@@ -1,7 +1,7 @@
 {
   "name": "kixx",
-  "version": "0.1.0",
-  "description": "The best ECMAScript application develoment environment ever",
+  "version": "0.1.1",
+  "description": "The best ECMAScript application develoment framework ever",
   "main": "index.js",
   "scripts": {
     "test": "test"
