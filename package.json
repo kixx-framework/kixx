@@ -1,0 +1,24 @@
+{
+  "name": "kixx",
+  "version": "0.1.0",
+  "description": "The best ECMAScript application develoment environment ever",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kixxauth/kixx.git"
+  },
+  "keywords": [
+    "functional",
+    "library",
+    "framework"
+  ],
+  "author": "Kris Walker (www.kixx.name)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kixxauth/kixx/issues"
+  },
+  "homepage": "https://github.com/kixxauth/kixx#readme"
+}
