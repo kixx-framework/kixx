@@ -2,8 +2,8 @@
 
 const R = require(`ramda`);
 const Filepath = require(`filepath`);
+const UserError = require(`./lib/types/user-error`);
 const Router = require(`./lib/types/router`);
-const error = require(`./lib/namespaces/error`);
 const server = require(`./lib/namespaces/server`);
 const app = require(`./lib/namespaces/app`);
 const router = require(`./lib/namespaces/router`);
@@ -29,9 +29,9 @@ exports.start = function start(dir, env) {
 		pkg = require(packageJson.path);
 	} catch (err) {
 		if (err.code === `MODULE_NOT_FOUND`) {
-			throw error.code(`USER_ERROR`, new Error(
+			throw new UserError(
 				`Missing package.json in the root of your project.`
-			));
+			);
 		}
 		throw err;
 	}
