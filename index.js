@@ -47,9 +47,7 @@ exports.start = function start(dir, env) {
 		}
 	}
 
-	const environment = env || process.env.NODE_ENV || `development`;
-
-	return initializeApp(appdir, pkg, config, environment).then((app) => {
+	return initializeApp(appdir, pkg, config, env).then((app) => {
 		const port = defaultPort(app.config);
 		const hostname = defaultHostname(app.config);
 

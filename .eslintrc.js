@@ -88,6 +88,13 @@ module.exports = {
 			"error",
 			"backtick"
 		],
+		"no-mixed-requires": [
+			"error",
+			{"grouping": true, "allowCall": true}
+		],
+		"no-process-env": [
+			"error"
+		],
 		"no-console": [
 			"error"
 		],
