@@ -1,36 +1,21 @@
 {
   "name": "kixx",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "The best ECMAScript application develoment framework ever",
+  "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV=test eslint ./"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kixxauth/kixx.git"
+    "test": "npm run lint",
+    "lint": "NODE_ENV=test eslint ./"
   },
   "author": "Kris Walker (www.kixx.name)",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/kixxauth/kixx/issues"
-  },
-  "homepage": "https://github.com/kixxauth/kixx#readme",
-  "keywords": [
-    "functional",
-    "web",
-    "framework"
-  ],
   "dependencies": {
-    "bluebird": "3.5.0",
-    "boom": "5.2.0",
-    "content-type": "1.0.4",
-    "filepath": "1.1.0",
-    "iconv-lite": "0.4.19",
-    "path-to-regexp": "2.0.0",
-    "pluralize": "7.0.0",
-    "ramda": "0.24.1"
+    "kixx-assert": "1.0.3"
+  },
+  "peerDependendencies": {
+    "bluebird": "^3.0.0"
   },
   "devDependencies": {
-    "eslint": "4.6.1"
+    "eslint": "4.9.0"
   }
 }

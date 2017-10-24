@@ -20,6 +20,10 @@ module.exports = {
 			"error",
 			"never"
 		],
+		"no-unused-vars": [
+			"error",
+			{"args": "none"}
+		],
 		"no-caller": [
 			"error"
 		],
