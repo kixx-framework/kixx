@@ -12,10 +12,6 @@ exports.append = function append(item, list) {
 	return list;
 };
 
-exports.last = function last(list) {
-	return list[list.length - 1];
-};
-
 exports.compact = function compact(list) {
 	return list.filter((x) => Boolean(x));
 };
