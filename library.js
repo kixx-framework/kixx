@@ -12,6 +12,10 @@ exports.append = function append(item, list) {
 	return list;
 };
 
+exports.compact = function compact(list) {
+	return list.filter((x) => Boolean(x));
+};
+
 exports.assoc = function assoc(key, value, hash) {
 	hash = Object.assign({}, hash);
 	hash[key] = value;
