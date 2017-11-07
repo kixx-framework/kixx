@@ -4,6 +4,7 @@ exports.StackedError = require(`./lib/classes/stacked-error`);
 exports.ProgrammerError = require(`./lib/classes/programmer-error`);
 exports.FrameworkError = require(`./lib/classes/framework-error`);
 exports.ConflictError = require(`./lib/classes/conflict-error`);
+exports.NotImplementedError = require(`./lib/classes/not-implemented-error`);
 
 exports.composeMiddleware = require(`./lib/compose-middleware`);
 exports.createProcessManager = require(`./lib/create-process-manager`);
