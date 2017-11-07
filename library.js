@@ -38,6 +38,10 @@ exports.merge = function merge(target, ...sources) {
 	}, target);
 };
 
+exports.clone = function clone(x) {
+	return exports.merge(null, x);
+};
+
 function mergeObject(a, b) {
 	return Object.keys(b).reduce((a, k) => {
 		const v = b[k];
