@@ -1,30 +1,20 @@
 'use strict';
 
+const ramda = require(`ramda`);
 const KixxAssert = require(`kixx-assert`);
 
 const {isObject, isPrimitive, isUndefined} = KixxAssert.helpers;
 
+Object.assign(exports, ramda);
 Object.assign(exports, KixxAssert.helpers);
 
 exports.assert = KixxAssert.assert;
-
-exports.append = function append(item, list) {
-	list = list.slice();
-	list.push(item);
-	return list;
-};
 
 exports.compact = function compact(list) {
 	return list.filter((x) => Boolean(x));
 };
 
-exports.assoc = function assoc(key, value, hash) {
-	hash = Object.assign({}, hash);
-	hash[key] = value;
-	return hash;
-};
-
-exports.merge = function merge(target, ...sources) {
+exports.mergeDeep = function mergeDeep(target, ...sources) {
 	return sources.reduce((target, source) => {
 		if (isUndefined(source)) {
 			source = Object.create(null);
@@ -36,10 +26,6 @@ exports.merge = function merge(target, ...sources) {
 			source
 		);
 	}, target);
-};
-
-exports.clone = function clone(x) {
-	return exports.merge(null, x);
 };
 
 function mergeObject(a, b) {
@@ -57,6 +43,10 @@ function mergeObject(a, b) {
 		return a;
 	}, a);
 }
+
+exports.clone = function clone(x) {
+	return exports.mergeDeep(null, x);
+};
 
 exports.deepFreeze = function deepFreeze(obj) {
 	Object.freeze(obj);
