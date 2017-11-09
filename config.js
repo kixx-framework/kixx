@@ -8,7 +8,6 @@ const commitTransaction = require(`./lib/store-middleware/commit-transaction`);
 const emit = require(`./lib/store-middleware/emit`);
 const getObject = require(`./lib/store-middleware/get-object`);
 const mergeObject = require(`./lib/store-middleware/merge-object`);
-const notImplemented = require(`./lib/store-middleware/not-implemented`);
 const removeObject = require(`./lib/store-middleware/remove-object`);
 const scanObjectsByType = require(`./lib/store-middleware/scan-objects-by-type`);
 const setObject = require(`./lib/store-middleware/set-object`);
@@ -25,7 +24,6 @@ exports.model = {
 	beforeScan: [noop],
 	beforeUpdate: [noop],
 	checkCreateConflict: [checkCreateConflict],
-	createTransaction: [notImplemented, {name: `createTransaction`}],
 	commitTransaction: [commitTransaction],
 	emit: [emit],
 	getObject: [getObject],
