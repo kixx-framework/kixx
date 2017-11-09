@@ -8,6 +8,7 @@ exports.NotImplementedError = require(`./lib/classes/not-implemented-error`);
 exports.InvariantError = require(`./lib/classes/invariant-error`);
 
 exports.composeMiddleware = require(`./lib/compose-middleware`);
+exports.createApplicationStore = require(`./lib/create-application-store`);
 exports.createProcessManager = require(`./lib/create-process-manager`);
 exports.defineFunction = require(`./lib/define-function`);
 exports.startHttpServer = require(`./lib/start-http-server`);
