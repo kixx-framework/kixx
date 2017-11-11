@@ -64,3 +64,10 @@ exports.deepFreeze = function deepFreeze(obj) {
 
 	return obj;
 };
+
+// The minimum is inclusive and the maximum is exclusive.
+exports.random = function random(min, max) {
+	min = Math.ceil(min);
+	max = Math.floor(max);
+	return Math.floor(Math.random() * (max - min)) + min;
+};
