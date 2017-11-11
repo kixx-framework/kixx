@@ -13,10 +13,12 @@
     "kixx-assert": "1.0.3"
   },
   "peerDependendencies": {
-    "bluebird": "^3.0.0"
+    "bluebird": "^3.0.0",
+    "ramda": "^0.25.0"
   },
   "devDependencies": {
     "bluebird": "^3.0.0",
-    "eslint": "4.9.0"
+    "eslint": "4.9.0",
+    "ramda": "^0.25.0"
   }
 }
