@@ -7,6 +7,9 @@ exports.ConflictError = require(`./lib/classes/conflict-error`);
 exports.NotImplementedError = require(`./lib/classes/not-implemented-error`);
 exports.InvariantError = require(`./lib/classes/invariant-error`);
 
+exports.EventBus = require(`./lib/classes/event-bus`);
+exports.CommandBus = require(`./lib/classes/command-bus`);
+
 exports.composeMiddleware = require(`./lib/compose-middleware`);
 exports.createApplicationStore = require(`./lib/create-application-store`);
 exports.createProcessManager = require(`./lib/create-process-manager`);
