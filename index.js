@@ -14,4 +14,4 @@ exports.composeMiddleware = require(`./lib/compose-middleware`);
 exports.createApplicationStore = require(`./lib/create-application-store`);
 exports.createProcessManager = require(`./lib/create-process-manager`);
 exports.defineFunction = require(`./lib/define-function`);
-exports.startHttpServer = require(`./lib/start-http-server`);
+exports.serverWrapper = require(`./lib/server-wrapper`);
