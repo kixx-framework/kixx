@@ -105,6 +105,9 @@ module.exports = {
 		"no-warning-comments": [
 			"warn",
 			{location: "anywhere"}
+		],
+		"eol-last": [
+			"error"
 		]
 	}
 };
