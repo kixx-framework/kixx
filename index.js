@@ -1,7 +1,5 @@
 'use strict';
 
-exports.config = require(`./config`);
-
 exports.StackedError = require(`./lib/classes/stacked-error`);
 exports.ProgrammerError = require(`./lib/classes/programmer-error`);
 exports.FrameworkError = require(`./lib/classes/framework-error`);
