@@ -12,7 +12,7 @@ const removeObject = require(`./lib/store-middleware/remove-object`);
 const scanObjectsByType = require(`./lib/store-middleware/scan-objects-by-type`);
 const setObject = require(`./lib/store-middleware/set-object`);
 
-exports.model = {
+exports.model = Object.freeze({
 	afterCreate: [noop],
 	afterGet: [noop],
 	afterRemove: [noop],
@@ -36,4 +36,4 @@ exports.model = {
 	validateBeforeRemove: [noop],
 	validateBeforeScan: [noop],
 	validateBeforeUpdate: [noop]
-};
+});

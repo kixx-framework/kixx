@@ -10,7 +10,8 @@
   "author": "Kris Walker (www.kixx.name)",
   "license": "MIT",
   "dependencies": {
-    "kixx-assert": "1.0.3"
+    "kixx-assert": "1.0.3",
+    "uuid": "^3.1.0"
   },
   "peerDependendencies": {
     "bluebird": "^3.0.0",
