@@ -16,3 +16,5 @@ exports.createApplicationStore = require(`./lib/create-application-store`);
 exports.createProcessManager = require(`./lib/create-process-manager`);
 exports.defineFunction = require(`./lib/define-function`);
 exports.serverWrapper = require(`./lib/server-wrapper`);
+exports.httpFetchBuffer = require(`./lib/http-fetch-buffer`);
+exports.httpSendBuffer = require(`./lib/http-send-buffer`);
