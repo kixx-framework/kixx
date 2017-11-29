@@ -1,11 +1,19 @@
 'use strict';
 
-exports.StackedError = require(`./lib/classes/stacked-error`);
-exports.ProgrammerError = require(`./lib/classes/programmer-error`);
-exports.FrameworkError = require(`./lib/classes/framework-error`);
+exports.BadRequestError = require(`./lib/classes/bad-request-error`);
 exports.ConflictError = require(`./lib/classes/conflict-error`);
-exports.NotImplementedError = require(`./lib/classes/not-implemented-error`);
+exports.ForbiddenError = require(`./lib/classes/forbidden-error`);
+exports.FrameworkError = require(`./lib/classes/framework-error`);
 exports.InvariantError = require(`./lib/classes/invariant-error`);
+exports.MethodNotAllowedError = require(`./lib/classes/method-not-allowed-error`);
+exports.NotAcceptableError = require(`./lib/classes/not-acceptable-error`);
+exports.NotFoundError = require(`./lib/classes/not-found-error`);
+exports.NotImplementedError = require(`./lib/classes/not-implemented-error`);
+exports.ProgrammerError = require(`./lib/classes/programmer-error`);
+exports.StackedError = require(`./lib/classes/stacked-error`);
+exports.UnauthorizedError = require(`./lib/classes/unauthorized-error`);
+exports.UnprocessableError = require(`./lib/classes/unprocessable-error`);
+exports.UnsupportedMediaTypeError = require(`./lib/classes/unsupported-media-type-error`);
 
 exports.EventBus = require(`./lib/classes/event-bus`);
 exports.CommandBus = require(`./lib/classes/command-bus`);
