@@ -51,6 +51,7 @@ const ExpressMiddleware = [
 	`resource-get`,
 	`resource-remove`,
 	`resource-update`,
+	`send-json-api`,
 	`validate-json-api-relationships-request`,
 	`validate-json-api-resource-request`
 ];
