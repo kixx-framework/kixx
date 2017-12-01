@@ -71,3 +71,10 @@ exports.random = function random(min, max) {
 	max = Math.floor(max);
 	return Math.floor(Math.random() * (max - min)) + min;
 };
+
+exports.regexp = Object.freeze({
+	/* eslint-disable no-useless-escape */
+	EMAIL: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
+	EMAIL_UNICODE: /^(([^<>()\[\]\.,;:\s@\"]+(\.[^<>()\[\]\.,;:\s@\"]+)*)|(\".+\"))@(([^<>()[\]\.,;:\s@\"]+\.)+[^<>()[\]\.,;:\s@\"]{2,})$/i
+	/* eslint-enable */
+});
