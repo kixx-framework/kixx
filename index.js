@@ -28,3 +28,35 @@ exports.httpFetchBuffer = require(`./lib/http-fetch-buffer`);
 exports.httpSendBuffer = require(`./lib/http-send-buffer`);
 exports.reportFullStackTrace = require(`./lib/report-full-stack-trace`);
 exports.serverWrapper = require(`./lib/server-wrapper`);
+
+const ExpressMiddleware = [
+	`accept-json-api`,
+	`allowed-methods`,
+	`authenticate-scope`,
+	`authenticate-user`,
+	`authorize`,
+	`collection-create`,
+	`collection-list`,
+	`create-transaction`,
+	`cross-origin-request`,
+	`default-error-handler`,
+	`dispatch-method`,
+	`handle-json-api-error`,
+	`handle-not-found`,
+	`relationships-append`,
+	`relationships-list`,
+	`relationships-remove`,
+	`relationships-replace`,
+	`request-options`,
+	`resource-get`,
+	`resource-remove`,
+	`resource-update`,
+	`validate-json-api-relationships-request`,
+	`validate-json-api-resource-request`
+];
+
+exports.ExpressMiddleware = Object.freeze(ExpressMiddleware.reduce((middleware, filename) => {
+	const fn = require(`./lib/express-middleware/${filename}`);
+	middleware[fn.name] = fn;
+	return middleware;
+}, Object.create(null)));
