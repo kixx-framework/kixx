@@ -12,7 +12,7 @@ const mergeObject = require(`./lib/store-middleware/merge-object`);
 const removeObject = require(`./lib/store-middleware/remove-object`);
 const scanObjectsByType = require(`./lib/store-middleware/scan-objects-by-type`);
 const setObject = require(`./lib/store-middleware/set-object`);
-const validateObjectExists = require(`./lib/store-middleware/set-object`);
+const validateObjectExists = require(`./lib/store-middleware/validate-object-exists`);
 
 exports.model = Object.freeze({
 	afterCreate: [noop],
