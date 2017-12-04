@@ -61,3 +61,24 @@ exports.ExpressMiddleware = Object.freeze(ExpressMiddleware.reduce((middleware, 
 	middleware[fn.name] = fn;
 	return middleware;
 }, Object.create(null)));
+
+const StoreMiddleware = [
+	`check-create-conflict`,
+	`commit-transaction`,
+	`emit`,
+	`generate-id`,
+	`get-object`,
+	`merge-object`,
+	`no-op`,
+	`not-implemented`,
+	`remove-object`,
+	`scan-objects-by-type`,
+	`set-object`,
+	`validate-object-exists`
+];
+
+exports.StoreMiddleware = Object.freeze(StoreMiddleware.reduce((middleware, filename) => {
+	const fn = require(`./lib/store-middleware/${filename}`);
+	middleware[fn.name] = fn;
+	return middleware;
+}, Object.create(null)));
