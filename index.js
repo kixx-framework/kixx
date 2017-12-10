@@ -14,6 +14,7 @@ exports.StackedError = require(`./lib/classes/stacked-error`);
 exports.UnauthorizedError = require(`./lib/classes/unauthorized-error`);
 exports.UnprocessableError = require(`./lib/classes/unprocessable-error`);
 exports.UnsupportedMediaTypeError = require(`./lib/classes/unsupported-media-type-error`);
+exports.UserError = require(`./lib/classes/user-error`);
 
 exports.EventBus = require(`./lib/classes/event-bus`);
 exports.CommandBus = require(`./lib/classes/command-bus`);
