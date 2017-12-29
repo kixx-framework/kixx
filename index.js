@@ -21,6 +21,7 @@ exports.CommandBus = require(`./lib/classes/command-bus`);
 exports.StoreArgs = require(`./lib/classes/store-args`);
 
 exports.composeMiddleware = require(`./lib/compose-middleware`);
+exports.computeObjectHash = require(`./lib/compute-object-hash`);
 exports.createApplicationStore = require(`./lib/create-application-store`);
 exports.createJsonWebToken = require(`./lib/create-json-web-token`);
 exports.createProcessManager = require(`./lib/create-process-manager`);
