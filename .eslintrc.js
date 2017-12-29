@@ -27,6 +27,10 @@ module.exports = {
 			"error",
 			{"args": "none"}
 		],
+		"no-use-before-define": [
+			"error",
+			{"functions": false, "classes": false}
+		],
 		"no-caller": [
 			"error"
 		],
