@@ -72,6 +72,10 @@ exports.random = function random(min, max) {
 	return Math.floor(Math.random() * (max - min)) + min;
 };
 
+exports.sampleOne = function sampleOne(list) {
+	return list[exports.random(0, list.length)];
+};
+
 exports.regexp = Object.freeze({
 	/* eslint-disable no-useless-escape */
 	EMAIL: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
