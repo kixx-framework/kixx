@@ -20,6 +20,7 @@ exports.EventBus = require(`./lib/classes/event-bus`);
 exports.CommandBus = require(`./lib/classes/command-bus`);
 exports.StoreArgs = require(`./lib/classes/store-args`);
 
+exports.composeLink = require(`./lib/compose-link`);
 exports.composeMiddleware = require(`./lib/compose-middleware`);
 exports.computeObjectHash = require(`./lib/compute-object-hash`);
 exports.createApplicationStore = require(`./lib/create-application-store`);
