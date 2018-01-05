@@ -10,11 +10,12 @@ Object.assign(exports, ramda);
 
 exports.assert = KixxAssert.assert;
 
-exports.compact = function compact(list) {
+function compact(list) {
 	return list.filter((x) => Boolean(x));
-};
+}
+exports.compact = compact;
 
-exports.mergeDeep = function mergeDeep(target, ...sources) {
+function mergeDeep(target, ...sources) {
 	return sources.reduce((target, source) => {
 		if (isUndefined(source)) {
 			source = Object.create(null);
@@ -26,7 +27,8 @@ exports.mergeDeep = function mergeDeep(target, ...sources) {
 			source
 		);
 	}, target);
-};
+}
+exports.mergeDeep = mergeDeep;
 
 function mergeObject(a, b) {
 	return Object.keys(b).reduce((a, k) => {
@@ -44,11 +46,7 @@ function mergeObject(a, b) {
 	}, a);
 }
 
-exports.clone = function clone(x) {
-	return exports.mergeDeep(null, x);
-};
-
-exports.deepFreeze = function deepFreeze(obj) {
+function deepFreeze(obj) {
 	Object.freeze(obj);
 	Object.getOwnPropertyNames(obj).forEach((key) => {
 		if (typeof obj === `function` &&
@@ -63,18 +61,21 @@ exports.deepFreeze = function deepFreeze(obj) {
 	});
 
 	return obj;
-};
+}
+exports.deepFreeze = deepFreeze;
 
 // The minimum is inclusive and the maximum is exclusive.
-exports.random = function random(min, max) {
+function random(min, max) {
 	min = Math.ceil(min);
 	max = Math.floor(max);
 	return Math.floor(Math.random() * (max - min)) + min;
-};
+}
+exports.random = random;
 
-exports.sampleOne = function sampleOne(list) {
-	return list[exports.random(0, list.length)];
-};
+function sampleOne(list) {
+	return list[random(0, list.length)];
+}
+exports.sampleOne = sampleOne;
 
 exports.regexp = Object.freeze({
 	/* eslint-disable no-useless-escape */
