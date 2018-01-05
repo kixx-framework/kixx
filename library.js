@@ -5,8 +5,8 @@ const KixxAssert = require(`kixx-assert`);
 
 const {isObject, isPrimitive, isUndefined} = KixxAssert.helpers;
 
-Object.assign(exports, ramda);
 Object.assign(exports, KixxAssert.helpers);
+Object.assign(exports, ramda);
 
 exports.assert = KixxAssert.assert;
 
