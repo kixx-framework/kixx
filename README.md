@@ -6,7 +6,8 @@ Kixx is a loosely coupled set of tools and libraries used to make designing and 
 
 Installation
 ------------
-Kixx requires 2 peer depenendencies which also must be installed: Bluebird and Ramda. The full command line NPM installation is:
+Kixx requires 2 peer depenendencies which also must be installed:
+[Bluebird](http://bluebirdjs.com/docs/getting-started.html) and [Ramda](http://ramdajs.com/). The full command line NPM installation is:
 
 ```
 $ npm install --save kixx
@@ -78,7 +79,7 @@ object | Object | An Object to deeply freeze.
 
 Returns the passed Object after recursively calling Object.freeze() deeply throughout.
 
-#### deepFreeze()
+#### random()
 __`random(min, max)`__
 
 parameter | type | description
