@@ -8,6 +8,8 @@ const {isObject, isPrimitive, isUndefined} = KixxAssert.helpers;
 Object.assign(exports, KixxAssert.helpers);
 Object.assign(exports, ramda);
 
+exports.isEmpty = KixxAssert.helpers.isEmpty;
+
 exports.assert = KixxAssert.assert;
 
 function compact(list) {
