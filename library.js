@@ -83,6 +83,7 @@ const clamp = ramda.curry((min, max, n) => {
 	max = max >= 1 ? max : 1;
 	if (typeof n !== `number` || n < min) return min;
 	if (n >= max) return max - 1;
+	return n;
 });
 exports.clamp = clamp;
 
