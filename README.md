@@ -87,7 +87,7 @@ parameter | type | description
 min | Number | The *inclusive* minimum.
 max | Number | The *exclusive* maximum.
 
-Returns a random Integer from min (inclusive) to max (exclusive).
+Returns a random Integer from min (inclusive) to max (exclusive). Is automatically curried.
 
 #### sampleOne()
 __`sampleOne(list)`__
@@ -97,6 +97,17 @@ parameter | type | description
 list | Array | An Array.
 
 Returns a single random element from the given Array.
+
+#### clamp()
+__`clamp(min, max, n)`__
+
+parameter | type | description
+--------- | ---- | -----------
+min | Number | The *inclusive* minimum.
+max | Number | The *exclusive* maximum.
+n   | Number | The Number to clamp.
+
+Returns Number n only if it is greater then or equal to the minimum and less than the maximum. Otherwise, return the min or max as appropriate.
 
 Copyright and License
 ---------------------

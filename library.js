@@ -67,17 +67,24 @@ function deepFreeze(obj) {
 exports.deepFreeze = deepFreeze;
 
 // The minimum is inclusive and the maximum is exclusive.
-function random(min, max) {
+const random = ramda.curry((min, max) => {
 	min = Math.ceil(min);
 	max = Math.floor(max);
 	return Math.floor(Math.random() * (max - min)) + min;
-}
+});
 exports.random = random;
 
-function sampleOne(list) {
+const sampleOne = (list) => {
 	return list[random(0, list.length)];
-}
+};
 exports.sampleOne = sampleOne;
+
+const clamp = ramda.curry((min, max, n) => {
+	max = max >= 1 ? max : 1;
+	if (typeof n !== `number` || n < min) return min;
+	if (n >= max) return max - 1;
+});
+exports.clamp = clamp;
 
 exports.regexp = Object.freeze({
 	/* eslint-disable no-useless-escape */
