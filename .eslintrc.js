@@ -1,8 +1,9 @@
 module.exports = {
 	"parserOptions": {
-		"ecmaVersion": 6
+		"ecmaVersion": 2017
 	},
 	"env": {
+		"es6": true,
 		"node": true
 	},
 	"extends": "eslint:recommended",
@@ -61,6 +62,9 @@ module.exports = {
 			"error"
 		],
 		"no-undefined": [
+			"error"
+		],
+		"no-new-symbol": [
 			"error"
 		],
 		"no-labels": [
