@@ -1,8 +1,8 @@
 'use strict';
 
-const {assert} = require(`../../library`);
+const {assert, remove, values} = require(`../../library`);
 
-const computeObjectHash = require(`../../lib/compute-object-hash`);
+const {computeObjectHash} = require(`../../`);
 
 module.exports = function (t) {
 	const undef = ((u) => u)();
@@ -74,8 +74,7 @@ module.exports = function (t) {
 		FULL_OBJECT: `GDOdFhaFWnmfNWMqvD0QqVJfcto=`,
 		EMPTY_ARRAY: `l9Fw4VUO7kr8CvBlt4zaMCqXZ0w=`,
 		MIXED_ARRAY: `OO/nlpAq/BmjRiWIWfO0uNB+Ams=`,
-		MIXED_OBJECT: `ukWEBullTFTjgLgendgcc0LtMOs=`,
-		FOO: `bar`
+		MIXED_OBJECT: `ukWEBullTFTjgLgendgcc0LtMOs=`
 	});
 
 	const {
@@ -101,6 +100,19 @@ module.exports = function (t) {
 		MIXED_ARRAY,
 		MIXED_OBJECT
 	} = HASHES;
+
+	t.describe(`HASHES`, (t) => {
+		const keys = Object.keys(HASHES);
+		const hashes = values(HASHES);
+
+		t.it(`has no equal hashes; all hashes are unique`, () => {
+			hashes.forEach((hash, i) => {
+				const key = keys[i];
+				const checkKeys = remove(i, 1, hashes);
+				assert.isEqual(-1, checkKeys.indexOf(hash), `hash for ${key}`);
+			});
+		});
+	});
 
 	t.it(`hashes undefined`, () => {
 		assert.isEqual(UNDEFINED, computeObjectHash(undef));
