@@ -33,6 +33,7 @@ exports.reportFullStackTrace = require(`./lib/report-full-stack-trace`);
 exports.serverWrapper = require(`./lib/server-wrapper`);
 
 const ExpressMiddleware = [
+	`accept-form-url-encoded`,
 	`accept-json-api`,
 	`allowed-methods`,
 	`authenticate-scope`,
