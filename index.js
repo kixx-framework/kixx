@@ -16,6 +16,7 @@ exports.UnprocessableError = require(`./lib/classes/unprocessable-error`);
 exports.UnsupportedMediaTypeError = require(`./lib/classes/unsupported-media-type-error`);
 exports.UserError = require(`./lib/classes/user-error`);
 
+exports.ApplicationInterface = require(`./lib/classes/application-interface`);
 exports.EventBus = require(`./lib/classes/event-bus`);
 exports.CommandBus = require(`./lib/classes/command-bus`);
 exports.Logger = require(`./lib/classes/logger`);
