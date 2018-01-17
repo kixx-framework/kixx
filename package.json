@@ -1,6 +1,6 @@
 {
   "name": "kixx",
-  "version": "0.10.1",
+  "version": "0.13.0",
   "description": "The best ECMAScript application develoment framework ever",
   "main": "index.js",
   "scripts": {
