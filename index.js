@@ -31,6 +31,7 @@ exports.createProcessManager = require(`./lib/create-process-manager`);
 exports.defineFunction = require(`./lib/define-function`);
 exports.httpFetchBuffer = require(`./lib/http-fetch-buffer`);
 exports.httpSendBuffer = require(`./lib/http-send-buffer`);
+exports.initializeComponents = require(`./lib/initialize-components`);
 exports.reportFullStackTrace = require(`./lib/report-full-stack-trace`);
 exports.serverWrapper = require(`./lib/server-wrapper`);
 
