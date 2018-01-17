@@ -18,6 +18,7 @@ exports.UserError = require(`./lib/classes/user-error`);
 
 exports.EventBus = require(`./lib/classes/event-bus`);
 exports.CommandBus = require(`./lib/classes/command-bus`);
+exports.Logger = require(`./lib/classes/logger`);
 exports.StoreArgs = require(`./lib/classes/store-args`);
 
 exports.composeLink = require(`./lib/compose-link`);
