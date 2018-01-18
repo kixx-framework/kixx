@@ -6,6 +6,7 @@
 // TODO: Add log request response middleware.
 // TODO: Add redirect middleware.
 // TODO: Add render template middleware.
+// TODO: Add authorizationOutput middleware to filter and/or decorate resource and included data.
 
 exports.BadRequestError = require(`./lib/classes/bad-request-error`);
 exports.ConflictError = require(`./lib/classes/conflict-error`);
