@@ -1,5 +1,11 @@
 'use strict';
 
+// TODO: Add cookie parsing middleware.
+// TODO: Add set cookie middleware.
+// TODO: Add log request response middleware.
+// TODO: Add redirect middleware.
+// TODO: Add render template middleware.
+
 exports.BadRequestError = require(`./lib/classes/bad-request-error`);
 exports.ConflictError = require(`./lib/classes/conflict-error`);
 exports.ForbiddenError = require(`./lib/classes/forbidden-error`);
