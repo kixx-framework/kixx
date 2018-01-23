@@ -49,6 +49,7 @@ const ExpressMiddleware = [
 	`authenticate-scope`,
 	`authenticate-user`,
 	`authorize`,
+	`body-to-json-api`,
 	`collection-create`,
 	`collection-list`,
 	`create-transaction`,

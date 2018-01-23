@@ -87,6 +87,12 @@ const clamp = ramda.curry((min, max, n) => {
 });
 exports.clamp = clamp;
 
+function capitalize(str) {
+	if (typeof str !== `string`) return str;
+	return str[0].toUpperCase() + str.slice(1);
+}
+exports.capitalize = capitalize;
+
 exports.regexp = Object.freeze({
 	/* eslint-disable no-useless-escape */
 	EMAIL: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
