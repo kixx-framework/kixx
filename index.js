@@ -40,6 +40,7 @@ exports.defineFunction = require(`./lib/define-function`);
 exports.httpFetchBuffer = require(`./lib/http-fetch-buffer`);
 exports.httpSendBuffer = require(`./lib/http-send-buffer`);
 exports.initializeComponents = require(`./lib/initialize-components`);
+exports.parseJsonWebToken = require(`./lib/parse-json-web-token`);
 exports.reportFullStackTrace = require(`./lib/report-full-stack-trace`);
 exports.serverWrapper = require(`./lib/server-wrapper`);
 
