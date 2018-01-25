@@ -4,7 +4,6 @@
 
 const noop = require(`./lib/store-middleware/no-op`);
 const checkCreateConflict = require(`./lib/store-middleware/check-create-conflict`);
-const commitTransaction = require(`./lib/store-middleware/commit-transaction`);
 const emit = require(`./lib/store-middleware/emit`);
 const generateId = require(`./lib/store-middleware/generate-id`);
 const getObject = require(`./lib/store-middleware/get-object`);
@@ -28,14 +27,13 @@ exports.model = Object.freeze({
 	beforeSet: [noop],
 	beforeUpdate: [noop],
 	checkCreateConflict: [checkCreateConflict],
-	commitTransaction: [commitTransaction],
 	emit: [emit],
 	generateId: [generateId],
 	getObject: [getObject],
 	mergeObject: [mergeObject],
 	removeObject: [removeObject],
-	setObject: [setObject],
 	scanObjectsByType: [scanObjectsByType],
+	setObject: [setObject],
 	validateBeforeCreate: [noop],
 	validateBeforeGet: [noop],
 	validateBeforeRemove: [noop],

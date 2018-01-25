@@ -81,7 +81,6 @@ exports.ExpressMiddleware = Object.freeze(ExpressMiddleware.reduce((middleware, 
 
 const StoreMiddleware = [
 	`check-create-conflict`,
-	`commit-transaction`,
 	`emit`,
 	`generate-id`,
 	`get-object`,
