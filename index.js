@@ -43,6 +43,10 @@ exports.initializeComponents = require(`./lib/initialize-components`);
 exports.parseJsonWebToken = require(`./lib/parse-json-web-token`);
 exports.reportFullStackTrace = require(`./lib/report-full-stack-trace`);
 exports.serverWrapper = require(`./lib/server-wrapper`);
+exports.uuidV1 = require(`uuid/v1`);
+exports.uuidV3 = require(`uuid/v3`);
+exports.uuidV4 = require(`uuid/v4`);
+exports.uuidV5 = require(`uuid/v5`);
 
 const ExpressMiddleware = [
 	`accept-json-api`,
