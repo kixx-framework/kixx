@@ -3,6 +3,7 @@
 const ramda = require(`ramda`);
 const KixxAssert = require(`kixx-assert`);
 
+const protoToString = Object.prototype.toString;
 const {isObject, isPrimitive, isUndefined} = KixxAssert.helpers;
 
 Object.assign(exports, KixxAssert.helpers);
@@ -48,6 +49,32 @@ function mergeObject(a, b) {
 	}, a);
 }
 
+// TODO: Test this new clone implementation.
+function clone(obj) {
+	const type = typeof obj;
+
+	if (obj === null || type !== `object` && type !== `function`) return obj;
+
+	if (Array.isArray(obj)) return obj.map(clone);
+
+	switch (type) {
+		case `function`:
+			return obj;
+		case `object`:
+			if (protoToString.call(obj) === `[object Date]`) {
+				return new Date(obj.toString());
+			}
+			return Object.getOwnPropertyNames(obj).reduce((newObj, key) => {
+				newObj[key] = clone(obj[key]);
+				return newObj;
+			}, {});
+		default:
+			return obj;
+	}
+}
+exports.clone = clone;
+
+// TODO: Test this deepFreeze implementation.
 function deepFreeze(obj) {
 	Object.freeze(obj);
 	Object.getOwnPropertyNames(obj).forEach((key) => {
