@@ -18,6 +18,8 @@ function compact(list) {
 }
 exports.compact = compact;
 
+// TODO: Test and optimize this merge deep, since Ramda.mergeDeepRight() is
+//   likely to have performance issues.
 function mergeDeep(target, ...sources) {
 	return sources.reduce((target, source) => {
 		if (isUndefined(source)) {
@@ -76,18 +78,24 @@ exports.clone = clone;
 
 // TODO: Test this deepFreeze implementation.
 function deepFreeze(obj) {
-	Object.freeze(obj);
-	Object.getOwnPropertyNames(obj).forEach((key) => {
-		if (typeof obj === `function` &&
-			(key === `arguments` || key === `caller` || key === `callee` || key === `prototype`)) {
-			return;
-		}
+	if (typeof obj === `function`) return obj;
 
-		const prop = obj[key];
-		if (prop !== null && (typeof prop === `object` || typeof prop === `function`)) {
-			deepFreeze(prop);
-		}
-	});
+	Object.freeze(obj);
+
+	if (Array.isArray(obj)) {
+		obj.forEach((prop) => {
+			if (prop !== null && typeof prop === `object`) {
+				deepFreeze(prop);
+			}
+		});
+	} else {
+		Object.getOwnPropertyNames(obj).forEach((key) => {
+			const prop = obj[key];
+			if (prop !== null && typeof prop === `object`) {
+				deepFreeze(prop);
+			}
+		});
+	}
 
 	return obj;
 }
