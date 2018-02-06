@@ -51,7 +51,6 @@ function mergeObject(a, b) {
 	}, a);
 }
 
-// TODO: Test this new clone implementation.
 function clone(obj) {
 	const type = typeof obj;
 
@@ -76,7 +75,6 @@ function clone(obj) {
 }
 exports.clone = clone;
 
-// TODO: Test this deepFreeze implementation.
 function deepFreeze(obj) {
 	if (typeof obj === `function`) return obj;
 

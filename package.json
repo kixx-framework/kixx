@@ -1,6 +1,6 @@
 {
   "name": "kixx",
-  "version": "0.15.0",
+  "version": "0.17.0",
   "description": "The best ECMAScript application develoment framework ever",
   "main": "index.js",
   "scripts": {
@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "bluebird": "^3.0.0",
-    "eslint": "4.16.0",
+    "eslint": "4.17.0",
     "kixx-test-node": "1.2.5",
     "ramda": "^0.25.0"
   }
