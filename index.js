@@ -52,8 +52,7 @@ exports.uuidV5 = require(`uuid/v5`);
 const ExpressMiddleware = [
 	`accept-json-api`,
 	`allowed-methods`,
-	`authenticate-scope`,
-	`authenticate-user`,
+	`authenticate`,
 	`authorize`,
 	`body-to-json-api`,
 	`collection-create`,

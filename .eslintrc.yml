@@ -17,6 +17,11 @@ rules:
   semi:
     - error
     - always
+  quotes:
+    - error
+    - single
+    -
+      allowTemplateLiterals: true
   no-multi-spaces:
     - error
   no-var:
