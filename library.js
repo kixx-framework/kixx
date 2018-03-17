@@ -59,18 +59,18 @@ function clone(obj) {
 	if (Array.isArray(obj)) return obj.map(clone);
 
 	switch (type) {
-		case `function`:
-			return obj;
-		case `object`:
-			if (protoToString.call(obj) === `[object Date]`) {
-				return new Date(obj.toString());
-			}
-			return Object.getOwnPropertyNames(obj).reduce((newObj, key) => {
-				newObj[key] = clone(obj[key]);
-				return newObj;
-			}, {});
-		default:
-			return obj;
+	case `function`:
+		return obj;
+	case `object`:
+		if (protoToString.call(obj) === `[object Date]`) {
+			return new Date(obj.toString());
+		}
+		return Object.getOwnPropertyNames(obj).reduce((newObj, key) => {
+			newObj[key] = clone(obj[key]);
+			return newObj;
+		}, {});
+	default:
+		return obj;
 	}
 }
 exports.clone = clone;
