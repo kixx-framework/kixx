@@ -103,7 +103,8 @@ module.exports = {
 		],
 		"quotes": [
 			"error",
-			"backtick"
+			"single",
+      {"allowTemplateLiterals": true}
 		],
 		"no-mixed-requires": [
 			"error",
