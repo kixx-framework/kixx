@@ -20,29 +20,71 @@ exports.compact = compact;
 function mergeDeep() {
 	const objects = Array.prototype.slice.call(arguments);
 
-	return objects.reduce((target, source) => {
-		if (typeof source !== 'object' || Array.isArray(source) || source === null) return target;
-		return mergeObject(target, source);
-	}, {});
+	let hasObject = false;
+	let target;
+
+	for (let i = 0; i < objects.length; i++) {
+		const source = objects[i];
+
+		if (Array.isArray(source)) {
+			if (hasObject) continue;
+			target = source.map(clone);
+			continue;
+		}
+
+		if (typeof source !== 'object' || source === null) {
+			if (hasObject) continue;
+			target = source;
+			continue;
+		}
+
+		if (protoToString.call(source) === '[object Date]') {
+			if (hasObject) continue;
+			target = new Date(source.toString());
+			continue;
+		}
+
+		if (!hasObject) {
+			target = {};
+			hasObject = true;
+		}
+
+		target = mergeObject(target, source);
+	}
+
+	return target;
 }
 exports.mergeDeep = mergeDeep;
 
 function mergeObject(target, source) {
-	return Object.keys(source).reduce((target, key) => {
+	const keys = Object.keys(source);
+
+	for (let i = keys.length - 1; i >= 0; i--) {
+		const key = keys[i];
 		const v = source[key];
+		const t = target[key];
 
 		if (typeof v !== 'object' || v === null) {
 			target[key] = v;
-		} else if (Array.isArray(v)) {
+			continue;
+		}
+		if (Array.isArray(v)) {
 			target[key] = v.map(clone);
-		} else if (protoToString.call(v) === '[object Date]') {
+			continue;
+		}
+		if (protoToString.call(v) === '[object Date]') {
 			target[key] = new Date(v.toString());
-		} else {
-			target[key] = mergeObject({}, v);
+			continue;
+		}
+		if (typeof t !== 'object' || t === null) {
+			target[key] = clone(v);
+			continue;
 		}
 
-		return target;
-	}, target);
+		target[key] = mergeObject(t, v);
+	}
+
+	return target;
 }
 
 function clone(obj) {
