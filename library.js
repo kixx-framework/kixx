@@ -59,7 +59,7 @@ exports.mergeDeep = mergeDeep;
 function mergeObject(target, source) {
 	const keys = Object.keys(source);
 
-	for (let i = keys.length - 1; i >= 0; i--) {
+	for (let i = 0; i < keys.length; i++) {
 		const key = keys[i];
 		const v = source[key];
 		const t = target[key];
@@ -98,12 +98,15 @@ function clone(obj) {
 		return new Date(obj.toString());
 	}
 
-	// Object.getOwnProperties() returns non-enumerable props, where
-	// Object.keys only returns *enumerable* props.
-	return Object.getOwnPropertyNames(obj).reduce((newObj, key) => {
-		newObj[key] = clone(obj[key]);
-		return newObj;
-	}, {});
+	const keys = Object.keys(obj);
+	const newObj = {};
+
+	for (let i = 0; i < keys.length; i++) {
+		const k = keys[i];
+		newObj[k] = clone(obj[k]);
+	}
+
+	return newObj;
 }
 exports.clone = clone;
 

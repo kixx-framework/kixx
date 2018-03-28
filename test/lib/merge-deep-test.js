@@ -2615,18 +2615,6 @@ module.exports = function (t) {
 		const B = [4, 5, 6];
 		const C = [6, 7];
 
-		t.it('returns a copy of the last Array', () => {
-			const x = mergeDeep(A, B, C);
-
-			assert.isNotEqual(A, x);
-			assert.isNotEqual(B, x);
-			assert.isNotEqual(C, x);
-
-			assert.isEqual(2, x.length);
-			assert.isEqual(6, x[0]);
-			assert.isEqual(7, x[1]);
-		});
-
 		t.it('does *not* mutate any of the arguments', () => {
 			mergeDeep(A, B, C);
 
@@ -2646,16 +2634,449 @@ module.exports = function (t) {
 			assert.isEqual(6, C[0]);
 			assert.isEqual(7, C[1]);
 		});
+
+		t.it('returns a copy of the last Array', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isNotEqual(A, x);
+			assert.isNotEqual(B, x);
+			assert.isNotEqual(C, x);
+
+			assert.isEqual(2, x.length);
+			assert.isEqual(6, x[0]);
+			assert.isEqual(7, x[1]);
+		});
+	});
+	t.describe('when all arguments are Arrays, smaller to larger', (t) => {
+		const A = [6, 7];
+		const B = [4, 5, 6];
+		const C = [1, 2, 3, 4];
+
+		t.it('does *not* mutate any of the arguments', () => {
+			mergeDeep(A, B, C);
+
+			assert.isEqual(2, A.length);
+			assert.isEqual(3, B.length);
+			assert.isEqual(4, C.length);
+
+			assert.isEqual(1, C[0]);
+			assert.isEqual(2, C[1]);
+			assert.isEqual(3, C[2]);
+			assert.isEqual(4, C[3]);
+
+			assert.isEqual(4, B[0]);
+			assert.isEqual(5, B[1]);
+			assert.isEqual(6, B[2]);
+
+			assert.isEqual(6, A[0]);
+			assert.isEqual(7, A[1]);
+		});
+
+		t.it('returns a copy of the last Array', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isNotEqual(A, x);
+			assert.isNotEqual(B, x);
+			assert.isNotEqual(C, x);
+
+			assert.isEqual(4, x.length);
+
+			assert.isEqual(1, x[0]);
+			assert.isEqual(2, x[1]);
+			assert.isEqual(3, x[2]);
+			assert.isEqual(4, x[3]);
+		});
+	});
+	t.describe('when all arguments are Objects, larger to smaller', () => {
+		const A = {a: 0, b: 0, c: 0, d: 0};
+		const B = {b: 1, c: 1, d: 1};
+		const C = {b: 2, c: 2};
+
+		t.it('does *not* mutate any of the arguments', () => {
+			mergeDeep(A, B, C);
+
+			assert.isEqual(0, A.a);
+			assert.isEqual(0, A.b);
+			assert.isEqual(0, A.c);
+			assert.isEqual(0, A.d);
+
+			assert.isEqual(1, B.b);
+			assert.isEqual(1, B.c);
+			assert.isEqual(1, B.d);
+
+			assert.isEqual(2, C.b);
+			assert.isEqual(2, C.c);
+		});
+
+		t.it('overwrites right to left', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isNotEqual(A, x);
+			assert.isNotEqual(B, x);
+			assert.isNotEqual(C, x);
+
+			assert.isEqual(4, Object.keys(x).length);
+
+			assert.isEqual(0, x.a);
+			assert.isEqual(2, x.b);
+			assert.isEqual(2, x.c);
+			assert.isEqual(1, x.d);
+		});
+	});
+	t.describe('when all arguments are Objects, smaller to larger', () => {
+		const A = {b: 0, c: 0};
+		const B = {b: 1, c: 1, d: 1};
+		const C = {a: 2, b: 2, c: 2, d: 2};
+
+		t.it('does *not* mutate any of the arguments', () => {
+			mergeDeep(A, B, C);
+
+			assert.isEqual(0, A.b);
+			assert.isEqual(0, A.c);
+
+			assert.isEqual(1, B.b);
+			assert.isEqual(1, B.c);
+			assert.isEqual(1, B.d);
+
+			assert.isEqual(2, C.a);
+			assert.isEqual(2, C.b);
+			assert.isEqual(2, C.c);
+			assert.isEqual(2, C.d);
+		});
+
+		t.it('overwrites right to left', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isNotEqual(A, x);
+			assert.isNotEqual(B, x);
+			assert.isNotEqual(C, x);
+
+			assert.isEqual(4, Object.keys(x).length);
+
+			assert.isEqual(2, x.a);
+			assert.isEqual(2, x.b);
+			assert.isEqual(2, x.c);
+			assert.isEqual(2, x.d);
+		});
+	});
+	t.describe('merging objects when all keys are the same', () => {
+		const A = {a: 0, b: 0};
+		const B = {a: 1, b: 1};
+		const C = {a: 2, b: 2};
+
+		t.it('overwrites right to left', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isEqual(2, Object.keys(x).length);
+			assert.includes('a', Object.keys(x));
+			assert.includes('b', Object.keys(x));
+			assert.isEqual(2, x.a);
+			assert.isEqual(2, x.b);
+		});
+	});
+	t.describe('merging objects when all keys are different', () => {
+		const A = {a: 0, b: 0};
+		const B = {c: 1, d: 1};
+		const C = {e: 2, f: 2};
+
+		t.it('overwrites right to left', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isEqual(6, Object.keys(x).length);
+			assert.includes('a', Object.keys(x));
+			assert.includes('b', Object.keys(x));
+			assert.includes('c', Object.keys(x));
+			assert.includes('d', Object.keys(x));
+			assert.includes('e', Object.keys(x));
+			assert.includes('f', Object.keys(x));
+			assert.isEqual(0, x.a);
+			assert.isEqual(0, x.b);
+			assert.isEqual(1, x.c);
+			assert.isEqual(1, x.d);
+			assert.isEqual(2, x.e);
+			assert.isEqual(2, x.f);
+		});
+	});
+	t.describe('merging objects when some keys are the same', () => {
+		const A = {a: 0, b: 0};
+		const B = {a: 1, c: 1};
+		const C = {c: 2, d: 2};
+
+		t.it('overwrites right to left', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isEqual(4, Object.keys(x).length);
+			assert.includes('a', Object.keys(x));
+			assert.includes('b', Object.keys(x));
+			assert.includes('c', Object.keys(x));
+			assert.includes('d', Object.keys(x));
+			assert.isEqual(1, x.a);
+			assert.isEqual(0, x.b);
+			assert.isEqual(2, x.c);
+			assert.isEqual(2, x.d);
+		});
 	});
 
+	t.describe('merging objects with same number of keys deeply', () => {
+		const A = {
+			A: {a: 0, b: 0},
+			B: {a: 0, b: 0},
+			C: {a: 0, b: 0}
+		};
 
-	// TODO:
-	// - all arguments are arrays, larger to smaller and smaller to larger
-	// - Object.keys() vs Object.getOwnPropertyNames()
+		const B = {
+			A: {a: 1, b: 1},
+			B: {c: 1, d: 1},
+			C: {a: 1, c: 1}
+		};
 
-	t.xdescribe('deeply nested objects fewer keys into more keys', (t) => {
+		const C = {
+			A: {a: 2, b: 2},
+			B: {e: 2, f: 2},
+			C: {c: 2, d: 2}
+		};
+
+		t.it('overwrites right to left', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isEqual(2, Object.keys(x.A).length);
+			assert.includes('a', Object.keys(x.A));
+			assert.includes('b', Object.keys(x.A));
+			assert.isEqual(2, x.A.a);
+			assert.isEqual(2, x.A.b);
+
+			assert.isEqual(6, Object.keys(x.B).length);
+			assert.includes('a', Object.keys(x.B));
+			assert.includes('b', Object.keys(x.B));
+			assert.includes('c', Object.keys(x.B));
+			assert.includes('d', Object.keys(x.B));
+			assert.includes('e', Object.keys(x.B));
+			assert.includes('f', Object.keys(x.B));
+			assert.isEqual(0, x.B.a);
+			assert.isEqual(0, x.B.b);
+			assert.isEqual(1, x.B.c);
+			assert.isEqual(1, x.B.d);
+			assert.isEqual(2, x.B.e);
+			assert.isEqual(2, x.B.f);
+
+			assert.isEqual(4, Object.keys(x.C).length);
+			assert.includes('a', Object.keys(x.C));
+			assert.includes('b', Object.keys(x.C));
+			assert.includes('c', Object.keys(x.C));
+			assert.includes('d', Object.keys(x.C));
+			assert.isEqual(1, x.C.a);
+			assert.isEqual(0, x.C.b);
+			assert.isEqual(2, x.C.c);
+			assert.isEqual(2, x.C.d);
+		});
+
+		t.it('does not mutate any of the objects', () => {
+			mergeDeep(A, B, C);
+
+			assert.isEqual(2, Object.keys(A.A).length);
+			assert.isEqual(0, A.A.a);
+			assert.isEqual(0, A.A.b);
+
+			assert.isEqual(2, Object.keys(A.B).length);
+			assert.isEqual(0, A.B.a);
+			assert.isEqual(0, A.B.b);
+
+			assert.isEqual(2, Object.keys(A.C).length);
+			assert.isEqual(0, A.C.a);
+			assert.isEqual(0, A.C.b);
+
+			assert.isEqual(2, Object.keys(B.A).length);
+			assert.isEqual(1, B.A.a);
+			assert.isEqual(1, B.A.b);
+
+			assert.isEqual(2, Object.keys(B.B).length);
+			assert.isEqual(1, B.B.c);
+			assert.isEqual(1, B.B.d);
+
+			assert.isEqual(2, Object.keys(B.C).length);
+			assert.isEqual(1, B.C.a);
+			assert.isEqual(1, B.C.c);
+
+			assert.isEqual(2, Object.keys(C.A).length);
+			assert.isEqual(2, C.A.a);
+			assert.isEqual(2, C.A.b);
+
+			assert.isEqual(2, Object.keys(C.B).length);
+			assert.isEqual(2, C.B.e);
+			assert.isEqual(2, C.B.f);
+
+			assert.isEqual(2, Object.keys(C.C).length);
+			assert.isEqual(2, C.C.c);
+			assert.isEqual(2, C.C.d);
+		});
 	});
 
-	t.xdescribe('deeply nested objects more keys into fewer keys', (t) => {
+	t.describe('merging objects with different numbers of keys deeply', () => {
+		const A = {
+			A: {a: 0, b: 0},
+			B: {d: 0, c: 0, b: 0, a: 0}
+		};
+
+		const B = {
+			A: {c: 1, b: 1, a: 1},
+			B: {c: 1, b: 1, d: 1}
+		};
+
+		const C = {
+			A: {a: 2, b: 2, c: 2, d: 2},
+			B: {a: 2, b: 2}
+		};
+
+		t.it('does not mutate any of the objects', () => {
+			mergeDeep(A, B, C);
+
+			assert.isEqual(2, Object.keys(A.A).length);
+			assert.isEqual(0, A.A.a);
+			assert.isEqual(0, A.A.b);
+
+			assert.isEqual(4, Object.keys(A.B).length);
+			assert.isEqual(0, A.B.a);
+			assert.isEqual(0, A.B.b);
+			assert.isEqual(0, A.B.c);
+			assert.isEqual(0, A.B.d);
+
+			assert.isEqual(3, Object.keys(B.A).length);
+			assert.isEqual(1, B.A.b);
+			assert.isEqual(1, B.A.c);
+			assert.isEqual(1, B.A.c);
+
+			assert.isEqual(3, Object.keys(B.B).length);
+			assert.isEqual(1, B.B.c);
+			assert.isEqual(1, B.B.b);
+			assert.isEqual(1, B.B.d);
+
+			assert.isEqual(4, Object.keys(C.A).length);
+			assert.isEqual(2, C.A.a);
+			assert.isEqual(2, C.A.b);
+			assert.isEqual(2, C.A.c);
+			assert.isEqual(2, C.A.d);
+
+			assert.isEqual(2, Object.keys(C.B).length);
+			assert.isEqual(2, C.B.a);
+			assert.isEqual(2, C.B.b);
+		});
+
+		t.it('overwrites right to left', () => {
+			const x = mergeDeep(A, B, C);
+
+			assert.isEqual(4, Object.keys(x.A).length);
+			assert.includes('a', Object.keys(x.A));
+			assert.includes('b', Object.keys(x.A));
+			assert.includes('c', Object.keys(x.A));
+			assert.includes('d', Object.keys(x.A));
+			assert.isEqual(2, x.A.a);
+			assert.isEqual(2, x.A.b);
+			assert.isEqual(2, x.A.c);
+			assert.isEqual(2, x.A.d);
+
+			assert.isEqual(4, Object.keys(x.B).length);
+			assert.includes('a', Object.keys(x.B));
+			assert.includes('b', Object.keys(x.B));
+			assert.includes('c', Object.keys(x.B));
+			assert.includes('d', Object.keys(x.B));
+			assert.isEqual(2, x.B.a);
+			assert.isEqual(2, x.B.b);
+			assert.isEqual(1, x.B.c);
+			assert.isEqual(1, x.B.d);
+		});
+	});
+
+	t.describe('with non enumerable members', (t) => {
+		const A = Object.defineProperties({}, {
+			a: {
+				enumerable: true,
+				value: 1
+			},
+			b: {
+				enumerable: false,
+				value: 1
+			},
+			c: {
+				enumerable: false,
+				value: 1
+			},
+			z: {
+				enumerable: true,
+				value: Object.defineProperties({}, {
+					a: {
+						enumerable: true,
+						value: 1
+					},
+					b: {
+						enumerable: false,
+						value: 1
+					},
+					c: {
+						enumerable: false,
+						value: 1
+					}
+				})
+			}
+		});
+
+		const B = Object.defineProperties({}, {
+			a: {
+				enumerable: false,
+				value: 2
+			},
+			b: {
+				enumerable: false,
+				value: 2
+			},
+			c: {
+				enumerable: true,
+				value: 2
+			},
+			d: {
+				enumerable: false,
+				value: 2
+			},
+			z: {
+				enumerable: true,
+				value: Object.defineProperties({}, {
+					a: {
+						enumerable: false,
+						value: 2
+					},
+					b: {
+						enumerable: false,
+						value: 2
+					},
+					c: {
+						enumerable: true,
+						value: 2
+					},
+					d: {
+						enumerable: false,
+						value: 2
+					}
+				})
+			}
+		});
+
+		t.it('does not merge non enumerable props', () => {
+			const x = mergeDeep(A, B);
+
+			assert.isEqual(3, Object.getOwnPropertyNames(x).length);
+			assert.isEqual(3, Object.keys(x).length);
+
+			assert.isEqual(1, x.a);
+			assert.isUndefined(x.b);
+			assert.isEqual(2, x.c);
+			assert.isUndefined(x.d);
+
+			assert.isEqual(2, Object.getOwnPropertyNames(x.z).length);
+			assert.isEqual(2, Object.keys(x.z).length);
+
+			assert.isEqual(1, x.z.a);
+			assert.isUndefined(x.z.b);
+			assert.isEqual(2, x.z.c);
+			assert.isUndefined(x.z.d);
+		});
 	});
 };
