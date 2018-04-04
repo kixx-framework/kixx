@@ -1,20 +1,20 @@
 'use strict';
 
-exports.BadRequestError = require(`./lib/classes/bad-request-error`);
-exports.ConflictError = require(`./lib/classes/conflict-error`);
-exports.ForbiddenError = require(`./lib/classes/forbidden-error`);
-exports.FrameworkError = require(`./lib/classes/framework-error`);
-exports.InvariantError = require(`./lib/classes/invariant-error`);
-exports.MethodNotAllowedError = require(`./lib/classes/method-not-allowed-error`);
-exports.NotAcceptableError = require(`./lib/classes/not-acceptable-error`);
-exports.NotFoundError = require(`./lib/classes/not-found-error`);
-exports.NotImplementedError = require(`./lib/classes/not-implemented-error`);
-exports.ProgrammerError = require(`./lib/classes/programmer-error`);
-exports.StackedError = require(`./lib/classes/stacked-error`);
-exports.UnauthorizedError = require(`./lib/classes/unauthorized-error`);
-exports.UnprocessableError = require(`./lib/classes/unprocessable-error`);
-exports.UnsupportedMediaTypeError = require(`./lib/classes/unsupported-media-type-error`);
-exports.UserError = require(`./lib/classes/user-error`);
+exports.BadRequestError = require(`./lib/errors/bad-request-error`);
+exports.ConflictError = require(`./lib/errors/conflict-error`);
+exports.ForbiddenError = require(`./lib/errors/forbidden-error`);
+exports.FrameworkError = require(`./lib/errors/framework-error`);
+exports.InvariantError = require(`./lib/errors/invariant-error`);
+exports.MethodNotAllowedError = require(`./lib/errors/method-not-allowed-error`);
+exports.NotAcceptableError = require(`./lib/errors/not-acceptable-error`);
+exports.NotFoundError = require(`./lib/errors/not-found-error`);
+exports.NotImplementedError = require(`./lib/errors/not-implemented-error`);
+exports.ProgrammerError = require(`./lib/errors/programmer-error`);
+exports.StackedError = require(`./lib/errors/stacked-error`);
+exports.UnauthorizedError = require(`./lib/errors/unauthorized-error`);
+exports.UnprocessableError = require(`./lib/errors/unprocessable-error`);
+exports.UnsupportedMediaTypeError = require(`./lib/errors/unsupported-media-type-error`);
+exports.UserError = require(`./lib/errors/user-error`);
 
 exports.ApplicationInterface = require(`./lib/classes/application-interface`);
 exports.Logger = require(`./lib/classes/logger`);
