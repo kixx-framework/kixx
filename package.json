@@ -18,18 +18,19 @@
   },
   "homepage": "https://github.com/kixxauth/kixx#readme",
   "dependencies": {
-    "filepath": "1.1.0",
-    "jsonwebtoken": "8.1.1",
+    "jsonwebtoken": "8.2.0",
     "kixx-assert": "1.0.5",
     "uuid": "3.2.1"
   },
   "peerDependendencies": {
     "bluebird": "^3.0.0",
+    "filepath": "^1.1.0",
     "ramda": "^0.25.0"
   },
   "devDependencies": {
     "bluebird": "^3.0.0",
-    "eslint": "4.17.0",
+    "eslint": "4.19.1",
+    "filepath": "^1.1.0",
     "kixx-test-node": "1.2.5",
     "ramda": "^0.25.0"
   }
