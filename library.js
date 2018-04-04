@@ -4,7 +4,6 @@ const ramda = require(`ramda`);
 const KixxAssert = require(`kixx-assert`);
 
 const protoToString = Object.prototype.toString;
-const {isObject, isPrimitive, isUndefined} = KixxAssert.helpers;
 
 Object.assign(exports, KixxAssert.helpers);
 Object.assign(exports, ramda);
@@ -18,81 +17,110 @@ function compact(list) {
 }
 exports.compact = compact;
 
-// TODO: Test and optimize this merge deep, since Ramda.mergeDeepRight() is
-//   likely to have performance issues.
-function mergeDeep(target, ...sources) {
-	return sources.reduce((target, source) => {
-		if (isUndefined(source)) {
-			source = Object.create(null);
-		} else if (isPrimitive(source)) {
-			source = Object.assign(Object.create(null), source);
+function mergeDeep() {
+	const objects = Array.prototype.slice.call(arguments);
+
+	let hasObject = false;
+	let target;
+
+	for (let i = 0; i < objects.length; i++) {
+		const source = objects[i];
+
+		if (Array.isArray(source)) {
+			if (hasObject) continue;
+			target = source.map(clone);
+			continue;
 		}
-		return mergeObject(
-			Object.assign(Object.create(null), target),
-			source
-		);
-	}, target);
+
+		if (typeof source !== 'object' || source === null) {
+			if (hasObject) continue;
+			target = source;
+			continue;
+		}
+
+		if (protoToString.call(source) === '[object Date]') {
+			if (hasObject) continue;
+			target = new Date(source.toString());
+			continue;
+		}
+
+		if (!hasObject) {
+			target = {};
+			hasObject = true;
+		}
+
+		target = mergeObject(target, source);
+	}
+
+	return target;
 }
 exports.mergeDeep = mergeDeep;
 
-function mergeObject(a, b) {
-	return Object.keys(b).reduce((a, k) => {
-		const v = b[k];
-		if (Array.isArray(v)) {
-			a[k] = mergeObject([], v);
-		} else if (isObject(v) && isPrimitive(a[k])) {
-			a[k] = mergeObject(Object.assign(Object.create(null), a[k]), v);
-		} else if (isObject(v)) {
-			a[k] = mergeObject(Object.create(null), v);
-		} else if (isPrimitive(v)) {
-			a[k] = v;
+function mergeObject(target, source) {
+	const keys = Object.keys(source);
+
+	for (let i = 0; i < keys.length; i++) {
+		const key = keys[i];
+		const v = source[key];
+		const t = target[key];
+
+		if (typeof v !== 'object' || v === null) {
+			target[key] = v;
+			continue;
 		}
-		return a;
-	}, a);
+		if (Array.isArray(v)) {
+			target[key] = v.map(clone);
+			continue;
+		}
+		if (protoToString.call(v) === '[object Date]') {
+			target[key] = new Date(v.toString());
+			continue;
+		}
+		if (typeof t !== 'object' || t === null) {
+			target[key] = clone(v);
+			continue;
+		}
+
+		target[key] = mergeObject(t, v);
+	}
+
+	return target;
 }
 
 function clone(obj) {
 	const type = typeof obj;
 
-	if (obj === null || type !== `object` && type !== `function`) return obj;
+	if (obj === null || type !== 'object') return obj;
 
 	if (Array.isArray(obj)) return obj.map(clone);
 
-	switch (type) {
-	case `function`:
-		return obj;
-	case `object`:
-		if (protoToString.call(obj) === `[object Date]`) {
-			return new Date(obj.toString());
-		}
-		return Object.getOwnPropertyNames(obj).reduce((newObj, key) => {
-			newObj[key] = clone(obj[key]);
-			return newObj;
-		}, {});
-	default:
-		return obj;
+	if (protoToString.call(obj) === '[object Date]') {
+		return new Date(obj.toString());
 	}
+
+	const keys = Object.keys(obj);
+	const newObj = {};
+
+	for (let i = 0; i < keys.length; i++) {
+		const k = keys[i];
+		newObj[k] = clone(obj[k]);
+	}
+
+	return newObj;
 }
 exports.clone = clone;
 
 function deepFreeze(obj) {
-	if (typeof obj === `function`) return obj;
+	if (obj === null || typeof obj !== 'object') return obj;
 
 	Object.freeze(obj);
 
 	if (Array.isArray(obj)) {
-		obj.forEach((prop) => {
-			if (prop !== null && typeof prop === `object`) {
-				deepFreeze(prop);
-			}
-		});
+		obj.forEach((prop) => deepFreeze(prop));
 	} else {
-		Object.getOwnPropertyNames(obj).forEach((key) => {
-			const prop = obj[key];
-			if (prop !== null && typeof prop === `object`) {
-				deepFreeze(prop);
-			}
-		});
+		// Object.getOwnProperties() returns non-enumerable props, where
+		// Object.keys only returns *enumerable* props.
+		Object.getOwnPropertyNames(obj).forEach((key) => deepFreeze(obj[key]));
 	}
 
 	return obj;
