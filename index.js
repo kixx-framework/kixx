@@ -3,13 +3,10 @@
 exports.BadRequestError = require('./lib/errors/bad-request-error');
 exports.ConflictError = require('./lib/errors/conflict-error');
 exports.ForbiddenError = require('./lib/errors/forbidden-error');
-// exports.FrameworkError = require(`./lib/errors/framework-error`);
-// exports.InvariantError = require(`./lib/errors/invariant-error`);
 exports.MethodNotAllowedError = require('./lib/errors/method-not-allowed-error');
 exports.NotAcceptableError = require('./lib/errors/not-acceptable-error');
 exports.NotFoundError = require('./lib/errors/not-found-error');
 exports.NotImplementedError = require('./lib/errors/not-implemented-error');
-// exports.ProgrammerError = require(`./lib/errors/programmer-error`);
 exports.StackedError = require('./lib/errors/stacked-error');
 exports.UnauthorizedError = require('./lib/errors/unauthorized-error');
 exports.UnprocessableError = require('./lib/errors/unprocessable-error');
