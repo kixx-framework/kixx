@@ -13,6 +13,8 @@ exports.UnprocessableError = require('./lib/errors/unprocessable-error');
 exports.UnsupportedMediaTypeError = require('./lib/errors/unsupported-media-type-error');
 exports.UserError = require('./lib/errors/user-error');
 
+exports.ImmutableHash = require('./lib/classes/immutable-hash');
+
 // exports.verifyJsonWebToken = require('./lib/verify-json-web-token');
 
 // exports.ApplicationInterface = require(`./lib/classes/application-interface`);

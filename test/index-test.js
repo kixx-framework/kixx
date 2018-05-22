@@ -16,6 +16,8 @@ const UnprocessableError = require('../lib/errors/unprocessable-error');
 const UnsupportedMediaTypeError = require('../lib/errors/unsupported-media-type-error');
 const UserError = require('../lib/errors/user-error');
 
+const ImmutableHash = require('../lib/classes/immutable-hash');
+
 module.exports = function (t) {
 	t.it('defines BadRequestError', () => {
 		assert.isEqual(BadRequestError, index.BadRequestError);
@@ -52,5 +54,8 @@ module.exports = function (t) {
 	});
 	t.it('defines UserError', () => {
 		assert.isEqual(UserError, index.UserError);
+	});
+	t.it('defines ImmutableHash', () => {
+		assert.isEqual(ImmutableHash, index.ImmutableHash);
 	});
 };
