@@ -1,8 +1,8 @@
 'use strict';
 
-const {assert, remove, values} = require(`../../library`);
+const {assert, remove, values} = require('../../library');
 
-const {computeObjectHash} = require(`../../`);
+const {computeObjectHash} = require('../../');
 
 module.exports = function (t) {
 	const undef = ((u) => u)();
@@ -10,7 +10,7 @@ module.exports = function (t) {
 	const mixedArray = [
 		1,
 		{v: 2, k: 1},
-		[1, {}, true, `foo`]
+		[1, {}, true, 'foo']
 	];
 
 	const mixedObject = {
@@ -54,27 +54,27 @@ module.exports = function (t) {
 	const arrayOrderB = [{d: 4, c: 3}, {b: 2, a: 1}];
 
 	const HASHES = Object.freeze({
-		UNDEFINED: `1dTNB2FqVCiRt+wtAlezoktphW4=`,
-		NULL: `K+iMpCQsduglOsYkdIUQZQMtaDM=`,
-		NAN: `9/2caPgErNpmXSqwgiF7sVgzGPI=`,
-		FALSE: `fLbvuYullyqbUJDcLlF/4U0SywQ=`,
-		TRUE: `X/5TO4MPCKAyY0ipFgr6/IraRNs=`,
-		ZERO: `tlifxqsNyCzxIJnRwtQKuZToQQw=`,
-		ONE: `NWoZK3kTsExUV00Ywo1G5jlUKKs=`,
-		NEGONE: `eYSwoOE5yrrbWvx3VtRz+zTSOBk=`,
-		FLOAT: `qo8onr5tTbG0oQOLiTHsjCtTmfs=`,
-		STRING: `C+7Hteo/D9vJXQ3UfzxbwnXaijM=`,
-		SYMBOL: `8iE16SSYcKcGX7lTfhYX8nddXlw=`,
-		NEGFLOAT: `pUqg9xSFJDEUUrNV19xvM5ND+UI=`,
-		NAMED_FUNC: `0XZAsJoiLLVSsgNh6xhUDX0wKfA=`,
-		FUNC: `tXGaSIgMZiYcJUXGW0LcD2KAbWw=`,
-		DATE: `0ScLc9gnbMf6QdMxhS2/yIlO14c=`,
-		EMPTY_OBJECT: `vyGp6PvFo4RvsFtPoIWeCReyIC8=`,
-		OBJECT: `uAdVu1BicUUPbg9E4M1r3T5ZLwk=`,
-		FULL_OBJECT: `GDOdFhaFWnmfNWMqvD0QqVJfcto=`,
-		EMPTY_ARRAY: `l9Fw4VUO7kr8CvBlt4zaMCqXZ0w=`,
-		MIXED_ARRAY: `OO/nlpAq/BmjRiWIWfO0uNB+Ams=`,
-		MIXED_OBJECT: `ukWEBullTFTjgLgendgcc0LtMOs=`
+		UNDEFINED: '1dTNB2FqVCiRt+wtAlezoktphW4=',
+		NULL: 'K+iMpCQsduglOsYkdIUQZQMtaDM=',
+		NAN: '9/2caPgErNpmXSqwgiF7sVgzGPI=',
+		FALSE: 'fLbvuYullyqbUJDcLlF/4U0SywQ=',
+		TRUE: 'X/5TO4MPCKAyY0ipFgr6/IraRNs=',
+		ZERO: 'tlifxqsNyCzxIJnRwtQKuZToQQw=',
+		ONE: 'NWoZK3kTsExUV00Ywo1G5jlUKKs=',
+		NEGONE: 'eYSwoOE5yrrbWvx3VtRz+zTSOBk=',
+		FLOAT: 'qo8onr5tTbG0oQOLiTHsjCtTmfs=',
+		STRING: 'C+7Hteo/D9vJXQ3UfzxbwnXaijM=',
+		SYMBOL: '8iE16SSYcKcGX7lTfhYX8nddXlw=',
+		NEGFLOAT: 'pUqg9xSFJDEUUrNV19xvM5ND+UI=',
+		NAMED_FUNC: '0XZAsJoiLLVSsgNh6xhUDX0wKfA=',
+		FUNC: 'tXGaSIgMZiYcJUXGW0LcD2KAbWw=',
+		DATE: '0ScLc9gnbMf6QdMxhS2/yIlO14c=',
+		EMPTY_OBJECT: 'vyGp6PvFo4RvsFtPoIWeCReyIC8=',
+		OBJECT: 'uAdVu1BicUUPbg9E4M1r3T5ZLwk=',
+		FULL_OBJECT: 'GDOdFhaFWnmfNWMqvD0QqVJfcto=',
+		EMPTY_ARRAY: 'l9Fw4VUO7kr8CvBlt4zaMCqXZ0w=',
+		MIXED_ARRAY: 'OO/nlpAq/BmjRiWIWfO0uNB+Ams=',
+		MIXED_OBJECT: 'ukWEBullTFTjgLgendgcc0LtMOs='
 	});
 
 	const {
@@ -101,11 +101,11 @@ module.exports = function (t) {
 		MIXED_OBJECT
 	} = HASHES;
 
-	t.describe(`HASHES`, (t) => {
+	t.describe('HASHES', (t) => {
 		const keys = Object.keys(HASHES);
 		const hashes = values(HASHES);
 
-		t.it(`has no equal hashes; all hashes are unique`, () => {
+		t.it('has no equal hashes; all hashes are unique', () => {
 			hashes.forEach((hash, i) => {
 				const key = keys[i];
 				const checkKeys = remove(i, 1, hashes);
@@ -114,82 +114,82 @@ module.exports = function (t) {
 		});
 	});
 
-	t.it(`hashes undefined`, () => {
+	t.it('hashes undefined', () => {
 		assert.isEqual(UNDEFINED, computeObjectHash(undef));
 	});
-	t.it(`hashes null`, () => {
+	t.it('hashes null', () => {
 		assert.isEqual(NULL, computeObjectHash(null));
 	});
-	t.it(`hashes NaN`, () => {
+	t.it('hashes NaN', () => {
 		assert.isEqual(NAN, computeObjectHash(NaN));
 	});
-	t.it(`hashes true`, () => {
+	t.it('hashes true', () => {
 		assert.isEqual(TRUE, computeObjectHash(true));
 	});
-	t.it(`hashes false`, () => {
+	t.it('hashes false', () => {
 		assert.isEqual(FALSE, computeObjectHash(false));
 	});
-	t.it(`hashes zero`, () => {
+	t.it('hashes zero', () => {
 		assert.isEqual(ZERO, computeObjectHash(0));
 	});
-	t.it(`hashes an integer`, () => {
+	t.it('hashes an integer', () => {
 		assert.isEqual(ONE, computeObjectHash(1));
 	});
-	t.it(`hashes a neg integer`, () => {
+	t.it('hashes a neg integer', () => {
 		assert.isEqual(NEGONE, computeObjectHash(-1));
 	});
-	t.it(`hashes a float`, () => {
+	t.it('hashes a float', () => {
 		assert.isEqual(FLOAT, computeObjectHash(1.50));
 	});
-	t.it(`hashes a neg float`, () => {
+	t.it('hashes a neg float', () => {
 		assert.isEqual(NEGFLOAT, computeObjectHash(-1.50));
 	});
-	t.it(`hashes a string`, () => {
-		assert.isEqual(STRING, computeObjectHash(`foo`));
+	t.it('hashes a string', () => {
+		assert.isEqual(STRING, computeObjectHash('foo'));
 	});
-	t.it(`hashes a symbol`, () => {
-		assert.isEqual(SYMBOL, computeObjectHash(Symbol(`bar`)));
+	t.it('hashes a symbol', () => {
+		assert.isEqual(SYMBOL, computeObjectHash(Symbol('bar')));
 	});
-	t.it(`hashes an anonymous function`, () => {
+	t.it('hashes an anonymous function', () => {
 		assert.isEqual(FUNC, computeObjectHash(() => 1));
 	});
-	t.it(`hashes a named function`, () => {
+	t.it('hashes a named function', () => {
 		assert.isEqual(NAMED_FUNC, computeObjectHash(function foo() {}));
 	});
-	t.it(`hashes a date`, () => {
-		assert.isEqual(DATE, computeObjectHash(new Date(`2018-01-01T17:00:00.000Z`)));
+	t.it('hashes a date', () => {
+		assert.isEqual(DATE, computeObjectHash(new Date('2018-01-01T17:00:00.000Z')));
 	});
-	t.it(`hashes an Object`, () => {
-		assert.isEqual(OBJECT, computeObjectHash({foo: `bar`}));
+	t.it('hashes an Object', () => {
+		assert.isEqual(OBJECT, computeObjectHash({foo: 'bar'}));
 	});
-	t.it(`hashes an empty Object`, () => {
+	t.it('hashes an empty Object', () => {
 		assert.isEqual(EMPTY_OBJECT, computeObjectHash({}));
 	});
-	t.it(`hashes an Object with many props`, () => {
+	t.it('hashes an Object with many props', () => {
 		assert.isEqual(FULL_OBJECT, computeObjectHash({foo: 1, bar: 2}));
 	});
-	t.it(`hashes an empty Array`, () => {
+	t.it('hashes an empty Array', () => {
 		assert.isEqual(EMPTY_ARRAY, computeObjectHash([]));
 	});
-	t.it(`hashes a mixed Array`, () => {
+	t.it('hashes a mixed Array', () => {
 		assert.isEqual(MIXED_ARRAY, computeObjectHash(mixedArray));
 	});
-	t.it(`hashes a mixed Object`, () => {
+	t.it('hashes a mixed Object', () => {
 		assert.isEqual(MIXED_OBJECT, computeObjectHash(mixedObject));
 	});
-	t.it(`treats objects with different ordered keys as the same object`, () => {
+	t.it('treats objects with different ordered keys as the same object', () => {
 		assert.isEqual(
 			computeObjectHash(orderedObjectA),
 			computeObjectHash(orderedObjectB)
 		);
 	});
-	t.it(`treats Arrays with different ordered keys as the same object in nested Array`, () => {
+	t.it('treats Arrays with different ordered keys as the same object in nested Array', () => {
 		assert.isEqual(
 			computeObjectHash(arrayA),
 			computeObjectHash(arrayB)
 		);
 	});
-	t.it(`treats Arrays with same objects in a different order as different`, () => {
+	t.it('treats Arrays with same objects in a different order as different', () => {
 		assert.isNotEqual(
 			computeObjectHash(arrayOrderA),
 			computeObjectHash(arrayOrderB)
