@@ -17,9 +17,6 @@ exports.ImmutableHash = require('./lib/classes/immutable-hash');
 
 // exports.verifyJsonWebToken = require('./lib/verify-json-web-token');
 
-// exports.ApplicationInterface = require(`./lib/classes/application-interface`);
-// exports.Logger = require(`./lib/classes/logger`);
-
 exports.computeObjectHash = require('./lib/compute-object-hash');
 // exports.createJsonWebToken = require(`./lib/create-json-web-token`);
 // exports.httpFetchBuffer = require(`./lib/http-fetch-buffer`);
