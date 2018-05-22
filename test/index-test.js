@@ -18,6 +18,9 @@ const UserError = require('../lib/errors/user-error');
 
 const ImmutableHash = require('../lib/classes/immutable-hash');
 
+const computeObjectHash = require('../lib/compute-object-hash');
+const initializeComponents = require('../lib/initialize-components');
+
 module.exports = function (t) {
 	t.it('defines BadRequestError', () => {
 		assert.isEqual(BadRequestError, index.BadRequestError);
@@ -57,5 +60,11 @@ module.exports = function (t) {
 	});
 	t.it('defines ImmutableHash', () => {
 		assert.isEqual(ImmutableHash, index.ImmutableHash);
+	});
+	t.it('defines computeObjectHash', () => {
+		assert.isEqual(computeObjectHash, index.computeObjectHash);
+	});
+	t.it('defines initializeComponents', () => {
+		assert.isEqual(initializeComponents, index.initializeComponents);
 	});
 };

@@ -16,9 +16,9 @@ exports.UserError = require('./lib/errors/user-error');
 exports.ImmutableHash = require('./lib/classes/immutable-hash');
 
 exports.computeObjectHash = require('./lib/compute-object-hash');
+exports.initializeComponents = require('./lib/initialize-components');
 // exports.verifyJsonWebToken = require('./lib/verify-json-web-token');
 // exports.createJsonWebToken = require(`./lib/create-json-web-token`);
-// exports.initializeComponents = require(`./lib/initialize-components`);
 // exports.parseJsonWebToken = require(`./lib/parse-json-web-token`);
 // exports.reportFullStackTrace = require(`./lib/report-full-stack-trace`);
 // exports.runTask = require(`./lib/run-task`);
