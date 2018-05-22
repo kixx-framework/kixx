@@ -15,12 +15,9 @@ exports.UserError = require('./lib/errors/user-error');
 
 exports.ImmutableHash = require('./lib/classes/immutable-hash');
 
-// exports.verifyJsonWebToken = require('./lib/verify-json-web-token');
-
 exports.computeObjectHash = require('./lib/compute-object-hash');
+// exports.verifyJsonWebToken = require('./lib/verify-json-web-token');
 // exports.createJsonWebToken = require(`./lib/create-json-web-token`);
-// exports.httpFetchBuffer = require(`./lib/http-fetch-buffer`);
-// exports.httpSendBuffer = require(`./lib/http-send-buffer`);
 // exports.initializeComponents = require(`./lib/initialize-components`);
 // exports.parseJsonWebToken = require(`./lib/parse-json-web-token`);
 // exports.reportFullStackTrace = require(`./lib/report-full-stack-trace`);
