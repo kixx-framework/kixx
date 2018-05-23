@@ -21,12 +21,10 @@
     "kixx-assert": "1.0.5"
   },
   "peerDependendencies": {
-    "bluebird": "^3.0.0",
     "filepath": "^1.1.0",
     "ramda": "^0.25.0"
   },
   "devDependencies": {
-    "bluebird": "^3.0.0",
     "eslint": "4.19.1",
     "filepath": "^1.1.0",
     "kixx-test-node": "1.2.5",

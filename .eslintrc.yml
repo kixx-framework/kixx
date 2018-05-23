@@ -5,6 +5,7 @@ env:
   node: true
 globals:
   Symbol: true
+  Promise: true
 rules:
   strict:
     - error
