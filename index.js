@@ -22,7 +22,6 @@ exports.reportFullStackTrace = require('./lib/report-full-stack-trace');
 // exports.verifyJsonWebToken = require('./lib/verify-json-web-token');
 // exports.createJsonWebToken = require(`./lib/create-json-web-token`);
 // exports.parseJsonWebToken = require(`./lib/parse-json-web-token`);
-// exports.serverWrapper = require(`./lib/server-wrapper`);
 // exports.uuidV1 = require('uuid/v1');
 // exports.uuidV3 = require('uuid/v3');
 // exports.uuidV4 = require('uuid/v4');
