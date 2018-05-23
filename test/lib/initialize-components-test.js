@@ -1,6 +1,5 @@
 'use strict';
 
-const Promise = require('bluebird');
 const {assert} = require('../../library');
 const initializeComponents = require('../../lib/initialize-components');
 
