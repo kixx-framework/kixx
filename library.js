@@ -1,7 +1,7 @@
 'use strict';
 
-const ramda = require(`ramda`);
-const KixxAssert = require(`kixx-assert`);
+const ramda = require('ramda');
+const KixxAssert = require('kixx-assert');
 
 const protoToString = Object.prototype.toString;
 
@@ -142,14 +142,14 @@ exports.sampleOne = sampleOne;
 
 const clamp = ramda.curry((min, max, n) => {
 	max = max >= 1 ? max : 1;
-	if (typeof n !== `number` || n < min) return min;
+	if (typeof n !== 'number' || n < min) return min;
 	if (n >= max) return max - 1;
 	return n;
 });
 exports.clamp = clamp;
 
 function capitalize(str) {
-	if (typeof str !== `string`) return str;
+	if (typeof str !== 'string') return str;
 	return str[0].toUpperCase() + str.slice(1);
 }
 exports.capitalize = capitalize;
