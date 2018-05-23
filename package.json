@@ -18,7 +18,6 @@
   },
   "homepage": "https://github.com/kixxauth/kixx#readme",
   "dependencies": {
-    "jsonwebtoken": "8.2.1",
     "kixx-assert": "1.0.5",
     "uuid": "3.2.1"
   },
