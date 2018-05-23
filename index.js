@@ -19,7 +19,3 @@ exports.composeMiddleware = require('./lib/compose-middleware');
 exports.computeObjectHash = require('./lib/compute-object-hash');
 exports.initializeComponents = require('./lib/initialize-components');
 exports.reportFullStackTrace = require('./lib/report-full-stack-trace');
-// exports.uuidV1 = require('uuid/v1');
-// exports.uuidV3 = require('uuid/v3');
-// exports.uuidV4 = require('uuid/v4');
-// exports.uuidV5 = require('uuid/v5');
