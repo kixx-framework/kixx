@@ -15,6 +15,7 @@ exports.UserError = require('./lib/errors/user-error');
 
 exports.ImmutableHash = require('./lib/classes/immutable-hash');
 
+exports.composeMiddleware = require('./lib/compose-middleware');
 exports.computeObjectHash = require('./lib/compute-object-hash');
 exports.initializeComponents = require('./lib/initialize-components');
 // exports.verifyJsonWebToken = require('./lib/verify-json-web-token');
