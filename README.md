@@ -6,12 +6,10 @@ Kixx is a loosely coupled set of tools and libraries used to make designing and 
 
 Installation
 ------------
-Kixx requires 2 peer depenendencies which also must be installed:
-[Bluebird](http://bluebirdjs.com/docs/getting-started.html) and [Ramda](http://ramdajs.com/). The full command line NPM installation is:
+Kixx [Ramda](http://ramdajs.com/) to be installed as a peer dependency. The full command line NPM installation is:
 
 ```
 $ npm install --save kixx
-$ npm install --save bluebird
 $ npm install --save ramda
 ```
 
@@ -79,6 +77,16 @@ object | Object | An Object to deeply freeze.
 
 Returns the passed Object after recursively calling Object.freeze() deeply throughout.
 
+#### mergeDeep()
+__`mergeDeep(object, ...)`__
+
+parameter | type | description
+--------- | ---- | -----------
+object | Object | An Object merge deeply.
+
+Returns a new Object after deeply merging all passed in Objects from left to right. The right most Object has precedence.
+
+
 #### random()
 __`random(min, max)`__
 
@@ -108,6 +116,15 @@ max | Number | The *exclusive* maximum.
 n   | Number | The Number to clamp.
 
 Returns Number n only if it is greater then or equal to the minimum and less than the maximum. Otherwise, return the min or max as appropriate.
+
+#### capitalize()
+__`capitalize(str)`__
+
+parameter | type | description
+--------- | ---- | -----------
+min | String | The String to capitalize.
+
+Uppercase the first character of the given String and return the new String.
 
 Copyright and License
 ---------------------
