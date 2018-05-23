@@ -21,6 +21,7 @@ const ImmutableHash = require('../lib/classes/immutable-hash');
 const composeMiddleware = require('../lib/compose-middleware');
 const computeObjectHash = require('../lib/compute-object-hash');
 const initializeComponents = require('../lib/initialize-components');
+const reportFullStackTrace = require('../lib/report-full-stack-trace');
 
 module.exports = function (t) {
 	t.it('defines BadRequestError', () => {
@@ -70,5 +71,8 @@ module.exports = function (t) {
 	});
 	t.it('defines initializeComponents', () => {
 		assert.isEqual(initializeComponents, index.initializeComponents);
+	});
+	t.it('defines reportFullStackTrace', () => {
+		assert.isEqual(reportFullStackTrace, index.reportFullStackTrace);
 	});
 };
