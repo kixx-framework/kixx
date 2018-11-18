@@ -1,6 +1,6 @@
 {
   "name": "kixx",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "The best ECMAScript application develoment framework ever",
   "main": "index.js",
   "scripts": {
@@ -17,16 +17,8 @@
     "url": "https://github.com/kixxauth/kixx/issues"
   },
   "homepage": "https://github.com/kixxauth/kixx#readme",
-  "dependencies": {
-    "kixx-assert": "1.0.5"
-  },
-  "peerDependendencies": {
-    "ramda": "^0.25.0"
-  },
   "devDependencies": {
-    "eslint": "4.19.1",
-    "filepath": "1.1.0",
-    "kixx-test-node": "1.2.5",
-    "ramda": "^0.25.0"
+    "eslint": "5.9.0",
+    "kixx-test-node": "1.2.5"
   }
 }

@@ -1,85 +1,19 @@
+env:
+  es6: true
+  node: true
 extends: 'eslint:recommended'
 parserOptions:
-  ecmaVersion: 2017
-env:
-  node: true
-globals:
-  Symbol: true
-  Promise: true
+  ecmaVersion: 2016
 rules:
-  strict:
-    - error
   indent:
     - error
     - tab
   linebreak-style:
     - error
     - unix
-  semi:
-    - error
-    - always
   quotes:
     - error
     - single
-    -
-      allowTemplateLiterals: true
-  no-multi-spaces:
-    - error
-  no-var:
-    - error
-  prefer-const:
-    - error
-  no-unused-vars:
-    - error
-    -
-      args: none
-  no-use-before-define:
-    - error
-    -
-      functions: false
-      classes: false
-  no-caller:
-    - error
-  curly:
-    - error
-    - multi-line
-  comma-dangle:
-    - error
-    - never
-  arrow-parens:
+  semi:
     - error
     - always
-  no-shadow-restricted-names:
-    - error
-  for-direction:
-    - error
-  no-prototype-builtins:
-    - error
-  no-template-curly-in-string:
-    - error
-  array-callback-return:
-    - error
-  no-floating-decimal:
-    - error
-  radix:
-    - error
-  no-mixed-requires:
-    - error
-    -
-      grouping: true
-      allowCall: true
-  no-process-env:
-    - error
-  no-buffer-constructor:
-    - error
-  no-path-concat:
-    - error
-  no-console:
-    - error
-  no-warning-comments:
-    - warn
-    -
-      location: anywhere
-  eol-last:
-    - error
-
