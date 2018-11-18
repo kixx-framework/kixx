@@ -5,6 +5,8 @@ extends: 'eslint:recommended'
 parserOptions:
   ecmaVersion: 2016
 rules:
+  strict:
+    - error
   indent:
     - error
     - tab
@@ -17,3 +19,73 @@ rules:
   semi:
     - error
     - always
+  no-var:
+    - error
+  prefer-const:
+    - error
+  no-unused-vars:
+    - error
+    -
+      args: none
+  no-use-before-define:
+    - error
+    -
+      functions: false
+      classes: false
+  no-caller:
+    - error
+  no-shadow-restricted-names:
+    - error
+  no-shadow:
+    - error
+  for-direction:
+    - error
+  no-prototype-builtins:
+    - error
+  no-template-curly-in-string:
+    - error
+  array-callback-return:
+    - error
+  no-floating-decimal:
+    - error
+  radix:
+    - error
+  no-process-env:
+    - error
+  no-buffer-constructor:
+    - error
+  no-path-concat:
+    - error
+  curly:
+    - error
+    - multi-line
+  arrow-parens:
+    - error
+    - always
+  block-spacing:
+    - error
+  space-infix-ops:
+    - error
+  space-unary-ops:
+    - error
+    -
+      words: true
+      nonwords: true
+  no-multi-spaces:
+    - error
+  object-curly-spacing:
+    - error
+    - always
+  array-bracket-spacing:
+    - error
+    - always
+  no-trailing-spaces:
+    - error
+  no-console:
+    - error
+  no-warning-comments:
+    - warn
+    -
+      location: anywhere
+  eol-last:
+    - error
