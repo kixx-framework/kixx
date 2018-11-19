@@ -70,7 +70,7 @@ rules:
     - error
     -
       words: true
-      nonwords: true
+      nonwords: false
   no-multi-spaces:
     - error
   object-curly-spacing:
