@@ -1,10 +1,10 @@
 {
   "name": "kixx",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "The best ECMAScript application develoment framework ever",
   "main": "index.js",
   "scripts": {
-    "test": "eslint ./ && kixx-test-node",
+    "test": "eslint ./",
     "lint": "eslint ./"
   },
   "author": "Kris Walker (www.kixx.name)",
