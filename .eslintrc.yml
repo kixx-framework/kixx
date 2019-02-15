@@ -10,6 +10,8 @@ rules:
   indent:
     - error
     - tab
+    -
+      SwitchCase: 1
   linebreak-style:
     - error
     - unix
@@ -39,8 +41,6 @@ rules:
   no-shadow:
     - error
   for-direction:
-    - error
-  no-prototype-builtins:
     - error
   no-template-curly-in-string:
     - error
