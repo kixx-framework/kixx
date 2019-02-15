@@ -16,9 +16,5 @@
   "bugs": {
     "url": "https://github.com/kixxauth/kixx/issues"
   },
-  "homepage": "https://github.com/kixxauth/kixx#readme",
-  "devDependencies": {
-    "eslint": "5.9.0",
-    "kixx-test-node": "1.2.5"
-  }
+  "homepage": "https://github.com/kixxauth/kixx#readme"
 }
