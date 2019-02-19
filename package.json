@@ -7,6 +7,9 @@
     "test": "eslint ./",
     "lint": "eslint ./"
   },
+  "engines": {
+    "node": ">=6.5.0"
+  },
   "author": "Kris Walker (www.kixx.name)",
   "license": "MIT",
   "repository": {
