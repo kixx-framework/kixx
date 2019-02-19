@@ -19,5 +19,12 @@
   "bugs": {
     "url": "https://github.com/kixxauth/kixx/issues"
   },
-  "homepage": "https://github.com/kixxauth/kixx#readme"
+  "homepage": "https://github.com/kixxauth/kixx#readme",
+  "peerDependencies": {
+    "ramda": "0.x"
+  },
+  "devDependencies": {
+    "eslint": "5.14.1",
+    "ramda": "0.26.1"
+  }
 }
