@@ -4,7 +4,7 @@
   "description": "The best ECMAScript application develoment framework ever",
   "main": "index.js",
   "scripts": {
-    "test": "eslint ./",
+    "test": "eslint ./ && kixx-test-node --quiet",
     "lint": "eslint ./"
   },
   "engines": {
@@ -21,9 +21,11 @@
   },
   "homepage": "https://github.com/kixxauth/kixx#readme",
   "dependencies": {
+    "kixx-assert": "1.0.5",
     "ramda": "0.26.1"
   },
   "devDependencies": {
-    "eslint": "5.14.1"
+    "eslint": "5.14.1",
+    "kixx-test-node": "1.4.0"
   }
 }
