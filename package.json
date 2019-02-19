@@ -20,11 +20,10 @@
     "url": "https://github.com/kixxauth/kixx/issues"
   },
   "homepage": "https://github.com/kixxauth/kixx#readme",
-  "peerDependencies": {
-    "ramda": "0.x"
+  "dependencies": {
+    "ramda": "0.26.1"
   },
   "devDependencies": {
-    "eslint": "5.14.1",
-    "ramda": "0.26.1"
+    "eslint": "5.14.1"
   }
 }
