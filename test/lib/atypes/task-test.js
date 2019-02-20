@@ -38,6 +38,30 @@ module.exports = (test) => {
 		});
 	});
 
+	test.describe('Task sad path', (t) => {
+		const ERR = new Error('TEST');
+
+		let result;
+
+		t.before((done) => {
+			const f = new Task((reject) => {
+				setTimeout(() => {
+					reject(ERR);
+				}, 10);
+			});
+
+			f.fork((x) => {
+				result = x;
+				done();
+			}, done);
+		});
+
+		t.it('is not smoking', () => {
+			assert.isDefined(result);
+			assert.isEqual(ERR, result);
+		});
+	});
+
 	// Testing the map() instance method.
 	test.describe('Task as Functor', (t) => {
 		// A value which has a Functor must provide a `map` method. The `map`
