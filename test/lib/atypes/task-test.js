@@ -154,4 +154,78 @@ module.exports = (test) => {
 			assert.isEqual(2, count);
 		});
 	});
+
+	// Testing the chain() instance method.
+	test.describe('Task as Chain', (t) => {
+		// A value which has a Chain must provide a `chain` method. The `chain`
+		// method takes one argument:
+		//
+		//     m.chain(f)
+		//
+		// 1. `f` must be a function which returns a value
+		//
+		//     1. If `f` is not a function, the behaviour of `chain` is
+		//        unspecified.
+		//     2. `f` must return a value of the same Chain
+		//
+		// 2. `chain` must return a value of the same Chain
+
+		const VALUE = Object.freeze({ VALUE: true });
+
+		const task = new Task((reject, resolve) => {
+			resolve(VALUE);
+		});
+
+		function throwError(err) {
+			throw err;
+		}
+
+		t.it('accepts a Task from f and return a Task', () => {
+			const task2 = new Task(function (reject, resolve) { resolve(9); });
+
+			const e = task.chain(() => task2);
+			isTask(e);
+
+			let count = 0;
+			e.fork(throwError, (x) => {
+				assert.isEqual(9, x);
+				count += 1;
+			});
+
+			assert.isEqual(1, count);
+		});
+
+		t.it('follows the associativity law', () => {
+			function f(x) {
+				return Task.of(Object.keys(x).length);
+			}
+
+			function g(x) {
+				return Task.of(x * 10);
+			}
+
+			const task2 = task.chain(f).chain(g);
+			const task3 = task.chain((x) => f(x).chain(g));
+
+			assert.isDefined(task2);
+			assert.isDefined(task3);
+			isTask(task2);
+			isTask(task3);
+			assert.isEqual(task.constructor, task2.constructor);
+			assert.isEqual(task.constructor, task3.constructor);
+
+			let count = 0;
+
+			task2.fork(throwError, (x) => {
+				assert.isEqual(10, x);
+				count += 1;
+			});
+			task3.fork(throwError, (x) => {
+				assert.isEqual(10, x);
+				count += 1;
+			});
+
+			assert.isEqual(2, count);
+		});
+	});
 };
