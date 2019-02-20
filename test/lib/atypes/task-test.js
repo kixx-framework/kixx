@@ -32,7 +32,7 @@ module.exports = (test) => {
 			});
 		});
 
-		t.it('is not smoking', () => {
+		t.it('resolves with the result', () => {
 			assert.isNotEmpty(result);
 			assert.isEqual(DELAYED_RESULT, result);
 		});
@@ -59,6 +59,61 @@ module.exports = (test) => {
 		t.it('is not smoking', () => {
 			assert.isDefined(result);
 			assert.isEqual(ERR, result);
+		});
+	});
+
+	test.describe('with an error in the fork fn', (t) => {
+		const ERR = new Error('TEST');
+
+		let result;
+
+		t.before((done) => {
+			const f = new Task(() => {
+				throw ERR;
+			});
+
+			f.fork((x) => {
+				result = x;
+				done();
+			}, done);
+		});
+
+		t.it('rejects with an error', () => {
+			assert.isDefined(result);
+			assert.isEqual(ERR, result);
+		});
+	});
+
+	test.describe('when calling resolve() more than once', (t) => {
+		const DELAYED_RESULT = Object.freeze({
+			DELAYED_RESULT: true
+		});
+
+		let result;
+		let count = 0;
+
+		t.before((done) => {
+			const f = new Task((reject, resolve) => {
+				setTimeout(() => {
+					resolve(DELAYED_RESULT);
+					setTimeout(() => {
+						resolve(DELAYED_RESULT);
+					}, 10);
+				}, 10);
+			});
+
+			f.fork(done, (x) => {
+				count += 1;
+				result = x;
+				// Give enough time for this callback to be called twice.
+				setTimeout(done, 100);
+			});
+		});
+
+		t.it('resolves only once', () => {
+			assert.isEqual(1, count);
+			assert.isNotEmpty(result);
+			assert.isEqual(DELAYED_RESULT, result);
 		});
 	});
 
