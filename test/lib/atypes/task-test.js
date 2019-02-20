@@ -18,6 +18,8 @@ module.exports = (test) => {
 		});
 
 		let result;
+		let chainCalled = false;
+		let mapCalled = false;
 
 		t.before((done) => {
 			const f = new Task((reject, resolve) => {
@@ -26,15 +28,32 @@ module.exports = (test) => {
 				}, 10);
 			});
 
-			f.fork(done, (x) => {
-				result = x;
-				done();
-			});
+			f
+				.chain(function withChain(x) {
+					chainCalled = true;
+					return Task.of(x);
+				})
+				.map(function withMap(x) {
+					mapCalled = true;
+					return x;
+				})
+				.fork(done, (x) => {
+					result = x;
+					done();
+				});
 		});
 
 		t.it('resolves with the result', () => {
 			assert.isNotEmpty(result);
 			assert.isEqual(DELAYED_RESULT, result);
+		});
+
+		t.it('calls the chained function', () => {
+			assert.isEqual(true, chainCalled);
+		});
+
+		t.it('calls the map function', () => {
+			assert.isEqual(true, mapCalled);
 		});
 	});
 
@@ -42,6 +61,8 @@ module.exports = (test) => {
 		const ERR = new Error('TEST');
 
 		let result;
+		let chainCalled = false;
+		let mapCalled = false;
 
 		t.before((done) => {
 			const f = new Task((reject) => {
@@ -50,15 +71,32 @@ module.exports = (test) => {
 				}, 10);
 			});
 
-			f.fork((x) => {
-				result = x;
-				done();
-			}, done);
+			f
+				.chain(function withChain(x) {
+					chainCalled = true;
+					return Task.of(x);
+				})
+				.map(function withMap(x) {
+					mapCalled = true;
+					return x;
+				})
+				.fork((x) => {
+					result = x;
+					done();
+				}, done);
 		});
 
 		t.it('rejects with the Error', () => {
 			assert.isDefined(result);
 			assert.isEqual(ERR, result);
+		});
+
+		t.it('never called the chained function', () => {
+			assert.isEqual(false, chainCalled);
+		});
+
+		t.it('never called the map function', () => {
+			assert.isEqual(false, mapCalled);
 		});
 	});
 
@@ -112,7 +150,6 @@ module.exports = (test) => {
 
 		t.it('resolves only once', () => {
 			assert.isEqual(1, count);
-			assert.isNotEmpty(result);
 			assert.isEqual(DELAYED_RESULT, result);
 		});
 	});
@@ -143,7 +180,66 @@ module.exports = (test) => {
 
 		t.it('rejects only once', () => {
 			assert.isEqual(1, count);
-			assert.isDefined(result);
+			assert.isEqual(ERR, result);
+		});
+	});
+
+	test.describe('when calling resolve() then reject()', (t) => {
+		const VALUE = Object.freeze({ VALUE: true });
+
+		let result;
+		let count = 0;
+
+		t.before((done) => {
+			const f = new Task((reject, resolve) => {
+				setTimeout(() => {
+					resolve(VALUE);
+					setTimeout(() => {
+						reject(new Error('TEST'));
+					}, 10);
+				}, 10);
+			});
+
+			f.fork(done, (x) => {
+				count += 1;
+				result = x;
+				// Give enough time for this callback to be called twice.
+				setTimeout(done, 100);
+			});
+		});
+
+		t.it('resolves only once', () => {
+			assert.isEqual(1, count);
+			assert.isEqual(VALUE, result);
+		});
+	});
+
+	test.describe('when calling reject() then resolve()', (t) => {
+		const ERR = new Error('TEST');
+
+		let result;
+		let count = 0;
+
+		t.before((done) => {
+			const f = new Task((reject, resolve) => {
+				setTimeout(() => {
+					reject(ERR);
+					setTimeout(() => {
+						resolve(new Error('Should not be called'));
+					}, 10);
+				}, 10);
+			});
+
+			f.fork((x) => {
+				count += 1;
+				result = x;
+				// Give enough time for this callback to be called twice.
+				setTimeout(done, 100);
+			}, done);
+		});
+
+		t.it('rejects only once', () => {
+			assert.isEqual(1, count);
 			assert.isEqual(ERR, result);
 		});
 	});
@@ -222,6 +318,112 @@ module.exports = (test) => {
 
 		t.it('throws if it errors a second time', () => {
 			assert.isEqual(ERR3, result3);
+		});
+	});
+
+	test.describe('with error 2 levels deep in chain', (t) => {
+		const DELAYED_RESULT = Object.freeze({
+			DELAYED_RESULT: true
+		});
+
+		const ERR = new Error('TEST');
+
+		let result;
+		let called1 = false;
+		let called2 = false;
+		let called3 = false;
+		let called4 = false;
+
+		t.before((done) => {
+			const f = new Task((reject, resolve) => {
+				resolve(DELAYED_RESULT);
+			});
+
+			f
+				.chain((x) => {
+					called1 = true;
+					return Task.of(x);
+				})
+				.chain(() => {
+					called2 = true;
+					throw ERR;
+				})
+				.chain((x) => {
+					called3 = true;
+					return Task.of(x);
+				})
+				.map((x) => {
+					called4 = true;
+					return x;
+				})
+				.fork((err) => {
+					result = err;
+					done();
+				}, done);
+		});
+
+		t.it('rejects with the error', () => {
+			assert.isEqual(ERR, result);
+		});
+
+		t.it('calls expected chains and maps', () => {
+			assert.isOk(called1);
+			assert.isOk(called2);
+			assert.isNotOk(called3);
+			assert.isNotOk(called4);
+		});
+	});
+
+	test.describe('with error 2 levels deep in map', (t) => {
+		const DELAYED_RESULT = Object.freeze({
+			DELAYED_RESULT: true
+		});
+
+		const ERR = new Error('TEST');
+
+		let result;
+		let called1 = false;
+		let called2 = false;
+		let called3 = false;
+		let called4 = false;
+
+		t.before((done) => {
+			const f = new Task((reject, resolve) => {
+				resolve(DELAYED_RESULT);
+			});
+
+			f
+				.map((x) => {
+					called1 = true;
+					return x;
+				})
+				.map(() => {
+					called2 = true;
+					throw ERR;
+				})
+				.map((x) => {
+					called3 = true;
+					return x;
+				})
+				.chain((x) => {
+					called4 = true;
+					return Task.of(x);
+				})
+				.fork((err) => {
+					result = err;
+					done();
+				}, done);
+		});
+
+		t.it('rejects with the error', () => {
+			assert.isEqual(ERR, result);
+		});
+
+		t.it('calls expected chains and maps', () => {
+			assert.isOk(called1);
+			assert.isOk(called2);
+			assert.isNotOk(called3);
+			assert.isNotOk(called4);
 		});
 	});
 
