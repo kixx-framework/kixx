@@ -56,7 +56,7 @@ module.exports = (test) => {
 			}, done);
 		});
 
-		t.it('is not smoking', () => {
+		t.it('rejects with the Error', () => {
 			assert.isDefined(result);
 			assert.isEqual(ERR, result);
 		});
@@ -114,6 +114,114 @@ module.exports = (test) => {
 			assert.isEqual(1, count);
 			assert.isNotEmpty(result);
 			assert.isEqual(DELAYED_RESULT, result);
+		});
+	});
+
+	test.describe('when calling reject() more than once', (t) => {
+		const ERR = new Error('TEST');
+
+		let result;
+		let count = 0;
+
+		t.before((done) => {
+			const f = new Task((reject) => {
+				setTimeout(() => {
+					reject(ERR);
+					setTimeout(() => {
+						reject(ERR);
+					}, 10);
+				}, 10);
+			});
+
+			f.fork((x) => {
+				count += 1;
+				result = x;
+				// Give enough time for this callback to be called twice.
+				setTimeout(done, 100);
+			}, done);
+		});
+
+		t.it('rejects only once', () => {
+			assert.isEqual(1, count);
+			assert.isDefined(result);
+			assert.isEqual(ERR, result);
+		});
+	});
+
+	test.describe('with an error in the happy path', (t) => {
+		const VALUE = Object.freeze({ VALUE: true });
+		const ERR = new Error('TEST');
+
+		let result;
+
+		t.before((done) => {
+			const f = new Task((reject, resolve) => resolve(VALUE));
+
+			function throwError() {
+				throw ERR;
+			}
+
+			f.fork((err) => {
+				result = err;
+				done();
+			}, throwError);
+		});
+
+		t.it('rejects with the Error', () => {
+			assert.isDefined(result);
+			assert.isEqual(ERR, result);
+		});
+	});
+
+	test.describe('with an error in the sad path', (t) => {
+		const ERR1 = new Error('TEST1');
+		const ERR2 = new Error('TEST2');
+		const ERR3 = new Error('TEST3');
+
+		let count = 0;
+		let result1;
+		let result2;
+		let result3;
+
+		t.before((done) => {
+			const f = new Task((reject) => reject(ERR1));
+
+			function throwError(err) {
+				count += 1;
+				if (!result1) {
+					result1 = err;
+					throw ERR2;
+				}
+				if (!result2) {
+					result2 = err;
+					throw ERR3;
+				}
+			}
+
+			try {
+				f.fork(throwError, (res) => {
+					done(new Error('Did not expect the happy path to execute'))	;
+				});
+			} catch (err) {
+				result3 = err;
+				done();
+			}
+		});
+
+		t.it('calls reject twice, at most', () => {
+			assert.isEqual(2, count);
+		});
+
+		t.it('receives first error as rejection', () => {
+			assert.isEqual(ERR1, result1);
+		});
+
+		t.it('receives thrown error as rejection', () => {
+			assert.isEqual(ERR2, result2);
+		});
+
+		t.it('throws if it errors a second time', () => {
+			assert.isEqual(ERR3, result3);
 		});
 	});
 
