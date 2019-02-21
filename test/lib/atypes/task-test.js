@@ -61,6 +61,7 @@ module.exports = (test) => {
 		const ERR = new Error('TEST');
 
 		let result;
+		// TODO: Use Sinon for these spies.
 		let chainCalled = false;
 		let mapCalled = false;
 
@@ -140,6 +141,7 @@ module.exports = (test) => {
 				}, 10);
 			});
 
+			// TODO: Use Sinon for the callback.
 			f.fork(done, (x) => {
 				count += 1;
 				result = x;
@@ -170,6 +172,7 @@ module.exports = (test) => {
 				}, 10);
 			});
 
+			// TODO: Use Sinon for the callback.
 			f.fork((x) => {
 				count += 1;
 				result = x;
@@ -200,6 +203,7 @@ module.exports = (test) => {
 				}, 10);
 			});
 
+			// TODO: Use Sinon for the callback.
 			f.fork(done, (x) => {
 				count += 1;
 				result = x;
@@ -230,6 +234,7 @@ module.exports = (test) => {
 				}, 10);
 			});
 
+			// TODO: Use Sinon for the callback.
 			f.fork((x) => {
 				count += 1;
 				result = x;
@@ -282,6 +287,7 @@ module.exports = (test) => {
 		t.before((done) => {
 			const f = new Task((reject) => reject(ERR1));
 
+			// TODO: Use Sinon for spies.
 			function throwError(err) {
 				count += 1;
 				if (!result1) {
@@ -339,6 +345,7 @@ module.exports = (test) => {
 				resolve(DELAYED_RESULT);
 			});
 
+			// TODO: Use Sinon for spies.
 			f
 				.chain((x) => {
 					called1 = true;
@@ -392,6 +399,7 @@ module.exports = (test) => {
 				resolve(DELAYED_RESULT);
 			});
 
+			// TODO: Use Sinon for spies.
 			f
 				.map((x) => {
 					called1 = true;
@@ -449,11 +457,13 @@ module.exports = (test) => {
 			resolve(VALUE);
 		});
 
+		// TODO: Move this inside the it() block.
 		function throwError(err) {
 			throw err;
 		}
 
 		t.it('will take any value from f and returns a Task', () => {
+			// TODO: Use Sinon for spies.
 			let count = 0;
 
 			const a = task.map((x) => x);
@@ -497,6 +507,7 @@ module.exports = (test) => {
 		});
 
 		t.it('follows the identity law', () => {
+			// TODO: Use Sinon for spies.
 			const task2 = task.map((x) => x);
 
 			assert.isDefined(task2);
@@ -512,6 +523,7 @@ module.exports = (test) => {
 		});
 
 		t.it('follows the composition law', () => {
+			// TODO: Use Sinon for spies.
 			function g(x) {
 				return Object.keys(x).length;
 			}
@@ -567,11 +579,13 @@ module.exports = (test) => {
 			resolve(VALUE);
 		});
 
+		// TODO: Move this inside the it() block.
 		function throwError(err) {
 			throw err;
 		}
 
 		t.it('accepts a Task from f and return a Task', () => {
+			// TODO: Use Sinon for spies.
 			const task2 = new Task(function (reject, resolve) { resolve(9); });
 
 			const e = task.chain(() => task2);
@@ -587,6 +601,7 @@ module.exports = (test) => {
 		});
 
 		t.it('follows the associativity law', () => {
+			// TODO: Use Sinon for spies.
 			function f(x) {
 				return Task.of(Object.keys(x).length);
 			}

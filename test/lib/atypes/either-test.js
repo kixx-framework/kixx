@@ -312,6 +312,7 @@ module.exports = (test) => {
 		});
 	});
 
+	// TODO: Replace the either helper with m.bimap()
 	test.describe('either() helper', (t) => {
 		const VALUE = Object.freeze({ VALUE: true });
 		const ERR = new Error('TEST');
