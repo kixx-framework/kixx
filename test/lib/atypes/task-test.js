@@ -453,7 +453,7 @@ module.exports = (test) => {
 			throw err;
 		}
 
-		t.it('can take any value from f and returns a Task', () => {
+		t.it('will take any value from f and returns a Task', () => {
 			let count = 0;
 
 			const a = task.map((x) => x);
@@ -498,6 +498,7 @@ module.exports = (test) => {
 
 		t.it('follows the identity law', () => {
 			const task2 = task.map((x) => x);
+
 			assert.isDefined(task2);
 			isTask(task2);
 			assert.isEqual(task.constructor, task2.constructor);
@@ -523,10 +524,11 @@ module.exports = (test) => {
 			const task3 = task.map(g).map(f);
 
 			assert.isDefined(task2);
-			assert.isDefined(task3);
 			isTask(task2);
-			isTask(task3);
 			assert.isEqual(task.constructor, task2.constructor);
+
+			assert.isDefined(task3);
+			isTask(task3);
 			assert.isEqual(task.constructor, task3.constructor);
 
 			let count = 0;
