@@ -1,13 +1,32 @@
 'use strict';
 
+const { inspect } = require('util');
 const { assert, helpers } = require('kixx-assert');
-// const pureTest = require('../../../lib/pure-test');
+const sinon = require('sinon');
 
 const Task = require('../../../lib/atypes/task');
 
 const isTask = helpers.assertion1(
 	(x) => x instanceof Task,
 	(actual) => `expected ${actual} to be an instance of Task`
+);
+
+// Create an assertion to confirm a function (sinon spy) has not been called.
+const isNotCalled = helpers.assertion1(
+	(x) => x.notCalled,
+	(actual) => `expected not to be called, but called ${actual.callCount} times`
+);
+
+// Create an assertion to confirm a function (sinon spy) has only been called
+// once, and was called with single argument a.
+const isCalledOnceWith = helpers.assertion2(
+	(a, x) => x.calledOnceWith(a),
+	(expected, actual) => {
+		const { callCount, firstCall } = actual;
+		const expectedString = inspect(expected);
+		const args = (firstCall || {}).args || [];
+		return `expected to be called once with ${expectedString}, but called ${callCount} times with ${args}`;
+	}
 );
 
 
@@ -61,9 +80,8 @@ module.exports = (test) => {
 		const ERR = new Error('TEST');
 
 		let result;
-		// TODO: Use Sinon for these spies.
-		let chainCalled = false;
-		let mapCalled = false;
+		const withChain = sinon.fake((x) => Task.of(x));
+		const withMap = sinon.fake((x) => x);
 
 		t.before((done) => {
 			const f = new Task((reject) => {
@@ -73,17 +91,11 @@ module.exports = (test) => {
 			});
 
 			f
-				.chain(function withChain(x) {
-					chainCalled = true;
-					return Task.of(x);
-				})
-				.map(function withMap(x) {
-					mapCalled = true;
-					return x;
-				})
+				.chain(withChain)
+				.map(withMap)
 				.fork((x) => {
 					result = x;
-					done();
+					setTimeout(done, 50);
 				}, done);
 		});
 
@@ -93,11 +105,11 @@ module.exports = (test) => {
 		});
 
 		t.it('never called the chained function', () => {
-			assert.isEqual(false, chainCalled);
+			isNotCalled(withChain);
 		});
 
 		t.it('never called the map function', () => {
-			assert.isEqual(false, mapCalled);
+			isNotCalled(withMap);
 		});
 	});
 
@@ -141,12 +153,11 @@ module.exports = (test) => {
 				}, 10);
 			});
 
-			// TODO: Use Sinon for the callback.
 			f.fork(done, (x) => {
 				count += 1;
 				result = x;
 				// Give enough time for this callback to be called twice.
-				setTimeout(done, 100);
+				if (count <= 1) setTimeout(done, 100);
 			});
 		});
 
@@ -172,12 +183,11 @@ module.exports = (test) => {
 				}, 10);
 			});
 
-			// TODO: Use Sinon for the callback.
 			f.fork((x) => {
 				count += 1;
 				result = x;
 				// Give enough time for this callback to be called twice.
-				setTimeout(done, 100);
+				if (count <= 1) setTimeout(done, 100);
 			}, done);
 		});
 
@@ -203,12 +213,11 @@ module.exports = (test) => {
 				}, 10);
 			});
 
-			// TODO: Use Sinon for the callback.
 			f.fork(done, (x) => {
 				count += 1;
 				result = x;
 				// Give enough time for this callback to be called twice.
-				setTimeout(done, 100);
+				if (count <= 1) setTimeout(done, 100);
 			});
 		});
 
@@ -234,12 +243,11 @@ module.exports = (test) => {
 				}, 10);
 			});
 
-			// TODO: Use Sinon for the callback.
 			f.fork((x) => {
 				count += 1;
 				result = x;
 				// Give enough time for this callback to be called twice.
-				setTimeout(done, 100);
+				if (count <= 1) setTimeout(done, 100);
 			}, done);
 		});
 
@@ -279,30 +287,27 @@ module.exports = (test) => {
 		const ERR2 = new Error('TEST2');
 		const ERR3 = new Error('TEST3');
 
-		let count = 0;
 		let result1;
 		let result2;
 		let result3;
 
+		const throwError = sinon.fake((err) => {
+			if (!result1) {
+				result1 = err;
+				throw ERR2;
+			}
+			if (!result2) {
+				result2 = err;
+				throw ERR3;
+			}
+		});
+
 		t.before((done) => {
 			const f = new Task((reject) => reject(ERR1));
 
-			// TODO: Use Sinon for spies.
-			function throwError(err) {
-				count += 1;
-				if (!result1) {
-					result1 = err;
-					throw ERR2;
-				}
-				if (!result2) {
-					result2 = err;
-					throw ERR3;
-				}
-			}
-
 			try {
 				f.fork(throwError, (res) => {
-					done(new Error('Did not expect the happy path to execute'))	;
+					done(new Error('Did not expect the happy path to execute'));
 				});
 			} catch (err) {
 				result3 = err;
@@ -311,7 +316,7 @@ module.exports = (test) => {
 		});
 
 		t.it('calls reject twice, at most', () => {
-			assert.isEqual(2, count);
+			assert.isEqual(2, throwError.callCount);
 		});
 
 		t.it('receives first error as rejection', () => {
@@ -335,38 +340,31 @@ module.exports = (test) => {
 		const ERR = new Error('TEST');
 
 		let result;
-		let called1 = false;
-		let called2 = false;
-		let called3 = false;
-		let called4 = false;
+
+		const f1 = sinon.fake((x) => Task.of(x));
+		const f2 = sinon.fake(() => {
+			throw ERR;
+		});
+		const f3 = sinon.fake((x) => Task.of(x));
+		const f4 = sinon.fake((x) => x);
 
 		t.before((done) => {
 			const f = new Task((reject, resolve) => {
 				resolve(DELAYED_RESULT);
 			});
 
-			// TODO: Use Sinon for spies.
 			f
-				.chain((x) => {
-					called1 = true;
-					return Task.of(x);
-				})
-				.chain(() => {
-					called2 = true;
-					throw ERR;
-				})
-				.chain((x) => {
-					called3 = true;
-					return Task.of(x);
-				})
-				.map((x) => {
-					called4 = true;
-					return x;
-				})
-				.fork((err) => {
-					result = err;
-					done();
-				}, done);
+				.chain(f1)
+				.chain(f2)
+				.chain(f3)
+				.map(f4)
+				.fork(
+					(err) => {
+						result = err;
+						done();
+					},
+					() => done(new Error('Unexpected execution path'))
+				);
 		});
 
 		t.it('rejects with the error', () => {
@@ -374,10 +372,10 @@ module.exports = (test) => {
 		});
 
 		t.it('calls expected chains and maps', () => {
-			assert.isOk(called1);
-			assert.isOk(called2);
-			assert.isNotOk(called3);
-			assert.isNotOk(called4);
+			isCalledOnceWith(DELAYED_RESULT, f1);
+			isCalledOnceWith(DELAYED_RESULT, f2);
+			isNotCalled(f3);
+			isNotCalled(f4);
 		});
 	});
 
@@ -389,38 +387,31 @@ module.exports = (test) => {
 		const ERR = new Error('TEST');
 
 		let result;
-		let called1 = false;
-		let called2 = false;
-		let called3 = false;
-		let called4 = false;
+
+		const f1 = sinon.fake((x) => x);
+		const f2 = sinon.fake(() => {
+			throw ERR;
+		});
+		const f3 = sinon.fake((x) => x);
+		const f4 = sinon.fake((x) => Task.of(x));
 
 		t.before((done) => {
 			const f = new Task((reject, resolve) => {
 				resolve(DELAYED_RESULT);
 			});
 
-			// TODO: Use Sinon for spies.
 			f
-				.map((x) => {
-					called1 = true;
-					return x;
-				})
-				.map(() => {
-					called2 = true;
-					throw ERR;
-				})
-				.map((x) => {
-					called3 = true;
-					return x;
-				})
-				.chain((x) => {
-					called4 = true;
-					return Task.of(x);
-				})
-				.fork((err) => {
-					result = err;
-					done();
-				}, done);
+				.map(f1)
+				.map(f2)
+				.map(f3)
+				.chain(f4)
+				.fork(
+					(err) => {
+						result = err;
+						done();
+					},
+					() => done(new Error('Unexpected execution path'))
+				);
 		});
 
 		t.it('rejects with the error', () => {
@@ -428,15 +419,15 @@ module.exports = (test) => {
 		});
 
 		t.it('calls expected chains and maps', () => {
-			assert.isOk(called1);
-			assert.isOk(called2);
-			assert.isNotOk(called3);
-			assert.isNotOk(called4);
+			isCalledOnceWith(DELAYED_RESULT, f1);
+			isCalledOnceWith(DELAYED_RESULT, f2);
+			isNotCalled(f3);
+			isNotCalled(f4);
 		});
 	});
 
 	// Testing the map() instance method.
-	test.describe('Task as Functor', (t) => {
+	test.describe('Task as Functor on happy path', (t) => {
 		// A value which has a Functor must provide a `map` method. The `map`
 		// method takes one argument:
 		//
@@ -457,14 +448,12 @@ module.exports = (test) => {
 			resolve(VALUE);
 		});
 
-		// TODO: Move this inside the it() block.
-		function throwError(err) {
-			throw err;
-		}
-
 		t.it('will take any value from f and returns a Task', () => {
-			// TODO: Use Sinon for spies.
 			let count = 0;
+
+			function throwError(err) {
+				throw err;
+			}
 
 			const a = task.map((x) => x);
 			isTask(a);
@@ -507,7 +496,10 @@ module.exports = (test) => {
 		});
 
 		t.it('follows the identity law', () => {
-			// TODO: Use Sinon for spies.
+			function throwError(err) {
+				throw err;
+			}
+
 			const task2 = task.map((x) => x);
 
 			assert.isDefined(task2);
@@ -523,7 +515,10 @@ module.exports = (test) => {
 		});
 
 		t.it('follows the composition law', () => {
-			// TODO: Use Sinon for spies.
+			function throwError(err) {
+				throw err;
+			}
+
 			function g(x) {
 				return Object.keys(x).length;
 			}
@@ -559,7 +554,7 @@ module.exports = (test) => {
 	});
 
 	// Testing the chain() instance method.
-	test.describe('Task as Chain', (t) => {
+	test.describe('Task as Chain on happy path', (t) => {
 		// A value which has a Chain must provide a `chain` method. The `chain`
 		// method takes one argument:
 		//
@@ -579,13 +574,11 @@ module.exports = (test) => {
 			resolve(VALUE);
 		});
 
-		// TODO: Move this inside the it() block.
-		function throwError(err) {
-			throw err;
-		}
-
 		t.it('accepts a Task from f and return a Task', () => {
-			// TODO: Use Sinon for spies.
+			function throwError(err) {
+				throw err;
+			}
+
 			const task2 = new Task(function (reject, resolve) { resolve(9); });
 
 			const e = task.chain(() => task2);
@@ -601,7 +594,10 @@ module.exports = (test) => {
 		});
 
 		t.it('follows the associativity law', () => {
-			// TODO: Use Sinon for spies.
+			function throwError(err) {
+				throw err;
+			}
+
 			function f(x) {
 				return Task.of(Object.keys(x).length);
 			}
@@ -632,6 +628,185 @@ module.exports = (test) => {
 			});
 
 			assert.isEqual(2, count);
+		});
+	});
+
+	// Testing the map() instance method.
+	test.describe('Task as Functor on sad path', (t) => {
+		// A value which has a Functor must provide a `map` method. The `map`
+		// method takes one argument:
+		//
+		//     u.map(f)
+		//
+		// 1. `f` must be a function,
+		//
+		//     1. If `f` is not a function, the behaviour of `map` is
+		//        unspecified.
+		//     2. `f` can return any value.
+		//     3. No parts of `f`'s return value should be checked.
+		//
+		// 2. `map` must return a value of the same Functor
+
+		const ERR = new Error('TEST');
+
+		const task = new Task((reject) => reject(ERR));
+
+		t.it('will take any value from f and returns a Task', () => {
+			const assertRejection = sinon.fake();
+
+			const f1 = sinon.fake((x) => x);
+			const a = task.map(f1);
+			isTask(a);
+			isNotCalled(f1);
+			a.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+
+			const f2 = sinon.fake.returns(null);
+			const b = task.map(f2);
+			isTask(b);
+			isNotCalled(f2);
+			b.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+
+			const f3 = sinon.fake.returns(1);
+			const c = task.map(f3);
+			isTask(c);
+			isNotCalled(f3);
+			c.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+
+			assert.isEqual(3, assertRejection.callCount);
+			assert.isEqual(ERR, assertRejection.getCall(0).args[0]);
+			assert.isEqual(ERR, assertRejection.getCall(1).args[0]);
+			assert.isEqual(ERR, assertRejection.getCall(2).args[0]);
+		});
+
+		t.it('follows the identity law', () => {
+			const assertRejection = sinon.fake();
+
+			const task2 = task.map((x) => x);
+
+			assert.isDefined(task2);
+			isTask(task2);
+			assert.isEqual(task.constructor, task2.constructor);
+
+			task2.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+
+			isCalledOnceWith(ERR, assertRejection);
+		});
+
+		t.it('follows the composition law', () => {
+			const assertRejection = sinon.fake();
+
+			const g = sinon.fake();
+			const f = sinon.fake();
+
+			const task2 = task.map((x) => f(g(x)));
+			const task3 = task.map(g).map(f);
+
+			assert.isDefined(task2);
+			isTask(task2);
+			assert.isEqual(task.constructor, task2.constructor);
+
+			assert.isDefined(task3);
+			isTask(task3);
+			assert.isEqual(task.constructor, task3.constructor);
+
+			task2.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+			task3.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+
+			assert.isEqual(2, assertRejection.callCount);
+			assert.isEqual(ERR, assertRejection.getCall(0).args[0]);
+			assert.isEqual(ERR, assertRejection.getCall(1).args[0]);
+		});
+	});
+
+	// Testing the chain() instance method.
+	test.describe('Task as Chain on sad path', (t) => {
+		// A value which has a Chain must provide a `chain` method. The `chain`
+		// method takes one argument:
+		//
+		//     m.chain(f)
+		//
+		// 1. `f` must be a function which returns a value
+		//
+		//     1. If `f` is not a function, the behaviour of `chain` is
+		//        unspecified.
+		//     2. `f` must return a value of the same Chain
+		//
+		// 2. `chain` must return a value of the same Chain
+
+		const ERR = new Error('TEST');
+
+		const task = new Task((reject) => reject(ERR));
+
+		t.it('accepts a Task from f and return a Task', () => {
+			const assertRejection = sinon.fake();
+
+			const task2 = Task.of(1);
+
+			const f = sinon.fake.returns(task2);
+
+			const e = task.chain(f);
+			isNotCalled(f);
+			isTask(e);
+
+			e.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+
+			isCalledOnceWith(ERR, assertRejection);
+		});
+
+		t.it('follows the associativity law', () => {
+			const assertRejection = sinon.fake();
+
+			const f = sinon.fake();
+			const g = sinon.fake();
+
+			const task2 = task.chain(f).chain(g);
+			const task3 = task.chain((x) => f(x).chain(g));
+
+			assert.isDefined(task2);
+			isTask(task2);
+			assert.isEqual(task.constructor, task2.constructor);
+
+			assert.isDefined(task3);
+			isTask(task3);
+			assert.isEqual(task.constructor, task3.constructor);
+
+			task2.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+
+			task3.fork(
+				assertRejection,
+				() => { throw new Error('Unexpected execution path'); }
+			);
+
+			assert.isEqual(2, assertRejection.callCount);
+			assert.isEqual(ERR, assertRejection.getCall(0).args[0]);
+			assert.isEqual(ERR, assertRejection.getCall(1).args[0]);
+
+			isNotCalled(f);
+			isNotCalled(g);
 		});
 	});
 };
