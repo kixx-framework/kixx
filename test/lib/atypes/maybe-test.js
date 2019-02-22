@@ -1,5 +1,6 @@
 'use strict';
 
+const { inspect } = require('util');
 const { assert, helpers } = require('kixx-assert');
 const sinon = require('sinon');
 
@@ -15,6 +16,18 @@ const isMaybe = helpers.assertion1(
 const isNotCalled = helpers.assertion1(
 	(x) => x.notCalled,
 	(actual) => `expected not to be called, but called ${actual.callCount} times`
+);
+
+// Create an assertion to confirm a function (sinon spy) has only been called
+// once, and was called with single argument a.
+const isCalledOnceWith = helpers.assertion2(
+	(a, x) => x.calledOnceWith(a),
+	(expected, actual) => {
+		const { callCount, firstCall } = actual;
+		const expectedString = inspect(expected);
+		const args = (firstCall || {}).args || [];
+		return `expected to be called once with ${expectedString}, but called ${callCount} times with ${args}`;
+	}
 );
 
 
@@ -186,6 +199,205 @@ module.exports = (test) => {
 			// Mapping functions are never called on the Left path.
 			isNotCalled(g);
 			isNotCalled(f);
+		});
+	});
+
+	// Test the bimap() instance method when Just
+	test.describe('Maybe as Bifunctor when Just', (t) => {
+		/*
+		A value which has a Bifunctor must provide a `bimap` method. The `bimap`
+		method takes two arguments:
+
+		    c.bimap(f, g)
+
+		1. `f` must be a function which returns a value
+
+		    1. If `f` is not a function, the behaviour of `bimap` is unspecified.
+		    2. `f` can return any value.
+		    3. No parts of `f`'s return value should be checked.
+
+		2. `g` must be a function which returns a value
+
+		    1. If `g` is not a function, the behaviour of `bimap` is unspecified.
+		    2. `g` can return any value.
+		    3. No parts of `g`'s return value should be checked.
+
+		3. `bimap` must return a value of the same Bifunctor.
+		*/
+
+		const VALUE = Object.freeze({ VALUE: true });
+		let c;
+
+		t.before((done) => {
+			c = Maybe.just(VALUE);
+			done();
+		});
+
+		t.it('will take any value from g and return a value of the same Bifunctor', () => {
+			const returnValues = [
+				[ 'returns null', null ],
+				[ 'returns bool false', false ],
+				[ 'returns bool true', true ],
+				[ 'returns number', 9 ],
+				[ 'returns object', VALUE ],
+				[ 'returns Functor', Maybe.just(1) ]
+			];
+
+			const count = returnValues.reduce((i, [ label, val ]) => {
+				const f = sinon.fake();
+				const g = sinon.fake.returns(val);
+
+				const c1 = c.bimap(f, g);
+
+				isNotCalled(f, label);
+				isCalledOnceWith(VALUE, g, label);
+
+				isMaybe(c1, label);
+				assert.isEqual(c.constructor, c1.constructor, label);
+				assert.isEqual(val, c1.value, label);
+
+				return i + 1;
+			}, 0);
+
+			assert.isEqual(returnValues.length, count);
+		});
+
+		t.it('follows the identity law', () => {
+			const f = sinon.fake((x) => x);
+			const g = sinon.fake((x) => x);
+
+			const c1 = c.bimap(f, g);
+			isMaybe(c1);
+			assert.isEqual(c.constructor, c1.constructor);
+			assert.isEqual(VALUE, c1.value);
+		});
+
+		t.it('follows the composition law', () => {
+			const f = sinon.fake.returns(0);
+			const g = sinon.fake.returns(1);
+			const h = sinon.fake.returns(2);
+			const i = sinon.fake.returns(3);
+
+			const sad = sinon.fake((x) => {
+				return f(g(x));
+			});
+
+			const happy = sinon.fake((x) => {
+				return h(i(x));
+			});
+
+			const c1 = c.bimap(sad, happy);
+			const c2 = c.bimap(g, i).bimap(f, h);
+
+			isMaybe(c1);
+			assert.isEqual(c.constructor, c1.constructor);
+			assert.isEqual(c1.constructor, c2.constructor);
+			assert.isEqual(2, c1.value);
+			assert.isEqual(c1.value, c2.value);
+
+			isNotCalled(f);
+			isNotCalled(g);
+			assert.isEqual(2, h.callCount);
+			assert.isEqual(2, i.callCount);
+		});
+	});
+
+	// Test the bimap() instance method when Nothing
+	test.describe('Maybe as Bifunctor when Nothing', (t) => {
+		/*
+		A value which has a Bifunctor must provide a `bimap` method. The `bimap`
+		method takes two arguments:
+
+		    c.bimap(f, g)
+
+		1. `f` must be a function which returns a value
+
+		    1. If `f` is not a function, the behaviour of `bimap` is unspecified.
+		    2. `f` can return any value.
+		    3. No parts of `f`'s return value should be checked.
+
+		2. `g` must be a function which returns a value
+
+		    1. If `g` is not a function, the behaviour of `bimap` is unspecified.
+		    2. `g` can return any value.
+		    3. No parts of `g`'s return value should be checked.
+
+		3. `bimap` must return a value of the same Bifunctor.
+		*/
+
+		let c;
+
+		t.before((done) => {
+			c = Maybe.nothing();
+			done();
+		});
+
+		t.it('will take any value from f and return a value of the same Bifunctor', () => {
+			const returnValues = [
+				[ 'returns null', null ],
+				[ 'returns bool false', false ],
+				[ 'returns bool true', true ],
+				[ 'returns number', 9 ],
+				[ 'returns object', {} ],
+				[ 'returns Functor', Maybe.just(1) ]
+			];
+
+			const count = returnValues.reduce((i, [ label, val ]) => {
+				const f = sinon.fake.returns(val);
+				const g = sinon.fake();
+
+				const c1 = c.bimap(f, g);
+
+				isNotCalled(g, label);
+				assert.isEqual(1, f.callCount);
+
+				isMaybe(c1, label);
+				assert.isEqual(c.constructor, c1.constructor, label);
+				assert.isUndefined(c1.value, label);
+
+				return i + 1;
+			}, 0);
+
+			assert.isEqual(returnValues.length, count);
+		});
+
+		t.it('follows the identity law', () => {
+			const f = sinon.fake((x) => x);
+			const g = sinon.fake((x) => x);
+
+			const c1 = c.bimap(f, g);
+			isMaybe(c1);
+			assert.isEqual(c.constructor, c1.constructor);
+			assert.isUndefined(c1.value);
+		});
+
+		t.it('follows the composition law', () => {
+			const f = sinon.fake.returns(0);
+			const g = sinon.fake.returns(1);
+			const h = sinon.fake.returns(2);
+			const i = sinon.fake.returns(3);
+
+			const sad = sinon.fake((x) => {
+				return f(g(x));
+			});
+
+			const happy = sinon.fake((x) => {
+				return h(i(x));
+			});
+
+			const c1 = c.bimap(sad, happy);
+			const c2 = c.bimap(g, i).bimap(f, h);
+
+			isMaybe(c1);
+			assert.isEqual(c.constructor, c1.constructor);
+			assert.isEqual(c1.constructor, c2.constructor);
+			assert.isUndefined(c1.value);
+			assert.isEqual(c1.value, c2.value);
+
+			assert.isEqual(2, f.callCount);
+			assert.isEqual(2, g.callCount);
+			isNotCalled(h);
+			isNotCalled(i);
 		});
 	});
 

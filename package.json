@@ -4,7 +4,7 @@
   "description": "The best ECMAScript application develoment framework ever",
   "main": "index.js",
   "scripts": {
-    "test": "eslint ./ && kixx-test-node --quiet",
+    "test": "eslint ./ && kixx-test-node",
     "lint": "eslint ./"
   },
   "engines": {
