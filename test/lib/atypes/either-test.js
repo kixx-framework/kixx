@@ -1,6 +1,5 @@
 'use strict';
 
-const { inspect } = require('util');
 const { assert, helpers } = require('kixx-assert');
 const sinon = require('sinon');
 
@@ -16,18 +15,6 @@ const isEither = helpers.assertion1(
 const isNotCalled = helpers.assertion1(
 	(x) => x.notCalled,
 	(actual) => `expected not to be called, but called ${actual.callCount} times`
-);
-
-// Create an assertion to confirm a function (sinon spy) has only been called
-// once, and was called with single argument a.
-const isCalledOnceWith = helpers.assertion2(
-	(a, x) => x.calledOnceWith(a),
-	(expected, actual) => {
-		const { callCount, firstCall } = actual;
-		const expectedString = inspect(expected);
-		const args = (firstCall || {}).args || [];
-		return `expected to be called once with ${expectedString}, but called ${callCount} times with ${args}`;
-	}
 );
 
 module.exports = (test) => {
@@ -309,69 +296,6 @@ module.exports = (test) => {
 			// Mapping functions are never called in the Left path.
 			isNotCalled(f);
 			isNotCalled(g);
-		});
-	});
-
-	// TODO: Replace the either helper with m.bimap()
-	test.describe('either() helper', (t) => {
-		const VALUE = Object.freeze({ VALUE: true });
-		const ERR = new Error('TEST');
-
-		t.describe('on Right path', (t1) => {
-			const onleft = sinon.fake.returns(0);
-			const onright = sinon.fake.returns(1);
-
-			const map = Either.either(onleft, onright);
-
-			t1.it('executes the right function', () => {
-				const x = map(Either.right(VALUE));
-
-				isNotCalled(onleft);
-				isCalledOnceWith(VALUE, onright);
-
-				assert.isEqual(1, x);
-			});
-		});
-
-		t.describe('on Left path', (t1) => {
-			const onleft = sinon.fake.returns(0);
-			const onright = sinon.fake.returns(1);
-
-			const map = Either.either(onleft, onright);
-
-			t1.it('executes the left function', () => {
-				const x = map(Either.left(ERR));
-
-				isNotCalled(onright);
-				isCalledOnceWith(ERR, onleft);
-
-				assert.isEqual(0, x);
-			});
-		});
-
-		t.describe('with invalid type', (t1) => {
-			const onleft = sinon.fake.returns(0);
-			const onright = sinon.fake.returns(1);
-
-			const map = Either.either(onleft, onright);
-
-			t1.it('throws', () => {
-				let x;
-				let success = false;
-
-				try {
-					x = map(new Date());
-					success = true;
-				} catch (err) {
-					assert.isEqual("Invalid type 'Date' given to either()", err.message);
-				}
-
-				isNotCalled(onright);
-				isNotCalled(onleft);
-
-				assert.isEqual(false, success);
-				assert.isUndefined(x);
-			});
 		});
 	});
 };
