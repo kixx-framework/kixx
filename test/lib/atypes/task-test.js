@@ -809,4 +809,230 @@ module.exports = (test) => {
 			isNotCalled(g);
 		});
 	});
+
+	// Test the bimap() instance method when happy.
+	test.describe('Task as Bifunctor when happy', (t) => {
+		/*
+		A value which has a Bifunctor must provide a `bimap` method. The `bimap`
+		method takes two arguments:
+
+		    c.bimap(f, g)
+
+		1. `f` must be a function which returns a value
+
+		    1. If `f` is not a function, the behaviour of `bimap` is unspecified.
+		    2. `f` can return any value.
+		    3. No parts of `f`'s return value should be checked.
+
+		2. `g` must be a function which returns a value
+
+		    1. If `g` is not a function, the behaviour of `bimap` is unspecified.
+		    2. `g` can return any value.
+		    3. No parts of `g`'s return value should be checked.
+
+		3. `bimap` must return a value of the same Bifunctor.
+		*/
+
+		const VALUE = Object.freeze({ VALUE: true });
+		let c;
+
+		t.before((done) => {
+			c = Task.of(VALUE);
+			done();
+		});
+
+		t.it('will take any value from g and return a value of the same Bifunctor', () => {
+			const returnValues = [
+				[ 'returns null', null ],
+				[ 'returns bool false', false ],
+				[ 'returns bool true', true ],
+				[ 'returns number', 9 ],
+				[ 'returns object', VALUE ],
+				[ 'returns Functor', Task.of(1) ]
+			];
+
+			const count = returnValues.reduce((i, [ label, val ]) => {
+				const f = sinon.fake();
+				const g = sinon.fake.returns(val);
+
+				const expectedPath = sinon.fake();
+				const unexpectedPath = sinon.fake();
+
+				const c1 = c.bimap(f, g).fork(unexpectedPath, expectedPath);
+
+				isNotCalled(f, label);
+				isNotCalled(unexpectedPath, label);
+				isCalledOnceWith(VALUE, g, label);
+
+				isTask(c1, label);
+				assert.isEqual(c.constructor, c1.constructor, label);
+				isCalledOnceWith(val, expectedPath, label);
+
+				return i + 1;
+			}, 0);
+
+			assert.isEqual(returnValues.length, count);
+		});
+
+		t.it('follows the identity law', () => {
+			const f = sinon.fake((x) => x);
+			const g = sinon.fake((x) => x);
+
+			const expectedPath = sinon.fake();
+			const unexpectedPath = sinon.fake();
+
+			const c1 = c.bimap(f, g).fork(unexpectedPath, expectedPath);
+			isTask(c1);
+			assert.isEqual(c.constructor, c1.constructor);
+			isNotCalled(unexpectedPath);
+			isCalledOnceWith(VALUE, expectedPath);
+		});
+
+		t.it('follows the composition law', () => {
+			const f = sinon.fake.returns(0);
+			const g = sinon.fake.returns(1);
+			const h = sinon.fake.returns(2);
+			const i = sinon.fake.returns(3);
+
+			const sad = sinon.fake((x) => {
+				return f(g(x));
+			});
+
+			const happy = sinon.fake((x) => {
+				return h(i(x));
+			});
+
+			const expectedPath1 = sinon.fake();
+			const expectedPath2 = sinon.fake();
+			const unexpectedPath = sinon.fake();
+
+			const c1 = c.bimap(sad, happy).fork(unexpectedPath, expectedPath1);
+			const c2 = c.bimap(g, i).bimap(f, h).fork(unexpectedPath, expectedPath2);
+
+			isTask(c1);
+			assert.isEqual(c.constructor, c1.constructor);
+			assert.isEqual(c1.constructor, c2.constructor);
+			isNotCalled(unexpectedPath);
+			isCalledOnceWith(2, expectedPath1);
+			isCalledOnceWith(2, expectedPath2);
+
+			isNotCalled(f);
+			isNotCalled(g);
+			assert.isEqual(2, h.callCount);
+			assert.isEqual(2, i.callCount);
+		});
+	});
+
+	// Test the bimap() instance method when sad.
+	test.describe('Task as Bifunctor when sad', (t) => {
+		/*
+		A value which has a Bifunctor must provide a `bimap` method. The `bimap`
+		method takes two arguments:
+
+		    c.bimap(f, g)
+
+		1. `f` must be a function which returns a value
+
+		    1. If `f` is not a function, the behaviour of `bimap` is unspecified.
+		    2. `f` can return any value.
+		    3. No parts of `f`'s return value should be checked.
+
+		2. `g` must be a function which returns a value
+
+		    1. If `g` is not a function, the behaviour of `bimap` is unspecified.
+		    2. `g` can return any value.
+		    3. No parts of `g`'s return value should be checked.
+
+		3. `bimap` must return a value of the same Bifunctor.
+		*/
+
+		const ERR = new Error('TEST');
+		let c;
+
+		t.before((done) => {
+			c = Task.reject(ERR);
+			done();
+		});
+
+		t.it('will take any value from f and return a value of the same Bifunctor', () => {
+			const returnValues = [
+				[ 'returns null', null ],
+				[ 'returns bool false', false ],
+				[ 'returns bool true', true ],
+				[ 'returns number', 9 ],
+				[ 'returns object', {} ],
+				[ 'returns Functor', Task.of(1) ]
+			];
+
+			const count = returnValues.reduce((i, [ label, val ]) => {
+				const f = sinon.fake.returns(val);
+				const g = sinon.fake();
+
+				const expectedPath = sinon.fake();
+				const unexpectedPath = sinon.fake();
+
+				const c1 = c.bimap(f, g).fork(expectedPath, unexpectedPath);
+
+				isNotCalled(g, label);
+				assert.isEqual(1, f.callCount);
+
+				isTask(c1, label);
+				assert.isEqual(c.constructor, c1.constructor, label);
+				isNotCalled(unexpectedPath, label);
+				isCalledOnceWith(val, expectedPath, label);
+
+				return i + 1;
+			}, 0);
+
+			assert.isEqual(returnValues.length, count);
+		});
+
+		t.it('follows the identity law', () => {
+			const f = sinon.fake((x) => x);
+			const g = sinon.fake((x) => x);
+
+			const expectedPath = sinon.fake();
+			const unexpectedPath = sinon.fake();
+
+			const c1 = c.bimap(f, g).fork(expectedPath, unexpectedPath);
+			isTask(c1);
+			assert.isEqual(c.constructor, c1.constructor);
+			isNotCalled(unexpectedPath);
+			isCalledOnceWith(ERR, expectedPath);
+		});
+
+		t.it('follows the composition law', () => {
+			const f = sinon.fake.returns(0);
+			const g = sinon.fake.returns(1);
+			const h = sinon.fake.returns(2);
+			const i = sinon.fake.returns(3);
+
+			const sad = sinon.fake((x) => {
+				return f(g(x));
+			});
+
+			const happy = sinon.fake((x) => {
+				return h(i(x));
+			});
+
+			const expectedPath1 = sinon.fake();
+			const expectedPath2 = sinon.fake();
+			const unexpectedPath = sinon.fake();
+
+			const c1 = c.bimap(sad, happy).fork(expectedPath1, unexpectedPath);
+			const c2 = c.bimap(g, i).bimap(f, h).fork(expectedPath2, unexpectedPath);
+
+			isTask(c1);
+			assert.isEqual(c.constructor, c1.constructor);
+			assert.isEqual(c1.constructor, c2.constructor);
+			isNotCalled(unexpectedPath);
+			isCalledOnceWith(0, expectedPath1);
+			isCalledOnceWith(0, expectedPath2);
+
+			assert.isEqual(2, f.callCount);
+			assert.isEqual(2, g.callCount);
+			isNotCalled(h);
+			isNotCalled(i);
+		});
+	});
 };
