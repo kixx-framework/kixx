@@ -4,7 +4,7 @@ const { assert } = require('kixx-assert');
 const R = require('ramda');
 const Task = require('../../lib/atypes/task');
 
-const { component, initializeApi } = require('../../lib/initialize-api');
+const { component, initializer, initializeApi } = require('../../lib/initialize-api');
 
 
 module.exports = (test) => {
@@ -17,16 +17,16 @@ module.exports = (test) => {
 			[ 'may', [] ]
 		];
 
+		const createComponent = component(initializer);
+
 		let result;
 
 		t.before((done) => {
 			const components = CONFIGS.map(([ name, dependencies, ]) => {
-				return component(name, dependencies, (api) => {
+				return createComponent(name, dependencies, (api) => {
 					const loadedNames = api.map(R.prop('name'));
-
-					const newApi = api.slice();
-					newApi.push({ name, dependencies , loadedNames });
-					return Task.of(newApi);
+					api.push({ name, dependencies , loadedNames });
+					return Task.of(api);
 				});
 			});
 
@@ -38,7 +38,7 @@ module.exports = (test) => {
 
 		t.it('loads dependencies before initializing a component', () => {
 			assert.isOk(Array.isArray(result));
-			assert.isGreaterThan(5, result.length);
+			assert.isEqual(CONFIGS.length, result.length);
 
 			result.forEach(({ name, dependencies, loadedNames }, index) => {
 				assert.isOk(
@@ -53,6 +53,19 @@ module.exports = (test) => {
 					);
 				});
 			});
+		});
+
+		t.it('does not initialize a component more than once', () => {
+			const initialized = result.map(R.prop('name'));
+
+			const checks = [];
+			for (let i = 0; i < initialized.length; i++) {
+				const key = initialized[i];
+				assert.isNotOk(checks.includes(key), `already includes '${key}'`);
+				checks.push(key);
+			}
+
+			assert.isEqual(CONFIGS.length, initialized.length);
 		});
 	});
 };
