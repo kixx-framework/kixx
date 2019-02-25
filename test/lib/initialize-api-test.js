@@ -25,12 +25,20 @@ module.exports = (test) => {
 			const components = CONFIGS.map(([ name, dependencies, ]) => {
 				return createComponent(name, dependencies, (api) => {
 					const loadedNames = api.map(R.prop('name'));
-					api.push({ name, dependencies , loadedNames });
-					return Task.of(api);
+					// api.push({ name, dependencies , loadedNames });
+					// return Task.of(api);
+					const newApi = api.slice();
+					newApi[0] = newApi[0] + 1;
+					newApi.push({ name, dependencies , loadedNames });
+					return new Task((reject, resolve) => {
+						setTimeout(() => {
+							resolve(newApi);
+						}, 1000);
+					});
 				});
 			});
 
-			initializeApi('jan', [], components).fork(done, (res) => {
+			initializeApi('jan', [0], components).fork(done, (res) => {
 				result = res;
 				done();
 			});
