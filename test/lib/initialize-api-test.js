@@ -28,17 +28,16 @@ module.exports = (test) => {
 					// api.push({ name, dependencies , loadedNames });
 					// return Task.of(api);
 					const newApi = api.slice();
-					newApi[0] = newApi[0] + 1;
 					newApi.push({ name, dependencies , loadedNames });
 					return new Task((reject, resolve) => {
 						setTimeout(() => {
 							resolve(newApi);
-						}, 1000);
+						}, 100);
 					});
 				});
 			});
 
-			initializeApi('jan', [0], components).fork(done, (res) => {
+			initializeApi('jan', [], components).fork(done, (res) => {
 				result = res;
 				done();
 			});
