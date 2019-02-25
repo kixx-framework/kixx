@@ -68,4 +68,37 @@ module.exports = (test) => {
 			assert.isEqual(CONFIGS.length, initialized.length);
 		});
 	});
+
+	test.describe('when component intializer returns non Task', (t) => {
+		const X = Object.create(null);
+
+		const CONFIGS = [
+			[ 'root', [ 'null', 'zero', 'false', 'undefined' ], X ],
+			[ 'null', [], null ],
+			[ 'zero', [], 0 ],
+			[ 'false', [], false ],
+			[ 'undefined', [], ],
+		];
+
+		const createComponent = component(initializer);
+
+		let result;
+
+		t.before((done) => {
+			const components = CONFIGS.map(([ name, dependencies, rval ]) => {
+				return createComponent(name, dependencies, () => {
+					return rval;
+				});
+			});
+
+			initializeApi('root', [], components).fork(done, (res) => {
+				result = res;
+				done();
+			});
+		});
+
+		t.it('is not smoking', () => {
+			assert.isOk(X, result);
+		});
+	});
 };
