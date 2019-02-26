@@ -57,6 +57,11 @@ class APIContext {
 		});
 	}
 
+	reduce(oldContext, value) {
+		const [ name, deps ] = value;
+		return oldContext.update(name, deps);
+	}
+
 	static create() {
 		return new APIContext({
 			loadedNames: [],
