@@ -8,7 +8,7 @@ const { component, initializer, initializeApi } = require('../../lib/initialize-
 
 
 module.exports = (test) => {
-	test.describe('happy path', (t) => {
+	test.xdescribe('happy path', (t) => {
 		const CONFIGS = [
 			[ 'jan', [ 'mar' ] ],
 			[ 'feb', [] ],
@@ -76,7 +76,7 @@ module.exports = (test) => {
 		});
 	});
 
-	test.describe('when component intializer returns non Task', (t) => {
+	test.xdescribe('when component intializer returns non Task', (t) => {
 		const X = Object.create(null);
 
 		const CONFIGS = [
