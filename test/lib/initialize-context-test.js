@@ -3,7 +3,7 @@
 const { assert } = require('kixx-assert');
 const R = require('ramda');
 
-const { component, initializer, initializeApi } = require('../../lib/initialize-api');
+const { component, initializer, initializeContext } = require('../../lib/initialize-context');
 
 function uid() {
 	let i = -1;
@@ -89,7 +89,12 @@ module.exports = (test) => {
 				});
 			});
 
-			initializeApi('jan', APIContext.create(), components).fork(done, (res) => {
+			function reducer(context, res) {
+				const [ name, deps ] = res;
+				return context.update(name, deps);
+			}
+
+			initializeContext(reducer, 'jan', APIContext.create(), components).fork(done, (res) => {
 				result = res;
 				done();
 			});
@@ -152,7 +157,12 @@ module.exports = (test) => {
 				});
 			});
 
-			initializeApi('root', [], components).fork(done, (res) => {
+			function reducer(context, res) {
+				const [ name, deps ] = res;
+				return context.update(name, deps);
+			}
+
+			initializeContext(reducer, 'root', [], components).fork(done, (res) => {
 				result = res;
 				done();
 			});
