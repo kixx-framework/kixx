@@ -40,8 +40,6 @@ rules:
     - error
   no-shadow-restricted-names:
     - error
-  no-shadow:
-    - error
   for-direction:
     - error
   no-template-curly-in-string:

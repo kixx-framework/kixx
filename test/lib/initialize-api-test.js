@@ -2,13 +2,73 @@
 
 const { assert } = require('kixx-assert');
 const R = require('ramda');
-const Task = require('../../lib/atypes/task');
 
 const { component, initializer, initializeApi } = require('../../lib/initialize-api');
 
+function uid() {
+	let i = -1;
+	return function genUID() {
+		return i += 1;
+	};
+}
+
+class APIContext {
+	constructor(spec) {
+		Object.defineProperties(this, {
+			uid: {
+				enumerable: true,
+				value: APIContext.uid()
+			},
+			extensions: {
+				enumerable: true,
+				value: Object.freeze(spec.extensions)
+			},
+			loadedNames: {
+				enumerable: true,
+				value: Object.freeze(spec.loadedNames)
+			}
+		});
+	}
+
+	inspect() {
+		const args = this.extensions.map((x) => {
+			return JSON.stringify(x);
+		});
+		args.unshift(this.uid);
+		return `Context(\n  ${args.join(',\n  ')}\n)`;
+	}
+
+	update(name, dependencies) {
+		const { loadedNames, extensions } = this;
+
+		const newExtensions = extensions.slice();
+		newExtensions.push(Object.freeze({
+			name,
+			dependencies,
+			loadedNames
+		}));
+
+		const newLoadedNames = loadedNames.slice();
+		newLoadedNames.push(name);
+
+		return new APIContext({
+			extensions: newExtensions,
+			loadedNames: newLoadedNames
+		});
+	}
+
+	static create() {
+		return new APIContext({
+			loadedNames: [],
+			extensions: []
+		});
+	}
+}
+APIContext.uid = uid();
+
 
 module.exports = (test) => {
-	test.xdescribe('happy path', (t) => {
+	test.describe('happy path', (t) => {
 		const CONFIGS = [
 			[ 'jan', [ 'mar' ] ],
 			[ 'feb', [] ],
@@ -23,27 +83,21 @@ module.exports = (test) => {
 
 		t.before((done) => {
 			const components = CONFIGS.map(([ name, dependencies, ]) => {
-				return createComponent(name, dependencies, (api) => {
-					const loadedNames = api.map(R.prop('name'));
-					// api.push({ name, dependencies , loadedNames });
-					// return Task.of(api);
-					const newApi = api.slice();
-					newApi.push({ name, dependencies , loadedNames });
-					return new Task((reject, resolve) => {
-						setTimeout(() => {
-							resolve(newApi);
-						}, 100);
-					});
+				return createComponent(name, dependencies, (context) => {
+					console.log(`>> initializing: ${name} ${context.uid} [${context.loadedNames.join()}]`);
+					return [ name, dependencies ];
 				});
 			});
 
-			initializeApi('jan', [], components).fork(done, (res) => {
+			initializeApi('jan', APIContext.create(), components).fork(done, (res) => {
 				result = res;
 				done();
 			});
 		});
 
 		t.it('loads dependencies before initializing a component', () => {
+			console.log(' --- result ---');
+			console.log(result);
 			assert.isOk(Array.isArray(result));
 			assert.isEqual(CONFIGS.length, result.length);
 
