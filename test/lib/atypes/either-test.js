@@ -32,6 +32,114 @@ const isCalledOnceWith = helpers.assertion2(
 
 
 module.exports = (test) => {
+	test.describe('Either Right properties', (t) => {
+		const VALUE = Object.freeze({ VALUE: true });
+		let subject;
+
+		t.before((done) => {
+			subject = Either.right(VALUE);
+			done();
+		});
+
+		t.it('passes the type check', () => {
+			assert.isOk(Either.isEither(subject));
+			assert.isOk(subject instanceof Either.Right);
+		});
+
+		t.it('has a "private" value property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'value'));
+			assert.isNotOk(Object.prototype.propertyIsEnumerable.call(subject, 'value'));
+			assert.isEqual(VALUE, subject.value);
+
+			try {
+				subject.value = 'foo';
+				assert.isOk(false, 'assigning to value throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to value throws an error');
+			}
+		});
+
+		t.it('has a read-only isLeft property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'isLeft'));
+			assert.isOk(Object.prototype.propertyIsEnumerable.call(subject, 'isLeft'));
+			assert.isEqual(false, subject.isLeft);
+
+			try {
+				subject.isLeft = 'foo';
+				assert.isOk(false, 'assigning to isLeft throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to isLeft throws an error');
+			}
+		});
+
+		t.it('has a read-only isRight property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'isRight'));
+			assert.isOk(Object.prototype.propertyIsEnumerable.call(subject, 'isRight'));
+			assert.isEqual(true, subject.isRight);
+
+			try {
+				subject.isRight = 'foo';
+				assert.isOk(false, 'assigning to isRight throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to isRight throws an error');
+			}
+		});
+	});
+
+	test.describe('Either Left properties', (t) => {
+		const ERR = new Error('TEST');
+		let subject;
+
+		t.before((done) => {
+			subject = Either.left(ERR);
+			done();
+		});
+
+		t.it('passes the type check', () => {
+			assert.isOk(Either.isEither(subject));
+			assert.isOk(subject instanceof Either.Left);
+		});
+
+		t.it('has a "private" value property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'value'));
+			assert.isNotOk(Object.prototype.propertyIsEnumerable.call(subject, 'value'));
+			assert.isEqual(ERR, subject.value);
+
+			try {
+				subject.value = 'foo';
+				assert.isOk(false, 'assigning to value throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to value throws an error');
+			}
+		});
+
+		t.it('has a read-only isLeft property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'isLeft'));
+			assert.isOk(Object.prototype.propertyIsEnumerable.call(subject, 'isLeft'));
+			assert.isEqual(true, subject.isLeft);
+
+			try {
+				subject.isLeft = 'foo';
+				assert.isOk(false, 'assigning to isLeft throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to isLeft throws an error');
+			}
+		});
+
+		t.it('has a read-only isRight property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'isRight'));
+			assert.isOk(Object.prototype.propertyIsEnumerable.call(subject, 'isRight'));
+			assert.isEqual(false, subject.isRight);
+
+			try {
+				subject.isRight = 'foo';
+				assert.isOk(false, 'assigning to isRight throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to isRight throws an error');
+			}
+		});
+	});
+
 	// Testing the map() instance method when Right.
 	test.describe('Either as Functor on Right side', (t) => {
 		// A value which has a Functor must provide a `map` method. The `map`
