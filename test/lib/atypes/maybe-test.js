@@ -604,4 +604,175 @@ module.exports = (test) => {
 			isNotCalled(g);
 		});
 	});
+
+	test.describe('Maybe.isMaybe() as expected', (t) => {
+		t.it('returns true', () => {
+			assert.isEqual(true, Maybe.isMaybe(Maybe.of(false)));
+			assert.isEqual(true, Maybe.isMaybe(Maybe.just(null)));
+			assert.isEqual(true, Maybe.isMaybe(Maybe.nothing(true)));
+		});
+	});
+
+	test.describe('Maybe.isMaybe(a) when a is falsy', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isMaybe(null));
+			assert.isEqual(false, Maybe.isMaybe(false));
+			assert.isEqual(false, Maybe.isMaybe(0));
+			assert.isEqual(false, Maybe.isMaybe(NaN));
+			assert.isEqual(false, Maybe.isMaybe());
+		});
+	});
+
+	test.describe('Maybe.isMaybe(a) when a.map is falsy', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isMaybe({
+				isJust: true,
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Maybe.isMaybe(a) when a.bimap is falsy', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isMaybe({
+				isJust: true,
+				map() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Maybe.isMaybe(a) when a.chain is falsy', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isMaybe({
+				isJust: true,
+				map() {},
+				bimap() {}
+			}));
+		});
+	});
+
+	test.describe('Maybe.isMaybe(a) when a without isJust or isNothing prop', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isMaybe({
+				isNothing: false,
+				isJust: false,
+				map() {},
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Maybe.isMaybe(a) when a.isJust only prop', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(true, Maybe.isMaybe({
+				isJust: true,
+				map() {},
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Maybe.isMaybe(a) when a.isNothing only prop', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(true, Maybe.isMaybe({
+				isNothing: true,
+				map() {},
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Maybe.isNothing(a) when a is Nothing', (t) => {
+		t.it('returns true', () => {
+			assert.isEqual(true, Maybe.isNothing(Maybe.nothing({})));
+		});
+	});
+
+	test.describe('Maybe.isNothing(a) when a is Just', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isNothing(Maybe.just({})));
+		});
+	});
+
+	test.describe('Maybe.isNothing(a) when a not Maybe', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isNothing({}));
+		});
+	});
+
+	test.describe('Maybe.isJust(a) when a is Just', (t) => {
+		t.it('returns true', () => {
+			assert.isEqual(true, Maybe.isJust(Maybe.just({})));
+		});
+	});
+
+	test.describe('Maybe.isJust(a) when a is Nothing', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isJust(Maybe.nothing({})));
+		});
+	});
+
+	test.describe('Maybe.isJust(a) when a not Maybe', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Maybe.isJust({}));
+		});
+	});
+
+	test.describe('Maybe.maybe(), with nothing value,', (t) => {
+		t.it('calls the left callback and returns the result', () => {
+			const VAL1 = {};
+			const VAL2 = {};
+
+			const sad = sinon.fake.returns(VAL2);
+			const happy = sinon.fake();
+
+			const res = Maybe.maybe(sad, happy, Maybe.nothing(VAL1));
+
+			assert.isEqual(1, sad.callCount);
+			assert.isEqual(0, happy.callCount);
+
+			assert.isUndefined(sad.firstCall.args[0]);
+			assert.isEqual(VAL2, res);
+		});
+	});
+
+	test.describe('Maybe.maybe(), with just value,', (t) => {
+		t.it('calls the right callback and returns the result', () => {
+			const VAL1 = {};
+			const VAL2 = {};
+
+			const happy = sinon.fake.returns(VAL2);
+			const sad = sinon.fake();
+
+			const res = Maybe.maybe(sad, happy, Maybe.just(VAL1));
+
+			assert.isEqual(1, happy.callCount);
+			assert.isEqual(0, sad.callCount);
+
+			assert.isEqual(VAL1, happy.firstCall.args[0]);
+			assert.isEqual(VAL2, res);
+		});
+	});
+
+	test.describe('Maybe.maybe(), with invalid value,', (t) => {
+		t.it('throws', () => {
+			const happy = sinon.fake();
+			const sad = sinon.fake();
+
+			try {
+				Maybe.maybe(sad, happy, {});
+				assert.isOk(false, 'should throw');
+			} catch (err) {
+				assert.isEqual("Invalid type 'Object' given to maybe()", err.message);
+			}
+
+			assert.isEqual(0, happy.callCount);
+			assert.isEqual(0, sad.callCount);
+		});
+	});
 };
