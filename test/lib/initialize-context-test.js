@@ -3,7 +3,14 @@
 const { assert } = require('kixx-assert');
 const R = require('ramda');
 
-const { component, initializer, initializeContext } = require('../../lib/initialize-context');
+const {
+	component,
+	initializer,
+	initializeContext,
+	//contextReducer,
+	//flattenAndSerializeComponents
+} = require('../../lib/initialize-context');
+
 
 function uid() {
 	let i = -1;
@@ -73,7 +80,7 @@ APIContext.uid = uid();
 
 
 module.exports = (test) => {
-	test.describe('happy path', (t) => {
+	test.xdescribe('happy path', (t) => {
 		const CONFIGS = [
 			[ 'jan', [ 'mar' ] ],
 			[ 'feb', [] ],
@@ -89,7 +96,6 @@ module.exports = (test) => {
 		t.before((done) => {
 			const components = CONFIGS.map(([ name, dependencies, ]) => {
 				return createComponent(name, dependencies, (context) => {
-					console.log(`>> initializing: ${name} ${context.uid} [${context.loadedNames.join()}]`);
 					return [ name, dependencies ];
 				});
 			});
@@ -106,8 +112,6 @@ module.exports = (test) => {
 		});
 
 		t.it('loads dependencies before initializing a component', () => {
-			console.log(' --- result ---');
-			console.log(result);
 			assert.isOk(Array.isArray(result));
 			assert.isEqual(CONFIGS.length, result.length);
 
