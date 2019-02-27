@@ -10,77 +10,9 @@ const U = require('../../lib/utils');
 const {
 	component,
 	initializer,
-	initializeContext,
-	// contextReducer,
-	// flattenAndSerializeComponents
+	contextReducer,
+	flattenAndSerializeComponents
 } = require('../../lib/initialize-context');
-
-
-function uid() {
-	let i = -1;
-	return function genUID() {
-		return i += 1;
-	};
-}
-
-class APIContext {
-	constructor(spec) {
-		Object.defineProperties(this, {
-			uid: {
-				enumerable: true,
-				value: APIContext.uid()
-			},
-			extensions: {
-				enumerable: true,
-				value: Object.freeze(spec.extensions)
-			},
-			loadedNames: {
-				enumerable: true,
-				value: Object.freeze(spec.loadedNames)
-			}
-		});
-	}
-
-	inspect() {
-		const args = this.extensions.map((x) => {
-			return JSON.stringify(x);
-		});
-		args.unshift(this.uid);
-		return `Context(\n  ${args.join(',\n  ')}\n)`;
-	}
-
-	update(name, dependencies) {
-		const { loadedNames, extensions } = this;
-
-		const newExtensions = extensions.slice();
-		newExtensions.push(Object.freeze({
-			name,
-			dependencies,
-			loadedNames
-		}));
-
-		const newLoadedNames = loadedNames.slice();
-		newLoadedNames.push(name);
-
-		return new APIContext({
-			extensions: newExtensions,
-			loadedNames: newLoadedNames
-		});
-	}
-
-	reduce(oldContext, value) {
-		const [ name, deps ] = value;
-		return oldContext.update(name, deps);
-	}
-
-	static create() {
-		return new APIContext({
-			loadedNames: [],
-			extensions: []
-		});
-	}
-}
-APIContext.uid = uid();
 
 
 module.exports = (test) => {
@@ -198,7 +130,64 @@ module.exports = (test) => {
 		});
 	});
 
-	test.xdescribe('happy path', (t) => {
+	test.describe('flattenAndSerializeComponents()', (t) => {
+		const CONFIGS = [
+			[ 'jan', [ 'mar' ] ],
+			[ 'feb', [] ],
+			[ 'mar', [ 'may', 'apr', 'feb' ] ],
+			[ 'apr', [ 'feb', 'may' ] ],
+			[ 'may', [] ]
+		];
+
+		let components;
+		let componentIndex;
+		let result;
+
+		t.before((done) => {
+			components = CONFIGS.map(([ name, dependencies ]) => {
+				const initialize = function () {};
+				return [ name, dependencies, initialize ];
+			});
+
+			componentIndex = components.reduce((index, comp) => {
+				const [ key ] = comp;
+				return index.set(key, comp);
+			}, new Map());
+
+			result = flattenAndSerializeComponents('jan', components);
+
+			done();
+		});
+
+		t.it('returns an Array of functions', () => {
+			assert.isOk(Array.isArray(result));
+			assert.isGreaterThan(0, result.length);
+			result.forEach((fn) => {
+				assert.isOk(typeof fn === 'function');
+			});
+		});
+
+		t.it('returns items in expected load order', () => {
+			const jan = componentIndex.get('jan');
+			const feb = componentIndex.get('feb');
+			const mar = componentIndex.get('mar');
+			const apr = componentIndex.get('apr');
+			const may = componentIndex.get('may');
+
+			assert.isEqual(may[2], result[0]);
+			assert.isEqual(feb[2], result[1]);
+			assert.isEqual(apr[2], result[2]);
+			assert.isEqual(mar[2], result[3]);
+			assert.isEqual(jan[2], result[4]);
+		});
+
+		t.it('does not return duplicates', () => {
+			assert.isEqual(R.uniq(result).length, result.length);
+			assert.isEqual(CONFIGS.length, result.length);
+		});
+	});
+
+	test.describe('happy path', (t) => {
 		const CONFIGS = [
 			[ 'jan', [ 'mar' ] ],
 			[ 'feb', [] ],
@@ -218,22 +207,36 @@ module.exports = (test) => {
 				});
 			});
 
-			function reducer(context, res) {
+			const flattenedComponents = flattenAndSerializeComponents('jan', components);
+
+			const reducer = contextReducer((context, res) => {
 				const [ name, deps ] = res;
 				return context.update(name, deps);
-			}
+			});
 
-			initializeContext(reducer, 'jan', APIContext.create(), components).fork(done, (res) => {
+			const seed = Task.of(APIContext.create());
+
+			R.reduce(reducer, seed, flattenedComponents).fork(done, (res) => {
 				result = res;
 				done();
 			});
 		});
 
-		t.it('loads dependencies before initializing a component', () => {
-			assert.isOk(Array.isArray(result));
-			assert.isEqual(CONFIGS.length, result.length);
+		t.it('returns the final context state as the result', () => {
+			assert.isOk(result instanceof APIContext);
+		});
 
-			result.forEach(({ name, dependencies, loadedNames }, index) => {
+		t.it('loads components only once', () => {
+			const names = result.extensions.map(R.prop('name'));
+			assert.isGreaterThan(0, names.length);
+			assert.isEqual(R.uniq(names).length, names.length);
+		});
+
+		t.it('loads dependencies before initializing a component', () => {
+			const { extensions } = result;
+			assert.isEqual(CONFIGS.length, extensions.length);
+
+			extensions.forEach(({ name, dependencies, loadedNames }, index) => {
 				assert.isOk(
 					Array.isArray(dependencies),
 					`dependencies check for ${index} ${name}`
@@ -247,56 +250,67 @@ module.exports = (test) => {
 				});
 			});
 		});
-
-		t.it('does not initialize a component more than once', () => {
-			const initialized = result.map(R.prop('name'));
-
-			const checks = [];
-			for (let i = 0; i < initialized.length; i++) {
-				const key = initialized[i];
-				assert.isNotOk(checks.includes(key), `already includes '${key}'`);
-				checks.push(key);
-			}
-
-			assert.isEqual(CONFIGS.length, initialized.length);
-		});
-	});
-
-	test.xdescribe('when component initializer returns non Task', (t) => {
-		const X = Object.create(null);
-
-		const CONFIGS = [
-			[ 'root', [ 'null', 'zero', 'false', 'undefined' ], X ],
-			[ 'null', [], null ],
-			[ 'zero', [], 0 ],
-			[ 'false', [], false ],
-			[ 'undefined', [], ],
-		];
-
-		const createComponent = component(initializer);
-
-		let result;
-
-		t.before((done) => {
-			const components = CONFIGS.map(([ name, dependencies, rval ]) => {
-				return createComponent(name, dependencies, () => {
-					return rval;
-				});
-			});
-
-			function reducer(context, res) {
-				const [ name, deps ] = res;
-				return context.update(name, deps);
-			}
-
-			initializeContext(reducer, 'root', [], components).fork(done, (res) => {
-				result = res;
-				done();
-			});
-		});
-
-		t.it('is not smoking', () => {
-			assert.isOk(X, result);
-		});
 	});
 };
+
+
+function uid() {
+	let i = -1;
+	return function genUID() {
+		return i += 1;
+	};
+}
+
+class APIContext {
+	constructor(spec) {
+		Object.defineProperties(this, {
+			uid: {
+				enumerable: true,
+				value: APIContext.uid()
+			},
+			extensions: {
+				enumerable: true,
+				value: Object.freeze(spec.extensions)
+			},
+			loadedNames: {
+				enumerable: true,
+				value: Object.freeze(spec.loadedNames)
+			}
+		});
+	}
+
+	inspect() {
+		const args = this.extensions.map((x) => {
+			return JSON.stringify(x);
+		});
+		args.unshift(this.uid);
+		return `Context(\n  ${args.join(',\n  ')}\n)`;
+	}
+
+	update(name, dependencies) {
+		const { loadedNames, extensions } = this;
+
+		const newExtensions = extensions.slice();
+		newExtensions.push(Object.freeze({
+			name,
+			dependencies,
+			loadedNames
+		}));
+
+		const newLoadedNames = loadedNames.slice();
+		newLoadedNames.push(name);
+
+		return new APIContext({
+			extensions: newExtensions,
+			loadedNames: newLoadedNames
+		});
+	}
+
+	static create() {
+		return new APIContext({
+			loadedNames: [],
+			extensions: []
+		});
+	}
+}
+APIContext.uid = uid();
