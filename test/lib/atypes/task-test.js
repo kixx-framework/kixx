@@ -1035,4 +1035,104 @@ module.exports = (test) => {
 			isNotCalled(i);
 		});
 	});
+
+	test.describe('Task.either, with resolved value, resolved', (t) => {
+		t.it('calls the right callback and returns a Task for the resolved value', () => {
+			const VAL1 = {};
+			const VAL2 = {};
+
+			const happy = sinon.fake.returns(Task.of(VAL2));
+			const sad = sinon.fake();
+			const onReject = sinon.fake();
+
+			let res;
+
+			Task.either(sad, happy, Task.of(VAL1)).fork(
+				onReject,
+				(x) => res = x
+			);
+
+			assert.isEqual(0, sad.callCount);
+			assert.isEqual(1, happy.callCount);
+			assert.isEqual(0, onReject.callCount);
+
+			assert.isEqual(VAL1, happy.firstCall.args[0]);
+			assert.isEqual(VAL2, res);
+		});
+	});
+
+	test.describe('Task.either, with resolved value, rejected', (t) => {
+		t.it('calls the right callback and returns a Task for the rejected value', () => {
+			const VAL1 = {};
+			const VAL2 = {};
+
+			const happy = sinon.fake.returns(Task.reject(VAL2));
+			const sad = sinon.fake();
+			const onResolve = sinon.fake();
+
+			let res;
+
+			Task.either(sad, happy, Task.of(VAL1)).fork(
+				(x) => res = x,
+				onResolve
+			);
+
+			assert.isEqual(0, sad.callCount);
+			assert.isEqual(1, happy.callCount);
+			assert.isEqual(0, onResolve.callCount);
+
+			assert.isEqual(VAL1, happy.firstCall.args[0]);
+			assert.isEqual(VAL2, res);
+		});
+	});
+
+	test.describe('Task.either, with rejected value, resolved', (t) => {
+		t.it('calls the left callback and returns a Task for the resolved value', () => {
+			const VAL1 = {};
+			const VAL2 = {};
+
+			const sad = sinon.fake.returns(Task.of(VAL2));
+			const happy = sinon.fake();
+			const onReject = sinon.fake();
+
+			let res;
+
+			Task.either(sad, happy, Task.reject(VAL1)).fork(
+				onReject,
+				(x) => res = x
+			);
+
+			assert.isEqual(1, sad.callCount);
+			assert.isEqual(0, happy.callCount);
+			assert.isEqual(0, onReject.callCount);
+
+			assert.isEqual(VAL1, sad.firstCall.args[0]);
+			assert.isEqual(VAL2, res);
+		});
+	});
+
+	test.describe('Task.either, with rejected value, rejected', (t) => {
+		t.it('calls the left callback and returns a Task for the rejected value', () => {
+			const VAL1 = {};
+			const VAL2 = {};
+
+			const sad = sinon.fake.returns(Task.reject(VAL2));
+			const happy = sinon.fake();
+			const onResolve = sinon.fake();
+
+			let res;
+
+			Task.either(sad, happy, Task.reject(VAL1)).fork(
+				(x) => res = x,
+				onResolve
+			);
+
+			assert.isEqual(1, sad.callCount);
+			assert.isEqual(0, happy.callCount);
+			assert.isEqual(0, onResolve.callCount);
+
+			assert.isEqual(VAL1, sad.firstCall.args[0]);
+			assert.isEqual(VAL2, res);
+		});
+	});
 };
