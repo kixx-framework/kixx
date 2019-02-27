@@ -620,4 +620,192 @@ module.exports = (test) => {
 			isNotCalled(g);
 		});
 	});
+
+	test.describe('Either.isEither() as expected', (t) => {
+		t.it('returns true', () => {
+			assert.isEqual(true, Either.isEither(Either.of(false)));
+			assert.isEqual(true, Either.isEither(Either.right(null)));
+			assert.isEqual(true, Either.isEither(Either.left(true)));
+		});
+	});
+
+	test.describe('Either.isEither(a) when a is falsy', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isEither(null));
+			assert.isEqual(false, Either.isEither(false));
+			assert.isEqual(false, Either.isEither(0));
+			assert.isEqual(false, Either.isEither(NaN));
+			assert.isEqual(false, Either.isEither());
+		});
+	});
+
+	test.describe('Either.isEither(a) when a.map is falsy', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isEither({
+				value: null,
+				isRight: true,
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Either.isEither(a) when a.bimap is falsy', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isEither({
+				value: null,
+				isRight: true,
+				map() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Either.isEither(a) when a.chain is falsy', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isEither({
+				value: null,
+				isRight: true,
+				map() {},
+				bimap() {}
+			}));
+		});
+	});
+
+	test.describe('Either.isEither(a) without a.value prop', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isEither({
+				isRight: true,
+				map() {},
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Either.isEither(a) when a without isRight or isLeft prop', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isEither({
+				value: null,
+				isLeft: false,
+				isRight: false,
+				map() {},
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Either.isEither(a) when a.isRight only prop', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(true, Either.isEither({
+				value: null,
+				isRight: true,
+				map() {},
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Either.isEither(a) when a.isLeft only prop', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(true, Either.isEither({
+				value: null,
+				isLeft: true,
+				map() {},
+				bimap() {},
+				chain() {}
+			}));
+		});
+	});
+
+	test.describe('Either.isLeft(a) when a is Left', (t) => {
+		t.it('returns true', () => {
+			assert.isEqual(true, Either.isLeft(Either.left({})));
+		});
+	});
+
+	test.describe('Either.isLeft(a) when a is Right', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isLeft(Either.right({})));
+		});
+	});
+
+	test.describe('Either.isLeft(a) when a not Either', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isLeft({}));
+		});
+	});
+
+	test.describe('Either.isRight(a) when a is Right', (t) => {
+		t.it('returns true', () => {
+			assert.isEqual(true, Either.isRight(Either.right({})));
+		});
+	});
+
+	test.describe('Either.isRight(a) when a is Left', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isRight(Either.left({})));
+		});
+	});
+
+	test.describe('Either.isRight(a) when a not Either', (t) => {
+		t.it('returns false', () => {
+			assert.isEqual(false, Either.isRight({}));
+		});
+	});
+
+	test.describe('Either.either(), with left value,', (t) => {
+		t.it('calls the left callback and returns the result', () => {
+			const VAL1 = {};
+			const VAL2 = {};
+
+			const sad = sinon.fake.returns(VAL2);
+			const happy = sinon.fake();
+
+			const res = Either.either(sad, happy, Either.left(VAL1));
+
+			assert.isEqual(1, sad.callCount);
+			assert.isEqual(0, happy.callCount);
+
+			assert.isEqual(VAL1, sad.firstCall.args[0]);
+			assert.isEqual(VAL2, res);
+		});
+	});
+
+	test.describe('Either.either(), with right value,', (t) => {
+		t.it('calls the right callback and returns the result', () => {
+			const VAL1 = {};
+			const VAL2 = {};
+
+			const happy = sinon.fake.returns(VAL2);
+			const sad = sinon.fake();
+
+			const res = Either.either(sad, happy, Either.right(VAL1));
+
+			assert.isEqual(1, happy.callCount);
+			assert.isEqual(0, sad.callCount);
+
+			assert.isEqual(VAL1, happy.firstCall.args[0]);
+			assert.isEqual(VAL2, res);
+		});
+	});
+
+	test.describe('Either.either(), with invalid value,', (t) => {
+		t.it('throws', () => {
+			const happy = sinon.fake();
+			const sad = sinon.fake();
+
+			try {
+				Either.either(sad, happy, {});
+				assert.isOk(false, 'should throw');
+			} catch (err) {
+				assert.isEqual("Invalid type 'Object' given to either()", err.message);
+			}
+
+			assert.isEqual(0, happy.callCount);
+			assert.isEqual(0, sad.callCount);
+		});
+	});
 };
