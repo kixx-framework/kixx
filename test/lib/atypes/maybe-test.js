@@ -32,6 +32,100 @@ const isCalledOnceWith = helpers.assertion2(
 
 
 module.exports = (test) => {
+	test.describe('Maybe Just properties', (t) => {
+		const VALUE = Object.freeze({ VALUE: true });
+		let subject;
+
+		t.before((done) => {
+			subject = Maybe.just(VALUE);
+			done();
+		});
+
+		t.it('passes the type check', () => {
+			assert.isOk(Maybe.isMaybe(subject));
+			assert.isOk(subject instanceof Maybe.Just);
+		});
+
+		t.it('has a "private" value property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'value'));
+			assert.isNotOk(Object.prototype.propertyIsEnumerable.call(subject, 'value'));
+			assert.isEqual(VALUE, subject.value);
+
+			try {
+				subject.value = 'foo';
+				assert.isOk(false, 'assigning to value throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to value throws an error');
+			}
+		});
+
+		t.it('has a read-only isNothing property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'isNothing'));
+			assert.isOk(Object.prototype.propertyIsEnumerable.call(subject, 'isNothing'));
+			assert.isEqual(false, subject.isNothing);
+
+			try {
+				subject.isNothing = 'foo';
+				assert.isOk(false, 'assigning to isNothing throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to isNothing throws an error');
+			}
+		});
+
+		t.it('has a read-only isJust property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'isJust'));
+			assert.isOk(Object.prototype.propertyIsEnumerable.call(subject, 'isJust'));
+			assert.isEqual(true, subject.isJust);
+
+			try {
+				subject.isJust = 'foo';
+				assert.isOk(false, 'assigning to isJust throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to isJust throws an error');
+			}
+		});
+	});
+
+	test.describe('Maybe Nothing properties', (t) => {
+		let subject;
+
+		t.before((done) => {
+			subject = Maybe.nothing();
+			done();
+		});
+
+		t.it('passes the type check', () => {
+			assert.isOk(Maybe.isMaybe(subject));
+			assert.isOk(subject instanceof Maybe.Nothing);
+		});
+
+		t.it('has a read-only isNothing property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'isNothing'));
+			assert.isOk(Object.prototype.propertyIsEnumerable.call(subject, 'isNothing'));
+			assert.isEqual(true, subject.isNothing);
+
+			try {
+				subject.isNothing = 'foo';
+				assert.isOk(false, 'assigning to isNothing throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to isNothing throws an error');
+			}
+		});
+
+		t.it('has a read-only isJust property', () => {
+			assert.isOk(Object.prototype.hasOwnProperty.call(subject, 'isJust'));
+			assert.isOk(Object.prototype.propertyIsEnumerable.call(subject, 'isJust'));
+			assert.isEqual(false, subject.isJust);
+
+			try {
+				subject.isJust = 'foo';
+				assert.isOk(false, 'assigning to isJust throws an error');
+			} catch (err) {
+				assert.isOk(true, 'assigning to isJust throws an error');
+			}
+		});
+	});
+
 	// Testing the map() instance method when Just.
 	test.describe('Maybe as Functor on Just side', (t) => {
 		// A value which has a Functor must provide a `map` method. The `map`
