@@ -1,12 +1,11 @@
-Kixx
+KIXX
 ====
-The best ECMAScript application development framework ever.
 
-Kixx is a loosely coupled set of tools and libraries used to make designing and building complex Node.js applications better. Although not strictly a functional library, it attempts to sprinkle in good functional programming paradigms where appropriate.
+The best web development framework ever.
 
 Copyright and License
 ---------------------
-Copyright: (c) 2017 - 2019 by Kris Walker (www.kixx.name)
+Copyright: (c) 2017 - 2023 by Kris Walker (www.kriswalker.me)
 
 Unless otherwise indicated, all source code is licensed under the MIT license. See MIT-LICENSE for details.
 

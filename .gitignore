@@ -3,11 +3,8 @@ logs
 *.log
 npm-debug.log*
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # node-waf configuration
 .lock-wscript
@@ -18,8 +15,14 @@ build/Release
 # Dependency directories
 node_modules/
 
+# We don't keep the package lock in source control.
+package-lock.json
+
 # Optional npm cache directory
 .npm
+
+# Ignore .npmrc npm config files
+.npmrc
 
 # Optional eslint cache
 .eslintcache
@@ -29,3 +32,6 @@ node_modules/
 
 # Output of 'npm pack'
 *.tgz
+
+# Temporary files
+tmp/

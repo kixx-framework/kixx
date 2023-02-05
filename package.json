@@ -1,16 +1,17 @@
 {
   "name": "kixx",
-  "version": "3.0.0",
-  "description": "The best ECMAScript application develoment framework ever",
+  "version": "4.0.0",
+  "description": "The best web development framework ever",
   "main": "index.js",
   "scripts": {
     "test": "eslint ./ && kixx-test-node",
-    "lint": "eslint ./"
+    "lint": "eslint ./",
+    "tests-only": "kixx-test-node"
   },
   "engines": {
-    "node": ">=6.5.0"
+    "node": ">=16.14.2"
   },
-  "author": "Kris Walker (www.kixx.name)",
+  "author": "Kris Walker (www.kriswalker.me)",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,13 +21,8 @@
     "url": "https://github.com/kixxauth/kixx/issues"
   },
   "homepage": "https://github.com/kixxauth/kixx#readme",
-  "dependencies": {
-    "kixx-assert": "1.0.5",
-    "ramda": "0.26.1"
-  },
   "devDependencies": {
-    "eslint": "5.14.1",
-    "kixx-test-node": "1.4.0",
-    "sinon": "7.2.4"
+    "eslint": "~8.33.0",
+    "kixx-test-node": "~1.4.3"
   }
 }
