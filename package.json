@@ -21,8 +21,13 @@
     "url": "https://github.com/kixxauth/kixx/issues"
   },
   "homepage": "https://github.com/kixxauth/kixx#readme",
+  "dependencies": {
+    "kixx-assert": "~1.1.1",
+    "kixx-logger": "~2.0.0",
+    "kixx-server-errors": "~4.0.2"
+  },
   "devDependencies": {
     "eslint": "~8.33.0",
-    "kixx-test-node": "~1.4.3"
+    "kixx-test-node": "~1.4.4"
   }
 }
