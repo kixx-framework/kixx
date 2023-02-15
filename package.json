@@ -4,8 +4,8 @@
   "description": "The best web development framework ever",
   "main": "index.js",
   "scripts": {
-    "test": "eslint ./ && kixx-test-node",
-    "lint": "eslint ./",
+    "test": "eslint ./**/*.mjs && kixx-test-node",
+    "lint": "eslint ./**/*.mjs",
     "tests-only": "kixx-test-node"
   },
   "engines": {
