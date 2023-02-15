@@ -9,7 +9,7 @@ export default class Server extends BaseComponent {
 	#configManager = null;
 	#logger = null;
 	#nativeNetServers = [];
-	#requestHandler = null;
+	#applicationRequestHandler = null;
 
 	static listDependencies() {
 		return [
@@ -37,7 +37,7 @@ export default class Server extends BaseComponent {
 	injectDependencies(deps) {
 		this.#configManager = deps.get('configManager');
 		this.#logger = deps.get('logger').getRootLogger();
-		this.#requestHandler = deps.get('requestHandler');
+		this.#applicationRequestHandler = deps.get('requestHandler');
 	}
 
 	initialize(context) {
@@ -58,7 +58,7 @@ export default class Server extends BaseComponent {
 				logger: this.#logger,
 				port,
 				protocol,
-				requestHandler: this.#requestHandler.handleRequest,
+				requestHandler: this.#applicationRequestHandler.handleRequest,
 			});
 
 			if (secure) {
