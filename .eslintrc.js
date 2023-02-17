@@ -14,10 +14,6 @@ module.exports = {
 			'always',
 			{ objectsInArrays: false },
 		],
-		'arrow-body-style': [
-			'error',
-			'always',
-		],
 		'arrow-parens': [
 			'error',
 			'always',
@@ -68,9 +64,6 @@ module.exports = {
 			'error',
 		],
 		'func-call-spacing': [
-			'error',
-		],
-		'func-names': [
 			'error',
 		],
 		'func-style': [
