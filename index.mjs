@@ -16,6 +16,8 @@ import BaseEntityType from './lib/entity-types/base-entity-type.mjs';
 import Page from './lib/entity-types/page.mjs';
 import PageImage from './lib/entity-types/page-image.mjs';
 
+import BasePageView from './lib/views/base-page-view.mjs';
+
 export default {
 	Events: {
 		ErrorEvent,
@@ -44,5 +46,8 @@ export default {
 		BaseEntityType,
 		Page,
 		PageImage,
+	},
+	views: {
+		BasePageView,
 	},
 };
