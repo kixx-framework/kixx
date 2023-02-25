@@ -24,6 +24,7 @@
   "dependencies": {
     "handlebars": "~4.7.7",
     "kixx-assert": "~1.1.1",
+    "kixx-lib-es6": "~2.0.0",
     "kixx-logger": "~2.0.0",
     "kixx-server-errors": "~4.0.2",
     "path-to-regexp": "~6.2.1",
