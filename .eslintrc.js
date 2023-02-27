@@ -83,7 +83,7 @@ module.exports = {
 		],
 		indent: [
 			'error',
-			'tab',
+			4,
 			{ SwitchCase: 1 },
 		],
 		'key-spacing': [
@@ -251,10 +251,6 @@ module.exports = {
 		'object-shorthand': [
 			'error',
 			'always',
-		],
-		'operator-assignment': [
-			'error',
-			'never',
 		],
 		'operator-linebreak': [
 			'error',
