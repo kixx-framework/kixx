@@ -1,0 +1,15 @@
+{
+    "extends": "@tsconfig/node18/tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "target": "es2022",
+        "lib": ["es2022", "dom"],
+        "moduleResolution": "nodenext",
+        "types": ["node"],
+        "allowJs": true,
+        "noImplicitAny": false,
+        "strictPropertyInitialization": false
+    },
+    "include": ["framework"],
+    "exclude": ["node_modules"]
+}

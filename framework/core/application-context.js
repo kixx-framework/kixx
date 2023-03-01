@@ -1,3 +1,5 @@
+// @ts-check
+
 import {
     OperationalError,
     NotFoundError,
@@ -5,18 +7,42 @@ import {
 } from 'kixx-server-errors';
 
 import KixxAssert from 'kixx-assert';
-import WebRequestMidhandlerContext from './web-request-midhandler-context.ts';
-import WrappedRequest from './wrapped-request.ts';
-import { getHttpStatusCode } from '../lib/error-handling.ts';
 
-const { isFunction, isString, isDefined } = KixxAssert.helpers;
+// These imports are for type checking.
+// eslint-disable-next-line no-unused-vars
+import KixxError from '../lib/kixx-error.js';
+
+import WebRoute from './web-route.js';
+import { WebRequestMidContext } from './web-request-context.js';
+import { getHttpStatusCode } from '../lib/error-handling.js';
+
+const { isFunction, isObject, isString } = KixxAssert.helpers;
 
 export default class ApplicationContext {
 
+    /**
+     * @type {Promise<ApplicationContext> | null}
+     */
     #initializingPromise = null;
+
+    /**
+     * @type {Map}
+     */
     #dependencies = new Map();
-    // TODO: Initialize routes.
+
+    /**
+     * @type {Array}
+     */
     #routes = [];
+
+    constructor({ routes }) {
+        this.#routes = routes.map(WebRoute.fromSpecification);
+    }
+
+    registerComponent(name, component) {
+        this.#dependencies.set(name, component);
+        return this;
+    }
 
     initialize() {
         if (this.#initializingPromise) {
@@ -35,51 +61,38 @@ export default class ApplicationContext {
                 this.#dependencies.set(key, comp);
             });
 
-            return true;
+            return this;
         });
 
         return this.#initializingPromise;
     }
 
-    routeNodeWebRequest(webRequest) {
-        const {
-            url,
-            originatingPort,
-            originatingProtocol,
-            nodeHttpRequest,
-            nodeHttpResponse,
-        } = webRequest;
-
-        const { pathname } = url;
-        const { method } = nodeHttpRequest;
+    routeWebRequest(request, response) {
+        const { method } = request;
+        const { pathname } = request.url;
         const route = this.#findMatchingHandlers(pathname, method);
 
         const {
             error,
+            allowedMethods,
             pathnameParams,
             pageHandler,
             midhandlers,
-            errorHandlers,
         } = route;
 
-        errorHandlers.unshift(this.constructor.handleError);
+        // @ts-ignore error TS2339: Property 'handleError' does not exist on type 'Function'.
+        const errorHandler = route.errorHandler || this.constructor.handleError;
 
-        const request = new WrappedRequest({
-            url,
-            originatingPort,
-            originatingProtocol,
-            nodeHttpRequest,
-            nodeHttpResponse,
-        });
-
-        const context = new WebRequestMidhandlerContext({
+        const context = new WebRequestMidContext({
             components: Object.fromEntries(this.#dependencies),
-            error,
             request,
+            response,
+            error,
+            allowedMethods,
             pathnameParams,
             pageHandler,
             midhandlers,
-            errorHandlers,
+            errorHandler,
         });
 
         return context.next();
@@ -88,57 +101,69 @@ export default class ApplicationContext {
     #findMatchingHandlers(pathname, method) {
         let pageHandler = null;
         let midhandlers = [];
-        let errorHandlers = [];
+        let errorHandler = null;
 
         for (let i = 0; i < this.#routes.length; i = i + 1) {
 
-            const route = this.routes[i];
+            const route = this.#routes[i];
             const match = route.matcher(pathname);
 
             if (match) {
-                pageHandler = route.pageHandler;
+                const { pageHandlers } = route;
+
                 midhandlers = midhandlers.concat(route.getMidhandlersForMethod(method));
-                errorHandlers = errorHandlers.concat(route.getErrorHandlers());
-                const { pathnameParams } = match;
 
-                if (pageHandler) {
-                    const { allowedMethods } = route;
-                    let error = null;
+                const newErrorHandler = route.getErrorHandlerForMethod(method);
 
-                    if (!allowedMethods.includes(method)) {
+                if (newErrorHandler) {
+                    errorHandler = newErrorHandler;
+                }
+
+                if (pageHandlers.length > 0) {
+                    const allowedMethods = route.getAllowedMethods();
+                    const pathnameParams = match.params;
+                    let error = null; // eslint-disable-line no-shadow
+
+                    if (allowedMethods.includes(method)) {
                         error = new MethodNotAllowedError(
                             `"${ method }" method is not allowed on ${ pathname }`,
                             { info: { method, pathname, allowedMethods } }
                         );
+                    } else {
+                        pageHandler = pageHandlers[method];
                     }
 
-                    return {
+                    return new Route({
                         error,
+                        allowedMethods,
                         pathnameParams,
                         pageHandler,
                         midhandlers,
-                        errorHandlers,
-                    };
+                        errorHandler,
+                    });
                 }
             }
         }
 
-        return {
-            error: new NotFoundError(
-                `Pathname ${ pathname } not present in this application`,
-                { info: { method, pathname } }
-            ),
-            pathnameParams: {},
-            pageHandler,
+        const error = new NotFoundError(
+            `Pathname ${ pathname } not present in this application`,
+            { info: { method, pathname } }
+        );
+
+        return new Route({
+            error,
             midhandlers,
-            errorHandlers,
-        };
+            errorHandler,
+        });
     }
 
     static handleError(context, error) {
         const status = getHttpStatusCode(error) || 500;
         const [ headersSource, body ] = this.renderErrorResponse(context, error);
 
+        /**
+         * @type {Headers}
+         */
         let headers;
 
         if (headersSource && isFunction(headersSource.set)) {
@@ -147,25 +172,20 @@ export default class ApplicationContext {
             headers = new Headers(headersSource || {});
         }
 
-        let contentLength;
-
         if (isString(body)) {
-            contentLength = Buffer.byteLength(body, 'utf8');
+            headers.set('content-length', Buffer.byteLength(body, 'utf8').toString());
         } else if (Buffer.isBuffer(body)) {
-            contentLength = body.length;
+            headers.set('content-length', body.length.toString());
         }
 
-        if (isDefined(contentLength)) {
-            headers.set('content-length', contentLength);
-        }
-
-        // TODO: How does respondWith() work?
         return context.respondWith(body, { status, headers });
     }
 
-    static renderErrorResponse(context, error) {
-        error = error || {};
-
+    /**
+     * @param  {KixxError} error
+     * @return {[Headers,string]}
+     */
+    static renderErrorResponse(_, error) {
         const unprocessableErrors = error.unprocessableErrors;
         const title = error.title || error.name || 'Unexpected Server Error';
 
@@ -187,14 +207,60 @@ export default class ApplicationContext {
     }
 }
 
+export class Route {
+
+    /**
+     * @type {KixxError|null}
+     */
+    error = null;
+
+    /**
+     * @type {Array}
+     */
+    allowedMethods = [];
+
+    /**
+     * @type {Object}
+     */
+    pathnameParams = {};
+
+    /**
+     * @type {Function|null}
+     */
+    pageHandler = null;
+
+    /**
+     * @type {Array}
+     */
+    midhandlers = [];
+
+    /**
+     * @type {Function|null}
+     */
+    errorHandler = null;
+
+    constructor(spec) {
+        this.error = spec.error || null;
+        this.allowedMethods = Array.isArray(spec.allowedMethods) ? spec.allowedMethods : [];
+        this.pathnameParams = isObject(spec.pathnameParams) ? spec.pathnameParams : {};
+        this.pageHandler = isFunction(spec.pageHandler) ? spec.pageHandler : null;
+        this.midhandlers = Array.isArray(spec.midhandlers) ? spec.midhandlers : [];
+        this.errorHandler = isFunction(spec.errorHandler) ? spec.errorHandler : null;
+    }
+}
+
 function initializeComponent(component, name) {
-    if (!isFunction(component.initialize)) {
+    if (!isFunction(component) && !isFunction(component.initialize)) {
         return component;
     }
 
     let promise;
     try {
-        promise = component.initialize();
+        if (isFunction(component.initialize)) {
+            promise = component.initialize();
+        } else {
+            promise = component();
+        }
     } catch (cause) {
         return Promise.reject(new OperationalError(
             `Error initializing component "${ name }"`,

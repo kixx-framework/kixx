@@ -4,8 +4,9 @@
   "description": "The best web development framework ever",
   "main": "index.mjs",
   "scripts": {
-    "test": "eslint --ext .mjs,.js ./",
-    "lint": "eslint --ext .mjs,.js ./",
+    "test": "npm run lint && npm run typecheck",
+    "lint": "eslint --ext .mjs,.js,.ts ./framework",
+    "typecheck": "tsc",
     "tests-only": "kixx-test-node"
   },
   "engines": {
@@ -32,7 +33,10 @@
     "uuid": "~9.0.0"
   },
   "devDependencies": {
+    "@tsconfig/node18": "~1.0.1",
+    "@types/node": "~18.14.2",
     "eslint": "~8.33.0",
-    "kixx-test-node": "~1.4.4"
+    "kixx-test-node": "~1.4.4",
+    "typescript": "~4.9.5"
   }
 }
