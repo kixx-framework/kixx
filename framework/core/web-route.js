@@ -5,7 +5,41 @@ import KixxAssert from 'kixx-assert';
 
 const { isObject, isNotEmpty } = KixxAssert.helpers;
 
-const ALL = 'all';
+const ALL = 'ALL';
+
+export class RouteSpecification {
+
+    /**
+     * @type {String}
+     */
+    pattern;
+
+    /**
+     * An *optional* plain object which maps page handler functions to
+     * HTTP methods. The enumerable keys of the object should map to
+     * method names like GET, PUT, POST, OPTIONS, etc.
+     * @type {Object=}
+     */
+    pageHandlers;
+
+    /**
+     * A *optional* plain object which maps midhandler functions to HTTP
+     * methods. The enumerable keys of the object should map to HTTP method
+     * names like GET, PUT, POST, or the special key "ALL". The values of
+     * the keys should be Arrays of midhandler functions.
+     * @type {Object=}
+     */
+    midhandlers;
+
+    /**
+     * A *optional* plain object which maps error handler functions to HTTP
+     * methods. The enumerable keys of the object should map to HTTP method
+     * names like GET, PUT, POST, or the special key "ALL". The values of
+     * the keys should be error handler functions.
+     * @type {Object=}
+     */
+    errorHandlers;
+}
 
 export default class WebRoute {
 
@@ -17,6 +51,7 @@ export default class WebRoute {
     #errorHandlers = new Map();
 
     constructor(spec) {
+        this.name = spec.name;
         this.pattern = spec.pattern || null;
         this.matcher = spec.matcher || null;
         this.pageHandlers = spec.pageHandlers || {};
@@ -39,8 +74,14 @@ export default class WebRoute {
     }
 
     getErrorHandlerForMethod(method) {
-        const handlers = this.#errorHandlers.get(ALL) || [];
-        return handlers.concat(this.#errorHandlers.get(method) || []);
+        if (this.#errorHandlers.has(method)) {
+            return this.#errorHandlers.get(method);
+        }
+        if (this.#errorHandlers.has(ALL)) {
+            return this.#errorHandlers.get(ALL);
+        }
+
+        return null;
     }
 
     static fromSpecification(spec) {

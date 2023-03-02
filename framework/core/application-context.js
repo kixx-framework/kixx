@@ -7,18 +7,47 @@ import {
 } from 'kixx-server-errors';
 
 import KixxAssert from 'kixx-assert';
-
-// These imports are for type checking.
-// eslint-disable-next-line no-unused-vars
-import KixxError from '../lib/kixx-error.js';
-
-import WebRoute from './web-route.js';
+// Some imports are only used for type checking.
+/* eslint-disable no-unused-vars */
+import Logger from 'kixx-logger';
+import EventBus from '../lib/event-bus.js';
+import WebRoute, { RouteSpecification } from './web-route.js';
 import { WebRequestMidContext } from './web-request-context.js';
-import { getHttpStatusCode } from '../lib/error-handling.js';
+import { KixxError, getHttpStatusCode, errorToStackedError } from '../lib/error-handling.js';
+/* eslint-enable no-unused-vars */
+import { createLogger } from '../lib/logger.js';
 
 const { isFunction, isObject, isString } = KixxAssert.helpers;
 
+/**
+ * @typedef ApplicationContextParams
+ * @prop {String} name
+ * @prop {String} environment
+ * @prop {Array} components
+ * @prop {Array<RouteSpecification>} routes
+ */
+
 export default class ApplicationContext {
+
+    /**
+     * @type {String}
+     */
+    name;
+
+    /**
+     * @type {String}
+     */
+    environment;
+
+    /**
+     * @type {EventBus}
+     */
+    eventBus;
+
+    /**
+     * @type {Logger}
+     */
+    logger;
 
     /**
      * @type {Promise<ApplicationContext> | null}
@@ -35,13 +64,32 @@ export default class ApplicationContext {
      */
     #routes = [];
 
-    constructor({ routes }) {
-        this.#routes = routes.map(WebRoute.fromSpecification);
-    }
+    /**
+     * @param {ApplicationContextParams} params
+     */
+    constructor({ name, environment, components, routes }) {
 
-    registerComponent(name, component) {
-        this.#dependencies.set(name, component);
-        return this;
+        Object.defineProperties(this, {
+            name: {
+                enumerable: true,
+                value: name,
+            },
+            environment: {
+                enumerable: true,
+                value: environment,
+            },
+            eventBus: {
+                enumerable: true,
+                value: new EventBus(),
+            },
+            logger: {
+                enumerable: true,
+                value: createLogger({ environment, name }),
+            },
+        });
+
+        this.#routes = routes.map(WebRoute.fromSpecification);
+        this.#dependencies = new Map(Object.entries(components));
     }
 
     initialize() {
@@ -52,7 +100,7 @@ export default class ApplicationContext {
         const dependencies = Array.from(this.#dependencies);
 
         const promises = dependencies.map(([ key, component ]) => {
-            return initializeComponent(component, key);
+            return this.#initializeComponent(component, key);
         });
 
         this.#initializingPromise = Promise.all(promises).then((components) => {
@@ -74,6 +122,7 @@ export default class ApplicationContext {
 
         const {
             error,
+            pattern,
             allowedMethods,
             pathnameParams,
             pageHandler,
@@ -84,10 +133,11 @@ export default class ApplicationContext {
         const errorHandler = route.errorHandler || this.constructor.handleError;
 
         const context = new WebRequestMidContext({
+            name: pattern,
             components: Object.fromEntries(this.#dependencies),
             request,
             response,
-            error,
+            error: errorToStackedError(`Routing error in application "${ this.name }"`, error),
             allowedMethods,
             pathnameParams,
             pageHandler,
@@ -95,7 +145,39 @@ export default class ApplicationContext {
             errorHandler,
         });
 
+        // TODO: Ensure an HTTP response object was returned.
         return context.next();
+    }
+
+    #initializeComponent(component, name) {
+        if (!isFunction(component) && !isFunction(component.initialize)) {
+            return component;
+        }
+
+        let promise;
+        try {
+            if (isFunction(component.initialize)) {
+                promise = component.initialize(this);
+            } else {
+                promise = component(this);
+            }
+        } catch (cause) {
+            return Promise.reject(new OperationalError(
+                `Error initializing component "${ name }"`,
+                { cause, fatal: true, info: { name } }
+            ));
+        }
+
+        if (promise && isFunction(promise.catch)) {
+            return promise.catch((cause) => {
+                throw new OperationalError(
+                    `Error initializing component "${ name }"`,
+                    { cause, fatal: true, info: { name } }
+                );
+            });
+        }
+
+        return promise;
     }
 
     #findMatchingHandlers(pathname, method) {
@@ -135,6 +217,7 @@ export default class ApplicationContext {
 
                     return new Route({
                         error,
+                        pattern: route.pattern,
                         allowedMethods,
                         pathnameParams,
                         pageHandler,
@@ -215,6 +298,11 @@ export class Route {
     error = null;
 
     /**
+     * @type {String|null}
+     */
+    pattern = null;
+
+    /**
      * @type {Array}
      */
     allowedMethods = [];
@@ -241,42 +329,12 @@ export class Route {
 
     constructor(spec) {
         this.error = spec.error || null;
+        this.pattern = spec.pattern || null;
         this.allowedMethods = Array.isArray(spec.allowedMethods) ? spec.allowedMethods : [];
         this.pathnameParams = isObject(spec.pathnameParams) ? spec.pathnameParams : {};
         this.pageHandler = isFunction(spec.pageHandler) ? spec.pageHandler : null;
         this.midhandlers = Array.isArray(spec.midhandlers) ? spec.midhandlers : [];
         this.errorHandler = isFunction(spec.errorHandler) ? spec.errorHandler : null;
     }
-}
-
-function initializeComponent(component, name) {
-    if (!isFunction(component) && !isFunction(component.initialize)) {
-        return component;
-    }
-
-    let promise;
-    try {
-        if (isFunction(component.initialize)) {
-            promise = component.initialize();
-        } else {
-            promise = component();
-        }
-    } catch (cause) {
-        return Promise.reject(new OperationalError(
-            `Error initializing component "${ name }"`,
-            { cause, fatal: true, info: { name } }
-        ));
-    }
-
-    if (promise && isFunction(promise.catch)) {
-        return promise.catch((cause) => {
-            throw new OperationalError(
-                `Error initializing component "${ name }"`,
-                { cause, fatal: true, info: { name } }
-            );
-        });
-    }
-
-    return promise;
 }
 

@@ -12,10 +12,6 @@ export default class WrappedHttpResponse {
     status = 200;
     statusText;
 
-    getWriteStream() {
-        return null;
-    }
-
     setResponse(body, options) {
         options = options || {};
 

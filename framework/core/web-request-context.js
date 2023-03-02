@@ -5,9 +5,15 @@
 import WrappedHttpRequest from '../servers/wrapped-http-request.js';
 // eslint-disable-next-line no-unused-vars
 import WrappedHttpResponse from '../servers/wrapped-http-response.js';
+import { errorToStackedError } from '../lib/error-handling.js';
 
 
 export default class WebRequestContext {
+
+    /**
+     * @type {String}
+     */
+    name;
 
     /**
      * @type {Object}
@@ -56,6 +62,10 @@ export default class WebRequestContext {
 
     constructor(spec) {
         Object.defineProperties(this, {
+            name: {
+                enumerable: true,
+                value: spec.name,
+            },
             components: {
                 enumerable: true,
                 value: Object.freeze(spec.components),
@@ -151,12 +161,14 @@ function safelyExecuteHandler(context, handler, handleError) {
     try {
         promise = handler(context);
     } catch (cause) {
-        return handleError(context, cause);
+        const message = `Web request handler error in route "${ context.name }"`;
+        return handleError(context, errorToStackedError(message, cause));
     }
 
     if (promise && promise.catch) {
         return promise.catch((cause) => {
-            return handleError(context, cause);
+            const message = `Web request handler error in route "${ context.name }"`;
+            return handleError(context, errorToStackedError(message, cause));
         });
     }
 

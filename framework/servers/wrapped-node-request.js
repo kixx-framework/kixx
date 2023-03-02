@@ -17,10 +17,10 @@ export default class WrappedNodeRequest extends WrappedHttpRequest {
     #nodeHttpRequest;
 
     constructor(spec) {
-        const { nodeHttpRequest } = spec;
+        const { nodeHttpRequest, url } = spec;
 
         super({
-            url: spec.url,
+            url,
             method: nodeHttpRequest.method,
             headers: nodeHttpRequest.headers,
         });

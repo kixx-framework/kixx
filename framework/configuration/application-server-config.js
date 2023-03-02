@@ -38,6 +38,31 @@ export default class ApplicationServerConfig {
     }
 
     /**
+     * @param  {String} requestHostname
+     * @param  {Number} requestPort
+     * @return {ApplicationConfig|undefined}
+     */
+    findHostApplication(requestHostname, requestPort) {
+        return this.applications.find(({ ports, hostnames }) => {
+            for (let y = 0; y < hostnames.length; y = y + 1) {
+                const { hostname } = hostnames[y];
+
+                if (hostname && hostname === requestHostname) {
+                    return true;
+                }
+            }
+
+            for (let n = 0; n < ports.length; n = n + 1) {
+                if (requestPort === ports[n]) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
+    /**
      * @param  {BaseConfig} config
      * @param  {Array<ApplicationConfigSpecification>} applicationConfigs
      * @return {ApplicationServerConfig}

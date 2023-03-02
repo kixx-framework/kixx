@@ -47,6 +47,28 @@ export default class ApplicationConfig {
     }
 
     /**
+     * @return {String|null}
+     */
+    getPreferredHost() {
+        if (this.hostnames.length > 0) {
+            return this.hostnames[0].hostname;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return {Number|null}
+     */
+    getPreferredPort() {
+        if (this.ports.length > 0) {
+            return this.ports[0];
+        }
+
+        return null;
+    }
+
+    /**
      * @param  {Array<ServerConfig>} servers
      * @param  {ApplicationConfigSpecification} config
      * @return {ApplicationConfig}
