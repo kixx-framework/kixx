@@ -83,7 +83,7 @@ export class InfoEvent extends KixxEvent {
     name = InfoEvent.NAME;
 
     /**
-     * @param  {EventSpecification} spec
+     * @param {EventSpecification} spec
      */
     constructor(spec) {
         super(spec);
@@ -97,10 +97,16 @@ export class DebugEvent extends KixxEvent {
     name = DebugEvent.NAME;
 
     /**
-     * @param  {EventSpecification} spec
+     * @param {EventSpecification} spec
      */
     constructor(spec) {
         super(spec);
         Object.freeze(this);
     }
 }
+
+export const Events = Object.freeze({
+    ERROR: ErrorEvent.NAME,
+    INFO: InfoEvent.NAME,
+    DEBUG: DebugEvent.NAME,
+});

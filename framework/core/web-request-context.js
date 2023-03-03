@@ -1,12 +1,32 @@
 // @ts-check
 
+import { ProgrammerError } from 'kixx-server-errors';
 // These imports are for type checking.
-// eslint-disable-next-line no-unused-vars
+/* eslint-disable no-unused-vars */
+import { Logger } from 'kixx-logger';
+import { KixxError, errorToStackedError } from '../lib/error-handling.js';
+import EventBus from '../lib/event-bus.js';
 import WrappedHttpRequest from '../servers/wrapped-http-request.js';
-// eslint-disable-next-line no-unused-vars
 import WrappedHttpResponse from '../servers/wrapped-http-response.js';
-import { errorToStackedError } from '../lib/error-handling.js';
+/* eslint-enable no-unused-vars */
+import { ErrorEvent } from '../lib/events.js';
 
+/**
+ * @typedef {Object} WebRequestContextSpecification
+ * @prop {String} name
+ * @prop {Object} configs
+ * @prop {Object} components
+ * @prop {EventBus} eventBus
+ * @prop {Logger} logger
+ * @prop {WrappedHttpRequest} request
+ * @prop {WrappedHttpResponse} response
+ * @prop {Array<String>} allowedMethods
+ * @prop {Object} pathnameParams
+ * @prop {(context:WebRequestContext, error:KixxError) => WrappedHttpResponse} errorHandler
+ * @prop {(context:WebRequestContext) => WrappedHttpResponse} pageHandler
+ * @prop {Array<Function>} midhandlers
+ * @prop {KixxError|null} error
+ */
 
 export default class WebRequestContext {
 
@@ -18,7 +38,22 @@ export default class WebRequestContext {
     /**
      * @type {Object}
      */
+    configs = {};
+
+    /**
+     * @type {Object}
+     */
     components = {};
+
+    /**
+     * @type {EventBus}
+     */
+    eventBus;
+
+    /**
+     * @type {Logger}
+     */
+    logger;
 
     /**
      * @type {WrappedHttpRequest}
@@ -41,17 +76,17 @@ export default class WebRequestContext {
     pathnameParams = {};
 
     /**
-     * @type {Function}
+     * @type {(context:WebRequestContext, error:KixxError) => WrappedHttpResponse}
      */
     errorHandler;
 
     /**
-     * @type {Function}
+     * @type {(context:WebRequestContext) => WrappedHttpResponse}
      */
     pageHandler;
 
     /**
-     * @type {Error}
+     * @type {KixxError|Error|null}
      */
     #error;
 
@@ -60,15 +95,35 @@ export default class WebRequestContext {
      */
     #midhandlers = [];
 
+    /**
+     * @type {Boolean}
+     */
+    #executedPageHandler = false;
+
+    /**
+     * @param {WebRequestContextSpecification} spec
+     */
     constructor(spec) {
         Object.defineProperties(this, {
             name: {
                 enumerable: true,
                 value: spec.name,
             },
+            configs: {
+                enumerable: true,
+                value: Object.freeze(spec.configs),
+            },
             components: {
                 enumerable: true,
                 value: Object.freeze(spec.components),
+            },
+            eventBus: {
+                enumerable: true,
+                value: spec.eventBus,
+            },
+            logger: {
+                enumerable: true,
+                value: spec.logger,
             },
             request: {
                 enumerable: true,
@@ -104,73 +159,91 @@ export default class WebRequestContext {
         return this.response.setResponse(body, options);
     }
 
-    respondWithHtml(body, options) {
+    /**
+     * @param  {String} body
+     * @param  {Object=} options
+     * @return {WrappedHttpResponse}
+     */
+    respondWithHtml(body, options = {}) {
         return this.response.setResponse(body, options)
             .setHeader('content-type', 'text/html; charset=utf-8')
             .setHeader('content-length', Buffer.byteLength(body));
     }
 
-    respondWithJson(data, options) {
+    /**
+     * @param  {any} data
+     * @param  {Object=} options
+     * @return {WrappedHttpResponse}
+     */
+    respondWithJson(data, options = {}) {
         const body = JSON.stringify(data);
 
         return this.response.setResponse(body, options)
             .setHeader('content-type', 'application/json; charset=utf-8')
             .setHeader('content-length', Buffer.byteLength(body));
     }
-}
-
-export class WebRequestMidContext extends WebRequestContext {
-
-    #error = null;
-    #midhandlers = [];
 
     next() {
+        if (this.#executedPageHandler) {
+            return this.#catchAndHandleError(new ProgrammerError(
+                `Cannot call next(); page handler for ${ this.name } has already been called`,
+                { fatal: true, name: this.name }
+            ));
+        }
+
         if (this.#error) {
             const error = this.#error;
             this.#error = null;
-            return this.errorHandler(this, error);
+            return this.#catchAndHandleError(error);
         }
 
         const midhandler = this.#midhandlers.shift();
 
         if (midhandler) {
-            return safelyExecuteHandler(this, midhandler, this.errorHandler);
+            return this.#safelyExecuteHandler(midhandler);
         }
 
-        const context = this.#cloneWebRequestContext();
-
-        return safelyExecuteHandler(context, this.pageHandler, this.errorHandler);
+        this.#executedPageHandler = true;
+        return this.#safelyExecuteHandler(this.pageHandler);
     }
 
-    #cloneWebRequestContext() {
-        return new WebRequestContext({
-            components: this.components,
-            allowedMethods: this.allowedMethods,
-            request: this.request,
-            pathnameParams: this.pathnameParams,
-            pageHandler: this.pageHandler,
-            errorHandler: this.errorHandler,
-            midhandlers: this.#midhandlers,
-        });
-    }
-}
+    #safelyExecuteHandler(handler) {
+        let promise;
 
-function safelyExecuteHandler(context, handler, handleError) {
-    let promise;
+        try {
+            promise = handler(this);
+        } catch (cause) {
+            return this.#catchAndHandleError(cause);
+        }
 
-    try {
-        promise = handler(context);
-    } catch (cause) {
-        const message = `Web request handler error in route "${ context.name }"`;
-        return handleError(context, errorToStackedError(message, cause));
+        if (promise && promise.catch) {
+            return promise.catch((cause) => {
+                return this.#catchAndHandleError(cause);
+            });
+        }
+
+        return promise;
     }
 
-    if (promise && promise.catch) {
-        return promise.catch((cause) => {
-            const message = `Web request handler error in route "${ context.name }"`;
-            return handleError(context, errorToStackedError(message, cause));
-        });
-    }
+    #catchAndHandleError(cause) {
+        const message = `Web request handler error in route "${ this.name }"`;
 
-    return promise;
+        if (!cause) {
+            // This ensures we have an error, and not null (returned from errorToStackedError below).
+            cause = new ProgrammerError(message, { fatal: true, name: this.name });
+        }
+
+        const error = errorToStackedError(message, cause);
+        // @ts-ignore error TS2322: Type 'KixxError | null' is not assignable to type 'KixxError'
+        const res = this.errorHandler(this, error);
+        // @ts-ignore error TS2322: Type 'KixxError | null' is not assignable to type 'KixxError'
+        const event = new ErrorEvent(error);
+
+        // Emit the error event after the response is returned.
+        setTimeout(() => {
+            this.eventBus.emitEvent(event);
+        }, 1);
+
+        return res;
+    }
 }

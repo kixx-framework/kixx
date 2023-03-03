@@ -3,7 +3,8 @@
 import {
     OperationalError,
     NotFoundError,
-    MethodNotAllowedError
+    MethodNotAllowedError,
+    getFullStack
 } from 'kixx-server-errors';
 
 import KixxAssert from 'kixx-assert';
@@ -11,17 +12,26 @@ import KixxAssert from 'kixx-assert';
 /* eslint-disable no-unused-vars */
 import Logger from 'kixx-logger';
 import EventBus from '../lib/event-bus.js';
+import { ErrorEvent } from '../lib/events.js';
 import WebRoute, { RouteSpecification } from './web-route.js';
-import { WebRequestMidContext } from './web-request-context.js';
-import { KixxError, getHttpStatusCode, errorToStackedError } from '../lib/error-handling.js';
+import WrappedHttpRequest from '../servers/wrapped-http-request.js';
+import WrappedHttpResponse from '../servers/wrapped-http-response.js';
+import WebRequestContext from './web-request-context.js';
+import {
+    KixxError,
+    getHttpStatusCode,
+    isInternalServerError,
+    errorToStackedError
+} from '../lib/error-handling.js';
 /* eslint-enable no-unused-vars */
 import { createLogger } from '../lib/logger.js';
 
-const { isFunction, isObject, isString } = KixxAssert.helpers;
+const { isFunction, isObject } = KixxAssert.helpers;
 
 /**
  * @typedef ApplicationContextParams
  * @prop {String} name
+ * @prop {Object} configs
  * @prop {String} environment
  * @prop {Array} components
  * @prop {Array<RouteSpecification>} routes
@@ -33,6 +43,11 @@ export default class ApplicationContext {
      * @type {String}
      */
     name;
+
+    /**
+     * @type {Object}
+     */
+    configs = {};
 
     /**
      * @type {String}
@@ -65,18 +80,26 @@ export default class ApplicationContext {
     #routes = [];
 
     /**
-     * @param {ApplicationContextParams} params
+     * @param {ApplicationContextParams} options
      */
-    constructor({ name, environment, components, routes }) {
+    constructor(options) {
+
+        const {
+            name,
+            configs,
+            environment,
+            components,
+            routes,
+        } = options;
 
         Object.defineProperties(this, {
             name: {
                 enumerable: true,
                 value: name,
             },
-            environment: {
+            configs: {
                 enumerable: true,
-                value: environment,
+                value: configs,
             },
             eventBus: {
                 enumerable: true,
@@ -92,10 +115,20 @@ export default class ApplicationContext {
         this.#dependencies = new Map(Object.entries(components));
     }
 
-    initialize() {
+    initialize(appConfig) {
         if (this.#initializingPromise) {
             return this.#initializingPromise;
         }
+
+        const { environment } = appConfig;
+
+        // Make the environment property permanent.
+        Object.defineProperty(this, 'environment', {
+            enumerable: true,
+            value: environment,
+        });
+
+        this.eventBus.on(ErrorEvent.NAME, this.onErrorEvent.bind(this));
 
         const dependencies = Array.from(this.#dependencies);
 
@@ -115,13 +148,23 @@ export default class ApplicationContext {
         return this.#initializingPromise;
     }
 
+    onErrorEvent(event) {
+        if (event.cause && isInternalServerError(event.cause)) {
+            if (event.fatal) {
+                this.logger.fatal('fatal event', event);
+            } else {
+                this.logger.error('error event', event);
+            }
+            this.logger.info(getFullStack(event.cause));
+        }
+    }
+
     routeWebRequest(request, response) {
         const { method } = request;
         const { pathname } = request.url;
         const route = this.#findMatchingHandlers(pathname, method);
 
         const {
-            error,
             pattern,
             allowedMethods,
             pathnameParams,
@@ -132,12 +175,23 @@ export default class ApplicationContext {
         // @ts-ignore error TS2339: Property 'handleError' does not exist on type 'Function'.
         const errorHandler = route.errorHandler || this.constructor.handleError;
 
-        const context = new WebRequestMidContext({
+        let error = null;
+        if (route.error) {
+            error = errorToStackedError(
+                `Routing error in application "${ this.name }"`,
+                route.error
+            );
+        }
+
+        const context = new WebRequestContext({
             name: pattern,
+            configs: this.configs,
             components: Object.fromEntries(this.#dependencies),
+            eventBus: this.eventBus,
+            logger: this.logger,
             request,
             response,
-            error: errorToStackedError(`Routing error in application "${ this.name }"`, error),
+            error,
             allowedMethods,
             pathnameParams,
             pageHandler,
@@ -242,33 +296,6 @@ export default class ApplicationContext {
 
     static handleError(context, error) {
         const status = getHttpStatusCode(error) || 500;
-        const [ headersSource, body ] = this.renderErrorResponse(context, error);
-
-        /**
-         * @type {Headers}
-         */
-        let headers;
-
-        if (headersSource && isFunction(headersSource.set)) {
-            headers = headersSource;
-        } else {
-            headers = new Headers(headersSource || {});
-        }
-
-        if (isString(body)) {
-            headers.set('content-length', Buffer.byteLength(body, 'utf8').toString());
-        } else if (Buffer.isBuffer(body)) {
-            headers.set('content-length', body.length.toString());
-        }
-
-        return context.respondWith(body, { status, headers });
-    }
-
-    /**
-     * @param  {KixxError} error
-     * @return {[Headers,string]}
-     */
-    static renderErrorResponse(_, error) {
         const unprocessableErrors = error.unprocessableErrors;
         const title = error.title || error.name || 'Unexpected Server Error';
 
@@ -282,11 +309,14 @@ export default class ApplicationContext {
             html += messages.join('\n');
         }
 
+        html += '\n';
+
         const headers = new Headers({
             'content-type': 'text/html; charset=utf-8',
+            'content-length': Buffer.byteLength(html, 'utf8').toString(),
         });
 
-        return [ headers, html ];
+        return context.respondWith(html, { status, headers });
     }
 }
 
@@ -298,9 +328,9 @@ export class Route {
     error = null;
 
     /**
-     * @type {String|null}
+     * @type {String}
      */
-    pattern = null;
+    pattern;
 
     /**
      * @type {Array}
@@ -313,9 +343,9 @@ export class Route {
     pathnameParams = {};
 
     /**
-     * @type {Function|null}
+     * @type {(context:WebRequestContext) => WrappedHttpResponse}
      */
-    pageHandler = null;
+    pageHandler;
 
     /**
      * @type {Array}

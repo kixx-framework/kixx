@@ -55,34 +55,38 @@ export class KixxError extends Error {
 }
 
 export function isStackedError(err) {
-    return err.code && err.title;
+    return err && err.code && err.title;
+}
+
+export function isInternalServerError(err) {
+    err = err || {};
+
+    if (isNumber(err.statusCode) && err.statusCode < 500) {
+        return false;
+    }
+
+    return true;
 }
 
 /**
  * @param  {String} message
- * @param  {Error|KixxError|unknown} cause
- * @return {KixxError|null}
+ * @param  {Error|KixxError} cause
+ * @return {KixxError}
  */
 export function errorToStackedError(message, cause) {
-    if (!cause) {
-        return null;
-    }
-
     if (isStackedError(cause)) {
-        // @ts-ignore error TS2740: Type '{}' is missing the following properties from type 'KixxError':
+        // @ts-ignore error TS2322: Type 'KixxError | Error' is not assignable to type 'KixxError'.
         return cause;
     }
 
     let newMessage;
 
-    // @ts-ignore error TS2339: Property 'code' does not exist on type '{}'
-    if (cause.code) {
-        // @ts-ignore error TS2339: Property 'message' does not exist on type '{}'
+    // @ts-ignore error TS2339: Property 'code' does not exist on type 'KixxError | Error'
+    if (cause && cause.code) {
         newMessage = message || cause.message || 'Unknown operational error';
         return new OperationalError(newMessage, { cause }, errorToStackedError);
     }
 
-    // @ts-ignore error TS2339: Property 'message' does not exist on type '{}'
     newMessage = message || cause.message || 'Unknown programmer error';
     return new ProgrammerError(newMessage, { cause, fatal: true }, errorToStackedError);
 }

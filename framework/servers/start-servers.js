@@ -41,7 +41,7 @@ export default function startServers(logger, eventBus, applications, config) {
             // before closing the servers.
             setTimeout(() => {
                 closeServers(servers);
-            }, 0);
+            }, 1);
         }
     });
 
