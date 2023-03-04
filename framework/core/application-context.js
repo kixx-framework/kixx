@@ -26,14 +26,13 @@ import {
 /* eslint-enable no-unused-vars */
 import { createLogger } from '../lib/logger.js';
 
-const { isFunction, isObject } = KixxAssert.helpers;
+const { isFunction, isObject, isNotEmpty } = KixxAssert.helpers;
 
 /**
  * @typedef ApplicationContextParams
  * @prop {String} name
  * @prop {Object} configs
- * @prop {String} environment
- * @prop {Array} components
+ * @prop {Object} components
  * @prop {Array<RouteSpecification>} routes
  */
 
@@ -87,7 +86,6 @@ export default class ApplicationContext {
         const {
             name,
             configs,
-            environment,
             components,
             routes,
         } = options;
@@ -105,10 +103,6 @@ export default class ApplicationContext {
                 enumerable: true,
                 value: new EventBus(),
             },
-            logger: {
-                enumerable: true,
-                value: createLogger({ environment, name }),
-            },
         });
 
         this.#routes = routes.map(WebRoute.fromSpecification);
@@ -123,9 +117,15 @@ export default class ApplicationContext {
         const { environment } = appConfig;
 
         // Make the environment property permanent.
-        Object.defineProperty(this, 'environment', {
-            enumerable: true,
-            value: environment,
+        Object.defineProperties(this, {
+            environment: {
+                enumerable: true,
+                value: environment,
+            },
+            logger: {
+                enumerable: true,
+                value: createLogger({ environment, name: this.name }),
+            },
         });
 
         this.eventBus.on(ErrorEvent.NAME, this.onErrorEvent.bind(this));
@@ -255,12 +255,12 @@ export default class ApplicationContext {
                     errorHandler = newErrorHandler;
                 }
 
-                if (pageHandlers.length > 0) {
+                if (isNotEmpty(pageHandlers)) {
                     const allowedMethods = route.getAllowedMethods();
                     const pathnameParams = match.params;
                     let error = null; // eslint-disable-line no-shadow
 
-                    if (allowedMethods.includes(method)) {
+                    if (!allowedMethods.includes(method)) {
                         error = new MethodNotAllowedError(
                             `"${ method }" method is not allowed on ${ pathname }`,
                             { info: { method, pathname, allowedMethods } }
