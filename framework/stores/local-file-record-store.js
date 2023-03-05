@@ -5,7 +5,10 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import KixxAssert from 'kixx-assert';
 
-const { isNumberNotNaN } = KixxAssert.helpers;
+const {
+    isUndefined,
+    isNumberNotNaN,
+} = KixxAssert.helpers;
 
 /**
  * @typedef {Object} GetOptions
@@ -22,9 +25,10 @@ const { isNumberNotNaN } = KixxAssert.helpers;
 /**
  * @typedef {Object} Record
  * @prop {String} type
- * @prop {String} id
+ * @prop {String|null|undefined} id
  * @prop {String} created
  */
+
 
 export default class LocalFileRecordStore {
 
@@ -48,12 +52,6 @@ export default class LocalFileRecordStore {
         return Promise.resolve(this);
     }
 
-    /**
-     * @param  {String} type
-     * @param  {String} id
-     * @param  {GetOptions} options
-     * @return {Promise<Array>}
-     */
     async get(type, id, options) {
         options = options || {};
 
@@ -66,11 +64,6 @@ export default class LocalFileRecordStore {
         return [ null, null ];
     }
 
-    /**
-     * @param  {String} type
-     * @param  {GetByTypeOptions} options
-     * @return {Promise<{count:Number,cursor:Number|null,records:Array}>}
-     */
     async getByType(type, options) {
         options = options || {};
 
@@ -105,7 +98,7 @@ export default class LocalFileRecordStore {
         /** @type {Number|null} */
         let newCursor = cursor + limit;
 
-        if (typeof records[newCursor] === 'undefined') {
+        if (isUndefined(records[newCursor])) {
             newCursor = null;
         }
 
@@ -116,11 +109,6 @@ export default class LocalFileRecordStore {
         };
     }
 
-    /**
-     * @template {Record} R
-     * @param {R} record
-     * @return {Promise<R>}
-     */
     async put(record) {
         const { type, id } = record;
         await this.#saveRecord(type, id, record);

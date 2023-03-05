@@ -3,9 +3,9 @@
 import { ValidationError } from 'kixx-server-errors';
 import { mergeDeep } from 'kixx-lib-es6';
 
-export default class Entity {
+export default class Model {
 
-    static type = 'entity';
+    static type = 'model';
     static includedAttributes = null;
 
     /**
@@ -51,11 +51,11 @@ export default class Entity {
     }
 
     validate() {
-        return new ValidationError('Entity validation error');
+        return new ValidationError('Model validation error');
     }
 
     validateNew() {
-        return new ValidationError('Entity validation error');
+        return new ValidationError('Model validation error');
     }
 
     toJSON() {

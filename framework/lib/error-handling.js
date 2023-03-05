@@ -75,8 +75,11 @@ export function isInternalServerError(err) {
  */
 export function errorToStackedError(message, cause) {
     if (isStackedError(cause)) {
-        // @ts-ignore error TS2322: Type 'KixxError | Error' is not assignable to type 'KixxError'.
-        return cause;
+        if (cause.name === ProgrammerError.NAME) {
+            // ProgrammerErrors are always fatal.
+            const options = Object.assign({}, cause, { fatal: true });
+            return new ProgrammerError(cause.message, options);
+        }
     }
 
     let newMessage;
@@ -87,6 +90,7 @@ export function errorToStackedError(message, cause) {
         return new OperationalError(newMessage, { cause }, errorToStackedError);
     }
 
+    // ProgrammerErrors are always fatal.
     newMessage = message || cause.message || 'Unknown programmer error';
     return new ProgrammerError(newMessage, { cause, fatal: true }, errorToStackedError);
 }
