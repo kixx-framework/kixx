@@ -52,8 +52,8 @@ export default class RecordStore {
         });
     }
 
-    initialize() {
-        return this.storageEngine.initialize().then(() => {
+    initialize(appContext) {
+        return this.storageEngine.initialize(appContext).then(() => {
             return this;
         });
     }

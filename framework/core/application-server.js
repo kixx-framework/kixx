@@ -95,10 +95,8 @@ export default class ApplicationServer {
             const appConfig = findApplicationConfig(appContext.name);
 
             if (!appConfig) {
-                throw new ProgrammerError(
-                    `Could not find application configuration for ${ appContext.name }`,
-                    { fatal: true, name: appContext.name }
-                );
+                // Do not initialize applications which are not configured.
+                return;
             }
 
             // Proxy events from the ApplicationContext up to the

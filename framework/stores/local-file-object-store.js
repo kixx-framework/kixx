@@ -2,7 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { OperationalError } from 'kixx-server-errors';
+import { OperationalError, NotFoundError } from 'kixx-server-errors';
 // Imported for type checking
 // eslint-disable-next-line no-unused-vars
 import EventBus from '../lib/event-bus.js';
@@ -13,17 +13,20 @@ export default class LocalFileObjectStore {
 
     #eventBus;
     #directory;
+    #logger;
 
     /**
-     * @param {{eventBus:EventBus,directory:String}} spec
+     * @param {{directory:String}} spec
      */
     constructor(spec) {
-        this.#eventBus = spec.eventBus;
         this.#directory = spec.directory;
     }
 
-    initialize() {
+    initialize(appContext) {
         return new Promise((resolve, reject) => {
+            this.#eventBus = appContext.eventBus;
+            this.#logger = appContext.logger;
+
             fs.mkdir(this.#directory, { recursive: true }, (err) => {
                 if (err) {
                     reject(err);
@@ -100,6 +103,18 @@ export default class LocalFileObjectStore {
             }
 
             const filepath = this.#createObjectFilePath(id);
+            const stat = fs.statSync(filepath, { throwIfNoEntry: false });
+
+            if (!stat) {
+                this.#logger.debug('object not found', { id, filepath });
+                callback(new NotFoundError(`Object "${ id }" not found`, {
+                    info: { filepath },
+                }));
+                return;
+            }
+
+            metadata.contentLength = stat.size;
+
             const readStream = fs.createReadStream(filepath);
 
             readStream.on('error', (cause) => {
@@ -140,6 +155,7 @@ export default class LocalFileObjectStore {
         fs.readFile(filepath, { encoding: 'utf8' }, (cause, utf8Data) => {
             if (cause) {
                 if (cause.code === 'ENOENT') {
+                    this.#logger.debug('object metadata file not found', { id, filepath });
                     callback(null, null);
                 } else {
                     callback(new OperationalError(

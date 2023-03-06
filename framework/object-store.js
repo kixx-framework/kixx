@@ -27,8 +27,8 @@ export default class ObjectStore {
         });
     }
 
-    initialize() {
-        return this.storageEngine.initialize().then(() => {
+    initialize(appContext) {
+        return this.storageEngine.initialize(appContext).then(() => {
             return this;
         });
     }

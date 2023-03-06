@@ -13,8 +13,8 @@ export default class TemplateStore {
         });
     }
 
-    initialize() {
-        return this.templateEngine.initialize().then(() => {
+    initialize(appContext) {
+        return this.templateEngine.initialize(appContext).then(() => {
             return this;
         });
     }
