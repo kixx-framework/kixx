@@ -21,7 +21,7 @@ const { isNonEmptyString, isFunction } = KixxAssert.helpers;
 
 // The "^" symbol within "[^]" means one NOT of the following set of characters.
 // eslint-disable-next-line no-useless-escape
-const DISALLOWED_URL_CHARACTERS = /[^a-z0-9_\.\-\/\?\=%]/i;
+const DISALLOWED_URL_CHARACTERS = /[^a-z0-9_\.\:\-\/\&\?\=%]/i;
 
 /**
  * @prop {Logger} logger
