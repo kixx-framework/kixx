@@ -80,6 +80,9 @@ export function errorToStackedError(message, cause) {
             const options = Object.assign({}, cause, { fatal: true });
             return new ProgrammerError(cause.message, options);
         }
+
+        // @ts-ignore error TS2322: Type 'KixxError | Error' is not assignable to type 'KixxError'
+        return cause;
     }
 
     let newMessage;
