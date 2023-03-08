@@ -1,6 +1,5 @@
 // @ts-check
 
-import { ValidationError } from 'kixx-server-errors';
 import { mergeDeep } from 'kixx-lib-es6';
 
 export default class Model {
@@ -50,12 +49,46 @@ export default class Model {
         return new SubClass(spec);
     }
 
+    mergeRelationships(relationships) {
+        const SubClass = this.constructor;
+
+        function addNewRelationships(existingRelationships, newRelationships) {
+            if (!Array.isArray(existingRelationships) || existingRelationships.length === 0) {
+                return newRelationships;
+            }
+
+            newRelationships.forEach((relationship) => {
+                const existing = existingRelationships.find(({ type, id }) => {
+                    return relationship.type === type && relationship.id === id;
+                });
+
+                if (existing) {
+                    mergeDeep(existing, relationship);
+                } else {
+                    existingRelationships.push(relationship);
+                }
+            });
+
+            return existingRelationships;
+        }
+
+        const rel = Object.keys(relationships).reduce((related, key) => {
+            related[key] = addNewRelationships(this.relationships[key], relationships[key]);
+            return related;
+        }, {});
+
+        const spec = Object.assign({}, this, { relationships: rel });
+
+        // @ts-ignore error TS2351: This expression is not constructable.
+        return new SubClass(spec);
+    }
+
     validate() {
-        return new ValidationError('Model validation error');
+        return null;
     }
 
     validateNew() {
-        return new ValidationError('Model validation error');
+        return null;
     }
 
     toJSON() {
