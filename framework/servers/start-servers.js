@@ -129,7 +129,7 @@ function startServer(params, serverConfig) {
             return;
         }
 
-        const appConfig = config.findHostApplication(hostname, originatingPort);
+        const appConfig = config.findHostApplication(hostname);
 
         if (!appConfig) {
             logger.debug('host not available', { host: hostname });
@@ -147,6 +147,7 @@ function startServer(params, serverConfig) {
         let newLocation = null;
 
         if (usePreferredHost && usePreferredPort) {
+            logger.debug('redirect to preferred host and port', { preferredHost, preferredPort });
             // Redirect to the preferred host and port:
             newLocation = composeRedirectLocation(
                 preferredProtocol,
@@ -155,6 +156,7 @@ function startServer(params, serverConfig) {
                 req.url
             );
         } else if (usePreferredHost) {
+            logger.debug('redirect to preferred host', { preferredHost });
             newLocation = composeRedirectLocation(
                 preferredProtocol,
                 preferredHost,
@@ -162,6 +164,7 @@ function startServer(params, serverConfig) {
                 req.url
             );
         } else if (usePreferredPort) {
+            logger.debug('redirect to preferred port', { preferredPort });
             newLocation = composeRedirectLocation(
                 preferredProtocol,
                 hostname,
