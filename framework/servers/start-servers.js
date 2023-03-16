@@ -129,7 +129,16 @@ function startServer(params, serverConfig) {
             return;
         }
 
-        const appConfig = config.findHostApplication(hostname);
+        let appConfig;
+
+        // If only 1 application is registered for this server then default to it.
+        // This feature allows us to use port number to designate host applications in
+        // the development environment.
+        if (config.applications.length === 1) {
+            appConfig = config.applications[0];
+        } else {
+            appConfig = config.findHostApplication(hostname);
+        }
 
         if (!appConfig) {
             logger.debug('host not available', { host: hostname });
