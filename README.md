@@ -1,8 +1,8 @@
 KIXX
 ====
-Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2023.
-
 The best web development framework ever.
+
+Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2023.
 
 Copyright and License
 ---------------------
