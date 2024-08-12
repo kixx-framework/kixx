@@ -1,43 +1,31 @@
 {
   "name": "kixx",
-  "version": "2.0.2",
-  "description": "The best web development framework ever",
+  "version": "3.0.0",
+  "description": "The kixx.js web development framework",
   "type": "module",
-  "main": "index.js",
+  "main": "mod.js",
   "scripts": {
-    "test": "npm run lint && npm run typecheck",
-    "lint": "eslint --ext .mjs,.js,.ts ./framework",
-    "typecheck": "tsc",
-    "tests-only": "kixx-test-node"
+    "test": "eslint ./",
+    "lint": "eslint ./"
   },
   "engines": {
-    "node": ">=16.14.2"
+    "node": ">=16.20.2"
   },
-  "files": ["framework/"],
+  "files": [
+    "mod.js"
+  ],
   "author": "Kris Walker (www.kriswalker.me)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kixxauth/kixx.git"
+    "url": "git+https://github.com/kixx-platform/kixx.git"
   },
   "bugs": {
-    "url": "https://github.com/kixxauth/kixx/issues"
+    "url": "https://github.com/kixx-platform/kixx/issues"
   },
-  "homepage": "https://github.com/kixxauth/kixx#readme",
-  "dependencies": {
-    "kixx-assert": "~1.1.1",
-    "kixx-lib-es6": "~2.0.0",
-    "kixx-logger": "~2.0.0",
-    "kixx-server-errors": "~4.0.2",
-    "path-to-regexp": "~6.2.1",
-    "toml": "~3.0.0",
-    "uuid": "~9.0.0"
-  },
+  "homepage": "https://github.com/kixx-platform/kixx#readme",
   "devDependencies": {
-    "@tsconfig/node18": "~1.0.1",
-    "@types/node": "~18.14.2",
-    "eslint": "~8.33.0",
-    "kixx-test-node": "~1.4.4",
-    "typescript": "~4.9.5"
+    "@eslint/js": "~9.9.0",
+    "eslint": "~9.9.0"
   }
 }
