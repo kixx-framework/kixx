@@ -62,6 +62,12 @@ export function isNumber(x) {
     return tag === '[object Number]' || tag === '[object BigInt]';
 }
 
+/**
+ * Determine if the given value is a Number but is not NaN. Uses `isNumber()`.
+ * @see {@link isNumber}
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isNumberNotNaN(x) {
     return isNumber(x) && !Number.isNaN(x);
 }
