@@ -72,9 +72,21 @@ export function isNumberNotNaN(x) {
     return isNumber(x) && !Number.isNaN(x);
 }
 
+/**
+ * Determine if the given value is a Boolean.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isBoolean(x) {
     // This expression will not catch booleans created with new Boolean(1):
     // return typeof x === 'boolean';
+    // The typeof expression will not catch values created with new Boolean(1):
+    //
+    // ```js
+    // return typeof new Boolean(1) === 'boolean'; // false
+    // ```
+    //
+    // So we use `Object.prototype.toString` instead.
     return protoToString.call(x) === '[object Boolean]';
 }
 
