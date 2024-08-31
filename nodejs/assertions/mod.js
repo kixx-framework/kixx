@@ -90,18 +90,11 @@ export function isBoolean(x) {
     return protoToString.call(x) === '[object Boolean]';
 }
 
-export function isSymbol(x) {
-    // Since calling new Symbol() will throw, then we do not need to worry about
-    // the typeof call returning "object".
-    return typeof x === 'symbol';
-}
-
-export function isBigInt(x) {
-    // Since calling new BigInt() will throw, then we do not need to worry about
-    // the typeof call returning "object".
-    return typeof x === 'bigint';
-}
-
+/**
+ * Determine if the given value is undefined by checking typeof x === 'undefined'.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isUndefined(x) {
     return typeof x === 'undefined';
 }
@@ -110,9 +103,9 @@ export function isPrimitive(x) {
     return x === null
         || isString(x)
         || isNumber(x)
-        || isBigInt(x)
+        || (typeof x === 'bigint')
         || isBoolean(x)
-        || isSymbol(x)
+        || (typeof x === 'symbol')
         || isUndefined(x);
 }
 
@@ -287,7 +280,7 @@ export function toFriendlyString(x) {
     if (isString(x)) {
         return `String(${ x })`;
     }
-    if (isBigInt(x)) {
+    if (typeof x === 'bigint') {
         return `BigInt(${ x })`;
     }
     // WARNING
@@ -299,7 +292,7 @@ export function toFriendlyString(x) {
     if (isBoolean(x)) {
         return `Boolean(${ x })`;
     }
-    if (isSymbol(x)) {
+    if (typeof x === 'symbol') {
         return x.toString();
     }
     if (isUndefined(x)) {
