@@ -5,8 +5,9 @@
   "type": "module",
   "main": "mod.js",
   "scripts": {
-    "test": "eslint ./",
-    "lint": "eslint ./"
+    "test": "node --test ./test/**/*.test.js",
+    "lint": "eslint ./",
+    "full-test": "eslint ./ && node --test ./test/**/*.test.js"
   },
   "engines": {
     "node": ">=16.20.2"
