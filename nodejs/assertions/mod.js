@@ -99,6 +99,12 @@ export function isUndefined(x) {
     return typeof x === 'undefined';
 }
 
+/**
+ * Determine if the given value is a primitive value. Primitive values are
+ * defined as String, Number, BigInt, Boolean, Symbol, null, and undefined.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isPrimitive(x) {
     return x === null
         || isString(x)
@@ -109,10 +115,22 @@ export function isPrimitive(x) {
         || isUndefined(x);
 }
 
+/**
+ * Determine if the given value is a Function.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isFunction(x) {
     return typeof x === 'function';
 }
 
+/**
+ * Determine if the given value is a plain object. First, check to see if the
+ * value is an object at all. Then if the object does not have a prototype OR
+ * it has a constructor named "Object", then consider it a "plain" object.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isPlainObject(x) {
     if (!x || typeof x !== 'object') {
         return false;
