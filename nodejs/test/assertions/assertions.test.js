@@ -8,6 +8,8 @@ import testIsUndefined from './is-undefined.js';
 import testIsPrimitive from './is-primitive.js';
 import testIsFunction from './is-function.js';
 import testIsPlainObject from './is-plain-object.js';
+import testIsDate from './is-date.js';
+import testIsValidDate from './is-valid-date.js';
 import testIsEqual from './is-equal.js';
 import testAssert from './assert.js';
 import testAssertFalsy from './assert-falsy.js';
@@ -22,6 +24,8 @@ describe('assertions', () => {
     describe('isPrimitive', testIsPrimitive);
     describe('isFunction', testIsFunction);
     describe('isPlainObject', testIsPlainObject);
+    describe('isDate', testIsDate);
+    describe('isValidDate', testIsValidDate);
     describe('isEqual', testIsEqual);
     describe('assert', testAssert);
     describe('assertFalsy', testAssertFalsy);

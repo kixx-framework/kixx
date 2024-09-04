@@ -141,10 +141,21 @@ export function isPlainObject(x) {
     return x.constructor && x.constructor.name === 'Object';
 }
 
+/**
+ * Determine if the given value is a native JavaScript Date instance.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isDate(x) {
     return protoToString.call(x) === '[object Date]';
 }
 
+/**
+ * Determine if the given value is a *valid* JavaScript Date instance.
+ * Validity is determined by checking isNaN() of .getTime(): `isNaN(x.getTime())`.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isValidDate(x) {
     if (isDate(x)) {
         return !Number.isNaN(x.getTime());
