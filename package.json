@@ -1,6 +1,6 @@
 {
   "name": "kixx",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "The best web development framework ever",
   "type": "module",
   "main": "index.js",
@@ -27,7 +27,7 @@
   "dependencies": {
     "kixx-assert": "~1.1.1",
     "kixx-lib-es6": "~2.0.0",
-    "kixx-logger": "~2.0.0",
+    "kixx-logger": "~2.1.0",
     "kixx-server-errors": "~4.0.2",
     "path-to-regexp": "~6.2.1",
     "toml": "~3.0.0",
