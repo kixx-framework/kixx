@@ -114,7 +114,9 @@ export function isPrimitive(x) {
 }
 
 /**
- * Determine if the given value is a Function.
+ * Determine if the given value is a Function. This will work as expected for
+ * function declarations, function expressions, async functions,
+ * class static methods, class methods, and object methods.
  * @param  {*} x
  * @return {Boolean}
  */
@@ -145,6 +147,7 @@ export function isPlainObject(x) {
  * @return {Boolean}
  */
 export function isDate(x) {
+    // Using the protoToString tag is more reliable than using `instanceof`.
     return protoToString.call(x) === '[object Date]';
 }
 
@@ -163,25 +166,36 @@ export function isValidDate(x) {
 
 /**
  * Determine if the given value is a native JavaScript RegExp instance.
- * @param  {[type]}  x [description]
- * @return {Boolean}   [description]
+ * @param  {*} x
+ * @return {Boolean}
  */
 export function isRegExp(x) {
-    // Using the protoToString tag is more reliable than using the global
-    // RegExp constructor:
-    //
-    // ```js
-    // return x instanceof RegExp;
-    // ```
+    // Using the protoToString tag is more reliable than using `instanceof`.
     return protoToString.call(x) === '[object RegExp]';
 }
 
+/**
+ * Determine if the given value is a native JavaScript Map or WeakMap. This
+ * will work as expected, returning true when passing an instance of a class
+ * which extends Map or WeakMap.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isMap(x) {
+    // Using the protoToString tag is more reliable than using `instanceof`.
     const tag = protoToString.call(x);
     return tag === '[object Map]' || tag === '[object WeakMap]';
 }
 
+/**
+ * Determine if the given value is a native JavaScript Set or WeakSet. This
+ * will work as expected, returning true when passing an instance of a class
+ * which extends Map or WeakMap.
+ * @param  {*} x
+ * @return {Boolean}
+ */
 export function isSet(x) {
+    // Using the protoToString tag is more reliable than using `instanceof`.
     const tag = protoToString.call(x);
     return tag === '[object Set]' || tag === '[object WeakSet]';
 }
