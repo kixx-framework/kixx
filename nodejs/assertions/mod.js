@@ -198,6 +198,16 @@ export function isSet(x) {
     return tag === '[object Set]' || tag === '[object WeakSet]';
 }
 
+/**
+ * Compare two values for equality. Will return a curried version of this
+ * function if only a single argument is supplied. If `a === b` then
+ * returns `true`. Otherwise ensure date and NaN comparison is
+ * done as expected.
+ *
+ * @param {*} a
+ * @param {*} b
+ * @return {Boolean}
+ */
 export function isEqual(a, b) {
     if (arguments.length < 2) {
         return function curriedIsEqual(_b) {
