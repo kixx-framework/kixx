@@ -4,35 +4,13 @@ import * as assertions from '../../assertions/mod.js';
 
 class Cat {}
 
-// Function *declarations*
+const arrowFunc = () => {
+    return null;
+};
 
-function funcDeclaration() {
+function funcDef() {
     return null;
 }
-
-async function asyncFuncDeclaration() {
-    return null;
-}
-
-// Function *expressions*
-
-// eslint-disable-next-line func-style
-const funcExp = function () {
-    return null;
-};
-
-// eslint-disable-next-line func-style
-const asyncFuncExp = async function () {
-    return null;
-};
-
-const arrowFuncExp = () => {
-    return null;
-};
-
-const asyncArrowFuncExp = async () => {
-    return null;
-};
 
 /* eslint-disable array-bracket-spacing, no-undefined */
 export const tests = [
@@ -57,29 +35,23 @@ export const tests = [
     [ String('foo'), 'String("foo")', false ],
     [ Symbol(), 'Symbol()', false ],
     [ Symbol('foo'), 'Symbol("foo")', false ],
-    [ Cat, 'class Cat', true ],
-    [ Cat.constructor, 'Cat constructor', true ],
-    [ funcDeclaration, 'function declaration', true ],
-    [ asyncFuncDeclaration, 'async function declaration', true ],
-    [ function () {}, 'anonymous function declaration', true ],
-    [ async function () {}, 'async anonymous function declaration', true ],
-    [ () => {}, 'arrow function declaration', true ],
-    [ async () => {}, 'async arrow function declaration', true ],
-    [ funcExp, 'function expression', true ],
-    [ asyncFuncExp, 'async function expression', true ],
-    [ arrowFuncExp, 'arrow function expression', true ],
-    [ asyncArrowFuncExp, 'async arrow function expression', true ],
-    [ {}, 'emty Object {}', false],
-    [ new Date(), 'new Date()', false],
+    [ Cat, 'class Cat', false ],
+    [ Cat.constructor, 'Cat constructor', false ],
+    [ arrowFunc, 'anonymous arrow function', false ],
+    [ funcDef, 'anonymous function', false ],
+    [ {}, 'emty Object {}', false ],
+    [ new Date(), 'new Date()', false ],
     [ new Date('invalid'), 'new Date("invalid")', false ],
-    [ [], 'empty Array []', false],
-    [ new Map(), 'new Map()', false],
-    [ new Set(), 'new Set()', false],
-    [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', false ],
+    [ [], 'empty Array []', false ],
+    [ new Map(), 'new Map()', false ],
+    [ new Set(), 'new Set()', false ],
+    [ /^foo[.]+bar$/, '/^foo[.]+bar$/', true ],
+    [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', true ],
 ];
 /* eslint-enable array-bracket-spacing, no-undefined */
 
-export default function testIsFunction() {
+
+export default function testToFriendlyString() {
     it('pass/fails with expected values', () => {
         tests.forEach(([ val, label, expectedResult ], index) => {
             assert.equal(
@@ -93,9 +65,9 @@ export default function testIsFunction() {
                 `Expect test expectedResult to be a boolean (index ${ index }).`
             );
 
-            const msg = `isFunction() with ${ label } (index ${ index }).`;
+            const msg = `isRegExp() with ${ label } (index ${ index }).`;
 
-            assert.equal(assertions.isFunction(val), expectedResult, msg);
+            assert.equal(assertions.isRegExp(val), expectedResult, msg);
         });
     });
 }
