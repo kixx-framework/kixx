@@ -302,7 +302,7 @@ export default [
                 'error',
             ],
             'require-await': [
-                'error',
+                'off',
             ],
             'rest-spread-spacing': [
                 'error',
@@ -325,8 +325,8 @@ export default [
                 'error',
                 {
                     anonymous: 'always',
+                    asyncArrow: 'always',
                     named: 'never',
-                    asyncArrow: 'never',
                 },
             ],
             'space-in-parens': [
