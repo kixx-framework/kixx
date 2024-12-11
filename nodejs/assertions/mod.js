@@ -379,6 +379,7 @@ export function curryAssertion1(guard) {
         message = message ? `. ${ message }` : '.';
         const msg = guard(x, message);
         if (msg) {
+            // TODO: Use the node.js AssertionError format
             throw new AssertionError(msg, null, curriedAssertion1);
         }
 
@@ -393,6 +394,7 @@ export function curryAssertion2(guard) {
                 _message = _message ? `. ${ _message }` : '.';
                 const _msg = guard(expected, _actual, _message);
                 if (_msg) {
+                    // TODO: Use the node.js AssertionError format
                     throw new AssertionError(_msg, null, curriedInnerAssert);
                 }
             };
@@ -401,6 +403,7 @@ export function curryAssertion2(guard) {
         message = message ? `. ${ message }` : '.';
         const msg = guard(expected, actual, message);
         if (msg) {
+            // TODO: Use the node.js AssertionError format
             throw new AssertionError(msg, null, curriedAssertion2);
         }
 
