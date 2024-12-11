@@ -494,6 +494,7 @@ export const assertNotMatches = curryAssertion2((matcher, actual, messageSuffix)
 export function assertEmpty(x, message) {
     if (!isEmpty(x)) {
         const messageSuffix = message ? `. ${ message }` : '.';
+        // TODO: Use the node.js AssertionError format
         throw new AssertionError(
             `Expected ${ toFriendlyString(x) } to be empty, null, or NaN${ messageSuffix }`,
             null,
@@ -505,6 +506,7 @@ export function assertEmpty(x, message) {
 export function assertNotEmpty(x, message) {
     if (isEmpty(x)) {
         const messageSuffix = message ? `. ${ message }` : '.';
+        // TODO: Use the node.js AssertionError format
         throw new AssertionError(
             `Expected ${ toFriendlyString(x) } NOT to be empty, null, or NaN${ messageSuffix }`,
             null,
@@ -516,6 +518,7 @@ export function assertNotEmpty(x, message) {
 export function assertDefined(x, message) {
     if (isUndefined(x)) {
         const messageSuffix = message ? `. ${ message }` : '.';
+        // TODO: Use the node.js AssertionError format
         throw new AssertionError(
             `Expected ${ toFriendlyString(x) } to be defined${ messageSuffix }`,
             null,
@@ -527,6 +530,7 @@ export function assertDefined(x, message) {
 export function assertUndefined(x, message) {
     if (!isUndefined(x)) {
         const messageSuffix = message ? `. ${ message }` : '.';
+        // TODO: Use the node.js AssertionError format
         throw new AssertionError(
             `Expected ${ toFriendlyString(x) } to be undefined${ messageSuffix }`,
             null,
