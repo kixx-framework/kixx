@@ -2,7 +2,12 @@ import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as assertions from '../../assertions/mod.js';
 
-class Cat {}
+class Cat {
+    foo() {}
+    static bar() {}
+}
+
+const cat = new Cat();
 
 // Function *declarations*
 
@@ -34,6 +39,12 @@ const asyncArrowFuncExp = async () => {
     return null;
 };
 
+const foo = {
+    bar() {
+        return null;
+    },
+};
+
 /* eslint-disable array-bracket-spacing, no-undefined */
 export const tests = [
     [ null, 'null', false ],
@@ -58,7 +69,10 @@ export const tests = [
     [ Symbol(), 'Symbol()', false ],
     [ Symbol('foo'), 'Symbol("foo")', false ],
     [ Cat, 'class Cat', true ],
-    [ Cat.constructor, 'Cat constructor', true ],
+    [ cat.constructor, 'Cat constructor', true ],
+    [ Cat.bar, 'Cat.bar', true ],
+    [ cat.foo, 'Cat:foo', true ],
+    [ foo.bar, 'foo.bar()', true ],
     [ funcDeclaration, 'function declaration', true ],
     [ asyncFuncDeclaration, 'async function declaration', true ],
     [ function () {}, 'anonymous function declaration', true ],
