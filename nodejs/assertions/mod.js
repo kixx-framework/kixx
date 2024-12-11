@@ -198,31 +198,6 @@ export function isSet(x) {
     return tag === '[object Set]' || tag === '[object WeakSet]';
 }
 
-export function isEmpty(x) {
-    switch (protoToString.call(x)) {
-        case '[object Array]':
-        case '[object String]':
-            return x.length === 0;
-        case '[object Map]':
-        case '[object Set]':
-            return x.size === 0;
-        case '[object Null]':
-        case '[object Undefined]':
-            return true;
-        case '[object Boolean]':
-        case '[object Number]':
-        case '[object BigInt]':
-            return !x;
-        case '[object Symbol]':
-            return false;
-        default:
-            if (isPlainObject(x)) {
-                return Object.keys(x).length === 0;
-            }
-            return false;
-    }
-}
-
 export function isEqual(a, b) {
     if (arguments.length < 2) {
         return function curriedIsEqual(_b) {
@@ -480,30 +455,6 @@ export const assertNotMatches = curryAssertion2((matcher, actual, messageSuffix)
     }
     return null;
 });
-
-export function assertEmpty(x, message) {
-    if (!isEmpty(x)) {
-        const messageSuffix = message ? `. ${ message }` : '.';
-        // TODO: Use the node.js AssertionError format
-        throw new AssertionError(
-            `Expected ${ toFriendlyString(x) } to be empty, null, or NaN${ messageSuffix }`,
-            null,
-            assertEmpty
-        );
-    }
-}
-
-export function assertNotEmpty(x, message) {
-    if (isEmpty(x)) {
-        const messageSuffix = message ? `. ${ message }` : '.';
-        // TODO: Use the node.js AssertionError format
-        throw new AssertionError(
-            `Expected ${ toFriendlyString(x) } NOT to be empty, null, or NaN${ messageSuffix }`,
-            null,
-            assertNotEmpty
-        );
-    }
-}
 
 export function assertDefined(x, message) {
     if (isUndefined(x)) {
