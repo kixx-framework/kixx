@@ -2,51 +2,91 @@ import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as assertions from '../../assertions/mod.js';
 
-class Cat {}
+class Cat {
+    foo() {}
+    static bar() {}
+}
 
-const arrowFunc = () => {
-    return null;
-};
+const cat = new Cat();
 
-function funcDef() {
+const date = new Date();
+
+// Function *declarations*
+
+function funcDeclaration() {
     return null;
 }
 
+async function asyncFuncDeclaration() {
+    return null;
+}
+
+// Function *expressions*
+
+// eslint-disable-next-line func-style
+const funcExp = function () {
+    return null;
+};
+
+// eslint-disable-next-line func-style
+const asyncFuncExp = async function () {
+    return null;
+};
+
+const arrowFuncExp = () => {
+    return null;
+};
+
+const asyncArrowFuncExp = async () => {
+    return null;
+};
+
+const foo = {
+    bar() {
+        return null;
+    },
+};
+
 /* eslint-disable array-bracket-spacing, no-undefined */
 export const tests = [
-    [ null, 'null', false ],
-    [ undefined, 'undefined', false ],
-    [ true, 'true', false ],
-    [ false, 'false', false ],
-    [ -1, '-1', false ],
-    [ 0, '0', false ],
-    [ 1, '1', false ],
-    [ 0.1, '0.1', false ],
-    [ NaN, 'NaN', false ],
-    [ BigInt(-1), 'BigInt(-1)', false ],
-    [ BigInt(0), 'BigInt(0)', false ],
-    [ BigInt(1), 'BigInt(1)', false ],
-    [ '1', '"1"', false ],
-    [ '0.1', '"0.1"', false ],
-    [ '7n', '"7n"', false ],
-    [ '', 'empty String', false ],
-    [ 'foo', '"foo"', false ],
-    [ String(''), 'String("")', false ],
-    [ String('foo'), 'String("foo")', false ],
-    [ Symbol(), 'Symbol()', false ],
-    [ Symbol('foo'), 'Symbol("foo")', false ],
-    [ Cat, 'class Cat', false ],
-    [ Cat.constructor, 'Cat constructor', false ],
-    [ arrowFunc, 'anonymous arrow function', false ],
-    [ funcDef, 'anonymous function', false ],
-    [ {}, 'emty Object {}', false ],
-    [ new Date(), 'new Date()', false ],
-    [ new Date('invalid'), 'new Date("invalid")', false ],
-    [ [], 'empty Array []', false ],
-    [ new Map(), 'new Map()', false ],
-    [ new Set(), 'new Set()', false ],
-    [ /^foo[.]+bar$/, '/^foo[.]+bar$/', true ],
-    [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', true ],
+    [ null, 'null', 'null' ],
+    [ undefined, 'undefined', 'undefined' ],
+    [ true, 'true', 'Boolean(true)' ],
+    [ false, 'false', 'Boolean(false)' ],
+    [ 0, '0', 'Number(0)' ],
+    [ 0.1, '0.1', 'Number(0.1)' ],
+    [ NaN, 'NaN', 'Number(NaN)' ],
+    [ BigInt(1), 'BigInt(1)', 'BigInt(1)' ],
+    [ '1', '"1"', 'String(1)' ],
+    [ '', 'empty String', 'String()' ],
+    [ 'foo', '"foo"', 'String(foo)' ],
+    [ String('foo'), 'String("foo")', 'String(foo)' ],
+    [ Symbol('foo'), 'Symbol("foo")', 'Symbol(foo)' ],
+    [ Cat, 'class Cat', 'class Cat {}' ],
+    [ cat.constructor, 'Cat:constructor', 'class Cat {}' ],
+    [ Cat.bar, 'Cat.bar', 'Function(bar)' ],
+    [ cat.foo, 'Cat:foo', 'Function(foo)' ],
+    [ foo.bar, 'foo.bar()', 'Function(bar)' ],
+    [ funcDeclaration, 'function declaration', 'Function(funcDeclaration)' ],
+    [ asyncFuncDeclaration, 'async function declaration', 'AsyncFunction(asyncFuncDeclaration)' ],
+    [ function () {}, 'anonymous function declaration', 'Function(function)' ],
+    [ async function () {}, 'async anonymous function declaration', 'AsyncFunction(function)' ],
+    [ () => {}, 'arrow function declaration', 'Function(function)' ],
+    [ async () => {}, 'async arrow function declaration', 'AsyncFunction(function)' ],
+    [ funcExp, 'function expression', 'Function(funcExp)' ],
+    [ asyncFuncExp, 'async function expression', 'AsyncFunction(asyncFuncExp)' ],
+    [ arrowFuncExp, 'arrow function expression', 'Function(arrowFuncExp)' ],
+    [ asyncArrowFuncExp, 'async arrow function expression', 'AsyncFunction(asyncArrowFuncExp)' ],
+    [ { foo: 'bar' }, 'emty Object {}', 'Object({})' ],
+    [ date, 'new Date()', `Date(${ date.toISOString() })` ],
+    [ new Date('invalid'), 'new Date("invalid")', 'Date(Invalid)' ],
+    [ [ 3, 4, 9 ], 'Array []', 'Array([0..2])' ],
+    [ new Map(), 'new Map()', 'Map()' ],
+    [ new Set(), 'new Set()', 'Set()' ],
+    [ new WeakMap(), 'new WeakMap()', 'WeakMap()' ],
+    [ new WeakSet(), 'new WeakSet()', 'WeakSet()' ],
+    [ /^foo[.]+bar$/, '/^foo[.]+bar$/', 'RegExp(/^foo[.]+bar$/)' ],
+    [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', 'RegExp(/^start/i)' ],
 ];
 /* eslint-enable array-bracket-spacing, no-undefined */
 
@@ -61,13 +101,13 @@ export default function testToFriendlyString() {
             );
             assert.equal(
                 typeof expectedResult,
-                'boolean',
+                'string',
                 `Expect test expectedResult to be a boolean (index ${ index }).`
             );
 
-            const msg = `isRegExp() with ${ label } (index ${ index }).`;
+            const msg = `toFriendlyString() with ${ label } (index ${ index }).`;
 
-            assert.equal(assertions.isRegExp(val), expectedResult, msg);
+            assert.equal(assertions.toFriendlyString(val), expectedResult, msg);
         });
     });
 }

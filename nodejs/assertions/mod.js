@@ -314,6 +314,11 @@ export function includes(item, list) {
     return false;
 }
 
+/**
+ * Convert any JavaScript value to a human friendly string.
+ * @param  {*} x
+ * @return {String}
+ */
 export function toFriendlyString(x) {
     if (isString(x)) {
         return `String(${ x })`;
@@ -337,12 +342,15 @@ export function toFriendlyString(x) {
         return 'undefined';
     }
     if (isFunction(x)) {
+        if (x.toString().startsWith('class ')) {
+            return `class ${ x.name } {}`;
+        }
         // This will get "Function" or "AsyncFunction":
         const prefix = protoToString.call(x).slice(8, -1);
         if (x.name) {
-            return `${ prefix }(${ x.name }() {})`;
+            return `${ prefix }(${ x.name })`;
         }
-        return `${ prefix }(function () {})`;
+        return `${ prefix }(function)`;
     }
     if (x === null) {
         return 'null';
@@ -367,6 +375,9 @@ export function toFriendlyString(x) {
     }
     if (isRegExp(x)) {
         return `RegExp(${ x })`;
+    }
+    if (isMap(x) || isSet(x)) {
+        return `${ x.constructor.name }()`;
     }
 
     const name = x.constructor?.name || 'Object';

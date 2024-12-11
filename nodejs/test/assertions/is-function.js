@@ -69,7 +69,7 @@ export const tests = [
     [ asyncFuncExp, 'async function expression', true ],
     [ arrowFuncExp, 'arrow function expression', true ],
     [ asyncArrowFuncExp, 'async arrow function expression', true ],
-    [ {}, 'emty Object {}', false],
+    [ {}, 'empty Object {}', false],
     [ new Date(), 'new Date()', false],
     [ new Date('invalid'), 'new Date("invalid")', false ],
     [ [], 'empty Array []', false],

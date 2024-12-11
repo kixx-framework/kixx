@@ -25,7 +25,7 @@ const tests = [
     [ Symbol(), 'Symbol()', 'Expected Symbol() to be falsy.', false ],
     [ Symbol('foo'), 'Symbol("foo")', 'Expected Symbol(foo) to be falsy.', false ],
     // eslint-disable-next-line brace-style
-    [ () => { return null; }, 'anonymous arrow function', 'Expected Function(function () {}) to be falsy.', false ],
+    [ () => { return null; }, 'anonymous arrow function', 'Expected Function(function) to be falsy.', false ],
     [{}, 'empty Object {}', 'Expected Object({}) to be falsy.', false ],
 ];
 

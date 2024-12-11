@@ -12,6 +12,7 @@ import testIsDate from './is-date.js';
 import testIsValidDate from './is-valid-date.js';
 import testIsRegExp from './is-reg-exp.js';
 import testIsEqual from './is-equal.js';
+import testToFriendlyString from './to-friendly-string.js';
 import testAssert from './assert.js';
 import testAssertFalsy from './assert-falsy.js';
 
@@ -29,6 +30,7 @@ describe('assertions', () => {
     describe('isValidDate', testIsValidDate);
     describe('isEqual', testIsEqual);
     describe('isRegExp', testIsRegExp);
+    describe('toFriendlyString', testToFriendlyString);
     describe('assert', testAssert);
     describe('assertFalsy', testAssertFalsy);
 });
