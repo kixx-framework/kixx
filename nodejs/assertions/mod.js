@@ -15,8 +15,6 @@ import { AssertionError } from 'node:assert';
 
 
 const protoToString = Object.prototype.toString;
-const protoHasOwnProperty = Object.prototype.hasOwnProperty;
-const useNativeHasOwn = typeof Object.hasOwn === 'function';
 
 
 /**
@@ -200,41 +198,6 @@ export function isSet(x) {
     return tag === '[object Set]' || tag === '[object WeakSet]';
 }
 
-export function hasOwn(key, obj) {
-    if (arguments.length < 2) {
-        return function curriedHasOwn(_obj) {
-            return hasOwn(key, _obj);
-        };
-    }
-    if (key && !Object.getPrototypeOf(key)) {
-        key = 'null';
-    }
-    if (useNativeHasOwn) {
-        return obj && Object.hasOwn(obj, key);
-    }
-    return obj && protoHasOwnProperty.call(obj, key);
-}
-
-export function has(key, obj) {
-    if (arguments.length < 2) {
-        return function curriedHas(_obj) {
-            return has(key, _obj);
-        };
-    }
-
-    if (isPrimitive(obj)) {
-        return false;
-    }
-    if (key && !Object.getPrototypeOf(key)) {
-        key = 'null';
-    }
-    return obj && key in obj;
-}
-
-export function ownKeys(obj) {
-    return obj ? Object.keys(obj) : [];
-}
-
 export function isEmpty(x) {
     switch (protoToString.call(x)) {
         case '[object Array]':
@@ -319,9 +282,11 @@ export function includes(item, list) {
         return list.has(item);
     }
 
-    for (const key of ownKeys(list)) {
-        if (isEqual(list[key], item)) {
-            return true;
+    if (list && typeof list === 'object') {
+        for (const key of Object.keys(list)) {
+            if (key === item) {
+                return true;
+            }
         }
     }
 
