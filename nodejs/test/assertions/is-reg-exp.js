@@ -40,16 +40,18 @@ export const tests = [
     [ arrowFunc, 'anonymous arrow function', false ],
     [ funcDef, 'anonymous function', false ],
     [ {}, 'emty Object {}', false ],
-    [ new Date(), 'new Date()', true ],
+    [ new Date(), 'new Date()', false ],
     [ new Date('invalid'), 'new Date("invalid")', false ],
     [ [], 'empty Array []', false ],
     [ new Map(), 'new Map()', false ],
     [ new Set(), 'new Set()', false ],
-    [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', false ],
+    [ /^foo[.]+bar$/, '/^foo[.]+bar$/', true ],
+    [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', true ],
 ];
 /* eslint-enable array-bracket-spacing, no-undefined */
 
-export default function testIsValidDate() {
+
+export default function testIsRegExp() {
     it('pass/fails with expected values', () => {
         tests.forEach(([ val, label, expectedResult ], index) => {
             assert.equal(
@@ -63,9 +65,9 @@ export default function testIsValidDate() {
                 `Expect test expectedResult to be a boolean (index ${ index }).`
             );
 
-            const msg = `isValidDate() with ${ label } (index ${ index }).`;
+            const msg = `isRegExp() with ${ label } (index ${ index }).`;
 
-            assert.equal(assertions.isValidDate(val), expectedResult, msg);
+            assert.equal(assertions.isRegExp(val), expectedResult, msg);
         });
     });
 }

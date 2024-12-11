@@ -78,8 +78,6 @@ export function isNumberNotNaN(x) {
  * @return {Boolean}
  */
 export function isBoolean(x) {
-    // This expression will not catch booleans created with new Boolean(1):
-    // return typeof x === 'boolean';
     // The typeof expression will not catch values created with new Boolean(1):
     //
     // ```js
@@ -163,7 +161,18 @@ export function isValidDate(x) {
     return false;
 }
 
+/**
+ * Determine if the given value is a native JavaScript RegExp instance.
+ * @param  {[type]}  x [description]
+ * @return {Boolean}   [description]
+ */
 export function isRegExp(x) {
+    // Using the protoToString tag is more reliable than using the global
+    // RegExp constructor:
+    //
+    // ```js
+    // return x instanceof RegExp;
+    // ```
     return protoToString.call(x) === '[object RegExp]';
 }
 
