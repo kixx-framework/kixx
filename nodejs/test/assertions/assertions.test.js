@@ -14,6 +14,7 @@ import testIsRegExp from './is-reg-exp.js';
 import testIsMap from './is-map.js';
 import testIsSet from './is-set.js';
 import testIsEqual from './is-equal.js';
+import testDoesMatch from './does-match.js';
 import testToFriendlyString from './to-friendly-string.js';
 import testAssert from './assert.js';
 import testAssertFalsy from './assert-falsy.js';
@@ -34,6 +35,7 @@ describe('assertions', () => {
     describe('isMap', testIsMap);
     describe('isSet', testIsSet);
     describe('isEqual', testIsEqual);
+    describe('doesMatch', testDoesMatch);
     describe('toFriendlyString', testToFriendlyString);
     describe('assert', testAssert);
     describe('assertFalsy', testAssertFalsy);

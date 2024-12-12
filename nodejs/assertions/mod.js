@@ -224,6 +224,16 @@ export function isEqual(a, b) {
     return a !== a && b !== b;
 }
 
+/**
+ * Performs string matching, with some caveats. If the matcher is a
+ * regular expression then doesMatch() will call RegExp:test(). If the
+ * matcher === x, then return true. If x is a String, then check to see if
+ * the String contains the matcher with String:includes().
+ *
+ * @param {*} matcher
+ * @param {*} x
+ * @return {Boolean}
+ */
 export function doesMatch(matcher, x) {
     if (arguments.length < 2) {
         return function curriedDoesMatch(_x) {
