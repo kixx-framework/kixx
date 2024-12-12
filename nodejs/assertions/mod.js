@@ -325,28 +325,20 @@ export function toFriendlyString(x) {
     return `${ name }(${ x })`;
 }
 
-export function curryAssertion1(guard) {
-    return function curriedAssertion1(x, message) {
-        message = message ? `. ${ message }` : '.';
-        const msg = guard(x, message);
-        if (msg) {
-            // TODO: Use the node.js AssertionError format
-            throw new AssertionError(msg, null, curriedAssertion1);
-        }
-
-        return null;
-    };
-}
-
-export function curryAssertion2(guard) {
+export function curryAssertion2(operator, guard) {
     return function curriedAssertion2(expected, actual, message) {
         if (arguments.length < 2) {
             return function curriedInnerAssert(_actual, _message) {
                 _message = _message ? `. ${ _message }` : '.';
                 const _msg = guard(expected, _actual, _message);
                 if (_msg) {
-                    // TODO: Use the node.js AssertionError format
-                    throw new AssertionError(_msg, null, curriedInnerAssert);
+                    throw new AssertionError({
+                        message: _msg,
+                        expected,
+                        actual: _actual,
+                        operator,
+                        stackStartFn: curriedInnerAssert,
+                    });
                 }
             };
         }
@@ -354,8 +346,13 @@ export function curryAssertion2(guard) {
         message = message ? `. ${ message }` : '.';
         const msg = guard(expected, actual, message);
         if (msg) {
-            // TODO: Use the node.js AssertionError format
-            throw new AssertionError(msg, null, curriedAssertion2);
+            throw new AssertionError({
+                message: msg,
+                expected,
+                actual,
+                operator,
+                stackStartFn: curriedAssertion2,
+            });
         }
 
         return null;
@@ -408,7 +405,7 @@ export function assertFalsy(actual, message) {
     }
 }
 
-export const assertEqual = curryAssertion2((expected, actual, messageSuffix) => {
+export const assertEqual = curryAssertion2('assertEqual', (expected, actual, messageSuffix) => {
     if (!isEqual(expected, actual)) {
         let msg = `Expected ${ toFriendlyString(actual) }`;
         msg += ` to equal (===) ${ toFriendlyString(expected) }`;
@@ -417,7 +414,7 @@ export const assertEqual = curryAssertion2((expected, actual, messageSuffix) => 
     return null;
 });
 
-export const assertNotEqual = curryAssertion2((expected, actual, messageSuffix) => {
+export const assertNotEqual = curryAssertion2('assertNotEqual', (expected, actual, messageSuffix) => {
     if (isEqual(expected, actual)) {
         let msg = `Expected ${ toFriendlyString(actual) }`;
         msg += ` to NOT equal (!==) ${ toFriendlyString(expected) }`;
@@ -426,7 +423,7 @@ export const assertNotEqual = curryAssertion2((expected, actual, messageSuffix) 
     return null;
 });
 
-export const assertMatches = curryAssertion2((matcher, actual, messageSuffix) => {
+export const assertMatches = curryAssertion2('assertMatches', (matcher, actual, messageSuffix) => {
     if (!doesMatch(matcher, actual)) {
         const msg = `Expected ${ toFriendlyString(actual) } to match `;
         return msg + toFriendlyString(matcher) + messageSuffix;
@@ -434,7 +431,7 @@ export const assertMatches = curryAssertion2((matcher, actual, messageSuffix) =>
     return null;
 });
 
-export const assertNotMatches = curryAssertion2((matcher, actual, messageSuffix) => {
+export const assertNotMatches = curryAssertion2('assertNotMatches', (matcher, actual, messageSuffix) => {
     if (doesMatch(matcher, actual)) {
         const msg = `Expected ${ toFriendlyString(actual) } NOT to match `;
         return msg + toFriendlyString(matcher) + messageSuffix;
@@ -445,28 +442,26 @@ export const assertNotMatches = curryAssertion2((matcher, actual, messageSuffix)
 export function assertDefined(x, message) {
     if (isUndefined(x)) {
         const messageSuffix = message ? `. ${ message }` : '.';
-        // TODO: Use the node.js AssertionError format
-        throw new AssertionError(
-            `Expected ${ toFriendlyString(x) } to be defined${ messageSuffix }`,
-            null,
-            assertDefined
-        );
+        throw new AssertionError({
+            message: `Expected ${ toFriendlyString(x) } to be defined${ messageSuffix }`,
+            operator: 'assertDefined',
+            stackStartFn: assertDefined,
+        });
     }
 }
 
 export function assertUndefined(x, message) {
     if (!isUndefined(x)) {
         const messageSuffix = message ? `. ${ message }` : '.';
-        // TODO: Use the node.js AssertionError format
-        throw new AssertionError(
-            `Expected ${ toFriendlyString(x) } to be undefined${ messageSuffix }`,
-            null,
-            assertUndefined
-        );
+        throw new AssertionError({
+            message: `Expected ${ toFriendlyString(x) } to be undefined${ messageSuffix }`,
+            operator: 'assertUndefined',
+            stackStartFn: assertUndefined,
+        });
     }
 }
 
-export const assertGreaterThan = curryAssertion2((control, subject, messageSuffix) => {
+export const assertGreaterThan = curryAssertion2('assertGreaterThan', (control, subject, messageSuffix) => {
     if (subject <= control) {
         const msg = `Expected ${ toFriendlyString(subject) } to be greater than `;
         return msg + toFriendlyString(control) + messageSuffix;
@@ -474,7 +469,7 @@ export const assertGreaterThan = curryAssertion2((control, subject, messageSuffi
     return null;
 });
 
-export const assertLessThan = curryAssertion2((control, subject, messageSuffix) => {
+export const assertLessThan = curryAssertion2('assertLessThan', (control, subject, messageSuffix) => {
     if (subject >= control) {
         const msg = `Expected ${ toFriendlyString(subject) } to be less than `;
         return msg + toFriendlyString(control) + messageSuffix;
