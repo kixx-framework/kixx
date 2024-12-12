@@ -199,10 +199,10 @@ export function isSet(x) {
 }
 
 /**
- * Compare two values for equality. Will return a curried version of this
- * function if only a single argument is supplied. If `a === b` then
+ * Compare two values for equality. If `a === b` then
  * returns `true`. Otherwise ensure date and NaN comparison is
- * done as expected.
+ * done as expected. Will return a curried version of this
+ * function if only a single argument is supplied.
  *
  * @param {*} a
  * @param {*} b
@@ -228,7 +228,8 @@ export function isEqual(a, b) {
  * Performs string matching, with some caveats. If the matcher is a
  * regular expression then doesMatch() will call RegExp:test(). If the
  * matcher === x, then return true. If x is a String, then check to see if
- * the String contains the matcher with String:includes().
+ * the String contains the matcher with String:includes(). Will return a
+ * curried version of this function if only a single argument is supplied.
  *
  * @param {*} matcher
  * @param {*} x
@@ -248,41 +249,6 @@ export function doesMatch(matcher, x) {
     }
     if (typeof x?.includes === 'function') {
         return x.includes(matcher);
-    }
-
-    return false;
-}
-
-export function includes(item, list) {
-    if (arguments.length < 2) {
-        return function curriedIncludes(_list) {
-            return includes(item, _list);
-        };
-    }
-
-    if (Array.isArray(list) || isString(list)) {
-        return list.includes(item);
-    }
-
-    const tag = protoToString.call(list);
-
-    if (tag === '[object Map]') {
-        for (const val of list.values()) {
-            if (isEqual(val, item)) {
-                return true;
-            }
-        }
-    }
-    if (tag === '[object WeakMap]' || tag === '[object Set]' || tag === '[object WeakSet]') {
-        return list.has(item);
-    }
-
-    if (list && typeof list === 'object') {
-        for (const key of Object.keys(list)) {
-            if (key === item) {
-                return true;
-            }
-        }
     }
 
     return false;
@@ -499,22 +465,6 @@ export function assertUndefined(x, message) {
         );
     }
 }
-
-export const assertIncludes = curryAssertion2((item, list, messageSuffix) => {
-    if (!includes(item, list)) {
-        const msg = `Expected ${ toFriendlyString(list) } to include `;
-        return msg + toFriendlyString(item) + messageSuffix;
-    }
-    return null;
-});
-
-export const assertExcludes = curryAssertion2((item, list, messageSuffix) => {
-    if (includes(item, list)) {
-        const msg = `Expected ${ toFriendlyString(list) } NOT to include `;
-        return msg + toFriendlyString(item) + messageSuffix;
-    }
-    return null;
-});
 
 export const assertGreaterThan = curryAssertion2((control, subject, messageSuffix) => {
     if (subject <= control) {
