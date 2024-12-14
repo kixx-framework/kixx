@@ -2,6 +2,11 @@ import js from '@eslint/js';
 
 
 export default [
+    {
+        ignores: [
+            'node_modules/',
+        ],
+    },
     js.configs.recommended,
     {
         languageOptions: {
@@ -292,7 +297,7 @@ export default [
                 { avoidEscape: true, allowTemplateLiterals: true },
             ],
             'quote-props': [
-                'error',
+                'off',
                 'as-needed',
             ],
             radix: [
