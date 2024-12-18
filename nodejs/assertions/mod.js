@@ -9,7 +9,8 @@
  * 2. Assertion functions which throw an AssertionError when the assertion is
  *    not true.
  *
- * The library depends on the Node.js AssertionError from the "node:assert" module.
+ * The library depends on the Node.js AssertionError from
+ * the "node:assert" module.
  */
 import { AssertionError } from 'node:assert';
 
@@ -23,7 +24,8 @@ const protoToString = Object.prototype.toString;
  * @return {Boolean}
  */
 export function isString(x) {
-    // The typeof expression will not catch strings created with new String('foo'):
+    // The typeof expression will not catch strings created
+    // with new String('foo'):
     //
     // ```js
     // return typeof new String('foo') === 'string'; // false
@@ -34,7 +36,8 @@ export function isString(x) {
 }
 
 /**
- * Determine if the given value is a String with length greater than zero. Uses `isString()`.
+ * Determine if the given value is a String with length greater
+ * than zero. Uses `isString()`.
  * @see {@link isString}
  * @param  {*} x
  * @return {Boolean}
@@ -44,7 +47,8 @@ export function isNonEmptyString(x) {
 }
 
 /**
- * Determine if the given value is a Number. Also returns `true` for BigInt instances.
+ * Determine if the given value is a Number. Also returns
+ * `true` for BigInt instances.
  * @param  {*} x
  * @return {Boolean}
  */
@@ -87,7 +91,8 @@ export function isBoolean(x) {
 }
 
 /**
- * Determine if the given value is undefined by checking typeof x === 'undefined'.
+ * Determine if the given value is undefined by
+ * checking typeof x === 'undefined'.
  * @param  {*} x
  * @return {Boolean}
  */
@@ -151,7 +156,8 @@ export function isDate(x) {
 
 /**
  * Determine if the given value is a *valid* JavaScript Date instance.
- * Validity is determined by checking isNaN() of .getTime(): `isNaN(x.getTime())`.
+ * Validity is determined by checking
+ * isNaN() of .getTime(): `isNaN(x.getTime())`.
  * @param  {*} x
  * @return {Boolean}
  */
@@ -326,14 +332,14 @@ export function toFriendlyString(x) {
 }
 
 export function curryAssertion2(operator, guard) {
-    return function curriedAssertion2(expected, actual, message) {
+    return function curriedAssertion2(expected, actual, messagePrefix) {
         if (arguments.length < 2) {
-            return function curriedInnerAssert(_actual, _message) {
-                _message = _message ? `. ${ _message }` : '.';
-                const _msg = guard(expected, _actual, _message);
-                if (_msg) {
+            return function curriedInnerAssert(_actual, _messagePrefix) {
+                // eslint-disable-next-line no-shadow
+                const message = guard(expected, _actual, _messagePrefix);
+                if (message) {
                     throw new AssertionError({
-                        message: _msg,
+                        message,
                         expected,
                         actual: _actual,
                         operator,
@@ -343,19 +349,16 @@ export function curryAssertion2(operator, guard) {
             };
         }
 
-        message = message ? `. ${ message }` : '.';
-        const msg = guard(expected, actual, message);
-        if (msg) {
+        const message = guard(expected, actual, messagePrefix);
+        if (message) {
             throw new AssertionError({
-                message: msg,
+                message,
                 expected,
                 actual,
                 operator,
                 stackStartFn: curriedAssertion2,
             });
         }
-
-        return null;
     };
 }
 
@@ -413,11 +416,12 @@ export function assertFalsy(actual, messagePrefix) {
     }
 }
 
-export const assertEqual = curryAssertion2('assertEqual', (expected, actual, messageSuffix) => {
+export const assertEqual = curryAssertion2('assertEqual', (expected, actual, messagePrefix) => {
     if (!isEqual(expected, actual)) {
-        let msg = `Expected ${ toFriendlyString(actual) }`;
-        msg += ` to equal (===) ${ toFriendlyString(expected) }`;
-        return msg + messageSuffix;
+        const assertionMessage = `Expected ${ toFriendlyString(actual) } to equal (===) ${ toFriendlyString(expected) }`;
+        return isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
     }
     return null;
 });

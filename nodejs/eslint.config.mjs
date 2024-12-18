@@ -64,7 +64,7 @@ export default [
                 'error',
             ],
             'consistent-return': [
-                'error',
+                'off',
             ],
             curly: [
                 'error',

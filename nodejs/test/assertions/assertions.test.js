@@ -18,6 +18,7 @@ import testDoesMatch from './does-match.js';
 import testToFriendlyString from './to-friendly-string.js';
 import testAssert from './assert.js';
 import testAssertFalsy from './assert-falsy.js';
+import testAssertEqual from './assert-equal.js';
 
 describe('assertions', () => {
     describe('isString', testIsString);
@@ -39,4 +40,5 @@ describe('assertions', () => {
     describe('toFriendlyString', testToFriendlyString);
     describe('assert', testAssert);
     describe('assertFalsy', testAssertFalsy);
+    describe('assertEqual', testAssertEqual);
 });
