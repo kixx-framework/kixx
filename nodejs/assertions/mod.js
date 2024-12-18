@@ -346,6 +346,8 @@ export function curryAssertion2(operator, guard) {
                         stackStartFn: curriedInnerAssert,
                     });
                 }
+
+                return true;
             };
         }
 
@@ -359,13 +361,14 @@ export function curryAssertion2(operator, guard) {
                 stackStartFn: curriedAssertion2,
             });
         }
+
+        return true;
     };
 }
 
 /**
  * Assert the given value is truthy. If not, assert() will throw a Node.js
- * AssertionError. The AssertionError message will be the concatenated string:
- * `${ messagePrefix } (Expected ${ toFriendlyString(actual) } to be truthy)`
+ * AssertionError.
  *
  * @param  {*} actual The value to test.
  * @param  {string} [messagePrefix] An optional error message prefix string.
@@ -391,8 +394,7 @@ export function assert(actual, messagePrefix) {
 
 /**
  * Assert the given value is falsy. If not, assertFalsy() will throw a Node.js
- * AssertionError. The AssertionError message will be the concatenated string:
- * `${ message } Expected ${ toFriendlyString(actual) } to be falsy.`
+ * AssertionError.
  *
  * @param  {*} actual The value to test.
  * @param  {string} [messagePrefix] An optional error message prefix string.
@@ -416,6 +418,16 @@ export function assertFalsy(actual, messagePrefix) {
     }
 }
 
+/**
+ * Asserts equalty using isEqual(). If the actual value does not equal the
+ * expected value then a Node.js AssertionError will be thrown.
+ *
+ * @see {@link isEqual}
+ * @param {*} expected The value to test against.
+ * @param {*} actual The value to test.
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
 export const assertEqual = curryAssertion2('assertEqual', (expected, actual, messagePrefix) => {
     if (!isEqual(expected, actual)) {
         const assertionMessage = `Expected ${ toFriendlyString(actual) } to equal (===) ${ toFriendlyString(expected) }`;
@@ -426,11 +438,22 @@ export const assertEqual = curryAssertion2('assertEqual', (expected, actual, mes
     return null;
 });
 
-export const assertNotEqual = curryAssertion2('assertNotEqual', (expected, actual, messageSuffix) => {
+/**
+ * Asserts NON equalty using isEqual(). If the actual value equals the expected
+ * value then a Node.js AssertionError will be thrown.
+ *
+ * @see {@link isEqual}
+ * @param {*} expected The value to test against.
+ * @param {*} actual The value to test.
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export const assertNotEqual = curryAssertion2('assertNotEqual', (expected, actual, messagePrefix) => {
     if (isEqual(expected, actual)) {
-        let msg = `Expected ${ toFriendlyString(actual) }`;
-        msg += ` to NOT equal (!==) ${ toFriendlyString(expected) }`;
-        return msg + messageSuffix;
+        const assertionMessage = `Expected ${ toFriendlyString(actual) } to NOT equal (!==) ${ toFriendlyString(expected) }`;
+        return isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
     }
     return null;
 });

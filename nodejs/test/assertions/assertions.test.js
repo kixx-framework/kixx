@@ -19,6 +19,7 @@ import testToFriendlyString from './to-friendly-string.js';
 import testAssert from './assert.js';
 import testAssertFalsy from './assert-falsy.js';
 import testAssertEqual from './assert-equal.js';
+import testAssertNotEqual from './assert-not-equal.js';
 
 describe('assertions', () => {
     describe('isString', testIsString);
@@ -41,4 +42,5 @@ describe('assertions', () => {
     describe('assert', testAssert);
     describe('assertFalsy', testAssertFalsy);
     describe('assertEqual', testAssertEqual);
+    describe('assertNotEqual', testAssertNotEqual);
 });
