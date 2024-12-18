@@ -208,7 +208,7 @@ export function isSet(x) {
  * Compare two values for equality. If `a === b` then
  * returns `true`. Otherwise ensure date and NaN comparison is
  * done as expected.
- * 
+ *
  * Will return a curried version of this function if only
  * a single argument is supplied.
  *
@@ -239,7 +239,7 @@ export function isEqual(a, b) {
  * check to see if the String contains the matcher with String:includes().
  * If x is a valid Date then convert it to a string using Date:toISOString()
  * before making the comparison.
- * 
+ *
  * Will return a curried version of this function if only
  * a single argument is supplied.
  *
@@ -344,6 +344,30 @@ export function toFriendlyString(x) {
     return `${ name }(${ x })`;
 }
 
+/**
+ * Create a function which can create assertion functions which can be curried.
+ * If the returned function is called with only a single argument then it will
+ * return a curried version of the assertion function.
+ *
+ * @param  {String} operator The name of the assertion operator which will be
+ * passed to new AssertionError({ operator })
+ * @param  {Function} guard The guard function should return a message string
+ * in the case of failure and null in the case of success.
+ * @return {Function}
+ *
+ * @example
+ * const assertEqual = curryAssertion2('assertEqual', (expected, actual, messagePrefix) => {
+ *     if (actual !== expected) {
+ *         return `${messagePrefix}. Values are not equal.`;
+ *     }
+ *     return null;
+ * });
+ *
+ * const assertIsZero = assertEqual(0);
+ *
+ * // This will fail.
+ * assertIsZero(1, 'What happens when we pass in 1?');
+ */
 export function curryAssertion2(operator, guard) {
     return function curriedAssertion2(expected, actual, messagePrefix) {
         if (arguments.length < 2) {

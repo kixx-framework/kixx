@@ -16,6 +16,7 @@ import testIsSet from './is-set.js';
 import testIsEqual from './is-equal.js';
 import testDoesMatch from './does-match.js';
 import testToFriendlyString from './to-friendly-string.js';
+import testCurryAssertion2 from './curry-assertion-2.js';
 import testAssert from './assert.js';
 import testAssertFalsy from './assert-falsy.js';
 import testAssertEqual from './assert-equal.js';
@@ -42,6 +43,7 @@ describe('assertions', () => {
     describe('isEqual', testIsEqual);
     describe('doesMatch', testDoesMatch);
     describe('toFriendlyString', testToFriendlyString);
+    describe('curryAssertion2', testCurryAssertion2);
     describe('assert', testAssert);
     describe('assertFalsy', testAssertFalsy);
     describe('assertEqual', testAssertEqual);
