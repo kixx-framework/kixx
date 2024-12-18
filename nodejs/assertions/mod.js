@@ -361,19 +361,23 @@ export function curryAssertion2(operator, guard) {
 
 /**
  * Assert the given value is truthy. If not, assert() will throw a Node.js
- * AssertionError with { expected:true, actual, operator:'assert'}. The
- * AssertionError message will be the concatenated string templated string
- * `${ message } Expected ${ toFriendlyString(actual) } to be truthy.`
+ * AssertionError. The AssertionError message will be the concatenated string:
+ * `${ messagePrefix } (Expected ${ toFriendlyString(actual) } to be truthy)`
  *
- * @param  {*}      actual    The value to test.
- * @param  {string} [message] An optional string message.
+ * @param  {*} actual The value to test.
+ * @param  {string} [messagePrefix] An optional error message prefix string.
  * @throws {AssertionError}
  */
-export function assert(actual, message) {
+export function assert(actual, messagePrefix) {
+    const assertionMessage = `Expected ${ toFriendlyString(actual) } to be truthy`;
+
+    const message = isNonEmptyString(messagePrefix)
+        ? `${ messagePrefix } (${ assertionMessage })`
+        : assertionMessage;
+
     if (!actual) {
-        const messagePrefix = message ? `${ message } ` : '';
         throw new AssertionError({
-            message: `${ messagePrefix }Expected ${ toFriendlyString(actual) } to be truthy.`,
+            message,
             expected: true,
             actual,
             operator: 'assert',
@@ -384,19 +388,23 @@ export function assert(actual, message) {
 
 /**
  * Assert the given value is falsy. If not, assertFalsy() will throw a Node.js
- * AssertionError with { expected:false, actual, operator:'assertFalsy'}. The
- * AssertionError message will be the concatenated string templated string
+ * AssertionError. The AssertionError message will be the concatenated string:
  * `${ message } Expected ${ toFriendlyString(actual) } to be falsy.`
  *
- * @param  {*}      actual    The value to test.
- * @param  {string} [message] An optional string message.
+ * @param  {*} actual The value to test.
+ * @param  {string} [messagePrefix] An optional error message prefix string.
  * @throws {AssertionError}
  */
-export function assertFalsy(actual, message) {
+export function assertFalsy(actual, messagePrefix) {
+    const assertionMessage = `Expected ${ toFriendlyString(actual) } to be falsy`;
+
+    const message = isNonEmptyString(messagePrefix)
+        ? `${ messagePrefix } (${ assertionMessage })`
+        : assertionMessage;
+
     if (actual) {
-        const messagePrefix = message ? `${ message } ` : '';
         throw new AssertionError({
-            message: `${ messagePrefix }Expected ${ toFriendlyString(actual) } to be falsy.`,
+            message,
             expected: false,
             actual,
             operator: 'assertFalsy',

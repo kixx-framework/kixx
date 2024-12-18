@@ -4,23 +4,23 @@ import * as assertions from '../../assertions/mod.js';
 
 
 const tests = [
-    [ null, 'null', 'Expected null to be truthy.', false ],
+    [ null, 'null', 'Expected null to be truthy', false ],
     // eslint-disable-next-line no-undefined
-    [ undefined, 'undefined', 'Expected undefined to be truthy.', false ],
+    [ undefined, 'undefined', 'Expected undefined to be truthy', false ],
     [ true, 'true', '', true ],
-    [ false, 'false', 'Expected Boolean(false) to be truthy.', false ],
+    [ false, 'false', 'Expected Boolean(false) to be truthy', false ],
     [ -1, '-1', '', true ],
-    [ 0, '0', 'Expected Number(0) to be truthy.', false ],
+    [ 0, '0', 'Expected Number(0) to be truthy', false ],
     [ 1, '1', '', true ],
     [ 0.1, '0.1', '', true ],
-    [ NaN, 'NaN', 'Expected Number(NaN) to be truthy.', false ],
+    [ NaN, 'NaN', 'Expected Number(NaN) to be truthy', false ],
     [ BigInt(-1), 'BigInt(-1)', '', true ],
-    [ BigInt(0), 'BigInt(0)', 'Expected BigInt(0) to be truthy.', false ],
+    [ BigInt(0), 'BigInt(0)', 'Expected BigInt(0) to be truthy', false ],
     [ BigInt(1), 'BigInt(1)', '', true ],
     [ '1', '"1"', '', true ],
     [ '0.1', '"0.1"', '', true ],
     [ '7n', '"7n"', '', true ],
-    [ '', 'empty String', 'Expected String() to be truthy.', false ],
+    [ '', 'empty String', 'Expected String() to be truthy', false ],
     [ 'foo', '"foo"', '', true ],
     [ Symbol(), 'Symbol()', '', true ],
     [ Symbol('foo'), 'Symbol("foo")', '', true ],
@@ -54,7 +54,7 @@ export default function testAssert() {
 
                 assert.throws(testWrapper, {
                     name: 'AssertionError',
-                    message: `${ msg } ${ info }`,
+                    message: `${ msg } (${ info })`,
                     expected: true,
                     actual: val,
                     operator: 'assert',
