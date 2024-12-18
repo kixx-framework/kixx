@@ -70,6 +70,8 @@ export const tests = [
     [ dateA, dateA, 'date dateA, dateA', true ],
     [ dateA, new Date(), 'date dateA, new Date()', false ],
     [ new Date(2019, 0, 3, 4, 20, 1, 10), new Date(2019, 0, 3, 4, 20, 1, 10), 'date new Date(), new Date()', true ],
+    [ '2019', new Date(2019, 0, 3, 4, 20, 1, 10), '"2019", new Date(2019)', true ],
+    [ /T09:20:01.010Z$/, new Date(2019, 0, 3, 4, 20, 1, 10), '/T00:00:00.000Z$/, new Date(2019)', true ],
     [ new Date(), new Date('invalid'), 'date new Date(), new Date("invalid")', false ],
     [ invalidDate, new Date('invalid'), 'date invalidDate, new Date("invalid")', false ],
     [ refA, {}, 'references refA, {}', false ],

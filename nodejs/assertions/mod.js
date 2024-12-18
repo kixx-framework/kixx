@@ -207,8 +207,10 @@ export function isSet(x) {
 /**
  * Compare two values for equality. If `a === b` then
  * returns `true`. Otherwise ensure date and NaN comparison is
- * done as expected. Will return a curried version of this
- * function if only a single argument is supplied.
+ * done as expected.
+ * 
+ * Will return a curried version of this function if only
+ * a single argument is supplied.
  *
  * @param {*} a
  * @param {*} b
@@ -233,11 +235,17 @@ export function isEqual(a, b) {
 /**
  * Performs string matching, with some caveats. If the matcher is a
  * regular expression then doesMatch() will call RegExp:test(). If the
- * matcher === x, then return true. If x is a String, then check to see if
- * the String contains the matcher with String:includes(). Will return a
- * curried version of this function if only a single argument is supplied.
+ * matcher equals x using isEqual() then return true. If x is a String then
+ * check to see if the String contains the matcher with String:includes().
+ * If x is a valid Date then convert it to a string using Date:toISOString()
+ * before making the comparison.
+ * 
+ * Will return a curried version of this function if only
+ * a single argument is supplied.
  *
- * @param {*} matcher
+ * @see {@link isEqual}
+ * @see {@link isValidDate}
+ * @param {String|RegExp} matcher
  * @param {*} x
  * @return {Boolean}
  */
@@ -250,6 +258,11 @@ export function doesMatch(matcher, x) {
     if (isEqual(matcher, x)) {
         return true;
     }
+
+    if (isValidDate(x)) {
+        x = x.toISOString();
+    }
+
     if (typeof matcher?.test === 'function') {
         return matcher.test(x);
     }
