@@ -458,18 +458,44 @@ export const assertNotEqual = curryAssertion2('assertNotEqual', (expected, actua
     return null;
 });
 
-export const assertMatches = curryAssertion2('assertMatches', (matcher, actual, messageSuffix) => {
+/**
+ * Asserts that the actual value matches the matcher value according
+ * to doesMatch(). If the actual does not match the matcher then a Node.js
+ * AssertionError will be thrown.
+ *
+ * @see {@link doesMatch}
+ * @param {*} matcher The matcher to test against. See doesMatch() for more info.
+ * @param {*} actual The value to test. See doesMatch() for more info.
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export const assertMatches = curryAssertion2('assertMatches', (matcher, actual, messagePrefix) => {
     if (!doesMatch(matcher, actual)) {
-        const msg = `Expected ${ toFriendlyString(actual) } to match `;
-        return msg + toFriendlyString(matcher) + messageSuffix;
+        const assertionMessage = `Expected ${ toFriendlyString(actual) } to match ${ toFriendlyString(matcher) }`;
+        return isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
     }
     return null;
 });
 
-export const assertNotMatches = curryAssertion2('assertNotMatches', (matcher, actual, messageSuffix) => {
+/**
+ * Asserts that the actual value DOES NOT match the matcher value according
+ * to doesMatch(). If the actual value matches the matcher then a Node.js
+ * AssertionError will be thrown.
+ *
+ * @see {@link doesMatch}
+ * @param {*} matcher The matcher to test against. See doesMatch() for more info.
+ * @param {*} actual The value to test. See doesMatch() for more info.
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export const assertNotMatches = curryAssertion2('assertNotMatches', (matcher, actual, messagePrefix) => {
     if (doesMatch(matcher, actual)) {
-        const msg = `Expected ${ toFriendlyString(actual) } NOT to match `;
-        return msg + toFriendlyString(matcher) + messageSuffix;
+        const assertionMessage = `Expected ${ toFriendlyString(actual) } NOT to match ${ toFriendlyString(matcher) }`;
+        return isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
     }
     return null;
 });

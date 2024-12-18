@@ -20,6 +20,9 @@ import testAssert from './assert.js';
 import testAssertFalsy from './assert-falsy.js';
 import testAssertEqual from './assert-equal.js';
 import testAssertNotEqual from './assert-not-equal.js';
+import testAssertMatches from './assert-matches.js';
+import testAssertNotMatches from './assert-not-matches.js';
+
 
 describe('assertions', () => {
     describe('isString', testIsString);
@@ -43,4 +46,6 @@ describe('assertions', () => {
     describe('assertFalsy', testAssertFalsy);
     describe('assertEqual', testAssertEqual);
     describe('assertNotEqual', testAssertNotEqual);
+    describe('assertMatches', testAssertMatches);
+    describe('assertNotMatches', testAssertNotMatches);
 });
