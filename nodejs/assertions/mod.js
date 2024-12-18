@@ -588,19 +588,3 @@ export function assertUndefined(x, messagePrefix) {
         });
     }
 }
-
-export const assertGreaterThan = curryAssertion2('assertGreaterThan', (control, subject, messageSuffix) => {
-    if (subject <= control) {
-        const msg = `Expected ${ toFriendlyString(subject) } to be greater than `;
-        return msg + toFriendlyString(control) + messageSuffix;
-    }
-    return null;
-});
-
-export const assertLessThan = curryAssertion2('assertLessThan', (control, subject, messageSuffix) => {
-    if (subject >= control) {
-        const msg = `Expected ${ toFriendlyString(subject) } to be less than `;
-        return msg + toFriendlyString(control) + messageSuffix;
-    }
-    return null;
-});
