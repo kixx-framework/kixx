@@ -23,6 +23,8 @@ import testAssertEqual from './assert-equal.js';
 import testAssertNotEqual from './assert-not-equal.js';
 import testAssertMatches from './assert-matches.js';
 import testAssertNotMatches from './assert-not-matches.js';
+import testAssertDefined from './assert-defined.js';
+import testAssertUndefined from './assert-undefined.js';
 
 
 describe('assertions', () => {
@@ -50,4 +52,6 @@ describe('assertions', () => {
     describe('assertNotEqual', testAssertNotEqual);
     describe('assertMatches', testAssertMatches);
     describe('assertNotMatches', testAssertNotMatches);
+    describe('assertDefined', testAssertDefined);
+    describe('assertUndefined', testAssertUndefined);
 });

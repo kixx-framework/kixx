@@ -537,22 +537,52 @@ export const assertNotMatches = curryAssertion2('assertNotMatches', (matcher, ac
     return null;
 });
 
-export function assertDefined(x, message) {
+/**
+ * Asserts that the given value is not undefined as
+ * determined by isUndefined(). If the value is undefined then a
+ * Node.js AssertionError will be thrown.
+ *
+ * @see {@link isUndefined}
+ * @param {*} x
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export function assertDefined(x, messagePrefix) {
     if (isUndefined(x)) {
-        const messageSuffix = message ? `. ${ message }` : '.';
+        const assertionMessage = `Expected ${ toFriendlyString(x) } to be defined`;
+
+        const message = isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
+
         throw new AssertionError({
-            message: `Expected ${ toFriendlyString(x) } to be defined${ messageSuffix }`,
+            message,
             operator: 'assertDefined',
             stackStartFn: assertDefined,
         });
     }
 }
 
-export function assertUndefined(x, message) {
+/**
+ * Asserts that the given value is undefined as
+ * determined by isUndefined(). If the value is NOT undefined then a
+ * Node.js AssertionError will be thrown.
+ *
+ * @see {@link isUndefined}
+ * @param {*} x
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export function assertUndefined(x, messagePrefix) {
     if (!isUndefined(x)) {
-        const messageSuffix = message ? `. ${ message }` : '.';
+        const assertionMessage = `Expected ${ toFriendlyString(x) } to be undefined`;
+
+        const message = isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
+
         throw new AssertionError({
-            message: `Expected ${ toFriendlyString(x) } to be undefined${ messageSuffix }`,
+            message,
             operator: 'assertUndefined',
             stackStartFn: assertUndefined,
         });
