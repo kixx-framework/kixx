@@ -614,3 +614,29 @@ export function assertNonEmptyString(x, messagePrefix) {
         });
     }
 }
+
+/**
+ * Asserts that the given value is a Number but not NaN as
+ * determined by isNumberNotNaN(). If the value is not a Number, or
+ * is NaN then a Node.js AssertionError will be thrown.
+ *
+ * @see {@link isNumberNotNaN}
+ * @param {*} x
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export function assertNumberNotNaN(x, messagePrefix) {
+    if (!isNumberNotNaN(x)) {
+        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a Number and not NaN`;
+
+        const message = isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
+
+        throw new AssertionError({
+            message,
+            operator: 'assertNumberNotNaN',
+            stackStartFn: assertNumberNotNaN,
+        });
+    }
+}
