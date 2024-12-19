@@ -588,3 +588,29 @@ export function assertUndefined(x, messagePrefix) {
         });
     }
 }
+
+/**
+ * Asserts that the given value is a non-empty String as
+ * determined by isNonEmptyString(). If the value is not a String, or an empty
+ * String then a Node.js AssertionError will be thrown.
+ *
+ * @see {@link isNonEmptyString}
+ * @param {*} x
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export function assertNonEmptyString(x, messagePrefix) {
+    if (!isNonEmptyString(x)) {
+        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a non-empty String`;
+
+        const message = isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
+
+        throw new AssertionError({
+            message,
+            operator: 'assertNonEmptyString',
+            stackStartFn: assertNonEmptyString,
+        });
+    }
+}
