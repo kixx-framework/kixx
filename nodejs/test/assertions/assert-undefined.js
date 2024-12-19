@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { assertUndefined } from '../../assertions/mod.js';
 
 
-export default function testAssertDefined() {
+export default function testAssertUndefined() {
 
     it('passes with success case', () => {
         assertUndefined();
