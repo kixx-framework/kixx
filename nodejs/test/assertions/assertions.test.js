@@ -29,6 +29,7 @@ import testAssertNonEmptyString from './assert-non-empty-string.js';
 import testAssertNumberNotNaN from './assert-number-not-nan.js';
 import testAssertArray from './assert-array.js';
 import testAssertBoolean from './assert-boolean.js';
+import testAssertFunction from './assert-function.js';
 
 
 describe('assertions', () => {
@@ -62,4 +63,5 @@ describe('assertions', () => {
     describe('assertNumberNotNaN', testAssertNumberNotNaN);
     describe('assertArray', testAssertArray);
     describe('assertBoolean', testAssertBoolean);
+    describe('assertFunction', testAssertFunction);
 });

@@ -2,8 +2,8 @@ TODO
 ====
 
 - [x] assertions:assertArray()
-- [ ] assertions:assertBoolean()
-- [ ] assertions:assertFunction()
+- [x] assertions:assertBoolean()
+- [x] assertions:assertFunction()
 - [ ] assertions:assertValidDate()
 - [ ] assertions:assertRegExp()
 - [ ] assertions:assertMap()

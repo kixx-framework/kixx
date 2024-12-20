@@ -691,3 +691,29 @@ export function assertBoolean(x, messagePrefix) {
         });
     }
 }
+
+/**
+ * Asserts that the given value is a Function as
+ * determined by isFunction(). If the value is not a Function
+ * then a Node.js AssertionError will be thrown.
+ *
+ * @see {@link isFunction}
+ * @param {*} x
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export function assertFunction(x, messagePrefix) {
+    if (!isFunction(x)) {
+        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a Function`;
+
+        const message = isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
+
+        throw new AssertionError({
+            message,
+            operator: 'assertFunction',
+            stackStartFn: assertFunction,
+        });
+    }
+}
