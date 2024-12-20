@@ -30,6 +30,7 @@ import testAssertNumberNotNaN from './assert-number-not-nan.js';
 import testAssertArray from './assert-array.js';
 import testAssertBoolean from './assert-boolean.js';
 import testAssertFunction from './assert-function.js';
+import testAssertValidDate from './assert-valid-date.js';
 
 
 describe('assertions', () => {
@@ -64,4 +65,5 @@ describe('assertions', () => {
     describe('assertArray', testAssertArray);
     describe('assertBoolean', testAssertBoolean);
     describe('assertFunction', testAssertFunction);
+    describe('assertValidDate', testAssertValidDate);
 });
