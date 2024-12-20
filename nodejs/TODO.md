@@ -5,4 +5,4 @@ TODO
 - [x] assertions:assertBoolean()
 - [x] assertions:assertFunction()
 - [x] assertions:assertValidDate()
-- [ ] assertions:assertRegExp()
+- [x] assertions:assertRegExp()

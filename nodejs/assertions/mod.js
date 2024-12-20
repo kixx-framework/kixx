@@ -11,6 +11,8 @@
  *
  * The library depends on the Node.js AssertionError from
  * the "node:assert" module.
+ *
+ * @version 2024-12-20
  */
 import { AssertionError } from 'node:assert';
 
@@ -740,6 +742,32 @@ export function assertValidDate(x, messagePrefix) {
             message,
             operator: 'assertValidDate',
             stackStartFn: assertValidDate,
+        });
+    }
+}
+
+/**
+ * Asserts that the given value is a RegExp as
+ * determined by isRegExp(). If the value is not a RegExp
+ * then a Node.js AssertionError will be thrown.
+ *
+ * @see {@link isRegExp}
+ * @param {*} x
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export function assertRegExp(x, messagePrefix) {
+    if (!isRegExp(x)) {
+        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a RegExp`;
+
+        const message = isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
+
+        throw new AssertionError({
+            message,
+            operator: 'assertRegExp',
+            stackStartFn: assertRegExp,
         });
     }
 }

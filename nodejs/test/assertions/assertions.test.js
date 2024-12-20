@@ -31,6 +31,7 @@ import testAssertArray from './assert-array.js';
 import testAssertBoolean from './assert-boolean.js';
 import testAssertFunction from './assert-function.js';
 import testAssertValidDate from './assert-valid-date.js';
+import testAssertRegExp from './assert-regexp.js';
 
 
 describe('assertions', () => {
@@ -66,4 +67,5 @@ describe('assertions', () => {
     describe('assertBoolean', testAssertBoolean);
     describe('assertFunction', testAssertFunction);
     describe('assertValidDate', testAssertValidDate);
+    describe('assertRegExp', testAssertRegExp);
 });
