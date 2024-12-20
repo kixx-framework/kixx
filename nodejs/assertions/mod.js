@@ -22,6 +22,7 @@ const protoToString = Object.prototype.toString;
 
 /**
  * Determine if the given value is a String.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -40,6 +41,7 @@ export function isString(x) {
 /**
  * Determine if the given value is a String with length greater
  * than zero. Uses `isString()`.
+ * @since 3.0.0
  * @see {@link isString}
  * @param  {*} x
  * @return {Boolean}
@@ -51,6 +53,7 @@ export function isNonEmptyString(x) {
 /**
  * Determine if the given value is a Number. Also returns
  * `true` for BigInt instances.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -68,6 +71,7 @@ export function isNumber(x) {
 
 /**
  * Determine if the given value is a Number but is not NaN. Uses `isNumber()`.
+ * @since 3.0.0
  * @see {@link isNumber}
  * @param  {*} x
  * @return {Boolean}
@@ -78,6 +82,7 @@ export function isNumberNotNaN(x) {
 
 /**
  * Determine if the given value is a Boolean.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -95,6 +100,7 @@ export function isBoolean(x) {
 /**
  * Determine if the given value is undefined by
  * checking typeof x === 'undefined'.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -105,6 +111,7 @@ export function isUndefined(x) {
 /**
  * Determine if the given value is a primitive value. Primitive values are
  * defined as String, Number, BigInt, Boolean, Symbol, null, and undefined.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -122,6 +129,7 @@ export function isPrimitive(x) {
  * Determine if the given value is a Function. This will work as expected for
  * function declarations, function expressions, async functions,
  * class static methods, class methods, and object methods.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -133,6 +141,7 @@ export function isFunction(x) {
  * Determine if the given value is a plain object. First, check to see if the
  * value is an object at all. Then if the object does not have a prototype OR
  * it has a constructor named "Object", then consider it a "plain" object.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -148,6 +157,7 @@ export function isPlainObject(x) {
 
 /**
  * Determine if the given value is a native JavaScript Date instance.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -160,6 +170,7 @@ export function isDate(x) {
  * Determine if the given value is a *valid* JavaScript Date instance.
  * Validity is determined by checking
  * isNaN() of .getTime(): `isNaN(x.getTime())`.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -172,6 +183,7 @@ export function isValidDate(x) {
 
 /**
  * Determine if the given value is a native JavaScript RegExp instance.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -184,6 +196,7 @@ export function isRegExp(x) {
  * Determine if the given value is a native JavaScript Map or WeakMap. This
  * will work as expected, returning true when passing an instance of a class
  * which extends Map or WeakMap.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -196,7 +209,8 @@ export function isMap(x) {
 /**
  * Determine if the given value is a native JavaScript Set or WeakSet. This
  * will work as expected, returning true when passing an instance of a class
- * which extends Map or WeakMap.
+ * which extends Set or WeakSet.
+ * @since 3.0.0
  * @param  {*} x
  * @return {Boolean}
  */
@@ -213,6 +227,7 @@ export function isSet(x) {
  *
  * Will return a curried version of this function if only
  * a single argument is supplied.
+ * @since 3.0.0
  *
  * @param {*} a
  * @param {*} b
@@ -244,6 +259,7 @@ export function isEqual(a, b) {
  *
  * Will return a curried version of this function if only
  * a single argument is supplied.
+ * @since 3.0.0
  *
  * @see {@link isEqual}
  * @see {@link isValidDate}
@@ -277,6 +293,7 @@ export function doesMatch(matcher, x) {
 
 /**
  * Convert any JavaScript value to a human friendly string.
+ * @since 3.0.0
  * @param  {*} x
  * @return {String}
  */
@@ -350,6 +367,7 @@ export function toFriendlyString(x) {
  * Create a function which can create assertion functions which can be curried.
  * If the returned function is called with only a single argument then it will
  * return a curried version of the assertion function.
+ * @since 3.0.0
  *
  * @param  {String} operator The name of the assertion operator which will be
  * passed to new AssertionError({ operator })
@@ -408,6 +426,7 @@ export function curryAssertion2(operator, guard) {
 /**
  * Assert the given value is truthy. If not, assert() will throw a Node.js
  * AssertionError.
+ * @since 3.0.0
  *
  * @param  {*} actual The value to test.
  * @param  {string} [messagePrefix] An optional error message prefix string.
@@ -434,6 +453,7 @@ export function assert(actual, messagePrefix) {
 /**
  * Assert the given value is falsy. If not, assertFalsy() will throw a Node.js
  * AssertionError.
+ * @since 3.0.0
  *
  * @param  {*} actual The value to test.
  * @param  {string} [messagePrefix] An optional error message prefix string.
@@ -460,6 +480,7 @@ export function assertFalsy(actual, messagePrefix) {
 /**
  * Asserts equalty using isEqual(). If the actual value does not equal the
  * expected value then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isEqual}
  * @param {*} expected The value to test against.
@@ -480,6 +501,7 @@ export const assertEqual = curryAssertion2('assertEqual', (expected, actual, mes
 /**
  * Asserts NON equalty using isEqual(). If the actual value equals the expected
  * value then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isEqual}
  * @param {*} expected The value to test against.
@@ -501,6 +523,7 @@ export const assertNotEqual = curryAssertion2('assertNotEqual', (expected, actua
  * Asserts that the actual value matches the matcher value according
  * to doesMatch(). If the actual does not match the matcher then a Node.js
  * AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link doesMatch}
  * @param {*} matcher The matcher to test against. See doesMatch() for more info.
@@ -522,6 +545,7 @@ export const assertMatches = curryAssertion2('assertMatches', (matcher, actual, 
  * Asserts that the actual value DOES NOT match the matcher value according
  * to doesMatch(). If the actual value matches the matcher then a Node.js
  * AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link doesMatch}
  * @param {*} matcher The matcher to test against. See doesMatch() for more info.
@@ -543,6 +567,7 @@ export const assertNotMatches = curryAssertion2('assertNotMatches', (matcher, ac
  * Asserts that the given value is not undefined as
  * determined by isUndefined(). If the value is undefined then a
  * Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isUndefined}
  * @param {*} x
@@ -569,6 +594,7 @@ export function assertDefined(x, messagePrefix) {
  * Asserts that the given value is undefined as
  * determined by isUndefined(). If the value is NOT undefined then a
  * Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isUndefined}
  * @param {*} x
@@ -595,6 +621,7 @@ export function assertUndefined(x, messagePrefix) {
  * Asserts that the given value is a non-empty String as
  * determined by isNonEmptyString(). If the value is not a String, or an empty
  * String then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isNonEmptyString}
  * @param {*} x
@@ -621,6 +648,7 @@ export function assertNonEmptyString(x, messagePrefix) {
  * Asserts that the given value is a Number but not NaN as
  * determined by isNumberNotNaN(). If the value is not a Number, or
  * is NaN then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isNumberNotNaN}
  * @param {*} x
@@ -647,6 +675,7 @@ export function assertNumberNotNaN(x, messagePrefix) {
  * Asserts that the given value is an Array as
  * determined by Array.isArray(). If the value is not an Array
  * then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @param {*} x
  * @param {string} [messagePrefix] An optional error message prefix string.
@@ -672,6 +701,7 @@ export function assertArray(x, messagePrefix) {
  * Asserts that the given value is a Boolean as
  * determined by isBoolean(). If the value is not a Boolean
  * then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isBoolean}
  * @param {*} x
@@ -698,6 +728,7 @@ export function assertBoolean(x, messagePrefix) {
  * Asserts that the given value is a Function as
  * determined by isFunction(). If the value is not a Function
  * then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isFunction}
  * @param {*} x
@@ -724,6 +755,7 @@ export function assertFunction(x, messagePrefix) {
  * Asserts that the given value is a valid Date as
  * determined by isValidDate(). If the value is not a valid Date
  * then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isValidDate}
  * @param {*} x
@@ -750,6 +782,7 @@ export function assertValidDate(x, messagePrefix) {
  * Asserts that the given value is a RegExp as
  * determined by isRegExp(). If the value is not a RegExp
  * then a Node.js AssertionError will be thrown.
+ * @since 3.0.0
  *
  * @see {@link isRegExp}
  * @param {*} x
