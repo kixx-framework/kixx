@@ -18,5 +18,14 @@ export default function testAssertNumberNotNaN() {
             assert.equal(error.message, 'Passing in NaN (Expected Number(NaN) to be a Number and not NaN)');
             assert.equal(error.operator, 'assertNumberNotNaN');
         }
+        try {
+            // Without the optional message prefix.
+            assertNumberNotNaN(NaN);
+            throw new Error('This should have thrown');
+        } catch (error) {
+            assert.equal(error.name, 'AssertionError');
+            assert.equal(error.message, 'Expected Number(NaN) to be a Number and not NaN');
+            assert.equal(error.operator, 'assertNumberNotNaN');
+        }
     });
 }

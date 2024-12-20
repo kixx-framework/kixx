@@ -19,5 +19,14 @@ export default function testAssertNonEmptyString() {
             assert.equal(error.message, 'Passing in undefined (Expected undefined to be a non-empty String)');
             assert.equal(error.operator, 'assertNonEmptyString');
         }
+        try {
+            // Without the optional failure message prefix.
+            assertNonEmptyString(1);
+            throw new Error('This should have thrown');
+        } catch (error) {
+            assert.equal(error.name, 'AssertionError');
+            assert.equal(error.message, 'Expected Number(1) to be a non-empty String');
+            assert.equal(error.operator, 'assertNonEmptyString');
+        }
     });
 }

@@ -1,6 +1,7 @@
 TODO
 ====
 
+- [x] assertions:assertArray()
 - [ ] assertions:assertBoolean()
 - [ ] assertions:assertFunction()
 - [ ] assertions:assertValidDate()
