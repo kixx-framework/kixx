@@ -665,3 +665,29 @@ export function assertArray(x, messagePrefix) {
         });
     }
 }
+
+/**
+ * Asserts that the given value is a Boolean as
+ * determined by isBoolean(). If the value is not a Boolean
+ * then a Node.js AssertionError will be thrown.
+ *
+ * @see {@link isBoolean}
+ * @param {*} x
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export function assertBoolean(x, messagePrefix) {
+    if (!isBoolean(x)) {
+        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a Boolean`;
+
+        const message = isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
+
+        throw new AssertionError({
+            message,
+            operator: 'assertBoolean',
+            stackStartFn: assertBoolean,
+        });
+    }
+}
