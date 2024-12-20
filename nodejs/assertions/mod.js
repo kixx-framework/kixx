@@ -640,3 +640,28 @@ export function assertNumberNotNaN(x, messagePrefix) {
         });
     }
 }
+
+/**
+ * Asserts that the given value is an Array as
+ * determined by Array.isArray(). If the value is not an Array
+ * then a Node.js AssertionError will be thrown.
+ *
+ * @param {*} x
+ * @param {string} [messagePrefix] An optional error message prefix string.
+ * @throws {AssertionError}
+ */
+export function assertArray(x, messagePrefix) {
+    if (!Array.isArray(x)) {
+        const assertionMessage = `Expected ${ toFriendlyString(x) } to be an Array`;
+
+        const message = isNonEmptyString(messagePrefix)
+            ? `${ messagePrefix } (${ assertionMessage })`
+            : assertionMessage;
+
+        throw new AssertionError({
+            message,
+            operator: 'assertArray',
+            stackStartFn: assertArray,
+        });
+    }
+}
