@@ -47,7 +47,7 @@ const foo = {
     },
 };
 
-/* eslint-disable array-bracket-spacing, no-undefined */
+/* eslint-disable array-bracket-spacing */
 export const tests = [
     [ null, 'null', 'null' ],
     [ undefined, 'undefined', 'undefined' ],
@@ -88,7 +88,7 @@ export const tests = [
     [ /^foo[.]+bar$/, '/^foo[.]+bar$/', 'RegExp(/^foo[.]+bar$/)' ],
     [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', 'RegExp(/^start/i)' ],
 ];
-/* eslint-enable array-bracket-spacing, no-undefined */
+/* eslint-enable array-bracket-spacing */
 
 
 export default function testToFriendlyString() {

@@ -2,7 +2,7 @@ import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as assertions from '../../assertions/mod.js';
 
-/* eslint-disable brace-style, array-bracket-spacing, no-undefined */
+/* eslint-disable brace-style, array-bracket-spacing */
 export const tests = [
     [ null, 'null', false ],
     [ undefined, 'undefined', false ],
@@ -35,7 +35,7 @@ export const tests = [
     [ new Set(), 'new Set()', false],
     [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', false ],
 ];
-/* eslint-enable brace-style, array-bracket-spacing, no-undefined */
+/* eslint-enable brace-style, array-bracket-spacing */
 
 export default function testIsString() {
     it('pass/fails with expected values', () => {

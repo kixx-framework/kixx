@@ -11,7 +11,6 @@ export default function testAssertBoolean() {
 
     it('throws with failure case', () => {
         try {
-            // eslint-disable-next-line no-undefined
             assertBoolean(undefined, 'Passing in undefined');
             throw new Error('This should have thrown');
         } catch (error) {

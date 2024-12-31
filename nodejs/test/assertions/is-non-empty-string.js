@@ -2,7 +2,7 @@ import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as assertions from '../../assertions/mod.js';
 
-/* eslint-disable array-bracket-spacing, no-undefined */
+/* eslint-disable array-bracket-spacing */
 export const tests = [
     [ null, 'null', false ],
     [ undefined, 'undefined', false ],
@@ -21,7 +21,7 @@ export const tests = [
     [ new Map(), 'new Map()', false],
     [ new Set(), 'new Set()', false],
 ];
-/* eslint-enable array-bracket-spacing, no-undefined */
+/* eslint-enable array-bracket-spacing */
 
 export default function testIsNonEmptyString() {
     it('pass/fails with expected values', () => {

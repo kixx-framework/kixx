@@ -7,7 +7,7 @@ class Cat {}
 class ExtendedMap extends Map {}
 class ExtendedSet extends Set {}
 
-/* eslint-disable array-bracket-spacing, no-undefined */
+/* eslint-disable array-bracket-spacing */
 export const tests = [
     [ null, 'null', false ],
     [ undefined, 'undefined', false ],
@@ -44,7 +44,7 @@ export const tests = [
     [ new ExtendedSet(), 'new ExtendedSet()', true ],
     [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', false ],
 ];
-/* eslint-enable array-bracket-spacing, no-undefined */
+/* eslint-enable array-bracket-spacing */
 
 export default function testIsSet() {
     it('pass/fails with expected values', () => {

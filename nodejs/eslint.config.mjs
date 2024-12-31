@@ -20,6 +20,7 @@ export default [
                 URL: 'readonly',
                 Headers: 'readonly',
                 Buffer: 'readonly',
+                structuredClone: 'readonly',
             },
         },
         rules: {
@@ -42,10 +43,7 @@ export default [
                 'error',
             ],
             'capitalized-comments': [
-                // 'warn',
                 'off',
-                'always',
-                { ignoreConsecutiveComments: true },
             ],
             'comma-dangle': [
                 'error',
@@ -63,6 +61,7 @@ export default [
             'comma-style': [
                 'error',
             ],
+            // Authors have the freedom to return something or not.
             'consistent-return': [
                 'off',
             ],
@@ -127,8 +126,13 @@ export default [
             'new-parens': [
                 'error',
             ],
+            // Performing an await as part of each operation may indicate that
+            // the program is not taking full advantage of the parallelization
+            // benefits of async/await.
+            // Often, the code can be refactored to create all the promises at
+            // once, then get access to the results using Promise.all()
             'no-await-in-loop': [
-                'off',
+                'warn',
             ],
             'no-bitwise': [
                 'warn',
@@ -218,9 +222,14 @@ export default [
             'no-trailing-spaces': [
                 'error',
             ],
+            // In ECMAScript 3 it was possible to overwrite the value of
+            // undefined. ECMAScript 5 disallows overwriting undefined and we
+            // assume authors are responsible about mistakenly shadowing it.
             'no-undefined': [
-                'error',
+                'off',
             ],
+            // Authors should be able to dangles as they see fit to
+            // make code readable.
             'no-underscore-dangle': [
                 'off',
             ],
@@ -296,9 +305,10 @@ export default [
                 'single',
                 { avoidEscape: true, allowTemplateLiterals: true },
             ],
+            // Authors can quote props, even when not necessary, to
+            // make the code readable.
             'quote-props': [
                 'off',
-                'as-needed',
             ],
             radix: [
                 'error',
@@ -306,6 +316,8 @@ export default [
             'require-atomic-updates': [
                 'error',
             ],
+            // Sometimes we want to use the async keyword to promisify a
+            // function without using await internally.
             'require-await': [
                 'off',
             ],

@@ -29,7 +29,7 @@ function funcDef() {
     return null;
 }
 
-/* eslint-disable brace-style, array-bracket-spacing, no-undefined */
+/* eslint-disable brace-style, array-bracket-spacing */
 const tests = [
     [ null, 'null', true ],
     [ undefined, 'undefined', true ],
@@ -82,7 +82,7 @@ const tests = [
     [ /^start/i, '/^start/i', false ],
     [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', false ],
 ];
-/* eslint-enable brace-style, array-bracket-spacing, no-undefined */
+/* eslint-enable brace-style, array-bracket-spacing */
 
 export default function testIsPrimitive() {
     it('pass/fails with expected values', () => {

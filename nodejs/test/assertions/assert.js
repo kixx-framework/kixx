@@ -5,7 +5,6 @@ import * as assertions from '../../assertions/mod.js';
 
 const tests = [
     [ null, 'null', 'Expected null to be truthy', false ],
-    // eslint-disable-next-line no-undefined
     [ undefined, 'undefined', 'Expected undefined to be truthy', false ],
     [ true, 'true', '', true ],
     [ false, 'false', 'Expected Boolean(false) to be truthy', false ],

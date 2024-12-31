@@ -12,7 +12,7 @@ function funcDef() {
     return null;
 }
 
-/* eslint-disable array-bracket-spacing, no-undefined */
+/* eslint-disable array-bracket-spacing */
 export const tests = [
     [ null, 'null', false ],
     [ undefined, 'undefined', false ],
@@ -48,7 +48,7 @@ export const tests = [
     [ /^foo[.]+bar$/, '/^foo[.]+bar$/', true ],
     [ new RegExp('^start', 'i'), 'new RegExp("^start", "i")', true ],
 ];
-/* eslint-enable array-bracket-spacing, no-undefined */
+/* eslint-enable array-bracket-spacing */
 
 
 export default function testIsRegExp() {
