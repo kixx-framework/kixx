@@ -1,0 +1,36 @@
+{
+  "name": "kixx-assert",
+  "version": "2.0.1",
+  "description": "Assert things in JavaScript",
+  "type": "module",
+  "main": "mod.js",
+  "engines": {
+    "node": ">=16.13.2"
+  },
+  "scripts": {
+    "test": "eslint ./ && node ./test/run-tests.js",
+    "lint": "eslint ./"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kixxauth/kixx-assert.git"
+  },
+  "files": [
+    "mod.js"
+  ],
+  "devDependencies": {
+    "@eslint/js": "9.27.0",
+    "eslint": "9.27.0"
+  },
+  "keywords": [
+    "functional",
+    "assertion",
+    "testing"
+  ],
+  "author": "Kris Walker (www.kriswalker.me)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kixxauth/kixx-assert/issues"
+  },
+  "homepage": "https://github.com/kixxauth/kixx-assert#readme"
+}

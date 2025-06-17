@@ -5,7 +5,12 @@ export default [
     {
         ignores: [
             'node_modules/',
-            'test/partials/',
+            'vendor/',
+            // Other vendor/dependency directories:
+            'assertions/',
+            'errors/',
+            'logger/',
+            'template-engine/',
         ],
     },
     js.configs.recommended,
@@ -15,7 +20,17 @@ export default [
             ecmaVersion: 2022,
             sourceType: 'module',
             globals: {
+                // Web globals
+                console: 'readonly',
+                setTimeout: 'readonly',
+                clearTimeout: 'readonly',
+                structuredClone: 'readonly',
+                Blob: 'readonly',
                 URL: 'readonly',
+                Headers: 'readonly',
+                // Node.js globals
+                Buffer: 'readonly',
+                queueMicrotask: 'readonly',
             },
         },
         rules: {
