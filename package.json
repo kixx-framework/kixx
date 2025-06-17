@@ -7,6 +7,9 @@
   "engines": {
     "node": ">=16.13.2"
   },
+  "bin": {
+    "kixx": "bin/kixx.js"
+  },
   "scripts": {
     "test": "eslint ./",
     "lint": "eslint ./"

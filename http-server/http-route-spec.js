@@ -1,4 +1,4 @@
-import * as PathToRegexp from '../vendor/path-to-regexp/mod.js';
+import { PathToRegexp } from '../vendor/mod.js';
 import { AssertionError } from '../errors/mod.js';
 import HttpRoute from './http-route.js';
 import HttpTargetSpec from './http-target-spec.js';

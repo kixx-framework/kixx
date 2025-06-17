@@ -1,34 +1,35 @@
 import process from 'node:process';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import * as Application from './application/application.js';
-import { readDirectory } from './lib/file-system.js';
-
-import { isNonEmptyString, assertFunction } from './assertions/mod.js';
+import * as Application from '../application/application.js';
+import { readDirectory } from '../lib/file-system.js';
+import { isNonEmptyString, assertFunction } from '../assertions/mod.js';
 
 
 const options = {
     // The path to the application configuration file.
     config: {
+        short: 'c',
         type: 'string',
     },
     // The environment to run the server in.
     environment: {
+        short: 'e',
         type: 'string',
         default: 'development',
     },
 };
 
-const parserOptions = {
-    options,
-    strict: false,
-    allowPositionals: true,
-    allowNegative: true,
-};
 
+export async function main(args) {
+    const { values, positionals } = parseArgs({
+        args,
+        options,
+        strict: false,
+        allowPositionals: true,
+        allowNegative: true,
+    });
 
-export async function main() {
-    const { values, positionals } = parseArgs(parserOptions);
     const commandName = positionals[0];
 
     if (!isNonEmptyString(commandName)) {
@@ -39,7 +40,7 @@ export async function main() {
     if (isNonEmptyString(values.config)) {
         configFilepath = path.resolve(values.config);
     } else {
-        configFilepath = path.join(process.cwd(), 'app', 'kixx-config.json');
+        configFilepath = path.join(process.cwd(), 'kixx-config.json');
     }
 
     const context = await Application.initialize(configFilepath, values.environment);
@@ -54,14 +55,15 @@ export async function main() {
 
     const updatedOptions = Object.assign({}, options, command.options || {});
 
-    const updatedParserOptions = Object.assign({}, parserOptions, {
+    const subArgs = parseArgs({
+        args,
         options: updatedOptions,
         strict: true,
+        allowPositionals: true,
+        allowNegative: true,
     });
 
-    const args = parseArgs(updatedParserOptions);
-
-    await command.run(context, args.values, ...args.positionals);
+    await command.run(context, subArgs.values, ...subArgs.positionals);
 }
 
 async function loadCommands(directory) {
@@ -89,11 +91,3 @@ async function loadCommand(filepath) {
         run: mod.run,
     };
 }
-
-main().catch((error) => {
-    /* eslint-disable no-console */
-    console.error('Error running command:');
-    console.error(error);
-    /* eslint-enable no-console */
-    process.exit(1);
-});

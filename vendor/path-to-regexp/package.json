@@ -2,6 +2,7 @@
   "name": "path-to-regexp",
   "version": "8.2.0",
   "description": "Express style path to RegExp utility",
+  "type": "module",
   "keywords": [
     "express",
     "regexp",

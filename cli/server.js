@@ -1,40 +1,40 @@
 import process from 'node:process';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import ApplicationServer from './application/application-server.js';
-import * as Application from './application/application.js';
-
-import { isNonEmptyString } from './assertions/mod.js';
+import ApplicationServer from '../application/application-server.js';
+import * as Application from '../application/application.js';
+import { isNonEmptyString } from '../assertions/mod.js';
 
 
 const options = {
     // The path to the application configuration file.
     config: {
+        short: 'c',
         type: 'string',
     },
     // The environment to run the server in.
     environment: {
+        short: 'e',
         type: 'string',
-        default: 'development',
+        default: 'production',
     },
 };
 
-const parserOptions = {
-    options,
-    strict: true,
-    allowPositionals: true,
-    allowNegative: true,
-};
 
-
-export async function main() {
-    const { values } = parseArgs(parserOptions);
+export async function main(args) {
+    const { values } = parseArgs({
+        args,
+        options,
+        strict: true,
+        allowPositionals: true,
+        allowNegative: true,
+    });
 
     let configFilepath;
     if (isNonEmptyString(values.config)) {
         configFilepath = path.resolve(values.config);
     } else {
-        configFilepath = path.join(process.cwd(), 'app', 'kixx-config.json');
+        configFilepath = path.join(process.cwd(), 'kixx-config.json');
     }
 
     const context = await Application.initialize(configFilepath, values.environment);
@@ -83,11 +83,3 @@ async function loadHttpAppServer(context, opts) {
 
     return server;
 }
-
-main().catch((error) => {
-    /* eslint-disable no-console */
-    console.error('Error starting server:');
-    console.error(error);
-    /* eslint-enable no-console */
-    process.exit(1);
-});
