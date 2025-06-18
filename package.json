@@ -19,7 +19,20 @@
     "url": "https://github.com/kixx-platform/kixx.git"
   },
   "files": [
+    "application/",
+    "assertions/",
+    "bin/",
+    "cli/",
+    "datastore/",
+    "errors/",
+    "http-server/",
+    "job-queue/",
     "lib/",
+    "logger/",
+    "request-handlers/",
+    "template-engine/",
+    "view-service/",
+    "vendor/",
     "mod.js"
   ],
   "devDependencies": {
