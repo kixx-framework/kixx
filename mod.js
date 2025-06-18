@@ -7,5 +7,5 @@ export {
     assertions,
     errors,
     templateEngine,
-    datastore,
+    datastore
 };
