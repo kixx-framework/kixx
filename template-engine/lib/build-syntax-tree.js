@@ -205,6 +205,11 @@ export default function buildSyntaxTree(options, tokens) {
                 continue;
             }
             if (c === '=') {
+                if (expressionTokenString) {
+                    closeSpaceDelineatedSubToken();
+                    expressionTokenString = '';
+                }
+
                 let key;
                 const lastSubToken = expressionTokens[expressionTokens.length - 1];
                 if (lastSubToken && lastSubToken.type === 'PATH') {
