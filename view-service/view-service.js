@@ -31,9 +31,6 @@ export default class ViewService {
         this.#pageTemplateEngine = options.pageTemplateEngine || new PageTemplateEngine({
             logger: options.logger,
             partialsDirectory: options.partialsDirectory,
-            // TODO: Make template engine options configurable.
-            verboseLogging: true,
-            renderErrorMessages: true,
         });
 
         this.#logger = options.logger;

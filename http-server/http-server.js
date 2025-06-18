@@ -167,7 +167,6 @@ export default class HttpServer extends EventEmitter {
                 cause,
             });
 
-            // TODO: There should be a method, which can be overridden, to return a custom error response.
             const status = 500;
             const body = 'Internal server error.\n';
 
