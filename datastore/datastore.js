@@ -31,8 +31,7 @@ export default class Datastore {
         } else {
             this.#db = new DatastoreEngine(options);
         }
-        // TODO: The LockingQueue should be able to be optionally set to null
-        if (options.lockingQueue) {
+        if (!isUndefined(options.lockingQueue)) {
             this.#lockingQueue = options.lockingQueue;
         } else {
             this.#lockingQueue = new LockingQueue();
@@ -46,8 +45,9 @@ export default class Datastore {
 
     async getItem(key) {
         // Ensure existing async operations are completed before proceeding.
-        await this.#lockingQueue.getLock();
-        this.#lockingQueue.releaseLock();
+        await this.getLock();
+        this.releaseLock();
+
         const { document } = this.#db.getItem(key);
         if (document) {
             return structuredClone(document);
@@ -56,8 +56,7 @@ export default class Datastore {
     }
 
     async setItem(key, document, options = {}) {
-        // TODO: Datastore checkConsistency should default to true
-        const checkConsistency = Boolean(options.checkConsistency);
+        const checkConsistency = options.checkConsistency === false ? false : true;
 
         // We make some assumptions about the document structure.
         // Ex. If the document is an Array, we can't assign the _rev property to it.
@@ -70,14 +69,14 @@ export default class Datastore {
         // Clone the document to avoid mutating the original object.
         document = structuredClone(document);
 
-        await this.#lockingQueue.getLock();
+        await this.getLock();
 
         const existing = this.#db.getItem(key);
 
         let revision = 0;
         if (existing.document) {
             if (checkConsistency && existing.document._rev !== document._rev) {
-                this.#lockingQueue.releaseLock();
+                this.releaseLock();
                 throw new AssertionError(
                     `The document with key "${ key }" has been modified since it was last read.`,
                     { code: ConflictError.CODE }
@@ -92,16 +91,15 @@ export default class Datastore {
 
         await this.#db.setItem(key, structuredClone(document));
 
-        this.#lockingQueue.releaseLock();
+        this.releaseLock();
 
         return document;
     }
 
     async updateItem(key, updateFunction, options = {}) {
-        // TODO: Datastore checkConsistency should default to true
-        const checkConsistency = Boolean(options.checkConsistency);
+        const checkConsistency = options.checkConsistency === false ? false : true;
 
-        await this.#lockingQueue.getLock();
+        await this.getLock();
 
         const existing = this.#db.getItem(key);
         const document = await updateFunction(structuredClone(existing.document));
@@ -114,7 +112,7 @@ export default class Datastore {
         if (existing.document) {
             assert(Number.isInteger(existing.document._rev));
             if (checkConsistency && existing.document._rev !== document._rev) {
-                this.#lockingQueue.releaseLock();
+                this.releaseLock();
                 throw new AssertionError(
                     `The updated document with key "${ key }" does not match the expected revision.`,
                     { code: ConflictError.CODE }
@@ -127,15 +125,15 @@ export default class Datastore {
 
         await this.#db.setItem(key, structuredClone(document));
 
-        this.#lockingQueue.releaseLock();
+        this.releaseLock();
 
         return document;
     }
 
     async deleteItem(key) {
-        await this.#lockingQueue.getLock();
+        await this.getLock();
         await this.#db.deleteItem(key);
-        this.#lockingQueue.releaseLock();
+        this.releaseLock();
         return key;
     }
 
@@ -174,8 +172,8 @@ export default class Datastore {
         const includeDocuments = Boolean(options.includeDocuments);
 
         // Ensure existing async operations are completed before proceeding.
-        await this.#lockingQueue.getLock();
-        this.#lockingQueue.releaseLock();
+        await this.getLock();
+        this.releaseLock();
 
         const result = this.#db.queryKeys({
             startKey,
@@ -243,8 +241,8 @@ export default class Datastore {
         const includeDocuments = Boolean(options.includeDocuments);
 
         // Ensure existing async operations are completed before proceeding.
-        await this.#lockingQueue.getLock();
-        this.#lockingQueue.releaseLock();
+        await this.getLock();
+        this.releaseLock();
 
         const result = this.#db.queryView(viewId, {
             startKey,
@@ -265,5 +263,17 @@ export default class Datastore {
         }
 
         return { exclusiveEndIndex, items };
+    }
+
+    async getLock() {
+        if (this.#lockingQueue) {
+            await this.#lockingQueue.getLock();
+        }
+    }
+
+    releaseLock() {
+        if (this.#lockingQueue) {
+            this.#lockingQueue.releaseLock();
+        }
     }
 }
