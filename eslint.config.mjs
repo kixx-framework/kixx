@@ -117,8 +117,10 @@ export default [
             'keyword-spacing': [
                 'error',
             ],
+            // Turn linebreak-style off to accomodate windows. Linebreaks will be converted
+            // to Windows format on checkout, but converted back to unix on commit.
             'linebreak-style': [
-                'error',
+                'off',
                 'unix',
             ],
             'lines-between-class-members': [
