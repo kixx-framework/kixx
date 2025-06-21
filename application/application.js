@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { WrappedError } from '../errors/mod.js';
 import { isFunction } from '../assertions/mod.js';
 import Logger from '../logger/mod.js';
@@ -54,7 +55,7 @@ export async function initializePlugins(context) {
         let mod;
         try {
             // eslint-disable-next-line no-await-in-loop
-            mod = await import(filepath);
+            mod = await import(pathToFileURL(filepath));
         } catch (cause) {
             throw new WrappedError(`Error loading plugin from ${ filepath }`, { cause });
         }

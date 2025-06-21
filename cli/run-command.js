@@ -1,5 +1,6 @@
 import process from 'node:process';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import * as Application from '../application/application.js';
 import { readDirectory } from '../lib/file-system.js';
@@ -81,7 +82,7 @@ async function loadCommands(directory) {
 }
 
 async function loadCommand(filepath) {
-    const mod = await import(filepath);
+    const mod = await import(pathToFileURL(filepath));
 
     assertFunction(mod.run, `A command must export a run function (in ${ filepath })`);
 

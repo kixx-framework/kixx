@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { WrappedError } from '../errors/mod.js';
 import HttpServer from '../http-server/http-server.js';
 import HttpServerRequest from './http-server-request.js';
@@ -78,7 +79,7 @@ async function loadMiddlewareDirectory(directory, register) {
 async function loadMiddlewareFunction(filepath) {
     let mod;
     try {
-        mod = await import(filepath);
+        mod = await import(pathToFileURL(filepath));
     } catch (cause) {
         throw new WrappedError(`Error loading error handler from ${ filepath }`, { cause });
     }
