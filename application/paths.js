@@ -100,7 +100,7 @@ export default class Paths {
                 plugins.push({
                     directory: pluginDirectory,
                     filepath: path.join(pluginDirectory, pluginFilename),
-                    middlewareDirectory: path.join(pluginDirectory, 'middlware'),
+                    middlewareDirectory: path.join(pluginDirectory, 'middleware'),
                     requestHandlerDirectory: path.join(pluginDirectory, 'request-handlers'),
                     errorHandlerDirectory: path.join(pluginDirectory, 'error-handlers'),
                 });
