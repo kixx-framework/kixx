@@ -108,9 +108,10 @@ export default class Job {
 
     static generateId(timestamp) {
         const date = new Date(timestamp);
+        const dateString = date.toISOString().replace(/[:.]+/g, '-');
         const n = getIncrement();
         const i = crypto.randomInt(10000);
-        return `${ date.toISOString() }-${ i }-${ n }`;
+        return `${ dateString }-${ i }-${ n }`;
     }
 
     /**
