@@ -115,13 +115,13 @@ export default class PageTemplateEngine {
                 if (stats.isDirectory()) {
                     // eslint-disable-next-line no-await-in-loop
                     await walkDirectory(filepath, parts.concat(entry));
+                } else {
+                    const id = parts.concat(entry).join('/');
+                    // eslint-disable-next-line no-await-in-loop
+                    const source = await fs.readUtf8File(filepath);
+
+                    sources.push({ id, source });
                 }
-
-                const id = parts.concat(entry).join('/');
-                // eslint-disable-next-line no-await-in-loop
-                const source = await fs.readUtf8File(filepath);
-
-                sources.push({ id, source });
             }
         }
 
