@@ -1,5 +1,4 @@
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { assertNonEmptyString, assertFunction } from '../assertions/mod.js';
 import { WrappedError } from '../errors/mod.js';
 import { tokenize, buildSyntaxTree, createRenderFunction, helpers } from '../template-engine/mod.js';
@@ -70,17 +69,18 @@ export default class PageTemplateEngine {
 
         const fs = this.#fileSystem;
         const helpersMap = this.helpers;
+        const helpersDirectory = this.#helpersDirectory;
 
-        const entries = await fs.readDirectory(this.#helpersDirectory);
+        const entries = await fs.readDirectory(helpersDirectory);
 
         const promises = entries.map(async (entry) => {
-            const filepath = path.join(this.#helpersDirectory, entry);
+            const filepath = path.join(helpersDirectory, entry);
             const stats = await fs.getFileStats(filepath);
 
             if (stats.isFile()) {
                 let mod;
                 try {
-                    mod = await import(pathToFileURL(filepath));
+                    mod = await fs.importAbsoluteFilepath(filepath);
                 } catch (cause) {
                     throw new WrappedError(`Unable to load template helper from ${ filepath }`, { cause });
                 }
