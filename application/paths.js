@@ -56,6 +56,12 @@ export default class Paths {
         this.application_templates_directory = path.join(this.app_directory, 'templates', 'templates');
 
         /**
+         * Directory containing template helper modules.
+         * @type {string}
+         */
+        this.application_helpers_directory = path.join(this.app_directory, 'templates', 'helpers');
+
+        /**
          * Directory containing partial HTML templates that can be included in pages.
          * @type {string}
          */

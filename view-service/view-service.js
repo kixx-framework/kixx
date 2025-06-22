@@ -10,7 +10,6 @@ export default class ViewService {
 
     #pageDirectory = null;
     #sitePageDataFilepath = null;
-    #templateDirectory = null;
     #logger = null;
     #pageTemplateEngine = null;
     #fileSystem = null;
@@ -20,24 +19,25 @@ export default class ViewService {
      *
      * @param {Object} options - Configuration options
      * @param {Object} options.logger - Logger instance
-     * @param {string} options.partialsDirectory - Directory containing template partials
      * @param {string} options.pageDirectory - Directory containing page files
      * @param {string} options.sitePageDataFilepath - Path to site-wide page data file
      * @param {string} options.templateDirectory - Directory containing templates
+     * @param {string} options.partialsDirectory - Directory containing template partials
+     * @param {string} options.helpersDirectory - Directory containing template helpers
      * @param {Object} [options.pageTemplateEngine] - Optional PageTemplateEngine instance for testing
      * @param {Object} [options.fileSystem] - Optional file system implementation for testing
      */
     constructor(options) {
         this.#pageTemplateEngine = options.pageTemplateEngine || new PageTemplateEngine({
-            logger: options.logger,
+            templatesDirectory: options.templatesDirectory,
             partialsDirectory: options.partialsDirectory,
+            helpersDirectory: options.helpersDirectory,
         });
 
         this.#logger = options.logger;
         this.#fileSystem = options.fileSystem || fileSystem;
         this.#pageDirectory = options.pageDirectory;
         this.#sitePageDataFilepath = options.sitePageDataFilepath;
-        this.#templateDirectory = options.templateDirectory;
     }
 
     async getPageData(pathname, props) {
@@ -72,50 +72,25 @@ export default class ViewService {
 
     async getPageMarkup(pathname, pageData) {
         const pathParts = this.urlPathnameToParts(pathname);
-
         const filepath = path.join(this.#pageDirectory, ...pathParts.concat('page.html'));
 
         this.#logger.debug('fetching page markup', { pathname, filepath });
-        let templateSource = null;
-        try {
-            templateSource = await this.#fileSystem.readUtf8File(filepath);
-        } catch (cause) {
-            throw new WrappedError(`Unable to read page markup file ${ filepath }`, { cause });
-        }
 
-        if (!templateSource) {
+        const templateId = `${ pathname }/page.html`;
+        const pageTemplate = await this.#pageTemplateEngine.getPageTemplate(templateId, filepath);
+
+        if (!pageTemplate) {
             return null;
         }
-
-        // TODO: Optimize partial loading for production.
-        await this.#pageTemplateEngine.loadPartials();
-        const pageTemplate = this.#pageTemplateEngine.compileTemplate(filepath, templateSource);
 
         return pageTemplate(pageData);
     }
 
     async getBaseTemplate(templateId) {
         templateId = templateId || 'base.html';
-        // Remove leading and trailing slashes
-        const pathParts = templateId.split('/').filter(Boolean);
-        const filepath = path.join(this.#templateDirectory, ...pathParts);
-
-        this.#logger.debug('fetching base template', { templateId, filepath });
-
-        let source;
-        try {
-            source = await this.#fileSystem.readUtf8File(filepath);
-        } catch (cause) {
-            throw new WrappedError(`Unable to read base template file ${ filepath }`, { cause });
-        }
-
-        if (!source) {
-            return null;
-        }
-
-        // TODO: Optimize partial loading for production.
-        await this.#pageTemplateEngine.loadPartials();
-        return this.#pageTemplateEngine.compileTemplate(templateId, source);
+        this.#logger.debug('fetching base template', { templateId });
+        const template = await this.#pageTemplateEngine.getTemplate(templateId);
+        return template;
     }
 
     async renderMarkupForError(error) {
