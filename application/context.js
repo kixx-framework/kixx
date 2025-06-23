@@ -85,9 +85,11 @@ function createViewService(logger, paths) {
     return new ViewService({
         logger,
         // Directory tree where application template files are stored.
-        templateDirectory: paths.application_templates_directory,
+        templatesDirectory: paths.application_templates_directory,
         // Directory tree where application template partials are stored.
         partialsDirectory: paths.application_partials_directory,
+        // Directory tree where application template helpers are stored.
+        helpersDirectory: paths.application_helpers_directory,
         // Directory tree where page data files (index.json) are stored, and
         // represent pathnames for the server.
         pageDirectory: paths.application_pages_directory,

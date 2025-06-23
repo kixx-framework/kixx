@@ -1,12 +1,16 @@
 import path from 'node:path';
 import { assertNonEmptyString } from '../assertions/mod.js';
-import { readDirectory } from '../lib/file-system.js';
+import * as fileSystem from '../lib/file-system.js';
 
 
 export default class Paths {
 
-    constructor(applicationDirectory) {
+    #fs = null;
+
+    constructor(applicationDirectory, options = {}) {
         assertNonEmptyString(applicationDirectory, 'applicationDirectory must be a non-empty string');
+
+        this.#fs = options.fileSystem || fileSystem;
 
         /**
          * The root directory path for the application.
@@ -52,6 +56,12 @@ export default class Paths {
         this.application_templates_directory = path.join(this.app_directory, 'templates', 'templates');
 
         /**
+         * Directory containing template helper modules.
+         * @type {string}
+         */
+        this.application_helpers_directory = path.join(this.app_directory, 'templates', 'helpers');
+
+        /**
          * Directory containing partial HTML templates that can be included in pages.
          * @type {string}
          */
@@ -83,20 +93,20 @@ export default class Paths {
     }
 
     async getPlugins() {
-        const pluginDirectories = await readDirectory(this.plugins_directory, { includeFullPaths: true });
+        const pluginDirectories = await this.#fs.readDirectory(this.plugins_directory, { includeFullPaths: true });
 
         const plugins = [];
 
         for (const pluginDirectory of pluginDirectories) {
             // eslint-disable-next-line no-await-in-loop
-            const entries = await readDirectory(pluginDirectory);
+            const entries = await this.#fs.readDirectory(pluginDirectory);
             const pluginFilename = entries.find((entry) => entry.endsWith('plugin.js'));
 
             if (pluginFilename) {
                 plugins.push({
                     directory: pluginDirectory,
                     filepath: path.join(pluginDirectory, pluginFilename),
-                    middlewareDirectory: path.join(pluginDirectory, 'middlware'),
+                    middlewareDirectory: path.join(pluginDirectory, 'middleware'),
                     requestHandlerDirectory: path.join(pluginDirectory, 'request-handlers'),
                     errorHandlerDirectory: path.join(pluginDirectory, 'error-handlers'),
                 });
@@ -106,7 +116,7 @@ export default class Paths {
         return plugins;
     }
 
-    static fromConfigFilepath(configFilepath) {
-        return new Paths(path.dirname(configFilepath));
+    static fromConfigFilepath(configFilepath, options = {}) {
+        return new Paths(path.dirname(configFilepath), options);
     }
 }
