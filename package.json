@@ -1,6 +1,6 @@
 {
   "name": "kixx",
-  "version": "3.0.2",
+  "version": "3.1.0",
   "description": "A web development framework for Node.js servers.",
   "type": "module",
   "main": "mod.js",
