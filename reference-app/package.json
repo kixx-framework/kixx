@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "name": "snow-alert",
+  "version": "1.0.0",
+  "description": "A reference and testing application for the Kixx framework",
+  "type": "module",
+  "engines": {
+    "node": ">=16.13.2"
+  },
+  "scripts": {
+    "start": "../bin/kixx.js dev"
+  },
+  "author": "Kris Walker (www.kriswalker.me)",
+  "license": "UNLICENSED"
+}
