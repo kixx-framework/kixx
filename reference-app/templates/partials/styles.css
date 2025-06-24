@@ -9,15 +9,15 @@ html {
     --color-type-muted-on-background: hsl(45, 15%, 28%);
     --color-type-link-on-background: hsl(203, 53%, 43%);
     --color-type-primary-on-background: hsl(203, 53%, 43%);
-    --color-border-on-background: hsl(45, 15%, 28%);
+    --color-border-on-background: hsl(45, 15%, 75%);
     --color-shadow-on-background: rgba(0, 0, 0, 0.66);
 
     --color-background-2: hsl(40, 8%, 77%);
     --color-type-on-background-2: hsl(43, 25%, 12%);
     --color-type-muted-on-background-2: hsl(43, 25%, 20%);
-    --color-type-link-on-background-2: hsl(203, 53%, 40%);
+    --color-type-link-on-background-2: hsl(203, 70%, 32%);
     --color-type-primary-on-background-2: hsl(203, 53%, 40%);
-    --color-border-on-background-2: hsl(47, 6%, 44%);
+    --color-border-on-background-2: hsl(47, 6%, 60%);
     --color-shadow-on-background-2: rgba(0, 0, 0, 0.66);
 
     --color-background-3: hsl(45, 15%, 16%);
@@ -30,9 +30,17 @@ html {
 
     --color-primary: hsl(203, 53%, 43%);
     --color-type-on-primary: hsl(43, 33%, 97%);
+    --color-type-muted-on-primary: hsl(43, 35%, 97%);
+    --color-type-link-on-primary: hsl(43, 35%, 97%);
+    --color-border-on-primary: hsl(45, 15%, 16%);
+    --color-shadow-on-primary: rgba(0, 0, 0, 0.66);
 
     --color-secondary: hsl(43, 39%, 93%);
     --color-type-on-secondary: hsl(203, 53%, 36%);
+    --color-type-muted-on-secondary: hsl(203, 53%, 36%);
+    --color-type-link-on-secondary: hsl(203, 53%, 36%);
+    --color-border-on-secondary: hsl(45, 15%, 64%);
+    --color-shadow-on-secondary: rgba(0, 0, 0, 0.66);
 
     /*
        See here for font ideas:
@@ -76,12 +84,13 @@ body {
     letter-spacing: 0.0125em;
 }
 
+.background-1 {
+    background-color: var(--color-background);
+    color: var(--color-type-on-background);
+}
 .background-2 {
     background-color: var(--color-background-2);
     color: var(--color-type-on-background-2);
-    /* Use smoothing on dark backgrounds; remove the antialiasing */
-    -moz-osx-font-smoothing: grayscale;
-    -webkit-font-smoothing: antialiased;
 }
 .background-3 {
     background-color: var(--color-background-3);
@@ -89,6 +98,17 @@ body {
     /* Use smoothing on dark backgrounds; remove the antialiasing */
     -moz-osx-font-smoothing: grayscale;
     -webkit-font-smoothing: antialiased;
+}
+.background-primary {
+    background-color: var(--color-primary);
+    color: var(--color-type-on-primary);
+    /* Use smoothing on dark backgrounds; remove the antialiasing */
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-smoothing: antialiased;
+}
+.background-secondary {
+    background-color: var(--color-secondary);
+    color: var(--color-type-on-secondary);
 }
 
 p, h1, h2, h3, h4, h5, h6 {
@@ -103,6 +123,11 @@ a:hover,
 a:visited {
     color: var(--color-type-link-on-background);
 }
+.background-1 a,
+.background-1 a:hover,
+.background-1 a:visited {
+    color: var(--color-type-link-on-background);
+}
 .background-2 a,
 .background-2 a:hover,
 .background-2 a:visited {
@@ -112,6 +137,16 @@ a:visited {
 .background-3 a:hover,
 .background-3 a:visited {
     color: var(--color-type-link-on-background-3);
+}
+.background-primary a,
+.background-primary a:hover,
+.background-primary a:visited {
+    color: var(--color-type-link-on-primary);
+}
+.background-secondary a,
+.background-secondary a:hover,
+.background-secondary a:visited {
+    color: var(--color-type-link-on-secondary);
 }
 .no-link-decoration a,
 .no-link-decoration a:hover,
@@ -163,7 +198,7 @@ button.button {
     justify-content: center;
     padding: 0;
     height: 2.66em;
-    border-radius: 0.125em;
+    border-radius: 0.36em;
     border: none;
     background-color: transparent;
     outline: none;
@@ -175,15 +210,20 @@ button.button {
     overflow: hidden;
     cursor: pointer;
 }
+.background-3 .button,
+.background-3 a.button,
+.background-3 button.button {
+    color: var(--color-type-on-background-3);
+}
+.background-primary .button,
+.background-primary a.button,
+.background-primary.button {
+    color: var(--color-type-on-primary);
+}
 .button.button--sm,
 a.button.button--sm,
 button.button.button--sm {
     font-size: 0.65em;
-}
-.inverted-background .button,
-.inverted-background a.button,
-.inverted-background button.button {
-    color: var(--color-type-on-primary);
 }
 .button.button--outlined,
 a.button.button--outlined,
@@ -192,10 +232,15 @@ button.button.button--outlined {
     padding-left: 1.25em;
     padding-right: 1.25em;
 }
-.inverted-background .button.button--outlined,
-.inverted-background a.button.button--outlined,
-.inverted-background button.button.button--outlined {
-    border: 2px solid var(--color-type-on-primary);
+.background-3 .button.button--outlined,
+.background-3 a.button.button--outlined,
+.background-3 button.button.button--outlined {
+    border-color: var(--color-type-on-background-3);
+}
+.background-primary .button.button--outlined,
+.background-primary a.button.button--outlined,
+.background-primary.button.button--outlined {
+    border-color: var(--color-type-on-primary);
 }
 .button.button--filled,
 a.button.button--filled,
@@ -205,11 +250,11 @@ button.button.button--filled {
     padding-left: 1.25em;
     padding-right: 1.25em;
 }
-.inverted-background .button.button--filled,
-.inverted-background a.button.button--filled,
-.inverted-background button.button.button--filled {
-    color: var(--color-type-primary-on-background);
-    background-color: var(--color-background);
+.button.button--secondary.button--filled,
+a.button.button--secondary.button--filled,
+button.button.button--secondary.button--filled {
+    color: var(--color-type-on-secondary);
+    background-color: var(--color-secondary);
 }
 .button__icon {
     font-size: 1.5em;
@@ -233,8 +278,27 @@ button.button.button--filled {
     border-radius: 0.5rem;
     box-shadow: 0 0.1rem 0.25rem -0.15rem var(--color-shadow-on-background);
 }
-.card.inverted-background {
-    border-width: 0;
+.background-2 .card {
+    border-color: var(--color-border-on-background-2);
+    box-shadow: 0 0.1rem 0.25rem -0.15rem var(--color-shadow-on-background-2);
+}
+.background-3 .card {
+    border-color: var(--color-border-on-background-3);
+    box-shadow: 0 0.1rem 0.25rem -0.15rem var(--color-shadow-on-background-3);
+}
+.background-primary .card {
+    border-color: var(--color-border-on-primary);
+    box-shadow: 0 0.1rem 0.25rem -0.15rem var(--color-shadow-on-primary);
+}
+.background-secondary .card {
+    border-color: var(--color-border-on-secondary);
+    box-shadow: 0 0.1rem 0.25rem -0.15rem var(--color-shadow-on-secondary);
+}
+.card.background-3 {
+    border-color: transparent;
+}
+.card.background-primary {
+    border-color: transparent;
 }
 
 ul.nav-menu,

@@ -1,6 +1,11 @@
 (function () {
     'use strict';
 
+    if (typeof hljs !== 'undefined') {
+        console.log('## highlightAll()');
+        hljs.highlightAll();
+    }
+
     eachBehavior('toggle-schedule-day', (toggle) => {
         const props = toggle.getProps();
         const daySection = $(props.target);

@@ -11,6 +11,8 @@ export default [
             'errors/',
             'logger/',
             'template-engine/',
+            // Client side JS in reference app:
+            'reference-app/templates/',
         ],
     },
     js.configs.recommended,
