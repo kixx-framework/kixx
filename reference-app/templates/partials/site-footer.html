@@ -1,0 +1,21 @@
+<footer id="site-footer">
+    <div class="site-width-container">
+        <nav class="site-footer__nav no-link-decoration">
+            {{#each nav_menu_sections as |menu_item|}}
+            <div class="footer-nav-group">
+                <span class="footer-nav-group__label">{{ menu_item.label }}</span>
+                <ul>
+                    {{#each menu_item.pages as |page|}}
+                    <li>
+                        <a href="{{ page.href }}">{{ page.label }}</a>
+                    </li>
+                    {{/each}}
+                </ul>
+            </div>
+            {{/each}}
+        </nav>
+
+        <p>This site is a reference application for the Kixx web framework.
+            <br>This site contains fictional content and is not intended for public consumption.</p>
+    </div>
+</footer>

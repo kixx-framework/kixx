@@ -1,0 +1,139 @@
+/*
+See the reset here:
+https://www.joshwcomeau.com/css/custom-css-reset/
+ */
+
+html {
+    --color-background: #ffffff;
+    --color-type-on-background: #222222;
+    --color-type-muted-on-background: #666666;
+    --color-type-link-on-background: rgb(0, 31, 112);
+    --color-border-on-background: #cccccc;
+    --color-shadow-on-background: rgba(0, 0, 0, 0.66);
+    --color-type-primary-on-background: rgb(2, 31, 89);
+
+    --color-background-2: #dedede;
+    --color-type-on-background-2: #000000;
+    --color-type-muted-on-background-2: #000000;
+    --color-type-link-on-background-2: rgb(0, 31, 112);
+    --color-border-on-background-2: #cccccc;
+    --color-shadow-on-background-2: rgba(0, 0, 0, 0.66);
+    --color-type-primary-on-background-2: rgb(2, 31, 89);
+
+    --color-primary: rgb(2, 31, 89);
+    --color-type-on-primary: #ffffff;
+    --color-type-link-on-primary: #ffffff;
+
+    --color-secondary: rgb(196, 208, 233);
+    --color-type-on-secondary: #000;
+    --color-type-link-on-secondary: #000;
+
+    /*
+       See here for font ideas:
+       https://modernfontstacks.com/
+    */
+    --font-family-title: Seravek, 'Gill Sans Nova', Ubuntu, Calibri, 'DejaVu Sans', source-sans-pro, sans-serif;
+    --font-family-body: Seravek, 'Gill Sans Nova', Ubuntu, Calibri, 'DejaVu Sans', source-sans-pro, sans-serif;
+    --font-family-mono: 'Nimbus Mono PS', 'Courier New', monospace;
+    --font-family-controls: Seravek, 'Gill Sans Nova', Ubuntu, Calibri, 'DejaVu Sans', source-sans-pro, sans-serif;
+
+    --site-width: 1080px;
+    --layout-right-left-margin: 4vw;
+
+    /* Sets the rm size for the rest of the styles */
+    font-size: 16px;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    /* Force the page to full height so we can stick the footer to
+    the bottom of the viewport */
+    min-height: 100vh;
+
+    font-family: var(--font-family-body);
+    background-color: var(--color-background);
+    color: var(--color-type-on-background);
+
+    /* No smoothing on light backgrounds; keep the antialiasing
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-smoothing: antialiased;
+    */
+    font-weight: 400;
+    line-height: 1.6;
+
+    /* Mobile font size */
+    font-size: 1.125em;
+    letter-spacing: 0.0125em;
+}
+
+.background-2 {
+    background-color: var(--color-background-2);
+    color: var(--color-type-on-background-2);
+}
+.inverted-background {
+    background-color: var(--color-primary);
+    color: var(--color-type-on-primary);
+    /* Use smoothing on dark backgrounds; remove the antialiasing */
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-smoothing: antialiased;
+}
+
+p, h1, h2, h3, h4, h5, h6 {
+    overflow-wrap: break-word;
+}
+p {
+    text-wrap: pretty;
+    line-height: 1.5;
+}
+a,
+a:hover,
+a:visited {
+    color: var(--color-type-link-on-background);
+}
+.inverted-background a,
+.inverted-background a:hover,
+.inverted-background a:visited {
+    color: var(--color-type-link-on-primary);
+}
+.background-2 a,
+.background-2 a:hover,
+.background-2 a:visited {
+    color: var(--color-type-link-on-background-2);
+}
+.no-link-decoration a,
+.no-link-decoration a:hover,
+.no-link-decoration a:visited {
+    text-decoration: none;
+    color: inherit;
+}
+code {
+    font-family: var(--font-family-mono);
+    font-size: 0.8em;
+}
+
+#site-layout {
+    /*
+    Set up a full height grid to stick the footer to the bottom of the
+    viewport. This creates a top row for the header, a middle row for
+    main content, and a bottom row for the footer
+     */
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+}
+
+.site-width-container {
+    margin-left: var(--layout-right-left-margin);
+    margin-right: var(--layout-right-left-margin);
+}
+@media screen and (min-width: 1080px) {
+    .site-width-container {
+        max-width: calc(var(--site-width) - var(--layout-right-left-margin) * 2);
+        margin-left: auto;
+        margin-right: auto;
+    }
+}

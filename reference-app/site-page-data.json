@@ -1,5 +1,71 @@
 {
     "page": {
         "title": "Snow Alert"
-    }
+    },
+    "nav_menu_sections": [
+        {
+            "label": "Forcasts",
+            "pages": [
+                {
+                    "label": "Avalanche forcast",
+                    "href": "/avalanche-forcast"
+                },
+                {
+                    "label": "Weather forcast",
+                    "href": "/weather-forcast"
+                }
+            ]
+        },
+        {
+            "label": "Snow Observations",
+            "pages": [
+                {
+                    "label": "Latest observations",
+                    "href": "/observations"
+                },
+                {
+                    "label": "Post an observation",
+                    "href": "/post-observation"
+                },
+                {
+                    "label": "How to make snow observations",
+                    "href": "/making-snow-observations"
+                }
+            ]
+        },
+        {
+            "label": "Education",
+            "pages": [
+                {
+                    "label": "How to make snow observations",
+                    "href": "/making-snow-observations"
+                },
+                {
+                    "label": "Field training events",
+                    "href": "/events/field-training"
+                },
+                {
+                    "label": "Presentations",
+                    "href": "/events/presentations"
+                },
+                {
+                    "label": "Resources",
+                    "href": "/avalanche-education"
+                }
+            ]
+        },
+        {
+            "label": "Admin",
+            "pages": [
+                {
+                    "label": "Style Guide",
+                    "href": "/style-guide"
+                },
+                {
+                    "label": "Images",
+                    "href": "/images"
+                }
+            ]
+        }
+    ]
 }
