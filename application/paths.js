@@ -93,19 +93,19 @@ export default class Paths {
     }
 
     async getPlugins() {
-        const pluginDirectories = await this.#fs.readDirectory(this.plugins_directory, { includeFullPaths: true });
+        const pluginDirectories = await this.#fs.readDirectory(this.plugins_directory);
 
         const plugins = [];
 
         for (const pluginDirectory of pluginDirectories) {
             // eslint-disable-next-line no-await-in-loop
             const entries = await this.#fs.readDirectory(pluginDirectory);
-            const pluginFilename = entries.find((entry) => entry.endsWith('plugin.js'));
+            const filepath = entries.find((entry) => entry.endsWith('plugin.js'));
 
-            if (pluginFilename) {
+            if (filepath) {
                 plugins.push({
                     directory: pluginDirectory,
-                    filepath: path.join(pluginDirectory, pluginFilename),
+                    filepath,
                     middlewareDirectory: path.join(pluginDirectory, 'middleware'),
                     requestHandlerDirectory: path.join(pluginDirectory, 'request-handlers'),
                     errorHandlerDirectory: path.join(pluginDirectory, 'error-handlers'),
