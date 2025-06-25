@@ -1,0 +1,107 @@
+[
+    {
+        "id": "001-mountain-range",
+        "url": "https://kixx.imgix.net/kriswalker/objects/350d92def59b6017d856a7773724371065fe50756c77d0b68d88c4bd9b11189e",
+        "fileExtension": ".jpg",
+        "contentType": "image/jpeg",
+        "alt": "A snow covered mountain range",
+        "license": {
+            "name": "Creative Commons Attribution 2.0 Generic",
+            "creator": {
+                "name": "kcxd",
+                "url": "https://www.flickr.com/photos/26786061@N00/"
+            },
+            "url": "https://creativecommons.org/licenses/by/2.0/"
+        }
+    },
+    {
+        "id": "002-snowy-trees",
+        "url": "https://kixx.imgix.net/kriswalker/objects/7768e960296a353873fe27d47636768f456dde9cc764c1f7bd40ae1c03c1e248",
+        "fileExtension": ".jpg",
+        "contentType": "image/jpeg",
+        "alt": "Deep snow covered evergreen trees",
+        "license": {
+            "name": "Creative Commons Attribution 2.0 Generic",
+            "creator": {
+                "name": "kcxd",
+                "url": "https://www.flickr.com/photos/26786061@N00/"
+            },
+            "url": "https://creativecommons.org/licenses/by/2.0/"
+        }
+    },
+    {
+        "id": "003-skier-on-mountain",
+        "url": "https://kixx.imgix.net/kriswalker/objects/12a14e7b6165052020e5ab9e90db2f4856d1b2dc2f2d93160657cf6c1cbf8c9b",
+        "fileExtension": ".jpg",
+        "contentType": "image/jpeg",
+        "alt": "Man standing on snow covered mountain",
+        "license": {
+            "name": "Unsplash",
+            "creator": {
+                "name": "Alessio Soggetti",
+                "url": "https://unsplash.com/@asoggetti?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash"
+            },
+            "url": "https://unsplash.com/photos/man-standing-on-top-of-snow-mountain-xqBllPa7XEs?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash"
+        }
+    },
+    {
+        "id": "004-skier-on-slope",
+        "url": "https://kixx.imgix.net/kriswalker/objects/3b8f6c2def7e42fcc537b2f0a9d495ec5b394b1840c31bbd49b222b4c5ac7142",
+        "fileExtension": ".jpg",
+        "contentType": "image/jpeg",
+        "alt": "Skier going down a big slope",
+        "license": {
+            "name": "Unsplash",
+            "creator": {
+                "name": "Patrick Robert Doyle",
+                "url": "https://unsplash.com/@teapowered?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash"
+            },
+            "url": "https://unsplash.com/photos/a-skier-going-down-a-slope-IvHZn4flNbc?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash"
+        }
+    },
+    {
+        "id": "005-ski-resort",
+        "url": "https://kixx.imgix.net/kriswalker/objects/1e70d32d60c9f3c0e989a0d807f9c74674a636567597aec390ca7bfc6d60f640",
+        "fileExtension": ".jpg",
+        "contentType": "image/jpeg",
+        "alt": "A ski resort base lodge at the bottom of the mountain, glowing with lights at twilight.",
+        "license": {
+            "name": "Creative Commons Attribution 2.0 Generic",
+            "creator": {
+                "name": "Radek Kucharski",
+                "url": "https://www.flickr.com/photos/137294100@N08/"
+            },
+            "url": "https://creativecommons.org/licenses/by/2.0/"
+        }
+    },
+    {
+        "id": "006-man-rocks",
+        "url": "https://kixx.imgix.net/kriswalker/objects/0d685cf28a5c0c8c9289ffb2453044406f506e23ed6780c3ef3e8dd1d1c2976b",
+        "fileExtension": ".jpg",
+        "contentType": "image/jpeg",
+        "alt": "A man, hiking, poses with hiking poles in front of a giant rock.",
+        "license": {
+            "name": "Unsplash",
+            "creator": {
+                "name": "Marina Zvada",
+                "url": "https://unsplash.com/@zvada_photo?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash"
+            },
+            "url": "https://unsplash.com/photos/a-man-standing-next-to-a-large-rock-Y01N2Rde3pE?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash"
+        }
+    },
+    {
+        "id": "007-woman-scientist",
+        "url": "https://kixx.imgix.net/kriswalker/objects/88fb299408d3a99cce53bb648229ed9f23fa35552f111018d6a5ac8fb64376fd",
+        "fileExtension": ".jpg",
+        "contentType": "image/jpeg",
+        "alt": "A woman in a white lab coat holding a black microphone.",
+        "license": {
+            "name": "Unsplash",
+            "creator": {
+                "name": "Diane Serik",
+                "url": "https://unsplash.com/@amelune?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash"
+            },
+            "url": "https://unsplash.com/photos/woman-in-white-laboratory-gown-holding-black-microphone-oFK7xgf4_50?utm_content=creditCopyText&utm_medium=referral&utm_source=unsplash"
+        }
+    }
+]
