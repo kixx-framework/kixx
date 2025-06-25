@@ -68,7 +68,7 @@ export async function main(args) {
 }
 
 async function loadCommands(directory) {
-    const filepaths = await readDirectory(directory, { includeFullPaths: true });
+    const filepaths = await readDirectory(directory);
     const promises = filepaths.map(loadCommand);
     const commands = await Promise.all(promises);
 

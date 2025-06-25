@@ -34,18 +34,18 @@ describe('Paths:getPlugins() - when a plugin is present', ({ before, it }) => {
         }
         if (dirpath === path.join(pluginsDirectory, 'not_a_plugin')) {
             return [
-                'foo',
-                'bar',
-                'plugin-this-is-not.js',
+                path.join(pluginsDirectory, 'not_a_plugin', 'foo'),
+                path.join(pluginsDirectory, 'not_a_plugin', 'bar'),
+                path.join(pluginsDirectory, 'not_a_plugin', 'plugin-this-is-not.js'),
             ];
         }
         if (dirpath === path.join(pluginsDirectory, 'a_plugin')) {
             return [
-                'foo',
-                'middleware',
-                'plugin.js',
-                'request-handlers',
-                'error-handlers',
+                path.join(pluginsDirectory, 'a_plugin', 'foo'),
+                path.join(pluginsDirectory, 'a_plugin', 'middleware'),
+                path.join(pluginsDirectory, 'a_plugin', 'plugin.js'),
+                path.join(pluginsDirectory, 'a_plugin', 'request-handlers'),
+                path.join(pluginsDirectory, 'a_plugin', 'error-handlers'),
             ];
         }
 

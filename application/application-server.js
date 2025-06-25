@@ -64,7 +64,7 @@ async function loadHandlersFromPlugin(plugin) {
 }
 
 async function loadMiddlewareDirectory(directory, register) {
-    const filepaths = await readDirectory(directory, { includeFullPaths: true });
+    const filepaths = await readDirectory(directory);
 
     const promises = filepaths.map((filepath) => {
         return loadMiddlewareFunction(filepath).then((fn) => {
