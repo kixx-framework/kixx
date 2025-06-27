@@ -35,6 +35,12 @@ export default class BaseHttpResponse {
         return this;
     }
 
+    updateHeaders(headers) {
+        for (const [ key, val ] of headers) {
+            this.headers.set(key, val);
+        }
+    }
+
     setHeader(key, val) {
         this.headers.set(key, val);
         return this;
@@ -150,10 +156,12 @@ export default class BaseHttpResponse {
 
     respondWithStream(statusCode, contentLength, readStream) {
         assert(isNumberNotNaN(statusCode), ': statusCode must be a number');
-        assert(isNumberNotNaN(contentLength), ': contentLength must be a number');
+
+        if (isNumberNotNaN(contentLength)) {
+            this.headers.set('content-length', contentLength.toString());
+        }
 
         this.status = statusCode;
-        this.headers.set('content-length', contentLength.toString());
         this.body = readStream;
         return this;
     }

@@ -1,6 +1,7 @@
 import process from 'node:process';
 import { assert } from '../assertions/mod.js';
 import Datastore from '../datastore/datastore.js';
+import ObjectStore from '../object-store/object-store.js';
 import JobQueue from '../job-queue/job-queue.js';
 import ViewService from '../view-service/view-service.js';
 
@@ -33,9 +34,11 @@ export default class Context {
 
         const viewService = createViewService(logger, paths);
         const datastore = await loadDatastore(paths);
+        const objectStore = await loadObjectStore(paths);
         const jobQueue = createJobQueue(logger, paths);
 
         context.registerService('kixx.Datastore', datastore);
+        context.registerService('kixx.ObjectStore', objectStore);
         context.registerService('kixx.JobQueue', jobQueue);
         context.registerService('kixx.AppViewService', viewService);
 
@@ -79,6 +82,16 @@ async function loadDatastore(paths) {
     await datastore.load();
 
     return datastore;
+}
+
+async function loadObjectStore(paths) {
+    const store = new ObjectStore({
+        directory: paths.object_store_directory,
+    });
+
+    await store.load();
+
+    return store;
 }
 
 function createViewService(logger, paths) {
