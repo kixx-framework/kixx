@@ -86,6 +86,12 @@ export default class Paths {
         this.kv_store_directory = path.join(this.app_directory, 'data', 'kv-store');
 
         /**
+         * Directory containing object files.
+         * @type {string}
+         */
+        this.object_store_directory = path.join(this.app_directory, 'data', 'objects');
+
+        /**
          * Directory containing job files.
          * @type {string}
          */
