@@ -57,8 +57,6 @@ async function main() {
     emitter.on('describeBlockStart', ({ block }) => {
         if (block.disabled) {
             write(`${ EOL }${ YELLOW }Disabled Describe Block: [${ block.concatName(' - ') }]${ COLOR_RESET }${ EOL }`);
-        } else {
-            write(`${ EOL }Describe Block: [${ block.concatName(' - ') }]${ EOL }`);
         }
     });
 
