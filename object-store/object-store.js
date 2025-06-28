@@ -29,9 +29,7 @@ export default class ObjectStore {
     }
 
     async getObjectStreamByReference(referenceId) {
-        // Ensure existing async operations are completed before proceeding.
         await this.getLock();
-        this.releaseLock();
 
         const { document } = this.#db.getObjectMeta(referenceId);
 
@@ -43,6 +41,8 @@ export default class ObjectStore {
 
         // Returns a source stream and HTTP Headers instance.
         const response = await this.#db.getObjectResponse(document.objectId);
+
+        this.releaseLock();
 
         assert(response, `No object by id "${ document.objectId }" as referenced by metadata "${ referenceId }"`);
 
