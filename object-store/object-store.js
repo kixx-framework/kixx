@@ -31,7 +31,7 @@ export default class ObjectStore {
     async getObjectStreamByReference(referenceId) {
         await this.getLock();
 
-        const { document } = this.#db.getObjectMeta(referenceId);
+        const { document } = this.#db.getObjectMetadata(referenceId);
 
         if (!document) {
             return null;
@@ -51,19 +51,20 @@ export default class ObjectStore {
 
     async putObjectStream(sourceStream, headers) {
         await this.getLock();
-        await this.#db.putObjectStream(sourceStream, headers);
+        const newHeaders = await this.#db.putObjectStream(sourceStream, headers);
         this.releaseLock();
+        return newHeaders;
     }
 
     async putObjectMetadata(objectId, referenceId, document) {
         await this.getLock();
 
-        const stats = await this.#db.getObjectStats(objectId);
-        if (!stats) {
+        const headers = await this.#db.getObjectHeaders(objectId);
+        if (!headers) {
             throw new BadRequestError(`Saving metadata; object id "${ objectId }" does not exist`);
         }
 
-        await this.#db.putObjectReference(objectId, referenceId, document);
+        await this.#db.putObjectMetadata(objectId, referenceId, document);
         this.releaseLock();
     }
 

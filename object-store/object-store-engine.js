@@ -1,9 +1,12 @@
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { WrappedError } from '../errors/mod.js';
+import { WrappedError, AssertionError } from '../errors/mod.js';
 import { assert } from '../assertions/mod.js';
 import * as fileSystem from '../lib/file-system.js';
+
+
+const DISALLOWED_STATIC_PATH_CHARACTERS = /[^a-z0-9_.-]/i;
 
 
 export default class ObjectStoreEngine {
@@ -15,6 +18,18 @@ export default class ObjectStoreEngine {
         this.#logger = options.logger;
         this.#fs = options.fileSystem || fileSystem;
         this.directory = options.directory;
+    }
+
+    getObjectMetadata(referenceId) {
+        const filepath = this.referenceIdToFilePath(referenceId);
+        return this.#fs.readJSONFile(filepath);
+    }
+
+    async putObjectMetadata(objectId, referenceId, document) {
+        const filepath = this.referenceIdToFilePath(referenceId);
+        // Make a copy to avoid mutating the original.
+        const newDocument = Object.assign({}, document, { objectId });
+        await this.#fs.writeJSONFile(filepath, newDocument);
     }
 
     async getObjectResponse(objectId) {
@@ -41,6 +56,12 @@ export default class ObjectStoreEngine {
         return stream;
     }
 
+    async getObjectHeaders(objectId) {
+        const headersFilepath = this.objectIdToHeadersFilePath(objectId);
+        const headers = await this.#fs.readJSONFile(headersFilepath);
+        return new Headers(headers);
+    }
+
     async putObjectStream(sourceStream, headers) {
         const objectMeta = await this.writeStreamToTemporaryFile(sourceStream);
         const id = objectMeta.md5ChecksumHex;
@@ -52,9 +73,10 @@ export default class ObjectStoreEngine {
         //       after reaching the expected content length. This is to
         //       prevent someone from sending a very large file and writing it to disk.
 
+        const headersFilepath = this.objectIdToHeadersFilePath(id);
+
         if (stats) {
             // The object already exists; returning existing headers.
-            const headersFilepath = this.objectIdToHeadersFilePath(id);
             const existingHeaders = await this.#fs.readJSONFile(headersFilepath);
 
             assert(existingHeaders, `Object headers file for "${ id }" at ${ headersFilepath }`);
@@ -64,12 +86,18 @@ export default class ObjectStoreEngine {
 
         await this.#fs.rename(objectMeta.filepath, filepath);
 
-        return new Headers({
+        const newHeadersObject = {
             'Content-Type': headers.get('Content-Type'),
             'Content-Length': objectMeta.contentLength.toString(),
             'Etag': id,
             'Last-Modified': new Date().toUTCString(),
-        });
+        };
+
+        await this.#fs.writeJSONFile(headersFilepath, newHeadersObject);
+
+        const newHeaders = new Headers(newHeadersObject);
+        newHeaders.set('x-kixx-new-object', '1');
+        return newHeaders;
     }
 
     objectIdToFilePath(objectId) {
@@ -78,6 +106,13 @@ export default class ObjectStoreEngine {
 
     objectIdToHeadersFilePath(objectId) {
         return path.join(this.directory, `${ objectId }_stats.json`);
+    }
+
+    referenceIdToFilePath(referenceId) {
+        if (DISALLOWED_STATIC_PATH_CHARACTERS.test(referenceId)) {
+            throw new AssertionError(`Disallowed characters in reference id "${ referenceId }"`);
+        }
+        return path.join(this.directory, `meta__${ referenceId }.json`);
     }
 
     writeStreamToTemporaryFile(sourceStream) {
