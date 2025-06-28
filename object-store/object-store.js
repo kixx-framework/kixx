@@ -16,10 +16,14 @@ export default class ObjectStore {
      * @param {Object} [options.lockingQueue] - Optional LockingQueue instance to use
      */
     constructor(options = {}) {
-        if (options.db) {
+        if (!isUndefined(options.db)) {
             this.#db = options.db;
         } else {
-            this.#db = new ObjectStoreEngine(options);
+            this.#db = new ObjectStoreEngine({
+                logger: options.logger,
+                fileSystem: options.fileSystem,
+                directory: options.directory,
+            });
         }
         if (!isUndefined(options.lockingQueue)) {
             this.#lockingQueue = options.lockingQueue;
@@ -31,7 +35,7 @@ export default class ObjectStore {
     async getObjectStreamByReference(referenceId) {
         await this.getLock();
 
-        const { document } = this.#db.getObjectMetadata(referenceId);
+        const document = await this.#db.getObjectMetadata(referenceId);
 
         if (!document) {
             return null;
