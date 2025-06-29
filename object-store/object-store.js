@@ -35,16 +35,23 @@ export default class ObjectStore {
     async getObjectStreamByReference(referenceId) {
         await this.getLock();
 
-        const document = await this.#db.getObjectMetadata(referenceId);
+        let document;
+        let response;
+        try {
+            document = await this.#db.getObjectMetadata(referenceId);
+            if (!document) {
+                this.releaseLock();
+                return null;
+            }
 
-        if (!document) {
-            return null;
+            assertNonEmptyString(document.objectId, 'Object metadata objectId');
+
+            // Returns a source stream and HTTP Headers instance.
+            response = await this.#db.getObjectResponse(document.objectId);
+        } catch (err) {
+            this.releaseLock();
+            throw err;
         }
-
-        assertNonEmptyString(document.objectId, 'Object metadata objectId');
-
-        // Returns a source stream and HTTP Headers instance.
-        const response = await this.#db.getObjectResponse(document.objectId);
 
         this.releaseLock();
 
