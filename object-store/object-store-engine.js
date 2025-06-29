@@ -20,6 +20,12 @@ export default class ObjectStoreEngine {
         this.directory = options.directory;
     }
 
+    async getObjectHeaders(objectId) {
+        const headersFilepath = this.objectIdToHeadersFilePath(objectId);
+        const headers = await this.#fs.readJSONFile(headersFilepath);
+        return new Headers(headers);
+    }
+
     getObjectMetadata(referenceId) {
         const filepath = this.referenceIdToFilePath(referenceId);
         return this.#fs.readJSONFile(filepath);
@@ -48,18 +54,12 @@ export default class ObjectStoreEngine {
         const stream = this.#fs.createReadStream(filepath, { encoding: null });
 
         if (!stream) {
-            this.#logger.debug('object file not found', { objectId, filepath });
-            return null;
+            this.#logger.warn('expected object file not found', { objectId, filepath });
+            throw new AssertionError(`Expected object file not found at ${ filepath }`);
         }
 
         stream.headers = new Headers(headers);
         return stream;
-    }
-
-    async getObjectHeaders(objectId) {
-        const headersFilepath = this.objectIdToHeadersFilePath(objectId);
-        const headers = await this.#fs.readJSONFile(headersFilepath);
-        return new Headers(headers);
     }
 
     async putObjectStream(sourceStream, headers) {
@@ -89,7 +89,7 @@ export default class ObjectStoreEngine {
         const newHeadersObject = {
             'Content-Type': headers.get('Content-Type'),
             'Content-Length': objectMeta.contentLength.toString(),
-            'Etag': id,
+            'ETag': id,
             'Last-Modified': new Date().toUTCString(),
         };
 
@@ -98,21 +98,6 @@ export default class ObjectStoreEngine {
         const newHeaders = new Headers(newHeadersObject);
         newHeaders.set('x-kixx-new-object', '1');
         return newHeaders;
-    }
-
-    objectIdToFilePath(objectId) {
-        return path.join(this.directory, objectId);
-    }
-
-    objectIdToHeadersFilePath(objectId) {
-        return path.join(this.directory, `${ objectId }_stats.json`);
-    }
-
-    referenceIdToFilePath(referenceId) {
-        if (DISALLOWED_STATIC_PATH_CHARACTERS.test(referenceId)) {
-            throw new AssertionError(`Disallowed characters in reference id "${ referenceId }"`);
-        }
-        return path.join(this.directory, `meta__${ referenceId }.json`);
     }
 
     writeStreamToTemporaryFile(sourceStream) {
@@ -165,9 +150,23 @@ export default class ObjectStoreEngine {
                 });
             });
 
-
             sourceStream.pipe(writeStream);
         });
+    }
+
+    objectIdToFilePath(objectId) {
+        return path.join(this.directory, objectId);
+    }
+
+    objectIdToHeadersFilePath(objectId) {
+        return path.join(this.directory, `${ objectId }__headers.json`);
+    }
+
+    referenceIdToFilePath(referenceId) {
+        if (DISALLOWED_STATIC_PATH_CHARACTERS.test(referenceId)) {
+            throw new AssertionError(`Disallowed characters in reference id "${ referenceId }"`);
+        }
+        return path.join(this.directory, `meta__${ referenceId }.json`);
     }
 
     createTemporaryFilepath() {
