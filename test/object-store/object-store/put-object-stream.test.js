@@ -16,7 +16,7 @@ describe('ObjectStore:putObjectStream() engine throws', ({ before, after, it }) 
         sandbox = sinon.createSandbox();
 
         db = {
-            putObjectStream: sinon.fake.throws(new Error('putObjectStream')),
+            putObjectStream: sinon.fake.rejects(new Error('putObjectStream')),
         };
 
         const lockingQueue = null;

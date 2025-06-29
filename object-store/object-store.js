@@ -76,12 +76,25 @@ export default class ObjectStore {
     async putObjectMetadata(objectId, referenceId, document) {
         await this.getLock();
 
-        const headers = await this.#db.getObjectHeaders(objectId);
+        let headers;
+        try {
+            headers = await this.#db.getObjectHeaders(objectId);
+        } catch (error) {
+            this.releaseLock();
+            throw error;
+        }
+
         if (!headers) {
+            this.releaseLock();
             throw new BadRequestError(`Saving metadata; object id "${ objectId }" does not exist`);
         }
 
-        await this.#db.putObjectMetadata(objectId, referenceId, document);
+        try {
+            await this.#db.putObjectMetadata(objectId, referenceId, document);
+        } catch (error) {
+            this.releaseLock();
+            throw error;
+        }
         this.releaseLock();
     }
 
