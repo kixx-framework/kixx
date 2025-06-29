@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 import sinon from 'sinon';
-import ObjectStore from '../../object-store/object-store.js';
+import ObjectStore from '../../../object-store/object-store.js';
 
 
 describe('ObjectStore:getObjectStreamByReference() getObjectResponse error', ({ before, after, it }) => {

@@ -62,7 +62,13 @@ export default class ObjectStore {
 
     async putObjectStream(sourceStream, headers) {
         await this.getLock();
-        const newHeaders = await this.#db.putObjectStream(sourceStream, headers);
+        let newHeaders;
+        try {
+            newHeaders = await this.#db.putObjectStream(sourceStream, headers);
+        } catch (error) {
+            this.releaseLock();
+            throw error;
+        }
         this.releaseLock();
         return newHeaders;
     }
