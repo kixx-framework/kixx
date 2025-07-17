@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
-import { assert, assertNonEmptyString } from '../assertions/mod.js';
+import { assertNonEmptyString } from '../assertions/mod.js';
 import { readJSONFile } from '../lib/file-system.js';
 import deepMerge from '../lib/deep-merge.js';
 
@@ -35,10 +35,8 @@ export default class Config extends EventEmitter {
         assertNonEmptyString(filepath, 'loadConfigs(); filepath is required');
         assertNonEmptyString(environment, 'loadConfigs(); environment is required');
 
-        const rootConfig = await readJSONFile(filepath);
-        // TODO: Instead of enforcing the existance of the config file, we should  
-        //       check the required config values outside of this Config object.
-        assert(rootConfig, `Root config file to exist: ${ filepath }`);
+        const json = await readJSONFile(filepath);
+        const rootConfig = json || {};
 
         const environmentConfig = rootConfig.environments?.[environment] || {};
 
