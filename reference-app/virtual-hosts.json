@@ -1,0 +1,10 @@
+[
+    {
+        "name": "Main",
+        "hostname": "com.snowalert.www",
+        "routes": [
+            "app://main.json",
+            "kixx://defaults.json"
+        ]
+    }
+]

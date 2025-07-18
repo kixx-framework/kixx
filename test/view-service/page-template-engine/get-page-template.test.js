@@ -25,7 +25,7 @@ describe('PageTemplateEngine:getPageTemplate()', ({ before, after, it }) => {
     let result;
 
     before(async () => {
-        readUtf8File = sinon.fake.returns(Promise.resolve(templateSource));
+        readUtf8File = sinon.fake.resolves(templateSource);
         const fileSystem = { readUtf8File };
 
         templateEngine = new PageTemplateEngine({
@@ -37,8 +37,8 @@ describe('PageTemplateEngine:getPageTemplate()', ({ before, after, it }) => {
 
         sandbox = sinon.createSandbox();
 
-        sandbox.replace(templateEngine, 'loadHelpers', sinon.fake.returns(Promise.resolve()));
-        sandbox.replace(templateEngine, 'loadPartials', sinon.fake.returns(Promise.resolve()));
+        sandbox.replace(templateEngine, 'loadHelpers', sinon.fake.resolves());
+        sandbox.replace(templateEngine, 'loadPartials', sinon.fake.resolves());
         sandbox.replace(templateEngine, 'compileTemplate', sinon.fake.returns(template));
 
         result = await templateEngine.getPageTemplate(templateId, path.join(templatesDirectory, 'admin', 'dash.html'));
@@ -85,7 +85,7 @@ describe('PageTemplateEngine:getPageTemplate() with no source', ({ before, after
     let result;
 
     before(async () => {
-        readUtf8File = sinon.fake.returns(Promise.resolve(templateSource));
+        readUtf8File = sinon.fake.resolves(templateSource);
         const fileSystem = { readUtf8File };
 
         templateEngine = new PageTemplateEngine({
@@ -97,8 +97,8 @@ describe('PageTemplateEngine:getPageTemplate() with no source', ({ before, after
 
         sandbox = sinon.createSandbox();
 
-        sandbox.replace(templateEngine, 'loadHelpers', sinon.fake.returns(Promise.resolve()));
-        sandbox.replace(templateEngine, 'loadPartials', sinon.fake.returns(Promise.resolve()));
+        sandbox.replace(templateEngine, 'loadHelpers', sinon.fake.resolves());
+        sandbox.replace(templateEngine, 'loadPartials', sinon.fake.resolves());
         sandbox.replace(templateEngine, 'compileTemplate', sinon.fake.returns(template));
 
         result = await templateEngine.getPageTemplate(templateId, path.join(templatesDirectory, 'admin', 'dash.html'));

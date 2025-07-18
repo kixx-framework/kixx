@@ -249,7 +249,7 @@ export default class JobQueueEngine {
 
     async readJobQueueDirectory() {
         try {
-            const filepaths = await readDirectory(this.#directory, { includeFullPaths: true });
+            const filepaths = await readDirectory(this.#directory);
             return filepaths;
         } catch (cause) {
             throw new WrappedError(

@@ -80,10 +80,22 @@ export default class Paths {
         this.commands_directory = path.join(this.app_directory, 'commands');
 
         /**
+         * Directory containing data files.
+         * @type {string}
+         */
+        this.data_directory = path.join(this.app_directory, 'data');
+
+        /**
          * Directory containing datastore files.
          * @type {string}
          */
         this.kv_store_directory = path.join(this.app_directory, 'data', 'kv-store');
+
+        /**
+         * Directory containing object files.
+         * @type {string}
+         */
+        this.object_store_directory = path.join(this.app_directory, 'data', 'objects');
 
         /**
          * Directory containing job files.
@@ -93,19 +105,19 @@ export default class Paths {
     }
 
     async getPlugins() {
-        const pluginDirectories = await this.#fs.readDirectory(this.plugins_directory, { includeFullPaths: true });
+        const pluginDirectories = await this.#fs.readDirectory(this.plugins_directory);
 
         const plugins = [];
 
         for (const pluginDirectory of pluginDirectories) {
             // eslint-disable-next-line no-await-in-loop
             const entries = await this.#fs.readDirectory(pluginDirectory);
-            const pluginFilename = entries.find((entry) => entry.endsWith('plugin.js'));
+            const filepath = entries.find((entry) => entry.endsWith('plugin.js'));
 
-            if (pluginFilename) {
+            if (filepath) {
                 plugins.push({
                     directory: pluginDirectory,
-                    filepath: path.join(pluginDirectory, pluginFilename),
+                    filepath,
                     middlewareDirectory: path.join(pluginDirectory, 'middleware'),
                     requestHandlerDirectory: path.join(pluginDirectory, 'request-handlers'),
                     errorHandlerDirectory: path.join(pluginDirectory, 'error-handlers'),

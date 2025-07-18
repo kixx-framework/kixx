@@ -57,7 +57,8 @@ export async function main(args) {
     const updatedOptions = Object.assign({}, options, command.options || {});
 
     const subArgs = parseArgs({
-        args,
+        // Slice off the cammand name positional arg.
+        args: args.slice(1),
         options: updatedOptions,
         strict: true,
         allowPositionals: true,
@@ -68,7 +69,7 @@ export async function main(args) {
 }
 
 async function loadCommands(directory) {
-    const filepaths = await readDirectory(directory, { includeFullPaths: true });
+    const filepaths = await readDirectory(directory);
     const promises = filepaths.map(loadCommand);
     const commands = await Promise.all(promises);
 

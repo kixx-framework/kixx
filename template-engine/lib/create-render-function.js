@@ -1,4 +1,6 @@
 import LineSyntaxError from './line-syntax-error.js';
+import { escapeHTMLChars } from './utils.js';
+
 
 export default function createRenderFunction(options, helpers, partials, tokens) {
 
@@ -184,8 +186,7 @@ export default function createRenderFunction(options, helpers, partials, tokens)
                         output += part.str;
                         break;
                     case 'PATH_EXPRESSION': {
-                        // eslint-disable-next-line no-implicit-coercion
-                        output += ('' + dereferencePath(context, part.exp.path));
+                        output += escapeHTMLChars(dereferencePath(context, part.exp.path));
                         break;
                     }
                     case 'HELPER_FUNCTION':
