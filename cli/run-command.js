@@ -57,7 +57,8 @@ export async function main(args) {
     const updatedOptions = Object.assign({}, options, command.options || {});
 
     const subArgs = parseArgs({
-        args,
+        // Slice off the cammand name positional arg.
+        args: args.slice(1),
         options: updatedOptions,
         strict: true,
         allowPositionals: true,
