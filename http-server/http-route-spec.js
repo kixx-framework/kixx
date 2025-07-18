@@ -243,27 +243,26 @@ export default class HttpRouteSpec {
             `Cannot define both route.routes AND route.targets (in ${ reportingName })`
         );
 
-        const newRoutes = [];
-        const newTargets = [];
-
+        let newRoutes = null;
         if (spec.routes) {
             assertArray(spec.routes, `route.routes must be an Array (in ${ reportingName })`);
 
             // Copy the routes over to a new Array since we're going to be
             // mutating them during the validation process.
-            for (let i = 0; i < spec.routes.length; i += 1) {
-                newRoutes.push(this.validateAndCreate(spec.routes[i], reportingName, i));
-            }
+            newRoutes = spec.routes.map((routeSpec, i) => {
+                newRoutes.push(this.validateAndCreate(routeSpec, reportingName, i));
+            });
         }
 
+        let newTargets = null;
         if (spec.targets) {
             assertArray(spec.targets, `route.targets must be an Array (in ${ reportingName })`);
 
             // Copy the targets over to a new Array since we're going to be
             // mutating them during the validation process.
-            for (let i = 0; i < spec.targets.length; i += 1) {
-                newTargets.push(HttpTargetSpec.validateAndCreate(spec.targets[i], reportingName, i));
-            }
+            newTargets = spec.targets.map((targetSpec, i) => {
+                newTargets.push(HttpTargetSpec.validateAndCreate(targetSpec, reportingName, i));
+            });
         }
 
         return new HttpRouteSpec({
