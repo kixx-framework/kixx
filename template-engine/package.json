@@ -1,6 +1,6 @@
 {
   "name": "kixx-templating",
-  "version": "3.0.2",
+  "version": "4.1.0",
   "description": "A simple and robust text template engine for JavaScript environments.",
   "type": "module",
   "main": "mod.js",

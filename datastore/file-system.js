@@ -12,7 +12,7 @@ import {
 export async function readDocumentDirectory(directory) {
     let entries;
     try {
-        entries = await readDirectory(directory, { includeFullPaths: true });
+        entries = await readDirectory(directory);
     } catch (cause) {
         throw new WrappedError(
             `Unable to read database directory ${ directory }`,

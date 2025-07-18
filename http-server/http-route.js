@@ -97,7 +97,7 @@ export default class HttpRoute {
      */
     handleError(context, request, response, error) {
         for (const func of this.#errorHandlers) {
-            const newResponse = func(context, error, request, response);
+            const newResponse = func(context, request, response, error);
 
             if (newResponse) {
                 return newResponse;

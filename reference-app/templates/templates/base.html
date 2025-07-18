@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en-US">
+    <head>
+        {{> html-header.html }}
+    </head>
+    <body id="site-layout">
+        {{> site-header.html }}
+        <!-- START Main Content Container -->
+        <div class="page-body">{{ body }}</div>
+        <!-- END Main Content Container -->
+        {{> site-footer.html }}
+    </body>
+
+    {{#each page.scripts |script| }}
+    <script src="{{ script.url }}"></script>
+    {{/each}}
+
+    <script>{{> script.js }}</script>
+</html>

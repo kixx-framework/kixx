@@ -1,0 +1,24 @@
+{
+    "name": "SnowAlert",
+    "procName": "snowalert",
+    "environments": {
+        "development": {
+            "logger": {
+                "level": "debug",
+                "mode": "console"
+            },
+            "server": {
+                "port": 3000
+            }
+        },
+        "production": {
+            "logger": {
+                "level": "info",
+                "mode": "stdout"
+            },
+            "server": {
+                "port": 3001
+            }
+        }
+    }
+}

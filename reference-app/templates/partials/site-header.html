@@ -1,0 +1,34 @@
+<header id="site-header" class="no-link-decoration">
+    <div id="site-header__row" class="site-width-container">
+        <a id="site-header__brand" href="/">
+            <span id="site-header__title">Kixx Reference</span>
+            <span id="site-header__subtitle">Avalanche Center</span>
+        </a>
+        <div id="site-header__controls">
+            <button id="site-header__menu-toggle" class="button" data-js-behave="menu-toggle" data-js-props='{"target":"#site-header__menu"}'>
+                <span class="button__label">menu</span>
+                <span class="material-symbols-rounded button__icon">menu</span>
+            </button>
+        </div>
+    </div>
+    <nav id="site-header__menu">
+        <ul class="nav-menu site-width-container">
+            {{#each nav_menu_sections as |section|}}
+            <li class="nav-menu__group">
+                <a href="#" class="nav-menu__group-label" data-js-behave="sub-menu-toggle">
+                    <span>{{ section.label }}</span>
+                    <span class="material-symbols-rounded nav-menu__group-label-icon--closed">keyboard_arrow_down</span>
+                    <span class="material-symbols-rounded nav-menu__group-label-icon--active">keyboard_arrow_up</span>
+                </a>
+                <ul>
+                    {{#each section.pages as |page|}}
+                    <li>
+                        <a href="{{ page.href }}">{{ page.label }}</a>
+                    </li>
+                    {{/each}}
+                </ul>
+            </li>
+            {{/each}}
+        </ul>
+    </nav>
+</header>
