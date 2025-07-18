@@ -81,6 +81,17 @@ async function loadDatastore(paths) {
     return datastore;
 }
 
+<<<<<<< Updated upstream
+=======
+async function loadObjectStore(paths) {
+    const store = new ObjectStore({
+        directory: paths.object_store_directory,
+    });
+
+    return store;
+}
+
+>>>>>>> Stashed changes
 function createViewService(logger, paths) {
     return new ViewService({
         logger,
