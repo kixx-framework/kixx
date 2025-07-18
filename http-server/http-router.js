@@ -78,7 +78,7 @@ export default class HttpRouter {
             if (error.isHttpError) {
                 // If the target does not handle the error, and the error
                 // is an HTTP error, then handle it here.
-                return this.handleError(error, request, response);
+                return this.handleError(context, request, response, error);
             }
 
             // Otherwise assume it is unexpected and throw.
