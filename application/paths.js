@@ -80,6 +80,12 @@ export default class Paths {
         this.commands_directory = path.join(this.app_directory, 'commands');
 
         /**
+         * Directory containing data files.
+         * @type {string}
+         */
+        this.data_directory = path.join(this.app_directory, 'data');
+
+        /**
          * Directory containing datastore files.
          * @type {string}
          */
