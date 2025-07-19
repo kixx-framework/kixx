@@ -22,10 +22,13 @@ describe('PageTemplateEngine:loadPartials() for each nested directory entry', ({
     before(async () => {
         const readDirectory = sinon.fake((filepath) => {
             if (filepath === partialsDirectory) {
-                return [ 'posts', 'book.html' ];
+                return [
+                    path.join(filepath, 'posts'),
+                    path.join(filepath, 'book.html'),
+                ];
             }
             if (filepath === path.join(partialsDirectory, 'posts')) {
-                return [ 'comment.html' ];
+                return [ path.join(filepath, 'comment.html') ];
             }
             return [];
         });

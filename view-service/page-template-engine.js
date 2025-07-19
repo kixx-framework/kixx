@@ -105,18 +105,18 @@ export default class PageTemplateEngine {
         const fs = this.#fileSystem;
 
         async function walkDirectory(directory, parts = []) {
-            const entries = await fs.readDirectory(directory);
+            const filepaths = await fs.readDirectory(directory);
 
-            for (const entry of entries) {
-                const filepath = path.join(directory, entry);
+            for (const filepath of filepaths) {
+                const filename = path.basename(filepath);
                 // eslint-disable-next-line no-await-in-loop
                 const stats = await fs.getFileStats(filepath);
 
                 if (stats.isDirectory()) {
                     // eslint-disable-next-line no-await-in-loop
-                    await walkDirectory(filepath, parts.concat(entry));
+                    await walkDirectory(filepath, parts.concat(filename));
                 } else {
-                    const id = parts.concat(entry).join('/');
+                    const id = parts.concat(filename).join('/');
                     // eslint-disable-next-line no-await-in-loop
                     const source = await fs.readUtf8File(filepath);
 
