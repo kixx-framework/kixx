@@ -90,14 +90,18 @@ export default class HttpRouteSpec {
             }
         }
 
-        for (let i = 0; i < this.routes.length; i += 1) {
-            const route = this.routes[i];
-            route.assignMiddleware(middleware, handlers, errorHandlers, reportingName, i);
+        if (Array.isArray(this.routes)) {
+            for (let i = 0; i < this.routes.length; i += 1) {
+                const route = this.routes[i];
+                route.assignMiddleware(middleware, handlers, errorHandlers, reportingName, i);
+            }
         }
 
-        for (let i = 0; i < this.targets.length; i += 1) {
-            const target = this.targets[i];
-            target.assignHandlers(handlers, errorHandlers, `${ reportingName }:target[${ i }]`);
+        if (Array.isArray(this.targets)) {
+            for (let i = 0; i < this.targets.length; i += 1) {
+                const target = this.targets[i];
+                target.assignHandlers(handlers, errorHandlers, `${ reportingName }:target[${ i }]`);
+            }
         }
     }
 
@@ -250,7 +254,7 @@ export default class HttpRouteSpec {
             // Copy the routes over to a new Array since we're going to be
             // mutating them during the validation process.
             newRoutes = spec.routes.map((routeSpec, i) => {
-                newRoutes.push(this.validateAndCreate(routeSpec, reportingName, i));
+                return this.validateAndCreate(routeSpec, reportingName, i);
             });
         }
 
@@ -261,7 +265,7 @@ export default class HttpRouteSpec {
             // Copy the targets over to a new Array since we're going to be
             // mutating them during the validation process.
             newTargets = spec.targets.map((targetSpec, i) => {
-                newTargets.push(HttpTargetSpec.validateAndCreate(targetSpec, reportingName, i));
+                return HttpTargetSpec.validateAndCreate(targetSpec, reportingName, i);
             });
         }
 
