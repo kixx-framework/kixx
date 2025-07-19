@@ -5,6 +5,10 @@ const { DateTime } = luxon;
 
 
 export default function format_date(context, options, date) {
+    if (date === '' || date === null || typeof date === 'undefined') {
+        return '';
+    }
+
     const { format, zone, locale } = options;
 
     let dateTimeOptions;
