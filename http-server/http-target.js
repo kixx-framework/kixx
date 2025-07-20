@@ -1,17 +1,60 @@
+/**
+ * Represents a single HTTP target (handler) for a route, including its allowed HTTP methods,
+ * middleware stack, and error handlers.
+ *
+ * @class
+ * @classdesc
+ * The HttpTarget class encapsulates the logic for handling a specific HTTP endpoint,
+ * including which HTTP methods are allowed, the middleware functions to execute,
+ * and error handling for this target.
+ */
 export default class HttpTarget {
-
+    /**
+     * @type {Array<Function>}
+     * @private
+     * @description
+     * List of middleware functions to be executed for this target.
+     */
     #middleware = [];
+
+    /**
+     * @type {Array<Function>}
+     * @private
+     * @description
+     * List of error handler functions for this target.
+     */
     #errorHandlers = [];
 
+    /**
+     * Constructs a new HttpTarget instance.
+     *
+     * @param {Object} options
+     * @param {string} options.name - The name of the target.
+     * @param {Array<string>} options.allowedMethods - Array of allowed HTTP methods for this target.
+     * @param {Array<Function>} options.middleware - Array of middleware functions.
+     * @param {Array<Function>} options.errorHandlers - Array of error handler functions.
+     */
     constructor({ name, allowedMethods, middleware, errorHandlers }) {
         this.#middleware = middleware;
         this.#errorHandlers = errorHandlers;
 
         Object.defineProperties(this, {
+            /**
+             * The name of this target.
+             * @memberof HttpTarget#
+             * @type {string}
+             * @readonly
+             */
             name: {
                 enumerable: true,
                 value: name,
             },
+            /**
+             * The list of allowed HTTP methods for this target.
+             * @memberof HttpTarget#
+             * @type {ReadonlyArray<string>}
+             * @readonly
+             */
             allowedMethods: {
                 enumerable: true,
                 // Make a copy of the original Array before freezing it.
@@ -21,29 +64,33 @@ export default class HttpTarget {
     }
 
     /**
-     * Is this HTTP method in the allowed methods list for this target?
-     * @param  {string} method HTTP method name
-     * @return {Boolean}
+     * Checks if the given HTTP method is allowed for this target.
+     *
+     * @param  {string} method - HTTP method name (e.g., 'GET', 'POST').
+     * @return {boolean} True if the method is allowed, false otherwise.
      */
     isMethodAllowed(method) {
         return this.allowedMethods.includes(method);
     }
 
     /**
-     * Invoke this target with the HttpRequest and HttpResponse. There is a
-     * short circuit callback which can be used by middleware functions to
-     * exit the middleware loop early.
+     * Invokes the middleware stack for this target with the given context, request, and response.
+     * Middleware functions are executed in series and may short-circuit the chain by calling the `skip` callback.
      *
-     * Middleware function are cast to asynchonous execution using await.
+     * Each middleware function is awaited, allowing for asynchronous operations.
      *
-     * @param  {HttpRequest} request
-     * @param  {HttpResponse} response
-     * @return {HttpResponse}
+     * @param  {ApplicationContext} context - The application context.
+     * @param  {HttpRequest} request - The HTTP request object.
+     * @param  {HttpResponse} response - The HTTP response object.
+     * @return {Promise<HttpResponse>} The (possibly modified) response object.
      */
     async invokeMiddleware(context, request, response) {
         let newResponse;
         let done = false;
 
+        /**
+         * Short-circuit callback to exit the middleware loop early.
+         */
         function skip() {
             done = true;
         }
@@ -64,16 +111,14 @@ export default class HttpTarget {
     }
 
     /**
-     * Handle an error on this target. It will invoke each handler in the
-     * error handlers list until one returns a truthy value.
-     *
+     * Handles an error for this target by invoking each error handler in order until one returns a truthy value.
      * Error handlers are expected to execute synchronously.
      *
-     * @param  {ApplicationContext} context
-     * @param  {HttpRequest} request
-     * @param  {HttpResponse} response
-     * @param  {Error} error
-     * @return {HttpResponse|boolean}
+     * @param  {ApplicationContext} context - The application context.
+     * @param  {HttpRequest} request - The HTTP request object.
+     * @param  {HttpResponse} response - The HTTP response object.
+     * @param  {Error} error - The error to handle.
+     * @return {HttpResponse|boolean} The response returned by an error handler, or false if none handled the error.
      */
     handleError(context, request, response, error) {
         for (const func of this.#errorHandlers) {
