@@ -2,21 +2,54 @@ import WrappedError from './wrapped-error.js';
 
 
 /**
- * Provide some additional functionality for 406 Not Acceptable
- * responses by including mimetype, encoding, and language information
- * for [content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation).
+ * Represents an error thrown when the server cannot produce a response matching the list of acceptable values
+ * defined in the request's proactive content negotiation headers (Accept, Accept-Encoding, Accept-Language).
+ * Typically used for HTTP 406 Not Acceptable responses.
+ * Extends WrappedError to provide additional context and stack trace handling, including the lists of
+ * acceptable mimetypes, encodings, and languages for content negotiation.
+ *
+ * @class
+ * @extends WrappedError
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation
  */
 export default class NotAcceptableError extends WrappedError {
+    /**
+     * The error code string for this error type.
+     * @type {string}
+     * @static
+     * @readonly
+     */
     static CODE = 'NOT_ACCEPTABLE_ERROR';
+
+    /**
+     * The HTTP status code for this error type (406).
+     * @type {number}
+     * @static
+     * @readonly
+     */
     static HTTP_STATUS_CODE = 406;
 
+    /**
+     * Constructs a new NotAcceptableError instance.
+     *
+     * @param {string} message - The error message describing why the request is not acceptable.
+     * @param {Object} [options] - Optional. Additional error options.
+     * @param {Array<string>} [options.accept] - Array of acceptable mimetypes (e.g., ['application/json', 'text/html']).
+     * @param {Array<string>} [options.acceptEncoding] - Array of acceptable encodings (e.g., ['gzip', 'deflate']).
+     * @param {Array<string>} [options.acceptLanguage] - Array of acceptable languages (e.g., ['en-US', 'fr']).
+     * @param {string} [options.code] - Optional custom error code.
+     * @param {string} [options.name] - Optional custom error name.
+     * @param {Error} [options.cause] - Optional cause of the error.
+     * @param {Function} [sourceFunction] - Optional. Function to use for stack trace capture.
+     */
     constructor(message, options, sourceFunction) {
         const opts = Object.assign({ expected: true }, options);
         super(message, opts, sourceFunction);
 
         let accept;
         if (Array.isArray(opts.accept)) {
-            // Make a copy before freezing.
+            // Make a shallow copy before freezing to prevent mutation.
             accept = Object.freeze(opts.accept.slice());
         } else {
             accept = Object.freeze([]);
@@ -24,7 +57,7 @@ export default class NotAcceptableError extends WrappedError {
 
         let acceptEncoding;
         if (Array.isArray(opts.acceptEncoding)) {
-            // Make a copy before freezing.
+            // Make a shallow copy before freezing to prevent mutation.
             acceptEncoding = Object.freeze(opts.acceptEncoding.slice());
         } else {
             acceptEncoding = Object.freeze([]);
@@ -32,22 +65,39 @@ export default class NotAcceptableError extends WrappedError {
 
         let acceptLanguage;
         if (Array.isArray(opts.acceptLanguage)) {
-            acceptLanguage = opts.acceptLanguage;
-            // Make a copy before freezing.
+            // Make a shallow copy before freezing to prevent mutation.
             acceptLanguage = Object.freeze(opts.acceptLanguage.slice());
         } else {
             acceptLanguage = Object.freeze([]);
         }
 
         Object.defineProperties(this, {
+            /**
+             * The list of acceptable mimetypes for content negotiation.
+             * @memberof NotAcceptableError#
+             * @type {ReadonlyArray<string>}
+             * @readonly
+             */
             accept: {
                 enumerable: true,
                 value: accept,
             },
+            /**
+             * The list of acceptable encodings for content negotiation.
+             * @memberof NotAcceptableError#
+             * @type {ReadonlyArray<string>}
+             * @readonly
+             */
             acceptEncoding: {
                 enumerable: true,
                 value: acceptEncoding,
             },
+            /**
+             * The list of acceptable languages for content negotiation.
+             * @memberof NotAcceptableError#
+             * @type {ReadonlyArray<string>}
+             * @readonly
+             */
             acceptLanguage: {
                 enumerable: true,
                 value: acceptLanguage,
