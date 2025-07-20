@@ -10,29 +10,66 @@ import {
 import { HTTP_METHODS } from '../lib/http-utils.js';
 
 
+/**
+ * @class HttpTargetSpec
+ * @classdesc
+ * Represents the specification for a single HTTP target (handler) within a route.
+ * Used to define the name, allowed HTTP methods, handler middleware, and error handlers
+ * for a target endpoint. Provides validation and transformation utilities for
+ * constructing HttpTarget instances from plain object specifications.
+ */
 export default class HttpTargetSpec {
 
     /**
-     * Create a new HttpTargetSpec instance from a plain object specification.
-     * The specification must include:
-     * - name: A name for the target
-     * - methods: Array of HTTP methods or "*" for all methods
-     * - handlers: Array of handler functions or [name, options] tuples
-     * - errorHandlers: Optional array of error handler functions or [name, options] tuples
+     * Constructs a new HttpTargetSpec instance from a plain object specification.
      *
-     * @param {Object} spec
-     * @param {string} spec.name - Name for the target
-     * @param {Array|string} spec.methods - Array of HTTP methods or "*"
-     * @param {Array} spec.handlers - Array of handlers
-     * @param {Array} [spec.errorHandlers] - Optional array of error handlers
+     * The specification object must include:
+     * - name: A non-empty string name for the target.
+     * - methods: An array of HTTP methods (e.g., ['GET', 'POST']) or "*" for all methods.
+     * - handlers: An array of handler functions or [name, options] tuples.
+     * - errorHandlers: (Optional) An array of error handler functions or [name, options] tuples.
+     *
+     * @param {Object} spec - The target specification.
+     * @param {string} spec.name - Name for the target.
+     * @param {Array<string>|string} spec.methods - Array of HTTP methods or "*".
+     * @param {Array<Function|Array>} spec.handlers - Array of handler functions or [name, options] tuples.
+     * @param {Array<Function|Array>} [spec.errorHandlers] - Optional array of error handler functions or [name, options] tuples.
      */
     constructor(spec) {
+        /**
+         * The name of the target.
+         * @type {string}
+         */
         this.name = spec.name;
+
+        /**
+         * The allowed HTTP methods for this target.
+         * @type {Array<string>|string}
+         */
         this.methods = spec.methods;
+
+        /**
+         * The handler middleware for this target.
+         * @type {Array<Function|Array>}
+         */
         this.handlers = spec.handlers;
+
+        /**
+         * The error handler middleware for this target.
+         * @type {Array<Function|Array>}
+         */
         this.errorHandlers = spec.errorHandlers;
     }
 
+    /**
+     * Assigns actual handler and error handler functions to this spec,
+     * replacing any [name, options] tuples with the composed middleware.
+     *
+     * @param {Map<string,Function>} handlers - Map of handler factories by name.
+     * @param {Map<string,Function>} errorHandlers - Map of error handler factories by name.
+     * @param {string} reportingName - Name used for error reporting context.
+     * @returns {void}
+     */
     assignHandlers(handlers, errorHandlers, reportingName) {
         for (let i = 0; i < this.handlers.length; i += 1) {
             const def = this.handlers[i];
@@ -55,6 +92,14 @@ export default class HttpTargetSpec {
         }
     }
 
+    /**
+     * Converts this HttpTargetSpec into an HttpTarget instance, combining
+     * route and vhost context.
+     *
+     * @param {Object} vhost - The virtual host object (must have a 'name' property).
+     * @param {Object} route - The route object (must have 'name', 'inboundMiddleware', 'outboundMiddleware', and 'errorHandlers').
+     * @returns {HttpTarget} The constructed HttpTarget instance.
+     */
     toHttpTarget(vhost, route) {
         const name = `${ vhost.name }:${ route.name }:${ this.name }`;
         const allowedMethods = this.methods;
@@ -69,6 +114,16 @@ export default class HttpTargetSpec {
         });
     }
 
+    /**
+     * Validates a plain object specification and creates a new HttpTargetSpec instance.
+     * Throws assertion errors if the specification is invalid.
+     *
+     * @param {Object} spec - The target specification object.
+     * @param {string} parentName - The name of the parent context (for error reporting).
+     * @param {number} index - The index of this target in the parent array (for error reporting).
+     * @returns {HttpTargetSpec} The validated HttpTargetSpec instance.
+     * @throws {AssertionError} If the specification is invalid.
+     */
     static validateAndCreate(spec, parentName, index) {
         let reportingName = `${ parentName }[${ index }]`;
 
