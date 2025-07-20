@@ -4,15 +4,61 @@ import { isFunction, isNumberNotNaN } from '../assertions/mod.js';
 import { headersToObject } from '../lib/http-utils.js';
 
 
+/**
+ * HttpServer is a lightweight HTTP server wrapper around Node.js's built-in http.Server.
+ * It provides lifecycle management, request/response handling, and emits events for server and request activity.
+ *
+ * Features:
+ * - Starts and stops a Node.js HTTP server on a configurable port.
+ * - Emits events for server errors, server close, server listening, request received, and response sent.
+ * - Handles graceful shutdown with a timeout for open connections.
+ * - Provides a default request handler (can be overridden) that returns a simple "Hello, world!" response.
+ * - Handles request and response errors, emitting error events and sending appropriate HTTP responses.
+ * - Supports custom request IDs for tracking.
+ *
+ * Events:
+ * - 'error': Emitted on server or request errors.
+ * - 'info': Emitted on server close and listening.
+ * - 'debug': Emitted on request received and response sent.
+ *
+ * Usage:
+ *   const server = new HttpServer({ port: 8080 });
+ *   server.startServer();
+ *   server.on('error', (err) => { ... });
+ *   server.on('info', (info) => { ... });
+ *   server.on('debug', (debug) => { ... });
+ */
 export default class HttpServer extends EventEmitter {
 
+    /**
+     * @type {http.Server|null}
+     * @private
+     * The underlying Node.js HTTP server instance.
+     */
     #nodeServer = null;
+
+    /**
+     * @type {number}
+     * @private
+     * Internal counter for generating unique request IDs.
+     */
     #requestId = 0;
 
+    /**
+     * Constructs a new HttpServer instance.
+     * @param {Object} options
+     * @param {number} [options.port=8080] - The port to listen on.
+     */
     constructor({ port }) {
         super();
 
         Object.defineProperties(this, {
+            /**
+             * The port number the server will listen on.
+             * @memberof HttpServer#
+             * @type {number}
+             * @readonly
+             */
             port: {
                 enumerable: true,
                 value: isNumberNotNaN(port) ? port : 8080,
@@ -20,6 +66,11 @@ export default class HttpServer extends EventEmitter {
         });
     }
 
+    /**
+     * Starts the HTTP server and begins listening for connections.
+     * Emits 'info' and 'error' events for server lifecycle.
+     * @throws {Error} If the server is already started.
+     */
     startServer() {
         if (this.#nodeServer) {
             throw new Error('Server already started');
@@ -58,14 +109,10 @@ export default class HttpServer extends EventEmitter {
         this.#nodeServer.listen(port);
     }
 
-    // Give the server some time to gracefully shutdown before forcing an exit.
-    // We could force this by calling "closeAllConnections()", but instead:
-    //
-    // First, we call close() to stop accepting new connections.
-    // Then, we give all the open connections an opportunity to finish their work and close.
-    // If open connections have not closed in a specified time, we call closeAllConnections().
-    // If the server still has not closed in a specified time, we force an exit.
-    //
+    /**
+     * Gracefully shuts down the server, allowing open connections to finish.
+     * If connections remain after 3 seconds, forcibly closes all connections.
+     */
     close() {
         const nodeServer = this.#nodeServer;
 
@@ -82,6 +129,13 @@ export default class HttpServer extends EventEmitter {
         }
     }
 
+    /**
+     * Default request handler.
+     * Returns a simple "Hello, world!" response.
+     * Override this method to implement custom request handling logic.
+     *
+     * @returns {Object} An object with { status, headers, body }.
+     */
     handleRequest() {
         const status = 200;
         const headers = new Headers();
@@ -97,6 +151,14 @@ export default class HttpServer extends EventEmitter {
         };
     }
 
+    /**
+     * Internal Node.js request handler.
+     * Handles request/response lifecycle, error handling, and emits events.
+     *
+     * @private
+     * @param {http.IncomingMessage} nodeRequest
+     * @param {http.ServerResponse} nodeResponse
+     */
     #handleNodeRequest(nodeRequest, nodeResponse) {
         const requestId = nodeRequest.headers['x-request-id'] || this.#generateRequestId();
 
@@ -185,8 +247,15 @@ export default class HttpServer extends EventEmitter {
         }
     }
 
-    // Send the response *after* the request has completed
-    // (see completeResponse() above).
+    /**
+     * Sends the HTTP response after the request has completed.
+     * Handles streaming bodies, buffers, and strings.
+     *
+     * @private
+     * @param {http.IncomingMessage} nodeRequest
+     * @param {http.ServerResponse} nodeResponse
+     * @param {Object} response - The response object with { status, headers, body }.
+     */
     #sendResponse(nodeRequest, nodeResponse, response) {
         const {
             status,
@@ -210,14 +279,31 @@ export default class HttpServer extends EventEmitter {
         }
     }
 
+    /**
+     * Extracts the HTTP protocol from the request headers.
+     * @private
+     * @param {http.IncomingMessage} req
+     * @returns {string} The protocol, e.g., 'http' or 'https'.
+     */
     #getHttpProtocol(req) {
         return req.headers['x-forwarded-proto'] || 'http';
     }
 
+    /**
+     * Extracts the HTTP host from the request headers.
+     * @private
+     * @param {http.IncomingMessage} req
+     * @returns {string} The host, e.g., 'localhost'.
+     */
     #getHttpHost(req) {
         return req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
     }
 
+    /**
+     * Generates a unique request ID for tracking.
+     * @private
+     * @returns {string} The generated request ID.
+     */
     #generateRequestId() {
         this.#requestId += 1;
         return `req-${ this.#requestId }`;

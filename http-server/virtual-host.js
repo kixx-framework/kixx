@@ -1,3 +1,13 @@
+/**
+ * Represents a single virtual host, including its hostname or pattern matcher,
+ * name, and an array of route instances.
+ *
+ * @class
+ * @classdesc
+ * The VirtualHost class encapsulates the logic for matching incoming hostnames
+ * (using either an exact hostname or a pattern matcher) and dispatching requests
+ * to the appropriate route handlers for this virtual host.
+ */
 export default class VirtualHost {
 
     #hostname = null;

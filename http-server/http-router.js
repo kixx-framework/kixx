@@ -10,20 +10,47 @@ import {
 } from '../assertions/mod.js';
 
 
+/**
+ * HttpRouter is responsible for routing HTTP requests to the appropriate
+ * virtual host, route, and target handler. It provides methods for matching
+ * requests, invoking middleware, and handling errors such as 404 Not Found
+ * and 405 Method Not Allowed. The router maintains a list of virtual hosts,
+ * each of which contains its own set of routes and targets.
+ *
+ * Usage:
+ *   const router = new HttpRouter(virtualHosts);
+ *   const handler = router.getHttpRequestHandler();
+ *   // handler can be used as a request listener in an HTTP server.
+ */
 export default class HttpRouter {
 
     #virtualHosts = [];
 
+    /**
+     * Constructs a new HttpRouter instance.
+     *
+     * @param {Array<VirtualHost>} virtualHosts - Array of virtual hosts to be managed by this router.
+     */
     constructor(virtualHosts) {
         if (Array.isArray(virtualHosts)) {
             this.#virtualHosts = virtualHosts;
         }
     }
 
+    /**
+     * Resets the virtual hosts managed by this router.
+     *
+     * @param {Array<VirtualHost>} virtualHosts - Array of virtual hosts to be managed by this router.
+     */
     resetVirtualHosts(virtualHosts) {
         this.#virtualHosts = virtualHosts;
     }
 
+    /**
+     * Returns a request handler function that can be used as a request listener in an HTTP server.
+     *
+     * @returns {Function} A request handler function that can be used as a request listener in an HTTP server.
+     */
     getHttpRequestHandler() {
         return this.handleHttpRequest.bind(this);
     }
@@ -86,6 +113,12 @@ export default class HttpRouter {
         }
     }
 
+    /**
+     * Matches a hostname against the virtual hosts managed by this router.
+     *
+     * @param {string} hostname - The hostname to match.
+     * @returns {Array<VirtualHost, object>} An array containing the matched virtual host and its parameters.
+     */
     matchHostname(hostname) {
         const virtualHosts = this.#virtualHosts;
 
@@ -101,6 +134,12 @@ export default class HttpRouter {
         return [ virtualHosts[0], {}];
     }
 
+    /**
+     * Matches a request against the virtual hosts managed by this router.
+     *
+     * @param {HttpRequest} request - The request to match.
+     * @returns {Array<HttpRoute, object, object>} An array containing the matched route, hostname parameters, and pathname parameters.
+     */
     matchRequest(request) {
         const { hostname } = request.url;
         const [ vhost, hostnameParams ] = this.matchHostname(hostname);
@@ -116,6 +155,15 @@ export default class HttpRouter {
         throw new NotFoundError(`No route found for pathname ${ request.url.pathname }`);
     }
 
+    /**
+     * Handles an error that occurred during request processing.
+     *
+     * @param {Object} context - The context of the request.
+     * @param {HttpRequest} request - The request that caused the error.
+     * @param {HttpResponse} response - The response to the request.
+     * @param {Error} error - The error that occurred.
+     * @returns {HttpResponse} The response to the request.
+     */
     handleError(context, request, response, error) {
         const statusCode = error.httpStatusCode || 500;
 
@@ -131,6 +179,14 @@ export default class HttpRouter {
         return response.respondWithJSON(statusCode, { errors }, { whiteSpace: 4 });
     }
 
+    /**
+     * Finds the target for a request.
+     *
+     * @private
+     * @param {HttpRequest} request - The request to find the target for.
+     * @param {HttpRoute} route - The route to find the target for.
+     * @returns {HttpTarget} The target for the request.
+     */
     #findTargetForRequest(request, route) {
         const target = route.findTargetForRequest(request);
 
@@ -144,6 +200,25 @@ export default class HttpRouter {
         return target;
     }
 
+    /**
+     * Maps an error to a JSON error object.
+     *
+     * @param {Error} error - The error to map.
+     * @returns {Object} The JSON error object.
+     *
+     * The returned object has the following shape:
+     * {
+     *   errors: [
+     *     {
+     *       status: number,         // HTTP status code (e.g., 404, 500)
+     *       code: string,           // Application or HTTP error code (e.g., 'INTERNAL_SERVER_ERROR')
+     *       title: string,          // Short error name (e.g., 'InternalServerError')
+     *       detail: string,         // Human-readable error message
+     *       source: any             // Optional, additional error source information
+     *     }
+     *   ]
+     * }
+     */
     static mapErrorToJsonError(error) {
         const jsonError = {
             status: error.httpStatusCode || 500,
@@ -156,6 +231,13 @@ export default class HttpRouter {
         return { errors: [ jsonError ] };
     }
 
+    /**
+     * Validates a response object.
+     *
+     * @throws {AssertionError} If the response is not valid.
+     *
+     * @param {HttpResponse} response - The response to validate.
+     */
     static validateResponse(response) {
         assert(response, 'An HttpResponse object was not returned by middlware handlers');
 
