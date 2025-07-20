@@ -41,6 +41,21 @@ Supports 4 levels of logging:
 | ERROR      | 40            | error()           |
 */
 
+/**
+ * @fileoverview
+ * Logger module providing multilevel logging (DEBUG, INFO, WARN, ERROR) with support for:
+ * - Named child loggers inheriting parent configuration.
+ * - Dynamic log level and mode changes.
+ * - Console and stdout logging modes, plus silent mode for testing.
+ *
+ * @module Logger
+ */
+
+/**
+ * Logging levels with integer values.
+ * @readonly
+ * @enum {number}
+ */
 const LEVELS = Object.freeze({
     DEBUG: 10,
     INFO: 20,
@@ -48,10 +63,16 @@ const LEVELS = Object.freeze({
     ERROR: 40,
 });
 
-// An Array of level string names
+/**
+ * Array of level string names.
+ * @type {readonly string[]}
+ */
 const LEVELS_NAMES = Object.freeze(Object.keys(LEVELS));
 
-// An Array of level integers.
+/**
+ * Array of level integer values.
+ * @type {readonly number[]}
+ */
 const LEVELS_INTEGERS = Object.freeze(LEVELS_NAMES.map((key) => LEVELS[key]));
 
 // Create a Map of level integers as keys to string names as values.
@@ -61,24 +82,45 @@ const LEVELS_INTEGERS_MAP = Object.freeze(LEVELS_NAMES.reduce((map, nameKey) => 
     return map;
 }, new Map()));
 
+/**
+ * Logging output modes.
+ * @readonly
+ * @enum {string}
+ */
 const MODES = Object.freeze({
-    // The "console" logging mode is designed for development environments.
+    /** Console logging for development. */
     CONSOLE: 'console',
-    // The "stdout" logging mode is designed for production environments.
+    /** Stdout logging for production. */
     STDOUT: 'stdout',
-    // The "silent" logging mode turns off logging for testing.
+    /** Silent mode disables logging. */
     SILENT: 'silent',
 });
 
+/**
+ * Array of accepted logging modes.
+ * @type {readonly string[]}
+ */
 const ACCEPTED_MODES = Object.freeze(Object.values(MODES));
 
-
+/**
+ * Logger class supporting multilevel, multimode logging and child loggers.
+ */
 export default class Logger {
-
+    /** @type {number} */
     #levelInteger = LEVELS.INFO;
+    /** @type {string} */
     #mode = 'stdout';
+    /** @type {Set<Logger>} */
     #children = new Set();
 
+    /**
+     * Create a new Logger instance.
+     * @param {Object} [options]
+     * @param {string} options.name - Logger name (required).
+     * @param {string|number} [options.level] - Initial log level (string or integer).
+     * @param {string} [options.mode] - Initial log mode.
+     * @throws {Error} If name is not provided or not a string.
+     */
     constructor(options) {
         const { name, level, mode } = options || {};
 
@@ -102,17 +144,36 @@ export default class Logger {
         }
     }
 
+    /**
+     * Get the current log level as a string.
+     * @returns {string}
+     */
     get level() {
         return LEVELS_INTEGERS_MAP.get(this.#levelInteger);
     }
 
+    /**
+     * Set the log level by string or integer.
+     *
+     * Possible level values:
+     *
+     * | Level Name | Level Integer |
+     * |------------|--------------|
+     * | 'DEBUG'    | 10           |
+     * | 'INFO'     | 20           |
+     * | 'WARN'     | 30           |
+     * | 'ERROR'    | 40           |
+     *
+     * @param {string|number} level
+     * @throws {Error} If level is invalid.
+     */
     set level(level) {
         if (level && typeof level === 'string') {
-            level = level.toUpperCase();
-            if (!LEVELS_NAMES.includes(level)) {
+            const upperLevel = level.toUpperCase();
+            if (!LEVELS_NAMES.includes(upperLevel)) {
                 throw new Error(`Logger:set level : "${ level }" is an invalid level name`);
             }
-            this.#levelInteger = LEVELS[level];
+            this.#levelInteger = LEVELS[upperLevel];
         } else {
             if (!LEVELS_INTEGERS.includes(level)) {
                 throw new Error(`Logger:set level : ${ level } is an invalid level integer`);
@@ -125,10 +186,28 @@ export default class Logger {
         }
     }
 
+    /**
+     * Get the current logging mode.
+     * @returns {string}
+     */
     get mode() {
         return this.#mode;
     }
 
+    /**
+     * Set the logging mode.
+     *
+     * Possible mode values:
+     *
+     * | Mode Name | Description                        |
+     * |-----------|------------------------------------|
+     * | 'console' | Console logging for development    |
+     * | 'stdout'  | Stdout logging for production      |
+     * | 'silent'  | Silent mode disables logging       |
+     *
+     * @param {string} mode
+     * @throws {Error} If mode is invalid.
+     */
     set mode(mode) {
         if (!ACCEPTED_MODES.includes(mode)) {
             throw new Error(`Logger:set mode : "${ mode }" is an invalid mode`);
@@ -141,6 +220,12 @@ export default class Logger {
         }
     }
 
+    /**
+     * Create a child logger with a derived name.
+     * @param {string} name - Child logger name.
+     * @returns {Logger}
+     * @throws {Error} If name is not a string.
+     */
     createChild(name) {
         if (!name || typeof name !== 'string') {
             throw new Error('Logger:createChild(name) name: must be a string');
@@ -157,30 +242,61 @@ export default class Logger {
         return logger;
     }
 
+    /**
+     * Log a DEBUG level message.
+     * @param {string} message
+     * @param {*} [info]
+     * @param {Error} [error]
+     */
     debug(message, info, error) {
         if (this.#levelInteger <= LEVELS.DEBUG) {
             this.printMessage(LEVELS.DEBUG, message, info, error);
         }
     }
 
+    /**
+     * Log an INFO level message.
+     * @param {string} message
+     * @param {*} [info]
+     * @param {Error} [error]
+     */
     info(message, info, error) {
         if (this.#levelInteger <= LEVELS.INFO) {
             this.printMessage(LEVELS.INFO, message, info, error);
         }
     }
 
+    /**
+     * Log a WARN level message.
+     * @param {string} message
+     * @param {*} [info]
+     * @param {Error} [error]
+     */
     warn(message, info, error) {
         if (this.#levelInteger <= LEVELS.WARN) {
             this.printMessage(LEVELS.WARN, message, info, error);
         }
     }
 
+    /**
+     * Log an ERROR level message.
+     * @param {string} message
+     * @param {*} [info]
+     * @param {Error} [error]
+     */
     error(message, info, error) {
         if (this.#levelInteger <= LEVELS.ERROR) {
             this.printMessage(LEVELS.ERROR, message, info, error);
         }
     }
 
+    /**
+     * Print a log message according to the current mode.
+     * @param {number} intLevel
+     * @param {string} message
+     * @param {*} [info]
+     * @param {Error} [error]
+     */
     printMessage(intLevel, message, info, error) {
         switch (this.#mode) {
             case MODES.CONSOLE:
@@ -192,6 +308,13 @@ export default class Logger {
         }
     }
 
+    /**
+     * Print a log message to the console.
+     * @param {number} intLevel
+     * @param {string} message
+     * @param {*} [info]
+     * @param {Error} [error]
+     */
     printConsoleMessage(intLevel, message, info, error) {
         const datetime = getCurrentHumanDateTimeString();
         const { name } = this;
@@ -213,6 +336,13 @@ export default class Logger {
         }
     }
 
+    /**
+     * Print a log message to stdout.
+     * @param {number} intLevel
+     * @param {string} message
+     * @param {*} [info]
+     * @param {Error} [error]
+     */
     printStdoutMessage(intLevel, message, info, error) {
         const now = new Date();
         const datetime = now.toISOString();
@@ -243,6 +373,9 @@ export default class Logger {
     }
 }
 
+/**
+ * Attach static LEVELS and MODES to Logger.
+ */
 Object.defineProperties(Logger, {
     LEVELS: {
         enumerable: true,
@@ -254,6 +387,10 @@ Object.defineProperties(Logger, {
     },
 });
 
+/**
+ * Get the current time as a human-readable string (HH:mm:ss.SSS).
+ * @returns {string}
+ */
 function getCurrentHumanDateTimeString() {
     const d = new Date();
     const hours = padNumber2(d.getHours());
@@ -263,6 +400,11 @@ function getCurrentHumanDateTimeString() {
     return `${ hours }:${ minutes }:${ seconds }.${ mseconds }`;
 }
 
+/**
+ * Format an Error object for logging.
+ * @param {Error} error
+ * @returns {{name: string, code: string, message: string, stack: string}}
+ */
 function formatError(error) {
     const name = error.name || '[NO_NAME]';
     const code = error.code || '[NO_CODE]';
@@ -272,10 +414,20 @@ function formatError(error) {
     return { name, code, message, stack };
 }
 
+/**
+ * Pad a number to 2 digits.
+ * @param {number} n
+ * @returns {string}
+ */
 function padNumber2(n) {
     return ('00' + n).slice(-2);
 }
 
+/**
+ * Pad a number to 3 digits.
+ * @param {number} n
+ * @returns {string}
+ */
 function padNumber3(n) {
     return ('000' + n).slice(-3);
 }

@@ -14,7 +14,7 @@ Features
 - Multilevel logging (DEBUG, INFO, WARN, ERROR)
 - Named child loggers with inheritance
 - Dynamic log level and mode configuration
-- Multiple output modes (console, stdout)
+- Multiple output modes (console, stdout, silent)
 - Structured logging with support for additional info and error objects
 
 Installation
@@ -106,28 +106,47 @@ const child = parent.createChild('child');
 
 // Child logger inherits parent's level and mode
 child.info('Message from child logger'); // Output: "parent:child - Message from child logger"
+
+// Changes to parent logger affect all children
+parent.level = 'DEBUG'; // This also changes child's level to DEBUG
+parent.mode = 'console'; // This also changes child's mode to console
 ```
 
 ### Output Modes
 
-The logger supports two output modes:
+The logger supports three output modes:
 
 1. `stdout` (default): Structured output suitable for production environments
+   - Format: `datetime - level - pid - name - message - infoString - errorString`
    - ISO timestamp
-   - Log level
+   - Log level (padded to 5 characters)
    - Process ID
    - Logger name
    - Message
-   - Additional info (JSON)
-   - Error details (JSON)
+   - Additional info (JSON string or 'null')
+   - Error details (JSON string or 'null')
 
 2. `console`: Human-readable output suitable for development
-   - Human-readable timestamp
-   - Log level
+   - Human-readable timestamp (HH:mm:ss.SSS)
+   - Log level (padded to 5 characters)
    - Logger name
    - Message
    - Additional info
    - Error details
+
+3. `silent`: Disables all logging output (useful for testing)
+
+### Error Object Format
+
+When logging error objects, they are automatically formatted as:
+```javascript
+{
+    name: string,      // Error name or '[NO_NAME]'
+    code: string,      // Error code or '[NO_CODE]'
+    message: string,   // Error message or '[NO_MESSAGE]'
+    stack: string      // Error stack trace or '[NO_STACK]'
+}
+```
 
 ## API Reference
 
@@ -141,7 +160,38 @@ new Logger(options)
 
 - `name` (string, required): Logger identifier
 - `level` (string|number, optional): Logging level
-- `mode` (string, optional): Output mode ('stdout' or 'console')
+- `mode` (string, optional): Output mode ('stdout', 'console', or 'silent')
+
+#### Validation
+
+- `name` must be a non-empty string, otherwise throws `Error: A logger must be provided with a name`
+- `level` must be a valid level name or integer, otherwise throws an error
+- `mode` must be a valid mode name, otherwise throws an error
+
+### Static Properties
+
+#### Logger.LEVELS
+
+Object containing all available log levels:
+```javascript
+{
+    DEBUG: 10,
+    INFO: 20,
+    WARN: 30,
+    ERROR: 40
+}
+```
+
+#### Logger.MODES
+
+Object containing all available output modes:
+```javascript
+{
+    CONSOLE: 'console',
+    STDOUT: 'stdout',
+    SILENT: 'silent'
+}
+```
 
 ### Properties
 
@@ -160,6 +210,8 @@ logger.level = 'DEBUG';
 logger.level = 10; // DEBUG level
 ```
 
+**Note:** Changing the level on a parent logger automatically updates all child loggers.
+
 #### mode
 
 Get or set the output mode:
@@ -172,6 +224,8 @@ const currentMode = logger.mode;
 logger.mode = 'console';
 ```
 
+**Note:** Changing the mode on a parent logger automatically updates all child loggers.
+
 ### Methods
 
 #### createChild(name)
@@ -181,6 +235,13 @@ Creates a child logger that inherits settings from the parent.
 ```javascript
 const child = logger.createChild('child-name');
 ```
+
+**Parameters:**
+- `name` (string, required): Child logger name. Must be a non-empty string.
+
+**Returns:** A new Logger instance with inherited settings.
+
+**Throws:** `Error` if name is not a string.
 
 #### debug(message, info, error)
 #### info(message, info, error)
@@ -194,6 +255,55 @@ logger.debug('Debug message', { context: 'value' });
 logger.info('Info message', { userId: 123 });
 logger.warn('Warning message', null, error);
 logger.error('Error message', { context: 'value' }, error);
+```
+
+**Parameters:**
+- `message` (string, required): The log message
+- `info` (any, optional): Additional structured information (will be JSON stringified)
+- `error` (Error, optional): Error object to log (will be formatted and JSON stringified)
+
+## Examples
+
+### Basic Usage
+```javascript
+import Logger from 'kixx-logger';
+
+const logger = new Logger({ name: 'my-app' });
+logger.info('Application started');
+```
+
+### With Child Loggers
+```javascript
+const appLogger = new Logger({ name: 'app', level: 'INFO' });
+const dbLogger = appLogger.createChild('database');
+const apiLogger = appLogger.createChild('api');
+
+dbLogger.info('Database connected');
+apiLogger.warn('Rate limit approaching');
+```
+
+### Error Handling
+```javascript
+try {
+    // Some operation that might fail
+    throw new Error('Database connection failed');
+} catch (error) {
+    logger.error('Failed to connect to database', { 
+        host: 'localhost', 
+        port: 5432 
+    }, error);
+}
+```
+
+### Testing with Silent Mode
+```javascript
+const testLogger = new Logger({ 
+    name: 'test', 
+    mode: 'silent' 
+});
+
+// No output will be produced
+testLogger.info('This will not be logged');
 ```
 
 Copyright and License
