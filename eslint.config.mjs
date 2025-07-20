@@ -29,6 +29,7 @@ export default [
                 structuredClone: 'readonly',
                 Blob: 'readonly',
                 URL: 'readonly',
+                URLSearchParams: 'readonly',
                 Headers: 'readonly',
                 // Node.js globals
                 Buffer: 'readonly',
