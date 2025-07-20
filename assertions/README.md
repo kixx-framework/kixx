@@ -2,7 +2,7 @@ Kixx Assert
 ===========
 A JavaScript library for creating robust ES6 code.
 
-Contains test functions like `isNumberNotNaN()` which return Booleans, and assertion functions like `assertEquals()` which throw an AssertionError if the condition(s) fail.
+Contains test functions like `isNumberNotNaN()` which return Booleans, and assertion functions like `assertEqual()` which throw an AssertionError if the condition(s) fail.
 
 Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2025.
 
@@ -18,21 +18,21 @@ This library is designed for use in an ES6 module environment requiring __Node.j
 
 If you're curious: Node.js >= 16.13.2 is required for [ES6 module stabilization](https://nodejs.org/dist/latest-v18.x/docs/api/esm.html#modules-ecmascript-modules) and [ES2022 support](https://node.green/#ES2020).
 
-Please don't bother running benchmarks on this library. Correctness and readability are design objectives. Conserving CPU cycles is not. It is very unlikely any utilities in this library would have a measureable performance impact on your application, and if they did you should probably be implementing something more optimized to your specific use case.
+Please don't bother running benchmarks on this library. Correctness and readability are design objectives. Conserving CPU cycles is not. It is very unlikely any utilities in this library would have a measurable performance impact on your application, and if they did you should probably be implementing something more optimized to your specific use case.
 
 __Note:__ There is no TypeScript here. It would be waste of time for a library as small as this.
 
 ## Usage
 ```js
 // In Node.js:
-import { isNonEmptyString, assertEquals } from 'kixx-assert';
+import { isNonEmptyString, assertEqual } from 'kixx-assert';
 
 isNonEmptyString('hello world'); // true
 isNonEmptyString(''); // false
 isNonEmptyString({}); // false
 
-assertEquals('hello world', 'hello world');
-assertEquals({}, {}); // Throws an AssertionError
+assertEqual('hello world', 'hello world');
+assertEqual({}, {}); // Throws an AssertionError
 ```
 
 Also supports currying :tada:
@@ -63,7 +63,7 @@ isString(String('1')) // true
 // If you need to do this for some (dumb) reason, then isString() will still
 // return true even though typeof new String() === 'object'.
 isString(new String('1')) // true
-````
+```
 
 ### isNonEmptyString
 ```js
@@ -214,7 +214,7 @@ isOne(1) // true
 ### doesMatch
 A wiz at matching strings and RegExp, but can match just about anything.
 
-If the matcher is a regular expression then doesMatch() will call RegExp:test() using the subject. If the subject is equal to the matcher (using isEqual()) then return true. If the subject is a String then check to see if the String contains the matcher with String:includes(). If the subject is a valid Date then convert it to a string using Date:toISOString() before making the comparison.
+If the matcher is a regular expression then doesMatch() will call RegExp.test() using the subject. If the subject is equal to the matcher (using isEqual()) then return true. If the subject is a String then check to see if the String contains the matcher with String.includes(). If the subject is a valid Date then convert it to a string using Date.toISOString() before making the comparison.
 
 Can be curried.
 
@@ -306,7 +306,7 @@ assertFalsy(null) // Passes
 ```
 
 ### assertEqual
-Throw an AssertionError if the passed values are *not strictly* equal. Dates and NaN are special cases handled seperately.
+Throw an AssertionError if the passed values are *not strictly* equal. Dates and NaN are special cases handled separately.
 
 See [isEqual](#isequal).
 
@@ -369,13 +369,14 @@ assertDefined(null) // passes
 ```
 
 ### assertUndefined
-Inverse of [assertUndefined](#assertUndefined). Uses [isUndefined()](#isundefined) internally.
+Inverse of [assertDefined()](#assertdefined). Uses [isUndefined()](#isundefined) internally.
 
 ```js
 assertUndefined(null) // Throws AssertionError
 assertUndefined(({}).toString) // Throws AssertionError
 assertUndefined(undefined) // passes
 ```
+
 ### assertNonEmptyString
 See [isNonEmptyString()](#isnonemptystring).
 
@@ -384,6 +385,12 @@ See [isNumberNotNaN()](#isnumbernotnan).
 
 ### assertArray
 Uses the native Array.isArray().
+
+```js
+assertArray({}) // Throws AssertionError
+assertArray([]) // passes
+assertArray([1, 2, 3]) // passes
+```
 
 ### assertBoolean
 See [isBoolean()](#isboolean).
@@ -434,6 +441,25 @@ You can curry it! :tada:
 const assertBeforeToday = assertLessThan(new Date());
 
 assertBeforeToday(new Date()); // Will throw an AssertionError
+```
+
+## Internal Functions
+
+### curryAssertion2
+Creates a function which can create assertion functions that can be curried. This is an internal utility used by the library to create curried assertion functions.
+
+```js
+import { curryAssertion2 } from 'kixx-assert';
+
+const assertEqual = curryAssertion2('assertEqual', (expected, actual, messagePrefix) => {
+    if (actual !== expected) {
+        return `${messagePrefix}. Values are not equal.`;
+    }
+    return null;
+});
+
+const assertIsZero = assertEqual(0);
+assertIsZero(1, 'What happens when we pass in 1?'); // Throws AssertionError
 ```
 
 Copyright and License

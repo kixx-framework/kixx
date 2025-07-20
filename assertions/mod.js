@@ -34,12 +34,21 @@
  */
 const protoToString = Object.prototype.toString;
 
+/**
+ * Custom error class for assertion failures.
+ * Extends the native Error class with additional properties for better error handling.
+ */
 export class AssertionError extends Error {
 
     /**
-     * @param  {string} message Will become the message string passed to the native Error constructor.
-     * @param  {object} [spec] Object with shape { cause, httpStatusCode, code, name }
-     * @param  {function} [sourceFunction] Will be passed to the native Error.captureStackTrace
+     * Creates a new AssertionError instance.
+     * @param {string} message - The error message to display.
+     * @param {object} [spec] - Optional specification object with additional error properties.
+     * @param {Error} [spec.cause] - The cause of this error.
+     * @param {string} [spec.name] - Custom name for the error.
+     * @param {string} [spec.code] - Error code identifier.
+     * @param {string} [spec.operator] - The assertion operator that failed.
+     * @param {Function} [sourceFunction] - Function to exclude from stack trace.
      */
     constructor(message, spec, sourceFunction) {
         spec = spec || {};
@@ -92,11 +101,12 @@ Object.defineProperties(AssertionError, {
 });
 
 /**
- * Determine if the given value is a String.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is a String.
+ * This function correctly identifies both string primitives and String objects.
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a String, false otherwise.
  */
-export function isString(x) {
+export function isString(value) {
     // The typeof expression will not catch strings created
     // with new String('foo'):
     //
@@ -105,27 +115,27 @@ export function isString(x) {
     // ```
     //
     // So we use `Object.prototype.toString` instead.
-    return protoToString.call(x) === '[object String]';
+    return protoToString.call(value) === '[object String]';
 }
 
 /**
- * Determine if the given value is a String with length greater
- * than zero. Uses `isString()`.
+ * Determines if the given value is a String with length greater than zero.
  * @see {@link isString}
- * @param  {*} x
- * @return {Boolean}
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a non-empty String, false otherwise.
  */
-export function isNonEmptyString(x) {
-    return Boolean(x && isString(x));
+export function isNonEmptyString(value) {
+    return Boolean(value && isString(value));
 }
 
 /**
- * Determine if the given value is a Number. Also returns
- * `true` for BigInt instances.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is a Number or BigInt.
+ * This function correctly identifies both number primitives and Number objects,
+ * as well as BigInt values.
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a Number or BigInt, false otherwise.
  */
-export function isNumber(x) {
+export function isNumber(value) {
     // The typeof expression will not catch numbers created with new Number(1):
     //
     // ```js
@@ -133,26 +143,27 @@ export function isNumber(x) {
     // ```
     //
     // So we use `Object.prototype.toString` instead.
-    const tag = protoToString.call(x);
+    const tag = protoToString.call(value);
     return tag === '[object Number]' || tag === '[object BigInt]';
 }
 
 /**
- * Determine if the given value is a Number but is not NaN. Uses `isNumber()`.
+ * Determines if the given value is a Number but is not NaN.
  * @see {@link isNumber}
- * @param  {*} x
- * @return {Boolean}
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a Number and not NaN, false otherwise.
  */
-export function isNumberNotNaN(x) {
-    return isNumber(x) && !Number.isNaN(x);
+export function isNumberNotNaN(value) {
+    return isNumber(value) && !Number.isNaN(value);
 }
 
 /**
- * Determine if the given value is a Boolean.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is a Boolean.
+ * This function correctly identifies both boolean primitives and Boolean objects.
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a Boolean, false otherwise.
  */
-export function isBoolean(x) {
+export function isBoolean(value) {
     // The typeof expression will not catch values created with new Boolean(1):
     //
     // ```js
@@ -160,133 +171,130 @@ export function isBoolean(x) {
     // ```
     //
     // So we use `Object.prototype.toString` instead.
-    return protoToString.call(x) === '[object Boolean]';
+    return protoToString.call(value) === '[object Boolean]';
 }
 
 /**
- * Determine if the given value is undefined by
- * checking typeof x === 'undefined'.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is undefined.
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is undefined, false otherwise.
  */
-export function isUndefined(x) {
-    return typeof x === 'undefined';
+export function isUndefined(value) {
+    return typeof value === 'undefined';
 }
 
 /**
- * Determine if the given value is a primitive value. Primitive values are
- * defined as String, Number, BigInt, Boolean, Symbol, null, and undefined.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is a primitive value.
+ * Primitive values are defined as String, Number, BigInt, Boolean, Symbol, null, and undefined.
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a primitive, false otherwise.
  */
-export function isPrimitive(x) {
-    return x === null
-        || isString(x)
-        || isNumber(x)
-        || (typeof x === 'bigint')
-        || isBoolean(x)
-        || (typeof x === 'symbol')
-        || isUndefined(x);
+export function isPrimitive(value) {
+    return value === null
+        || isString(value)
+        || isNumber(value)
+        || (typeof value === 'bigint')
+        || isBoolean(value)
+        || (typeof value === 'symbol')
+        || isUndefined(value);
 }
 
 /**
- * Determine if the given value is a Function. This will work as expected for
- * function declarations, function expressions, async functions,
+ * Determines if the given value is a Function.
+ * This will work as expected for function declarations, function expressions, async functions,
  * class static methods, class methods, and object methods.
- * @param  {*} x
- * @return {Boolean}
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a Function, false otherwise.
  */
-export function isFunction(x) {
-    return typeof x === 'function';
+export function isFunction(value) {
+    return typeof value === 'function';
 }
 
 /**
- * Determine if the given value is a plain object. First, check to see if the
- * value is an object at all. Then if the object does not have a prototype OR
- * it has a constructor named "Object", then consider it a "plain" object.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is a plain object.
+ * A plain object is defined as an object that either has no prototype or has a constructor named "Object".
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a plain object, false otherwise.
  */
-export function isPlainObject(x) {
-    if (!x || typeof x !== 'object') {
+export function isPlainObject(value) {
+    if (!value || typeof value !== 'object') {
         return false;
     }
-    if (!Object.getPrototypeOf(x)) {
+    if (!Object.getPrototypeOf(value)) {
         return true;
     }
-    return x.constructor && x.constructor.name === 'Object';
+    return value.constructor && value.constructor.name === 'Object';
 }
 
 /**
- * Determine if the given value is a native JavaScript Date instance.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is a native JavaScript Date instance.
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a Date, false otherwise.
  */
-export function isDate(x) {
+export function isDate(value) {
     // Using the protoToString tag is more reliable than using `instanceof`.
-    return protoToString.call(x) === '[object Date]';
+    return protoToString.call(value) === '[object Date]';
 }
 
 /**
- * Determine if the given value is a *valid* JavaScript Date instance.
- * Validity is determined by checking
- * isNaN() of .getTime(): `isNaN(x.getTime())`.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is a valid JavaScript Date instance.
+ * Validity is determined by checking if the date's timestamp is not NaN.
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a valid Date, false otherwise.
  */
-export function isValidDate(x) {
-    if (isDate(x)) {
-        return !Number.isNaN(x.getTime());
+export function isValidDate(value) {
+    if (isDate(value)) {
+        return !Number.isNaN(value.getTime());
     }
     return false;
 }
 
 /**
- * Determine if the given value is a native JavaScript RegExp instance.
- * @param  {*} x
- * @return {Boolean}
+ * Determines if the given value is a native JavaScript RegExp instance.
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a RegExp, false otherwise.
  */
-export function isRegExp(x) {
+export function isRegExp(value) {
     // Using the protoToString tag is more reliable than using `instanceof`.
-    return protoToString.call(x) === '[object RegExp]';
+    return protoToString.call(value) === '[object RegExp]';
 }
 
 /**
- * Determine if the given value is a native JavaScript Map or WeakMap. This
- * will work as expected, returning true when passing an instance of a class
+ * Determines if the given value is a native JavaScript Map or WeakMap.
+ * This will work as expected, returning true when passing an instance of a class
  * which extends Map or WeakMap.
- * @param  {*} x
- * @return {Boolean}
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a Map or WeakMap, false otherwise.
  */
-export function isMap(x) {
+export function isMap(value) {
     // Using the protoToString tag is more reliable than using `instanceof`.
-    const tag = protoToString.call(x);
+    const tag = protoToString.call(value);
     return tag === '[object Map]' || tag === '[object WeakMap]';
 }
 
 /**
- * Determine if the given value is a native JavaScript Set or WeakSet. This
- * will work as expected, returning true when passing an instance of a class
+ * Determines if the given value is a native JavaScript Set or WeakSet.
+ * This will work as expected, returning true when passing an instance of a class
  * which extends Set or WeakSet.
- * @param  {*} x
- * @return {Boolean}
+ * @param {*} value - The value to check.
+ * @returns {boolean} True if the value is a Set or WeakSet, false otherwise.
  */
-export function isSet(x) {
+export function isSet(value) {
     // Using the protoToString tag is more reliable than using `instanceof`.
-    const tag = protoToString.call(x);
+    const tag = protoToString.call(value);
     return tag === '[object Set]' || tag === '[object WeakSet]';
 }
 
 /**
- * Compare two values for equality. If `a === b` then
- * returns `true`. Otherwise ensure date and NaN comparison is
+ * Compares two values for equality.
+ * If `a === b` then returns `true`. Otherwise ensures date and NaN comparison is
  * done as expected.
  *
  * Will return a curried version of this function if only
  * a single argument is supplied.
- * @param {*} a
- * @param {*} b
- * @return {Boolean}
+ * @param {*} a - The first value to compare.
+ * @param {*} b - The second value to compare.
+ * @returns {boolean|Function} True if the values are equal, or a curried function if only one argument is provided.
  */
 export function isEqual(a, b) {
     if (arguments.length < 2) {
@@ -305,127 +313,126 @@ export function isEqual(a, b) {
 }
 
 /**
- * Performs string matching, with some caveats. If the matcher is a
- * regular expression then doesMatch() will call RegExp:test(). If the
- * matcher equals x using isEqual() then return true. If x is a String then
- * check to see if the String contains the matcher with String:includes().
- * If x is a valid Date then convert it to a string using Date:toISOString()
- * before making the comparison.
+ * Performs string matching with various strategies.
+ * If the matcher is a regular expression, it will call RegExp.test().
+ * If the matcher equals the value using isEqual(), it returns true.
+ * If the value is a String, it checks if the String contains the matcher using String.includes().
+ * If the value is a valid Date, it converts it to a string using Date.toISOString() before comparison.
  *
  * Will return a curried version of this function if only
  * a single argument is supplied.
  *
  * @see {@link isEqual}
  * @see {@link isValidDate}
- * @param {String|RegExp} matcher
- * @param {*} x
- * @return {Boolean}
+ * @param {string|RegExp} matcher - The pattern or value to match against.
+ * @param {*} value - The value to test.
+ * @returns {boolean|Function} True if the value matches, or a curried function if only one argument is provided.
  */
-export function doesMatch(matcher, x) {
+export function doesMatch(matcher, value) {
     if (arguments.length < 2) {
-        return function curriedDoesMatch(_x) {
-            return doesMatch(matcher, _x);
+        return function curriedDoesMatch(_value) {
+            return doesMatch(matcher, _value);
         };
     }
-    if (isEqual(matcher, x)) {
+    if (isEqual(matcher, value)) {
         return true;
     }
 
-    if (isValidDate(x)) {
-        x = x.toISOString();
+    if (isValidDate(value)) {
+        value = value.toISOString();
     }
 
     if (typeof matcher?.test === 'function') {
-        return matcher.test(x);
+        return matcher.test(value);
     }
-    if (typeof x?.includes === 'function') {
-        return x.includes(matcher);
+    if (typeof value?.includes === 'function') {
+        return value.includes(matcher);
     }
 
     return false;
 }
 
 /**
- * Convert any JavaScript value to a human friendly string.
- * @param  {*} x
- * @return {String}
+ * Converts any JavaScript value to a human-friendly string representation.
+ * @param {*} value - The value to convert.
+ * @returns {string} A human-readable string representation of the value.
  */
-export function toFriendlyString(x) {
-    if (isString(x)) {
-        return `String(${ x })`;
+export function toFriendlyString(value) {
+    if (isString(value)) {
+        return `String(${ value })`;
     }
-    if (typeof x === 'bigint') {
-        return `BigInt(${ x })`;
+    if (typeof value === 'bigint') {
+        return `BigInt(${ value })`;
     }
     // WARNING
     // Checking isNumber() will return true for BigInt instances as well as
     // Numbers, so the isBigInt() check needs to come before isNumber().
-    if (isNumber(x)) {
-        return `Number(${ x })`;
+    if (isNumber(value)) {
+        return `Number(${ value })`;
     }
-    if (isBoolean(x)) {
-        return `Boolean(${ x })`;
+    if (isBoolean(value)) {
+        return `Boolean(${ value })`;
     }
-    if (typeof x === 'symbol') {
-        return x.toString();
+    if (typeof value === 'symbol') {
+        return value.toString();
     }
-    if (isUndefined(x)) {
+    if (isUndefined(value)) {
         return 'undefined';
     }
-    if (isFunction(x)) {
-        if (x.toString().startsWith('class ')) {
-            return `class ${ x.name } {}`;
+    if (isFunction(value)) {
+        if (value.toString().startsWith('class ')) {
+            return `class ${ value.name } {}`;
         }
         // This will get "Function" or "AsyncFunction":
-        const prefix = protoToString.call(x).slice(8, -1);
-        if (x.name) {
-            return `${ prefix }(${ x.name })`;
+        const prefix = protoToString.call(value).slice(8, -1);
+        if (value.name) {
+            return `${ prefix }(${ value.name })`;
         }
         return `${ prefix }(function)`;
     }
-    if (x === null) {
+    if (value === null) {
         return 'null';
     }
-    if (Object.getPrototypeOf(x) === null) {
+    if (Object.getPrototypeOf(value) === null) {
         return 'Object(null)';
     }
-    if (isPlainObject(x)) {
+    if (isPlainObject(value)) {
         return 'Object({})';
     }
-    if (Array.isArray(x)) {
-        if (x.length === 0) {
+    if (Array.isArray(value)) {
+        if (value.length === 0) {
             return 'Array([])';
         }
-        return `Array([0..${ (x.length - 1) }])`;
+        return `Array([0..${ (value.length - 1) }])`;
     }
-    if (isValidDate(x)) {
-        return `Date(${ x.toISOString() })`;
+    if (isValidDate(value)) {
+        return `Date(${ value.toISOString() })`;
     }
-    if (isDate(x)) {
+    if (isDate(value)) {
         return 'Date(Invalid)';
     }
-    if (isRegExp(x)) {
-        return `RegExp(${ x })`;
+    if (isRegExp(value)) {
+        return `RegExp(${ value })`;
     }
-    if (isMap(x) || isSet(x)) {
-        return `${ x.constructor.name }()`;
+    if (isMap(value) || isSet(value)) {
+        return `${ value.constructor.name }()`;
     }
 
-    const name = x.constructor?.name || 'Object';
+    const name = value.constructor?.name || 'Object';
 
-    return `${ name }(${ x })`;
+    return `${ name }(${ value })`;
 }
 
 /**
- * Create a function which can create assertion functions which can be curried.
- * If the returned function is called with only a single argument then it will
+ * Creates a function which can create assertion functions that can be curried.
+ * If the returned function is called with only a single argument, it will
  * return a curried version of the assertion function.
  *
- * @param  {String} operator The name of the assertion operator which will be
- * passed to new AssertionError({ operator })
- * @param  {Function} guard The guard function should return a message string
+ * @param {string} operator - The name of the assertion operator which will be
+ * passed to new AssertionError({ operator }).
+ * @param {Function} guard - The guard function should return a message string
  * in the case of failure and null in the case of success.
- * @return {Function}
+ * @returns {Function} A curried assertion function.
  *
  * @example
  * const assertEqual = curryAssertion2('assertEqual', (expected, actual, messagePrefix) => {
@@ -464,11 +471,13 @@ export function curryAssertion2(operator, guard) {
 }
 
 /**
- * Assert the given value is truthy. If not, assert() will throw an AssertionError
+ * Asserts that the given value is truthy.
+ * If the value is falsy, assert() will throw an AssertionError.
  *
- * @param  {*} actual The value to test.
- * @param  {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} actual - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is falsy.
+ * @returns {true} When the assertion passes.
  */
 export function assert(actual, messagePrefix) {
     const assertionMessage = `Expected ${ toFriendlyString(actual) } to be truthy`;
@@ -483,11 +492,13 @@ export function assert(actual, messagePrefix) {
 }
 
 /**
- * Assert the given value is falsy. If not, assertFalsy() will throw an AssertionError
+ * Asserts that the given value is falsy.
+ * If the value is truthy, assertFalsy() will throw an AssertionError.
  *
- * @param  {*} actual The value to test.
- * @param  {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} actual - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is truthy.
+ * @returns {true} When the assertion passes.
  */
 export function assertFalsy(actual, messagePrefix) {
     const assertionMessage = `Expected ${ toFriendlyString(actual) } to be falsy`;
@@ -502,14 +513,15 @@ export function assertFalsy(actual, messagePrefix) {
 }
 
 /**
- * Asserts equalty using isEqual(). If the actual value does not equal the
- * expected value then an AssertionError will be thrown.
+ * Asserts equality using isEqual().
+ * If the actual value does not equal the expected value, an AssertionError will be thrown.
  *
  * @see {@link isEqual}
- * @param {*} expected The value to test against.
- * @param {*} actual The value to test.
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} expected - The value to test against.
+ * @param {*} actual - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the values are not equal.
+ * @returns {true|Function} True when the assertion passes, or a curried function if only one argument is provided.
  */
 export const assertEqual = curryAssertion2('assertEqual', (expected, actual, messagePrefix) => {
     if (!isEqual(expected, actual)) {
@@ -522,14 +534,15 @@ export const assertEqual = curryAssertion2('assertEqual', (expected, actual, mes
 });
 
 /**
- * Asserts NON equalty using isEqual(). If the actual value equals the expected
- * value then an AssertionError will be thrown.
+ * Asserts non-equality using isEqual().
+ * If the actual value equals the expected value, an AssertionError will be thrown.
  *
  * @see {@link isEqual}
- * @param {*} expected The value to test against.
- * @param {*} actual The value to test.
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} expected - The value to test against.
+ * @param {*} actual - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the values are equal.
+ * @returns {true|Function} True when the assertion passes, or a curried function if only one argument is provided.
  */
 export const assertNotEqual = curryAssertion2('assertNotEqual', (expected, actual, messagePrefix) => {
     if (isEqual(expected, actual)) {
@@ -542,15 +555,15 @@ export const assertNotEqual = curryAssertion2('assertNotEqual', (expected, actua
 });
 
 /**
- * Asserts that the actual value matches the matcher value according
- * to doesMatch(). If the actual does not match the matcher then an AssertionError
- * will be thrown.
+ * Asserts that the actual value matches the matcher value according to doesMatch().
+ * If the actual does not match the matcher, an AssertionError will be thrown.
  *
  * @see {@link doesMatch}
- * @param {*} matcher The matcher to test against. See doesMatch() for more info.
- * @param {*} actual The value to test. See doesMatch() for more info.
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {string|RegExp} matcher - The matcher to test against. See doesMatch() for more info.
+ * @param {*} actual - The value to test. See doesMatch() for more info.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value does not match.
+ * @returns {true|Function} True when the assertion passes, or a curried function if only one argument is provided.
  */
 export const assertMatches = curryAssertion2('assertMatches', (matcher, actual, messagePrefix) => {
     if (!doesMatch(matcher, actual)) {
@@ -563,15 +576,15 @@ export const assertMatches = curryAssertion2('assertMatches', (matcher, actual, 
 });
 
 /**
- * Asserts that the actual value DOES NOT match the matcher value according
- * to doesMatch(). If the actual value matches the matcher then an AssertionError
- * will be thrown.
+ * Asserts that the actual value does NOT match the matcher value according to doesMatch().
+ * If the actual value matches the matcher, an AssertionError will be thrown.
  *
  * @see {@link doesMatch}
- * @param {*} matcher The matcher to test against. See doesMatch() for more info.
- * @param {*} actual The value to test. See doesMatch() for more info.
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {string|RegExp} matcher - The matcher to test against. See doesMatch() for more info.
+ * @param {*} actual - The value to test. See doesMatch() for more info.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value matches.
+ * @returns {true|Function} True when the assertion passes, or a curried function if only one argument is provided.
  */
 export const assertNotMatches = curryAssertion2('assertNotMatches', (matcher, actual, messagePrefix) => {
     if (doesMatch(matcher, actual)) {
@@ -584,18 +597,18 @@ export const assertNotMatches = curryAssertion2('assertNotMatches', (matcher, ac
 });
 
 /**
- * Asserts that the given value is not undefined as
- * determined by isUndefined(). If the value is undefined then an
- * AssertionError will be thrown.
+ * Asserts that the given value is not undefined as determined by isUndefined().
+ * If the value is undefined, an AssertionError will be thrown.
  *
  * @see {@link isUndefined}
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is undefined.
+ * @returns {true} When the assertion passes.
  */
-export function assertDefined(x, messagePrefix) {
-    if (isUndefined(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be defined`;
+export function assertDefined(value, messagePrefix) {
+    if (isUndefined(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be defined`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -606,18 +619,18 @@ export function assertDefined(x, messagePrefix) {
 }
 
 /**
- * Asserts that the given value is undefined as
- * determined by isUndefined(). If the value is NOT undefined then an
- * AssertionError will be thrown.
+ * Asserts that the given value is undefined as determined by isUndefined().
+ * If the value is NOT undefined, an AssertionError will be thrown.
  *
  * @see {@link isUndefined}
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is not undefined.
+ * @returns {true} When the assertion passes.
  */
-export function assertUndefined(x, messagePrefix) {
-    if (!isUndefined(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be undefined`;
+export function assertUndefined(value, messagePrefix) {
+    if (!isUndefined(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be undefined`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -628,18 +641,18 @@ export function assertUndefined(x, messagePrefix) {
 }
 
 /**
- * Asserts that the given value is a non-empty String as
- * determined by isNonEmptyString(). If the value is not a String, or an empty
- * String then an AssertionError will be thrown.
+ * Asserts that the given value is a non-empty String as determined by isNonEmptyString().
+ * If the value is not a String or is an empty String, an AssertionError will be thrown.
  *
  * @see {@link isNonEmptyString}
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is not a non-empty String.
+ * @returns {true} When the assertion passes.
  */
-export function assertNonEmptyString(x, messagePrefix) {
-    if (!isNonEmptyString(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a non-empty String`;
+export function assertNonEmptyString(value, messagePrefix) {
+    if (!isNonEmptyString(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be a non-empty String`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -650,18 +663,18 @@ export function assertNonEmptyString(x, messagePrefix) {
 }
 
 /**
- * Asserts that the given value is a Number but not NaN as
- * determined by isNumberNotNaN(). If the value is not a Number, or
- * is NaN then an AssertionError will be thrown.
+ * Asserts that the given value is a Number but not NaN as determined by isNumberNotNaN().
+ * If the value is not a Number or is NaN, an AssertionError will be thrown.
  *
  * @see {@link isNumberNotNaN}
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is not a Number or is NaN.
+ * @returns {true} When the assertion passes.
  */
-export function assertNumberNotNaN(x, messagePrefix) {
-    if (!isNumberNotNaN(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a Number and not NaN`;
+export function assertNumberNotNaN(value, messagePrefix) {
+    if (!isNumberNotNaN(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be a Number and not NaN`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -672,17 +685,17 @@ export function assertNumberNotNaN(x, messagePrefix) {
 }
 
 /**
- * Asserts that the given value is an Array as
- * determined by Array.isArray(). If the value is not an Array
- * then an AssertionError will be thrown.
+ * Asserts that the given value is an Array as determined by Array.isArray().
+ * If the value is not an Array, an AssertionError will be thrown.
  *
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is not an Array.
+ * @returns {true} When the assertion passes.
  */
-export function assertArray(x, messagePrefix) {
-    if (!Array.isArray(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be an Array`;
+export function assertArray(value, messagePrefix) {
+    if (!Array.isArray(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be an Array`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -693,18 +706,18 @@ export function assertArray(x, messagePrefix) {
 }
 
 /**
- * Asserts that the given value is a Boolean as
- * determined by isBoolean(). If the value is not a Boolean
- * then an AssertionError will be thrown.
+ * Asserts that the given value is a Boolean as determined by isBoolean().
+ * If the value is not a Boolean, an AssertionError will be thrown.
  *
  * @see {@link isBoolean}
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is not a Boolean.
+ * @returns {true} When the assertion passes.
  */
-export function assertBoolean(x, messagePrefix) {
-    if (!isBoolean(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a Boolean`;
+export function assertBoolean(value, messagePrefix) {
+    if (!isBoolean(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be a Boolean`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -715,18 +728,18 @@ export function assertBoolean(x, messagePrefix) {
 }
 
 /**
- * Asserts that the given value is a Function as
- * determined by isFunction(). If the value is not a Function
- * then an AssertionError will be thrown.
+ * Asserts that the given value is a Function as determined by isFunction().
+ * If the value is not a Function, an AssertionError will be thrown.
  *
  * @see {@link isFunction}
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is not a Function.
+ * @returns {true} When the assertion passes.
  */
-export function assertFunction(x, messagePrefix) {
-    if (!isFunction(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a Function`;
+export function assertFunction(value, messagePrefix) {
+    if (!isFunction(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be a Function`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -737,18 +750,18 @@ export function assertFunction(x, messagePrefix) {
 }
 
 /**
- * Asserts that the given value is a valid Date as
- * determined by isValidDate(). If the value is not a valid Date
- * then an AssertionError will be thrown.
+ * Asserts that the given value is a valid Date as determined by isValidDate().
+ * If the value is not a valid Date, an AssertionError will be thrown.
  *
  * @see {@link isValidDate}
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is not a valid Date.
+ * @returns {true} When the assertion passes.
  */
-export function assertValidDate(x, messagePrefix) {
-    if (!isValidDate(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a valid Date`;
+export function assertValidDate(value, messagePrefix) {
+    if (!isValidDate(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be a valid Date`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -759,18 +772,18 @@ export function assertValidDate(x, messagePrefix) {
 }
 
 /**
- * Asserts that the given value is a RegExp as
- * determined by isRegExp(). If the value is not a RegExp
- * then an AssertionError will be thrown.
+ * Asserts that the given value is a RegExp as determined by isRegExp().
+ * If the value is not a RegExp, an AssertionError will be thrown.
  *
  * @see {@link isRegExp}
- * @param {*} x
- * @param {string} [messagePrefix] An optional error message prefix string.
- * @throws {AssertionError}
+ * @param {*} value - The value to test.
+ * @param {string} [messagePrefix] - An optional error message prefix string.
+ * @throws {AssertionError} When the value is not a RegExp.
+ * @returns {true} When the assertion passes.
  */
-export function assertRegExp(x, messagePrefix) {
-    if (!isRegExp(x)) {
-        const assertionMessage = `Expected ${ toFriendlyString(x) } to be a RegExp`;
+export function assertRegExp(value, messagePrefix) {
+    if (!isRegExp(value)) {
+        const assertionMessage = `Expected ${ toFriendlyString(value) } to be a RegExp`;
 
         const message = isNonEmptyString(messagePrefix)
             ? `${ messagePrefix } (${ assertionMessage })`
@@ -782,13 +795,13 @@ export function assertRegExp(x, messagePrefix) {
 
 /**
  * Asserts that the subject value is greater than the control value.
- * If the subject is less than or equal to the control value, then an
- * AssertionError will be thrown.
+ * If the subject is less than or equal to the control value, an AssertionError will be thrown.
  *
- * @param {number} control The value to test against
- * @param {number} subject The value to test
- * @param {string} [messageSuffix] An optional error message suffix string
- * @throws {AssertionError}
+ * @param {number} control - The value to test against.
+ * @param {number} subject - The value to test.
+ * @param {string} [messageSuffix] - An optional error message suffix string.
+ * @throws {AssertionError} When the subject is not greater than the control.
+ * @returns {true|Function} True when the assertion passes, or a curried function if only one argument is provided.
  */
 export const assertGreaterThan = curryAssertion2('assertGreaterThan', (control, subject, messageSuffix) => {
     if (subject <= control) {
@@ -802,13 +815,13 @@ export const assertGreaterThan = curryAssertion2('assertGreaterThan', (control, 
 
 /**
  * Asserts that the subject value is less than the control value.
- * If the subject is greater than or equal to the control value, then an
- * AssertionError will be thrown.
+ * If the subject is greater than or equal to the control value, an AssertionError will be thrown.
  *
- * @param {number} control The value to test against
- * @param {number} subject The value to test
- * @param {string} [messageSuffix] An optional error message suffix string
- * @throws {AssertionError}
+ * @param {number} control - The value to test against.
+ * @param {number} subject - The value to test.
+ * @param {string} [messageSuffix] - An optional error message suffix string.
+ * @throws {AssertionError} When the subject is not less than the control.
+ * @returns {true|Function} True when the assertion passes, or a curried function if only one argument is provided.
  */
 export const assertLessThan = curryAssertion2('assertLessThan', (control, subject, messageSuffix) => {
     if (subject >= control) {
