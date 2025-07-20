@@ -217,6 +217,7 @@ export default class BaseServerRequest {
 
     /**
      * Returns the Bearer token from the Authorization header, or null.
+     * Strips the "Bearer " prefix from the header value.
      * @returns {string|null}
      */
     getAuthorizationBearer() {
@@ -224,10 +225,13 @@ export default class BaseServerRequest {
         if (!authHeader) {
             return null;
         }
+
         const [ scheme, token ] = authHeader.split(/\s+/, 2);
+
         if (!/^bearer$/i.test(scheme)) {
             return null;
         }
+
         return token || null;
     }
 
@@ -246,12 +250,14 @@ export default class BaseServerRequest {
      */
     async json() {
         const data = await this.getBufferedStringData('utf8');
+
         let json;
         try {
             json = JSON.parse(data);
         } catch (cause) {
             throw new BadRequestError(`Error parsing HTTP JSON body: ${ cause.message }`, { cause });
         }
+
         return json;
     }
 
@@ -262,10 +268,12 @@ export default class BaseServerRequest {
      */
     async formData() {
         const body = await this.getBufferedStringData('utf8');
+        // Use URLSearchParams for robust parsing
         const params = new URLSearchParams(body);
         const result = {};
         for (const [ key, value ] of params) {
             if (Object.prototype.hasOwnProperty.call(result, key)) {
+                // Convert to array if multiple values for the same key
                 if (Array.isArray(result[key])) {
                     result[key].push(value);
                 } else {
@@ -280,30 +288,36 @@ export default class BaseServerRequest {
 
     /**
      * Reads and buffers the entire request body as a string with the specified encoding.
-     * @param {BufferEncoding} encoding
-     * @returns {Promise<string>}
+     * @param {BufferEncoding} encoding - The encoding to use for the resulting string.
+     * @returns {Promise<string>} The buffered request body as a string.
      */
     getBufferedStringData(encoding) {
         return new Promise((resolve, reject) => {
             const req = this.#nodeRequest;
             const chunks = [];
+
             function onError(err) {
                 cleanup();
                 reject(err);
             }
+
             function onData(chunk) {
                 chunks.push(chunk);
             }
+
             function onEnd() {
                 cleanup();
                 const data = Buffer.concat(chunks).toString(encoding);
                 resolve(data);
             }
+
+            // Cleanup function to remove all listeners
             function cleanup() {
                 req.off('error', onError);
                 req.off('data', onData);
                 req.off('end', onEnd);
             }
+
             req.on('error', onError);
             req.on('data', onData);
             req.on('end', onEnd);
