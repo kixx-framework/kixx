@@ -2,11 +2,15 @@ Kixx.js
 =======
 Kixx is a web development framework for Node.js servers which is derived from these core principles:
 
-__1. The technologies which make up the World Wide Web constitute our application development and distribution platform of choice.__
+### 1. Optimize for productivity.
 
-__2. An application development framework must remove complexity, both from within the framework and from the applications which are built on it.__
+### 2. The World Wide Web is our application development and distribution platform of choice.
 
-__3. Computer programming is art form. It is an expression of human creativity and imagination on the medium of computers.__
+### 3. Remove complexity from the framework *and* the applications which are built on it.
+
+### 4. Computer programming is art form.
+
+### 5. Embrace the essence of the Web and optimize for building [Hypermedia Driven Applications](https://htmx.org/essays/hypermedia-driven-applications/).
 
 Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2025.
 

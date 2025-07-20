@@ -13,17 +13,51 @@ import {
 const DEFAULT_QUERY_LIMIT = 10;
 
 
+/**
+ * Datastore
+ * =========
+ *
+ * The Datastore class provides a high-level, document-oriented API for managing
+ * persistent data using a file-based backend. It supports atomic operations,
+ * optimistic concurrency control, revision tracking, and view-based querying.
+ *
+ * Core Features:
+ *   - Atomic get/set/update/delete operations with revision (_rev) support
+ *   - Optimistic concurrency control to prevent lost updates
+ *   - Locking queue for safe concurrent access in async environments
+ *   - Querying by key range or custom views, with pagination and sorting
+ *   - Optionally pluggable backend (DatastoreEngine) and locking queue
+ *
+ * Usage Example:
+ *   const store = new Datastore({ directory: '/data/db' });
+ *   await store.load();
+ *   await store.setItem('foo', { name: 'bar' });
+ *   const doc = await store.getItem('foo');
+ *   await store.deleteItem('foo');
+ */
 export default class Datastore {
 
+    /**
+     * @private
+     * @type {DatastoreEngine|null}
+     * The underlying database engine instance.
+     */
     #db = null;
+
+    /**
+     * @private
+     * @type {LockingQueue|null}
+     * Locking queue for serializing async operations.
+     */
     #lockingQueue = null;
 
     /**
-     * Create a new Datastore instance.
+     * Construct a new Datastore instance.
      *
-     * @param {Object} options - Configuration options
-     * @param {string} [options.directory] - Directory path for storing data files
-     * @param {Object} [options.db] - Optional pre-configured database instance to use
+     * @param {Object} options - Configuration options.
+     * @param {string} [options.directory] - Directory path for storing data files.
+     * @param {Object} [options.db] - Optional pre-configured database engine instance.
+     * @param {Object} [options.lockingQueue] - Optional locking queue instance.
      */
     constructor(options = {}) {
         if (options.db) {
@@ -38,11 +72,23 @@ export default class Datastore {
         }
     }
 
+    /**
+     * Load all documents from the underlying database engine.
+     * Must be called before performing operations.
+     *
+     * @returns {Promise<Datastore>} The Datastore instance (for chaining).
+     */
     async load() {
         await this.#db.loadDocuments();
         return this;
     }
 
+    /**
+     * Retrieve a document by key.
+     *
+     * @param {string|number} key - The document key.
+     * @returns {Promise<Object|null>} The document (cloned), or null if not found.
+     */
     async getItem(key) {
         // Ensure existing async operations are completed before proceeding.
         await this.getLock();
@@ -55,6 +101,17 @@ export default class Datastore {
         return null;
     }
 
+    /**
+     * Set (insert or update) a document by key.
+     * Performs optimistic concurrency control using the _rev property.
+     *
+     * @param {string|number} key - The document key.
+     * @param {Object} document - The document to store (must be a plain object).
+     * @param {Object} [options] - Additional options.
+     * @param {boolean} [options.checkConsistency=true] - If true, checks _rev for conflicts.
+     * @returns {Promise<Object>} The stored document (with updated _rev).
+     * @throws {AssertionError} If a revision conflict is detected.
+     */
     async setItem(key, document, options = {}) {
         const checkConsistency = options.checkConsistency === false ? false : true;
 
@@ -96,6 +153,18 @@ export default class Datastore {
         return document;
     }
 
+    /**
+     * Update a document by key using an update function.
+     * The update function receives a clone of the current document (or undefined).
+     * Performs optimistic concurrency control using the _rev property.
+     *
+     * @param {string|number} key - The document key.
+     * @param {Function} updateFunction - Function that receives the current document and returns the updated document.
+     * @param {Object} [options] - Additional options.
+     * @param {boolean} [options.checkConsistency=true] - If true, checks _rev for conflicts.
+     * @returns {Promise<Object>} The updated document (with updated _rev).
+     * @throws {AssertionError} If a revision conflict is detected.
+     */
     async updateItem(key, updateFunction, options = {}) {
         const checkConsistency = options.checkConsistency === false ? false : true;
 
@@ -130,6 +199,12 @@ export default class Datastore {
         return document;
     }
 
+    /**
+     * Delete a document by key.
+     *
+     * @param {string|number} key - The document key.
+     * @returns {Promise<string|number>} The deleted key.
+     */
     async deleteItem(key) {
         await this.getLock();
         await this.#db.deleteItem(key);
@@ -148,7 +223,9 @@ export default class Datastore {
      * @param {number} [options.inclusiveStartIndex=0] - The inclusive start index for pagination.
      * @param {number} [options.limit=10] - The maximum number of items to return.
      * @param {boolean} [options.includeDocuments=false] - Whether to include full documents in the results.
-     * @returns {Promise<Object>} An object containing the query results.
+     * @returns {Promise<Object>} An object containing the query results:
+     *   - exclusiveEndIndex: The exclusive end index for pagination.
+     *   - items: Array of { key, [document] } objects.
      */
     async queryKeys(options) {
         options = options || {};
@@ -208,7 +285,9 @@ export default class Datastore {
      * @param {number} [options.inclusiveStartIndex=0] - The inclusive start index for pagination.
      * @param {number} [options.limit=10] - The maximum number of items to return.
      * @param {boolean} [options.includeDocuments=false] - Whether to include full documents in the results.
-     * @returns {Promise<Object>} An object containing the query results.
+     * @returns {Promise<Object>} An object containing the query results:
+     *   - exclusiveEndIndex: The exclusive end index for pagination.
+     *   - items: Array of { key, [document] } objects.
      * @throws {WrappedError} If the specified view is not registered with the database.
      */
     async queryView(viewId, options = {}) {
@@ -265,12 +344,22 @@ export default class Datastore {
         return { exclusiveEndIndex, items };
     }
 
+    /**
+     * Acquire the locking queue for atomic operations.
+     * Used internally to serialize async access.
+     *
+     * @returns {Promise<void>}
+     */
     async getLock() {
         if (this.#lockingQueue) {
             await this.#lockingQueue.getLock();
         }
     }
 
+    /**
+     * Release the locking queue after an atomic operation.
+     * Used internally to serialize async access.
+     */
     releaseLock() {
         if (this.#lockingQueue) {
             this.#lockingQueue.releaseLock();
