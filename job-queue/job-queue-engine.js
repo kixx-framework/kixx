@@ -19,19 +19,89 @@ import {
 } from '../assertions/mod.js';
 
 
+/**
+ * JobQueueEngine
+ * ==============
+ *
+ * The JobQueueEngine class provides a file-backed, concurrency-limited job queue for
+ * scheduling, executing, and managing asynchronous jobs. Jobs are persisted as JSON
+ * files in a specified directory, and the engine supports deferred execution, custom
+ * job handlers, and safe concurrent processing.
+ *
+ * Core Features:
+ *   - Schedules jobs for immediate or deferred execution based on their executionDate
+ *   - Limits the number of concurrently running jobs (maxConcurrency)
+ *   - Persists jobs to disk for durability and recovery
+ *   - Supports registering custom job handlers by method name
+ *   - Handles job completion, failure, and cleanup
+ *   - Emits events for debugging and error handling via an eventListener callback
+ *   - Uses a LockingQueue to ensure safe concurrent file operations
+ *
+ * Usage Example:
+ *   const engine = new JobQueueEngine({ directory: '/jobs', maxConcurrency: 2 });
+ *   engine.registerJobHandler('sendEmail', async (params) => { ... });
+ *   await engine.load(); // Loads and schedules all persisted jobs
+ *   await engine.scheduleJob(new Job({ ... }));
+ */
 export default class JobQueueEngine {
-
+    /**
+     * @private
+     * @type {string|null}
+     * Directory where job files are stored.
+     */
     #directory = null;
+
+    /**
+     * @private
+     * @type {Set<Job>}
+     * Set of jobs currently in progress.
+     */
     #inProgressJobs = new Set();
+
+    /**
+     * @private
+     * @type {number}
+     * Maximum number of concurrent jobs allowed.
+     */
     #maxConcurrentJobs = 1;
+
+    /**
+     * @private
+     * @type {boolean}
+     * Indicates if the engine has been disposed.
+     */
     #disposed = false;
+
+    /**
+     * @private
+     * @type {Map<string, Function>}
+     * Map of job method names to handler functions.
+     */
     #jobHandlers = new Map();
+
+    /**
+     * @private
+     * @type {Map<string, Timeout>}
+     * Map of job IDs to scheduled setTimeout handles for deferred jobs.
+     */
     #scheduledJobHandles = new Map();
+
+    /**
+     * @private
+     * @type {LockingQueue}
+     * Locking queue for safe concurrent file operations.
+     */
     #lockingQueue = null;
+
+    /**
+     * @private
+     * @type {Function}
+     * Event listener callback for debug and error events.
+     */
     #eventListener = null;
 
     /**
-     * Create a new JobQueueEngine instance
+     * Create a new JobQueueEngine instance.
      *
      * @param {Object} options - Configuration options
      * @param {string} options.directory - Directory path where job files will be stored
@@ -61,23 +131,45 @@ export default class JobQueueEngine {
         }
     }
 
+    /**
+     * Indicates whether the engine has reached the maximum number of concurrent jobs.
+     * @returns {boolean}
+     */
     get hasReachedMaxConcurrency() {
         return this.#inProgressJobs.size >= this.#maxConcurrentJobs;
     }
 
+    /**
+     * Set the maximum number of concurrent jobs allowed.
+     * @param {number} max
+     */
     setMaxConcurrency(max) {
         assertNumberNotNaN(max);
         this.#maxConcurrentJobs = max;
     }
 
+    /**
+     * Register a handler function for a specific job method name.
+     * @param {string} methodName
+     * @param {Function} handler
+     */
     registerJobHandler(methodName, handler) {
         this.#jobHandlers.set(methodName, handler);
     }
 
+    /**
+     * Check if a handler is registered for the given method name.
+     * @param {string} methodName
+     * @returns {boolean}
+     */
     hasJobHandler(methodName) {
         return this.#jobHandlers.has(methodName);
     }
 
+    /**
+     * Load all jobs from disk and schedule them for execution.
+     * @returns {Promise<Array<Job>>}
+     */
     async load() {
         const jobs = await this.getAllJobs();
 
@@ -88,6 +180,12 @@ export default class JobQueueEngine {
         return Promise.all(promises);
     }
 
+    /**
+     * Schedule a job for execution. If the job is ready, it will be started immediately.
+     * If deferred, it will be scheduled to start at the appropriate time.
+     * @param {Job} job
+     * @returns {Promise<Job|boolean>}
+     */
     async scheduleJob(job) {
         if (this.#disposed) {
             return false;
@@ -112,6 +210,9 @@ export default class JobQueueEngine {
         return job;
     }
 
+    /**
+     * Dispose the engine, clearing all scheduled jobs and preventing further execution.
+     */
     dispose() {
         this.#disposed = true;
 
@@ -122,6 +223,10 @@ export default class JobQueueEngine {
         this.#scheduledJobHandles.clear();
     }
 
+    /**
+     * Start the next available job if concurrency limits allow.
+     * @returns {Promise<Job|boolean>}
+     */
     async startNextJob() {
         if (this.#disposed || this.hasReachedMaxConcurrency) {
             return false;
@@ -160,7 +265,11 @@ export default class JobQueueEngine {
     }
 
     /**
+     * Execute a job by invoking its registered handler.
+     * Handles completion and error reporting.
      * @private
+     * @param {Job} job
+     * @returns {Promise<void>}
      */
     async executeJob(job) {
         this.#eventListener('debug', {
@@ -197,6 +306,10 @@ export default class JobQueueEngine {
         });
     }
 
+    /**
+     * Get the oldest job that is ready to be executed.
+     * @returns {Promise<Job|null>}
+     */
     async getOldestReadyJob() {
         const jobs = await this.getAllJobs();
 
@@ -211,6 +324,11 @@ export default class JobQueueEngine {
         return oldestReadyJob;
     }
 
+    /**
+     * Set a job's state to IN_PROGRESS and persist it.
+     * @param {Job} job
+     * @returns {Promise<void>}
+     */
     async setJobStateInProgress(job) {
         await this.#lockingQueue.getLock();
         job.setStateInProgress();
@@ -219,11 +337,21 @@ export default class JobQueueEngine {
         this.#lockingQueue.releaseLock();
     }
 
+    /**
+     * Complete a job and remove it from the queue and disk.
+     * @param {Job} job
+     * @returns {Promise<void>}
+     */
     async completeJob(job) {
         this.#inProgressJobs.delete(job);
         await this.deleteJob(job);
     }
 
+    /**
+     * Persist a job to disk as a JSON file.
+     * @param {Job} job
+     * @returns {Promise<void>}
+     */
     async saveJob(job) {
         const filepath = this.getJobFilepath(job);
         await this.#lockingQueue.getLock();
@@ -231,12 +359,21 @@ export default class JobQueueEngine {
         this.#lockingQueue.releaseLock();
     }
 
+    /**
+     * Delete a job's file from disk.
+     * @param {Job} job
+     * @returns {Promise<void>}
+     */
     async deleteJob(job) {
         await this.#lockingQueue.getLock();
         await removeFile(this.getJobFilepath(job));
         this.#lockingQueue.releaseLock();
     }
 
+    /**
+     * Get all jobs currently persisted in the job queue directory.
+     * @returns {Promise<Array<Job>>}
+     */
     async getAllJobs() {
         const filepaths = await this.readJobQueueDirectory();
 
@@ -247,6 +384,11 @@ export default class JobQueueEngine {
         return jobs;
     }
 
+    /**
+     * Read the job queue directory and return all file paths.
+     * @returns {Promise<Array<string>>}
+     * @throws {WrappedError} If the directory cannot be read
+     */
     async readJobQueueDirectory() {
         try {
             const filepaths = await readDirectory(this.#directory);
@@ -259,6 +401,12 @@ export default class JobQueueEngine {
         }
     }
 
+    /**
+     * Load a job from a given file path.
+     * @param {string} filepath
+     * @returns {Promise<Job>}
+     * @throws {WrappedError} If the job file cannot be loaded
+     */
     async loadJobByFilepath(filepath) {
         try {
             const json = await readJSONFile(filepath);
@@ -268,6 +416,11 @@ export default class JobQueueEngine {
         }
     }
 
+    /**
+     * Get the file path for a given job.
+     * @param {Job} job
+     * @returns {string}
+     */
     getJobFilepath(job) {
         return path.join(this.#directory, `${ job.key }.json`);
     }

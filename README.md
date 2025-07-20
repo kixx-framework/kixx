@@ -4,13 +4,17 @@ Kixx is a web development framework for Node.js servers which is derived from th
 
 ### 1. Optimize for productivity.
 
-### 2. The World Wide Web is our application development and distribution platform of choice.
+### 2. Computer programming is an art and a craft.
 
 ### 3. Remove complexity from the framework *and* the applications which are built on it.
 
-### 4. Computer programming is art form.
+### 4. The World Wide Web is our application development and distribution platform of choice.
 
 ### 5. Embrace the essence of the Web and optimize for building [Hypermedia Driven Applications](https://htmx.org/essays/hypermedia-driven-applications/).
+
+### 6. Have a bias toward monilithic applications over distributed or microservice architectures.
+
+### 7. Have opinions and make decisions.
 
 Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2025.
 
