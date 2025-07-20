@@ -1,14 +1,33 @@
 import { NotFoundError } from '../../errors/mod.js';
-import { assertNonEmptyString } from '../../assertions/mod.js';
 
 
+/**
+ * PageHandler
+ * ===========
+ *
+ * Returns a request handler function that renders a page using the application's view service.
+ *
+ * @function PageHandler
+ * @param {Object} spec - Specification for the page handler.
+ * @param {string} [spec.pathname] - Optional pathname to use instead of the request URL pathname.
+ * @returns {Function} An async request handler function for rendering pages.
+ */
 export default function PageHandler(spec) {
-    assertNonEmptyString(spec.viewService, 'viewService is required');
-
+    /**
+     * Returns an async request handler function that renders a page using the application's view service.
+     *
+     * @function pageHandler
+     * @async
+     * @param {Object} context - The application context, containing services and configuration.
+     * @param {Object} request - The HTTP request object.
+     * @param {Object} response - The HTTP response object.
+     * @returns {Promise<Object>} The HTTP response with rendered HTML or JSON.
+     * @throws {NotFoundError} If the page body or base template is not found.
+     */
     return async function pageHandler(context, request, response) {
         const pathname = spec.pathname || request.url.pathname;
 
-        const viewService = context.getService(spec.viewService);
+        const viewService = context.getService('kixx.AppViewService');
 
         const pageData = await viewService.getPageData(pathname, response.props);
 

@@ -6,25 +6,91 @@ import JobQueue from '../job-queue/job-queue.js';
 import ViewService from '../view-service/view-service.js';
 
 
+/**
+ * Context
+ * =======
+ *
+ * The Context class provides a central registry and accessor for core application services,
+ * such as configuration, paths, logging, data stores, object stores, job queues, and view services.
+ * It is responsible for managing the lifecycle and access to these services, and for providing
+ * a consistent interface for other parts of the application to retrieve them.
+ *
+ * Core Features:
+ *   - Registers and retrieves named services (e.g., Datastore, ObjectStore, JobQueue, ViewService)
+ *   - Provides access to application config, paths, and logger
+ *   - Static loader for initializing and wiring up all core services
+ *
+ * Usage Example:
+ *   const context = await Context.load(config, paths, logger);
+ *   const datastore = context.getService('kixx.Datastore');
+ *   const jobQueue = context.getService('kixx.JobQueue');
+ */
 export default class Context {
-
+    /**
+     * @private
+     * @type {Map<string, any>}
+     * Internal registry of named services.
+     */
     #services = new Map();
 
+    /**
+     * Construct a new Context instance.
+     *
+     * @param {Object} options
+     * @param {Object} options.config - The application configuration object.
+     * @param {Object} options.paths - The application paths object.
+     * @param {Object} options.logger - The application logger instance.
+     */
     constructor({ config, paths, logger }) {
+        /**
+         * The application configuration object.
+         * @type {Object}
+         */
         this.config = config;
+
+        /**
+         * The application paths object.
+         * @type {Object}
+         */
         this.paths = paths;
+
+        /**
+         * The application logger instance.
+         * @type {Object}
+         */
         this.logger = logger;
     }
 
+    /**
+     * Registers a service instance under a given name.
+     *
+     * @param {string} name - The unique name for the service.
+     * @param {any} service - The service instance to register.
+     */
     registerService(name, service) {
         this.#services.set(name, service);
     }
 
+    /**
+     * Retrieves a registered service by name.
+     *
+     * @param {string} name - The name of the service to retrieve.
+     * @returns {any} The registered service instance.
+     * @throws {AssertionError} If the service is not registered.
+     */
     getService(name) {
         assert(this.#services.has(name), `The service "${ name }" is not registered`);
         return this.#services.get(name);
     }
 
+    /**
+     * Loads and initializes all core application services, registers them, and returns a Context instance.
+     *
+     * @param {Object} config - The application configuration object.
+     * @param {Object} paths - The application paths object.
+     * @param {Object} logger - The application logger instance.
+     * @returns {Promise<Context>} The fully initialized Context instance.
+     */
     static async load(config, paths, logger) {
         const context = new Context({
             config,
@@ -46,6 +112,13 @@ export default class Context {
     }
 }
 
+/**
+ * Creates and configures a JobQueue instance, wiring up logger event handlers.
+ *
+ * @param {Object} logger - The application logger instance.
+ * @param {Object} paths - The application paths object.
+ * @returns {JobQueue} The configured JobQueue instance.
+ */
 function createJobQueue(logger, paths) {
     const jobQueue = new JobQueue({
         directory: paths.job_directory,
@@ -74,6 +147,12 @@ function createJobQueue(logger, paths) {
     return jobQueue;
 }
 
+/**
+ * Loads and initializes the Datastore service.
+ *
+ * @param {Object} paths - The application paths object.
+ * @returns {Promise<Datastore>} The loaded Datastore instance.
+ */
 async function loadDatastore(paths) {
     const datastore = new Datastore({
         directory: paths.kv_store_directory,
@@ -84,6 +163,12 @@ async function loadDatastore(paths) {
     return datastore;
 }
 
+/**
+ * Loads and initializes the ObjectStore service.
+ *
+ * @param {Object} paths - The application paths object.
+ * @returns {Promise<ObjectStore>} The loaded ObjectStore instance.
+ */
 async function loadObjectStore(paths) {
     const store = new ObjectStore({
         directory: paths.object_store_directory,
@@ -91,6 +176,13 @@ async function loadObjectStore(paths) {
     return store;
 }
 
+/**
+ * Creates and configures a ViewService instance.
+ *
+ * @param {Object} logger - The application logger instance.
+ * @param {Object} paths - The application paths object.
+ * @returns {ViewService} The configured ViewService instance.
+ */
 function createViewService(logger, paths) {
     return new ViewService({
         logger,

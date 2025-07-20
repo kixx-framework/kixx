@@ -1,5 +1,5 @@
-Kixx.js
-=======
+Kixx Hypermedia Framework
+=========================
 Kixx is a web development framework for Node.js servers which is derived from these core principles:
 
 ### 1. Optimize for productivity.

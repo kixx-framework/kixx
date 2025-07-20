@@ -3,10 +3,45 @@ import { assertNonEmptyString } from '../assertions/mod.js';
 import * as fileSystem from '../lib/file-system.js';
 
 
+/**
+ * Paths
+ * =====
+ *
+ * The Paths class provides a structured interface for resolving and managing
+ * important directory and file paths within a Kixx application. It centralizes
+ * the logic for constructing absolute paths to configuration files, routes,
+ * templates, plugins, data stores, and other key resources, based on the
+ * application's root directory.
+ *
+ * Core Features:
+ *   - Computes and exposes absolute paths for all major application resources.
+ *   - Supports injection of a custom file system abstraction for testing or extension.
+ *   - Provides a utility for discovering plugin modules and their associated directories.
+ *   - Can be instantiated directly or from a configuration file path.
+ *
+ * Usage Example:
+ *   const paths = new Paths('/my/app');
+ *   const plugins = await paths.getPlugins();
+ *
+ *   // Or, from a config file path:
+ *   const paths = Paths.fromConfigFilepath('/my/app/config.json');
+ */
 export default class Paths {
-
+    /**
+     * @private
+     * @type {Object}
+     * File system abstraction for reading directories, etc.
+     */
     #fs = null;
 
+    /**
+     * Construct a new Paths instance.
+     *
+     * @param {string} applicationDirectory - The root directory of the application.
+     * @param {Object} [options] - Optional settings.
+     * @param {Object} [options.fileSystem] - Optional file system abstraction.
+     * @throws {AssertionError} If applicationDirectory is not a non-empty string.
+     */
     constructor(applicationDirectory, options = {}) {
         assertNonEmptyString(applicationDirectory, 'applicationDirectory must be a non-empty string');
 
@@ -31,7 +66,7 @@ export default class Paths {
         this.application_routes_directory = path.join(this.app_directory, 'routes');
 
         /**
-         * File path to the site-wide page data JSON file.
+         * Directory path to the application's public assets.
          * @type {string}
          */
         this.application_public_directory = path.join(this.app_directory, 'public');
@@ -104,6 +139,19 @@ export default class Paths {
         this.job_directory = path.join(this.app_directory, 'data', 'jobs');
     }
 
+    /**
+     * Discovers available plugins in the plugins directory.
+     *
+     * Each plugin is expected to be a directory containing a file ending with 'plugin.js'.
+     * Returns an array of plugin metadata objects, each with:
+     *   - directory: The plugin's root directory.
+     *   - filepath: The main plugin module file.
+     *   - middlewareDirectory: Directory for plugin middleware modules.
+     *   - requestHandlerDirectory: Directory for plugin request handlers.
+     *   - errorHandlerDirectory: Directory for plugin error handlers.
+     *
+     * @returns {Promise<Array<Object>>} Array of plugin metadata objects.
+     */
     async getPlugins() {
         const pluginDirectories = await this.#fs.readDirectory(this.plugins_directory);
 
@@ -128,6 +176,13 @@ export default class Paths {
         return plugins;
     }
 
+    /**
+     * Creates a Paths instance from a configuration file path.
+     *
+     * @param {string} configFilepath - The absolute path to the application's config file.
+     * @param {Object} [options] - Optional settings.
+     * @returns {Paths} A new Paths instance rooted at the config file's directory.
+     */
     static fromConfigFilepath(configFilepath, options = {}) {
         return new Paths(path.dirname(configFilepath), options);
     }

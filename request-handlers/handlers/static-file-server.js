@@ -12,8 +12,37 @@ const DISALLOWED_STATIC_PATH_CHARACTERS = /[^a-z0-9_.-]/i;
 const NAMESPACE = 'Kixx.StaticFileServer';
 
 
+/**
+ * StaticFileServer
+ * ================
+ *
+ * Returns a request handler function that serves static files from a public directory.
+ *
+ * @function StaticFileServer
+ * @param {Object} [options={}] - Optional settings.
+ * @param {string} [options.publicDirectory] - The directory to serve static files from. Defaults to context.paths.application_public_directory.
+ * @param {string} [options.cacheControl] - The Cache-Control header value to use. Defaults to config.cacheControl or 'no-cache'.
+ * @returns {Function} An async request handler function for serving static files.
+ */
 export default function StaticFileServer(options = {}) {
 
+    /**
+     * Serves static files from a public directory.
+     *
+     * This handler validates the request path, checks for file existence, and serves the file
+     * with appropriate headers. It supports conditional requests via the If-Modified-Since header
+     * and sets cache-control and content-type headers. If the file is not found or is not a file,
+     * the handler returns the response unchanged, allowing the next handler to process the request.
+     *
+     * @function staticFileServer
+     * @async
+     * @param {Object} context - The application context, containing config, logger, and paths.
+     * @param {Object} request - The HTTP request object.
+     * @param {Object} response - The HTTP response object.
+     * @param {Function} skip - Function to skip remaining handlers after serving the file.
+     * @returns {Promise<Object>} The HTTP response, possibly with a file stream.
+     * @throws {BadRequestError} If the request path is invalid.
+     */
     return async function staticFileServer(context, request, response, skip) {
         const config = context.config.getNamespace(NAMESPACE);
         const logger = context.logger.createChild(NAMESPACE);
