@@ -4,6 +4,8 @@
 
 The template system is the foundation of hypermedia-driven applications in Kixx. It provides server-side rendering with a simple, powerful templating language that supports partials, helpers, and data binding. Templates are the primary mechanism for generating HTML responses that include embedded state transitions.
 
+For more information see [Templating with Kixx](./templating-with-kixx.md).
+
 ## Template Architecture
 
 ```
@@ -51,6 +53,7 @@ An example base template:
 
 After setting up the template system, proceed to:
 
-- [Step 3: Page Structure](../step-3-page-structure.md)
-- [Step 4: Routing Configuration](../step-4-routing-configuration.md)
-- [Step 5: Custom Plugins](../step-5-custom-plugins.md) 
+- [Step 3: Page Structure](./step-3-page-structure.md)
+- [Step 4: Routing Configuration](./step-4-routing-configuration.md)
+- [Step 5: Custom Plugins](./step-5-custom-plugins.md) 
+- [Templating with Kixx](./templating-with-kixx.md);

@@ -38,6 +38,11 @@ pages/
 
 ## Page Types
 
+| Page Type | Description |
+|-----------|-------------|
+| Static Routing | The URL pathname maps directly to the page filepath |
+| Dynamic Routing | The page pathname must be defined in the PageHandler options |
+
 ### Static Pages
 
 Pages with fixed content that doesn't change based on user input or database data.
