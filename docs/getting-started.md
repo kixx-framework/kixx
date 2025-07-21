@@ -197,7 +197,9 @@ console.log(apiSecrets.secretKey);
 ```
 
 ## Step 2: Routing Configuration
-Routing in Kixx applications defines how HTTP requests are mapped to specific handlers and determines the flow of data through your application. The routing system is based on virtual hosts, routes, and targets.
+Routing in Kixx applications defines how HTTP requests are mapped to specific handlers and determines the flow of data through your application.
+
+Kixx provides static page routing functionality out of the box, as well as a way for you to define custom dynamic routes and handlers. See [HTTP Request Routing and Processing](./http-request-routing-and-processing.md) for more information.
 
 ### Virtual Hosts
 Routing starts in the `virtual-hosts.json` config from **Step 1.2** above.
@@ -206,280 +208,34 @@ Routing starts in the `virtual-hosts.json` config from **Step 1.2** above.
 - **app://** - Application-specific routes (from `routes/` directory)
 - **kixx://** - Kixx framework default routes
 
-### Route Definitions
-A route definition file in the `routes/` directory contains route specifcations in a JSON Array. Example:
+Define your custom routes in a JSON file (e.g., `routes/main.json`). Reference your handlers and middleware by their exported name:
 
 ```json
 [
     {
-        "name": "HomePage",
-        "pattern": "/{index.json}",
-        "errorHandlers": [
-            ["kixx.AppPageErrorHandler"]
-        ],
+        "name": "HelloPage",
+        "pattern": "/hello",
+        "inboundMiddleware": [ ["AuthMiddleware"] ],
+        "outboundMiddleware": [ ["CookieMiddleware"] ],
+        "errorHandlers": [ ["kixx.AppPageErrorHandler"] ],
         "targets": [
             {
-                "name": "HomePageHandler",
-                "methods": ["GET", "HEAD"],
+                "name": "HelloTarget",
+                "methods": ["GET"],
                 "handlers": [
-                    ["HomePageHandler"],
-                    ["kixx.AppPageHandler"]
-                ]
-            }
-        ]
-    },
-    {
-        "name": "ProductPages",
-        "pattern": "/products/:product_id{.json}",
-        "errorHandlers": [
-            ["kixx.AppPageErrorHandler"]
-        ],
-        "targets": [
-            {
-                "name": "ProductPageHandler",
-                "methods": ["GET", "HEAD"],
-                "handlers": [
-                    ["ProductPageHandler"],
-                    ["kixx.AppPageHandler", {"pathname": "/products/id"}]
-                ]
-            }
-        ]
-    },
-    {
-        "name": "ContactForm",
-        "pattern": "/contact",
-        "errorHandlers": [
-            ["kixx.AppPageErrorHandler"]
-        ],
-        "targets": [
-            {
-                "name": "ContactFormGet",
-                "methods": ["GET", "HEAD"],
-                "handlers": [
-                    ["kixx.AppPageHandler"]
-                ]
-            },
-            {
-                "name": "ContactFormPost",
-                "methods": ["POST"],
-                "handlers": [
-                    ["ContactFormHandler"],
+                    ["HelloHandler"],
                     ["kixx.AppPageHandler"]
                 ]
             }
         ]
     }
 ]
-```
-
-Each route consists of several components:
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `name` | string | Unique route identifier |
-| `pattern` | string | URL pattern with parameters |
-| `errorHandlers` | array | Error handling middleware |
-| `targets` | array | Request targets for different HTTP methods |
-| `routes` | array | Nested routes |
-
-A route must have a nested `targets` array or `routes` array, but *must NOT* have both.
-
-### Route Targets
-
-Targets define how different HTTP methods are handled:
-
-```json
-{
-    "targets": [
-        {
-            "name": "GetHandler",
-            "methods": ["GET", "HEAD"],
-            "handlers": [
-                ["CustomHandler"],
-                ["kixx.AppPageHandler"]
-            ]
-        },
-        {
-            "name": "PostHandler", 
-            "methods": ["POST"],
-            "handlers": [
-                ["FormHandler"],
-                ["kixx.AppPageHandler"]
-            ]
-        }
-    ]
-}
-```
-
-Each Target consists of several components.
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `name` | string | Target identifier |
-| `methods` | array | HTTP methods to handle |
-| `handlers` | array | Handler middleware chain |
-
-### Dynamic Routes
-Routes with parameters for dynamic content:
-
-```json
-{
-    "name": "ProductDetail",
-    "pattern": "/products/:slug",
-    "targets": [
-        {
-            "name": "ProductDetailHandler",
-            "methods": ["GET", "HEAD"],
-            "handlers": [
-                ["ProductDetailHandler"],
-                ["kixx.AppPageHandler", {"pathname": "/products/id"}]
-            ]
-        }
-    ]
-}
-```
-
-### Form Handling Routes
-Routes that handle form submissions:
-
-```json
-{
-    "name": "ContactForm",
-    "pattern": "/contact",
-    "targets": [
-        {
-            "name": "ContactFormDisplay",
-            "methods": ["GET", "HEAD"],
-            "handlers": [
-                ["kixx.AppPageHandler"]
-            ]
-        },
-        {
-            "name": "ContactFormSubmit",
-            "methods": ["POST"],
-            "handlers": [
-                ["ContactFormHandler"],
-                ["kixx.AppPageHandler"]
-            ]
-        }
-    ]
-}
-```
-
-### Middleware
-Middleware in Kixx routes allows you to process requests and responses before and after your main handler logic. There are two types of middleware arrays you can define on a route:
-
-- **inboundMiddleware**: Runs before the target handlers. Use this for tasks like authentication, logging, or request transformation.
-- **outboundMiddleware**: Runs after the target handlers, before the response is sent. Use this for response formatting, adding headers, or cleanup.
-
-**Inbound and outbound middleware example:** 
-
-```json
-{
-    "name": "AdminPanel",
-    "pattern": "/admin",
-    "inboundMiddleware": [
-        ["AuthenticateAdmin"]
-    ],
-    "outboundMiddleware": [
-        ["SetAdminSession"]
-    ],
-    "targets": [
-        {
-            "name": "AdminHome",
-            "methods": ["GET", "HEAD"],
-            "handlers": [
-                ["kixx.AppPageHandler"]
-            ]
-        }
-    ]
-}
-```
-
-### Error Handlers
-Error handlers process exceptions and generate appropriate responses. The `errorhandlers` can be defined on the route and the target.
-
-```json
-{
-    "errorHandlers": [
-        ["kixx.AppPageErrorHandler"],
-        ["CustomErrorHandler"]
-    ]
-}
-```
-
-### Route Loading Order
-Routes are loaded in the order specified in virtual-hosts.json:
-
-```json
-{
-    "routes": [
-        "app://main.json",      // Loaded first
-        "app://api.json",       // Loaded second
-        "kixx://defaults.json"  // Loaded last (fallback)
-    ]
-}
-```
-
-### Route Best Practices
-
-#### 1. RESTful URLs
-Use RESTful URL patterns:
-
-```json
-[
-    {
-        "name": "ProductsList",
-        "pattern": "/products"
-    },
-    {
-        "name": "ProductDetail", 
-        "pattern": "/products/:id"
-    },
-    {
-        "name": "ProductCreate",
-        "pattern": "/products/new"
-    },
-    {
-        "name": "ProductEdit",
-        "pattern": "/products/:id/edit"
-    }
-]
-```
-
-#### 2. Error Handling
-Always include error handlers:
-
-```json
-{
-    "errorHandlers": [
-        ["kixx.AppPageErrorHandler"]  // Handle common errors
-    ]
-}
-```
-
-#### 3. Method Separation
-Separate different HTTP methods:
-
-```json
-{
-    "targets": [
-        {
-            "name": "GetHandler",
-            "methods": ["GET", "HEAD"],
-            "handlers": [["kixx.AppPageHandler"]]
-        },
-        {
-            "name": "PostHandler",
-            "methods": ["POST"],
-            "handlers": [["FormHandler"], ["kixx.AppPageHandler"]]
-        }
-    ]
-}
 ```
 
 ## Step 3: Page Structure
 Pages in Kixx applications are the core content units that define what users see and interact with. Each page consists of an HTML template and optional JSON data file. The page structure follows a file-based approach where the directory structure mirrors the URL structure, making it intuitive and easy to manage.
+
+See [HTTP Request Routing and Processing](./http-request-routing-and-processing.md) and [Templating with Kixx](./templating-with-kixx.md) for more information.
 
 The `pages/` directory should be placed in the root directory for your project. An example page structure might be:
 ```
@@ -546,3 +302,13 @@ When the route is defined with the PageHandler pathname like:
     ]
 }
 ```
+
+## Step 5: Data Management
+Default data management in Kixx applications is handled through the Datastore service, which provides a file-backed, document-oriented storage system with in-memory caching, optimistic concurrency control, and powerful querying capabilities.
+
+```javascript
+// Core datastore components
+const datastore = context.getService('kixx.Datastore');
+```
+
+See the [Datastore docs](./datastore.md) for more information.
