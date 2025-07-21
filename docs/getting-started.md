@@ -1,19 +1,11 @@
-# Step 1: Application Configuration
+# Getting started with Kixx
+Steps to get started with your Kixx web application.
 
-## Overview
-
+## 1) Setting up configuration files
 The first step in building a Kixx application is setting up the configuration files that define how your application behaves. Kixx uses a file-based configuration system that's simple, versionable, and environment-aware.
 
-## Configuration Files
-
-### kixx-config.json
-
-The main application configuration file that defines your application's name, environment-specific settings, and custom configuration options.
-
-> **⚠️ Warning:**  
-> **Do not put secrets (such as API keys, passwords, or private tokens) in `kixx-config.json`.**  
-> Instead, store all sensitive information in a separate `.secrets.json` file, which is loaded automatically by the framework.  
-> This keeps your secrets out of version control and reduces the risk of accidental exposure.
+### 1.1) Create a `kixx-config.json`
+The `kixx-config.json` file must be created in the root of your project directory. The `kixx-config.json` file is the main application configuration file that defines your application's name, environment-specific settings, and custom configuration options. The format is:
 
 ```json
 {
@@ -39,7 +31,8 @@ The main application configuration file that defines your application's name, en
             }
         }
     },
-    "customConfig": {
+    // Custom value used in all environments.
+    "app": {
         "timezone": "America/New_York"
     }
 }
@@ -62,9 +55,24 @@ Each environment can have its own settings:
 - **logger.mode**: Logging output (`console`, `stdout`, `file`)
 - **server.port**: HTTP server port number
 
-### virtual-hosts.json
+> **⚠️ Warning:**  
+> **Do not put secrets (such as API keys, passwords, or private tokens) in `kixx-config.json`.**  
+> Instead, store all sensitive information in a separate `.secrets.json` file, which is loaded automatically by the framework.  
+> This keeps your secrets out of version control and reduces the risk of accidental exposure.
 
-Defines how different hostnames are routed to your application's routes. See more in [Routing Configuration](./step-4-routing-configuration.md).
+#### Accessing configuration values from your app
+
+Configuration values can be accessed from your application code:
+
+```js
+const serverConfig = context.config.getNamespace('server');
+const appConfig = context.config.getNamespace('app');
+console.log(serverConfig.port) // 3000
+console.log(appConfig.timezone) // America/New_York
+```
+
+### 1.2) Create a `virtual-hosts.json` config
+The `virtual-hosts.json` config must be created in the root of your project directory. It defines how different hostnames are routed to your application's routes. See more in [Routing Configuration](./routing-configuration.md).
 
 ```json
 [
@@ -99,9 +107,8 @@ Defines how different hostnames are routed to your application's routes. See mor
 - **app://** - Application-specific routes (from `routes/` directory)
 - **kixx://** - Framework default routes. See [Routing Configuration](./step-4-routing-configuration.md) for the Kixx default routes.
 
-### site-page-data.json
-
-Contains site-wide data that's available on every page, such as navigation menus, contact information, and global settings.
+### 1.3) Create a `site-page-data.json` config.
+The `site-page-data.json` config file must be created in the root of your project directory. The `site-page-data.json` file contains site-wide data that's available on every page, such as navigation menus, contact information, and global settings. This file will be used as the basis for the template context in each page by the `ViewService`.
 
 ```json
 {
@@ -158,9 +165,8 @@ Contains site-wide data that's available on every page, such as navigation menus
 }
 ```
 
-### .secrets.json
-
-Contains sensitive configuration data that shouldn't be committed to version control.
+### 1.4) Create a `.secrets.json` config.
+The `.secrets.json` file must be created in the root directory of your project. The `secrets.json` file contains sensitive configuration data that shouldn't be committed to version control.
 
 ```json
 {
@@ -181,10 +187,12 @@ Contains sensitive configuration data that shouldn't be committed to version con
 1. **Never commit secrets** - Add `.secrets.json` to `.gitignore`
 2. **Rotate secrets regularly** - Change passwords and keys periodically
 
-## Next Steps
+#### Accessing secrets from your app
 
-After completing the configuration setup, proceed to:
+Secrets can be accessed from your application code:
 
-- [Step 2: Template System Setup](./step-2-template-system-setup.md)
-- [Step 3: Page Structure](./step-3-page-structure.md)
-- [Step 4: Routing Configuration](./step-4-routing-configuration.md) 
+```js
+const apiSecrets = context.config.getSecrets('api');
+console.log(apiSecrets.secretKey);
+```
+
