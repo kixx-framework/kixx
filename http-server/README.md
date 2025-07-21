@@ -592,7 +592,3 @@ my-app/
     }
 ]
 ```
-
-## Examples
-
-See the `reference-app/` directory for complete examples of how to use the HTTP server components in a real application. 
