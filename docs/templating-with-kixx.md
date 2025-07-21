@@ -1,46 +1,16 @@
 # Templating with Kixx
+A comprehensive developer guide for building server-side rendered web applications using the Kixx templating system.
 
-A comprehensive developer guide for building server-side rendered web applications using Kixx's templating system.
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Template Engine Fundamentals](#template-engine-fundamentals)
-4. [View Service Integration](#view-service-integration)
-5. [Template Structure](#template-structure)
-6. [Template Syntax](#template-syntax)
-7. [Built-in Helpers](#built-in-helpers)
-8. [Custom Helpers](#custom-helpers)
-9. [Partials](#partials)
-10. [Data Flow](#data-flow)
-11. [Page Templates](#page-templates)
-12. [Best Practices](#best-practices)
-13. [Advanced Patterns](#advanced-patterns)
-14. [Troubleshooting](#troubleshooting)
-
-## Overview
-
-Kixx provides a robust server-side templating system designed for building hypermedia-driven web applications. The templating system consists of:
-
-- **Template Engine**: A lightweight, dependency-free template engine with mustache-style syntax
-- **View Service**: High-level integration layer for loading, merging, and rendering templates
-- **Page Template Engine**: Dynamic template loading and compilation system
-- **Helper System**: Extensible helper functions for data transformation and formatting
-
-### Key Features
-
-- **Server-side rendering** with progressive enhancement
-- **Mustache-style syntax** for clean, readable templates
-- **Automatic HTML escaping** for security
-- **Dynamic template loading** from file system
-- **Extensible helper system** with custom helpers
-- **Partial support** for reusable components
-- **Data merging** from multiple sources
-- **Error handling** with graceful fallbacks
+- [Architecture](#architecture)
+- [Template File Structure](#template-file-structure)
+- [Template Syntax](#template-syntax)
+- [HTML Entity Escaping](#html-entity-escaping)
+- [Error Handling](#error-handling)
+- [Built-in Helpers](#built-in-helpers)
+- [Partials](#partials)
+- [Custom Helpers](#custom-helpers)
 
 ## Architecture
-
 The Kixx templating system follows a layered architecture:
 
 ```
@@ -69,124 +39,7 @@ The Kixx templating system follows a layered architecture:
 4. **Helpers**: Built-in and custom helper functions
 5. **Partials**: Reusable template components
 
-## Template Engine Fundamentals
-
-The Kixx template engine is built on three core primitives:
-
-### 1. Tokenization
-
-```javascript
-import { tokenize } from 'kixx-templating';
-
-const source = '<h1>{{ title }}</h1>';
-const tokens = tokenize(null, 'template.html', source);
-```
-
-### 2. Syntax Tree Building
-
-```javascript
-import { buildSyntaxTree } from 'kixx-templating';
-
-const tree = buildSyntaxTree(null, tokens);
-```
-
-### 3. Render Function Creation
-
-```javascript
-import { createRenderFunction, helpers } from 'kixx-templating';
-
-const render = createRenderFunction(null, helpers, partials, tree);
-const html = render(context);
-```
-
-### Basic Usage
-
-```javascript
-import { 
-    tokenize, 
-    buildSyntaxTree, 
-    createRenderFunction, 
-    helpers 
-} from 'kixx-templating';
-
-class SimpleTemplateEngine {
-    #helpers = new Map(helpers);
-    #partials = new Map();
-
-    compile(source) {
-        const tokens = tokenize(null, 'template.html', source);
-        const tree = buildSyntaxTree(null, tokens);
-        return createRenderFunction(null, this.#helpers, this.#partials, tree);
-    }
-}
-
-// Usage
-const engine = new SimpleTemplateEngine();
-const template = '<h1>{{ title }}</h1><p>{{ content }}</p>';
-const render = engine.compile(template);
-const html = render({ title: 'Hello', content: 'World' });
-```
-
-## View Service Integration
-
-The View Service provides a high-level API for template management in Kixx applications.
-
-### View Service Setup
-
-```javascript
-import ViewService from './view-service/view-service.js';
-
-const viewService = new ViewService({
-    logger: logger,
-    pageDirectory: './pages',
-    sitePageDataFilepath: './site-page-data.json',
-    templatesDirectory: './templates/templates',
-    partialsDirectory: './templates/partials',
-    helpersDirectory: './templates/helpers'
-});
-```
-
-### Core Methods
-
-#### 1. Loading Page Data
-
-```javascript
-// Load and merge page data
-const pageData = await viewService.getPageData('/about', {
-    custom: 'value',
-    dynamic: 'data'
-});
-```
-
-#### 2. Rendering Page Markup
-
-```javascript
-// Render page HTML
-const html = await viewService.getPageMarkup('/about', pageData);
-```
-
-#### 3. Error Page Rendering
-
-```javascript
-// Render error pages with fallback
-const errorHtml = await viewService.renderMarkupForError(error);
-```
-
-### Data Merging
-
-The View Service merges data from multiple sources:
-
-```javascript
-// Merging order (later sources override earlier ones)
-const finalData = {
-    ...sitePageData,        // site-page-data.json
-    ...pageData,           // pages/*/page.json
-    ...dynamicProps        // From request handlers
-};
-```
-
-## Template Structure
-
+## Template File Structure
 Kixx applications follow a structured template organization:
 
 ```
@@ -268,112 +121,416 @@ Page templates contain the main content for each page:
 ```
 
 ## Template Syntax
-
-Kixx uses mustache-style syntax with some enhancements.
+Kixx Templating uses a clean, intuitive syntax based on mustache-style templating.
 
 ### Basic Expressions
+The most fundamental syntax element is the expression, which allows you to output values from your context.
+
+#### Simple Variable Output
+```html
+<h1>{{ title }}</h1>
+<p>Welcome, {{ user.name }}!</p>
+```
+
+#### Nested Property Access
+```html
+<p>{{ article.author.firstName }} {{ article.author.lastName }}</p>
+<p>Published: {{ article.metadata.publishDate }}</p>
+```
+#### Array and Object Access
 
 ```html
-<!-- Simple variable output -->
-<h1>{{ title }}</h1>
-
-<!-- Nested property access -->
-<p>By {{ article.author.name }}</p>
-
 <!-- Array access -->
 <img src="{{ images[0].src }}" alt="{{ images[0].alt }}" />
+
+<!-- Object property access -->
+<span>{{ user.preferences.theme }}</span>
+
+<!-- Mixed access -->
+<p>{{ articles[0].comments[2].author.name }}</p>
 ```
 
 ### Comments
 
-```html
-{{!-- This is a comment that won't appear in output --}}
+Comments are useful for documentation and debugging. They don't appear in the final output.
 
-{{!-- 
-    Multi-line comments
-    can span multiple lines
---}}
+#### Single Line Comments
+
+```html
+{{!-- This is a single line comment --}}
+<h1>{{ title }}</h1>
 ```
 
-### Conditional Rendering
+#### Multi-line Comments
 
 ```html
+{{!-- 
+    This is a multi-line comment.
+    You can include mustaches here: {{ title }}
+    And they won't be processed.
+--}}
+<div class="content">
+    {{ content }}
+</div>
+```
+
+### Helpers
+Helpers are functions that can transform data or provide conditional logic. They come in two types: inline helpers and block helpers.
+
+#### Inline Helpers
+Inline helpers are used for data transformation and formatting.
+
+```html
+<!-- Basic helper usage -->
+<p>{{ format_date article.publishDate }}</p>
+
+<!-- Helper with arguments -->
+<p>{{ format_date article.publishDate format="long" timezone="UTC" }}</p>
+
+<!-- Helper with multiple arguments -->
+<img src="{{ image article.image width=800 height=600 quality="high" }}" />
+```
+
+#### Block Helpers
+Block helpers control the flow of your template and can contain other content.
+
+```html
+<!-- Conditional rendering -->
 {{#if user.isLoggedIn}}
     <p>Welcome back, {{ user.name }}!</p>
-    <a href="/logout">Logout</a>
 {{else}}
     <p>Please <a href="/login">log in</a>.</p>
 {{/if}}
 
-{{#if articles}}
-    <p>Found {{ articles.length }} articles.</p>
-{{else}}
-    <p>No articles available.</p>
-{{/if}}
+<!-- Iteration -->
+{{#each articles as |article|}}
+    <article>
+        <h2>{{ article.title }}</h2>
+        <p>{{ article.excerpt }}</p>
+    </article>
+{{/each}}
 ```
 
-### Iteration
+#### Helper Arguments
+Helpers can accept different types of arguments:
+
+Positional Arguments:
+
+```html
+{{ format_date "2023-12-25" "long" "America/New_York" }}
+```
+
+Named Arguments (Hash):
+
+```html
+{{ format_date article.date format="long" timezone="America/New_York" locale="en-US" }}
+```
+
+Mixed Arguments:
+
+```html
+{{ image article.image 800 600 quality="high" format="webp" }}
+```
+
+You can use string literals in helper arguments:
+
+```html
+{{#ifEqual user.role "admin"}}
+    <span class="admin-badge">Administrator</span>
+{{/ifEqual}}
+
+{{ format_date "2023-12-25" format="long" }}
+```
+
+### Partials
+
+Partials allow you to include other templates within your current template.
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    {{> head.html }}
+</head>
+<body>
+    {{> header.html }}
+    
+    <main>
+        {{ content }}
+    </main>
+    
+    {{> footer.html }}
+</body>
+</html>
+```
+
+Partials inherit the current context, so they have access to all the same variables.
+
+```html
+<!-- In main template -->
+{{> user-card.html }}
+
+<!-- In user-card.html partial -->
+<div class="user-card">
+    <h3>{{ user.name }}</h3>
+    <p>{{ user.email }}</p>
+</div>
+```
+
+### Multi-line Expressions
+
+Expressions can span multiple lines for better readability:
+
+```html
+{{image
+    article.featuredImage.src
+    article.featuredImage.alt
+    width=800
+    height=600
+    class="featured-image"
+    }}
+```
+
+### Bracket Notation
+
+Use bracket notation for property names with special characters:
+
+```html
+<!-- Access properties with spaces or special characters -->
+<p>{{ article["Published Date"] }}</p>
+<p>{{ user["email-verified"] }}</p>
+```
+
+## HTML Entity Escaping
+
+Kixx Templating automatically escapes HTML entities for security, but the behavior differs between expressions and helpers:
+
+### Expression Escaping
+
+When you use simple expressions (variable output), HTML entities are automatically escaped:
+
+```html
+<!-- This will escape HTML entities -->
+<p>{{ userInput }}</p>
+
+<!-- If userInput contains "<script>alert('xss')</script>" -->
+<!-- Output: <p>&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;</p> -->
+```
+
+### Helper Escaping
+
+Helper functions return their output **without** automatic HTML escaping:
+
+```html
+<!-- Helper output is NOT automatically escaped -->
+<p>{{ formatHtml userInput }}</p>
+
+<!-- If formatHtml returns "<strong>Bold text</strong>" -->
+<!-- Output: <p><strong>Bold text</strong></p> -->
+```
+
+### Using noop Helper to Prevent Escaping
+
+The `noop` helper can be used to prevent automatic HTML entity escaping for expressions:
+
+```html
+<!-- This will NOT escape HTML entities -->
+<p>{{noop userInput }}</p>
+
+<!-- If userInput contains "<script>alert('xss')</script>" -->
+<!-- Output: <p><script>alert('xss')</script></p> -->
+```
+
+**⚠️ Security Warning:** Only use `noop` when you trust the content and want to render HTML. Never use it with untrusted user input.
+
+### Safe HTML Rendering
+
+For trusted HTML content, you can use helpers or `noop`:
+
+```html
+<!-- Safe: Using a helper for trusted HTML -->
+<p>{{ renderMarkdown article.content }}</p>
+
+<!-- Safe: Using noop for trusted HTML -->
+<p>{{noop trustedHtmlContent }}</p>
+
+<!-- Unsafe: Using noop with untrusted content -->
+<p>{{noop userComment }}</p> <!-- DON'T DO THIS -->
+```
+
+## Error Handling
+Kixx Templating provides graceful error handling:
+
+### Undefined Properties
+
+If a property doesn't exist in your context, it will render as an empty string instead of throwing an error:
+
+```html
+<!-- If article.date doesn't exist, this renders as an empty string -->
+<p>{{ article.date.localized }}</p>
+```
+
+### Helper Errors
+
+If a helper function throws an error, you'll get a clear error message with the file name and line number:
+
+```
+Error in helper "format_date" in "template.html" on line 15
+```
+
+## Built-in Helpers
+Kixx comes with a set of essential helper functions that cover common templating needs.
+
+| Helper | Type | Description |
+|--------|------|-------------|
+| `#each` | Block | Iterate over arrays, objects, Maps, and Sets |
+| `#if` | Block | Conditional rendering based on truthiness |
+| `#ifEqual` | Block | Equality comparison using `==` |
+| `#ifEmpty` | Block | Check if a value is empty |
+| `format_date` | Inline | Format JavaScript dates and date strings |
+| `noop` | Inline | No-operation helper to prevent automatic HTML entities encoding |
+
+### #each Helper
+
+The `#each` helper allows you to iterate over iterable objects and render content for each item.
+
+```html
+{{#each articles as |article|}}
+    <article>
+        <h2>{{ article.title }}</h2>
+        <p>{{ article.excerpt }}</p>
+    </article>
+{{/each}}
+```
+
+**With Index**
 
 ```html
 {{#each articles as |article, index|}}
     <article class="article-{{ index }}">
+        <span class="number">{{ index }}</span>
         <h2>{{ article.title }}</h2>
-        <p>{{ article.excerpt }}</p>
-        {{#if article.tags}}
-            <div class="tags">
-                {{#each article.tags as |tag|}}
-                    <span class="tag">{{ tag }}</span>
-                {{/each}}
-            </div>
-        {{/if}}
+    </article>
+{{/each}}
+```
+
+**With Else Block**
+
+```html
+{{#each articles as |article|}}
+    <article>
+        <h2>{{ article.title }}</h2>
     </article>
 {{else}}
     <p>No articles found.</p>
 {{/each}}
 ```
 
-### Partials
+#### Supported Data Types
+
+**Arrays**
 
 ```html
-{{!-- Include a partial --}}
-{{> header.html }}
-
-{{!-- Partials inherit the current context --}}
-{{#each users as |user|}}
-    {{> user-card.html }}
+{{#each ['apple', 'banana', 'cherry'] as |fruit, index|}}
+    <li>{{ index }}: {{ fruit }}</li>
 {{/each}}
 ```
 
-## Built-in Helpers
-
-Kixx provides essential built-in helpers:
-
-### #if Helper
+**Objects**
 
 ```html
-{{#if condition}}
-    <!-- Content when condition is truthy -->
+{{#each user.preferences as |value, key|}}
+    <div>{{ key }}: {{ value }}</div>
+{{/each}}
+```
+
+**Maps**
+
+```html
+{{#each userSettings as |value, key|}}
+    <div>{{ key }}: {{ value }}</div>
+{{/each}}
+```
+
+**Sets**
+
+```html
+{{#each tags as |tag|}}
+    <span class="tag">{{ tag }}</span>
+{{/each}}
+```
+
+#### Context Inheritance
+
+The `#each` block has access to the parent context:
+
+```html
+{{#each articles as |article|}}
+    <article>
+        <h2>{{ article.title }}</h2>
+        <p>By {{ article.author }} for {{ site.name }}</p>
+    </article>
+{{/each}}
+```
+
+### #if Helper
+The `#if` helper provides conditional rendering based on the truthiness of a value.
+
+```html
+{{#if user.isLoggedIn}}
+    <p>Welcome back, {{ user.name }}!</p>
 {{else}}
-    <!-- Content when condition is falsy -->
+    <p>Please <a href="/login">log in</a>.</p>
 {{/if}}
 ```
 
-**Truthy values**: Non-empty strings, non-zero numbers, `true`, non-empty arrays/objects
-**Falsy values**: `false`, `0`, `""`, `null`, `undefined`, empty arrays/objects
+#### Truthiness Rules
+The `#if` helper considers these values as **truthy**:
 
-### #each Helper
+- Any non-empty string
+- Any non-zero number
+- `true`
+- Non-empty arrays
+- Non-empty objects
+- Non-empty Maps and Sets
+
+These values are considered **falsy**:
+
+- `false`
+- `0`
+- `""` (empty string)
+- `null`
+- `undefined`
+- Empty arrays `[]`
+- Empty objects `{}`
+- Empty Maps and Sets
 
 ```html
-{{#each items as |item, index|}}
-    <div class="item-{{ index }}">{{ item.name }}</div>
+<!-- String check -->
+{{#if user.name}}
+    <p>Hello, {{ user.name }}!</p>
+{{/if}}
+
+<!-- Array check -->
+{{#if articles}}
+    <p>Found {{ articles.length }} articles.</p>
 {{else}}
-    <p>No items found.</p>
-{{/each}}
+    <p>No articles available.</p>
+{{/if}}
+
+<!-- Object check -->
+{{#if user.preferences}}
+    <p>User has preferences set.</p>
+{{/if}}
+
+<!-- Number check -->
+{{#if article.viewCount}}
+    <p>Viewed {{ article.viewCount }} times.</p>
+{{/if}}
 ```
 
-Supports arrays, objects, Maps, and Sets.
-
 ### #ifEqual Helper
+The `#ifEqual` helper compares two values using `==` equality and renders content conditionally.
 
 ```html
 {{#ifEqual user.role "admin"}}
@@ -383,7 +540,41 @@ Supports arrays, objects, Maps, and Sets.
 {{/ifEqual}}
 ```
 
+#### Multiple Comparisons
+```html
+{{#ifEqual user.role "admin"}}
+    <span>Administrator</span>
+{{else}}{{#ifEqual user.role "moderator"}}
+    <span>Moderator</span>
+{{else}}
+    <span>User</span>
+{{/ifEqual}}{{/ifEqual}}
+```
+
+#### Examples
+
+```html
+<!-- String comparison -->
+{{#ifEqual article.status "published"}}
+    <span class="published">Published</span>
+{{/ifEqual}}
+
+<!-- Number comparison -->
+{{#ifEqual article.viewCount 0}}
+    <span class="unviewed">Not viewed yet</span>
+{{/ifEqual}}
+
+<!-- Boolean comparison -->
+{{#ifEqual user.isVerified true}}
+    <span class="verified">✓ Verified</span>
+{{/ifEqual}}
+```
+
 ### #ifEmpty Helper
+
+The `#ifEmpty` helper checks if a value is empty and renders content accordingly.
+
+#### Basic Usage
 
 ```html
 {{#ifEmpty articles}}
@@ -393,100 +584,69 @@ Supports arrays, objects, Maps, and Sets.
 {{/ifEmpty}}
 ```
 
+#### Empty Value Rules
+The `#ifEmpty` helper considers these values as **empty**:
+
+- `false`
+- `0`
+- `""` (empty string)
+- `null`
+- `undefined`
+- Empty arrays `[]`
+- Empty objects `{}`
+- Empty Maps and Sets
+
+#### Examples
+```html
+<!-- Array check -->
+{{#ifEmpty user.posts}}
+    <p>No posts yet.</p>
+{{else}}
+    <p>{{ user.posts.length }} posts</p>
+{{/ifEmpty}}
+
+<!-- String check -->
+{{#ifEmpty user.bio}}
+    <p>No bio provided.</p>
+{{else}}
+    <p>{{ user.bio }}</p>
+{{/ifEmpty}}
+
+<!-- Object check -->
+{{#ifEmpty user.preferences}}
+    <p>No preferences set.</p>
+{{else}}
+    <p>Preferences configured</p>
+{{/ifEmpty}}
+```
+
 ### noop Helper
+The `noop` helper is a no-operation helper that prevents automatic HTML entity escaping. It's useful when you want to render HTML content without escaping.
 
 ```html
 <!-- Prevent HTML entity escaping for trusted content -->
-<div>{{noop trustedHtmlContent }}</div>
+<p>{{noop trustedHtmlContent }}</p>
 
-<!-- Render HTML from helpers without double-escaping -->
+<!-- Render HTML from a helper without double-escaping -->
 <div>{{noop renderMarkdown article.content }}</div>
+
+<!-- Debug: check if variable exists (returns empty string) -->
+{{noop user.name }}
 ```
 
-**⚠️ Security Warning**: Only use `noop` with trusted content to prevent XSS attacks.
+### Security Considerations
 
-## Custom Helpers
-
-Custom helpers extend template functionality for application-specific needs.
-
-### Helper Structure
-
-```javascript
-// templates/helpers/format_date.js
-export const name = 'format_date';
-
-export function helper(context, options, date) {
-    // Helper implementation
-    const format = options.hash.format || 'default';
-    
-    if (!date) return '';
-    
-    const dt = new Date(date);
-    
-    switch (format) {
-        case 'YEAR':
-            return dt.getFullYear().toString();
-        case 'DATE_MONTH_DATE':
-            return dt.toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric' 
-            });
-        default:
-            return dt.toLocaleDateString();
-    }
-}
-```
-
-### Helper Parameters
-
-- `context`: The template context object
-- `options`: Helper options including `options.hash` for named arguments
-- `...args`: Positional arguments passed to the helper
-
-### Example: Event Duration Helper
-
-```javascript
-// templates/helpers/event_duration.js
-import DateTime from '../../vendor/luxon/datetime.js';
-
-export const name = 'event_duration';
-
-export function helper(context, options, start, end) {
-    const startDateTime = DateTime.fromISO(start);
-    const endDateTime = DateTime.fromISO(end);
-    const diff = endDateTime.diff(startDateTime, ['hours', 'minutes']);
-    const { hours, minutes } = diff;
-
-    let hoursText = '';
-    if (hours === 1) {
-        hoursText = '1hr';
-    } else if (hours > 1) {
-        hoursText = `${hours}hrs`;
-    }
-
-    let minutesText = '';
-    if (minutes > 0) {
-        minutesText = `${minutes}min`;
-    }
-
-    if (hoursText && minutesText) {
-        return `${hoursText} ${minutesText}`;
-    }
-
-    return hoursText || minutesText;
-}
-```
-
-### Usage in Templates
+**⚠️ Important:** Only use `noop` with content you trust. Never use it with untrusted user input as it can lead to XSS attacks.
 
 ```html
-{{!-- Using the event duration helper --}}
-<div class="event-duration">
-    Duration: {{ event_duration event.startTime event.endTime }}
-</div>
+<!-- Safe: Trusted content -->
+<p>{{noop adminMessage }}</p>
+
+<!-- Unsafe: Untrusted user input -->
+<p>{{noop userComment }}</p> <!-- DON'T DO THIS -->
 ```
 
-### Built-in Date Helper
+### format_date Helper
 
 Kixx includes a built-in `format_date` helper:
 
@@ -503,85 +663,169 @@ Kixx includes a built-in `format_date` helper:
 <p>{{ format_date article.publishDate format="DATETIME_FULL" zone="America/New_York" locale="en-US" }}</p>
 ```
 
-## Partials
+### Best Practices
 
-Partials are reusable template components that help maintain consistency and reduce duplication.
-
-### Creating Partials
+#### 1. Use Descriptive Block Parameters
 
 ```html
-<!-- templates/partials/html-header.html -->
-<meta charset="utf-8">
-<title>{{ page.title }}</title>
+<!-- Good -->
+{{#each articles as |article, index|}}
+    <article>{{ article.title }}</article>
+{{/each}}
 
-{{#if page.description}}
-    <meta name="description" content="{{ page.description }}">
-{{/if}}
-
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-{{#if page.openGraph}}
-    {{#if page.openGraph.type}}
-        <meta property="og:type" content="{{ page.openGraph.type }}">
-    {{/if}}
-    {{#if page.openGraph.title}}
-        <meta property="og:title" content="{{ page.openGraph.title }}">
-    {{/if}}
-    {{#if page.openGraph.image}}
-        <meta property="og:image" content="{{ page.openGraph.image.url }}">
-    {{/if}}
-{{/if}}
-
-<link rel="stylesheet" href="/css/main.css">
+<!-- Avoid -->
+{{#each articles as |a, i|}}
+    <article>{{ a.title }}</article>
+{{/each}}
 ```
 
-### Using Partials
+#### 2. Combine Helpers for Complex Logic
 
 ```html
-<!-- In base template -->
-<!doctype html>
-<html lang="en-US">
-    <head>
-        {{> html-header.html }}
-    </head>
-    <body>
-        {{> site-header.html }}
-        <main>{{noop body }}</main>
-        {{> site-footer.html }}
-    </body>
+{{#if user}}
+    {{#ifEqual user.role "admin"}}
+        {{#each adminFeatures as |feature|}}
+            <div>{{ feature.name }}</div>
+        {{/each}}
+    {{else}}
+        {{#each userFeatures as |feature|}}
+            <div>{{ feature.name }}</div>
+        {{/each}}
+    {{/ifEqual}}
+{{/if}}
+```
+
+#### 3. Use Else Blocks for Better UX
+
+```html
+{{#if articles}}
+    {{#each articles as |article|}}
+        <article>{{ article.title }}</article>
+    {{/each}}
+{{else}}
+    <p>No articles available. <a href="/create">Create one</a>?</p>
+{{/if}}
+```
+
+## Partials
+Partials are reusable template components that allow you to break down large templates into smaller, manageable pieces. They help maintain consistency across your application and reduce code duplication.
+
+Use the `{{> partial-name.html }}` syntax to include a partial:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    {{> head.html }}
+</head>
+<body>
+    {{> header.html }}
+    
+    <main>
+        {{noop content }}
+    </main>
+    
+    {{> footer.html }}
+</body>
 </html>
 ```
 
-### Component Partials
-
-Create reusable UI components:
+### Creating Partials
+Partials are just regular template files. Here's an example header partial:
 
 ```html
-<!-- templates/partials/components/button.html -->
-<button 
-    type="{{ type }}" 
-    class="btn btn-{{ variant }} {{ size }}"
-    {{#if disabled}}disabled{{/if}}
-    {{#if data}}data-{{ data.name }}="{{ data.value }}"{{/if}}
->
-    {{#if icon}}<span class="icon">{{ icon }}</span>{{/if}}
-    <span class="button__label">{{ label }}</span>
-</button>
-
-<!-- Usage -->
-{{> components/button.html 
-    type="submit" 
-    variant="primary" 
-    size="large" 
-    label="Save Changes" 
-    icon="save"
-}}
+<!-- header.html -->
+<header class="site-header">
+    <nav>
+        <a href="/" class="logo">{{ site.name }}</a>
+        <ul class="nav-menu">
+            {{#each navigation as |item|}}
+                <li><a href="{{ item.url }}">{{ item.text }}</a></li>
+            {{/each}}
+        </ul>
+    </nav>
+</header>
 ```
 
-### Conditional Partials
+**Context Inheritance**
+
+Partials automatically inherit the context from their parent template, so they have access to all the same variables.
+
+### Example: User Card Partial
 
 ```html
-{{!-- Include different partials based on context --}}
+<!-- In main template -->
+{{#each users as |user|}}
+    {{> user-card.html }}
+{{/each}}
+
+<!-- user-card.html partial -->
+<div class="user-card">
+    <img src="{{ user.avatar }}" alt="{{ user.name }}" />
+    <h3>{{ user.name }}</h3>
+    <p>{{ user.email }}</p>
+    {{#if user.isOnline}}
+        <span class="status online">Online</span>
+    {{/if}}
+</div>
+```
+
+### Common Partial Patterns
+Create a base layout that other templates can extend:
+
+```html
+<!-- layout.html -->
+<!DOCTYPE html>
+<html lang="{{ site.language }}">
+<head>
+    {{> head.html }}
+</head>
+<body class="{{ bodyClass }}">
+    {{> header.html }}
+    
+    <main class="main-content">
+        {{ content }}
+    </main>
+    
+    {{> footer.html }}
+    
+    {{> scripts.html }}
+</body>
+</html>
+```
+
+Partials can include other partials, allowing you to create complex component hierarchies:
+
+```html
+<!-- article-list.html -->
+<div class="article-list">
+    {{#each articles as |article|}}
+        {{> article-card.html }}
+    {{/each}}
+</div>
+
+<!-- article-card.html -->
+<article class="article-card">
+    <header>
+        {{> article-header.html }}
+    </header>
+    <div class="content">
+        {{ article.excerpt }}
+    </div>
+    <footer>
+        {{> article-footer.html }}
+    </footer>
+</article>
+
+<!-- article-header.html -->
+<h2><a href="{{ article.url }}">{{ article.title }}</a></h2>
+{{> author-info.html }}
+```
+
+You can conditionally include partials based on context:
+
+```html
+<!-- main template -->
 {{#if user.isAdmin}}
     {{> admin-panel.html }}
 {{else}}
@@ -593,569 +837,382 @@ Create reusable UI components:
 {{/if}}
 ```
 
-## Data Flow
+### Best Practices for partials
 
-Understanding data flow is crucial for effective templating.
-
-### Data Sources
-
-1. **Site-wide data** (`site-page-data.json`)
-2. **Page-specific data** (`pages/*/page.json`)
-3. **Dynamic data** (from request handlers)
-4. **Configuration data** (`kixx-config.json`)
-
-### Data Merging Example
-
-```javascript
-// site-page-data.json
-{
-    "site": {
-        "name": "My Application",
-        "description": "A great application"
-    },
-    "contactInfo": {
-        "phone": {
-            "raw": "555-123-4567",
-            "formatted": "(555) 123-4567"
-        }
-    },
-    "nav_menu_sections": [
-        {
-            "label": "Main",
-            "pages": [
-                { "url": "/", "label": "Home" },
-                { "url": "/about", "label": "About" }
-            ]
-        }
-    ]
-}
-
-// pages/about/page.json
-{
-    "page": {
-        "title": "About Us",
-        "description": "Learn more about our company"
-    },
-    "team": [
-        { "name": "John Doe", "role": "CEO" },
-        { "name": "Jane Smith", "role": "CTO" }
-    ]
-}
-
-// Dynamic data from handler
-{
-    "currentUser": { "name": "Alice", "role": "admin" },
-    "timestamp": "2024-01-15T10:30:00Z"
-}
-```
-
-### Final Merged Data
-
-```javascript
-{
-    // From site-page-data.json
-    "site": { "name": "My Application", "description": "A great application" },
-    "contactInfo": { "phone": { "raw": "555-123-4567", "formatted": "(555) 123-4567" } },
-    "nav_menu_sections": [...],
-    
-    // From pages/about/page.json
-    "page": { "title": "About Us", "description": "Learn more about our company" },
-    "team": [...],
-    
-    // From dynamic data
-    "currentUser": { "name": "Alice", "role": "admin" },
-    "timestamp": "2024-01-15T10:30:00Z"
-}
-```
-
-### Accessing Data in Templates
+#### 1. Use Descriptive Names
 
 ```html
-<!-- Site-wide data -->
-<title>{{ page.title }} - {{ site.name }}</title>
+<!-- Good -->
+{{> user-profile-card.html }}
+{{> navigation-menu.html }}
+{{> article-meta.html }}
 
-<!-- Contact information -->
-<a href="tel:{{ contactInfo.phone.raw }}">
-    {{ contactInfo.phone.formatted }}
-</a>
-
-<!-- Navigation -->
-<nav>
-    {{#each nav_menu_sections as |section|}}
-        <div class="nav-section">
-            <h3>{{ section.label }}</h3>
-            <ul>
-                {{#each section.pages as |page|}}
-                    <li><a href="{{ page.url }}">{{ page.label }}</a></li>
-                {{/each}}
-            </ul>
-        </div>
-    {{/each}}
-</nav>
-
-<!-- Dynamic data -->
-{{#if currentUser}}
-    <p>Welcome, {{ currentUser.name }}!</p>
-{{/if}}
+<!-- Avoid -->
+{{> card.html }}
+{{> nav.html }}
+{{> meta.html }}
 ```
 
-## Page Templates
-
-Page templates are the core content templates for each page in your application.
-
-### Page Template Structure
-
-```
-pages/
-├── page.html              # Home page
-├── page.json              # Home page data
-├── about/
-│   ├── page.html          # About page template
-│   └── page.json          # About page data
-├── blog/
-│   ├── page.html          # Blog listing template
-│   ├── page.json          # Blog listing data
-│   └── post/
-│       ├── page.html      # Individual post template
-│       └── page.json      # Post data
-└── contact/
-    ├── page.html          # Contact page template
-    └── page.json          # Contact page data
-```
-
-### Home Page Template
+#### 2. Keep Partials Focused
 
 ```html
-<!-- pages/page.html -->
-<div class="hero-banner inverted-background">
-    <img src="{{ page.heroImage.url }}" 
-         alt="{{ page.heroImage.alt }}"
-         style="object-position: {{ page.heroImage.position }};">
+<!-- Good: Single responsibility -->
+<!-- user-avatar.html -->
+<img src="{{ user.avatar }}" alt="{{ user.name }}" class="avatar" />
+
+<!-- Avoid: Multiple responsibilities -->
+<!-- user-card.html -->
+<div class="user-card">
+    <img src="{{ user.avatar }}" alt="{{ user.name }}" />
+    <h3>{{ user.name }}</h3>
+    <p>{{ user.bio }}</p>
+    <div class="actions">
+        <button>Edit</button>
+        <button>Delete</button>
+    </div>
 </div>
-
-<article class="site-width-container">
-    <header>
-        <h1>{{ page.title }}</h1>
-        {{#if page.subtitle}}
-            <p class="subtitle">{{ page.subtitle }}</p>
-        {{/if}}
-    </header>
-
-    <div class="content">
-        {{ page.content }}
-    </div>
-
-    {{#if page.featuredContent}}
-        <section class="featured-content">
-            <h2>Featured</h2>
-            {{#each page.featuredContent as |item|}}
-                {{> content-card.html item=item }}
-            {{/each}}
-        </section>
-    {{/if}}
-</article>
 ```
 
-### Blog Post Template
+#### 3. Use Consistent Naming Conventions
 
 ```html
-<!-- pages/blog/post/page.html -->
-<article class="site-width-container">
-    <header class="post-header">
-        <h1>{{ page.title }}</h1>
-        <div class="post-meta">
-            <time datetime="{{ page.publishDate }}">
-                {{ format_date page.publishDate format="DATE_MED_WITH_WEEKDAY" }}
-            </time>
-            {{#if page.author}}
-                <span class="author">by {{ page.author.name }}</span>
-            {{/if}}
-        </div>
-    </header>
+<!-- Use kebab-case for file names -->
+{{> user-profile.html }}
+{{> navigation-menu.html }}
+{{> article-card.html }}
 
-    <div class="post-content">
-        {{noop page.content }}
-    </div>
-
-    {{#if page.tags}}
-        <footer class="post-footer">
-            <div class="tags">
-                {{#each page.tags as |tag|}}
-                    <a href="/blog/tag/{{ tag.slug }}" class="tag">{{ tag.name }}</a>
-                {{/each}}
-            </div>
-        </footer>
-    {{/if}}
-</article>
+<!-- Use descriptive names that indicate purpose -->
+{{> form-field-input.html }}
+{{> form-field-textarea.html }}
+{{> form-field-select.html }}
 ```
 
-### Form Page Template
-
-```html
-<!-- pages/contact/page.html -->
-<article class="site-width-container">
-    <header>
-        <h1>{{ page.title }}</h1>
-        {{#if page.description}}
-            <p class="description">{{ page.description }}</p>
-        {{/if}}
-    </header>
-
-    <form method="POST" action="/contact" class="contact-form">
-        {{#each page.formFields as |field|}}
-            {{> form-field.html field=field }}
-        {{/each}}
-        
-        <div class="form-actions">
-            {{> components/button.html 
-                type="submit" 
-                variant="primary" 
-                label="Send Message" 
-            }}
-        </div>
-    </form>
-
-    {{#if page.contactInfo}}
-        <aside class="contact-info">
-            <h3>Contact Information</h3>
-            {{> contact-info.html info=page.contactInfo }}
-        </aside>
-    {{/if}}
-</article>
-```
-
-## Best Practices
-
-### 1. Template Organization
+#### 4. Organize Partials by Feature
 
 ```
 templates/
-├── templates/
-│   └── base.html              # Main layout template
-├── partials/
-│   ├── layout/
-│   │   ├── html-header.html   # Head section
-│   │   ├── site-header.html   # Navigation
-│   │   └── site-footer.html   # Footer
-│   ├── components/
-│   │   ├── button.html        # Reusable components
-│   │   ├── card.html
-│   │   └── form-field.html
-│   └── content/
-│       ├── article-card.html  # Content-specific partials
-│       └── event-schedule.html
-└── helpers/
-    ├── format_date.js         # Custom helpers
-    └── format_currency.js
+├── layout/
+│   ├── base.html
+│   ├── head.html
+│   ├── header.html
+│   └── footer.html
+├── components/
+│   ├── button.html
+│   ├── card.html
+│   └── form-field.html
+├── user/
+│   ├── user-card.html
+│   ├── user-avatar.html
+│   └── user-profile.html
+└── article/
+    ├── article-card.html
+    ├── article-meta.html
+    └── article-content.html
 ```
 
-### 2. Semantic HTML
+#### 5. Document Partial Dependencies
 
 ```html
-<!-- Good: Semantic structure -->
-<main class="site-width-container">
-    <article>
-        <header>
-            <h1>{{ page.title }}</h1>
-            <time datetime="{{ page.date }}">{{ format_date page.date }}</time>
-        </header>
-        <section>
-            {{noop page.content }}
-        </section>
-    </article>
-</main>
-
-<!-- Avoid: Generic divs -->
-<div class="main">
-    <div class="article">
-        <div class="header">
-            <div class="title">{{ page.title }}</div>
+<!-- user-card.html -->
+{{!-- 
+    This partial expects the following context:
+    - user: Object with name, email, avatar properties
+    - showActions: Boolean to show/hide action buttons
+--}}
+<div class="user-card">
+    <img src="{{ user.avatar }}" alt="{{ user.name }}" />
+    <h3>{{ user.name }}</h3>
+    <p>{{ user.email }}</p>
+    
+    {{#if showActions}}
+        <div class="actions">
+            <button>Edit</button>
+            <button>Delete</button>
         </div>
-    </div>
+    {{/if}}
 </div>
 ```
 
-### 3. Progressive Enhancement
+## Custom Helpers
+Kixx Templating allows you to create custom helper functions to extend the template engine's capabilities. This guide covers how to create both inline and block helpers.
 
-```html
-<!-- Base functionality works without JavaScript -->
-<form action="/search" method="GET">
-    <input type="text" name="q" placeholder="Search..." required>
-    <button type="submit">Search</button>
-</form>
+There are two types of helpers you can create:
 
-<!-- Enhanced with JavaScript -->
-<script>
-document.querySelector('form').addEventListener('submit', function(e) {
-    // Add loading state, validation, etc.
-});
-</script>
-```
+- **Inline Helpers**: Transform data and return a string value
+- **Block Helpers**: Control template flow and can contain other content
 
-### 4. Security
-
-```html
-<!-- Safe: Automatic HTML escaping -->
-<p>{{ userInput }}</p>
-
-<!-- Safe: Using noop for trusted content -->
-<p>{{noop trustedHtmlContent }}</p>
-
-<!-- Unsafe: Using noop with untrusted content -->
-<p>{{noop userComment }}</p> <!-- DON'T DO THIS -->
-```
-
-### 5. Performance
-
-```html
-<!-- Use conditional rendering to avoid unnecessary work -->
-{{#if showExpensiveComponent}}
-    {{> expensive-component.html data=expensiveData }}
-{{/if}}
-
-<!-- Cache compiled templates in production -->
-<!-- The PageTemplateEngine handles this automatically -->
-```
-
-### 6. Error Handling
-
-```html
-<!-- Include error states in templates -->
-{{#if error}}
-    <div class="error-message">
-        <h3>Error</h3>
-        <p>{{ error.message }}</p>
-        {{#if error.details}}
-            <details>
-                <summary>Technical Details</summary>
-                <pre>{{ error.details }}</pre>
-            </details>
-        {{/if}}
-    </div>
-{{/if}}
-
-<!-- Provide fallbacks for missing data -->
-<h1>{{ page.title || 'Untitled Page' }}</h1>
-<p>{{ page.description || 'No description available.' }}</p>
-```
-
-## Advanced Patterns
-
-### 1. Template Inheritance
-
-```html
-<!-- base.html -->
-<!doctype html>
-<html lang="en-US">
-    <head>
-        {{> html-header.html }}
-        {{#if page.extraHead}}
-            {{noop page.extraHead }}
-        {{/if}}
-    </head>
-    <body class="{{ page.bodyClass }}">
-        {{> site-header.html }}
-        <main class="main-content">
-            {{noop body }}
-        </main>
-        {{> site-footer.html }}
-        {{#if page.extraScripts}}
-            {{noop page.extraScripts }}
-        {{/if}}
-    </body>
-</html>
-```
-
-### 2. Dynamic Partials
-
-```html
-<!-- Include different partials based on content type -->
-{{#if content.type}}
-    {{> (concat content.type "-card.html") }}
-{{/if}}
-
-<!-- Or use a helper -->
-{{> (getPartialName content.type) }}
-```
-
-### 3. Complex Data Structures
-
-```html
-<!-- Handle nested data structures -->
-{{#if user}}
-    {{#if user.profile}}
-        {{#if user.profile.preferences}}
-            {{#if user.profile.preferences.theme}}
-                <div class="theme-{{ user.profile.preferences.theme }}">
-                    {{ user.profile.preferences.theme }} theme
-                </div>
-            {{/if}}
-        {{/if}}
-    {{/if}}
-{{/if}}
-
-<!-- Or use helper functions -->
-{{#if (getNestedValue user "profile.preferences.theme")}}
-    <div class="theme-{{ (getNestedValue user "profile.preferences.theme") }}">
-        {{ (getNestedValue user "profile.preferences.theme") }} theme
-    </div>
-{{/if}}
-```
-
-### 4. Conditional Styling
-
-```html
-<!-- Dynamic CSS classes -->
-<div class="card {{#if isActive}}card--active{{/if}} {{#if isFeatured}}card--featured{{/if}}">
-
-<!-- Or use a helper -->
-<div class="card {{ getCardClasses card }}">
-
-<!-- Helper implementation -->
-function getCardClasses(card) {
-    const classes = ['card'];
-    if (card.isActive) classes.push('card--active');
-    if (card.isFeatured) classes.push('card--featured');
-    return classes.join(' ');
-}
-```
-
-### 5. Pagination
-
-```html
-<!-- pagination.html partial -->
-{{#if pagination}}
-    <nav class="pagination">
-        {{#if pagination.prevPage}}
-            <a href="?page={{ pagination.prevPage }}" class="pagination__prev">Previous</a>
-        {{/if}}
-        
-        <span class="pagination__info">
-            Page {{ pagination.currentPage }} of {{ pagination.totalPages }}
-        </span>
-        
-        {{#if pagination.nextPage}}
-            <a href="?page={{ pagination.nextPage }}" class="pagination__next">Next</a>
-        {{/if}}
-    </nav>
-{{/if}}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### 1. Template Not Found
+All helper functions follow this signature:
 
 ```javascript
-// Check file paths and permissions
-const template = await viewService.getPageMarkup('/about', pageData);
-if (!template) {
-    console.log('Template not found for /about');
+function helperName(context, options, ...positionals) {
+    // Helper implementation
+    return output;
 }
 ```
 
-#### 2. Missing Data
+### Parameters
+- `context`: The current template context object
+- `options`: Named arguments (hash) passed to the helper
+- `...positionals`: Rest parameters representing positional arguments
+
+### The `this` Context
+Inside block helpers, the `this` context provides:
+
+- `this.blockParams`: Array of block parameter names
+- `this.renderPrimary(newContext)`: Render the primary block
+- `this.renderInverse(newContext)`: Render the inverse (else) block
+
+### Inline Helpers
+Inline helpers transform data and return a string value.
+
+```javascript
+function formatDate(context, options, dateString) {
+    const { format = 'short', timezone = 'UTC' } = options;
+    
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    
+    if (format === 'short') {
+        return date.toLocaleDateString();
+    } else if (format === 'long') {
+        return date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+    
+    return date.toISOString();
+}
+```
 
 ```html
-<!-- Use conditional rendering to handle missing data -->
-{{#if page.title}}
-    <h1>{{ page.title }}</h1>
+<p>Published: {{ formatDate article.publishDate format="long" }}</p>
+<p>Updated: {{ formatDate article.updatedDate format="short" timezone="America/New_York" }}</p>
+```
+
+**Helper with Multiple Arguments**
+
+```javascript
+function image(context, options, src, alt, width, height) {
+    const { class: className = '', loading = 'lazy' } = options;
+    
+    if (!src) return '';
+    
+    return `<img src="${src}" alt="${alt || ''}" width="${width || ''}" height="${height || ''}" class="${className}" loading="${loading}">`;
+}
+```
+
+```html
+{{image article.image.src article.image.alt 800 600 class="featured" loading="eager"}}
+```
+
+### Block Helpers
+
+Block helpers control template flow and can contain other content.
+
+```javascript
+function unless(context, options, condition) {
+    if (!condition) {
+        return this.renderPrimary(context);
+    }
+    return this.renderInverse(context);
+}
+```
+
+```html
+{{#unless user.isLoggedIn}}
+    <p>Please log in to continue.</p>
 {{else}}
-    <h1>Untitled Page</h1>
-{{/if}}
+    <p>Welcome back!</p>
+{{/unless}}
 ```
 
-#### 3. Helper Errors
+**Block Helper with Parameters**
 
 ```javascript
-// Check helper function signature
-export function helper(context, options, ...args) {
-    // Helper implementation
+function repeat(context, options, count) {
+    const { separator = '' } = options;
+    let output = '';
+    
+    for (let i = 0; i < count; i++) {
+        const subContext = { ...context, index: i };
+        output += this.renderPrimary(subContext);
+        if (i < count - 1 && separator) {
+            output += separator;
+        }
+    }
+    
+    return output;
 }
 ```
 
-#### 4. HTML Escaping Issues
-
 ```html
-<!-- Use noop for trusted HTML content -->
-<div>{{noop trustedHtmlContent }}</div>
-
-<!-- Use helpers for dynamic HTML -->
-<div>{{ renderMarkdown article.content }}</div>
+{{#repeat 3 separator=", "}}
+    <span>Item {{ index }}</span>
+{{/repeat}}
 ```
 
-### Debug Techniques
-
-#### 1. Template Debugging
-
-```html
-<!-- Debug all context data -->
-{{ debug }}
-
-<!-- Debug specific object -->
-{{ debug user }}
-
-<!-- Debug with label -->
-{{ debug "User data:" user }}
-```
-
-#### 2. Helper Debugging
+**Complex Block Helper**
 
 ```javascript
-export function helper(context, options, ...args) {
-    console.log('Helper called with:', { context, options, args });
-    // Helper implementation
+function with(context, options, object) {
+    if (!object) {
+        return this.renderInverse(context);
+    }
+    
+    // Merge the object into the current context
+    const newContext = { ...context, ...object };
+    return this.renderPrimary(newContext);
 }
 ```
 
-#### 3. Data Validation
-
-```javascript
-// Validate data before rendering
-const pageData = await viewService.getPageData('/about', props);
-console.log('Page data:', JSON.stringify(pageData, null, 2));
+```html
+{{#with user.profile}}
+    <h2>{{ name }}</h2>
+    <p>{{ bio }}</p>
+    <p>Email: {{ email }}</p>
+{{else}}
+    <p>No profile information available.</p>
+{{/with}}
 ```
 
-### Performance Optimization
+### Registering Helpers
 
-#### 1. Template Caching
+Kixx Templating will automatically register any helper functions you define in your project's `templates/helpers` directory. Simply create a JavaScript file for each helper in that directory, and the template engine will load and register them for you—no manual registration required.
 
-The PageTemplateEngine automatically caches compiled templates:
+For example, to add a custom `formatDate` helper, create a file at `templates/helpers/formatDate.js`:
 
-```javascript
-// Templates are compiled once and cached
-const template1 = await engine.getTemplate('base.html');
-const template2 = await engine.getTemplate('base.html'); // Uses cached version
-```
+### Advanced Helper Examples
 
-#### 2. Partial Optimization
+**Date Formatting Helper**
 
 ```javascript
-// Partials are loaded once and cached
-await engine.loadPartials(); // Loads all partials
-// Subsequent calls use cached partials
+function formatDate(context, options, dateString) {
+    const { 
+        format = 'short', 
+        timezone = 'UTC',
+        locale = 'en-US' 
+    } = options;
+    
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    
+    const formats = {
+        short: { month: 'short', day: 'numeric', year: 'numeric' },
+        long: { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        },
+        time: { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        },
+        datetime: { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit', 
+            minute: '2-digit' 
+        }
+    };
+    
+    const options = formats[format] || formats.short;
+    return date.toLocaleDateString(locale, options);
+}
 ```
 
-#### 3. Helper Optimization
+**String Manipulation Helper**
 
 ```javascript
-// Helpers are loaded once and cached
-await engine.loadHelpers(); // Loads all helpers
-// Subsequent calls use cached helpers
+function truncate(context, options, text) {
+    const { length = 100, suffix = '...' } = options;
+    
+    if (!text || text.length <= length) {
+        return text;
+    }
+    
+    return text.substring(0, length) + suffix;
+}
 ```
 
-## Conclusion
+**Conditional Class Helper**
 
-The Kixx templating system provides a powerful, flexible foundation for building server-side rendered web applications. By understanding the architecture, syntax, and best practices outlined in this guide, you can create maintainable, performant, and secure templates that scale with your application needs.
+```javascript
+function conditionalClass(context, options, ...classes) {
+    const classList = [];
+    
+    for (let i = 0; i < classes.length; i += 2) {
+        const className = classes[i];
+        const condition = classes[i + 1];
+        
+        if (condition) {
+            classList.push(className);
+        }
+    }
+    
+    return classList.join(' ');
+}
+```
 
-Key takeaways:
+```html
+<div class="{{ conditionalClass 'active' user.isActive 'admin' user.isAdmin 'verified' user.isVerified }}">
+    User content
+</div>
+```
 
-1. **Use the layered architecture** - Template Engine → Page Template Engine → View Service
-2. **Follow the template structure** - Base templates, page templates, partials, and helpers
-3. **Leverage data merging** - Site-wide, page-specific, and dynamic data
-4. **Implement progressive enhancement** - Base functionality without JavaScript
-5. **Prioritize security** - Automatic HTML escaping and careful use of `noop`
-6. **Organize for maintainability** - Clear structure, semantic HTML, and reusable components
+**Pagination Helper**
 
-For more advanced topics, explore the [Template Engine Documentation](../template-engine/docs/) and [Reference Applications](../reference-applications/) for practical examples. 
+```javascript
+function pagination(context, options, currentPage, totalPages) {
+    const { maxVisible = 5 } = options;
+    
+    if (totalPages <= 1) return '';
+    
+    let output = '<nav class="pagination"><ul>';
+    
+    // Previous button
+    if (currentPage > 1) {
+        output += `<li><a href="?page=${currentPage - 1}">Previous</a></li>`;
+    }
+    
+    // Page numbers
+    const start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    const end = Math.min(totalPages, start + maxVisible - 1);
+    
+    for (let i = start; i <= end; i++) {
+        if (i === currentPage) {
+            output += `<li class="current"><span>${i}</span></li>`;
+        } else {
+            output += `<li><a href="?page=${i}">${i}</a></li>`;
+        }
+    }
+    
+    // Next button
+    if (currentPage < totalPages) {
+        output += `<li><a href="?page=${currentPage + 1}">Next</a></li>`;
+    }
+    
+    output += '</ul></nav>';
+    return output;
+}
+```
+
+Always handle errors gracefully in your helpers:
+
+```javascript
+function safeHelper(context, options, value) {
+    try {
+        // Your helper logic here
+        return processedValue;
+    } catch (error) {
+        console.error('Helper error:', error);
+        return ''; // Return empty string on error
+    }
+}
+```
