@@ -29,6 +29,7 @@ plugins/
 ```
 
 ## Plugin Structure
+Plugins are installed and initialized automatically just by placing them in the `plugins/` directory as outlined above. More details and examples are provided below.
 
 ### Main Plugin File
 
@@ -97,8 +98,6 @@ async function setupJobs(jobQueue, itemService) {
 ### Service Architecture
 
 Services contain business logic and provide a clean interface for data operations.
-
-### Item Service
 
 **plugins/my-app/services/item-service.js** - Business logic for items:
 
@@ -242,100 +241,7 @@ export default class ItemService {
 }
 ```
 
-### User Service
-
-**plugins/my-app/services/user-service.js** - User management service:
-
-```javascript
-import crypto from 'crypto';
-
-export default class UserService {
-    constructor({ logger, datastore }) {
-        this.logger = logger;
-        this.datastore = datastore;
-    }
-
-    async initialize() {
-        this.logger.info('UserService initialized');
-    }
-
-    async createUser(userData) {
-        const id = `user:${Date.now()}`;
-        const salt = crypto.randomBytes(16).toString('hex');
-        const hashedPassword = this.hashPassword(userData.password, salt);
-        
-        const user = {
-            ...userData,
-            id,
-            type: 'user',
-            passwordHash: hashedPassword,
-            salt,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
-        delete user.password; // Don't store plain text password
-        
-        await this.datastore.setItem(id, user);
-        this.logger.info('User created', { id, email: user.email });
-        
-        return user;
-    }
-
-    async authenticateUser(email, password) {
-        const users = await this.datastore.queryKeys({
-            startKey: 'user:',
-            endKey: 'user:\uffff',
-            includeDocuments: true
-        });
-
-        const user = users.items.find(item => item.document.email === email);
-        if (!user) {
-            return null;
-        }
-
-        const hashedPassword = this.hashPassword(password, user.document.salt);
-        if (hashedPassword !== user.document.passwordHash) {
-            return null;
-        }
-
-        return user.document;
-    }
-
-    hashPassword(password, salt) {
-        return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
-    }
-
-    async getUser(id) {
-        try {
-            return await this.datastore.getItem(`user:${id}`);
-        } catch (error) {
-            if (error.name === 'NotFoundError') {
-                return null;
-            }
-            throw error;
-        }
-    }
-
-    async updateUser(id, updates) {
-        return await this.datastore.updateItem(`user:${id}`, (currentUser) => {
-            if (!currentUser) {
-                throw new Error('User not found');
-            }
-
-            return {
-                ...currentUser,
-                ...updates,
-                updatedAt: new Date().toISOString()
-            };
-        });
-    }
-}
-```
-
 ## Request Handlers
-
-### Page Handlers
 
 **plugins/my-app/request-handlers/item-page-handler.js** - Handle item page requests:
 
@@ -373,117 +279,7 @@ export default function ItemPageHandler() {
 }
 ```
 
-### Action Handlers
-
-**plugins/my-app/request-handlers/item-action-handler.js** - Handle item actions:
-
-```javascript
-export default function ItemActionHandler() {
-    return async function itemActionHandler(context, request, response) {
-        const itemService = context.getService('ItemService');
-        const { id, action } = request.pathnameParams;
-
-        try {
-            switch (action) {
-                case 'edit':
-                    if (request.method === 'GET') {
-                        const item = await itemService.getItem(id);
-                        if (!item) {
-                            response.statusCode = 404;
-                            return response;
-                        }
-                        response.updateProps({ item, editing: true });
-                    } else if (request.method === 'POST') {
-                        const formData = await request.getFormData();
-                        const updates = {
-                            title: formData.get('title'),
-                            description: formData.get('description'),
-                            category: formData.get('category'),
-                            price: parseFloat(formData.get('price'))
-                        };
-                        
-                        await itemService.updateItem(id, updates);
-                        return response.redirect(`/items/${id}`);
-                    }
-                    break;
-
-                case 'delete':
-                    if (request.method === 'POST') {
-                        await itemService.deleteItem(id);
-                        return response.redirect('/items');
-                    }
-                    break;
-
-                default:
-                    response.statusCode = 404;
-                    return response;
-            }
-
-            return response;
-        } catch (error) {
-            context.logger.error('Error in item action handler', { error, id, action });
-            throw error;
-        }
-    };
-}
-```
-
-### API Handlers
-
-**plugins/my-app/request-handlers/api-handler.js** - Handle API requests:
-
-```javascript
-export default function APIHandler() {
-    return async function apiHandler(context, request, response) {
-        const itemService = context.getService('ItemService');
-        
-        try {
-            switch (request.method) {
-                case 'GET':
-                    const { category, limit, offset, q } = request.queryParams;
-                    
-                    if (q) {
-                        // Search
-                        const results = await itemService.searchItems(q, { limit, offset });
-                        response.setHeader('Content-Type', 'application/json');
-                        response.body = JSON.stringify(results);
-                    } else {
-                        // List items
-                        const items = await itemService.getAllItems({ category, limit, offset });
-                        response.setHeader('Content-Type', 'application/json');
-                        response.body = JSON.stringify(items);
-                    }
-                    break;
-
-                case 'POST':
-                    const body = await request.getJSON();
-                    const newItem = await itemService.createItem(body);
-                    response.statusCode = 201;
-                    response.setHeader('Content-Type', 'application/json');
-                    response.body = JSON.stringify(newItem);
-                    break;
-
-                default:
-                    response.statusCode = 405;
-                    response.setHeader('Content-Type', 'application/json');
-                    response.body = JSON.stringify({ error: 'Method not allowed' });
-            }
-
-            return response;
-        } catch (error) {
-            context.logger.error('Error in API handler', { error });
-            response.statusCode = 500;
-            response.setHeader('Content-Type', 'application/json');
-            response.body = JSON.stringify({ error: 'Internal server error' });
-            return response;
-        }
-    };
-}
-```
-
 ## Middleware
-
-### Authentication Middleware
 
 **plugins/my-app/middleware/auth-middleware.js** - Authentication middleware:
 
@@ -523,43 +319,7 @@ export default function AuthMiddleware() {
 }
 ```
 
-### Logging Middleware
-
-**plugins/my-app/middleware/logging-middleware.js** - Request logging:
-
-```javascript
-export default function LoggingMiddleware() {
-    return async function loggingMiddleware(context, request, response) {
-        const startTime = Date.now();
-        
-        // Log request
-        context.logger.info('Request started', {
-            method: request.method,
-            url: request.url,
-            userAgent: request.headers.get('User-Agent'),
-            ip: request.ip
-        });
-
-        // Continue processing
-        const result = await response;
-
-        // Log response
-        const duration = Date.now() - startTime;
-        context.logger.info('Request completed', {
-            method: request.method,
-            url: request.url,
-            statusCode: result.statusCode,
-            duration: `${duration}ms`
-        });
-
-        return result;
-    };
-}
-```
-
 ## Error Handlers
-
-### Custom Error Handler
 
 **plugins/my-app/error-handlers/custom-error-handler.js** - Custom error handling:
 
@@ -615,8 +375,6 @@ export default function CustomErrorHandler() {
 
 ## Background Jobs
 
-### Cleanup Job
-
 **plugins/my-app/jobs/cleanup-job.js** - Background cleanup job:
 
 ```javascript
@@ -645,152 +403,3 @@ export async function initialize({ logger, jobQueue, itemService }) {
     logger.info('Cleanup job scheduled');
 }
 ```
-
-## Plugin Registration
-
-### In Application Configuration
-
-Register your plugin in the application configuration:
-
-```json
-{
-    "plugins": [
-        "plugins/my-app/plugin.js"
-    ]
-}
-```
-
-### Plugin Loading Order
-
-Plugins are loaded in the order specified:
-
-```json
-{
-    "plugins": [
-        "plugins/core/plugin.js",      // Loaded first
-        "plugins/auth/plugin.js",      // Loaded second
-        "plugins/my-app/plugin.js"     // Loaded last
-    ]
-}
-```
-
-## Plugin Best Practices
-
-### 1. Service Organization
-
-Organize services by domain:
-
-```javascript
-// Good: Domain-specific services
-context.registerService('UserService', new UserService(...));
-context.registerService('ProductService', new ProductService(...));
-context.registerService('OrderService', new OrderService(...));
-
-// Avoid: Generic services
-context.registerService('DataService', new DataService(...));
-```
-
-### 2. Error Handling
-
-Always handle errors gracefully:
-
-```javascript
-try {
-    const result = await service.operation();
-    return result;
-} catch (error) {
-    this.logger.error('Operation failed', { error });
-    throw new CustomError('Operation failed', { cause: error });
-}
-```
-
-### 3. Logging
-
-Use structured logging:
-
-```javascript
-this.logger.info('User created', { 
-    userId: user.id, 
-    email: user.email,
-    source: 'registration'
-});
-```
-
-### 4. Configuration
-
-Make services configurable:
-
-```javascript
-export default class ConfigurableService {
-    constructor({ logger, datastore, config }) {
-        this.logger = logger;
-        this.datastore = datastore;
-        this.config = config.getNamespace('myService');
-    }
-}
-```
-
-### 5. Testing
-
-Make services testable:
-
-```javascript
-// Inject dependencies
-export default class TestableService {
-    constructor({ logger, datastore, externalAPI }) {
-        this.logger = logger;
-        this.datastore = datastore;
-        this.externalAPI = externalAPI;
-    }
-}
-```
-
-## Plugin Testing
-
-### Unit Testing
-
-Test individual services:
-
-```javascript
-// test/services/item-service.test.js
-import ItemService from '../../plugins/my-app/services/item-service.js';
-
-describe('ItemService', () => {
-    let service;
-    let mockDatastore;
-    let mockLogger;
-
-    beforeEach(() => {
-        mockDatastore = {
-            getItem: jest.fn(),
-            setItem: jest.fn(),
-            updateItem: jest.fn(),
-            deleteItem: jest.fn()
-        };
-        mockLogger = {
-            info: jest.fn(),
-            error: jest.fn()
-        };
-        service = new ItemService({ logger: mockLogger, datastore: mockDatastore });
-    });
-
-    test('should create item', async () => {
-        const itemData = { title: 'Test Item', description: 'Test Description' };
-        mockDatastore.setItem.mockResolvedValue();
-
-        const result = await service.createItem(itemData);
-
-        expect(result.title).toBe(itemData.title);
-        expect(result.id).toMatch(/^item:/);
-        expect(mockDatastore.setItem).toHaveBeenCalled();
-    });
-});
-```
-
-## Next Steps
-
-After creating custom plugins, proceed to:
-
-- [Step 6: Application Entry Point](../step-6-application-entry-point.md)
-- [Step 7: Progressive Enhancement](../step-7-progressive-enhancement.md)
-- [Step 8: Data Management](../step-8-data-management.md) 

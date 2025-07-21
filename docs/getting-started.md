@@ -303,6 +303,11 @@ When the route is defined with the PageHandler pathname like:
 }
 ```
 
+## Step 4: Custom Plugins
+Define services, HTTP request handlers, middleware, and error handlers in custom plugins. Custom plugins will go into the `plugins/` directory. Most apps will only need 1 plugin to handle most custom functionality.
+
+See the [Custom Plugins docs](./custom-plugins.md) for more information.
+
 ## Step 5: Data Management
 Default data management in Kixx applications is handled through the Datastore service, which provides a file-backed, document-oriented storage system with in-memory caching, optimistic concurrency control, and powerful querying capabilities.
 
