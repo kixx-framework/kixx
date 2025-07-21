@@ -2,7 +2,7 @@
 
 ## Overview
 
-The first step in building a Kixx application is setting up the configuration files that define how your application behaves in different environments. Kixx uses a file-based configuration system that's simple, versionable, and environment-aware.
+The first step in building a Kixx application is setting up the configuration files that define how your application behaves. Kixx uses a file-based configuration system that's simple, versionable, and environment-aware.
 
 ## Configuration Files
 
@@ -64,7 +64,7 @@ Each environment can have its own settings:
 
 ### virtual-hosts.json
 
-Defines how different hostnames are routed to your application's routes.
+Defines how different hostnames are routed to your application's routes. See more in [Routing Configuration](./step-4-routing-configuration.md).
 
 ```json
 [
@@ -92,12 +92,12 @@ Defines how different hostnames are routed to your application's routes.
 |--------|------|-------------|
 | `name` | string | Human-readable hostname identifier |
 | `hostname` | string | Domain name pattern to match |
-| `routes` | array | List of route configuration files |
+| `routes` | array | List of route specifications or references to route configuration files |
 
 #### Route References
 
 - **app://** - Application-specific routes (from `routes/` directory)
-- **kixx://** - Framework default routes
+- **kixx://** - Framework default routes. See [Routing Configuration](./step-4-routing-configuration.md) for the Kixx default routes.
 
 ### site-page-data.json
 
@@ -176,30 +176,15 @@ Contains sensitive configuration data that shouldn't be committed to version con
 }
 ```
 
-#### Security Best Practices
+#### Security Best Practices for .secrets.json
 
 1. **Never commit secrets** - Add `.secrets.json` to `.gitignore`
 2. **Rotate secrets regularly** - Change passwords and keys periodically
-
-## Configuration Validation
-
-### Required Fields
-
-- `name` - Application name
-- `procName` - Process name
-- `environments` - At least one environment
-
-### Validation Rules
-
-1. **JSON syntax** - All files must be valid JSON
-2. **Required fields** - Missing required fields cause startup errors
-3. **Environment names** - Must match the environment parameter
-4. **Port numbers** - Must be valid port numbers (1-65535)
 
 ## Next Steps
 
 After completing the configuration setup, proceed to:
 
-- [Step 2: Template System Setup](../step-2-template-system-setup.md)
-- [Step 3: Page Structure](../step-3-page-structure.md)
-- [Step 4: Routing Configuration](../step-4-routing-configuration.md) 
+- [Step 2: Template System Setup](./step-2-template-system-setup.md)
+- [Step 3: Page Structure](./step-3-page-structure.md)
+- [Step 4: Routing Configuration](./step-4-routing-configuration.md) 

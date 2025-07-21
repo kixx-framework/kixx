@@ -20,9 +20,26 @@ const NAMESPACE = 'Kixx.StaticFileServer';
  *
  * @function StaticFileServer
  * @param {Object} [options={}] - Optional settings.
- * @param {string} [options.publicDirectory] - The directory to serve static files from. Defaults to context.paths.application_public_directory.
- * @param {string} [options.cacheControl] - The Cache-Control header value to use. Defaults to config.cacheControl or 'no-cache'.
+ * @param {string} [options.publicDirectory] - The directory to serve static files from.
+ *   If not provided, defaults to the value of `context.paths.application_public_directory` at runtime.
+ * @param {string} [options.cacheControl] - The Cache-Control header value to use.
+ *   If not provided, defaults to the value of `config.cacheControl` (from the "Kixx.StaticFileServer" config namespace)
+ *   or falls back to `'no-cache'` if not set in config.
  * @returns {Function} An async request handler function for serving static files.
+ *
+ * @example
+ * // Uses defaults from context and config:
+ * StaticFileServer();
+ *
+ * // Custom public directory and cache control:
+ * StaticFileServer({
+ *   publicDirectory: '/custom/public/path',
+ *   cacheControl: 'public, max-age=3600'
+ * });
+ *
+ * // Default config usage:
+ * // - publicDirectory: context.paths.application_public_directory
+ * // - cacheControl: config.cacheControl (from "Kixx.StaticFileServer" namespace) or 'no-cache'
  */
 export default function StaticFileServer(options = {}) {
 
