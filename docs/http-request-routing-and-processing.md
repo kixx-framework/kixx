@@ -1,5 +1,9 @@
 # HTTP Request Routing and Processing
 
+- [Overview](#overview)
+- [Default Routing and Request Handling](#default-routing-and-request-handling)
+- [Creating Custom Routes and Handlers](#creating-custom-routes-and-handlers)
+
 ## Overview
 Kixx provides a comprehensive request handling system with default routes and handlers to address the most common web application use cases. The system is designed to work seamlessly with the [page structure and templating system](./templating-with-kixx.md).
 
@@ -80,8 +84,6 @@ my-app/
 │   └── helpers/               # Template helpers
 └── routes/ (optional)         # Only needed for custom routes
 ```
-
-## Default Routing
 
 ### Static Files
 - **URL:** `/assets.css`, `/logo.png`, etc.
@@ -191,6 +193,23 @@ export default function AuthenticationErrorHandler(options = {}) {
 ```
 
 ### Reference Custom Handlers in Route JSON
+Custom routing starts by referencing your routes in the `virtual-hosts.json` config.
+
+- **app://** - Application-specific routes (from `routes/` directory)
+- **kixx://** - Kixx framework default routes
+
+Routes are loaded in the order specified in `virtual-hosts.json`:
+
+```json
+{
+    "routes": [
+        "app://main.json",      // Loaded first
+        "app://api.json",       // Loaded second
+        "kixx://defaults.json"  // Loaded last (fallback)
+    ]
+}
+```
+
 Define your custom routes in a JSON file (e.g., `routes/main.json`). Reference your handlers and middleware by their exported name:
 
 ```json
@@ -216,17 +235,30 @@ Define your custom routes in a JSON file (e.g., `routes/main.json`). Reference y
 ```
 
 #### Route
-A route defines the URL pathname to which it will apply as well as the targets to handle specific HTTP methods.
+A route defines the URL pathname to which it will apply as well as the targets to handle specific HTTP methods. Each route consists of several components:
 
-- **pattern**: URL path to match (e.g., `/hello`)
-- **inboundMiddleware**: Runs before handlers (e.g., authentication). Middleware can only be defined on a route.
-- **outboundMiddleware**: Runs after handlers (e.g., setting cookies). Middleware can only be defined on a route.
+| Option | Type | Description |
+|--------|------|-------------|
+| `name` | string | Unique route identifier |
+| `pattern` | string | URL path to match (e.g., `/hello`) which can have parameters (e.g. `/products/:id`)|
+| `inboundMiddleware` | array | Runs before handlers (e.g., authentication). Middleware can only be defined on a route. |
+| `outboundMiddleware` | array | Runs after handlers (e.g., setting cookies). Middleware can only be defined on a route. |
+| `errorHandlers` | array | Error handling middleware |
+| `targets` | array | Request targets for different HTTP methods |
+| `routes` | array | Nested routes |
+
+A route must have a nested `targets` array or `routes` array, but *must NOT* have both.
 
 ### Target
-A target is defined on a route to define how specific HTTP methods are handled for the route.
+A target is defined on a route to define how specific HTTP methods are handled for the route. Each Target consists of several components:
 
-- **handlers**: Run in the order they are defined. Request handlers can only be defined on a target.
-- **errorHandlers**: Handle errors for this route. Error handlers can be defined on the route or the targets.
+| Option | Type | Description |
+|--------|------|-------------|
+| `name` | string | Target identifier |
+| `methods` | array | HTTP methods to handle |
+| `handlers` | array | Handler middleware chain. Run in the order they are defined. Request handlers can only be defined on a target. |
+| `errorHandlers` | array | Handle errors for this route. Error handlers can be defined on the route or the targets. |
+
 
 ### Map Custom Routes to URLs
 

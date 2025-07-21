@@ -1,7 +1,4 @@
-# Step 8: Data Management
-
-## Overview
-
+# The Kixx Datastore
 Data management in Kixx applications is handled through the Datastore service, which provides a file-backed, document-oriented storage system with in-memory caching, optimistic concurrency control, and powerful querying capabilities. Understanding how to effectively use the datastore is crucial for building scalable hypermedia applications.
 
 ## Datastore Architecture
@@ -11,34 +8,33 @@ Data management in Kixx applications is handled through the Datastore service, w
 The datastore consists of several key components:
 
 ```javascript
-// Core datastore components
 const datastore = context.getService('kixx.Datastore');
-
-// Components:
-// - Document storage (JSON files)
-// - In-memory cache (all documents loaded at startup)
-// - Views (for complex queries)
-// - Indexing (for fast lookups)
-// - Concurrency control (optimistic locking)
 ```
+
+Components:
+
+- Document storage (JSON files)
+- In-memory cache (all documents loaded at startup)
+- Views (for complex queries)
+- Indexing (for fast lookups)
+- Concurrency control (optimistic locking)
 
 ### In-Memory Caching
 
 The datastore loads all documents into memory at startup for fast access:
 
-```javascript
-// All documents are cached in memory
-// This provides:
-// - Fast read access
-// - No disk I/O for reads
-// - Immediate consistency
-// - Requires entire dataset to fit in RAM
+This provides:
 
-// Memory usage considerations:
-// - Monitor memory usage
-// - Consider data archiving for large datasets
-// - Use views for efficient queries
-```
+- Fast read access
+- No disk I/O for reads
+- Immediate consistency
+- Requires entire dataset to fit in RAM
+
+Memory usage considerations:
+
+- Monitor memory usage
+- Consider data archiving for large datasets
+- Use views for efficient queries
 
 ## Basic Operations
 
@@ -56,7 +52,7 @@ const item = await datastore.setItem('item:123', {
 });
 
 // Generate unique IDs
-const id = `item:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const id = `item:${ randomUUID() }`;
 const item = await datastore.setItem(id, itemData);
 ```
 
@@ -706,11 +702,3 @@ async function safeUpdateItem(id, updateFunction) {
     }
 }
 ```
-
-## Next Steps
-
-After implementing data management, proceed to:
-
-- [Testing Guide](../testing-guide.md)
-- [Deployment Guide](../deployment-guide.md)
-- [Performance Tuning](../performance-tuning.md) 
