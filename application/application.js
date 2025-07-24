@@ -8,20 +8,24 @@ import Context from './context.js';
 
 
 /**
- * Initializes the core application context.
+ * Initializes and returns the core application context.
  *
- * Loads configuration from the provided file path and environment, constructs
- * the application's paths, creates a logger, and loads all core services into
- * the application context. Afterward, all plugins are loaded and initialized.
+ * This function performs the following steps:
+ *   1. Loads and merges configuration and secrets from the specified file path and environment.
+ *   2. Constructs application paths based on the configuration file location.
+ *   3. Creates a logger instance configured according to the loaded configuration.
+ *   4. Loads and registers all core services into the application context.
+ *   5. Loads and initializes all plugins for the application.
  *
  * @async
  * @function initialize
- * @param {string} configFilepath - Path to the application's configuration file.
+ * @param {object} runtime - The application runtime object (e.g., { command: <command-name> } or { server: { name: <server-name> } }).
+ * @param {string} configFilepath - Absolute path to the application's configuration file.
  * @param {string} environment - The environment name (e.g., 'development', 'production').
- * @returns {Promise<Context>} The fully initialized application context.
+ * @returns {Promise<Context>} Resolves to the fully initialized application context.
  * @throws {WrappedError} If configuration loading fails.
  */
-export async function initialize(configFilepath, environment) {
+export async function initialize(runtime, configFilepath, environment) {
     let config;
     try {
         config = await Config.loadConfigs(configFilepath, environment);
