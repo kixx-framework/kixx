@@ -1,8 +1,8 @@
 import { pathToFileURL } from 'node:url';
 import { WrappedError } from '../errors/mod.js';
 import HttpServer from '../http-server/http-server.js';
-import HttpServerRequest from './http-server-request.js';
-import HttpServerResponse from './http-server-response.js';
+import HttpServerRequest from '../http-server/http-server-request.js';
+import HttpServerResponse from '../http-server/http-server-response.js';
 import HttpRouter from '../http-server/http-router.js';
 import RoutesConfig from './routes-config.js';
 import { middleware, registerMiddleware } from '../request-handlers/middleware/mod.js';
