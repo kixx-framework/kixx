@@ -1,29 +1,26 @@
-# Step 5: Custom Plugins
+# Creating Custom Plugins
+A custom plugin is where all the magic happens in a Kixx web application. Most of the common functionality expected from a website comes pre-configured out of the box with Kixx, but custom plugins is where you get to role your sleeves up and build something unique.
 
-## Overview
-
-Plugins in Kixx applications provide a modular way to extend functionality, organize business logic, and create reusable components. Plugins can define services, request handlers, middleware, error handlers, and background jobs, making them the primary mechanism for building complex applications.
-
-## Plugin Architecture
-
+## Plugin Structure
 ```
 plugins/
-└── my-app/
-    ├── plugin.js                    # Main plugin entry point
-    ├── services/
-    │   ├── item-service.js          # Business logic services
-    │   └── user-service.js
-    ├── request-handlers/
-    │   ├── item-page-handler.js     # Page handlers
-    │   ├── item-action-handler.js   # Action handlers
-    │   └── api-handler.js           # API handlers
-    ├── middleware/
-    │   ├── auth-middleware.js       # Authentication
-    │   └── logging-middleware.js    # Request logging
-    ├── error-handlers/
-    │   └── custom-error-handler.js  # Custom error handling
-    ├── jobs/
-    │   └── cleanup-job.js           # Background jobs
+└── my-app/                          # Named plugin directory.
+    ├── plugin.js                    # Main plugin entry point (must be named "plugin.js").
+    ├── services/                    # Business logic services
+    │   ├── one-service.js
+    │   └── two-service.js
+    ├── request-handlers/            # Custom HTTP request handlers.
+    │   ├── route-a-handler.js
+    │   └── route-b-handler.js
+    ├── middleware/                  # Inbound and outbound middleware.
+    │   ├── auth-middleware.js
+    │   └── cookie-middleware.js
+    ├── error-handlers/              # Custom error handling
+    │   └── custom-error-handler.js
+    ├── jobs/                        # Background jobs
+    │   └── cleanup-job.js
+    ├── lib/                         # Libraries and utilities
+    │   └── utils.js
     └── models/
         └── item-model.js            # Data models
 ```
@@ -32,6 +29,7 @@ plugins/
 Plugins are installed and initialized automatically just by placing them in the `plugins/` directory as outlined above. More details and examples are provided below.
 
 ### Main Plugin File
+If the main plugin file is not named "plugin.js" it must end in "plugin.js".
 
 **plugins/my-app/plugin.js** - The main plugin entry point:
 
