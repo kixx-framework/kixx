@@ -28,7 +28,7 @@ export default [
         pattern: '*',
         errorHandlers: [
             // eslint-disable-next-line new-cap
-            PageErrorHandler({ viewService: 'kixx.AppViewService' }),
+            PageErrorHandler(),
         ],
         targets: [
             {
@@ -38,7 +38,7 @@ export default [
                     // eslint-disable-next-line new-cap
                     StaticFileServer(),
                     // eslint-disable-next-line new-cap
-                    PageHandler({ viewService: 'kixx.AppViewService' }),
+                    PageHandler(),
                 ],
             },
         ],

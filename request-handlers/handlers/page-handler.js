@@ -8,11 +8,12 @@ import { NotFoundError } from '../../errors/mod.js';
  * Returns a request handler function that renders a page using the application's view service.
  *
  * @function PageHandler
- * @param {Object} spec - Specification for the page handler.
- * @param {string} [spec.pathname] - Optional pathname to use instead of the request URL pathname.
+ * @param {Object} options - Options for the page handler.
+ * @param {string} [options.pathname] - Optional pathname to use instead of the request URL pathname.
  * @returns {Function} An async request handler function for rendering pages.
  */
-export default function PageHandler(spec) {
+export default function PageHandler(options) {
+    options = options || {};
     /**
      * Returns an async request handler function that renders a page using the application's view service.
      *
@@ -25,13 +26,13 @@ export default function PageHandler(spec) {
      * @throws {NotFoundError} If the page body or base template is not found.
      */
     return async function pageHandler(context, request, response) {
-        const pathname = spec.pathname || request.url.pathname;
+        const pathname = options.pathname || request.url.pathname;
 
         const viewService = context.getService('kixx.AppViewService');
 
         const pageData = await viewService.getPageData(pathname, response.props);
 
-        if (request.isRequestForJSON()) {
+        if (request.isJSONRequest()) {
             return response.respondWithJSON(200, pageData, { whiteSpace: 4 });
         }
 
