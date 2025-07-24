@@ -35,7 +35,7 @@ export async function initialize(runtime, configFilepath, environment) {
 
     const paths = Paths.fromConfigFilepath(configFilepath);
     const logger = createLogger(config);
-    const context = await Context.load(config, paths, logger);
+    const context = await Context.load(runtime, config, paths, logger);
 
     await initializePlugins(context);
 
