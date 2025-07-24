@@ -1,0 +1,17 @@
+{
+    "private": true,
+    "name": "kixx-reference-app",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "kixx/bin/kixx.js dev",
+        "lint": "eslint ./",
+        "test": "eslint ./"
+    },
+    "devDependencies": {
+        "@eslint/js": "9.22.0",
+        "eslint": "9.22.0"
+    },
+    "author": "Kris Walker (www.kriswalker.me)",
+    "license": "MIT"
+}

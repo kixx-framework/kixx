@@ -1,0 +1,10 @@
+[
+    {
+        "name": "Main",
+        "hostname": "reference.kixx.dev",
+        "routes": [
+            "app://weather.json",
+            "kixx://defaults.json"
+        ]
+    }
+] 

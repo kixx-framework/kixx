@@ -1,0 +1,15 @@
+<div class="site-width-container">
+    <h1>{{ title }}</h1>
+    
+    <div class="forecast-details">
+        <div class="forecast-metadata">
+            <p><strong>Issuing Office:</strong> {{ forecast.issuingOffice }}</p>
+            <p><strong>Product Code:</strong> {{ forecast.productCode }}</p>
+            <p><strong>Issued:</strong> {{format_date forecast.issuanceTime }}</p>
+            <p><strong>Updated:</strong> {{format_date forecast.storedAt }}</p>
+        </div>
+        <div class="forecast-content">
+            {{noop forecastHTML }}
+        </div>
+    </div>
+</div>
