@@ -121,9 +121,10 @@ export default class HttpRoute {
      * @param {Error} error - The error to handle.
      * @returns {HttpResponse|boolean} The new response if handled, or false.
      */
-    handleError(context, request, response, error) {
+    async handleError(context, request, response, error) {
         for (const func of this.#errorHandlers) {
-            const newResponse = func(context, request, response, error);
+            // eslint-disable-next-line no-await-in-loop
+            const newResponse = await func(context, request, response, error);
 
             if (newResponse) {
                 return newResponse;

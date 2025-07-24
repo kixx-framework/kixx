@@ -91,11 +91,11 @@ export default class HttpRouter {
 
             if (target) {
                 // Give the target a chance to handle the error first.
-                updatedResponse = target.handleError(context, request, response, error);
+                updatedResponse = await target.handleError(context, request, response, error);
             } else if (route) {
                 // The route gets the second crack at it if the target
                 // was not found.
-                updatedResponse = route.handleError(context, request, response, error);
+                updatedResponse = await route.handleError(context, request, response, error);
             }
 
             if (updatedResponse) {

@@ -112,7 +112,6 @@ export default class HttpTarget {
 
     /**
      * Handles an error for this target by invoking each error handler in order until one returns a truthy value.
-     * Error handlers are expected to execute synchronously.
      *
      * @param  {ApplicationContext} context - The application context.
      * @param  {HttpRequest} request - The HTTP request object.
@@ -120,9 +119,10 @@ export default class HttpTarget {
      * @param  {Error} error - The error to handle.
      * @return {HttpResponse|boolean} The response returned by an error handler, or false if none handled the error.
      */
-    handleError(context, request, response, error) {
+    async handleError(context, request, response, error) {
         for (const func of this.#errorHandlers) {
-            const newResponse = func(context, request, response, error);
+            // eslint-disable-next-line no-await-in-loop
+            const newResponse = await func(context, request, response, error);
 
             if (newResponse) {
                 return newResponse;
