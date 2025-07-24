@@ -37,7 +37,8 @@ export async function main(args) {
         configFilepath = path.join(process.cwd(), 'kixx-config.json');
     }
 
-    const context = await Application.initialize(configFilepath, values.environment);
+    const runtime = { server: { name: 'server' } };
+    const context = await Application.initialize(runtime, configFilepath, values.environment);
 
     // eslint-disable-next-line require-atomic-updates
     process.title = `node-${ context.config.procName }`;

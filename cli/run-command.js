@@ -44,7 +44,8 @@ export async function main(args) {
         configFilepath = path.join(process.cwd(), 'kixx-config.json');
     }
 
-    const context = await Application.initialize(configFilepath, values.environment);
+    const runtime = { command: commandName };
+    const context = await Application.initialize(runtime, configFilepath, values.environment);
 
     const commands = await loadCommands(context.paths.commands_directory);
 

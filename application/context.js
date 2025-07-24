@@ -34,14 +34,22 @@ export default class Context {
     #services = new Map();
 
     /**
-     * Construct a new Context instance.
+     * Constructs a new Context instance.
      *
-     * @param {Object} options
+     * @param {Object} options - Options for context construction.
+     * @param {Object} options.runtime - The application runtime object (e.g., { command: <command-name> } or { server: { name: <server-name> } }).
      * @param {Object} options.config - The application configuration object.
      * @param {Object} options.paths - The application paths object.
      * @param {Object} options.logger - The application logger instance.
      */
-    constructor({ config, paths, logger }) {
+    constructor({ runtime, config, paths, logger }) {
+        /**
+         * The application runtime object.
+         * This will be set by one of { command: <command-name> } or { server: { name: <server-name> } }.
+         * @type {Object}
+         */
+        this.runtime = runtime;
+
         /**
          * The application configuration object.
          * @type {Object}
@@ -91,8 +99,9 @@ export default class Context {
      * @param {Object} logger - The application logger instance.
      * @returns {Promise<Context>} The fully initialized Context instance.
      */
-    static async load(config, paths, logger) {
+    static async load(runtime, config, paths, logger) {
         const context = new Context({
+            runtime,
             config,
             paths,
             logger,
