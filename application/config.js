@@ -32,15 +32,17 @@ export default class Config extends EventEmitter {
      */
     #values = {};
 
+    #secrets = {};
+
     /**
      * Construct a new Config instance.
      *
      * @param {Object} values - The merged configuration object.
      */
-    constructor(values) {
+    constructor(values, secrets) {
         super();
         this.#values = values;
-        this.#values.secrets = values.secrets || {};
+        this.#secrets = secrets;
     }
 
     /**
@@ -76,7 +78,7 @@ export default class Config extends EventEmitter {
      * @returns {Object} The secrets object for the namespace, or an empty object if not found.
      */
     getSecrets(namespace) {
-        return this.#values.secrets[namespace] || {};
+        return this.#secrets[namespace] || {};
     }
 
     /**
@@ -91,8 +93,8 @@ export default class Config extends EventEmitter {
         assertNonEmptyString(filepath, 'loadConfigs(); filepath is required');
         assertNonEmptyString(environment, 'loadConfigs(); environment is required');
 
-        const json = await readJSONFile(filepath);
-        const rootConfig = json || {};
+        const configJSON = await readJSONFile(filepath);
+        const rootConfig = configJSON || {};
 
         // Extract environment-specific config, if present.
         const environmentConfig = rootConfig.environments?.[environment] || {};
@@ -102,29 +104,24 @@ export default class Config extends EventEmitter {
 
         // Load secrets from .secrets.json in the same directory.
         const rootDirectory = path.dirname(filepath);
-        const rootSecrets = await readJSONFile(path.join(rootDirectory, '.secrets.json'));
-        // Prefer environment-specific secrets, fallback to root secrets object.
-        const secrets = rootSecrets?.[environment] || rootSecrets || {};
+        const secretsJSON = await readJSONFile(path.join(rootDirectory, '.secrets.json'));
+        const rootSecrets = secretsJSON || {};
 
-        if (rootSecrets) {
-            delete rootSecrets.environments;
-        }
+        // Prefer environment-specific secrets, fallback to root secrets object.
+        const environmentSecrets = rootSecrets.environments?.[environment] || {};
+
+        // Remove environments property from secrets to avoid merging it.
+        delete rootSecrets.environments;
 
         // Merge root config, environment config, and secrets.
-        const spec = deepMerge(rootConfig, environmentConfig, { secrets });
+        const configs = deepMerge(rootConfig, environmentConfig);
+        const secrets = deepMerge(rootSecrets, environmentSecrets);
 
-        this.validateSpec(spec);
+        this.validateSpec(configs, secrets);
 
-        return new Config(spec);
+        return new Config(configs, secrets);
     }
 
-    /**
-     * Validates the configuration spec.
-     * (No-op by default; override to implement validation logic.)
-     *
-     * @param {Object} spec - The configuration spec to validate.
-     */
-    static validateSpec(/* spec */) {
-        // No-op: implement validation logic as needed.
+    static validateSpec() {
     }
 }
