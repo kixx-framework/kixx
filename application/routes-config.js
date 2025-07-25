@@ -144,7 +144,7 @@ export default class RoutesConfig {
      * @returns {string} The virtual hosts config file path.
      */
     #getVhostsConfigFilepath() {
-        return this.#paths.application_vhosts_config;
+        return this.#paths.vhosts_config;
     }
 
     /**
@@ -154,6 +154,6 @@ export default class RoutesConfig {
      * @returns {string} The routes config directory path.
      */
     #getRoutesConfigDirectory() {
-        return this.#paths.application_routes_directory;
+        return this.#paths.routes_directory;
     }
 }
