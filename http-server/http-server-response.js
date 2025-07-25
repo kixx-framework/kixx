@@ -2,6 +2,7 @@ import deepFreeze from '../lib/deep-freeze.js';
 import deepMerge from '../lib/deep-merge.js';
 import {
     assert,
+    assertNonEmptyString,
     isNonEmptyString,
     isNumberNotNaN,
     isBoolean
@@ -165,6 +166,11 @@ export default class HttpServerResponse {
      */
     respondWithRedirect(statusCode, newLocation) {
         assert(isNumberNotNaN(statusCode), ': statusCode must be a number');
+        if (newLocation.href) {
+            newLocation = newLocation.href;
+        }
+        assertNonEmptyString(newLocation, ': newLocation must be a string');
+
         this.status = statusCode;
         this.headers.set('location', newLocation);
         return this;
