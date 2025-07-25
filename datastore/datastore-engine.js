@@ -207,9 +207,10 @@ export default class DatastoreEngine {
         });
 
         if (includeDocuments) {
-            for (const item of results.items) {
+            for (let i = 0; i < results.items.length; i += 1) {
+                const item = results.items[i];
                 const document = this.#documentsMap.get(item.documentKey);
-                item.document = document;
+                results.items[i] = Object.assign({}, item, { document });
             }
         }
 
@@ -266,8 +267,10 @@ export default class DatastoreEngine {
         });
 
         if (includeDocuments) {
-            for (const item of results.items) {
-                item.document = this.#documentsMap.get(item.documentKey);
+            for (let i = 0; i < results.items.length; i += 1) {
+                const item = results.items[i];
+                const document = this.#documentsMap.get(item.documentKey);
+                results.items[i] = Object.assign({}, item, { document });
             }
         }
 
