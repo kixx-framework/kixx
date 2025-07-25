@@ -21,7 +21,7 @@ const NAMESPACE = 'Kixx.StaticFileServer';
  * @function StaticFileServer
  * @param {Object} [options={}] - Optional settings.
  * @param {string} [options.publicDirectory] - The directory to serve static files from.
- *   If not provided, defaults to the value of `context.paths.application_public_directory` at runtime.
+ *   If not provided, defaults to the value of `context.paths.public_directory` at runtime.
  * @param {string} [options.cacheControl] - The Cache-Control header value to use.
  *   If not provided, defaults to the value of `config.cacheControl` (from the "Kixx.StaticFileServer" config namespace)
  *   or falls back to `'no-cache'` if not set in config.
@@ -38,7 +38,7 @@ const NAMESPACE = 'Kixx.StaticFileServer';
  * });
  *
  * // Default config usage:
- * // - publicDirectory: context.paths.application_public_directory
+ * // - publicDirectory: context.paths.public_directory
  * // - cacheControl: config.cacheControl (from "Kixx.StaticFileServer" namespace) or 'no-cache'
  */
 export default function StaticFileServer(options = {}) {
@@ -65,7 +65,7 @@ export default function StaticFileServer(options = {}) {
         const logger = context.logger.createChild(NAMESPACE);
 
         const { pathname } = request.url;
-        const publicDirectory = options.publicDirectory || context.paths.application_public_directory;
+        const publicDirectory = options.publicDirectory || context.paths.public_directory;
         const cacheControl = options.cacheControl || config.cacheControl || 'no-cache';
 
         // Two dots or two slashes are always invalid

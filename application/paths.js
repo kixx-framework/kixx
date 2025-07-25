@@ -57,50 +57,50 @@ export default class Paths {
          * File path to the application's virtual hosts root configuration file.
          * @type {string}
          */
-        this.application_vhosts_config = path.join(this.app_directory, 'virtual-hosts.json');
+        this.vhosts_config = path.join(this.app_directory, 'virtual-hosts.json');
 
         /**
          * Directory path to the application's routes configuration files.
          * @type {string}
          */
-        this.application_routes_directory = path.join(this.app_directory, 'routes');
+        this.routes_directory = path.join(this.app_directory, 'routes');
 
         /**
          * Directory path to the application's public assets.
          * @type {string}
          */
-        this.application_public_directory = path.join(this.app_directory, 'public');
+        this.public_directory = path.join(this.app_directory, 'public');
 
         /**
          * File path to the site-wide page data JSON file.
          * @type {string}
          */
-        this.application_site_page_data_filepath = path.join(this.app_directory, 'site-page-data.json');
+        this.site_page_data_filepath = path.join(this.app_directory, 'site-page-data.json');
 
         /**
          * Directory tree where page data files (index.json) and page templates (index.html) are stored.
          * The directory structure represents pathnames for the server.
          * @type {string}
          */
-        this.application_pages_directory = path.join(this.app_directory, 'pages');
+        this.pages_directory = path.join(this.app_directory, 'pages');
 
         /**
          * Directory containing base HTML templates that page templates extend.
          * @type {string}
          */
-        this.application_templates_directory = path.join(this.app_directory, 'templates', 'templates');
+        this.templates_directory = path.join(this.app_directory, 'templates', 'templates');
 
         /**
          * Directory containing template helper modules.
          * @type {string}
          */
-        this.application_helpers_directory = path.join(this.app_directory, 'templates', 'helpers');
+        this.helpers_directory = path.join(this.app_directory, 'templates', 'helpers');
 
         /**
          * Directory containing partial HTML templates that can be included in pages.
          * @type {string}
          */
-        this.application_partials_directory = path.join(this.app_directory, 'templates', 'partials');
+        this.partials_directory = path.join(this.app_directory, 'templates', 'partials');
 
         /**
          * Directory containing plugin modules.

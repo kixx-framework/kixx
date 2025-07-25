@@ -196,15 +196,15 @@ function createViewService(logger, paths) {
     return new ViewService({
         logger,
         // Directory tree where application template files are stored.
-        templatesDirectory: paths.application_templates_directory,
+        templatesDirectory: paths.templates_directory,
         // Directory tree where application template partials are stored.
-        partialsDirectory: paths.application_partials_directory,
+        partialsDirectory: paths.partials_directory,
         // Directory tree where application template helpers are stored.
-        helpersDirectory: paths.application_helpers_directory,
+        helpersDirectory: paths.helpers_directory,
         // Directory tree where page data files (index.json) are stored, and
         // represent pathnames for the server.
-        pageDirectory: paths.application_pages_directory,
+        pageDirectory: paths.pages_directory,
         // File path to the site-wide page data JSON file.
-        sitePageDataFilepath: paths.application_site_page_data_filepath,
+        sitePageDataFilepath: paths.site_page_data_filepath,
     });
 }
