@@ -3,6 +3,7 @@ import { assertNonEmptyString, assertFunction } from '../assertions/mod.js';
 import { WrappedError } from '../errors/mod.js';
 import { tokenize, buildSyntaxTree, createRenderFunction, helpers } from '../template-engine/mod.js';
 import format_date from './helpers/format_date.js';
+import plus_one from './helpers/plus_one.js';
 import * as fileSystem from '../lib/file-system.js';
 
 
@@ -63,6 +64,7 @@ export default class PageTemplateEngine {
         // Start with built-in helpers from kixx-templating, then add custom ones
         this.helpers = new Map(helpers);
         this.helpers.set('format_date', format_date);
+        this.helpers.set('plus_one', plus_one);
 
         // Partials are loaded dynamically from disk
         this.partials = new Map();

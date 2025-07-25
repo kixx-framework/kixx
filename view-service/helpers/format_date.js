@@ -3,6 +3,41 @@ import { isDate, isNumberNotNaN, toFriendlyString } from '../../assertions/mod.j
 
 const { DateTime } = luxon;
 
+/*
+# Luxon Formatting Presets
+
+Based on the Luxon documentation, here are the formatting presets available for `toLocaleString()` method.
+These presets use the example date of **October 14, 1983 at 13:30:23**.
+
+## Complete Formatting Presets Table
+
+|        Name                       | Example in en_US                                 |
+|-----------------------------------|--------------------------------------------------|
+| `DATE_SHORT`                      | 10/14/1983                                       |
+| `DATE_MED`                        | Oct 14, 1983                                     |
+| `DATE_MED_WITH_WEEKDAY`           | Fri, Oct 14, 1983                                |
+| `DATE_FULL`                       | October 14, 1983                                 |
+| `DATE_HUGE`                       | Friday, October 14, 1983                         |
+| `TIME_SIMPLE`                     | 1:30 PM                                          |
+| `TIME_WITH_SECONDS`               | 1:30:23 PM                                       |
+| `TIME_WITH_SHORT_OFFSET`          | 1:30:23 PM EDT                                   |
+| `TIME_WITH_LONG_OFFSET`           | 1:30:23 PM Eastern Daylight Time                 |
+| `TIME_24_SIMPLE`                  | 13:30                                            |
+| `TIME_24_WITH_SECONDS`            | 13:30:23                                         |
+| `TIME_24_WITH_SHORT_OFFSET`       | 13:30:23 EDT                                     |
+| `TIME_24_WITH_LONG_OFFSET`        | 13:30:23 Eastern Daylight Time                   |
+| `DATETIME_SHORT`                  | 10/14/1983, 1:30 PM                              |
+| `DATETIME_MED`                    | Oct 14, 1983, 1:30 PM                            |
+| `DATETIME_MED_WITH_WEEKDAY`       | Fri, Oct 14, 1983, 1:30 PM                       |
+| `DATETIME_FULL`                   | October 14, 1983 at 1:30 PM EDT                  |
+| `DATETIME_HUGE`                   | Friday, October 14, 1983 at 1:30 PM Eastern Daylight Time |
+| `DATETIME_SHORT_WITH_SECONDS`     | 10/14/1983, 1:30:23 PM                           |
+| `DATETIME_MED_WITH_SECONDS`       | Oct 14, 1983, 1:30:23 PM                         |
+| `DATETIME_FULL_WITH_SECONDS`      | October 14, 1983 at 1:30:23 PM EDT               |
+| `DATETIME_HUGE_WITH_SECONDS`      | Friday, October 14, 1983 at 1:30:23 PM Eastern Daylight Time |
+
+*/
+
 
 export default function format_date(context, options, date) {
     if (date === '' || date === null || typeof date === 'undefined') {
@@ -35,6 +70,10 @@ export default function format_date(context, options, date) {
 
     if (format === 'ISO') {
         return dt.toISO();
+    }
+
+    if (format === 'ISO_DATE') {
+        return dt.toISODate();
     }
 
     if (format === 'DATE_MONTH_DATE') {
