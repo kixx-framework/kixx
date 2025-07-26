@@ -12,7 +12,7 @@ Kixx is a web development framework for Node.js servers which is derived from th
 
 ### 5. Embrace the essence of the Web and optimize for building [Hypermedia Driven Applications](https://htmx.org/essays/hypermedia-driven-applications/).
 
-### 6. Have a bias toward monilithic applications over distributed or microservice architectures.
+### 6. Have a bias toward monolithic applications over distributed or microservice architectures.
 
 ### 7. Have opinions and make decisions.
 
@@ -31,6 +31,9 @@ This library is designed for use in an ES6 module environment requiring __Node.j
 If you're curious: Node.js >= 16.13.2 is required for [ES6 module stabilization](https://nodejs.org/dist/latest-v18.x/docs/api/esm.html#modules-ecmascript-modules) and [ES2022 support](https://node.green/#ES2020).
 
 __Note:__ There is no TypeScript here. There are reasons for that: Primarily developer happiness.
+
+## Documentation
+Find framework documentation at [docs/README.md](./docs/README.md).
 
 ## Hypermedia-Driven Applications: A Better Way to Build Web Apps
 A hypermedia-driven application is a web application where **hypermedia (HTML) serves as the engine of application state**. Instead of relying on JavaScript to manage state and coordinate between client and server, the application state changes by following links and submitting forms embedded in the HTML responses.
