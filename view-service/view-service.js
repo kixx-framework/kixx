@@ -100,6 +100,7 @@ export default class ViewService {
      * @throws {WrappedError} - If reading page or site data fails
      */
     async getPageData(pathname, props) {
+        // TODO: ViewService#getPageData() should accept a full URL instance and merge it in with the page data.
         const pathParts = this.urlPathnameToParts(pathname);
         pathParts.push('page.json');
 
