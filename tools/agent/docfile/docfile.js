@@ -47,6 +47,63 @@ async function main() {
     const modelRole = await getModelRole();
 
     await addInlineCodeComments(client, modelRole, srcFilepath);
+    await addJSDocComments(client, modelRole, srcFilepath);
+}
+
+async function addJSDocComments(client, modelRole, srcFilepath) {
+    const prompt = await getJSDocCommentsPrompt(srcFilepath);
+
+    const message = new ClaudeMessage({
+        max_tokens: 32000,
+        system: modelRole,
+        tools: [
+            {
+                name: 'save_source_file',
+                description: toolSaveSourceFile.description,
+                input_schema: toolSaveSourceFile.input_schema,
+            },
+        ],
+        tool_choice: { type: 'auto', disable_parallel_tool_use: true },
+        thinking: {
+            type: 'enabled',
+            budget_tokens: 2048,
+        },
+        messages: [
+            {
+                role: 'user',
+                content: prompt,
+            },
+        ],
+    });
+
+    const { requestId, statusCode, error, response } = await client.sendMessage(message);
+
+    console.log('Get JSDoc comments: Turn 1:', JSON.stringify({ requestId, statusCode }));
+
+    if (error) {
+        console.log('Error:', JSON.stringify(error, null, 2));
+        throw new Error('Claude API error');
+    }
+
+    if (response.stop_reason !== 'tool_use') {
+        throw new Error(`Expected stop_reason to be 'tool_use' but got ${ response.stop_reason }`);
+    }
+
+    for (const content of response.content) {
+        if (content.type === 'thinking') {
+            logThinking(content);
+        } else if (content.type === 'text') {
+            logText(content);
+        } else if (content.type === 'tool_use') {
+            assertEqual('save_source_file', content.name);
+            assertNonEmptyString(content.input.source_file, 'source_file');
+            logToolUse(content);
+            // eslint-disable-next-line no-await-in-loop
+            await toolSaveSourceFile.main(srcFilepath, content.input.source_file);
+        } else {
+            console.log(`Unexpected response content type: ${ content.type }`);
+        }
+    }
 }
 
 async function addInlineCodeComments(client, modelRole, srcFilepath) {
@@ -103,6 +160,16 @@ async function addInlineCodeComments(client, modelRole, srcFilepath) {
             console.log(`Unexpected response content type: ${ content.type }`);
         }
     }
+}
+
+async function getJSDocCommentsPrompt(srcFilepath) {
+    const srcFileContent = await fsp.readFile(srcFilepath, { encoding: 'utf8' });
+    const guidelines = await fsp.readFile(path.join(__dirname, 'jsdoc-guidelines.md'), { encoding: 'utf8' });
+    const utf8 = await fsp.readFile(path.join(__dirname, 'jsdoc-prompt.md'), { encoding: 'utf8' });
+
+    return utf8
+        .replace('{{guidelines}}', guidelines)
+        .replace('{{source_file}}', srcFileContent);
 }
 
 async function getInlineCodeCommentsPrompt(srcFilepath) {
