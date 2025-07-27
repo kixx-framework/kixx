@@ -14,7 +14,8 @@ Review our code JSDoc guidelines to make sure you understand them. Then review t
 
 There are some conventions our team follows which you should take into consideration:
 
-- Do not use @author tags. We do not use the @author tag because we have many, many authors on this project.
-- Do not use @since tags. We don't use @since version tags because it is so difficult to keep them updated.
+- __Do not use @author tags__. We do not use the @author tag because we have many, many authors on this project.
+- __Do not use @since tags__. We don't use @since version tags because it is so difficult to keep them updated.
+- __Do add @typedef tags__ for type definitions when needed.
 
 After making your changes to the JavaScript source file be sure to save it using the save_source_file tool so your team can review it.

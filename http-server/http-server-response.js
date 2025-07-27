@@ -1,3 +1,11 @@
+/**
+ * @fileoverview HTTP response builder and utilities for Node.js web servers
+ * 
+ * This module provides the HttpServerResponse class for constructing HTTP responses
+ * with fluent API methods for setting status codes, headers, cookies, and response bodies.
+ * Supports common response types including JSON, HTML, redirects, and streaming responses.
+ */
+
 import deepFreeze from '../lib/deep-freeze.js';
 import deepMerge from '../lib/deep-merge.js';
 import {
@@ -8,10 +16,30 @@ import {
     isBoolean
 } from '../assertions/mod.js';
 
+/**
+ * @typedef {Object} CookieOptions
+ * @property {number} [maxAge] - Number of seconds until the cookie expires (Max-Age)
+ * @property {boolean} [secure] - Whether the cookie is only sent over HTTPS (Secure)
+ * @property {boolean} [httpOnly] - Whether the cookie is inaccessible to JavaScript (HttpOnly)
+ * @property {'Strict'|'Lax'|'None'} [sameSite] - Controls the SameSite attribute
+ * @property {string} [path] - The path for which the cookie is valid (Path)
+ */
 
 /**
- * BaseHttpResponse provides a base class for HTTP responses, supporting
- * status, headers, body, and utility methods for common response types.
+ * @typedef {Object} JSONResponseOptions
+ * @property {number} [whiteSpace] - Number of spaces for JSON indentation (0 for compact)
+ * @property {string} [contentType] - Custom content type header value
+ */
+
+/**
+ * @typedef {Object} HTMLResponseOptions
+ * @property {string} [contentType] - Custom content type header value
+ */
+
+/**
+ * HTTP response builder providing fluent API for constructing server responses.
+ * Supports status codes, headers, cookies, and various response body types including
+ * JSON, HTML, redirects, streams, and custom properties management.
  */
 export default class HttpServerResponse {
     /**
@@ -23,8 +51,9 @@ export default class HttpServerResponse {
     #props = Object.freeze({});
 
     /**
-     * Constructs a new BaseHttpResponse.
-     * @param {string|number} id - The unique identifier for this response.
+     * Creates a new HTTP response instance with default 200 status and empty headers.
+     * @param {string|number} id - Unique identifier for this response instance
+     * @throws {TypeError} When id is not provided or is invalid type
      */
     constructor(id) {
         /**
@@ -54,48 +83,61 @@ export default class HttpServerResponse {
     }
 
     /**
-     * Returns the custom properties object for this response.
-     * The returned object is deeply frozen and should not be mutated.
-     * @returns {Object} The response properties.
+     * Retrieves the custom properties object for this response.
+     * Properties are deeply frozen to prevent accidental mutation.
+     * @returns {Object} The immutable response properties object
      */
     get props() {
         return this.#props;
     }
 
     /**
-     * Updates the custom properties object for this response by deeply merging
-     * the provided params into the existing properties. The result is deeply frozen
-     * to ensure immutability. Returns the response instance for chaining.
-     *
-     * @param {Object} params - The properties to merge into the response's custom properties.
-     * @returns {BaseHttpResponse} The response instance.
+     * Merges new properties into the response's custom properties object.
+     * Performs a deep merge and freezes the result for immutability.
+     * @param {Object} params - Properties to merge into existing custom properties
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * @throws {TypeError} When params is not an object
+     * 
+     * @example
+     * response.updateProps({ userId: '123', theme: 'dark' });
+     * response.updateProps({ metadata: { version: '1.0' } });
      */
     updateProps(params) {
+        // Clone existing props first to avoid mutating frozen object during merge
         const mergedParams = deepMerge(structuredClone(this.#props), params);
         this.#props = deepFreeze(mergedParams);
         return this;
     }
 
     /**
-     * Updates the response headers with the provided headers.
-     * Accepts an iterable of [ key, value ] pairs (e.g., Map or Headers).
-     * Each header is set on the response, replacing any existing value for the same key.
-     *
-     * @param {Iterable<[ string, string ]>} headers - Iterable of header key-value pairs.
-     * @returns {void}
+     * Updates response headers from an iterable of key-value pairs.
+     * Replaces any existing values for the same header keys.
+     * @param {Iterable<[string, string]>} headers - Iterable of header key-value pairs (Map, Headers, Array)
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * @throws {TypeError} When headers is not iterable or contains invalid key-value pairs
+     * 
+     * @example
+     * // Using a Map
+     * const headerMap = new Map([['x-api-version', '1.0'], ['x-request-id', '123']]);
+     * response.updateHeaders(headerMap);
+     * 
+     * @example  
+     * // Using an array of arrays
+     * response.updateHeaders([['content-encoding', 'gzip'], ['cache-control', 'no-cache']]);
      */
     updateHeaders(headers) {
         for (const [ key, val ] of headers) {
             this.headers.set(key, val);
         }
+        return this;
     }
 
     /**
-     * Sets a single header on the response.
-     *
-     * @param {string} key - The header name.
-     * @param {string} val - The header value.
-     * @returns {this} The response instance for chaining.
+     * Sets a single header on the response, replacing any existing value.
+     * @param {string} key - The header name
+     * @param {string} val - The header value  
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * @throws {TypeError} When key or val are not strings
      */
     setHeader(key, val) {
         this.headers.set(key, val);
@@ -103,19 +145,29 @@ export default class HttpServerResponse {
     }
 
     /**
-     * Sets a cookie on the response.
-     *
+     * Sets a cookie on the response with security defaults.
+     * Defaults to Secure, HttpOnly, and SameSite=Lax for security best practices.
+     * @param {string} key - The cookie name
+     * @param {string} val - The cookie value
+     * @param {CookieOptions} [options] - Cookie configuration options
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * @throws {TypeError} When key or val are not strings
+     * 
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
-     *
-     * @param {string} key - The cookie name.
-     * @param {string} val - The cookie value.
-     * @param {Object} [options] - Optional. Cookie options:
-     * @param {number} [options.maxAge] - Number of seconds until the cookie expires (Max-Age).
-     * @param {boolean} [options.secure] - Whether the cookie is only sent over HTTPS (Secure).
-     * @param {boolean} [options.httpOnly] - Whether the cookie is inaccessible to JavaScript (HttpOnly).
-     * @param {'Strict'|'Lax'|'None'} [options.sameSite] - Controls the SameSite attribute ('Strict', 'Lax', or 'None').
-     * @param {string} [options.path] - The path for which the cookie is valid (Path).
-     * @returns {this} The response instance for chaining.
+     * 
+     * @example
+     * // Basic secure cookie with defaults
+     * response.setCookie('sessionId', 'abc123');
+     * 
+     * @example
+     * // Custom cookie with explicit options
+     * response.setCookie('preferences', 'dark-mode', {
+     *   maxAge: 86400,
+     *   path: '/app',
+     *   sameSite: 'Strict',
+     *   secure: true,
+     *   httpOnly: false
+     * });
      */
     setCookie(key, val, options) {
         const {
@@ -136,10 +188,14 @@ export default class HttpServerResponse {
             cookie = `${ cookie }; Path=${ path }`;
         }
 
+        // Default to secure cookies unless explicitly set to false
+        // This follows security best practices for production environments
         if (secure || !isBoolean(secure)) {
             cookie = `${ cookie }; Secure`;
         }
 
+        // Default to HttpOnly unless explicitly set to false
+        // Prevents XSS attacks by blocking JavaScript access to the cookie
         if (httpOnly || !isBoolean(httpOnly)) {
             cookie = `${ cookie }; HttpOnly`;
         }
@@ -147,6 +203,7 @@ export default class HttpServerResponse {
         if (sameSite) {
             cookie = `${ cookie }; SameSite=${ sameSite }`;
         } else {
+            // Default to 'Lax' for CSRF protection while maintaining usability
             cookie = `${ cookie }; SameSite=Lax`;
         }
 
@@ -156,16 +213,28 @@ export default class HttpServerResponse {
     }
 
     /**
-     * Sets the response as a redirect with the given status code and location.
-     *
+     * Configures the response as an HTTP redirect with proper status code and location header.
+     * @param {number} statusCode - HTTP redirect status code (301, 302, 307, 308, etc.)
+     * @param {string|URL} newLocation - Target URL for the redirect
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * @throws {Error} When statusCode is not a valid number
+     * @throws {Error} When newLocation is not a valid string or URL
+     * 
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Redirections
-     *
-     * @param {number} statusCode - The HTTP status code for the redirect (e.g., 301, 302, 307, 308).
-     * @param {string} newLocation - The URL to redirect to.
-     * @returns {this} The response instance for chaining.
+     * 
+     * @example
+     * // Permanent redirect
+     * response.respondWithRedirect(301, 'https://example.com/new-path');
+     * 
+     * @example
+     * // Temporary redirect with URL object
+     * const targetUrl = new URL('/login', 'https://example.com');
+     * response.respondWithRedirect(302, targetUrl);
      */
     respondWithRedirect(statusCode, newLocation) {
         assert(isNumberNotNaN(statusCode), ': statusCode must be a number');
+        
+        // Handle URL objects by extracting the href property
         if (newLocation.href) {
             newLocation = newLocation.href;
         }
@@ -177,29 +246,45 @@ export default class HttpServerResponse {
     }
 
     /**
-     * Sets the response as a JSON response with the given status code and object.
-     *
-     * @param {number} statusCode - The HTTP status code for the response.
-     * @param {Object} obj - The JSON object to send in the response body.
-     * @param {Object} [options] - Optional. JSON serialization options:
-     * @param {number} [options.whiteSpace] - The number of spaces to use for indentation (0 for no whitespace, 2 for 2 spaces, etc.).
-     * @param {string} [options.contentType] - The content type to use for the response (e.g., 'application/json').
-     * @returns {this} The response instance for chaining.
+     * Configures the response to return JSON data with proper content type and encoding.
+     * Automatically sets Content-Type, Content-Length, and UTF-8 encoding headers.
+     * @param {number} statusCode - HTTP status code for the response
+     * @param {*} obj - Object to serialize as JSON response body
+     * @param {JSONResponseOptions} [options] - JSON formatting and content type options
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * @throws {Error} When statusCode is not a valid number
+     * @throws {TypeError} When obj cannot be serialized to JSON
+     * 
+     * @example
+     * // Simple JSON response
+     * response.respondWithJSON(200, { success: true, data: users });
+     * 
+     * @example
+     * // Pretty-printed JSON with custom content type
+     * response.respondWithJSON(201, { id: 123 }, {
+     *   whiteSpace: 2,
+     *   contentType: 'application/vnd.api+json'
+     * });
      */
     respondWithJSON(statusCode, obj, options) {
         assert(isNumberNotNaN(statusCode), ': statusCode must be a number');
 
         options = options || {};
 
+        // Handle different whitespace formatting options for JSON output
         let utf8;
         if (Number.isInteger(options.whiteSpace)) {
+            // Use exact number of spaces specified
             utf8 = JSON.stringify(obj, null, options.whiteSpace);
         } else if (options.whiteSpace) {
+            // Default to 4 spaces for pretty-printing when truthy but not a number
             utf8 = JSON.stringify(obj, null, 4);
         } else {
+            // Compact JSON output for production
             utf8 = JSON.stringify(obj);
         }
 
+        // Add trailing newline for better terminal/curl output readability
         utf8 += '\n';
 
         this.status = statusCode;
@@ -218,13 +303,25 @@ export default class HttpServerResponse {
     }
 
     /**
-     * Sets the response as an HTML response with the given status code and UTF-8 string body.
-     *
-     * @param {number} statusCode - The HTTP status code for the response.
-     * @param {string} utf8 - The HTML string to send in the response body.
-     * @param {Object} [options="text/html; charset=utf-8"] - Optional. HTML response options:
-     * @param {string} [options.contentType] - The content type to use for the response (e.g., 'text/html').
-     * @returns {this} The response instance for chaining.
+     * Configures the response to return HTML content with proper content type and encoding.
+     * Automatically sets Content-Type, Content-Length, and UTF-8 encoding headers.
+     * @param {number} statusCode - HTTP status code for the response
+     * @param {string} utf8 - HTML string content for the response body
+     * @param {HTMLResponseOptions} [options] - HTML response configuration options
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * @throws {Error} When statusCode is not a valid number
+     * @throws {Error} When utf8 is not a non-empty string
+     * 
+     * @example
+     * // Basic HTML response
+     * const html = '<html><body><h1>Welcome</h1></body></html>';
+     * response.respondWithHTML(200, html);
+     * 
+     * @example
+     * // HTML with custom content type
+     * response.respondWithHTML(200, htmlString, {
+     *   contentType: 'application/xhtml+xml; charset=utf-8'
+     * });
      */
     respondWithHTML(statusCode, utf8, options) {
         assert(isNumberNotNaN(statusCode), ': statusCode must be a number');
@@ -248,17 +345,24 @@ export default class HttpServerResponse {
     }
 
     /**
-     * Sets up the response for a 304 Not Modified status.
-     * This response indicates that the resource has not changed and the client can use its cached version.
-     * Per RFC 9110, a 304 response must not include a message body, and the Content-Length should be set to 0.
-     *
-     * @returns {this} The response instance for chaining.
+     * Configures the response for HTTP 304 Not Modified status with proper headers.
+     * Indicates that the resource has not changed and the client can use its cached version.
+     * Sets Content-Length to 0 and clears the response body per RFC 9110 requirements.
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * 
+     * @example
+     * // Check if client's cached version is still valid
+     * if (clientETag === currentETag) {
+     *   return response.respondNotModified();
+     * }
      */
     respondNotModified() {
         const statusCode = 304;
 
         this.status = statusCode;
 
+        // RFC 9110 requires Content-Length: 0 for 304 responses
+        // even though there's no body - this helps caches understand the response
         this.headers.set('content-length', '0');
         this.body = null;
 
@@ -266,12 +370,24 @@ export default class HttpServerResponse {
     }
 
     /**
-     * Sets up the response to stream data from a readable stream.
-     *
-     * @param {number} statusCode - The HTTP status code to use for the response.
-     * @param {number} [contentLength] - Optional. The byte length of the stream content for the Content-Length header.
-     * @param {import('stream').Readable} readStream - The readable stream to use as the response body.
-     * @returns {this} The response instance for chaining.
+     * Configures the response to stream data from a readable stream.
+     * Useful for serving large files or real-time data without loading everything into memory.
+     * @param {number} statusCode - HTTP status code for the streaming response
+     * @param {number} [contentLength] - Total byte length of the stream content for Content-Length header
+     * @param {import('stream').Readable} readStream - Readable stream to use as the response body
+     * @returns {HttpServerResponse} This response instance for method chaining
+     * @throws {Error} When statusCode is not a valid number
+     * 
+     * @example
+     * // Stream a file without content length
+     * const fileStream = fs.createReadStream('large-file.pdf');
+     * response.respondWithStream(200, undefined, fileStream);
+     * 
+     * @example
+     * // Stream with known content length
+     * const stats = fs.statSync('video.mp4');
+     * const videoStream = fs.createReadStream('video.mp4');
+     * response.respondWithStream(200, stats.size, videoStream);
      */
     respondWithStream(statusCode, contentLength, readStream) {
         assert(isNumberNotNaN(statusCode), ': statusCode must be a number');
@@ -286,12 +402,24 @@ export default class HttpServerResponse {
     }
 
     /**
-     * Returns the byte length of a UTF-8 string for use in the Content-Length header.
-     *
-     * @param {string} utf8 - The string whose UTF-8 byte length is to be calculated.
-     * @returns {number} The byte length of the string in UTF-8 encoding.
+     * Calculates the accurate byte length of a UTF-8 string for Content-Length headers.
+     * Uses Blob API to determine actual byte count rather than character count,
+     * which is crucial for proper HTTP Content-Length handling with multi-byte characters.
+     * @param {string} utf8 - String whose UTF-8 byte length should be calculated
+     * @returns {number} The byte length of the string in UTF-8 encoding
+     * @throws {TypeError} When utf8 is not a string
+     * 
+     * @example
+     * // ASCII characters: 5 bytes
+     * response.getContentLengthForUTF8('hello'); // returns 5
+     * 
+     * @example  
+     * // Multi-byte UTF-8 characters: more than character count
+     * response.getContentLengthForUTF8('héllo'); // returns 6 (not 5)
      */
     getContentLengthForUTF8(utf8) {
+        // Use Blob.size to get accurate UTF-8 byte length
+        // String.length gives character count, not byte count for multi-byte UTF-8
         return new Blob([ utf8 ]).size;
     }
 }

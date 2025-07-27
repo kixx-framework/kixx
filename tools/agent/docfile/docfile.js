@@ -12,8 +12,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ROOT_DIRNAME = path.dirname(path.dirname(path.dirname(__dirname)));
-const SECRETS_FILEPATH = path.join(ROOT_DIRNAME, '.secrets.json');
-const MODEL_ROLE_FILEPATH = path.join(__dirname, 'model-role.md');
+
+const DEFAULT_MODEL = MODELS.claudeSonnet4.id;
 
 /* eslint-disable no-console */
 
@@ -40,7 +40,7 @@ async function main() {
     const srcFilepath = path.resolve(src);
 
     const client = new ClaudeClient({
-        defaultModel: MODELS.claudeOpus4.id,
+        defaultModel: DEFAULT_MODEL,
         apiKey: secrets.anthropic.api_key,
     });
 
@@ -195,12 +195,12 @@ function logToolUse(content) {
 }
 
 async function getModelRole() {
-    const utf8 = await fsp.readFile(MODEL_ROLE_FILEPATH, { encoding: 'utf8' });
+    const utf8 = await fsp.readFile(path.join(__dirname, 'model-role.md'), { encoding: 'utf8' });
     return utf8;
 }
 
 async function getSecrets() {
-    const utf8 = await fsp.readFile(SECRETS_FILEPATH, { encoding: 'utf8' });
+    const utf8 = await fsp.readFile(path.join(ROOT_DIRNAME, '.secrets.json'), { encoding: 'utf8' });
     return JSON.parse(utf8);
 }
 

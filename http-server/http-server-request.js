@@ -1,22 +1,18 @@
+/**
+ * @fileoverview HTTP server request abstraction for Node.js applications
+ * 
+ * Provides an immutable, structured interface for accessing HTTP request data,
+ * including headers, parameters, cookies, authentication tokens, and body parsing.
+ */
+
 import { BadRequestError } from '../errors/mod.js';
 import { objectToHeaders } from '../lib/http-utils.js';
 import deepFreeze from '../lib/deep-freeze.js';
 
-
 /**
- * BaseServerRequest provides a structured, immutable, and convenient interface
- * for accessing and parsing HTTP request data in a server environment.
- *
- * This class wraps the raw Node.js IncomingMessage and exposes:
- *   - Immutable request metadata (id, method, headers, url)
- *   - Parameter accessors for hostname and pathname (set by router)
- *   - Query parameter access (URLSearchParams)
- *   - Cookie parsing and retrieval
- *   - Authorization header parsing (Bearer tokens)
- *   - Helpers for detecting request type (JSON, form)
- *   - Methods for reading and parsing the request body (JSON, form, raw)
- *
- * All mutation of parameters is internal and results in frozen objects.
+ * Immutable HTTP request wrapper providing structured access to request data.
+ * Wraps Node.js IncomingMessage with convenient accessors for headers, parameters,
+ * cookies, authentication, and body parsing capabilities.
  */
 export default class HttpServerRequest {
     /**
@@ -27,25 +23,27 @@ export default class HttpServerRequest {
 
     /**
      * @private
-     * @type {Object}
+     * @type {Object<string, string>}
      */
     #hostnameParams = Object.freeze({});
 
     /**
      * @private
-     * @type {Object}
+     * @type {Object<string, string>}
      */
     #pathnameParams = Object.freeze({});
 
     /**
-     * Constructs a new BaseServerRequest.
-     * @param {import('http').IncomingMessage} req - The raw Node.js request.
-     * @param {URL} url - The parsed request URL.
-     * @param {string} id - A unique request identifier.
+     * Creates a new HTTP server request wrapper
+     * @param {import('http').IncomingMessage} req - Raw Node.js request object
+     * @param {URL} url - Parsed request URL
+     * @param {string} id - Unique request identifier
      */
     constructor(req, url, id) {
         this.#nodeRequest = req;
 
+        // Define properties as non-configurable to prevent accidental mutation
+        // This ensures request metadata remains immutable after construction
         Object.defineProperties(this, {
             /**
              * Unique request identifier.
@@ -83,99 +81,101 @@ export default class HttpServerRequest {
     }
 
     /**
-     * Returns the parameters extracted from the hostname portion of the request.
-     * These are typically set by the router when matching virtual hosts.
-     * The returned object is frozen and should not be mutated.
-     * @returns {Object} The hostname parameters.
+     * Parameters extracted from hostname during routing (e.g., subdomain matching)
+     * @returns {Object<string, string>} Frozen hostname parameters object
      */
     get hostnameParams() {
         return this.#hostnameParams;
     }
 
     /**
-     * Returns the parameters extracted from the pathname portion of the request.
-     * These are typically set by the router when matching routes.
-     * The returned object is frozen and should not be mutated.
-     * @returns {Object} The pathname parameters.
+     * Parameters extracted from URL pathname during routing (e.g., /users/:id)
+     * @returns {Object<string, string>} Frozen pathname parameters object
      */
     get pathnameParams() {
         return this.#pathnameParams;
     }
 
     /**
-     * Returns the query parameters extracted from the request URL.
-     * The returned object is a URLSearchParams object (like a Map).
-     * It does not parse the values and return primitive types. It only extracts strings.
-     * @returns {Map} The query parameters.
+     * Query parameters from URL search string
+     * @returns {URLSearchParams} Query parameters as URLSearchParams instance
      */
     get queryParams() {
         return this.url.searchParams;
     }
 
     /**
-     * Returns true if the request method is HEAD.
-     * @returns {boolean} True if the request method is HEAD.
+     * Checks if request method is HEAD
+     * @returns {boolean} True if HEAD request
      */
     isHeadRequest() {
         return this.method === 'HEAD';
     }
 
     /**
-     * Returns true if the request is a JSON request.
-     * Checks the content-type header, then the pathname, and finally the accept header.
-     * @returns {boolean} True if the request is a JSON request.
+     * Determines if client expects JSON response based on multiple indicators
+     * @returns {boolean} True if JSON request (content-type, .json extension, or Accept header)
      */
     isJSONRequest() {
+        // Priority order: content-type takes precedence for actual data format
         if (this.headers.get('content-type')?.includes('application/json')) {
             return true;
         }
+        
+        // Fallback: REST API convention - .json extension indicates JSON response desired
         if (this.url.pathname.endsWith('.json')) {
             return true;
         }
+        
+        // Final fallback: client preference via Accept header
         if (this.headers.get('accept')?.includes('application/json')) {
             return true;
         }
+        
         return false;
     }
 
     /**
-     * Returns true if the request is a form URL-encoded request.
-     * Checks the content-type header for 'application/x-www-form-urlencoded'.
-     * @returns {boolean} True if the request is form URL-encoded.
+     * Checks if request contains form-encoded data
+     * @returns {boolean} True if content-type is application/x-www-form-urlencoded
      */
     isFormURLEncodedRequest() {
         return this.headers.get('content-type')?.includes('application/x-www-form-urlencoded');
     }
 
     /**
-     * Sets the pathname parameters for the request.
-     * The parameters are frozen and should not be mutated.
+     * Sets pathname parameters extracted during route matching
      * @private
-     * @param {Object} params - The pathname parameters.
-     * @returns {BaseServerRequest} The request instance.
+     * @param {Object<string, string>} params - Route parameters to set
+     * @returns {HttpServerRequest} This request instance for chaining
      */
     setPathnameParams(params) {
+        // Deep clone to prevent reference sharing, then freeze for immutability
+        // This ensures router params can't be accidentally modified by handlers
         this.#pathnameParams = deepFreeze(structuredClone(params));
         return this;
     }
 
     /**
-     * Sets the hostname parameters for the request.
-     * The parameters are frozen and should not be mutated.
+     * Sets hostname parameters extracted during hostname matching
      * @private
-     * @param {Object} params - The hostname parameters.
-     * @returns {BaseServerRequest} The request instance.
+     * @param {Object<string, string>} params - Hostname parameters to set  
+     * @returns {HttpServerRequest} This request instance for chaining
      */
     setHostnameParams(params) {
+        // Deep clone to prevent reference sharing, then freeze for immutability
+        // This ensures router params can't be accidentally modified by handlers
         this.#hostnameParams = deepFreeze(structuredClone(params));
         return this;
     }
 
     /**
-     * Returns the value of a cookie with the given keyname.
-     * It does not parse the values and return primitive types. It only extracts strings.
-     * @param {string} keyname - The name of the cookie.
-     * @returns {string|null} The value of the cookie, or null if not found.
+     * Retrieves specific cookie value by name
+     * @param {string} keyname - Cookie name to retrieve
+     * @returns {string|null} Cookie value or null if not found
+     * @example
+     * // Get session cookie
+     * const sessionId = request.getCookie('sessionId');
      */
     getCookie(keyname) {
         const cookies = this.getCookies();
@@ -186,27 +186,32 @@ export default class HttpServerRequest {
     }
 
     /**
-     * Returns all cookies from the request.
-     * It does not parse the values and return primitive types. It only extracts strings.
-     * @returns {Object|null} The cookies, or null if no cookies are found.
+     * Parses and returns all cookies from Cookie header
+     * @returns {Object<string, string>|null} Cookie name-value pairs or null if no cookies
+     * @example
+     * // Get all cookies
+     * const cookies = request.getCookies();
+     * // { sessionId: 'abc123', theme: 'dark' }
      */
     getCookies() {
         const cookies = this.headers.get('cookie');
         if (!cookies) {
             return null;
         }
-        // Parse cookies: "a=1; b=2" => { a: "1", b: "2" }
+        
+        // Parse cookies according to RFC 6265: "name=value; name2=value2"
         const cookieMap = cookies
             .split(';')
             .map((cookie) => cookie.trim())
             .reduce((acc, cookie) => {
-                // Skip empty cookies
                 if (!cookie) {
                     return acc;
                 }
 
                 const [ key, ...valueParts ] = cookie.split('=');
-                // Handle cookies with = in the value by rejoining
+                
+                // Rejoin value parts to handle cookies with = in their values
+                // Example: "sessionData=user=john&role=admin" should preserve the = signs
                 const value = valueParts.join('=');
                 acc[ key.trim() ] = value?.trim() || '';
                 return acc;
@@ -216,9 +221,12 @@ export default class HttpServerRequest {
     }
 
     /**
-     * Returns the Bearer token from the Authorization header, or null.
-     * Strips the "Bearer " prefix from the header value.
-     * @returns {string|null}
+     * Extracts Bearer token from Authorization header
+     * @returns {string|null} Bearer token without "Bearer " prefix, or null if not found
+     * @example
+     * // Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+     * const token = request.getAuthorizationBearer();
+     * // Returns: 'eyJhbGciOiJIUzI1NiIs...'
      */
     getAuthorizationBearer() {
         const authHeader = this.headers.get('authorization');
@@ -226,8 +234,11 @@ export default class HttpServerRequest {
             return null;
         }
 
+        // Split header into scheme and token, limiting to 2 parts
+        // to handle tokens that might contain spaces
         const [ scheme, token ] = authHeader.split(/\s+/, 2);
 
+        // Case-insensitive check for "Bearer" scheme per RFC 6750
         if (!/^bearer$/i.test(scheme)) {
             return null;
         }
@@ -236,17 +247,22 @@ export default class HttpServerRequest {
     }
 
     /**
-     * Returns the raw Node.js IncomingMessage (readable stream).
-     * @returns {import('http').IncomingMessage}
+     * Provides access to underlying Node.js readable stream
+     * @returns {import('http').IncomingMessage} Raw Node.js request stream
      */
     getReadStream() {
         return this.#nodeRequest;
     }
 
     /**
-     * Reads and parses the request body as JSON.
-     * Throws BadRequestError if parsing fails.
-     * @returns {Promise<Object>}
+     * Reads and parses request body as JSON
+     * @async
+     * @returns {Promise<*>} Parsed JSON data
+     * @throws {BadRequestError} When JSON parsing fails
+     * @example
+     * // Parse JSON request body
+     * const data = await request.json();
+     * // { name: 'John', age: 30 }
      */
     async json() {
         const data = await this.getBufferedStringData('utf8');
@@ -255,6 +271,7 @@ export default class HttpServerRequest {
         try {
             json = JSON.parse(data);
         } catch (cause) {
+            // Wrap JSON parse errors in our domain error type for consistent error handling
             throw new BadRequestError(`Error parsing HTTP JSON body: ${ cause.message }`, { cause });
         }
 
@@ -262,18 +279,26 @@ export default class HttpServerRequest {
     }
 
     /**
-     * Reads and parses the request body as form data (application/x-www-form-urlencoded).
-     * Returns an object with key/value pairs. Multiple values for a key become arrays.
-     * @returns {Promise<Object>}
+     * Reads and parses request body as form-encoded data
+     * @async
+     * @returns {Promise<Object<string, string|string[]>>} Form data with arrays for duplicate keys
+     * @example
+     * // Parse form data: name=John&age=30&tags=red&tags=blue
+     * const data = await request.formData();
+     * // { name: 'John', age: '30', tags: ['red', 'blue'] }
      */
     async formData() {
         const body = await this.getBufferedStringData('utf8');
-        // Use URLSearchParams for robust parsing
+        
+        // URLSearchParams handles URL decoding and proper form parsing
         const params = new URLSearchParams(body);
         const result = {};
+        
+        // Transform URLSearchParams entries into a plain object
         for (const [ key, value ] of params) {
             if (Object.prototype.hasOwnProperty.call(result, key)) {
-                // Convert to array if multiple values for the same key
+                // Handle multiple values for same key: convert to array
+                // Example: "tags=red&tags=blue" becomes { tags: ["red", "blue"] }
                 if (Array.isArray(result[key])) {
                     result[key].push(value);
                 } else {
@@ -287,9 +312,11 @@ export default class HttpServerRequest {
     }
 
     /**
-     * Reads and buffers the entire request body as a string with the specified encoding.
-     * @param {BufferEncoding} encoding - The encoding to use for the resulting string.
-     * @returns {Promise<string>} The buffered request body as a string.
+     * Reads entire request body as string with specified encoding
+     * @async
+     * @param {BufferEncoding} encoding - Text encoding for string conversion
+     * @returns {Promise<string>} Complete request body as string
+     * @throws {Error} When stream reading fails
      */
     getBufferedStringData(encoding) {
         return new Promise((resolve, reject) => {
@@ -302,22 +329,27 @@ export default class HttpServerRequest {
             }
 
             function onData(chunk) {
+                // Accumulate chunks in memory - suitable for typical API payloads
+                // For large file uploads, consider streaming processing instead
                 chunks.push(chunk);
             }
 
             function onEnd() {
                 cleanup();
+                // Concatenate all chunks into final buffer, then decode to string
                 const data = Buffer.concat(chunks).toString(encoding);
                 resolve(data);
             }
 
-            // Cleanup function to remove all listeners
             function cleanup() {
+                // Essential cleanup to prevent memory leaks in long-lived connections
                 req.off('error', onError);
                 req.off('data', onData);
                 req.off('end', onEnd);
             }
 
+            // Set up stream event handlers
+            // Order matters: error handler must be set before data/end handlers
             req.on('error', onError);
             req.on('data', onData);
             req.on('end', onEnd);
