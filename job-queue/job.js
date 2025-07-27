@@ -1,6 +1,6 @@
 /**
  * @fileoverview Job scheduling and execution utilities
- * 
+ *
  * This module provides the Job class for representing units of work in a job queue system.
  * Jobs can be scheduled for immediate or deferred execution, track their state through
  * the execution lifecycle, and provide safe serialization for storage and API responses.
@@ -52,7 +52,7 @@ const getIncrement = (function createIncrementer() {
 
 /**
  * Represents a single unit of work to be scheduled and executed by a job queue.
- * 
+ *
  * Jobs have unique IDs, track their execution state, and can be scheduled for
  * immediate or deferred execution. They provide safe serialization methods
  * for storage and public API responses.
@@ -233,7 +233,7 @@ export default class Job {
         // Replace colons and dots with dashes to create filesystem-safe ID
         // ISO format: 2023-12-01T15:30:45.123Z becomes 2023-12-01T15-30-45-123Z
         const dateString = date.toISOString().replace(/[:.]+/g, '-');
-        
+
         // Combine three sources of uniqueness to prevent collisions:
         // 1. Timestamp (dateString) - time-based uniqueness
         // 2. Random number (i) - handles simultaneous creation
@@ -255,7 +255,7 @@ export default class Job {
      *   methodName: 'sendEmail',
      *   params: { to: 'user@example.com', subject: 'Welcome' }
      * });
-     * 
+     *
      * @example
      * // Create a job to run in 5 seconds
      * const delayedJob = Job.fromSpec({
@@ -263,7 +263,7 @@ export default class Job {
      *   waitTime: 5000,
      *   params: { orderId: '12345' }
      * });
-     * 
+     *
      * @example
      * // Create a job for a specific time
      * const scheduledJob = Job.fromSpec({

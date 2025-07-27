@@ -1,6 +1,6 @@
 /**
  * @fileoverview Virtual host specification and route composition utilities
- * 
+ *
  * Provides the VirtualHostSpec class for defining and validating virtual host
  * configurations with hostname/pattern matching and route hierarchies. Includes
  * utilities for flattening nested route structures and converting specifications
@@ -36,7 +36,7 @@ export default class VirtualHostSpec {
     /**
      * Creates a new VirtualHostSpec from a configuration object.
      * Must include either hostname or pattern (but not both) and a routes array.
-     * 
+     *
      * @param {VirtualHostSpecConfig} spec - The virtual host configuration
      */
     constructor(spec) {
@@ -63,9 +63,9 @@ export default class VirtualHostSpec {
 
     /**
      * Assigns middleware, handlers, and error handlers to all routes.
-     * 
+     *
      * @param {Map<string, Function>} middleware - Named middleware functions
-     * @param {Map<string, Function>} handlers - Named route handler functions  
+     * @param {Map<string, Function>} handlers - Named route handler functions
      * @param {Map<string, Function>} errorHandlers - Named error handler functions
      * @returns {VirtualHostSpec} This instance for chaining
      */
@@ -82,7 +82,7 @@ export default class VirtualHostSpec {
     /**
      * Flattens nested route specifications into a single array.
      * Child routes inherit properties from parent routes.
-     * 
+     *
      * @returns {VirtualHostSpec} This instance for chaining
      */
     flattenRoutes() {
@@ -102,7 +102,7 @@ export default class VirtualHostSpec {
     /**
      * Converts this specification into an executable VirtualHost instance.
      * Creates pattern matcher function if pattern is defined.
-     * 
+     *
      * @returns {VirtualHost} New VirtualHost instance with compiled routes
      */
     toVirtualHost() {
@@ -123,7 +123,7 @@ export default class VirtualHostSpec {
     /**
      * Validates a configuration object and creates a new VirtualHostSpec.
      * Ensures exactly one of hostname or pattern is provided and validates all routes.
-     * 
+     *
      * @param {Object} spec - The virtual host configuration to validate
      * @returns {VirtualHostSpec} New validated VirtualHostSpec instance
      * @throws {AssertionError} When hostname/pattern requirements not met
@@ -159,7 +159,7 @@ export default class VirtualHostSpec {
                 `vhost.hostname must be a string (in ${ reportingName })`
             );
         }
-        
+
         // Validate pattern compilation if provided
         if (spec.pattern) {
             try {
@@ -199,7 +199,7 @@ export default class VirtualHostSpec {
 /**
  * Recursively flattens nested route specifications into a single array.
  * Child routes inherit properties from parent routes. Only leaf nodes with targets are added.
- * 
+ *
  * @param {Array<HttpRouteSpec>} routes - Accumulator array for flattened routes
  * @param {HttpRouteSpec|null} parent - Parent route to inherit properties from
  * @param {HttpRouteSpec} child - Current route being processed

@@ -1,6 +1,6 @@
 /**
  * @fileoverview HTTP server request abstraction for Node.js applications
- * 
+ *
  * Provides an immutable, structured interface for accessing HTTP request data,
  * including headers, parameters, cookies, authentication tokens, and body parsing.
  */
@@ -121,17 +121,17 @@ export default class HttpServerRequest {
         if (this.headers.get('content-type')?.includes('application/json')) {
             return true;
         }
-        
+
         // Fallback: REST API convention - .json extension indicates JSON response desired
         if (this.url.pathname.endsWith('.json')) {
             return true;
         }
-        
+
         // Final fallback: client preference via Accept header
         if (this.headers.get('accept')?.includes('application/json')) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -159,7 +159,7 @@ export default class HttpServerRequest {
     /**
      * Sets hostname parameters extracted during hostname matching
      * @private
-     * @param {Object<string, string>} params - Hostname parameters to set  
+     * @param {Object<string, string>} params - Hostname parameters to set
      * @returns {HttpServerRequest} This request instance for chaining
      */
     setHostnameParams(params) {
@@ -198,7 +198,7 @@ export default class HttpServerRequest {
         if (!cookies) {
             return null;
         }
-        
+
         // Parse cookies according to RFC 6265: "name=value; name2=value2"
         const cookieMap = cookies
             .split(';')
@@ -209,7 +209,7 @@ export default class HttpServerRequest {
                 }
 
                 const [ key, ...valueParts ] = cookie.split('=');
-                
+
                 // Rejoin value parts to handle cookies with = in their values
                 // Example: "sessionData=user=john&role=admin" should preserve the = signs
                 const value = valueParts.join('=');
@@ -289,11 +289,11 @@ export default class HttpServerRequest {
      */
     async formData() {
         const body = await this.getBufferedStringData('utf8');
-        
+
         // URLSearchParams handles URL decoding and proper form parsing
         const params = new URLSearchParams(body);
         const result = {};
-        
+
         // Transform URLSearchParams entries into a plain object
         for (const [ key, value ] of params) {
             if (Object.prototype.hasOwnProperty.call(result, key)) {

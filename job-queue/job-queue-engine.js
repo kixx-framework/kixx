@@ -1,6 +1,6 @@
 /**
  * @fileoverview Job queue engine with file-backed persistence and concurrency control
- * 
+ *
  * Provides a durable job queue that persists jobs as JSON files and supports
  * deferred execution, custom handlers, and safe concurrent processing.
  */
@@ -46,22 +46,22 @@ import {
 
 /**
  * File-backed job queue engine with concurrency control and persistence
- * 
+ *
  * Schedules and executes jobs with support for deferred execution, custom handlers,
  * and crash recovery through file persistence. Jobs are stored as JSON files and
  * processed with configurable concurrency limits.
- * 
+ *
  * @example
- * const engine = new JobQueueEngine({ 
- *   directory: '/jobs', 
+ * const engine = new JobQueueEngine({
+ *   directory: '/jobs',
  *   maxConcurrency: 2,
  *   eventListener: (type, event) => console.log(type, event)
  * });
- * engine.registerJobHandler('sendEmail', async (params) => { 
+ * engine.registerJobHandler('sendEmail', async (params) => {
  *   await sendEmail(params.to, params.subject, params.body);
  * });
  * await engine.load();
- * await engine.scheduleJob(new Job({ 
+ * await engine.scheduleJob(new Job({
  *   methodName: 'sendEmail',
  *   params: { to: 'user@example.com', subject: 'Hello', body: 'Message' }
  * }));
@@ -125,7 +125,7 @@ export default class JobQueueEngine {
 
     /**
      * Create a new JobQueueEngine instance
-     * 
+     *
      * @param {JobQueueEngineOptions} [options] - Configuration options
      * @throws {AssertionError} When directory is not a non-empty string
      * @throws {AssertionError} When maxConcurrency is provided but not a valid number
@@ -156,7 +156,7 @@ export default class JobQueueEngine {
 
     /**
      * Indicates whether the engine has reached the maximum number of concurrent jobs
-     * 
+     *
      * @returns {boolean} True if at maximum concurrency, false otherwise
      */
     get hasReachedMaxConcurrency() {
@@ -165,7 +165,7 @@ export default class JobQueueEngine {
 
     /**
      * Set the maximum number of concurrent jobs allowed
-     * 
+     *
      * @param {number} max - Maximum concurrent jobs (must be a positive number)
      * @throws {AssertionError} When max is not a valid number
      */
@@ -176,7 +176,7 @@ export default class JobQueueEngine {
 
     /**
      * Register a handler function for jobs with a specific method name
-     * 
+     *
      * @param {string} methodName - Method name that jobs will reference
      * @param {Function} handler - Async function to handle job execution
      * @example
@@ -190,7 +190,7 @@ export default class JobQueueEngine {
 
     /**
      * Check if a handler is registered for the given method name
-     * 
+     *
      * @param {string} methodName - Method name to check
      * @returns {boolean} True if handler exists, false otherwise
      */
@@ -200,7 +200,7 @@ export default class JobQueueEngine {
 
     /**
      * Load all persisted jobs from disk and schedule them for execution
-     * 
+     *
      * @async
      * @returns {Promise<Array<Job>>} Array of loaded and scheduled jobs
      * @throws {WrappedError} When job directory cannot be read or jobs cannot be loaded
@@ -219,10 +219,10 @@ export default class JobQueueEngine {
 
     /**
      * Schedule a job for execution based on its execution date
-     * 
+     *
      * Jobs ready for immediate execution will start if concurrency allows.
      * Deferred jobs will be scheduled to start at their execution time.
-     * 
+     *
      * @async
      * @param {Job} job - Job instance to schedule
      * @returns {Promise<Job|boolean>} The scheduled job or false if engine is disposed
@@ -262,7 +262,7 @@ export default class JobQueueEngine {
 
     /**
      * Dispose the engine and clean up all resources
-     * 
+     *
      * Stops processing new jobs, clears scheduled timers, and prevents further execution.
      * Should be called before application shutdown to avoid memory leaks.
      */
@@ -281,7 +281,7 @@ export default class JobQueueEngine {
 
     /**
      * Start the next available job if concurrency limits allow
-     * 
+     *
      * @async
      * @returns {Promise<Job|boolean>} Started job or false if no job was started
      */
@@ -333,7 +333,7 @@ export default class JobQueueEngine {
 
     /**
      * Execute a job by invoking its registered handler
-     * 
+     *
      * @private
      * @async
      * @param {Job} job - Job to execute
@@ -381,7 +381,7 @@ export default class JobQueueEngine {
 
     /**
      * Get the oldest job that is ready for execution
-     * 
+     *
      * @async
      * @returns {Promise<Job|null>} Oldest ready job or null if none available
      * @throws {WrappedError} When job directory cannot be read or jobs cannot be loaded
@@ -404,7 +404,7 @@ export default class JobQueueEngine {
 
     /**
      * Atomically set a job's state to IN_PROGRESS and persist the change
-     * 
+     *
      * @private
      * @async
      * @param {Job} job - Job to mark as in progress
@@ -415,18 +415,18 @@ export default class JobQueueEngine {
         // Lock required to prevent race condition between state change and file write
         // Without this, multiple engine instances could pick up the same job
         await this.#lockingQueue.getLock();
-        
+
         // Update both in-memory and persistent state atomically
         job.setStateInProgress();
         this.#inProgressJobs.add(job);
         await this.saveJob(job);
-        
+
         this.#lockingQueue.releaseLock();
     }
 
     /**
      * Complete a job and remove it from queue and disk storage
-     * 
+     *
      * @private
      * @async
      * @param {Job} job - Job to complete and clean up
@@ -436,7 +436,7 @@ export default class JobQueueEngine {
         // Remove from in-memory tracking first (even if file delete fails,
         // job won't be re-executed since it's no longer in progress)
         this.#inProgressJobs.delete(job);
-        
+
         // Clean up persisted job file - completed/failed jobs are removed
         // to prevent accumulating old job files on disk
         await this.deleteJob(job);
@@ -444,7 +444,7 @@ export default class JobQueueEngine {
 
     /**
      * Persist a job to disk as a JSON file
-     * 
+     *
      * @private
      * @async
      * @param {Job} job - Job to save
@@ -453,7 +453,7 @@ export default class JobQueueEngine {
      */
     async saveJob(job) {
         const filepath = this.getJobFilepath(job);
-        
+
         // Lock prevents concurrent writes to the same job file
         // and ensures consistency during job state transitions
         await this.#lockingQueue.getLock();
@@ -463,7 +463,7 @@ export default class JobQueueEngine {
 
     /**
      * Delete a job's file from disk storage
-     * 
+     *
      * @private
      * @async
      * @param {Job} job - Job whose file should be deleted
@@ -478,7 +478,7 @@ export default class JobQueueEngine {
 
     /**
      * Load all jobs from the queue directory
-     * 
+     *
      * @async
      * @returns {Promise<Array<Job>>} Array of all persisted jobs
      * @throws {WrappedError} When directory cannot be read or job files cannot be loaded
@@ -497,7 +497,7 @@ export default class JobQueueEngine {
 
     /**
      * Read the job queue directory and return all file paths
-     * 
+     *
      * @private
      * @async
      * @returns {Promise<Array<string>>} Array of file paths in the job directory
@@ -518,7 +518,7 @@ export default class JobQueueEngine {
 
     /**
      * Load a job from a specific file path
-     * 
+     *
      * @private
      * @async
      * @param {string} filepath - Path to the job file
@@ -537,7 +537,7 @@ export default class JobQueueEngine {
 
     /**
      * Get the filesystem path for a job's persistence file
-     * 
+     *
      * @param {Job} job - Job to get file path for
      * @returns {string} Full file path where job data is stored
      */

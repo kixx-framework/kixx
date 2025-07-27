@@ -1,6 +1,6 @@
 /**
  * @fileoverview HTTP target specification and validation utilities
- * 
+ *
  * This module provides the HttpTargetSpec class for defining and validating
  * HTTP endpoint specifications within routes. It handles transformation from
  * plain object configurations to validated HttpTarget instances with proper
@@ -54,10 +54,10 @@ export default class HttpTargetSpec {
 
     /**
      * Constructs a new HttpTargetSpec instance from a target specification
-     * 
+     *
      * @param {TargetSpecification} spec - The target specification object
      * @throws {TypeError} When spec is not an object or missing required properties
-     * 
+     *
      * @example
      * const targetSpec = new HttpTargetSpec({
      *   name: 'getUser',
@@ -101,10 +101,10 @@ export default class HttpTargetSpec {
      * @param {string} reportingName - Name used for error reporting context
      * @returns {void}
      * @throws {Error} When a referenced handler name is not found in the factory maps
-     * 
+     *
      * @example
      * const handlerFactories = new Map([
-     *   ['getUserHandler', (options) => (req, res, next) => { /* handler logic */ }]
+     *   ['getUserHandler', (options) => (req, res, next) => { handler logic }]
      * ]);
      * targetSpec.assignHandlers(handlerFactories, new Map(), 'users:getUser');
      */
@@ -150,11 +150,11 @@ export default class HttpTargetSpec {
         // Build hierarchical name for debugging and logging purposes
         const name = `${ vhost.name }:${ route.name }:${ this.name }`;
         const allowedMethods = this.methods;
-        
+
         // Middleware execution order is critical: inbound → target → outbound
         // This ensures proper request preprocessing and response postprocessing
         const middleware = route.inboundMiddleware.concat(this.handlers).concat(route.outboundMiddleware);
-        
+
         // Target error handlers take precedence over route-level handlers
         // for more specific error handling at the endpoint level
         const errorHandlers = this.errorHandlers.concat(route.errorHandlers);
@@ -169,7 +169,7 @@ export default class HttpTargetSpec {
 
     /**
      * Validates a target specification object and creates a new HttpTargetSpec instance
-     * 
+     *
      * @param {Object} spec - The target specification object to validate
      * @param {string} parentName - The name of the parent context for error reporting
      * @param {number} index - The index of this target in the parent array for error reporting
@@ -178,7 +178,7 @@ export default class HttpTargetSpec {
      * @throws {Error} When spec.methods is not an array of valid HTTP methods or "*"
      * @throws {Error} When spec.handlers is not an array or contains invalid handler definitions
      * @throws {Error} When spec.errorHandlers exists but contains invalid error handler definitions
-     * 
+     *
      * @example
      * // Valid specification
      * const spec = HttpTargetSpec.validateAndCreate({
@@ -187,7 +187,7 @@ export default class HttpTargetSpec {
      *   handlers: [validateInput, ['createUserHandler', { sendEmail: true }]],
      *   errorHandlers: [['logError', {}]]
      * }, 'users', 0);
-     * 
+     *
      * @example
      * // Using wildcard methods
      * const spec = HttpTargetSpec.validateAndCreate({
@@ -216,7 +216,7 @@ export default class HttpTargetSpec {
         } else {
             methods = spec.methods;
             assertArray(methods, `target.methods must be an Array or "*" (in ${ reportingName })`);
-            
+
             // Validate each method against known HTTP methods
             for (const method of methods) {
                 assert(HTTP_METHODS.includes(method), `Invalid HTTP method: ${ method } (in ${ reportingName })`);
@@ -266,7 +266,7 @@ export default class HttpTargetSpec {
 
 /**
  * Creates middleware function by calling a factory with provided options
- * 
+ *
  * @param {Map<string,Function>} middleware - Map of middleware factory functions
  * @param {HandlerDefinition} def - Handler definition tuple [name, options]
  * @returns {Function} The composed middleware function ready for use
