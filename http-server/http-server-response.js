@@ -1,6 +1,6 @@
 /**
  * @fileoverview HTTP response builder and utilities for Node.js web servers
- * 
+ *
  * This module provides the HttpServerResponse class for constructing HTTP responses
  * with fluent API methods for setting status codes, headers, cookies, and response bodies.
  * Supports common response types including JSON, HTML, redirects, and streaming responses.
@@ -97,7 +97,7 @@ export default class HttpServerResponse {
      * @param {Object} params - Properties to merge into existing custom properties
      * @returns {HttpServerResponse} This response instance for method chaining
      * @throws {TypeError} When params is not an object
-     * 
+     *
      * @example
      * response.updateProps({ userId: '123', theme: 'dark' });
      * response.updateProps({ metadata: { version: '1.0' } });
@@ -115,13 +115,13 @@ export default class HttpServerResponse {
      * @param {Iterable<[string, string]>} headers - Iterable of header key-value pairs (Map, Headers, Array)
      * @returns {HttpServerResponse} This response instance for method chaining
      * @throws {TypeError} When headers is not iterable or contains invalid key-value pairs
-     * 
+     *
      * @example
      * // Using a Map
      * const headerMap = new Map([['x-api-version', '1.0'], ['x-request-id', '123']]);
      * response.updateHeaders(headerMap);
-     * 
-     * @example  
+     *
+     * @example
      * // Using an array of arrays
      * response.updateHeaders([['content-encoding', 'gzip'], ['cache-control', 'no-cache']]);
      */
@@ -135,7 +135,7 @@ export default class HttpServerResponse {
     /**
      * Sets a single header on the response, replacing any existing value.
      * @param {string} key - The header name
-     * @param {string} val - The header value  
+     * @param {string} val - The header value
      * @returns {HttpServerResponse} This response instance for method chaining
      * @throws {TypeError} When key or val are not strings
      */
@@ -152,13 +152,13 @@ export default class HttpServerResponse {
      * @param {CookieOptions} [options] - Cookie configuration options
      * @returns {HttpServerResponse} This response instance for method chaining
      * @throws {TypeError} When key or val are not strings
-     * 
+     *
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
-     * 
+     *
      * @example
      * // Basic secure cookie with defaults
      * response.setCookie('sessionId', 'abc123');
-     * 
+     *
      * @example
      * // Custom cookie with explicit options
      * response.setCookie('preferences', 'dark-mode', {
@@ -219,13 +219,13 @@ export default class HttpServerResponse {
      * @returns {HttpServerResponse} This response instance for method chaining
      * @throws {Error} When statusCode is not a valid number
      * @throws {Error} When newLocation is not a valid string or URL
-     * 
+     *
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Redirections
-     * 
+     *
      * @example
      * // Permanent redirect
      * response.respondWithRedirect(301, 'https://example.com/new-path');
-     * 
+     *
      * @example
      * // Temporary redirect with URL object
      * const targetUrl = new URL('/login', 'https://example.com');
@@ -233,7 +233,7 @@ export default class HttpServerResponse {
      */
     respondWithRedirect(statusCode, newLocation) {
         assert(isNumberNotNaN(statusCode), ': statusCode must be a number');
-        
+
         // Handle URL objects by extracting the href property
         if (newLocation.href) {
             newLocation = newLocation.href;
@@ -254,11 +254,11 @@ export default class HttpServerResponse {
      * @returns {HttpServerResponse} This response instance for method chaining
      * @throws {Error} When statusCode is not a valid number
      * @throws {TypeError} When obj cannot be serialized to JSON
-     * 
+     *
      * @example
      * // Simple JSON response
      * response.respondWithJSON(200, { success: true, data: users });
-     * 
+     *
      * @example
      * // Pretty-printed JSON with custom content type
      * response.respondWithJSON(201, { id: 123 }, {
@@ -311,12 +311,12 @@ export default class HttpServerResponse {
      * @returns {HttpServerResponse} This response instance for method chaining
      * @throws {Error} When statusCode is not a valid number
      * @throws {Error} When utf8 is not a non-empty string
-     * 
+     *
      * @example
      * // Basic HTML response
      * const html = '<html><body><h1>Welcome</h1></body></html>';
      * response.respondWithHTML(200, html);
-     * 
+     *
      * @example
      * // HTML with custom content type
      * response.respondWithHTML(200, htmlString, {
@@ -349,7 +349,7 @@ export default class HttpServerResponse {
      * Indicates that the resource has not changed and the client can use its cached version.
      * Sets Content-Length to 0 and clears the response body per RFC 9110 requirements.
      * @returns {HttpServerResponse} This response instance for method chaining
-     * 
+     *
      * @example
      * // Check if client's cached version is still valid
      * if (clientETag === currentETag) {
@@ -377,12 +377,12 @@ export default class HttpServerResponse {
      * @param {import('stream').Readable} readStream - Readable stream to use as the response body
      * @returns {HttpServerResponse} This response instance for method chaining
      * @throws {Error} When statusCode is not a valid number
-     * 
+     *
      * @example
      * // Stream a file without content length
      * const fileStream = fs.createReadStream('large-file.pdf');
      * response.respondWithStream(200, undefined, fileStream);
-     * 
+     *
      * @example
      * // Stream with known content length
      * const stats = fs.statSync('video.mp4');
@@ -408,12 +408,12 @@ export default class HttpServerResponse {
      * @param {string} utf8 - String whose UTF-8 byte length should be calculated
      * @returns {number} The byte length of the string in UTF-8 encoding
      * @throws {TypeError} When utf8 is not a string
-     * 
+     *
      * @example
      * // ASCII characters: 5 bytes
      * response.getContentLengthForUTF8('hello'); // returns 5
-     * 
-     * @example  
+     *
+     * @example
      * // Multi-byte UTF-8 characters: more than character count
      * response.getContentLengthForUTF8('héllo'); // returns 6 (not 5)
      */

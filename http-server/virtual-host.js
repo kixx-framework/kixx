@@ -1,8 +1,8 @@
 /**
  * @fileoverview Virtual host routing and request dispatching
- * 
+ *
  * This module provides the VirtualHost class for hostname-based routing
- * in web applications, supporting both exact hostname matching and 
+ * in web applications, supporting both exact hostname matching and
  * pattern-based dynamic routing.
  */
 
@@ -12,7 +12,7 @@
  */
 
 /**
- * @typedef {Object} HttpRoute  
+ * @typedef {Object} HttpRoute
  * @property {function} matchPathname - Method to match URL pathname against route pattern
  */
 
@@ -26,7 +26,7 @@
 
 /**
  * Handles hostname-based request routing with support for exact matches and patterns
- * 
+ *
  * @class
  */
 export default class VirtualHost {
@@ -37,7 +37,7 @@ export default class VirtualHost {
 
     /**
      * Creates a new virtual host instance
-     * 
+     *
      * @param {VirtualHostConfig} config - Virtual host configuration
      * @throws {TypeError} When required configuration is missing or invalid
      */
@@ -56,17 +56,17 @@ export default class VirtualHost {
 
     /**
      * Checks if this virtual host can handle the given hostname
-     * 
+     *
      * @param {string} hostname - The hostname to match (e.g., 'www.example.com')
      * @returns {Object|null} Parameters object if matched, null if no match
      * @throws {TypeError} When hostname is not a string
-     * 
+     *
      * @example
      * // Exact hostname match
      * const params = vhost.matchHostname('www.example.com');
      * // Returns {} for exact match, null for no match
-     * 
-     * @example  
+     *
+     * @example
      * // Pattern match with captured parameters
      * const params = vhost.matchHostname('api.example.com');
      * // May return { subdomain: 'api' } for pattern matches
@@ -102,18 +102,18 @@ export default class VirtualHost {
 
     /**
      * Finds the first route that matches the request pathname
-     * 
+     *
      * @param {HttpRequest} request - HTTP request object with URL
      * @returns {[HttpRoute|null, Object|null]} Tuple of matched route and parameters, or nulls if no match
      * @throws {TypeError} When request is missing or invalid
-     * 
+     *
      * @example
      * // Successful route match
      * const [route, params] = vhost.matchRequest(request);
      * if (route) {
      *   // Handle request with matched route and extracted parameters
      * }
-     * 
+     *
      * @example
      * // No route found
      * const [route, params] = vhost.matchRequest(request);

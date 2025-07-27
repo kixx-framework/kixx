@@ -5,7 +5,7 @@ import { headersToObject } from '../lib/http-utils.js';
 
 /**
  * @fileoverview HTTP server wrapper with lifecycle management and event emission
- * 
+ *
  * Provides a lightweight wrapper around Node.js's built-in http.Server with
  * enhanced error handling, event emission, and graceful shutdown capabilities.
  */
@@ -32,21 +32,21 @@ import { headersToObject } from '../lib/http-utils.js';
  */
 
 /**
- * HTTP server wrapper that provides lifecycle management, request/response handling, 
+ * HTTP server wrapper that provides lifecycle management, request/response handling,
  * and comprehensive event emission for monitoring server and request activity.
- * 
+ *
  * @extends EventEmitter
  * @fires HttpServer#error - Server errors, request errors, or handler errors
  * @fires HttpServer#info - Server lifecycle events (listening, closed)
  * @fires HttpServer#debug - Request/response activity for debugging
- * 
+ *
  * @example
  * // Basic server setup
  * const server = new HttpServer({ port: 8080 });
  * server.on('error', (event) => console.error(event));
  * server.on('info', (event) => console.log(event));
  * server.startServer();
- * 
+ *
  * @example
  * // Custom request handler
  * class CustomServer extends HttpServer {
@@ -171,13 +171,13 @@ export default class HttpServer extends EventEmitter {
     /**
      * Default request handler that can be overridden in subclasses
      * Returns a simple "Hello, world!" response with proper content headers
-     * 
-     * @param {http.IncomingMessage} [nodeRequest] - Node.js request object  
+     *
+     * @param {http.IncomingMessage} [nodeRequest] - Node.js request object
      * @param {http.ServerResponse} [nodeResponse] - Node.js response object
      * @param {URL} [url] - Parsed request URL
      * @param {string} [requestId] - Unique request identifier
      * @returns {HttpResponse|Promise<HttpResponse>} Response object or Promise resolving to response
-     * 
+     *
      * @example
      * // Override in subclass for custom behavior
      * handleRequest(nodeRequest, nodeResponse, url, requestId) {
@@ -213,7 +213,7 @@ export default class HttpServer extends EventEmitter {
      *
      * @private
      * @param {http.IncomingMessage} nodeRequest - Node.js HTTP request object
-     * @param {http.ServerResponse} nodeResponse - Node.js HTTP response object  
+     * @param {http.ServerResponse} nodeResponse - Node.js HTTP response object
      * @fires HttpServer#debug
      * @fires HttpServer#error
      */
@@ -303,7 +303,7 @@ export default class HttpServer extends EventEmitter {
         try {
             // Async request handlers return promises, sync handlers return response objects
             const result = this.handleRequest(nodeRequest, nodeResponse, url, requestId);
-            
+
             if (result && typeof result.then === 'function') {
                 result.then(completeResponse, handleError);
             } else {
@@ -322,7 +322,7 @@ export default class HttpServer extends EventEmitter {
      *
      * @private
      * @param {http.IncomingMessage} nodeRequest - Node.js request object
-     * @param {http.ServerResponse} nodeResponse - Node.js response object  
+     * @param {http.ServerResponse} nodeResponse - Node.js response object
      * @param {HttpResponse} response - Response object with status, headers, and body
      */
     #sendResponse(nodeRequest, nodeResponse, response) {

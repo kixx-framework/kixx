@@ -1,6 +1,6 @@
 /**
  * @fileoverview HTTP request routing and middleware management
- * 
+ *
  * This module provides the core HttpRouter class for handling HTTP request routing
  * in Node.js applications. It supports virtual host matching, route resolution,
  * middleware execution, and comprehensive error handling with proper HTTP status codes.
@@ -54,10 +54,10 @@ import {
 
 /**
  * Routes HTTP requests to appropriate virtual hosts and handlers
- * 
+ *
  * Manages virtual host matching, route resolution, middleware execution,
  * and error handling with proper HTTP status codes (404, 405, 500).
- * 
+ *
  * @example
  * const router = new HttpRouter(virtualHosts);
  * const handler = router.getHttpRequestHandler();
@@ -69,7 +69,7 @@ export default class HttpRouter {
 
     /**
      * Creates a new HTTP router instance
-     * 
+     *
      * @param {VirtualHost[]} [virtualHosts=[]] - Virtual hosts to manage
      */
     constructor(virtualHosts) {
@@ -80,7 +80,7 @@ export default class HttpRouter {
 
     /**
      * Replaces all virtual hosts managed by this router
-     * 
+     *
      * @param {VirtualHost[]} virtualHosts - New virtual hosts to manage
      */
     resetVirtualHosts(virtualHosts) {
@@ -89,9 +89,9 @@ export default class HttpRouter {
 
     /**
      * Returns bound request handler for use with HTTP server
-     * 
+     *
      * @returns {Function} Request handler function (context, request, response) => Promise<HttpResponse>
-     * 
+     *
      * @example
      * const handler = router.getHttpRequestHandler();
      * server.on('request', handler);
@@ -102,11 +102,11 @@ export default class HttpRouter {
 
     /**
      * Processes HTTP request through routing pipeline
-     * 
+     *
      * Executes four-phase processing: route resolution, method resolution,
      * middleware execution, and response validation. Implements error handling
      * cascade from target to route to router level.
-     * 
+     *
      * @async
      * @param {Object} context - Request context object
      * @param {HttpRequest} request - HTTP request to process
@@ -180,10 +180,10 @@ export default class HttpRouter {
 
     /**
      * Finds virtual host that matches the given hostname
-     * 
+     *
      * Uses first virtual host as fallback when no exact match found
      * to prevent 404 errors for unexpected Host headers.
-     * 
+     *
      * @param {string} hostname - Hostname to match against virtual hosts
      * @returns {[VirtualHost, Object]} Matched virtual host and extracted parameters
      */
@@ -205,11 +205,11 @@ export default class HttpRouter {
 
     /**
      * Resolves request to matching route with extracted parameters
-     * 
+     *
      * @param {HttpRequest} request - Request containing URL to match
      * @returns {[HttpRoute, Object, Object]} Route, hostname params, and pathname params
      * @throws {NotFoundError} When no route matches the request pathname
-     * 
+     *
      * @example
      * // For request to https://api.example.com/users/123
      * const [route, hostParams, pathParams] = router.matchRequest(request);
@@ -232,10 +232,10 @@ export default class HttpRouter {
 
     /**
      * Generates standardized error response for HTTP errors
-     * 
+     *
      * Converts errors to JSON:API compliant format and sets appropriate
      * headers like Allow for 405 Method Not Allowed responses.
-     * 
+     *
      * @param {Object} context - Request context
      * @param {HttpRequest} request - Original request
      * @param {HttpResponse} response - Response to populate
@@ -262,7 +262,7 @@ export default class HttpRouter {
 
     /**
      * Locates target handler for request method within matched route
-     * 
+     *
      * @private
      * @param {HttpRequest} request - Request to find target for
      * @param {HttpRoute} route - Route containing potential targets
@@ -286,10 +286,10 @@ export default class HttpRouter {
 
     /**
      * Converts error to JSON:API compliant error object
-     * 
+     *
      * Sanitizes internal error messages for security, only exposing
      * HttpError messages which are safe for public consumption.
-     * 
+     *
      * @static
      * @param {Error & {httpStatusCode?: number, isHttpError?: boolean, code?: string, name?: string, source?: any}} error - Error to convert
      * @returns {{errors: Array<{status: number, code: string, title: string, detail: string, source?: any}>}} JSON:API error format
@@ -311,7 +311,7 @@ export default class HttpRouter {
 
     /**
      * Validates middleware response conforms to expected interface
-     * 
+     *
      * @static
      * @param {HttpResponse} response - Response object to validate
      * @throws {AssertionError} When response is null, missing status, or has invalid headers

@@ -110,7 +110,7 @@ export default class HttpTarget {
      * @example
      * // Basic middleware execution
      * const response = await target.invokeMiddleware(context, request, response);
-     * 
+     *
      * @example
      * // Middleware can short-circuit by calling skip()
      * const authMiddleware = async (context, request, response, skip) => {
