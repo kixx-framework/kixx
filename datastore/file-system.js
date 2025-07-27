@@ -1,3 +1,11 @@
+/**
+ * @fileoverview Database document management utilities
+ *
+ * This module provides high-level functions for managing JSON documents
+ * in a file-based database system. It wraps low-level file system operations
+ * with consistent error handling and database-specific context.
+ */
+
 import path from 'node:path';
 import { WrappedError } from '../errors/mod.js';
 
@@ -8,7 +16,13 @@ import {
     writeJSONFile
 } from '../lib/file-system.js';
 
-
+/**
+ * Reads all entries from a database directory
+ * @async
+ * @param {string} directory - Path to the database directory
+ * @returns {Promise<Array<import('fs').Dirent>>} Array of directory entries
+ * @throws {WrappedError} When directory cannot be read or doesn't exist
+ */
 export async function readDocumentDirectory(directory) {
     let entries;
     try {
@@ -22,6 +36,15 @@ export async function readDocumentDirectory(directory) {
     return entries;
 }
 
+/**
+ * Writes a JSON document to the database
+ * @async
+ * @param {string} filepath - Full path where the document should be written
+ * @param {*} data - Data to be serialized as JSON and written to disk
+ * @returns {Promise<void>}
+ * @throws {WrappedError} When parent directory doesn't exist (ENOENT)
+ * @throws {WrappedError} When write operation fails (permissions, disk full, etc.)
+ */
 export async function writeDocumentFile(filepath, data) {
     try {
         await writeJSONFile(filepath, data);
@@ -39,10 +62,24 @@ export async function writeDocumentFile(filepath, data) {
     }
 }
 
+/**
+ * Removes a document file from the database
+ * @async
+ * @param {string} filepath - Path to the file to be removed
+ * @returns {Promise<void>}
+ * @throws {Error} When file doesn't exist or cannot be removed
+ */
 export async function removeDocumentFile(filepath) {
     await removeFile(filepath);
 }
 
+/**
+ * Reads and parses a JSON document from the database
+ * @async
+ * @param {string} filepath - Path to the JSON document file
+ * @returns {Promise<*>} Parsed JSON document
+ * @throws {WrappedError} When file doesn't exist, contains invalid JSON, or read fails
+ */
 export async function readDocumentFile(filepath) {
     let document;
     try {

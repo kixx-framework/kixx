@@ -7,8 +7,6 @@
  * small to medium datasets.
  *
  * @module datastore-engine
- * @author Your Team
- * @since 1.0.0
  */
 
 import path from 'node:path';
@@ -128,6 +126,7 @@ export default class DatastoreEngine {
         assertNonEmptyString(options.directory);
 
         // Allow dependency injection of file system for testing
+        // This lets us mock file operations without touching real disk
         if (options.fileSystem) {
             this.#fileSystem = options.fileSystem;
         }
@@ -176,9 +175,12 @@ export default class DatastoreEngine {
      */
     async loadDocuments() {
         // WARNING: This method assumes the caller has acquired a read/write lock
+        // to prevent concurrent modifications during the loading process
         const fileNames = await this.#fileSystem.readDocumentDirectory(this.#directory);
 
-        // Load all documents in parallel for better performance
+        // Load all documents in parallel for better I/O throughput on modern SSDs
+        // This trades memory for speed - all file reads happen concurrently
+        // For very large datasets, consider batching to avoid EMFILE errors
         const promises = fileNames.map((filename) => {
             const encodedKey = path.basename(filename, '.json');
             const key = decodeURIComponent(encodedKey);
@@ -211,8 +213,11 @@ export default class DatastoreEngine {
      * @throws {Error} When file cannot be written to disk
      */
     async setItem(key, document) {
-        // Write to disk first before updating in-memory state
+        // Write to disk first to ensure durability - if the write fails,
+        // the in-memory state remains unchanged (strong consistency)
         await this.writeDocument(key, document);
+
+        // Only update memory after successful disk write
         this.#documentsMap.set(key, document);
         return { key, document };
     }
@@ -226,8 +231,11 @@ export default class DatastoreEngine {
      * @throws {Error} When file cannot be removed from disk
      */
     async deleteItem(key) {
-        // Remove from disk first to ensure consistency
+        // Remove from disk first to maintain consistency - if deletion fails,
+        // document remains both on disk and in memory (no phantom documents)
         await this.removeDocument(key);
+
+        // Safe to remove from memory after successful disk deletion
         this.#documentsMap.delete(key);
         return { key };
     }
@@ -260,24 +268,25 @@ export default class DatastoreEngine {
 
         let { startKey, endKey } = options;
 
-        // Validate pagination parameters
         assertNumberNotNaN(inclusiveStartIndex);
         assert(inclusiveStartIndex >= 0);
         assertNumberNotNaN(limit);
         assert(limit > 0);
 
-        // Build index in requested sort order
+        // Build index in memory each time to avoid staleness
+        // This trades CPU for simplicity - no index maintenance needed
         const sortedList = descending
             ? this.buildDescendingKeyIndex()
             : this.buildAscendingKeyIndex();
 
-        // Handle different query modes
+        // Single key query overrides range queries for exact matches
         if (key) {
             startKey = key;
             endKey = key;
         }
 
-        // Default to full range if bounds not specified
+        // Default to full range scan when bounds not specified
+        // Using Unicode sentinels ensures we capture all possible strings
         if (isUndefined(startKey)) {
             startKey = ALPHA;
         }
@@ -285,7 +294,7 @@ export default class DatastoreEngine {
             endKey = OMEGA;
         }
 
-        // Extract matching items with pagination
+        // Core pagination logic - returns items and continuation token
         const results = getIndexItemsLeftToRight(sortedList, {
             startKey,
             endKey,
@@ -293,7 +302,8 @@ export default class DatastoreEngine {
             limit,
         });
 
-        // Optionally hydrate results with full document objects
+        // Hydrate with full documents if requested - trades bandwidth for convenience
+        // Client can choose based on whether they need just keys or full data
         if (includeDocuments) {
             for (let i = 0; i < results.items.length; i += 1) {
                 const item = results.items[i];
@@ -335,25 +345,24 @@ export default class DatastoreEngine {
 
         const view = this.#views.get(viewId);
 
-        // Fail fast if view doesn't exist
         assert(view);
         assertNumberNotNaN(inclusiveStartIndex);
         assert(inclusiveStartIndex >= 0);
         assertNumberNotNaN(limit);
         assert(limit > 0);
 
-        // Build view index in requested sort order
+        // Views are re-indexed on each query for simplicity
+        // This ensures fresh results but impacts performance on large datasets
+        // Consider caching view results if queries are frequent
         const sortedList = descending
             ? this.buildDescendingViewIndex(view)
             : this.buildAscendingViewIndex(view);
 
-        // Handle different query modes
         if (key) {
             startKey = key;
             endKey = key;
         }
 
-        // Default to full range if bounds not specified
         if (isUndefined(startKey)) {
             startKey = ALPHA;
         }
@@ -361,7 +370,6 @@ export default class DatastoreEngine {
             endKey = OMEGA;
         }
 
-        // Extract matching items with pagination
         const results = getIndexItemsLeftToRight(sortedList, {
             startKey,
             endKey,
@@ -369,7 +377,8 @@ export default class DatastoreEngine {
             limit,
         });
 
-        // Hydrate with documents if requested
+        // Include source documents when requested
+        // Useful when view emits partial data but client needs full document
         if (includeDocuments) {
             for (let i = 0; i < results.items.length; i += 1) {
                 const item = results.items[i];
@@ -382,11 +391,13 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Writes a document to disk
      * @private
      * @async
      * @param {string} key - Document key
      * @param {Object} document - Document to write
      * @returns {Promise<void>}
+     * @throws {Error} When file write fails
      */
     async writeDocument(key, document) {
         const filepath = this.getDocumentFilepath(key);
@@ -394,10 +405,12 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Removes a document file from disk
      * @private
      * @async
      * @param {string} key - Document key
      * @returns {Promise<void>}
+     * @throws {Error} When file removal fails
      */
     async removeDocument(key) {
         const filepath = this.getDocumentFilepath(key);
@@ -405,10 +418,12 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Loads a document from disk into memory
      * @private
      * @async
      * @param {string} key - Document key
      * @returns {Promise<void>}
+     * @throws {Error} When file read fails or contains invalid JSON
      */
     async loadDocument(key) {
         const filepath = this.getDocumentFilepath(key);
@@ -417,17 +432,20 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Generates the file path for a document
      * @private
      * @param {string} key - Document key
      * @returns {string} Full file path
      */
     getDocumentFilepath(key) {
-        // URL-encode keys to handle special characters
+        // URL-encode keys to safely handle special characters like '/', ':', etc.
+        // This prevents directory traversal and ensures valid filenames on all platforms
         const filename = `${ encodeURIComponent(key) }.json`;
         return path.join(this.#directory, filename);
     }
 
     /**
+     * Builds an ascending sorted index of document keys
      * @private
      * @returns {IndexItem[]} Sorted index
      */
@@ -438,6 +456,7 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Builds a descending sorted index of document keys
      * @private
      * @returns {IndexItem[]} Sorted index
      */
@@ -448,6 +467,7 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Builds an ascending sorted index from a view
      * @private
      * @param {ViewSource} view - View to build index for
      * @returns {IndexItem[]} Sorted index
@@ -459,6 +479,7 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Builds a descending sorted index from a view
      * @private
      * @param {ViewSource} view - View to build index for
      * @returns {IndexItem[]} Sorted index
@@ -470,12 +491,14 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Maps all document keys to index items
      * @private
      * @returns {IndexItem[]} Array of index items
      */
     mapDocumentKeys() {
         const index = [];
         for (const key of this.#documentsMap.keys()) {
+            // Freeze items to prevent accidental mutation of index entries
             index.push(Object.freeze({
                 key,
                 documentKey: key,
@@ -485,6 +508,7 @@ export default class DatastoreEngine {
     }
 
     /**
+     * Maps documents through a view function to generate index items
      * @private
      * @param {ViewSource} view - View containing map function
      * @returns {IndexItem[]} Array of index items emitted by the view
@@ -493,8 +517,11 @@ export default class DatastoreEngine {
         const index = [];
 
         for (const [ documentKey, document ] of this.#documentsMap) {
-            // CouchDB-style map function that can emit multiple entries per document
+            // CouchDB-style map function where each document can emit zero or more
+            // index entries via the emit() callback - this allows complex indexing
+            // like emitting multiple keys for array fields or computed values
             view.map(document, function emit(key, value) {
+                // Freeze to ensure index integrity
                 index.push(Object.freeze({
                     key,
                     value,
@@ -529,26 +556,28 @@ export function getIndexItemsLeftToRight(sortedList, options) {
     const items = [];
     let exclusiveEndIndex = null;
 
-    // Handle edge case where pagination starts beyond array bounds
+    // Guard against pagination beyond available data
     if (inclusiveStartIndex >= sortedList.length) {
         return { exclusiveEndIndex, items };
     }
 
     let index = inclusiveStartIndex;
 
-    // Scan through sorted list starting at pagination offset
+    // Linear scan from pagination offset - efficient for sorted data
+    // We skip items before startKey and after endKey
     for (index; index < sortedList.length; index += 1) {
         const item = sortedList[index];
         const { key } = item;
 
-        // Check if current item falls within the requested key range
+        // Include items within the requested key range (inclusive bounds)
         if (isGreaterThanOrEqualTo(key, startKey) && isLessThanOrEqualTo(key, endKey)) {
             items.push(item);
         }
 
-        // Stop when we've collected enough items
+        // Check if we've collected the requested page size
         if (items.length === limit) {
-            // Set continuation point for next page
+            // Set continuation token for next page if more items exist
+            // Client uses this as inclusiveStartIndex for subsequent requests
             if (index < (sortedList.length - 1)) {
                 exclusiveEndIndex = index + 1;
             }
@@ -557,6 +586,7 @@ export function getIndexItemsLeftToRight(sortedList, options) {
         }
     }
 
+    // Reached end of data - no continuation token needed
     return { exclusiveEndIndex, items };
 }
 
@@ -581,37 +611,51 @@ export function sortIndexListAscending(a, b) {
 export function sortIndexListDescending(a, b) {
     const akey = a.key;
     const bkey = b.key;
+    // Swap argument order to reverse comparison
     return compare(bkey, akey);
 }
 
 /**
- * Tests if comp is greater than or equal to val using locale-aware comparison
+ * Tests if a value is greater than or equal to another value
  * @param {*} comp - Value to compare
  * @param {*} val - Value to compare against
- * @returns {boolean} True if comp >= val
+ * @returns {boolean} True if comp >= val using locale-aware comparison for strings
  */
 export function isGreaterThanOrEqualTo(comp, val) {
     return compare(comp, val) >= 0;
 }
 
 /**
- * Tests if comp is less than or equal to val using locale-aware comparison
+ * Tests if a value is less than or equal to another value
  * @param {*} comp - Value to compare
  * @param {*} val - Value to compare against
- * @returns {boolean} True if comp <= val
+ * @returns {boolean} True if comp <= val using locale-aware comparison for strings
  */
 export function isLessThanOrEqualTo(comp, val) {
     return compare(comp, val) <= 0;
 }
 
 /**
- * Compares two values with locale-aware string comparison
+ * Compares two values with special handling for strings
+ *
  * @param {*} a - First value
  * @param {*} b - Second value
  * @returns {number} -1 if a < b, 1 if a > b, 0 if equal
+ *
+ * @example
+ * // String comparison uses locale-aware sorting
+ * compare('ñ', 'n'); // Returns positive number (ñ comes after n)
+ * compare('10', '2'); // Returns negative number (lexical comparison)
+ *
+ * @example
+ * // Non-string comparison uses standard operators
+ * compare(10, 2); // Returns 1
+ * compare(new Date(2023, 0, 1), new Date(2023, 0, 2)); // Returns -1
  */
 export function compare(a, b) {
-    // Use locale-aware string comparison for international support
+    // Use localeCompare for strings to handle international characters correctly
+    // This ensures 'ñ' sorts correctly relative to 'n' and 'o' based on locale
+    // For non-strings, fall back to standard comparison operators
     if (typeof a === 'string') {
         return a.localeCompare(b);
     } else if (a < b) {
