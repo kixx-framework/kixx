@@ -9,6 +9,10 @@ import {
 } from '../assertions/mod.js';
 
 
+// Unicode boundary characters used as sentinel values for key ranges
+// ALPHA (\u0000) represents the lowest possible string in JavaScript's sort order
+// OMEGA (\uffff) represents a very high value (though not technically the highest)
+// These allow open-ended queries like "all keys from 'foo' onwards"
 const ALPHA = '\u0000';
 const OMEGA = '\uffff';
 
@@ -75,6 +79,8 @@ export default class DatastoreEngine {
     constructor(options = {}) {
         assertNonEmptyString(options.directory);
 
+        // Allow dependency injection of file system for testing
+        // This enables mocking file operations without touching real disk
         if (options.fileSystem) {
             this.#fileSystem = options.fileSystem;
         }
@@ -97,6 +103,8 @@ export default class DatastoreEngine {
      * @param {Object} source - View source (must have a .map function)
      */
     setView(id, source) {
+        // Views are CouchDB-style map functions that emit key-value pairs
+        // They're stored but not executed until a query needs them
         this.#views.set(id, source);
     }
 
@@ -106,10 +114,15 @@ export default class DatastoreEngine {
      * @returns {Promise<void>}
      */
     async loadDocuments() {
-        // Assume the read/write lock has already been acquired by the caller.
+        // WARNING: This method assumes the caller has acquired a read/write lock
+        // Loading documents without proper locking can lead to race conditions
+        // where documents are modified on disk while being loaded
         const fileNames = await this.#fileSystem.readDocumentDirectory(this.#directory);
 
+        // Load all documents in parallel for better performance
+        // On large directories this significantly reduces startup time
         const promises = fileNames.map((filename) => {
+            // Document keys are URL-encoded in filenames to handle special characters
             const encodedKey = path.basename(filename, '.json');
             const key = decodeURIComponent(encodedKey);
             return this.loadDocument(key);
@@ -128,6 +141,8 @@ export default class DatastoreEngine {
         if (this.#documentsMap.has(key)) {
             document = this.#documentsMap.get(key);
         }
+        // Always return consistent shape even when document doesn't exist
+        // This simplifies null checking for callers
         return { key, document };
     }
 
@@ -138,6 +153,9 @@ export default class DatastoreEngine {
      * @returns {Promise<{ key: string, document: Object }>}
      */
     async setItem(key, document) {
+        // Write to disk first before updating in-memory state
+        // This ensures data durability - if the process crashes after
+        // the write, the document is still persisted
         await this.writeDocument(key, document);
         this.#documentsMap.set(key, document);
         return { key, document };
@@ -149,6 +167,9 @@ export default class DatastoreEngine {
      * @returns {Promise<{ key: string }>}
      */
     async deleteItem(key) {
+        // Remove from disk first to ensure consistency
+        // If we removed from memory first and then crashed,
+        // the document would reappear on next load
         await this.removeDocument(key);
         this.#documentsMap.delete(key);
         return { key };
@@ -168,7 +189,6 @@ export default class DatastoreEngine {
      */
     queryKeys(options) {
         const {
-            // The "key" will override startKey and endKey if it exists.
             key,
             descending,
             inclusiveStartIndex,
@@ -178,20 +198,26 @@ export default class DatastoreEngine {
 
         let { startKey, endKey } = options;
 
+        // Validate pagination parameters to prevent runtime errors
         assertNumberNotNaN(inclusiveStartIndex);
         assert(inclusiveStartIndex >= 0);
         assertNumberNotNaN(limit);
         assert(limit > 0);
 
+        // Build index in requested sort order
+        // Index is rebuilt on each query to ensure it reflects current state
         const sortedList = descending
             ? this.buildDescendingKeyIndex()
             : this.buildAscendingKeyIndex();
 
+        // Exact key match overrides range query
         if (key) {
             startKey = key;
             endKey = key;
         }
 
+        // Default to full range if bounds not specified
+        // This allows queries like "all documents" or "all documents from 'foo' onwards"
         if (isUndefined(startKey)) {
             startKey = ALPHA;
         }
@@ -199,6 +225,7 @@ export default class DatastoreEngine {
             endKey = OMEGA;
         }
 
+        // Extract matching items with pagination
         const results = getIndexItemsLeftToRight(sortedList, {
             startKey,
             endKey,
@@ -206,6 +233,9 @@ export default class DatastoreEngine {
             limit,
         });
 
+        // Optionally hydrate results with full document objects
+        // This is separated from the index query for performance -
+        // some queries only need keys, not full documents
         if (includeDocuments) {
             for (let i = 0; i < results.items.length; i += 1) {
                 const item = results.items[i];
@@ -225,7 +255,6 @@ export default class DatastoreEngine {
      */
     queryView(viewId, options) {
         const {
-            // The "key" will override startKey and endKey if it exists.
             key,
             descending,
             inclusiveStartIndex,
@@ -237,21 +266,27 @@ export default class DatastoreEngine {
 
         const view = this.#views.get(viewId);
 
+        // Fail fast if view doesn't exist
         assert(view);
         assertNumberNotNaN(inclusiveStartIndex);
         assert(inclusiveStartIndex >= 0);
         assertNumberNotNaN(limit);
         assert(limit > 0);
 
+        // Build view index in requested sort order
+        // Views can emit multiple entries per document, so the index
+        // may be larger than the document count
         const sortedList = descending
             ? this.buildDescendingViewIndex(view)
             : this.buildAscendingViewIndex(view);
 
+        // Exact key match overrides range query
         if (key) {
             startKey = key;
             endKey = key;
         }
 
+        // Default to full range if bounds not specified
         if (isUndefined(startKey)) {
             startKey = ALPHA;
         }
@@ -259,6 +294,7 @@ export default class DatastoreEngine {
             endKey = OMEGA;
         }
 
+        // Extract matching items with pagination
         const results = getIndexItemsLeftToRight(sortedList, {
             startKey,
             endKey,
@@ -266,6 +302,8 @@ export default class DatastoreEngine {
             limit,
         });
 
+        // Hydrate with documents if requested
+        // Note: multiple view entries may reference the same document
         if (includeDocuments) {
             for (let i = 0; i < results.items.length; i += 1) {
                 const item = results.items[i];
@@ -309,6 +347,8 @@ export default class DatastoreEngine {
     async loadDocument(key) {
         const filepath = this.getDocumentFilepath(key);
         const document = await this.#fileSystem.readDocumentFile(filepath);
+        // Documents are cached in memory for fast access
+        // This trades memory for speed - suitable for small to medium datasets
         this.#documentsMap.set(key, document);
     }
 
@@ -319,6 +359,8 @@ export default class DatastoreEngine {
      * @returns {string}
      */
     getDocumentFilepath(key) {
+        // URL-encode keys to handle special characters that aren't
+        // valid in filenames (e.g., '/', ':', '*')
         const filename = `${ encodeURIComponent(key) }.json`;
         return path.join(this.#directory, filename);
     }
@@ -377,6 +419,8 @@ export default class DatastoreEngine {
     mapDocumentKeys() {
         const index = [];
         for (const key of this.#documentsMap.keys()) {
+            // Freeze index items to prevent accidental mutation
+            // which could corrupt query results
             index.push(Object.freeze({
                 key,
                 documentKey: key,
@@ -395,7 +439,11 @@ export default class DatastoreEngine {
         const index = [];
 
         for (const [ documentKey, document ] of this.#documentsMap) {
+            // CouchDB-style map function that can emit multiple key-value pairs
+            // per document. This enables complex indexing scenarios like
+            // indexing by multiple fields or creating compound keys
             view.map(document, function emit(key, value) {
+                // Freeze to prevent mutation of index entries
                 index.push(Object.freeze({
                     key,
                     value,
@@ -429,21 +477,27 @@ export function getIndexItemsLeftToRight(sortedList, options) {
     const items = [];
     let exclusiveEndIndex = null;
 
+    // Handle edge case where pagination starts beyond array bounds
     if (inclusiveStartIndex >= sortedList.length) {
         return { exclusiveEndIndex, items };
     }
 
     let index = inclusiveStartIndex;
 
+    // Scan through sorted list starting at pagination offset
     for (index; index < sortedList.length; index += 1) {
         const item = sortedList[index];
         const { key } = item;
 
+        // Only include items within the specified key range
         if (isGreaterThanOrEqualTo(key, startKey) && isLessThanOrEqualTo(key, endKey)) {
             items.push(item);
         }
 
+        // Stop when we've collected enough items
         if (items.length === limit) {
+            // Set continuation point for next page of results
+            // null indicates we've reached the end of available data
             if (index < (sortedList.length - 1)) {
                 exclusiveEndIndex = index + 1;
             }
@@ -464,7 +518,6 @@ export function getIndexItemsLeftToRight(sortedList, options) {
 export function sortIndexListAscending(a, b) {
     const akey = a.key;
     const bkey = b.key;
-    // Each index item is of the form [ key, value, doc.id ]
     return compare(akey, bkey);
 }
 
@@ -477,7 +530,7 @@ export function sortIndexListAscending(a, b) {
 export function sortIndexListDescending(a, b) {
     const akey = a.key;
     const bkey = b.key;
-    // Each index item is of the form [ key, value, doc.id ]
+    // Reverse comparison order for descending sort
     return compare(bkey, akey);
 }
 
@@ -508,6 +561,8 @@ export function isLessThanOrEqualTo(comp, val) {
  * @returns {number}
  */
 export function compare(a, b) {
+    // Use locale-aware string comparison for better international support
+    // This handles accented characters and different alphabets correctly
     if (typeof a === 'string') {
         return a.localeCompare(b);
     } else if (a < b) {
