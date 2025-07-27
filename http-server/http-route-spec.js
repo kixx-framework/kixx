@@ -103,11 +103,15 @@ export default class HttpRouteSpec {
     assignMiddleware(middleware, handlers, errorHandlers, parentName, routeIndex) {
         const reportingName = `${ parentName }[${ routeIndex }]:${ this.name }`;
 
+        // Transform middleware references into composed functions
+        // [name, options] tuples become actual middleware instances
         for (let i = 0; i < this.inboundMiddleware.length; i += 1) {
             const def = this.inboundMiddleware[i];
             if (Array.isArray(def)) {
                 const [ name ] = def;
                 assert(middleware.has(name), `Unknown inbound middleware: ${ name } (in ${ reportingName })`);
+                // Replace the middleware definition with the composed function
+                // This mutates the array in place to avoid multiple composition calls
                 this.inboundMiddleware[i] = composeMiddleware(middleware, def);
             }
         }
@@ -130,6 +134,8 @@ export default class HttpRouteSpec {
             }
         }
 
+        // Recursively assign middleware to nested routes and targets
+        // This ensures the entire route tree is properly configured
         if (Array.isArray(this.routes)) {
             for (let i = 0; i < this.routes.length; i += 1) {
                 const route = this.routes[i];
@@ -153,25 +159,27 @@ export default class HttpRouteSpec {
      * @returns {HttpRouteSpec} A new HttpRouteSpec instance representing the merged route.
      */
     mergeParent(parent) {
-        // Combine the parent and child route names.
         const name = `${ parent.name }:${ this.name }`;
 
         let pattern;
-        // If the parent pattern is a wildcard, use the child pattern.
+        // Wildcard parent patterns should not constrain child patterns
+        // This allows mounting entire route trees at any path
         if (parent.pattern === '*') {
             pattern = this.pattern;
         } else {
-            // Concatenate the pattern strings together, and remove any consecutive slashes.
+            // Remove consecutive slashes to handle cases like "/api/" + "/users"
+            // Without this, we'd get "/api//users" which breaks path matching
             pattern = (parent.pattern + this.pattern).replace(/\/+/g, '/');
         }
 
-        // Inbound middleware is invoked from the outside in.
+        // Middleware execution order matters for proper request/response flow:
+        // Inbound: parent -> child (outside-in) for authentication, parsing, etc.
         const inboundMiddleware = parent.inboundMiddleware.concat(this.inboundMiddleware);
 
-        // Outbound middleware is invoked from the inside out.
+        // Outbound: child -> parent (inside-out) for response transformation
         const outboundMiddleware = this.outboundMiddleware.concat(parent.outboundMiddleware);
 
-        // Error handlers are invoked from the inside out.
+        // Error handlers: child -> parent (inside-out) so specific handlers run first
         const errorHandlers = this.errorHandlers.concat(parent.errorHandlers);
 
         return new HttpRouteSpec({
@@ -196,6 +204,8 @@ export default class HttpRouteSpec {
 
         let patternMatcher;
         if (this.pattern === '*') {
+            // Wildcard patterns match everything and don't extract params
+            // Using a function instead of PathToRegexp avoids regex overhead
             patternMatcher = function match() {
                 return { params: {} };
             };
@@ -226,6 +236,7 @@ export default class HttpRouteSpec {
      * @throws {AssertionError} If validation fails.
      */
     static validateAndCreate(spec, parentName, routeIndex) {
+        // Build hierarchical name for error reporting
         let reportingName = spec.name
             ? `${ parentName }[${ routeIndex }]:${ spec.name }`
             : `${ parentName }[${ routeIndex }]`;
@@ -234,11 +245,14 @@ export default class HttpRouteSpec {
         const outboundMiddleware = spec.outboundMiddleware || [];
         const errorHandlers = spec.errorHandlers || [];
 
+        // Validate route pattern
         let pattern;
         if (spec.pattern === '*') {
             pattern = '*';
         } else {
             try {
+                // PathToRegexp.match will throw if pattern syntax is invalid
+                // Testing here prevents runtime errors when routes are used
                 PathToRegexp.match(spec.pattern);
                 pattern = spec.pattern;
             } catch (cause) {
@@ -249,10 +263,13 @@ export default class HttpRouteSpec {
             }
         }
 
+        // Use pattern as name if no explicit name provided
+        // This ensures every route has a unique identifier
         const name = spec.name || pattern;
 
         reportingName = `${ parentName }[${ routeIndex }]:${ name }`;
 
+        // Validate middleware arrays and their contents
         assertArray(
             inboundMiddleware,
             `route.inboundMiddleware must be an Array (in ${ reportingName })`
@@ -268,6 +285,8 @@ export default class HttpRouteSpec {
             `route.errorHandlers must be an Array (in ${ reportingName })`
         );
 
+        // Middleware can be either a function or [name, options] tuple
+        // Tuples allow parameterized middleware instances
         for (const def of inboundMiddleware) {
             if (!isFunction(def)) {
                 assertArray(def, `route.inboundMiddleware[] must be an Array (in ${ reportingName })`);
@@ -292,6 +311,8 @@ export default class HttpRouteSpec {
             }
         }
 
+        // Routes must define either targets (leaf nodes) or nested routes (branches)
+        // Mixing both would create ambiguous routing behavior
         assert(
             spec.routes || spec.targets,
             `route.routes or route.targets are required (in ${ reportingName })`
@@ -305,7 +326,8 @@ export default class HttpRouteSpec {
         let newRoutes = null;
         if (spec.routes) {
             assertArray(spec.routes, `route.routes must be an Array (in ${ reportingName })`);
-            // Copy the routes over to a new Array since we're going to be mutating them during the validation process.
+            // Create new array to avoid mutating the original spec
+            // Validation process transforms the nested structures
             newRoutes = spec.routes.map((routeSpec, i) => {
                 return this.validateAndCreate(routeSpec, reportingName, i);
             });
@@ -314,7 +336,8 @@ export default class HttpRouteSpec {
         let newTargets = null;
         if (spec.targets) {
             assertArray(spec.targets, `route.targets must be an Array (in ${ reportingName })`);
-            // Copy the targets over to a new Array since we're going to be mutating them during the validation process.
+            // Create new array to avoid mutating the original spec
+            // Validation process transforms the nested structures
             newTargets = spec.targets.map((targetSpec, i) => {
                 return HttpTargetSpec.validateAndCreate(targetSpec, reportingName, i);
             });
@@ -332,8 +355,18 @@ export default class HttpRouteSpec {
     }
 }
 
+/**
+ * Creates a middleware instance by calling a factory function with options.
+ * This allows middleware to be configured per-route rather than globally.
+ *
+ * @param {Map<string, Function>} middleware - Map of middleware factory functions
+ * @param {Array} def - Tuple of [middlewareName, options]
+ * @returns {Function} Configured middleware instance
+ */
 function composeMiddleware(middleware, def) {
     const [ name, options ] = def;
     const factory = middleware.get(name);
+    // Factory pattern allows each route to have its own middleware configuration
+    // e.g., different rate limits, auth requirements, or cache settings
     return factory(options);
 }

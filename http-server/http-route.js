@@ -48,6 +48,8 @@ export default class HttpRoute {
         this.#targets = targets;
         this.#errorHandlers = errorHandlers;
 
+        // Make route name immutable to prevent accidental modification
+        // that could break route lookup in parent collections
         Object.defineProperties(this, {
             name: {
                 enumerable: true,
@@ -63,16 +65,19 @@ export default class HttpRoute {
      * @returns {Array<string>} Array of allowed HTTP methods (e.g., ['GET', 'POST']).
      */
     get allowedMethods() {
-        // Use a Set to ensure uniqueness (de-duplicate).
+        // Use Set for automatic de-duplication since multiple targets
+        // might handle the same HTTP method (e.g., different middleware chains)
         const allowedMethods = new Set();
 
+        // Aggregate methods from all targets - a route supports a method
+        // if ANY of its targets can handle it
         for (const target of this.#targets) {
             for (const method of target.allowedMethods) {
                 allowedMethods.add(method);
             }
         }
 
-        // Return an Array.
+        // Convert back to Array for consistent API with other collections
         return Array.from(allowedMethods);
     }
 
@@ -87,6 +92,9 @@ export default class HttpRoute {
         const res = this.#matchPattern(pathname);
 
         if (res) {
+            // Pattern matcher returns { params, ...otherData } but we only
+            // expose params to maintain abstraction - consumers don't need
+            // to know about the internal matching implementation details
             return res.params;
         }
 
@@ -102,6 +110,9 @@ export default class HttpRoute {
     findTargetForRequest(request) {
         const { method } = request;
 
+        // Return first matching target - order matters here as targets
+        // are expected to be sorted by specificity during route construction
+        // (e.g., authenticated endpoints before public ones)
         for (const target of this.#targets) {
             if (target.isMethodAllowed(method)) {
                 return target;
@@ -122,15 +133,23 @@ export default class HttpRoute {
      * @returns {HttpResponse|boolean} The new response if handled, or false.
      */
     async handleError(context, request, response, error) {
+        // Try error handlers in order until one successfully handles the error
+        // This allows for cascading error handling strategies (specific to generic)
         for (const func of this.#errorHandlers) {
+            // Sequential execution required - handlers may modify shared state
+            // or expect previous handlers to have completed
             // eslint-disable-next-line no-await-in-loop
             const newResponse = await func(context, request, response, error);
 
             if (newResponse) {
+                // Handler successfully processed the error by returning a response
+                // Stop processing and let this handler's response take precedence
                 return newResponse;
             }
+            // Falsy return means "I can't handle this error, try next handler"
         }
 
+        // No handler could process this error - propagate to parent error handling
         return false;
     }
 }
