@@ -96,10 +96,17 @@ export default class Claude {
             try {
                 response = JSON.parse(body);
             } catch (cause) {
-                const error = new WrappedError('failed to parse response body JSON', { cause, statusCode });
+                const error = new WrappedError('failed to parse error response JSON', { cause, statusCode });
                 return { requestId, error, statusCode, body };
             }
             return { requestId, statusCode, error: response, response: null };
+        }
+
+        try {
+            response = JSON.parse(body);
+        } catch (cause) {
+            const error = new WrappedError('failed to parse response body JSON', { cause, statusCode });
+            return { requestId, error, statusCode, body };
         }
 
         return {
@@ -123,7 +130,7 @@ export default class Claude {
             try {
                 response = JSON.parse(body);
             } catch (cause) {
-                const error = new WrappedError('failed to parse error response body JSON', { cause, statusCode });
+                const error = new WrappedError('failed to parse error response JSON', { cause, statusCode });
                 return { requestId, error, statusCode, body };
             }
             return { requestId, statusCode, error: response, response: null };
@@ -161,7 +168,7 @@ export default class Claude {
                 },
             };
 
-            const request = httpClient.get(url, options, (response) => {
+            const request = httpClient.request(url, options, (response) => {
                 const chunks = [];
 
                 response.on('error', (cause) => {
@@ -211,7 +218,7 @@ export default class Claude {
                 },
             };
 
-            const request = httpClient.get(url, options, (response) => {
+            const request = httpClient.request(url, options, (response) => {
                 const chunks = [];
 
                 response.on('error', (cause) => {
