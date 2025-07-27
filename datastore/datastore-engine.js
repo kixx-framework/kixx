@@ -1,3 +1,16 @@
+/**
+ * @fileoverview Document storage engine with file-based persistence and view indexing
+ *
+ * This module provides a simple document database that stores JSON documents as files
+ * on disk, with support for CouchDB-style views and efficient key-based queries.
+ * Documents are loaded into memory for fast access, making this suitable for
+ * small to medium datasets.
+ *
+ * @module datastore-engine
+ * @author Your Team
+ * @since 1.0.0
+ */
+
 import path from 'node:path';
 import * as fileSystem from './file-system.js';
 
@@ -13,74 +26,108 @@ import {
 // ALPHA (\u0000) represents the lowest possible string in JavaScript's sort order
 // OMEGA (\uffff) represents a very high value (though not technically the highest)
 // These allow open-ended queries like "all keys from 'foo' onwards"
+// We use \uffff instead of the true max (\u{10FFFF}) for compatibility
+// with systems that may not handle astral plane characters correctly
 const ALPHA = '\u0000';
 const OMEGA = '\uffff';
 
 
 /**
- * DatastoreEngine
- * ===============
+ * @typedef {Object} DocumentResult
+ * @property {string} key - Document key
+ * @property {Object|null} document - Document object or null if not found
+ */
+
+/**
+ * @typedef {Object} ViewSource
+ * @property {Function} map - Map function that receives (document, emit) parameters
+ */
+
+/**
+ * @typedef {Object} IndexItem
+ * @property {string} key - Index key (same as documentKey for document queries, or emitted key for views)
+ * @property {string} documentKey - Original document key
+ * @property {*} [value] - Emitted value (only present for view queries)
+ * @property {Object} [document] - Full document object (only when includeDocuments is true)
+ */
+
+/**
+ * @typedef {Object} QueryOptions
+ * @property {string} [key] - Exact key to match (overrides startKey/endKey)
+ * @property {boolean} [descending=false] - Whether to sort results in descending order
+ * @property {number} inclusiveStartIndex - Zero-based start index for pagination
+ * @property {number} limit - Maximum number of results to return
+ * @property {boolean} [includeDocuments=false] - Whether to include full document objects
+ * @property {string} [startKey] - Inclusive start of key range
+ * @property {string} [endKey] - Inclusive end of key range
+ */
+
+/**
+ * @typedef {Object} QueryResult
+ * @property {number|null} exclusiveEndIndex - Index for next page, or null if no more results
+ * @property {IndexItem[]} items - Array of matching items
+ */
+
+/**
+ * File-based document storage engine with in-memory indexing
  *
- * The DatastoreEngine class provides a simple, file-based document store with
- * support for views, key-based queries, and document management. Documents are
- * stored as JSON files in a specified directory, and views can be registered
- * to enable map/reduce-style querying.
+ * @example
+ * // Initialize and load documents
+ * const engine = new DatastoreEngine({ directory: './data' });
+ * await engine.loadDocuments();
  *
- * Core Features:
- *   - Load and manage documents from a directory on disk
- *   - Register and query views for custom indexing
- *   - Query documents by key range, with support for pagination and sorting
- *   - Add, update, and delete documents
- *   - In-memory indexing for fast queries
+ * @example
+ * // Store and retrieve documents
+ * await engine.setItem('user:123', { name: 'Alice', role: 'admin' });
+ * const { document } = engine.getItem('user:123');
  *
- * Usage Example:
- *   const engine = new DatastoreEngine({ directory: '/data/db' });
- *   await engine.loadDocuments();
- *   await engine.setItem('foo', { name: 'bar' });
- *   const { document } = engine.getItem('foo');
- *   await engine.deleteItem('foo');
+ * @example
+ * // Query documents by key range
+ * const results = engine.queryKeys({
+ *   startKey: 'user:',
+ *   endKey: 'user:\uffff',
+ *   inclusiveStartIndex: 0,
+ *   limit: 10,
+ *   includeDocuments: true
+ * });
  */
 export default class DatastoreEngine {
     /**
      * @private
      * @type {string|null}
-     * Directory where document files are stored.
      */
     #directory = null;
 
     /**
      * @private
      * @type {Object}
-     * File system abstraction for reading/writing files.
      */
     #fileSystem = fileSystem;
 
     /**
      * @private
-     * @type {Map<string, Object>}
-     * Registered views for custom indexing.
+     * @type {Map<string, ViewSource>}
      */
     #views = new Map();
 
     /**
      * @private
      * @type {Map<string, Object>}
-     * In-memory map of document key to document object.
      */
     #documentsMap = new Map();
 
     /**
-     * Construct a new DatastoreEngine.
+     * Creates a new DatastoreEngine instance
      *
-     * @param {Object} options
-     * @param {string} options.directory - Directory for document storage (required)
-     * @param {Object} [options.fileSystem] - Optional file system abstraction
+     * @param {Object} options - Configuration options
+     * @param {string} options.directory - Directory path for document storage
+     * @param {Object} [options.fileSystem] - Custom file system implementation for testing
+     * @throws {AssertionError} When directory is not a non-empty string
      */
     constructor(options = {}) {
         assertNonEmptyString(options.directory);
 
         // Allow dependency injection of file system for testing
-        // This enables mocking file operations without touching real disk
         if (options.fileSystem) {
             this.#fileSystem = options.fileSystem;
         }
@@ -89,40 +136,50 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Check if a view is registered.
-     * @param {string} id - View ID
-     * @returns {boolean}
+     * Checks if a view is registered
+     * @param {string} id - View identifier
+     * @returns {boolean} True if the view exists
      */
     hasView(id) {
         return this.#views.has(id);
     }
 
     /**
-     * Register a view for custom indexing.
-     * @param {string} id - View ID
-     * @param {Object} source - View source (must have a .map function)
+     * Registers a view for custom indexing
+     *
+     * @param {string} id - Unique view identifier
+     * @param {ViewSource} source - View source containing map function
+     *
+     * @example
+     * // Register a view that indexes documents by type
+     * engine.setView('by_type', {
+     *   map: (doc, emit) => {
+     *     if (doc.type) emit(doc.type, null);
+     *   }
+     * });
      */
     setView(id, source) {
-        // Views are CouchDB-style map functions that emit key-value pairs
-        // They're stored but not executed until a query needs them
         this.#views.set(id, source);
     }
 
     /**
-     * Load all documents from the storage directory into memory.
-     * Assumes the caller has acquired any necessary locks.
+     * Loads all documents from the storage directory into memory
+     *
+     * @async
      * @returns {Promise<void>}
+     * @throws {Error} When directory cannot be read or contains invalid JSON files
+     *
+     * @example
+     * const engine = new DatastoreEngine({ directory: './data' });
+     * await engine.loadDocuments();
+     * // Engine is now ready for queries
      */
     async loadDocuments() {
         // WARNING: This method assumes the caller has acquired a read/write lock
-        // Loading documents without proper locking can lead to race conditions
-        // where documents are modified on disk while being loaded
         const fileNames = await this.#fileSystem.readDocumentDirectory(this.#directory);
 
         // Load all documents in parallel for better performance
-        // On large directories this significantly reduces startup time
         const promises = fileNames.map((filename) => {
-            // Document keys are URL-encoded in filenames to handle special characters
             const encodedKey = path.basename(filename, '.json');
             const key = decodeURIComponent(encodedKey);
             return this.loadDocument(key);
@@ -132,60 +189,65 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Get a document by key.
-     * @param {string} key
-     * @returns {{ key: string, document: Object|null }}
+     * Retrieves a document by its key
+     * @param {string} key - Document key
+     * @returns {DocumentResult} Object containing the key and document (or null)
      */
     getItem(key) {
         let document = null;
         if (this.#documentsMap.has(key)) {
             document = this.#documentsMap.get(key);
         }
-        // Always return consistent shape even when document doesn't exist
-        // This simplifies null checking for callers
         return { key, document };
     }
 
     /**
-     * Add or update a document by key.
-     * @param {string} key
-     * @param {Object} document
-     * @returns {Promise<{ key: string, document: Object }>}
+     * Stores or updates a document
+     *
+     * @async
+     * @param {string} key - Document key
+     * @param {Object} document - Document to store
+     * @returns {Promise<DocumentResult>} The stored document
+     * @throws {Error} When file cannot be written to disk
      */
     async setItem(key, document) {
         // Write to disk first before updating in-memory state
-        // This ensures data durability - if the process crashes after
-        // the write, the document is still persisted
         await this.writeDocument(key, document);
         this.#documentsMap.set(key, document);
         return { key, document };
     }
 
     /**
-     * Delete a document by key.
-     * @param {string} key
-     * @returns {Promise<{ key: string }>}
+     * Removes a document from the datastore
+     *
+     * @async
+     * @param {string} key - Document key to delete
+     * @returns {Promise<{key: string}>} Object containing the deleted key
+     * @throws {Error} When file cannot be removed from disk
      */
     async deleteItem(key) {
         // Remove from disk first to ensure consistency
-        // If we removed from memory first and then crashed,
-        // the document would reappear on next load
         await this.removeDocument(key);
         this.#documentsMap.delete(key);
         return { key };
     }
 
     /**
-     * Query document keys with optional range, pagination, and sorting.
-     * @param {Object} options
-     * @param {string} [options.key] - Exact key to match (overrides startKey/endKey)
-     * @param {boolean} [options.descending] - Sort order
-     * @param {number} options.inclusiveStartIndex - Start index (inclusive)
-     * @param {number} options.limit - Max number of results
-     * @param {boolean} [options.includeDocuments] - Include document objects in results
-     * @param {string} [options.startKey] - Range start key
-     * @param {string} [options.endKey] - Range end key
-     * @returns {Object} { exclusiveEndIndex, items }
+     * Queries documents by key range with pagination support
+     *
+     * @param {QueryOptions} options - Query parameters
+     * @returns {QueryResult} Paginated query results
+     * @throws {AssertionError} When pagination parameters are invalid
+     *
+     * @example
+     * // Get all documents with keys starting with 'user:'
+     * const results = engine.queryKeys({
+     *   startKey: 'user:',
+     *   endKey: 'user:\uffff',
+     *   inclusiveStartIndex: 0,
+     *   limit: 20,
+     *   includeDocuments: true
+     * });
      */
     queryKeys(options) {
         const {
@@ -198,26 +260,24 @@ export default class DatastoreEngine {
 
         let { startKey, endKey } = options;
 
-        // Validate pagination parameters to prevent runtime errors
+        // Validate pagination parameters
         assertNumberNotNaN(inclusiveStartIndex);
         assert(inclusiveStartIndex >= 0);
         assertNumberNotNaN(limit);
         assert(limit > 0);
 
         // Build index in requested sort order
-        // Index is rebuilt on each query to ensure it reflects current state
         const sortedList = descending
             ? this.buildDescendingKeyIndex()
             : this.buildAscendingKeyIndex();
 
-        // Exact key match overrides range query
+        // Handle different query modes
         if (key) {
             startKey = key;
             endKey = key;
         }
 
         // Default to full range if bounds not specified
-        // This allows queries like "all documents" or "all documents from 'foo' onwards"
         if (isUndefined(startKey)) {
             startKey = ALPHA;
         }
@@ -234,8 +294,6 @@ export default class DatastoreEngine {
         });
 
         // Optionally hydrate results with full document objects
-        // This is separated from the index query for performance -
-        // some queries only need keys, not full documents
         if (includeDocuments) {
             for (let i = 0; i < results.items.length; i += 1) {
                 const item = results.items[i];
@@ -248,10 +306,21 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Query a registered view with optional range, pagination, and sorting.
-     * @param {string} viewId - Registered view ID
-     * @param {Object} options - Same as queryKeys
-     * @returns {Object} { exclusiveEndIndex, items }
+     * Queries a view with key range and pagination support
+     *
+     * @param {string} viewId - Registered view identifier
+     * @param {QueryOptions} options - Query parameters
+     * @returns {QueryResult} Paginated view query results
+     * @throws {AssertionError} When view doesn't exist or pagination parameters are invalid
+     *
+     * @example
+     * // Query documents by type using a view
+     * const results = engine.queryView('by_type', {
+     *   key: 'user',
+     *   inclusiveStartIndex: 0,
+     *   limit: 10,
+     *   includeDocuments: true
+     * });
      */
     queryView(viewId, options) {
         const {
@@ -274,13 +343,11 @@ export default class DatastoreEngine {
         assert(limit > 0);
 
         // Build view index in requested sort order
-        // Views can emit multiple entries per document, so the index
-        // may be larger than the document count
         const sortedList = descending
             ? this.buildDescendingViewIndex(view)
             : this.buildAscendingViewIndex(view);
 
-        // Exact key match overrides range query
+        // Handle different query modes
         if (key) {
             startKey = key;
             endKey = key;
@@ -303,7 +370,6 @@ export default class DatastoreEngine {
         });
 
         // Hydrate with documents if requested
-        // Note: multiple view entries may reference the same document
         if (includeDocuments) {
             for (let i = 0; i < results.items.length; i += 1) {
                 const item = results.items[i];
@@ -316,10 +382,10 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Write a document to disk.
      * @private
-     * @param {string} key
-     * @param {Object} document
+     * @async
+     * @param {string} key - Document key
+     * @param {Object} document - Document to write
      * @returns {Promise<void>}
      */
     async writeDocument(key, document) {
@@ -328,9 +394,9 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Remove a document file from disk.
      * @private
-     * @param {string} key
+     * @async
+     * @param {string} key - Document key
      * @returns {Promise<void>}
      */
     async removeDocument(key) {
@@ -339,36 +405,31 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Load a document from disk and add it to the in-memory map.
      * @private
-     * @param {string} key
+     * @async
+     * @param {string} key - Document key
      * @returns {Promise<void>}
      */
     async loadDocument(key) {
         const filepath = this.getDocumentFilepath(key);
         const document = await this.#fileSystem.readDocumentFile(filepath);
-        // Documents are cached in memory for fast access
-        // This trades memory for speed - suitable for small to medium datasets
         this.#documentsMap.set(key, document);
     }
 
     /**
-     * Get the file path for a document key.
      * @private
-     * @param {string} key
-     * @returns {string}
+     * @param {string} key - Document key
+     * @returns {string} Full file path
      */
     getDocumentFilepath(key) {
-        // URL-encode keys to handle special characters that aren't
-        // valid in filenames (e.g., '/', ':', '*')
+        // URL-encode keys to handle special characters
         const filename = `${ encodeURIComponent(key) }.json`;
         return path.join(this.#directory, filename);
     }
 
     /**
-     * Build an ascending-sorted index of all document keys.
      * @private
-     * @returns {Array<Object>}
+     * @returns {IndexItem[]} Sorted index
      */
     buildAscendingKeyIndex() {
         const index = this.mapDocumentKeys();
@@ -377,9 +438,8 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Build a descending-sorted index of all document keys.
      * @private
-     * @returns {Array<Object>}
+     * @returns {IndexItem[]} Sorted index
      */
     buildDescendingKeyIndex() {
         const index = this.mapDocumentKeys();
@@ -388,10 +448,9 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Build an ascending-sorted index for a view.
      * @private
-     * @param {Object} view
-     * @returns {Array<Object>}
+     * @param {ViewSource} view - View to build index for
+     * @returns {IndexItem[]} Sorted index
      */
     buildAscendingViewIndex(view) {
         const index = this.mapViewDocuments(view);
@@ -400,10 +459,9 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Build a descending-sorted index for a view.
      * @private
-     * @param {Object} view
-     * @returns {Array<Object>}
+     * @param {ViewSource} view - View to build index for
+     * @returns {IndexItem[]} Sorted index
      */
     buildDescendingViewIndex(view) {
         const index = this.mapViewDocuments(view);
@@ -412,15 +470,12 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Map all document keys to index objects.
      * @private
-     * @returns {Array<Object>}
+     * @returns {IndexItem[]} Array of index items
      */
     mapDocumentKeys() {
         const index = [];
         for (const key of this.#documentsMap.keys()) {
-            // Freeze index items to prevent accidental mutation
-            // which could corrupt query results
             index.push(Object.freeze({
                 key,
                 documentKey: key,
@@ -430,20 +485,16 @@ export default class DatastoreEngine {
     }
 
     /**
-     * Map all documents through a view's map function to index objects.
      * @private
-     * @param {Object} view
-     * @returns {Array<Object>}
+     * @param {ViewSource} view - View containing map function
+     * @returns {IndexItem[]} Array of index items emitted by the view
      */
     mapViewDocuments(view) {
         const index = [];
 
         for (const [ documentKey, document ] of this.#documentsMap) {
-            // CouchDB-style map function that can emit multiple key-value pairs
-            // per document. This enables complex indexing scenarios like
-            // indexing by multiple fields or creating compound keys
+            // CouchDB-style map function that can emit multiple entries per document
             view.map(document, function emit(key, value) {
-                // Freeze to prevent mutation of index entries
                 index.push(Object.freeze({
                     key,
                     value,
@@ -457,14 +508,15 @@ export default class DatastoreEngine {
 }
 
 /**
- * Get a slice of index items from a sorted list, left-to-right, within a key range.
- * @param {Array<Object>} sortedList
- * @param {Object} options
- * @param {string} options.startKey
- * @param {string} options.endKey
- * @param {number} options.inclusiveStartIndex
- * @param {number} options.limit
- * @returns {{ exclusiveEndIndex: number|null, items: Array<Object> }}
+ * Extracts a paginated slice of items from a sorted index within a key range
+ *
+ * @param {IndexItem[]} sortedList - Pre-sorted array of index items
+ * @param {Object} options - Query options
+ * @param {string} options.startKey - Inclusive start of key range
+ * @param {string} options.endKey - Inclusive end of key range
+ * @param {number} options.inclusiveStartIndex - Zero-based pagination offset
+ * @param {number} options.limit - Maximum items to return
+ * @returns {QueryResult} Paginated results with continuation index
  */
 export function getIndexItemsLeftToRight(sortedList, options) {
     const {
@@ -489,15 +541,14 @@ export function getIndexItemsLeftToRight(sortedList, options) {
         const item = sortedList[index];
         const { key } = item;
 
-        // Only include items within the specified key range
+        // Check if current item falls within the requested key range
         if (isGreaterThanOrEqualTo(key, startKey) && isLessThanOrEqualTo(key, endKey)) {
             items.push(item);
         }
 
         // Stop when we've collected enough items
         if (items.length === limit) {
-            // Set continuation point for next page of results
-            // null indicates we've reached the end of available data
+            // Set continuation point for next page
             if (index < (sortedList.length - 1)) {
                 exclusiveEndIndex = index + 1;
             }
@@ -510,10 +561,10 @@ export function getIndexItemsLeftToRight(sortedList, options) {
 }
 
 /**
- * Sort comparator for ascending order by key.
- * @param {Object} a
- * @param {Object} b
- * @returns {number}
+ * Comparator function for sorting index items in ascending order by key
+ * @param {IndexItem} a - First item
+ * @param {IndexItem} b - Second item
+ * @returns {number} Negative if a < b, positive if a > b, zero if equal
  */
 export function sortIndexListAscending(a, b) {
     const akey = a.key;
@@ -522,47 +573,45 @@ export function sortIndexListAscending(a, b) {
 }
 
 /**
- * Sort comparator for descending order by key.
- * @param {Object} a
- * @param {Object} b
- * @returns {number}
+ * Comparator function for sorting index items in descending order by key
+ * @param {IndexItem} a - First item
+ * @param {IndexItem} b - Second item
+ * @returns {number} Positive if a < b, negative if a > b, zero if equal
  */
 export function sortIndexListDescending(a, b) {
     const akey = a.key;
     const bkey = b.key;
-    // Reverse comparison order for descending sort
     return compare(bkey, akey);
 }
 
 /**
- * Compare if comp >= val.
- * @param {*} comp
- * @param {*} val
- * @returns {boolean}
+ * Tests if comp is greater than or equal to val using locale-aware comparison
+ * @param {*} comp - Value to compare
+ * @param {*} val - Value to compare against
+ * @returns {boolean} True if comp >= val
  */
 export function isGreaterThanOrEqualTo(comp, val) {
     return compare(comp, val) >= 0;
 }
 
 /**
- * Compare if comp <= val.
- * @param {*} comp
- * @param {*} val
- * @returns {boolean}
+ * Tests if comp is less than or equal to val using locale-aware comparison
+ * @param {*} comp - Value to compare
+ * @param {*} val - Value to compare against
+ * @returns {boolean} True if comp <= val
  */
 export function isLessThanOrEqualTo(comp, val) {
     return compare(comp, val) <= 0;
 }
 
 /**
- * Generic comparison function for keys.
- * @param {*} a
- * @param {*} b
- * @returns {number}
+ * Compares two values with locale-aware string comparison
+ * @param {*} a - First value
+ * @param {*} b - Second value
+ * @returns {number} -1 if a < b, 1 if a > b, 0 if equal
  */
 export function compare(a, b) {
-    // Use locale-aware string comparison for better international support
-    // This handles accented characters and different alphabets correctly
+    // Use locale-aware string comparison for international support
     if (typeof a === 'string') {
         return a.localeCompare(b);
     } else if (a < b) {
