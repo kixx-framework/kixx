@@ -1,7 +1,24 @@
+/**
+ * @fileoverview Path management utilities for Kixx applications
+ *
+ * This module provides centralized path resolution and management for all
+ * major application resources including configuration, routes, templates,
+ * plugins, and data stores. It supports plugin discovery and flexible
+ * file system abstraction for testing.
+ */
+
 import path from 'node:path';
 import { assertNonEmptyString } from '../assertions/mod.js';
 import * as fileSystem from '../lib/file-system.js';
 
+/**
+ * @typedef {Object} PluginMetadata
+ * @property {string} directory - Absolute path to the plugin's root directory
+ * @property {string} filepath - Absolute path to the main plugin module file
+ * @property {string} middlewareDirectory - Absolute path to plugin middleware directory
+ * @property {string} requestHandlerDirectory - Absolute path to plugin request handlers directory
+ * @property {string} errorHandlerDirectory - Absolute path to plugin error handlers directory
+ */
 
 /**
  * Paths
@@ -35,16 +52,16 @@ export default class Paths {
     #fs = null;
 
     /**
-     * Construct a new Paths instance.
-     *
-     * @param {string} applicationDirectory - The root directory of the application.
-     * @param {Object} [options] - Optional settings.
-     * @param {Object} [options.fileSystem] - Optional file system abstraction.
-     * @throws {AssertionError} If applicationDirectory is not a non-empty string.
+     * Creates a new Paths instance with resolved absolute paths for all application resources
+     * @param {string} applicationDirectory - The root directory of the application
+     * @param {Object} [options] - Configuration options
+     * @param {Object} [options.fileSystem] - Custom file system abstraction for testing
+     * @throws {AssertionError} When applicationDirectory is not a non-empty string
      */
     constructor(applicationDirectory, options = {}) {
         assertNonEmptyString(applicationDirectory, 'applicationDirectory must be a non-empty string');
 
+        // Inject custom file system for testing or use default
         this.#fs = options.fileSystem || fileSystem;
 
         /**
@@ -53,6 +70,7 @@ export default class Paths {
          */
         this.app_directory = applicationDirectory;
 
+        // Configuration and routing paths
         /**
          * File path to the application's virtual hosts root configuration file.
          * @type {string}
@@ -71,6 +89,7 @@ export default class Paths {
          */
         this.public_directory = path.join(this.app_directory, 'public');
 
+        // Page and template system paths
         /**
          * File path to the site-wide page data JSON file.
          * @type {string}
@@ -102,6 +121,7 @@ export default class Paths {
          */
         this.partials_directory = path.join(this.app_directory, 'templates', 'partials');
 
+        // Plugin and extension system paths
         /**
          * Directory containing plugin modules.
          * @type {string}
@@ -114,6 +134,7 @@ export default class Paths {
          */
         this.commands_directory = path.join(this.app_directory, 'commands');
 
+        // Data storage paths - all under 'data' for logical organization
         /**
          * Directory containing data files.
          * @type {string}
@@ -140,32 +161,44 @@ export default class Paths {
     }
 
     /**
-     * Discovers available plugins in the plugins directory.
+     * Discovers and returns metadata for all available plugins in the plugins directory
      *
-     * Each plugin is expected to be a directory containing a file ending with 'plugin.js'.
-     * Returns an array of plugin metadata objects, each with:
-     *   - directory: The plugin's root directory.
-     *   - filepath: The main plugin module file.
-     *   - middlewareDirectory: Directory for plugin middleware modules.
-     *   - requestHandlerDirectory: Directory for plugin request handlers.
-     *   - errorHandlerDirectory: Directory for plugin error handlers.
+     * Scans the plugins directory for subdirectories containing files ending with 'plugin.js'.
+     * Each discovered plugin includes standardized paths for middleware, request handlers,
+     * and error handlers based on Kixx plugin architecture conventions.
      *
-     * @returns {Promise<Array<Object>>} Array of plugin metadata objects.
+     * @async
+     * @returns {Promise<PluginMetadata[]>} Array of plugin metadata objects with directory paths
+     * @throws {Error} When plugins directory cannot be read or accessed
+     *
+     * @example
+     * const paths = new Paths('/my/app');
+     * const plugins = await paths.getPlugins();
+     * console.log(plugins[0].filepath); // '/my/app/plugins/auth/auth-plugin.js'
      */
     async getPlugins() {
+        // Get all subdirectories in the plugins folder
         const pluginDirectories = await this.#fs.readDirectory(this.plugins_directory);
 
         const plugins = [];
 
+        // Process each potential plugin directory
         for (const pluginDirectory of pluginDirectories) {
+            // Read contents of each plugin directory to find the main plugin file
             // eslint-disable-next-line no-await-in-loop
             const entries = await this.#fs.readDirectory(pluginDirectory);
+
+            // Kixx plugin convention: main file must end with 'plugin.js'
+            // This allows flexibility in naming (e.g., 'auth-plugin.js', 'main-plugin.js')
             const filepath = entries.find((entry) => entry.endsWith('plugin.js'));
 
             if (filepath) {
+                // Build plugin metadata with standardized directory structure
+                // Plugin architecture expects these specific subdirectories
                 plugins.push({
                     directory: pluginDirectory,
                     filepath,
+                    // Standard plugin subdirectories for different handler types
                     middlewareDirectory: path.join(pluginDirectory, 'middleware'),
                     requestHandlerDirectory: path.join(pluginDirectory, 'request-handlers'),
                     errorHandlerDirectory: path.join(pluginDirectory, 'error-handlers'),
@@ -177,13 +210,23 @@ export default class Paths {
     }
 
     /**
-     * Creates a Paths instance from a configuration file path.
+     * Creates a Paths instance using a configuration file's directory as the application root
      *
-     * @param {string} configFilepath - The absolute path to the application's config file.
-     * @param {Object} [options] - Optional settings.
-     * @returns {Paths} A new Paths instance rooted at the config file's directory.
+     * Convenience factory method that extracts the parent directory from a config file path
+     * and uses it as the application directory for the new Paths instance.
+     *
+     * @param {string} configFilepath - Absolute path to the application's configuration file
+     * @param {Object} [options] - Configuration options passed to the constructor
+     * @param {Object} [options.fileSystem] - Custom file system abstraction for testing
+     * @returns {Paths} New Paths instance rooted at the config file's directory
+     * @throws {AssertionError} When configFilepath is not a non-empty string
+     *
+     * @example
+     * const paths = Paths.fromConfigFilepath('/my/app/config.json');
+     * console.log(paths.app_directory); // '/my/app'
      */
     static fromConfigFilepath(configFilepath, options = {}) {
+        // Extract parent directory from config file path to use as app root
         return new Paths(path.dirname(configFilepath), options);
     }
 }
