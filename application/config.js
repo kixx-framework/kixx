@@ -4,40 +4,66 @@ import { assertNonEmptyString } from '../assertions/mod.js';
 import { readJSONFile } from '../lib/file-system.js';
 import deepMerge from '../lib/deep-merge.js';
 
+/**
+ * @fileoverview Application configuration management with environment-specific overrides
+ *
+ * The Config class provides a structured interface for loading, merging, and accessing
+ * application configuration data. It supports environment-specific overrides and
+ * separate secret management through JSON files.
+ */
 
 /**
- * Config
- * ======
+ * @typedef {Object} ConfigurationData
+ * @property {string} [name] - Application name
+ * @property {string} [procName] - Process name for the application
+ * @property {Object} [environments] - Environment-specific configuration overrides
+ * @property {...*} [namespace] - Additional configuration namespaces
+ */
+
+/**
+ * @typedef {Object} SecretsData
+ * @property {Object} [environments] - Environment-specific secrets
+ * @property {...*} [namespace] - Secret values organized by namespace
+ */
+
+/**
+ * Application configuration manager with environment-specific overrides and secret management.
  *
- * The Config class provides a structured interface for application configuration,
- * supporting environment-specific overrides and secret management. It extends
- * EventEmitter to allow for configuration change notifications if needed.
+ * Loads configuration from JSON files, merging environment-specific overrides and
+ * managing secrets separately from main configuration data. Extends EventEmitter
+ * to support configuration change notifications.
  *
- * Core Features:
- *   - Loads and merges configuration from a JSON file, supporting per-environment overrides.
- *   - Loads secrets from a separate `.secrets.json` file, also supporting per-environment secrets.
- *   - Provides accessors for application name, process name, namespaces, and secrets.
- *   - Validates configuration spec before instantiation.
+ * @extends EventEmitter
  *
- * Usage Example:
- *   const config = await Config.loadConfigs('/path/to/config.json', 'production');
- *   const dbConfig = config.getNamespace('database');
- *   const dbSecrets = config.getSecrets('database');
+ * @example
+ * // Load configuration for production environment
+ * const config = await Config.loadConfigs('/path/to/config.json', 'production');
+ *
+ * @example
+ * // Access configuration namespaces and secrets
+ * const dbConfig = config.getNamespace('database');
+ * const dbSecrets = config.getSecrets('database');
  */
 export default class Config extends EventEmitter {
     /**
+     * Merged configuration values from root and environment-specific settings
      * @private
-     * @type {Object}
-     * Stores the merged configuration values.
+     * @type {ConfigurationData}
      */
     #values = {};
 
+    /**
+     * Merged secrets from root and environment-specific secret files
+     * @private
+     * @type {SecretsData}
+     */
     #secrets = {};
 
     /**
-     * Construct a new Config instance.
+     * Creates a new Config instance with merged configuration and secrets
      *
-     * @param {Object} values - The merged configuration object.
+     * @param {ConfigurationData} values - The merged configuration object
+     * @param {SecretsData} secrets - The merged secrets object
      */
     constructor(values, secrets) {
         super();
@@ -46,82 +72,126 @@ export default class Config extends EventEmitter {
     }
 
     /**
-     * The application name.
-     * @returns {string}
+     * Application name from configuration
+     * @type {string}
      */
     get name() {
         return this.#values.name || 'Kixx Application';
     }
 
     /**
-     * The process name for the application.
-     * @returns {string}
+     * Process name for the application
+     * @type {string}
      */
     get procName() {
         return this.#values.procName || 'kixx';
     }
 
     /**
-     * Retrieves a configuration namespace object.
+     * Retrieves configuration values for a specific namespace
      *
-     * @param {string} namespace - The namespace to retrieve.
-     * @returns {Object} The configuration object for the namespace, or an empty object if not found.
+     * @param {string} namespace - The configuration namespace to retrieve
+     * @returns {Object} Configuration object for the namespace, empty object if namespace not found
+     *
+     * @example
+     * // Get database configuration
+     * const dbConfig = config.getNamespace('database');
+     * // Returns: { host: 'localhost', port: 5432, ... }
      */
     getNamespace(namespace) {
         return this.#values[namespace] || {};
     }
 
     /**
-     * Retrieves secrets for a given namespace.
+     * Retrieves secret values for a specific namespace
      *
-     * @param {string} namespace - The namespace for which to retrieve secrets.
-     * @returns {Object} The secrets object for the namespace, or an empty object if not found.
+     * @param {string} namespace - The secrets namespace to retrieve
+     * @returns {Object} Secrets object for the namespace, empty object if namespace not found
+     *
+     * @example
+     * // Get database secrets
+     * const dbSecrets = config.getSecrets('database');
+     * // Returns: { password: 'secret123', apiKey: '...' }
      */
     getSecrets(namespace) {
         return this.#secrets[namespace] || {};
     }
 
     /**
-     * Loads and merges configuration and secrets for a given environment.
+     * Loads and merges configuration and secrets for the specified environment
      *
-     * @param {string} filepath - Path to the main configuration JSON file.
-     * @param {string} environment - The environment name (e.g., 'production', 'development').
-     * @returns {Promise<Config>} A promise that resolves to a Config instance.
-     * @throws {AssertionError} If filepath or environment is not a non-empty string.
+     * Reads the main configuration file and optional .secrets.json file from the same
+     * directory. Environment-specific settings override root-level settings.
+     *
+     * @async
+     * @param {string} filepath - Absolute or relative path to the main configuration JSON file
+     * @param {string} environment - Environment name for configuration overrides (e.g., 'production', 'development')
+     * @returns {Promise<Config>} Resolves to a configured Config instance
+     * @throws {AssertionError} When filepath or environment is not a non-empty string
+     * @throws {Error} When configuration file cannot be read or contains invalid JSON
+     * @throws {Error} When configuration validation fails
+     *
+     * @example
+     * // Load production configuration
+     * const config = await Config.loadConfigs('./config.json', 'production');
+     *
+     * @example
+     * // Load development configuration with secrets
+     * const config = await Config.loadConfigs('/app/config/app.json', 'development');
      */
     static async loadConfigs(filepath, environment) {
         assertNonEmptyString(filepath, 'loadConfigs(); filepath is required');
         assertNonEmptyString(environment, 'loadConfigs(); environment is required');
 
+        // Load and parse the main configuration file
         const configJSON = await readJSONFile(filepath);
         const rootConfig = configJSON || {};
 
-        // Extract environment-specific config, if present.
+        // Priority order: environment config overrides root config
         const environmentConfig = rootConfig.environments?.[environment] || {};
 
-        // Remove environments property from root config to avoid merging it.
+        // Remove environments object to prevent it from appearing in final merged config
+        // This keeps the config clean and prevents accidental access to other environments
         delete rootConfig.environments;
 
-        // Load secrets from .secrets.json in the same directory.
+        // Load secrets from conventional .secrets.json file in same directory
+        // This separation keeps sensitive data out of main config files
         const rootDirectory = path.dirname(filepath);
         const secretsJSON = await readJSONFile(path.join(rootDirectory, '.secrets.json'));
         const rootSecrets = secretsJSON || {};
 
-        // Prefer environment-specific secrets, fallback to root secrets object.
+        // Environment-specific secrets take precedence over root-level secrets
+        // This allows per-environment database passwords, API keys, etc.
         const environmentSecrets = rootSecrets.environments?.[environment] || {};
 
-        // Remove environments property from secrets to avoid merging it.
+        // Remove environments object from secrets to keep final structure clean
         delete rootSecrets.environments;
 
-        // Merge root config, environment config, and secrets.
+        // Merge with environment configs taking precedence over root configs
+        // deepMerge handles nested objects properly, unlike Object.assign
         const configs = deepMerge(rootConfig, environmentConfig);
         const secrets = deepMerge(rootSecrets, environmentSecrets);
 
+        // Validate the final merged configuration meets our application requirements
+        // TODO: Implement actual validation logic in validateSpec method
         this.validateSpec(configs, secrets);
 
         return new Config(configs, secrets);
     }
 
+    /**
+     * Validates merged configuration and secrets against application requirements
+     *
+     * @static
+     * @param {ConfigurationData} configs - Merged configuration object to validate
+     * @param {SecretsData} secrets - Merged secrets object to validate
+     * @throws {Error} When required configuration fields are missing or invalid
+     *
+     * @todo Implement actual validation logic for required fields, data types, and business rules
+     */
     static validateSpec() {
+        // TODO: Implement configuration validation
+        // Should validate required fields, data types, and business rules
+        // Consider throwing descriptive errors for missing required config
     }
 }
