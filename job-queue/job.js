@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 
 import {
+    isUndefined,
     assertNonEmptyString,
     assertNumberNotNaN,
     assertValidDate,
@@ -275,7 +276,7 @@ export default class Job {
     static fromSpec(spec) {
         assertNonEmptyString(spec.methodName, 'A job must have a methodName');
 
-        if (spec.executionDate) {
+        if (!isUndefined(spec.executionDate)) {
             assertNumberNotNaN(spec.executionDate);
         }
 
