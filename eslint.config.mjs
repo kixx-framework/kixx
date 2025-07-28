@@ -32,6 +32,7 @@ export default [
                 URLSearchParams: 'readonly',
                 Headers: 'readonly',
                 // Node.js globals
+                global: 'readonly',
                 Buffer: 'readonly',
                 queueMicrotask: 'readonly',
             },
