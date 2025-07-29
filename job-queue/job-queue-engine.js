@@ -6,19 +6,14 @@
  */
 
 import path from 'node:path';
-import { WrappedError } from '../errors/mod.js';
+import { AssertionError, WrappedError } from '../errors/mod.js';
 import LockingQueue from '../lib/locking-queue.js';
 import Job from './job.js';
-
-import {
-    readJSONFile,
-    writeJSONFile,
-    readDirectory,
-    removeFile
-} from '../lib/file-system.js';
+import * as fileSystem from '../lib/file-system.js';
 
 import {
     isFunction,
+    isUndefined,
     isNumberNotNaN,
     assertNonEmptyString,
     assertNumberNotNaN,
@@ -31,6 +26,7 @@ import {
  * @property {number} [maxConcurrency=1] - Maximum number of concurrent jobs to run
  * @property {LockingQueue} [lockingQueue] - Custom locking queue instance for file operations
  * @property {Function} [eventListener] - Callback function to receive engine events (debug, error)
+ * @property {Object} [fileSystem] - Custom file system implementation for testing
  */
 
 /**
@@ -124,6 +120,13 @@ export default class JobQueueEngine {
     #eventListener = null;
 
     /**
+     * @private
+     * @type {Object}
+     * File system utilities for file operations.
+     */
+    #fileSystem = fileSystem;
+
+    /**
      * Create a new JobQueueEngine instance
      *
      * @param {JobQueueEngineOptions} [options] - Configuration options
@@ -136,6 +139,8 @@ export default class JobQueueEngine {
 
         if (isNumberNotNaN(options.maxConcurrency)) {
             this.setMaxConcurrency(options.maxConcurrency);
+        } else if (!isUndefined(options.maxConcurrency)) {
+            throw new AssertionError('maxConcurrency must be a number');
         }
 
         if (options.lockingQueue) {
@@ -151,6 +156,12 @@ export default class JobQueueEngine {
         } else {
             // No-op listener prevents null checks throughout the codebase
             this.#eventListener = () => {};
+        }
+
+        // Allow dependency injection of file system for testing
+        // This lets us mock file operations without touching real disk
+        if (options.fileSystem) {
+            this.#fileSystem = options.fileSystem;
         }
     }
 
@@ -457,7 +468,7 @@ export default class JobQueueEngine {
         // Lock prevents concurrent writes to the same job file
         // and ensures consistency during job state transitions
         await this.#lockingQueue.getLock();
-        await writeJSONFile(filepath, job.toDatabaseRecord());
+        await this.#fileSystem.writeJSONFile(filepath, job.toDatabaseRecord());
         this.#lockingQueue.releaseLock();
     }
 
@@ -472,7 +483,7 @@ export default class JobQueueEngine {
     async deleteJob(job) {
         // Lock ensures file deletion doesn't conflict with concurrent reads/writes
         await this.#lockingQueue.getLock();
-        await removeFile(this.getJobFilepath(job));
+        await this.#fileSystem.removeFile(this.getJobFilepath(job));
         this.#lockingQueue.releaseLock();
     }
 
@@ -505,7 +516,7 @@ export default class JobQueueEngine {
      */
     async readJobQueueDirectory() {
         try {
-            const filepaths = await readDirectory(this.#directory);
+            const filepaths = await this.#fileSystem.readDirectory(this.#directory);
             return filepaths;
         } catch (cause) {
             // Wrap filesystem errors with context for better debugging
@@ -527,7 +538,7 @@ export default class JobQueueEngine {
      */
     async loadJobByFilepath(filepath) {
         try {
-            const json = await readJSONFile(filepath);
+            const json = await this.#fileSystem.readJSONFile(filepath);
             return new Job(json);
         } catch (cause) {
             // Wrap JSON parsing/file reading errors with context

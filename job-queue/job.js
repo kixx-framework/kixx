@@ -17,7 +17,8 @@ import {
 } from '../assertions/mod.js';
 
 // Use closure to create a thread-safe incrementer for unique ID generation
-// This ensures unique IDs even if multiple jobs are created simultaneously
+// Node.js is single-threaded but this prevents race conditions during
+// high-frequency job creation within the same event loop tick
 const getIncrement = (function createIncrementer() {
     let n = 0;
     return function increment() {
@@ -31,7 +32,7 @@ const getIncrement = (function createIncrementer() {
  * @property {string} methodName - The name of the method to be executed
  * @property {number} [executionDate] - Timestamp (ms) for when job should run
  * @property {number} [waitTime] - Milliseconds to wait before execution
- * @property {Object} [params] - Parameters to pass to the method
+ * @property {*} [params] - Parameters to pass to the method
  */
 
 /**
@@ -48,7 +49,7 @@ const getIncrement = (function createIncrementer() {
  * @property {string} methodName - Method name to execute
  * @property {number} executionDate - Timestamp (ms) for execution
  * @property {string} state - Current job state
- * @property {Object} [params] - Job parameters
+ * @property {*} [params] - Job parameters
  */
 
 /**
@@ -75,6 +76,34 @@ export default class Job {
         FAILED: 'FAILED',
     });
 
+    /**
+     * Unique job identifier
+     * @readonly
+     * @type {string}
+     */
+    id;
+
+    /**
+     * Timestamp (in milliseconds) when the job should execute
+     * @readonly
+     * @type {number}
+     */
+    executionDate;
+
+    /**
+     * Name of the method to execute
+     * @readonly
+     * @type {string}
+     */
+    methodName;
+
+    /**
+     * Parameters to pass to the method during execution
+     * @readonly
+     * @type {*}
+     */
+    params;
+
     /** @type {string} */
     #state = Job.STATES.NOT_STARTED;
     /** @type {Error|null} */
@@ -86,27 +115,32 @@ export default class Job {
      * @param {string} spec.id - Unique job identifier
      * @param {number} spec.executionDate - Timestamp (ms) for job execution
      * @param {string} spec.methodName - Name of the method to execute
-     * @param {Object} [spec.params] - Optional parameters for the job
+     * @param {*} [spec.params] - Optional parameters for the job
      * @throws {TypeError} When spec properties are invalid types or missing
      */
     constructor(spec) {
         // Use defineProperties to make these fields immutable after construction
-        // This prevents accidental modification of core job identity
+        // This prevents accidental modification of core job identity properties
+        // which could cause jobs to be misrouted or duplicated in queues
         Object.defineProperties(this, {
             id: {
                 enumerable: true,
+                writable: false,
                 value: spec.id,
             },
             executionDate: {
                 enumerable: true,
+                writable: false,
                 value: spec.executionDate,
             },
             methodName: {
                 enumerable: true,
+                writable: false,
                 value: spec.methodName,
             },
             params: {
                 enumerable: true,
+                writable: false,
                 value: spec.params,
             },
         });
@@ -114,6 +148,7 @@ export default class Job {
 
     /**
      * Returns a unique key combining method name and job ID.
+     * Used for Redis keys, cache lookups, and ensuring uniqueness in job stores.
      * @returns {string} Key in format "methodName__id"
      */
     get key() {
@@ -154,42 +189,51 @@ export default class Job {
 
     /**
      * Calculates milliseconds remaining until job should execute.
+     * Used by job schedulers to determine sleep/wait times before polling again.
      * @returns {number} Milliseconds to wait, or 0 if execution time has passed
      */
     getDeferredMilliseconds() {
         const delta = this.executionDate - Date.now();
         // Return 0 if execution time has passed to indicate job is ready now
+        // This prevents negative delays which would confuse setTimeout calls
         return delta > 0 ? delta : 0;
     }
 
     /**
      * Marks the job as currently executing.
-     * @throws {Error} If job is not in NOT_STARTED state
+     * @throws {Error} When job is not in NOT_STARTED state
      */
     setStateInProgress() {
-        // State transition: NOT_STARTED -> IN_PROGRESS
-        // After this call, job shows as actively running in status queries
+        if (this.#state !== Job.STATES.NOT_STARTED) {
+            throw new Error(`Cannot start job in ${ this.#state } state`);
+        }
         this.#state = Job.STATES.IN_PROGRESS;
     }
 
     /**
      * Marks the job as successfully completed.
-     * @throws {Error} If job is not in IN_PROGRESS state
+     * @throws {Error} When job is not in IN_PROGRESS state
      */
     setStateCompleted() {
-        // State transition: IN_PROGRESS -> COMPLETED
-        // Job is now eligible for cleanup and can be safely removed from active queues
+        if (this.#state !== Job.STATES.IN_PROGRESS) {
+            throw new Error(`Cannot complete job in ${ this.#state } state`);
+        }
         this.#state = Job.STATES.COMPLETED;
     }
 
     /**
      * Marks the job as failed and records the error.
      * @param {Error} error - The error that caused the job to fail
-     * @throws {TypeError} If error parameter is not an Error instance
+     * @throws {TypeError} When error parameter is not an Error instance
+     * @throws {Error} When job is not in IN_PROGRESS state
      */
     setStateFailed(error) {
-        // State transition: IN_PROGRESS -> FAILED
-        // Job will not be retried automatically and error is preserved for debugging
+        if (!(error instanceof Error)) {
+            throw new TypeError('error must be an Error instance');
+        }
+        if (this.#state !== Job.STATES.IN_PROGRESS) {
+            throw new Error(`Cannot fail job in ${ this.#state } state`);
+        }
         this.#state = Job.STATES.FAILED;
         this.#error = error;
     }
@@ -199,12 +243,12 @@ export default class Job {
      * @returns {SafeJobObject} Job data safe for public APIs
      */
     toSafeObject() {
-        // Exclude params to prevent sensitive data from being exposed in public APIs
-        // Use ISO string for execution date for better human readability
+        // Exclude params to prevent sensitive data (passwords, API keys, PII)
+        // from being exposed in public APIs, logs, or monitoring dashboards
         return {
             id: this.id,
             methodName: this.methodName,
-            executionDate: this.executionDateString,
+            executionDate: this.executionDateString, // Use ISO string for human readability
             state: this.#state,
         };
     }
@@ -214,11 +258,12 @@ export default class Job {
      * @returns {DatabaseJobRecord} Full job data including parameters
      */
     toDatabaseRecord() {
-        // Include all data for database storage, using numeric timestamp for efficient indexing
+        // Include all data for database storage, using numeric timestamp
+        // for efficient indexing and range queries on execution time
         return {
             id: this.id,
             methodName: this.methodName,
-            executionDate: this.executionDate,
+            executionDate: this.executionDate, // Keep as number for DB indexing performance
             state: this.#state,
             params: this.params,
         };
@@ -228,17 +273,24 @@ export default class Job {
      * Generates a unique job identifier based on timestamp and random values.
      * @param {number} timestamp - Milliseconds since epoch for the job
      * @returns {string} Unique job ID safe for use in filesystems and URLs
+     * @throws {TypeError} When timestamp is not a number
      */
     static generateId(timestamp) {
+        if (typeof timestamp !== 'number' || isNaN(timestamp)) {
+            throw new TypeError('timestamp must be a valid number');
+        }
+
         const date = new Date(timestamp);
         // Replace colons and dots with dashes to create filesystem-safe ID
         // ISO format: 2023-12-01T15:30:45.123Z becomes 2023-12-01T15-30-45-123Z
+        // This allows job IDs to be used safely in file names and URL paths
         const dateString = date.toISOString().replace(/[:.]+/g, '-');
 
-        // Combine three sources of uniqueness to prevent collisions:
-        // 1. Timestamp (dateString) - time-based uniqueness
-        // 2. Random number (i) - handles simultaneous creation
-        // 3. Increment counter (n) - handles high-frequency creation in same millisecond
+        // Triple-layer uniqueness strategy to prevent ID collisions:
+        // 1. Timestamp (dateString) - provides time-based uniqueness and sortability
+        // 2. Random number (i) - handles multiple jobs created in same millisecond
+        // 3. Increment counter (n) - handles high-frequency creation bursts
+        // This combination virtually eliminates collision risk even under heavy load
         const n = getIncrement();
         const i = crypto.randomInt(10000);
         return `${ dateString }-${ i }-${ n }`;
@@ -281,28 +333,33 @@ export default class Job {
         }
 
         // Start with current time as baseline for execution scheduling
+        // This ensures all timing calculations are relative to job creation time
         const now = Date.now();
         let executionDate = now;
 
         // Determine final execution time based on provided specification
+        // Priority: explicit executionDate > waitTime > immediate execution
         if (spec.executionDate) {
-            // Use explicit execution date if provided
+            // Use explicit execution date if provided (for precise scheduling)
             const d = new Date(spec.executionDate);
             assertValidDate(d);
             executionDate = d.getTime();
         } else if (isNumberNotNaN(spec.waitTime)) {
             // Calculate execution date by adding wait time to current time
+            // This is the most common pattern for delayed job execution
             executionDate += spec.waitTime;
         }
 
-        // Prevent jobs from being scheduled in the past to avoid immediate execution confusion
-        // Jobs scheduled for past times run immediately but maintain consistent behavior
+        // Prevent jobs from being scheduled in the past to avoid confusion
+        // Past-scheduled jobs run immediately but maintain consistent behavior
+        // This prevents "why didn't my job run?" debugging scenarios
         if (executionDate < now) {
             executionDate = now;
         }
 
         // Create new object to avoid mutating the input spec (defensive programming)
-        // This prevents unexpected side effects in calling code
+        // This prevents unexpected side effects in calling code where the same
+        // spec object might be reused for multiple job creation calls
         return new Job(Object.assign({}, spec, {
             id: this.generateId(executionDate),
             executionDate,

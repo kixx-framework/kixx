@@ -45,6 +45,11 @@ describe('MyComponent: some behavior', ({ before, after, it }) => {
 - Define your test subject, spies and stubs, and any results or state at the top of your `describe(({ before, after, it }) => {});` block using the JavaScript `let` keyword. Then you can define those block level values from inside your `before(() => {});` block and use them throughout your describe block scope.
 - Do not nest describe() blocks. Although possible to do so, nested describe blocks become confusing. Instead create a top level describe block for each discrete piece of functionality even if that means you need to repeat before() and after() blocks.
 - Create a discrete describe() block for each logical branch of code in a method.
+- When making assertions about errors, use error names and codes instead of using `instance of` to identify a specific type of error.
+
+## Tips
+- create a delayPromise() helper
+- prefer implementing mocks instead of using stubs
 
 ## Use the Sinon framework for spying and stubbing
 Standard practice in this project is to use the Sinon mocking framework with the Kixx Test framework for all our testing. In our use cases we use Sinon spy and stub features insetad of mocks and so will refer to them as spies and stubs from here on out.
@@ -203,13 +208,10 @@ describe('PubSub#publishSync', ({ before, after, it }) => {
 });
 ```
 
-Note how the stub also implements the spy interface. The test verifies that all
-callbacks were called, and also that the exception throwing stub was called
-before one of the other callbacks.
+Note how the stub also implements the spy interface. The test verifies that all callbacks were called, and also that the exception throwing stub was called before one of the other callbacks.
 
 ### Defining stub behavior on consecutive calls
-Calling behavior defining methods like `returns` or `throws` multiple times
-overrides the behavior of the stub.
+Calling behavior defining methods like `returns` or `throws` multiple times overrides the behavior of the stub.
 
 ### Stub API Properties
 
@@ -225,7 +227,7 @@ The original function can be restored by calling `object.method.restore();` (or 
 
 #### `stub.withArgs(arg1[, arg2, ...]);`
 
-Stubs the method only for the provided arguments.
+Stubs the method only for the provided arguments. If the arguments do not match what you've provided in `withArgs()` then the underlying method will be called.
 
 This is useful to be more expressive in your assertions, where you can access the spy with the same call. It is also useful to create a stub that can act differently in response to different arguments.
 
@@ -235,7 +237,7 @@ Defines the behavior of the stub on the _nth_ call. Useful for testing sequentia
 
 There are methods `onFirstCall`, `onSecondCall`,`onThirdCall` to make stub definitions read more naturally.
 
-`onCall` can be combined with all of the behavior defining methods in this section. In particular, it can be used together with `withArgs`.
+`onCall` can be combined with all of the behavior defining methods in this section.
 
 ```javascript
 import { describe } from 'kixx-test';
@@ -247,7 +249,6 @@ describe('stub', () => {
         const callback = sinon.stub();
 
         callback
-            .withArgs(42)
             .onFirstCall()
             .returns(1)
             .onSecondCall()
@@ -255,17 +256,14 @@ describe('stub', () => {
 
         callback.returns(0);
 
-        assertEqual(0, callback(1));
-        assertEqual(1, callback(42));
-        assertEqual(0, callback(1));
-        assertEqual(2, callback(42));
-        assertEqual(0, callback(1));
-        assertEqual(0, callback(42));
+        assertEqual(1, callback());
+        assertEqual(2, callback());
+        assertEqual(0, callback());
     });
 });
 ```
 
-Note how the behavior of the stub for argument `42` falls back to the default behavior once no more calls have been defined.
+Note how the behavior of the stub falls back to the default behavior once no more calls have been defined.
 
 #### `stub.onFirstCall();`
 
@@ -358,7 +356,7 @@ Causes the stub to return a Promise which rejects with an exception of the provi
 #### `stub.rejects(value);`
 
 ## Sinon Say API
-Sinon Say objects are objects returned from `sinon.spy()` and `sinon.stub()`. When spying on existing methods with `sinon.spy(object, method)`, the following properties and methods are also available on `object.method`.
+Sinon Say objects are objects returned from `sinon.spy()` and `sinon.stub()`. When spying on existing methods with `sinon.spy(object, "method")` and `sinon.stub(object, "method")`, the following properties and methods are also available on `object.method`.
 
 ### Sinon Say API Properties
 
@@ -392,7 +390,7 @@ The number of recorded [calls](#spy-call-api).
 
 #### `spy.firstCall`
 
-The first [call](#spy-call-api)
+The first [Spy Call API](#spy-call-api) object.
 
 #### `spy.secondCall`
 

@@ -5,23 +5,19 @@ import {
     assertEqual,
     assertDefined,
     assertArray,
-    assertGreaterThan,
-    AssertionError
+    assertGreaterThan
 } from 'kixx-assert';
 import sinon from 'sinon';
 
 import JobQueueEngine from '../../job-queue/job-queue-engine.js';
-import Job from '../../job-queue/job.js';
 import LockingQueue from '../../lib/locking-queue.js';
 import { WrappedError } from '../../errors/mod.js';
 
-// Mock the file system module
-const mockFileSystem = {
-    readJSONFile: sinon.stub(),
-    writeJSONFile: sinon.stub(),
-    readDirectory: sinon.stub(),
-    removeFile: sinon.stub(),
-};
+function delayPromise(ms) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
 
 // Constructor and Initialization Tests
 
@@ -33,6 +29,9 @@ describe('JobQueueEngine: constructor with valid directory', ({ before, after, i
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -64,6 +63,9 @@ describe('JobQueueEngine: constructor with custom options', ({ before, after, it
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -89,7 +91,7 @@ describe('JobQueueEngine: constructor with invalid directory', ({ it }) => {
             new JobQueueEngine({ directory: null });
         } catch (error) {
             threwError = true;
-            assert(error instanceof AssertionError);
+            assertEqual('AssertionError', error.name);
         }
         assert(threwError, 'Expected AssertionError to be thrown');
     });
@@ -100,7 +102,7 @@ describe('JobQueueEngine: constructor with invalid directory', ({ it }) => {
             new JobQueueEngine({ directory: '' });
         } catch (error) {
             threwError = true;
-            assert(error instanceof AssertionError);
+            assertEqual('AssertionError', error.name);
         }
         assert(threwError, 'Expected AssertionError to be thrown');
     });
@@ -111,7 +113,7 @@ describe('JobQueueEngine: constructor with invalid directory', ({ it }) => {
             new JobQueueEngine({ directory: 123 });
         } catch (error) {
             threwError = true;
-            assert(error instanceof AssertionError);
+            assertEqual('AssertionError', error.name);
         }
         assert(threwError, 'Expected AssertionError to be thrown');
     });
@@ -127,7 +129,7 @@ describe('JobQueueEngine: constructor with invalid max concurrency', ({ it }) =>
             });
         } catch (error) {
             threwError = true;
-            assert(error instanceof AssertionError);
+            assertEqual('AssertionError', error.name);
         }
         assert(threwError, 'Expected AssertionError to be thrown');
     });
@@ -141,7 +143,7 @@ describe('JobQueueEngine: constructor with invalid max concurrency', ({ it }) =>
             });
         } catch (error) {
             threwError = true;
-            assert(error instanceof AssertionError);
+            assertEqual('AssertionError', error.name);
         }
         assert(threwError, 'Expected AssertionError to be thrown');
     });
@@ -161,6 +163,9 @@ describe('JobQueueEngine: job handler registration', ({ before, after, it }) => 
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -197,6 +202,9 @@ describe('JobQueueEngine: job handler checking', ({ before, after, it }) => {
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -219,6 +227,9 @@ describe('JobQueueEngine: concurrency limit management', ({ before, after, it })
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -234,7 +245,7 @@ describe('JobQueueEngine: concurrency limit management', ({ before, after, it })
             engine.setMaxConcurrency('invalid');
         } catch (error) {
             threwError = true;
-            assert(error instanceof AssertionError);
+            assertEqual('AssertionError', error.name);
         }
         assert(threwError, 'Expected AssertionError to be thrown');
     });
@@ -248,6 +259,9 @@ describe('JobQueueEngine: concurrency state checking with no jobs', ({ before, a
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -262,6 +276,7 @@ describe('JobQueueEngine: job loading from empty directory', ({ before, after, i
     let engine;
     let mockLockingQueue;
     let loadedJobs;
+    let mockFileSystem;
 
     before(async () => {
         mockLockingQueue = {
@@ -269,22 +284,27 @@ describe('JobQueueEngine: job loading from empty directory', ({ before, after, i
             releaseLock: sinon.stub(),
         };
 
-        // Mock file system to return empty directory
-        sinon.stub(mockFileSystem, 'readDirectory').resolves([]);
+        // Create mock file system that returns empty directory
+        mockFileSystem = {
+            readJSONFile: sinon.stub(),
+            writeJSONFile: sinon.stub(),
+            readDirectory: sinon.stub().resolves([]),
+            removeFile: sinon.stub(),
+        };
 
         engine = new JobQueueEngine({
             directory: '/var/jobs',
             lockingQueue: mockLockingQueue,
+            fileSystem: mockFileSystem,
         });
-
-        // Replace the file system module
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'readDirectory').resolves([]);
 
         loadedJobs = await engine.load();
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -299,6 +319,7 @@ describe('JobQueueEngine: job loading with directory read error', ({ before, aft
     let mockLockingQueue;
     let threwError;
     let caughtError;
+    let mockFileSystem;
 
     before(async () => {
         mockLockingQueue = {
@@ -306,14 +327,19 @@ describe('JobQueueEngine: job loading with directory read error', ({ before, aft
             releaseLock: sinon.stub(),
         };
 
+        // Create mock file system that throws error
+        mockFileSystem = {
+            readJSONFile: sinon.stub(),
+            writeJSONFile: sinon.stub(),
+            readDirectory: sinon.stub().rejects(new Error('Directory not found')),
+            removeFile: sinon.stub(),
+        };
+
         engine = new JobQueueEngine({
             directory: '/nonexistent/path',
             lockingQueue: mockLockingQueue,
+            fileSystem: mockFileSystem,
         });
-
-        // Mock file system to throw error
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'readDirectory').rejects(new Error('Directory not found'));
 
         try {
             await engine.load();
@@ -325,6 +351,9 @@ describe('JobQueueEngine: job loading with directory read error', ({ before, aft
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -350,10 +379,19 @@ describe('JobQueueEngine: scheduling ready job for immediate execution', ({ befo
             releaseLock: sinon.stub(),
         };
 
+        // Create mock file system
+        const mockFileSystem = {
+            readJSONFile: sinon.stub(),
+            writeJSONFile: sinon.stub().resolves(),
+            readDirectory: sinon.stub(),
+            removeFile: sinon.stub(),
+        };
+
         engine = new JobQueueEngine({
             directory: '/var/jobs',
             lockingQueue: mockLockingQueue,
             eventListener: mockEventListener,
+            fileSystem: mockFileSystem,
         });
 
         // Create a ready job
@@ -372,14 +410,13 @@ describe('JobQueueEngine: scheduling ready job for immediate execution', ({ befo
             setStateFailed: sinon.spy(),
         };
 
-        // Mock file system operations
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'writeJSONFile').resolves();
-
         scheduledJob = await engine.scheduleJob(readyJob);
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
@@ -412,9 +449,18 @@ describe('JobQueueEngine: scheduling deferred job', ({ before, after, it }) => {
             releaseLock: sinon.stub(),
         };
 
+        // Create mock file system
+        const mockFileSystem = {
+            readJSONFile: sinon.stub(),
+            writeJSONFile: sinon.stub().resolves(),
+            readDirectory: sinon.stub(),
+            removeFile: sinon.stub(),
+        };
+
         engine = new JobQueueEngine({
             directory: '/var/jobs',
             lockingQueue: mockLockingQueue,
+            fileSystem: mockFileSystem,
         });
 
         // Create a deferred job
@@ -430,16 +476,15 @@ describe('JobQueueEngine: scheduling deferred job', ({ before, after, it }) => {
             toSafeObject: sinon.stub().returns({ id: 'deferred-job-456' }),
         };
 
-        // Mock file system operations
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'writeJSONFile').resolves();
-
         scheduledJob = await engine.scheduleJob(deferredJob);
     });
 
     after(() => {
         global.setTimeout = originalSetTimeout;
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should schedule future job with timeout', () => {
@@ -466,9 +511,18 @@ describe('JobQueueEngine: scheduling job when engine disposed', ({ before, after
             releaseLock: sinon.stub(),
         };
 
+        // Create mock file system
+        const mockFileSystem = {
+            readJSONFile: sinon.stub(),
+            writeJSONFile: sinon.stub().resolves(),
+            readDirectory: sinon.stub(),
+            removeFile: sinon.stub(),
+        };
+
         engine = new JobQueueEngine({
             directory: '/var/jobs',
             lockingQueue: mockLockingQueue,
+            fileSystem: mockFileSystem,
         });
 
         testJob = {
@@ -477,10 +531,6 @@ describe('JobQueueEngine: scheduling job when engine disposed', ({ before, after
             isReady: sinon.stub().returns(true),
             toDatabaseRecord: sinon.stub().returns({ id: 'test-job-789' }),
         };
-
-        // Mock file system operations
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'writeJSONFile').resolves();
 
         // Dispose the engine first
         engine.dispose();
@@ -537,6 +587,9 @@ describe('JobQueueEngine: successful job execution with single parameter', ({ be
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should execute job with single parameter', () => {
@@ -588,12 +641,16 @@ describe('JobQueueEngine: successful job execution with array parameters', ({ be
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should execute job with array parameters', () => {
         assert(reportHandler.calledOnce);
         assertEqual('monthly', reportHandler.getCall(0).args[0]);
-        assertEqual({ year: 2023, month: 12 }, reportHandler.getCall(0).args[1]);
+        assertEqual(2023, reportHandler.getCall(0).args[1].year);
+        assertEqual(12, reportHandler.getCall(0).args[1].month);
     });
 });
 
@@ -637,6 +694,9 @@ describe('JobQueueEngine: failed job execution', ({ before, after, it }) => {
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should mark job as failed when handler throws', () => {
@@ -686,11 +746,14 @@ describe('JobQueueEngine: execution with no handler registered', ({ before, afte
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should throw when no handler registered', () => {
         assert(threwError, 'Expected error to be thrown');
-        assert(caughtError instanceof AssertionError);
+        assertEqual('AssertionError', caughtError.name);
     });
 });
 
@@ -699,9 +762,6 @@ describe('JobQueueEngine: execution with no handler registered', ({ before, afte
 describe('JobQueueEngine: selecting oldest ready job', ({ before, after, it }) => {
     let engine;
     let mockLockingQueue;
-    let oldestJob;
-    let newerJob;
-    let futureJob;
     let selectedJob;
 
     before(async () => {
@@ -710,59 +770,79 @@ describe('JobQueueEngine: selecting oldest ready job', ({ before, after, it }) =
             releaseLock: sinon.stub(),
         };
 
+        const baseDate = new Date('2023-12-01T10:00:00Z');
+
+        // Create valid Job JSON representations
+        const oldestJobData = {
+            id: 'oldest-job',
+            methodName: 'sendEmail',
+            executionDate: baseDate.getTime() - 2000,
+            state: 'NOT_STARTED',
+            params: { to: 'user1@example.com', subject: 'Oldest' },
+        };
+
+        const newerJobData = {
+            id: 'newer-job',
+            methodName: 'sendEmail',
+            executionDate: baseDate.getTime() - 1000,
+            state: 'NOT_STARTED',
+            params: { to: 'user2@example.com', subject: 'Newer' },
+        };
+
+        const futureJobData = {
+            id: 'future-job',
+            methodName: 'sendEmail',
+            executionDate: baseDate.getTime() + 5000,
+            state: 'NOT_STARTED',
+            params: { to: 'user3@example.com', subject: 'Future' },
+        };
+
+        // Create mock file system that returns valid Job JSON data
+        const mockFileSystem = {
+            readJSONFile(filepath) {
+                if (filepath === '/var/jobs/oldest-job.json') {
+                    return Promise.resolve(oldestJobData);
+                }
+                if (filepath === '/var/jobs/newer-job.json') {
+                    return Promise.resolve(newerJobData);
+                }
+                if (filepath === '/var/jobs/future-job.json') {
+                    return Promise.resolve(futureJobData);
+                }
+                throw new Error(`Unknown filepath: ${ filepath }`);
+            },
+            writeJSONFile() {},
+            readDirectory() {
+                return Promise.resolve([
+                    '/var/jobs/newer-job.json',
+                    '/var/jobs/oldest-job.json',
+                    '/var/jobs/future-job.json',
+                ]);
+            },
+            removeFile() {},
+        };
+
         engine = new JobQueueEngine({
             directory: '/var/jobs',
             lockingQueue: mockLockingQueue,
+            fileSystem: mockFileSystem,
         });
-
-        const baseDate = new Date('2023-12-01T10:00:00Z');
-
-        oldestJob = {
-            id: 'oldest-job',
-            executionDate: new Date(baseDate.getTime() - 2000),
-            isReady: sinon.stub().returns(true),
-        };
-
-        newerJob = {
-            id: 'newer-job',
-            executionDate: new Date(baseDate.getTime() - 1000),
-            isReady: sinon.stub().returns(true),
-        };
-
-        futureJob = {
-            id: 'future-job',
-            executionDate: new Date(baseDate.getTime() + 5000),
-            isReady: sinon.stub().returns(false),
-        };
-
-        // Mock the file system to return these jobs
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'readDirectory').resolves([
-            '/var/jobs/newer-job.json',
-            '/var/jobs/oldest-job.json',
-            '/var/jobs/future-job.json',
-        ]);
-
-        sinon.stub(fileSystemModule, 'readJSONFile')
-            .withArgs('/var/jobs/oldest-job.json').resolves({ id: 'oldest-job' })
-            .withArgs('/var/jobs/newer-job.json').resolves({ id: 'newer-job' })
-            .withArgs('/var/jobs/future-job.json').resolves({ id: 'future-job' });
-
-        // Mock Job constructor
-        sinon.stub(Job, 'constructor')
-            .withArgs({ id: 'oldest-job' }).returns(oldestJob)
-            .withArgs({ id: 'newer-job' }).returns(newerJob)
-            .withArgs({ id: 'future-job' }).returns(futureJob);
 
         selectedJob = await engine.getOldestReadyJob();
     });
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should select oldest ready job first', () => {
-        assertEqual(oldestJob, selectedJob);
+        assertDefined(selectedJob);
+        assertEqual('oldest-job', selectedJob.id);
+        assertEqual('sendEmail', selectedJob.methodName);
+        assertEqual('NOT_STARTED', selectedJob.state);
     });
 });
 
@@ -777,20 +857,28 @@ describe('JobQueueEngine: no ready jobs available', ({ before, after, it }) => {
             releaseLock: sinon.stub(),
         };
 
+        // Create mock file system
+        const mockFileSystem = {
+            readJSONFile: sinon.stub(),
+            writeJSONFile: sinon.stub(),
+            readDirectory: sinon.stub().resolves([]),
+            removeFile: sinon.stub(),
+        };
+
         engine = new JobQueueEngine({
             directory: '/var/jobs',
             lockingQueue: mockLockingQueue,
+            fileSystem: mockFileSystem,
         });
-
-        // Mock empty directory
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'readDirectory').resolves([]);
 
         selectedJob = await engine.getOldestReadyJob();
     });
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should return null when no ready jobs', () => {
@@ -825,9 +913,18 @@ describe('JobQueueEngine: disposal cleanup operations', ({ before, after, it }) 
             releaseLock: sinon.stub(),
         };
 
+        // Create mock file system
+        const mockFileSystem = {
+            readJSONFile: sinon.stub(),
+            writeJSONFile: sinon.stub().resolves(),
+            readDirectory: sinon.stub(),
+            removeFile: sinon.stub(),
+        };
+
         engine = new JobQueueEngine({
             directory: '/var/jobs',
             lockingQueue: mockLockingQueue,
+            fileSystem: mockFileSystem,
         });
 
         // Schedule a deferred job to create a timeout handle
@@ -839,19 +936,16 @@ describe('JobQueueEngine: disposal cleanup operations', ({ before, after, it }) 
             toDatabaseRecord: sinon.stub().returns({ id: 'deferred-job-cleanup' }),
         };
 
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'writeJSONFile').resolves();
-
         await engine.scheduleJob(deferredJob);
-
-        // Now dispose the engine
-        engine.dispose();
     });
 
     after(() => {
         global.setTimeout = originalSetTimeout;
         global.clearTimeout = originalClearTimeout;
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should clear all scheduled timeouts', () => {
@@ -953,6 +1047,9 @@ describe('JobQueueEngine: event emission during job lifecycle', ({ before, after
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should emit debug events for job lifecycle', () => {
@@ -1017,6 +1114,9 @@ describe('JobQueueEngine: error event emission', ({ before, after, it }) => {
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should emit error events for failures', () => {
@@ -1073,6 +1173,9 @@ describe('JobQueueEngine: job file path generation', ({ before, after, it }) => 
 
     after(() => {
         sinon.restore();
+        if (engine) {
+            engine.dispose();
+        }
     });
 
     it('should generate correct filepath for job', () => {
@@ -1082,40 +1185,72 @@ describe('JobQueueEngine: job file path generation', ({ before, after, it }) => 
 
 describe('JobQueueEngine: handling jobs with past execution dates', ({ before, after, it }) => {
     let engine;
-    let pastJob;
-    let result;
+    let mockFileSystem;
+    let sendEmailHandler;
 
     before(async () => {
-        const mockLockingQueue = {
-            getLock: sinon.stub().resolves(),
-            releaseLock: sinon.stub(),
+        sendEmailHandler = sinon.spy();
+
+        mockFileSystem = {
+            readJSONFile(filepath) {
+                if (filepath === '/var/jobs/job-with-past-execution-date.json') {
+                    return Promise.resolve({
+                        id: 'job-with-past-execution-date',
+                        executionDate: new Date('2023-12-01T10:00:00Z').getTime() - 1000,
+                        methodName: 'sendEmail',
+                        params: [ 'test1@example.com' ],
+                    });
+                }
+                if (filepath === '/var/jobs/job-with-future-execution-date.json') {
+                    return Promise.resolve({
+                        id: 'job-with-future-execution-date',
+                        executionDate: new Date().getTime() + 1000,
+                        methodName: 'sendEmail',
+                        params: [ 'test2@example.com' ],
+                    });
+                }
+                throw new Error(`Unknown filepath: ${ filepath }`);
+            },
+            readDirectory() {
+                return Promise.resolve([
+                    '/var/jobs/job-with-future-execution-date.json',
+                    '/var/jobs/job-with-past-execution-date.json',
+                ]);
+            },
+            writeJSONFile: sinon.stub().resolves(),
+            removeFile: sinon.stub().resolves(),
         };
 
         engine = new JobQueueEngine({
             directory: '/var/jobs',
-            lockingQueue: mockLockingQueue,
+            fileSystem: mockFileSystem,
         });
 
-        pastJob = {
-            id: 'past-job-123',
-            key: 'past-job-123',
-            executionDate: new Date('2020-01-01T00:00:00Z'), // Far in the past
-            isReady: sinon.stub().returns(true),
-            toDatabaseRecord: sinon.stub().returns({ id: 'past-job-123' }),
-        };
+        engine.registerJobHandler('sendEmail', sendEmailHandler);
 
-        const fileSystemModule = await import('../src/lib/file-system.js');
-        sinon.stub(fileSystemModule, 'writeJSONFile').resolves();
+        await engine.load();
 
-        result = await engine.scheduleJob(pastJob);
+        // Wait for the job to load and execute.
+        await delayPromise(10);
+
+        engine.dispose();
     });
 
     after(() => {
+        if (engine) {
+            engine.dispose();
+        }
         sinon.restore();
     });
 
-    it('should handle jobs with past execution dates', () => {
-        assertEqual(pastJob, result);
+    it('should execute the job', () => {
+        assertEqual(1, sendEmailHandler.callCount);
+        assertEqual('test@example.com', sendEmailHandler.getCall(0).args[0]);
+    });
+
+    it('should remove the job from storage', () => {
+        assertEqual(1, mockFileSystem.removeFile.callCount);
+        assertEqual('/var/jobs/job-with-past-execution-date.json', mockFileSystem.removeFile.getCall(0).args[0]);
     });
 });
 
