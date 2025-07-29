@@ -1,5 +1,5 @@
 # Kixx Test with Sinon
-A very basic and reliable framework for writing unit tests for JavaScript code using `describe()` blocks, `before()` setup blocks, `after()` teardown blocks, and `it()` assertions.
+The Kixx Test frameowrk with Sinon for mocking provides a basic and reliable framework for creating unit tests for JavaScript code. Tests are created in Kixx Test using `describe()` blocks, `before()` setup blocks, `after()` teardown blocks, and `it()` assertions.
 
 Each discrete piece of functionality should have its own describe block which a short description statement and nested `it()` blocks which assert some behavior or state. A common pattern is to create a describe block for each logical code branch in a method. Optionally, nested before and after blocks can be used to define the setup and teardown of the test(s) in the describe block.
 
@@ -42,17 +42,191 @@ describe('MyComponent: some behavior', ({ before, after, it }) => {
 ```
 
 ## Best Practices when using Kixx Test
-- Define your test subject, spies and stubs, and any results or state at the top of your `describe(({ before, after, it }) => {});` block using the JavaScript `let` keyword. Then you can define those block level values from inside your `before(() => {});` block and use them throughout your describe block scope.
-- Do not nest describe() blocks. Although possible to do so, nested describe blocks become confusing. Instead create a top level describe block for each discrete piece of functionality even if that means you need to repeat before() and after() blocks.
-- Create a discrete describe() block for each logical branch of code in a method.
-- When making assertions about errors, use error names and codes instead of using `instance of` to identify a specific type of error.
+We've found that it is easier to reason about our tests when we adhere to these best practices.
 
-## Tips
-- create a delayPromise() helper
-- prefer implementing mocks instead of using stubs
+### Do not nest describe(blocks)
+Do not nest describe() blocks. Although possible to do so in the Kixx Test frameworks, nested describe blocks become confusing. Instead create a top level describe block for each discrete piece of functionality even if that means you need to repeat before() and after() blocks for each of them.
+
+### Create discrete describe() blocks
+Create a discrete describe() block for each behavior you intend to test. Be aware that many methods may require several describe() blocks to describe all the functionality they contain. Look for logical branches of code in a method for clues to different behaviors.
+
+Here is an example of creating different describe() blocks based on different logical code branches in a method:
+
+```javascript
+import { describe } from 'kixx-test';
+import { assertEqual } from 'kixx-assert';
+
+function toBinary(value) {
+    if (value <= 0) {
+        return false;
+    }
+    if (value >= 1) {
+        return true;
+    }
+}
+
+describe('toBinary(): when value is less than or equal to 0', ({ it }) => {
+    it('returns false', () => {
+        assertEqual(false, toBinary(0));
+        assertEqual(false, toBinary(-1));
+        assertEqual(false, toBinary(-99));
+    })
+});
+
+describe('toBinary(): when value is greater than equal to 1', ({ it }) => {
+    it('returns true', () => {
+        assertEqual(true, toBinary(1));
+        assertEqual(true, toBinary(2));
+        assertEqual(true, toBinary(99));
+    })
+});
+```
+
+### No deep equality assertions
+Remember that the Kixx Assert library does not do deep equality testing or matching. This feature has been left out intentionally to avoid complexity. It is better, and more clearly understood, to compare objects by reference where possible, or by comparing their properties if not.
+
+### Making assertions about errors
+While there is no specific function in our test framework for testing errors, you can test for thrown errors using a simple try ... catch sequence it() blocks like in this example: 
+
+```javascript
+import { describe } from 'kixx-test';
+import { assert, assertEqual } from 'kixx-assert';
+
+function authenticationMiddleware(context, request, response) {
+    const userCollection = context.getService('UserCollection');
+
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+        throw new AuthenticationError('Request missing Authorization header');
+    }
+
+    request.user = await userCollection.getUserByToken(authHeader);
+    if (!request.user.entitledForPathname(request.url.pathname)) {
+        throw new AuthorizationError('User is not entitled for this pathname');
+    }
+
+    return response;
+}
+
+describe('authenticationMiddleware(): with missing Authorization header', ({ before, it }) => {
+    let context;
+    let request;
+    let response;
+
+    before(() => {
+        const user = {
+            entitledForPathname() {
+                return true;
+            },
+        };
+        const userCollection = {
+            getUserByToken() {
+                return Promise.resolve(user);
+            },
+        };
+
+        // We do not define an Authorization header in the Header map.
+        const headers = new Headers();
+
+        context = {
+            getService(serviceName) {
+                if (serviceName !== 'UserCollection') {
+                    // Throw an error for any other services except for the exact
+                    // service we are mocking here.
+                    throw new Error(`Service ${ serviceName } is not implemented for this test`);
+                }
+                return userCollection;
+            },
+        };
+
+        request = {
+            headers,
+            pathname: '/admin',
+        };
+
+        response = {};
+    });
+
+    it('throws an AuthenticationError', () => {
+        let error;
+        try {
+            authenticationMiddleware(context, request, response);
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AuthenticationError', error.name);
+        assertEqual('AUTHENTICATION_ERROR', error.code);
+        assertEqual(401, error.httpStatus);
+    })
+});
+
+describe('authenticationMiddleware(): when user is not entitled', ({ it }) => {
+    let context;
+    let request;
+    let response;
+
+    before(() => {
+        const user = {
+            entitledForPathname() {
+                return false;
+            },
+        };
+        const userCollection = {
+            getUserByToken() {
+                return Promise.resolve(user);
+            },
+        };
+
+        const headers = new Headers({
+            authorization: 'Bearer 23492309weflijw3r098wefj',
+        });
+
+        context = {
+            getService(serviceName) {
+                if (serviceName !== 'UserCollection') {
+                    // Throw an error for any other services except for the exact
+                    // service we are mocking here.
+                    throw new Error(`Service ${ serviceName } is not implemented for this test`);
+                }
+                return userCollection;
+            },
+        };
+
+        request = {
+            headers,
+            pathname: '/admin',
+        };
+
+        response = {};
+    });
+
+    it('throws an AuthorizationError', () => {
+        let error;
+        try {
+            authenticationMiddleware(context, request, response);
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AuthorizationError', error.name);
+        assertEqual('AUTHORIZATION_ERROR', error.code);
+        assertEqual(403, error.httpStatus);
+    })
+});
+```
+
+When making assertions about errors, use error names and codes instead of using `instance of` to identify a specific type of error like in the example above. This avoid unexpected reference mismatches with imported Node.js modules.
+
+Also notice how we broke out the discrete behaviors of the `authenticationMiddleware()` into separate describe blocks for clarity. This is considered best practice.
 
 ## Use the Sinon framework for spying and stubbing
-Standard practice in this project is to use the Sinon mocking framework with the Kixx Test framework for all our testing. In our use cases we use Sinon spy and stub features insetad of mocks and so will refer to them as spies and stubs from here on out.
+Standard practice in this project is to use the Sinon mocking framework with the Kixx Test framework for all our tests which require stubbing or spying on functions or methods. In our use cases we use Sinon spy and stub features (instead of Sinon mocks) and so will refer to them as spies and stubs in this document.
+
+Also, remember there is no need to stub or spy every function or method. It is only necessary to:
+
+- Use a spy ([Sinon Spy API](#sinon-spy-api)) if you still want the original function or method to be called but need to get information about the call from the [Sinon Say API](#sinon-say-api).
+- Use a stub ([Sinon Stub API](#sinon-stub-api)) if you need to prevent the underlying function or method from being called and intend on modifying its behavior.
 
 Here is a basic example of using the Sinon framework with the Kixx Test framework:
 
@@ -83,11 +257,6 @@ describe('MyComponent: some behavior', ({ before, after, it }) => {
     });
 });
 ```
-
-### Best practices when using Sinon to spy and stub
-- Keep things simple and only use the Sinon spy and stub features.
-- Set up Sinon spies and stubs in the before() block so the it() assertions have access to the Sinon spy calls.
-- Be sure to call `sinon.restore()` in the after() block to avoid creating race conditions and unexpected state in your tests.
 
 ## Sinon Spy API
 
@@ -150,6 +319,25 @@ describe('Wrap existing method', ({ before, after, it }) => {
     });
 });
 ```
+
+---
+
+## Best Practices when using Kixx Test
+- Define your test subject, spies and stubs, and any results or state at the top of your `describe(({ before, after, it }) => {});` block using the JavaScript `let` keyword. Then you can define those block level values from inside your `before(() => {});` block and use them throughout your describe block scope.
+- Do not nest describe() blocks. Although possible to do so, nested describe blocks become confusing. Instead create a top level describe block for each discrete piece of functionality even if that means you need to repeat before() and after() blocks.
+- Create a discrete describe() block for each logical branch of code in a method.
+- When making assertions about errors, use error names and codes instead of using `instance of` to identify a specific type of error.
+
+## Tips
+- create a delayPromise() helper
+- prefer implementing mocks instead of using stubs
+
+### Best practices when using Sinon to spy and stub
+- Keep things simple and only use the Sinon spy and stub features.
+- Set up Sinon spies and stubs in the before() block so the it() assertions have access to the Sinon spy calls.
+- Be sure to call `sinon.restore()` in the after() block to avoid creating race conditions and unexpected state in your tests.
+
+---
 
 ## Sinon Stub API
 Test stubs are functions (spies) with pre-programmed behavior.
