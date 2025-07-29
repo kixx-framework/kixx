@@ -172,26 +172,6 @@ export default class Config extends EventEmitter {
         const configs = deepMerge(rootConfig, environmentConfig);
         const secrets = deepMerge(rootSecrets, environmentSecrets);
 
-        // Validate the final merged configuration meets our application requirements
-        // TODO: Implement actual validation logic in validateSpec method
-        this.validateSpec(configs, secrets);
-
         return new Config(configs, secrets);
-    }
-
-    /**
-     * Validates merged configuration and secrets against application requirements
-     *
-     * @static
-     * @param {ConfigurationData} configs - Merged configuration object to validate
-     * @param {SecretsData} secrets - Merged secrets object to validate
-     * @throws {Error} When required configuration fields are missing or invalid
-     *
-     * @todo Implement actual validation logic for required fields, data types, and business rules
-     */
-    static validateSpec() {
-        // TODO: Implement configuration validation
-        // Should validate required fields, data types, and business rules
-        // Consider throwing descriptive errors for missing required config
     }
 }
