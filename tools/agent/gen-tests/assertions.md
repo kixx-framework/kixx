@@ -113,6 +113,8 @@ assertFalsy(null) // Passes
 ### assertEqual
 Throw an AssertionError if the passed values are *not strictly* equal. Dates and NaN are special cases handled separately.
 
+*!IMPORTANT* : assertEqual() uses `===` for comparison and *does NOT* deeply compare objects. For objects to pass this test they must be referencially equal with `===`. If you do not intend to referencially compare objects, then consider testing one or more unique properties, like an id or name.
+
 ```js
 /**
  * If the actual value does not equal the expected value, an AssertionError will be thrown.
