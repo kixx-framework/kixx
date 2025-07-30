@@ -106,6 +106,7 @@ export default class Job {
 
     /** @type {string} */
     #state = Job.STATES.NOT_STARTED;
+
     /** @type {Error|null} */
     #error = null;
 
