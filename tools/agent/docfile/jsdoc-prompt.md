@@ -10,9 +10,8 @@ You have been sent this JavaScript source file:
 {{source_file}}
 </javascript_source_file>
 
-Review our code JSDoc guidelines to make sure you understand them. Then review the given JavaScript source file and think carefully about improving the JSSoc comments for better code documentation. Are there features which are not documented but should be? Are there existing doc blocks which do not ahere to our guidelines and should be replaced or removed? With your extensive experience and our team guidelines, determine where the source code can be improved with good JSDoc comments for future reference.
-
-There are some conventions our team follows which you should take into consideration:
+## Common Conventions
+There are also some conventions our team follows which you should take into consideration:
 
 - __Do not use @author tags__. We do not use the @author tag because we have many, many authors on this project.
 - __Do not use @since tags__. We don't use @since version tags because it is so difficult to keep them updated.
@@ -85,5 +84,12 @@ class Job {
     }
 }
 ```
+
+## Instructions
+Review our code JSDoc guidelines and common conventions to make sure you understand them. Then review the given JavaScript source file and think carefully about improving the JSDoc comments for better code documentation. Are there features which are not documented but should be? Are there existing doc blocks which do not ahere to our guidelines and should be replaced or removed?
+
+Remember that adding more documentation is not always the best approach. Being more precise and accurate will result in useful documentation that is easy to read and understand.
+
+With your extensive experience and our team guidelines, determine where the source code can be improved with good JSDoc comments for future reference.
 
 Lastly, after making your changes to the JavaScript source file be sure to save it using the save_source_file tool so your team can review it.
