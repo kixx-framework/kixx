@@ -177,6 +177,10 @@ export default class JobQueueEngine {
         }
     }
 
+    get concurrentJobs() {
+        return this.#inProgressJobs.size;
+    }
+
     /**
      * Indicates whether the engine has reached the maximum number of concurrent jobs
      *
