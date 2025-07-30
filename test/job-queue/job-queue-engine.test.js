@@ -296,6 +296,9 @@ describe('JobQueueEngine: job loading from empty directory', ({ before, after, i
         });
 
         loadedJobs = await engine.load();
+
+        // Give it a beat to start jobs.
+        await delayPromise(10);
     });
 
     after(() => {
@@ -345,6 +348,9 @@ describe('JobQueueEngine: job loading with directory read error', ({ before, aft
             threwError = true;
             caughtError = error;
         }
+
+        // Give it a beat to start jobs.
+        await delayPromise(10);
     });
 
     after(() => {
@@ -380,7 +386,7 @@ describe('JobQueueEngine: scheduling ready job for immediate execution', ({ befo
         const mockFileSystem = {
             readJSONFile: sinon.stub(),
             writeJSONFile: sinon.stub().resolves(),
-            readDirectory: sinon.stub(),
+            readDirectory: sinon.stub().resolves([]),
             removeFile: sinon.stub(),
         };
 
@@ -408,6 +414,9 @@ describe('JobQueueEngine: scheduling ready job for immediate execution', ({ befo
         };
 
         scheduledJob = await engine.scheduleJob(readyJob);
+
+        // Give it a beat to start jobs.
+        await delayPromise(10);
     });
 
     after(() => {
@@ -432,14 +441,14 @@ describe('JobQueueEngine: scheduling deferred job', ({ before, after, it }) => {
     let mockLockingQueue;
     let deferredJob;
     let scheduledJob;
-    let originalSetTimeout;
-    let mockSetTimeout;
+    let mockTimers;
 
     before(async () => {
         // Mock setTimeout
-        originalSetTimeout = global.setTimeout;
-        mockSetTimeout = sinon.stub();
-        global.setTimeout = mockSetTimeout;
+        mockTimers = {
+            setTimeout: sinon.stub().returns(1),
+            clearTimeout: sinon.spy(),
+        };
 
         mockLockingQueue = {
             getLock: sinon.stub().resolves(),
@@ -450,7 +459,7 @@ describe('JobQueueEngine: scheduling deferred job', ({ before, after, it }) => {
         const mockFileSystem = {
             readJSONFile: sinon.stub(),
             writeJSONFile: sinon.stub().resolves(),
-            readDirectory: sinon.stub(),
+            readDirectory: sinon.stub().resolves([]),
             removeFile: sinon.stub(),
         };
 
@@ -458,6 +467,7 @@ describe('JobQueueEngine: scheduling deferred job', ({ before, after, it }) => {
             directory: '/var/jobs',
             lockingQueue: mockLockingQueue,
             fileSystem: mockFileSystem,
+            timers: mockTimers,
         });
 
         // Create a deferred job
@@ -474,10 +484,12 @@ describe('JobQueueEngine: scheduling deferred job', ({ before, after, it }) => {
         };
 
         scheduledJob = await engine.scheduleJob(deferredJob);
+
+        // Give it a beat to start jobs.
+        await delayPromise(10);
     });
 
     after(() => {
-        global.setTimeout = originalSetTimeout;
         sinon.restore();
         if (engine) {
             engine.dispose();
@@ -486,13 +498,13 @@ describe('JobQueueEngine: scheduling deferred job', ({ before, after, it }) => {
 
     it('should schedule future job with timeout', () => {
         assertEqual(deferredJob, scheduledJob);
-        assert(mockSetTimeout.calledOnce);
-        assertEqual(5000, mockSetTimeout.getCall(0).args[1]);
+        assertEqual(1, mockTimers.setTimeout.callCount);
+        assertEqual(5000, mockTimers.setTimeout.getCall(0).args[1]);
+        assertEqual(0, mockTimers.clearTimeout.callCount);
     });
 
     it('should not execute deferred job immediately', () => {
-        // The setTimeout should have been called instead of immediate execution
-        assert(mockSetTimeout.called);
+        assertEqual(0, engine.concurrentJobs);
     });
 });
 
@@ -533,6 +545,9 @@ describe('JobQueueEngine: scheduling job when engine disposed', ({ before, after
         engine.dispose();
 
         result = await engine.scheduleJob(testJob);
+
+        // Give it a beat to start jobs.
+        await delayPromise(10);
     });
 
     after(() => {
@@ -580,6 +595,9 @@ describe('JobQueueEngine: successful job execution with single parameter', ({ be
         };
 
         await engine.executeJob(testJob);
+
+        // Give it a beat to start jobs.
+        await delayPromise(10);
     });
 
     after(() => {
@@ -634,6 +652,9 @@ describe('JobQueueEngine: successful job execution with array parameters', ({ be
         };
 
         await engine.executeJob(testJob);
+
+        // Give it a beat to start jobs.
+        await delayPromise(10);
     });
 
     after(() => {

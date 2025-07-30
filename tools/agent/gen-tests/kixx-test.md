@@ -564,21 +564,6 @@ const stubCalls = stub.getCalls();
 ### .callCount
 The number of recorded [calls](#spy-call-api).
 
-### .called
-`true` if the spy was called at least once
-
-### .notCalled
-`true` if the spy was not called
-
-### .calledOnce
-`true` if spy was called exactly once
-
-### .calledTwice
-`true` if the spy was called exactly twice
-
-### .calledThrice
-`true` if the spy was called exactly thrice
-
 ### .firstCall
 The first [Spy Call API](#spy-call-api) object.
 
@@ -711,9 +696,7 @@ Exception thrown, if any.
 ### .returnValue
 Return value.
 
----
-
-## Best Practices when using Kixx Test
+## Test Framework Best Practices
 - Define your test subject, spies and stubs, and any results or state at the top of your `describe(({ before, after, it }) => {});` block using the JavaScript `let` keyword. Then you can define those block level values from inside your `before(() => {});` block and use them throughout your describe block scope.
 - Do not nest describe() blocks. Although possible to do so, nested describe blocks become confusing. Instead create a top level describe block for each discrete piece of functionality even if that means you need to repeat before() and after() blocks.
 - Create a discrete describe() block for each logical branch of code in a method.
@@ -728,4 +711,11 @@ Return value.
 - Set up Sinon spies and stubs in the before() block so the it() assertions have access to the Sinon spy calls.
 - Be sure to call `sinon.restore()` in the after() block to avoid creating race conditions and unexpected state in your tests.
 
----
+### Use Sinon Say API .callCount
+We prefer to use [Sinon Say API](#sinon-say-api) .callCount rather than methods like .calledOnce or .calledTwice. Asserting the number of calls made provides more useful information:
+
+```javascript
+const date = new Date();
+sinon.spy(date, 'getTime');
+assertEqual(2, date.getTime.callCount); // Prints a better error message on failure
+```
