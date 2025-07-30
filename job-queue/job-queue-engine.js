@@ -5,6 +5,8 @@
  * deferred execution, custom handlers, and safe concurrent processing.
  */
 
+// TODO: Update docs for job-queue-engine
+
 import path from 'node:path';
 import { AssertionError, WrappedError } from '../errors/mod.js';
 import LockingQueue from '../lib/locking-queue.js';
@@ -126,6 +128,11 @@ export default class JobQueueEngine {
      */
     #fileSystem = fileSystem;
 
+    #timers = {
+        setTimeout,
+        clearTimeout,
+    };
+
     /**
      * Create a new JobQueueEngine instance
      *
@@ -162,6 +169,11 @@ export default class JobQueueEngine {
         // This lets us mock file operations without touching real disk
         if (options.fileSystem) {
             this.#fileSystem = options.fileSystem;
+        }
+        // Allow dependency injection of system timers setTimeout and
+        // clearTimeout. This lets us mock timing operations for testing.
+        if (options.timers) {
+            this.#timers = options.timers;
         }
     }
 
@@ -263,7 +275,7 @@ export default class JobQueueEngine {
         // Job is deferred - schedule it using Node.js setTimeout
         // This leverages the event loop's timer phase for precise scheduling
         const milliseconds = job.getDeferredMilliseconds();
-        const handle = setTimeout(this.startNextJob.bind(this), milliseconds);
+        const handle = this.#timers.setTimeout(this.startNextJob.bind(this), milliseconds);
 
         // Store handle for cleanup during disposal
         this.#scheduledJobHandles.set(job.id, handle);
@@ -284,7 +296,7 @@ export default class JobQueueEngine {
         // Clean up all pending setTimeout handles to prevent memory leaks
         // and unwanted job execution after disposal
         for (const handle of this.#scheduledJobHandles.values()) {
-            clearTimeout(handle);
+            this.#timers.clearTimeout(handle);
         }
 
         this.#scheduledJobHandles.clear();
