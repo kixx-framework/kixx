@@ -5,12 +5,12 @@ export default [
     {
         ignores: [
             'node_modules/',
-            'vendor/',
+            'lib/vendor/',
             // Other vendor/dependency directories:
-            'assertions/',
-            'errors/',
-            'logger/',
-            'template-engine/',
+            'lib/assertions/',
+            'lib/errors/',
+            'lib/logger/',
+            'lib/template-engine/',
             // Client side JS in reference app:
             'reference-app/templates/',
         ],

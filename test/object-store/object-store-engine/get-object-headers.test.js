@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 import sinon from 'sinon';
-import ObjectStoreEngine from '../../../object-store/object-store-engine.js';
+import ObjectStoreEngine from '../../../lib/object-store/object-store-engine.js';
 
 
 const thisDirectory = path.dirname(fileURLToPath(import.meta.url));

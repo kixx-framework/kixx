@@ -11,7 +11,7 @@ import {
 } from 'kixx-assert';
 import sinon from 'sinon';
 
-import Job from '../../job-queue/job.js';
+import Job from '../../lib/job-queue/job.js';
 
 // Test Group: Constructor Behavior
 describe('Job constructor: should create job with valid immutable properties', ({ before, it }) => {
