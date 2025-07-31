@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assertEqual, assertUndefined, assertMatches } from 'kixx-assert';
 import sinon from 'sinon';
-import ObjectStoreEngine from '../../../object-store/object-store-engine.js';
+import ObjectStoreEngine from '../../../lib/object-store/object-store-engine.js';
 
 const MD5_PATTERN = /^[0-9a-f]{32}$/;
 const HTTP_DATE_PATTERN = /^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/;

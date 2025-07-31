@@ -3,7 +3,7 @@
   "version": "4.0.0",
   "description": "A web development framework for Node.js servers.",
   "type": "module",
-  "main": "mod.js",
+  "main": "lib/mod.js",
   "engines": {
     "node": ">=16.13.2"
   },
@@ -19,21 +19,9 @@
     "url": "https://github.com/kixx-platform/kixx.git"
   },
   "files": [
-    "application/",
-    "assertions/",
-    "bin/",
-    "cli/",
-    "datastore/",
-    "errors/",
-    "http-server/",
-    "job-queue/",
     "lib/",
-    "logger/",
-    "request-handlers/",
-    "template-engine/",
-    "view-service/",
-    "vendor/",
-    "mod.js"
+    "bin/",
+    "cli/"
   ],
   "devDependencies": {
     "@eslint/js": "9.27.0",

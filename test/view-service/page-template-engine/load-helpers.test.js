@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assertEqual, assertFunction, assertUndefined, assertNotEqual } from 'kixx-assert';
 import sinon from 'sinon';
-import PageTemplateEngine from '../../../view-service/page-template-engine.js';
+import PageTemplateEngine from '../../../lib/view-service/page-template-engine.js';
 
 
 const thisDirectory = path.dirname(fileURLToPath(import.meta.url));

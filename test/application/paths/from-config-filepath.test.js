@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Paths from '../../../application/paths.js';
+import Paths from '../../../lib/application/paths.js';
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 

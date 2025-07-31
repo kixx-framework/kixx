@@ -2,9 +2,9 @@ import process from 'node:process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import * as Application from '../application/application.js';
-import { readDirectory } from '../lib/file-system.js';
-import { isNonEmptyString, assertFunction } from '../assertions/mod.js';
+import * as Application from '../lib/application/application.js';
+import { readDirectory } from '../lib/lib/file-system.js';
+import { isNonEmptyString, assertFunction } from '../lib/assertions/mod.js';
 
 
 const options = {
