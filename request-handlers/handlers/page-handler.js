@@ -31,7 +31,7 @@ export default function PageHandler(spec) {
 
         const pageData = await viewService.getPageData(pathname, response.props);
 
-        if (request.isRequestForJSON()) {
+        if (request.isJSONRequest()) {
             return response.respondWithJSON(200, pageData, { whiteSpace: 4 });
         }
 
