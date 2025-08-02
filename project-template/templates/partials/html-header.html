@@ -1,0 +1,31 @@
+<meta charset="utf-8">
+
+<title>{{ title }}</title>
+
+{{#if description }}
+    <meta name="description" content="{{ description }}">
+{{/if}}
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+{{#if openGraph.type }}
+    <meta property="og:type" content="{{ openGraph.type }}">
+{{/if}}
+{{#if openGraph.title }}
+    <meta property="og:title" content="{{ openGraph.title }}">
+{{/if}}
+{{#if openGraph.url }}
+    <meta property="og:url" content="{{ openGraph.url }}">
+{{/if}}
+{{#if openGraph.image }}
+    <meta property="og:image" content="{{ openGraph.image.url }}">
+    <meta property="og:image:url" content="{{ openGraph.image.url }}">
+{{/if}}
+
+{{#if canonicalURL }}
+    <link rel="canonical" href="{{ canonicalURL }}" />
+{{/if}}
+
+<style type="text/css">
+    {{> styles.css }}
+</style>

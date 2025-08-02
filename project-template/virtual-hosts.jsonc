@@ -1,0 +1,15 @@
+[
+    {
+        "name": "Main",
+        // Notice that we need to write the hostname backward. This is so that we
+        // can match a hostname from the most generic part (com) to the most specific (developers).
+        // So "developers.example.com" becomes "com.example.developers".
+        "hostname": "com.example.developers",
+        "routes": [
+            // The "app:" protocol will resolve to files in your custom routes/ directory.
+            "app://main.json",
+            // Most applications will use the Kixx default routes.
+            "kixx://defaults.json"
+        ]
+    }
+]

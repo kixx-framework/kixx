@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import process from 'node:process';
-import * as InitProject from '../cli/kixx/init-project.js';
+import * as DevServer from '../cli/app/dev-server.js';
+import * as ProdServer from '../cli/app/server.js';
+import * as RunCommand from '../cli/app/run-command.js';
 
 
 const args = process.argv.slice(2);
@@ -18,8 +20,14 @@ if (!commandName) {
 let promise;
 
 switch (commandName) {
-    case 'init-project':
-        promise = InitProject.main(args);
+    case 'dev':
+        promise = DevServer.main(args);
+        break;
+    case 'server':
+        promise = ProdServer.main(args);
+        break;
+    case 'run':
+        promise = RunCommand.main(args);
         break;
     default:
         // eslint-disable-next-line no-console

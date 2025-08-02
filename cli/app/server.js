@@ -1,9 +1,9 @@
 import process from 'node:process';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import ApplicationServer from '../lib/application/application-server.js';
-import * as Application from '../lib/application/application.js';
-import { isNonEmptyString } from '../lib/assertions/mod.js';
+import ApplicationServer from '../../lib/application/application-server.js';
+import * as Application from '../../lib/application/application.js';
+import { isNonEmptyString } from '../../lib/assertions/mod.js';
 
 
 const options = {
