@@ -1,7 +1,6 @@
 import process from 'node:process';
 import { assert } from '../assertions/mod.js';
 import Datastore from '../datastore/datastore.js';
-import ObjectStore from '../object-store/object-store.js';
 import JobQueue from '../job-queue/job-queue.js';
 import ViewService from '../view-service/view-service.js';
 
@@ -11,12 +10,12 @@ import ViewService from '../view-service/view-service.js';
  * =======
  *
  * The Context class provides a central registry and accessor for core application services,
- * such as configuration, paths, logging, data stores, object stores, job queues, and view services.
+ * such as configuration, paths, logging, data stores, job queues, and view services.
  * It is responsible for managing the lifecycle and access to these services, and for providing
  * a consistent interface for other parts of the application to retrieve them.
  *
  * Core Features:
- *   - Registers and retrieves named services (e.g., Datastore, ObjectStore, JobQueue, ViewService)
+ *   - Registers and retrieves named services (e.g., Datastore, JobQueue, ViewService)
  *   - Provides access to application config, paths, and logger
  *   - Static loader for initializing and wiring up all core services
  *
@@ -100,11 +99,9 @@ export default class Context {
 
         const viewService = createViewService(logger, paths);
         const datastore = await loadDatastore(paths);
-        const objectStore = await loadObjectStore(paths);
         const jobQueue = createJobQueue(logger, paths);
 
         context.registerService('kixx.Datastore', datastore);
-        context.registerService('kixx.ObjectStore', objectStore);
         context.registerService('kixx.JobQueue', jobQueue);
         context.registerService('kixx.AppViewService', viewService);
 
@@ -161,19 +158,6 @@ async function loadDatastore(paths) {
     await datastore.load();
 
     return datastore;
-}
-
-/**
- * Loads and initializes the ObjectStore service.
- *
- * @param {Object} paths - The application paths object.
- * @returns {Promise<ObjectStore>} The loaded ObjectStore instance.
- */
-async function loadObjectStore(paths) {
-    const store = new ObjectStore({
-        directory: paths.object_store_directory,
-    });
-    return store;
 }
 
 /**
