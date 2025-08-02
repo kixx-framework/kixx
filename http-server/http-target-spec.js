@@ -183,5 +183,5 @@ export default class HttpTargetSpec {
 function composeMiddleware(middleware, def) {
     const [ name, options ] = def;
     const factory = middleware.get(name);
-    return factory(options);
+    return factory(options || {});
 }
