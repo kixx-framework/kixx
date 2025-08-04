@@ -17,7 +17,8 @@ export default function tokenize(options, filename, utf8) {
     // Each line will break down as a new token, disregarding the "{{" "}}" syntax.
     for (; lineIndex < lines.length; lineIndex += 1) {
         // Add the newline character back after splitting it out.
-        const line = lines[lineIndex] + '\n';
+        // ! Only if there is more than one line.
+        const line = lines.length > 1 ? lines[lineIndex] + '\n' : lines[lineIndex];
 
         let tokenString = '';
 
