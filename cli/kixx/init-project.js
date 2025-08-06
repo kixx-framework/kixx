@@ -40,11 +40,14 @@ export async function main(args) {
         process.exit(1);
     }
 
-    const processName = appName.replace(/[^a-z0-9]/g, '').slice(0, 12);
+    const processName = appName.replace(/[^a-z0-9]/g, '').slice(0, 15);
 
-    await createReadme(appName);
-    await createKixxConfig(appName, processName);
-    await createSitePageData(appName);
+    console.log(path.relative(TEMPLATE_DIR, PROJECT_DIR));
+    console.log(path.relative(PROJECT_DIR, 'pages/index.html'));
+
+    // await createReadme(appName);
+    // await createKixxConfig(appName, processName);
+    // await createSitePageData(appName);
 }
 
 async function createReadme(applicationName) {
@@ -64,6 +67,13 @@ async function createReadme(applicationName) {
 }
 
 async function createKixxConfig(appName, processName) {
+    const destPathname = path.join(PROJECT_DIR, 'kixx-config.jsonc');
+    const destExists = await statFile(destPathname);
+
+    if (destExists) {
+        return false;
+    }
+
     const srcPathname = path.join(TEMPLATE_DIR, 'kixx-config.jsonc');
     let textContent = await fsp.readFile(srcPathname, 'utf8');
 
@@ -73,19 +83,22 @@ async function createKixxConfig(appName, processName) {
     diff = jsonc.modify(textContent, [ 'processName' ], processName, {});
     textContent = jsonc.applyEdits(textContent, diff);
 
-    const destPathname = path.join(PROJECT_DIR, 'kixx-config.jsonc');
-
     await fsp.writeFile(destPathname, textContent, 'utf8');
 }
 
 async function createSitePageData(appName) {
+    const destPathname = path.join(PROJECT_DIR, 'site-page-data.jsonc');
+    const destExists = await statFile(destPathname);
+
+    if (destExists) {
+        return false;
+    }
+
     const srcPathname = path.join(TEMPLATE_DIR, 'site-page-data.jsonc');
     let textContent = await fsp.readFile(srcPathname, 'utf8');
 
     const diff = jsonc.modify(textContent, [ 'title' ], appName, {});
     textContent = jsonc.applyEdits(textContent, diff);
-
-    const destPathname = path.join(PROJECT_DIR, 'site-page-data.jsonc');
 
     await fsp.writeFile(destPathname, textContent, 'utf8');
 }
@@ -96,7 +109,17 @@ function compileTemplate(templateId, utf8) {
     return TemplateEngine.createRenderFunction(null, new Map(), new Map(), tree);
 }
 
-function copyFileIfNotExists() {
+function copyDirectory() {
+}
+
+/**
+ * Copy a file to a destination pathname if the destination file does not exist.
+ *
+ * @param {string} sourcePathname
+ * @param {string} destPathname
+ */
+async function copyFileIfNotExists(sourcePathname, destPathname) {
+    await fsp.copyFile(sourcePathname, destPathname, fsp.constants.COPYFILE_EXCL);
 }
 
 async function statFile(filepath) {
