@@ -7,7 +7,7 @@
         "hostname": "com.example.developers",
         "routes": [
             // The "app:" protocol will resolve to files in your custom routes/ directory.
-            "app://main.json",
+            "app://main.jsonc",
             // Most applications will use the Kixx default routes.
             "kixx://defaults.json"
         ]

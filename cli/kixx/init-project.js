@@ -42,12 +42,14 @@ export async function main(args) {
 
     const processName = appName.replace(/[^a-z0-9]/g, '').slice(0, 15);
 
-    console.log(path.relative(TEMPLATE_DIR, PROJECT_DIR));
-    console.log(path.relative(PROJECT_DIR, 'pages/index.html'));
-
-    // await createReadme(appName);
-    // await createKixxConfig(appName, processName);
-    // await createSitePageData(appName);
+    await createReadme(appName);
+    await createKixxConfig(appName, processName);
+    await createSitePageData(appName);
+    await copyFileIfNotExists(path.join(TEMPLATE_DIR, 'virtual-hosts.jsonc'), path.join(PROJECT_DIR, 'virtual-hosts.jsonc'));
+    await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'pages'), path.join(PROJECT_DIR, 'pages'));
+    await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'templates'), path.join(PROJECT_DIR, 'templates'));
+    await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'routes'), path.join(PROJECT_DIR, 'routes'));
+    await copyFileIfNotExists(path.join(TEMPLATE_DIR, '.gitignore'), path.join(PROJECT_DIR, '.gitignore'));
 }
 
 async function createReadme(applicationName) {
@@ -109,17 +111,35 @@ function compileTemplate(templateId, utf8) {
     return TemplateEngine.createRenderFunction(null, new Map(), new Map(), tree);
 }
 
-function copyDirectory() {
+async function copyDirectoryRecursive(sourceDir, destDir) {
+    // Ensure destination directory exists
+    await fsp.mkdir(destDir, { recursive: true });
+
+    const entries = await fsp.readdir(sourceDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const sourcePath = path.join(sourceDir, entry.name);
+        const destPath = path.join(destDir, entry.name);
+
+        if (entry.isDirectory()) {
+            // eslint-disable-next-line no-await-in-loop
+            await copyDirectoryRecursive(sourcePath, destPath);
+        } else if (entry.isFile()) {
+            // eslint-disable-next-line no-await-in-loop
+            await copyFileIfNotExists(sourcePath, destPath);
+        }
+        // Skip other entry types (symbolic links, etc.)
+    }
 }
 
-/**
- * Copy a file to a destination pathname if the destination file does not exist.
- *
- * @param {string} sourcePathname
- * @param {string} destPathname
- */
 async function copyFileIfNotExists(sourcePathname, destPathname) {
-    await fsp.copyFile(sourcePathname, destPathname, fsp.constants.COPYFILE_EXCL);
+    try {
+        await fsp.copyFile(sourcePathname, destPathname, fsp.constants.COPYFILE_EXCL);
+    } catch (error) {
+        if (error.code !== 'EEXIST') {
+            throw error;
+        }
+    }
 }
 
 async function statFile(filepath) {
