@@ -1,40 +1,52 @@
 # The Kixx Datastore
-Data management in Kixx applications is handled through the Datastore service, which provides a file-backed, document-oriented storage system with in-memory caching, optimistic concurrency control, and powerful querying capabilities. Understanding how to effectively use the datastore is crucial for building scalable hypermedia applications.
+Data management in Kixx applications is handled through the Datastore service, which provides a file-backed, document-oriented storage system with in-memory caching, optimistic concurrency control, and powerful querying capabilities.
 
-## Datastore Architecture
+## API Reference
 
-### Core Components
-
-The datastore consists of several key components:
+### Data Types
 
 ```javascript
-const datastore = context.getService('kixx.Datastore');
+/**
+ * Document structure with automatic revision management
+ * @typedef {Object} Document
+ * @property {number} _rev - Revision number for optimistic concurrency control
+ * @property {*} [*] - Any additional document properties
+ */
+
+/**
+ * Query result with pagination support
+ * @typedef {Object} QueryResult
+ * @property {number|null} exclusiveEndIndex - Index for next page, or null if no more results
+ * @property {Array<Object>} items - Array of query result items
+ * @property {string|number} items[].key - Document key
+ * @property {Document} [items[].document] - Full document object (when includeDocuments is true)
+ * @property {*} [items[].value] - Emitted value (only for view queries)
+ */
+
+/**
+ * Update function signature
+ * @typedef {Function} UpdateFunction
+ * @param {Document|null} currentDocument - Current document or null if doesn't exist
+ * @returns {Document|Promise<Document>} Updated document
+ */
 ```
 
-Components:
+### Method Signatures
 
-- Document storage (JSON files)
-- In-memory cache (all documents loaded at startup)
-- Views (for complex queries)
-- Indexing (for fast lookups)
-- Concurrency control (optimistic locking)
+```javascript
+// Core CRUD operations
+async getItem(key: string|number): Promise<Document|null>
+async setItem(key: string|number, document: Object, options?: { checkConsistency?: boolean }): Promise<Document>
+async updateItem(key: string|number, updateFunction: UpdateFunction, options?: { checkConsistency?: boolean }): Promise<Document>
+async deleteItem(key: string|number): Promise<string|number>
 
-### In-Memory Caching
+// Query operations
+async queryKeys(options: Object): Promise<QueryResult>
+async queryView(viewId: string, options: Object): Promise<QueryResult>
 
-The datastore loads all documents into memory at startup for fast access:
-
-This provides:
-
-- Fast read access
-- No disk I/O for reads
-- Immediate consistency
-- Requires entire dataset to fit in RAM
-
-Memory usage considerations:
-
-- Monitor memory usage
-- Consider data archiving for large datasets
-- Use views for efficient queries
+// Lifecycle
+async load(): Promise<Datastore>
+```
 
 ## Basic Operations
 
@@ -51,6 +63,9 @@ const item = await datastore.setItem('item:123', {
     updatedAt: new Date().toISOString()
 });
 
+// The _rev property is automatically managed by the datastore
+console.log(item._rev); // 0 (first revision)
+
 // Generate unique IDs
 const id = `item:${ randomUUID() }`;
 const item = await datastore.setItem(id, itemData);
@@ -61,15 +76,14 @@ const item = await datastore.setItem(id, itemData);
 ```javascript
 // Get a single document
 const item = await datastore.getItem('item:123');
+// Returns Document|null (deep cloned document or null if not found)
 
 // Check if document exists
-try {
-    const item = await datastore.getItem('item:123');
+if (item) {
     // Document exists
-} catch (error) {
-    if (error.name === 'NotFoundError') {
-        // Document doesn't exist
-    }
+    console.log(item._rev); // Current revision number
+} else {
+    // Document doesn't exist
 }
 
 // Get multiple documents
@@ -79,6 +93,7 @@ const result = await datastore.queryKeys({
     includeDocuments: true,
     limit: 10
 });
+// Returns QueryResult with items array and pagination info
 ```
 
 ### Updating Documents
@@ -96,6 +111,7 @@ const updatedItem = await datastore.updateItem('item:123', (currentItem) => {
         updatedAt: new Date().toISOString()
     };
 });
+// Returns Document with updated _rev property
 
 // Update with conflict handling
 try {
@@ -103,18 +119,24 @@ try {
         return { ...currentItem, price: 39.99 };
     });
 } catch (error) {
-    if (error.name === 'ConflictError') {
+    if (error.code === 'CONFLICT_ERROR') {
         // Handle concurrent modification
         // Retry or show error to user
     }
 }
+
+// Update with consistency check disabled
+const updatedItem = await datastore.updateItem('item:123', (currentItem) => {
+    return { ...currentItem, price: 39.99 };
+}, { checkConsistency: false });
 ```
 
 ### Deleting Documents
 
 ```javascript
 // Delete a document
-await datastore.deleteItem('item:123');
+const deletedKey = await datastore.deleteItem('item:123');
+// Returns Promise<string|number> - the deleted key
 
 // Soft delete (mark as deleted)
 await datastore.updateItem('item:123', (currentItem) => {
@@ -137,8 +159,19 @@ const result = await datastore.queryKeys({
     endKey: 'item:\uffff',
     includeDocuments: true,
     limit: 50,
-    offset: 0
+    inclusiveStartIndex: 0
 });
+// Returns QueryResult object:
+// {
+//   exclusiveEndIndex: number|null, // Index for next page, or null if no more results
+//   items: [
+//     {
+//       key: 'item:123',
+//       document: { /* full document object */ } // Only when includeDocuments is true
+//     },
+//     // ... more items
+//   ]
+// }
 
 // Query specific range
 const result = await datastore.queryKeys({
@@ -153,7 +186,7 @@ const result = await datastore.queryKeys({
     endKey: 'item:\uffff',
     includeDocuments: true,
     limit: 20,
-    offset: 40, // Skip first 40 items
+    inclusiveStartIndex: 40, // Skip first 40 items
     descending: true // Most recent first
 });
 ```
@@ -183,6 +216,7 @@ const result = await datastore.queryView('itemsByCategory', {
     includeDocuments: true,
     limit: 20
 });
+// Returns QueryResult with items array containing key, value, and optional document
 ```
 
 ### Advanced Views
@@ -219,87 +253,6 @@ engine.setView('itemsByDate', {
 });
 ```
 
-## Data Modeling
-
-### Document Structure
-
-Design your documents for efficient querying:
-
-```javascript
-// Good document structure
-const item = {
-    id: 'item:123',
-    type: 'item',           // Document type for filtering
-    title: 'Sample Item',
-    description: 'Description here',
-    price: 29.99,
-    category: 'electronics',
-    tags: ['gadget', 'tech'],
-    metadata: {
-        sku: 'SKU123',
-        weight: 0.5,
-        dimensions: { width: 10, height: 5, depth: 2 }
-    },
-    status: 'active',       // For soft deletes
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z'
-};
-
-// User document
-const user = {
-    id: 'user:456',
-    type: 'user',
-    email: 'user@example.com',
-    name: 'John Doe',
-    role: 'customer',
-    preferences: {
-        newsletter: true,
-        theme: 'dark'
-    },
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z'
-};
-```
-
-### Key Naming Conventions
-
-Use consistent key naming for efficient querying:
-
-```javascript
-// Key naming patterns
-const keys = {
-    // Simple items
-    item: 'item:123',
-    
-    // User items
-    userItem: 'user:456:item:123',
-    
-    // Date-based items
-    dateItem: 'item:2024-01-15:123',
-    
-    // Category-based items
-    categoryItem: 'item:electronics:123',
-    
-    // Composite keys
-    composite: 'order:2024-01-15:456:item:123'
-};
-
-// Query patterns
-const queries = {
-    // All items
-    allItems: { startKey: 'item:', endKey: 'item:\uffff' },
-    
-    // User's items
-    userItems: { startKey: 'user:456:item:', endKey: 'user:456:item:\uffff' },
-    
-    // Items by date
-    dateItems: { startKey: 'item:2024-01-15:', endKey: 'item:2024-01-15:\uffff' },
-    
-    // Items by category
-    categoryItems: { startKey: 'item:electronics:', endKey: 'item:electronics:\uffff' }
-};
-```
-
 ## Concurrency Control
 
 ### Optimistic Locking
@@ -319,7 +272,7 @@ async function updateItemPrice(id, newPrice) {
         });
         return updatedItem;
     } catch (error) {
-        if (error.name === 'ConflictError') {
+        if (error.code === 'CONFLICT_ERROR') {
             // Another process modified the document
             // Retry or handle conflict
             throw new Error('Item was modified by another user. Please try again.');
@@ -393,93 +346,6 @@ class ConflictResolver {
 }
 ```
 
-## Performance Optimization
-
-### Efficient Queries
-
-Optimize your queries for performance:
-
-```javascript
-// Efficient querying patterns
-class QueryOptimizer {
-    // Use views for complex queries
-    static async getItemsByCategory(category, options = {}) {
-        return await datastore.queryView('itemsByCategory', {
-            startKey: category,
-            endKey: category + '\uffff',
-            includeDocuments: true,
-            limit: options.limit || 50,
-            offset: options.offset || 0
-        });
-    }
-    
-    // Use pagination for large datasets
-    static async getItemsPaginated(page = 1, pageSize = 20) {
-        const offset = (page - 1) * pageSize;
-        return await datastore.queryKeys({
-            startKey: 'item:',
-            endKey: 'item:\uffff',
-            includeDocuments: true,
-            limit: pageSize,
-            offset: offset
-        });
-    }
-    
-    // Use specific key ranges
-    static async getRecentItems(days = 7) {
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
-        const startKey = `item:${cutoffDate.toISOString().split('T')[0]}`;
-        
-        return await datastore.queryKeys({
-            startKey: startKey,
-            endKey: 'item:\uffff',
-            includeDocuments: true,
-            limit: 100,
-            descending: true
-        });
-    }
-}
-```
-
-### Memory Management
-
-Monitor and manage memory usage:
-
-```javascript
-// Memory monitoring
-class MemoryMonitor {
-    static getMemoryUsage() {
-        const usage = process.memoryUsage();
-        return {
-            rss: `${Math.round(usage.rss / 1024 / 1024)}MB`,
-            heapUsed: `${Math.round(usage.heapUsed / 1024 / 1024)}MB`,
-            heapTotal: `${Math.round(usage.heapTotal / 1024 / 1024)}MB`,
-            external: `${Math.round(usage.external / 1024 / 1024)}MB`
-        };
-    }
-    
-    static logMemoryUsage(logger) {
-        const usage = this.getMemoryUsage();
-        logger.info('Memory usage', usage);
-    }
-    
-    // Monitor datastore size
-    static async getDatastoreStats(datastore) {
-        const result = await datastore.queryKeys({
-            startKey: '',
-            endKey: '\uffff',
-            includeDocuments: false
-        });
-        
-        return {
-            totalDocuments: result.total,
-            estimatedSize: `${Math.round(result.total * 1024 / 1024)}MB` // Rough estimate
-        };
-    }
-}
-```
-
 ## Data Migration
 
 ### Schema Evolution
@@ -532,173 +398,6 @@ class SchemaMigrator {
             }
             return document;
         });
-    }
-}
-```
-
-## Backup and Recovery
-
-### Data Backup
-
-Implement backup strategies:
-
-```javascript
-// Backup utility
-class DataBackup {
-    static async createBackup(datastore, backupPath) {
-        const result = await datastore.queryKeys({
-            startKey: '',
-            endKey: '\uffff',
-            includeDocuments: true
-        });
-        
-        const backup = {
-            timestamp: new Date().toISOString(),
-            version: '1.0',
-            documents: result.items.map(item => ({
-                key: item.key,
-                document: item.document
-            }))
-        };
-        
-        // Write backup to file
-        const fs = await import('fs/promises');
-        await fs.writeFile(backupPath, JSON.stringify(backup, null, 2));
-        
-        return {
-            path: backupPath,
-            documentCount: result.total,
-            size: `${Math.round(JSON.stringify(backup).length / 1024)}KB`
-        };
-    }
-    
-    static async restoreBackup(datastore, backupPath) {
-        const fs = await import('fs/promises');
-        const backupData = JSON.parse(await fs.readFile(backupPath, 'utf8'));
-        
-        let restored = 0;
-        let errors = 0;
-        
-        for (const item of backupData.documents) {
-            try {
-                await datastore.setItem(item.key, item.document);
-                restored++;
-            } catch (error) {
-                console.error(`Restore failed for ${item.key}:`, error);
-                errors++;
-            }
-        }
-        
-        return { restored, errors, total: backupData.documents.length };
-    }
-}
-```
-
-## Best Practices
-
-### 1. Key Design
-
-Design keys for efficient querying:
-
-```javascript
-// Good key design
-const goodKeys = {
-    // Hierarchical
-    userOrder: 'user:123:order:456',
-    
-    // Date-based
-    dateItem: 'item:2024-01-15:789',
-    
-    // Category-based
-    categoryItem: 'item:electronics:101',
-    
-    // Composite
-    composite: 'order:2024-01-15:456:item:789'
-};
-
-// Avoid
-const badKeys = {
-    // Random IDs (hard to query)
-    random: 'item:abc123def456',
-    
-    // No structure
-    unstructured: 'item123'
-};
-```
-
-### 2. Document Design
-
-Design documents for your use cases:
-
-```javascript
-// Good document design
-const goodDocument = {
-    id: 'item:123',
-    type: 'item',           // For filtering
-    title: 'Sample Item',
-    category: 'electronics',
-    status: 'active',       // For soft deletes
-    metadata: {             // Group related fields
-        sku: 'SKU123',
-        weight: 0.5
-    },
-    timestamps: {           // Group timestamps
-        createdAt: '2024-01-15T10:00:00Z',
-        updatedAt: '2024-01-15T10:00:00Z'
-    }
-};
-```
-
-### 3. Query Optimization
-
-Optimize queries for performance:
-
-```javascript
-// Use views for complex queries
-engine.setView('itemsByCategory', {
-    map: function(document, emit) {
-        if (document.type === 'item' && document.category) {
-            emit(document.category, document);
-        }
-    }
-});
-
-// Use pagination for large datasets
-const result = await datastore.queryKeys({
-    startKey: 'item:',
-    endKey: 'item:\uffff',
-    includeDocuments: true,
-    limit: 20,  // Reasonable page size
-    offset: 0
-});
-```
-
-### 4. Error Handling
-
-Handle errors gracefully:
-
-```javascript
-// Robust error handling
-async function safeGetItem(id) {
-    try {
-        return await datastore.getItem(id);
-    } catch (error) {
-        if (error.name === 'NotFoundError') {
-            return null;
-        }
-        throw error;
-    }
-}
-
-async function safeUpdateItem(id, updateFunction) {
-    try {
-        return await datastore.updateItem(id, updateFunction);
-    } catch (error) {
-        if (error.name === 'ConflictError') {
-            // Handle concurrent modification
-            throw new Error('Item was modified by another user');
-        }
-        throw error;
     }
 }
 ```
