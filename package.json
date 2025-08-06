@@ -8,8 +8,8 @@
     "node": ">=16.13.2"
   },
   "bin": {
-    "kixx": "bin/kixx.js",
-    "app": "bin/app.js"
+    "kixx-dev": "bin/kixx-dev.js",
+    "kixx-app": "bin/kixx-app.js"
   },
   "scripts": {
     "test": "eslint ./ && node run-tests.js",
