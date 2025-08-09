@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
-import { assertEqual } from 'kixx-assert';
+import { assert, assertEqual } from 'kixx-assert';
 import Paths from '../../lib/application/paths.js';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -64,5 +64,91 @@ describe('Application/Paths#constructor with valid input', ({ before, it }) => {
 
     it('should have the correct job_directory', () => {
         assertEqual(subject.job_directory, path.join(FAKE_APP_DIR, 'data', 'jobs'));
+    });
+});
+
+describe('Application/Paths#constructor with invalid input', ({ it }) => {
+    it('should throw an AssertionError when applicationDirectory is undefined', () => {
+        let error;
+        try {
+            new Paths();
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
+    });
+
+    it('should throw an AssertionError when applicationDirectory is null', () => {
+        let error;
+        try {
+            new Paths(null);
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
+    });
+
+    it('should throw an AssertionError when applicationDirectory is an empty string', () => {
+        let error;
+        try {
+            new Paths('');
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
+    });
+
+    it('should throw an AssertionError when applicationDirectory is a number', () => {
+        let error;
+        try {
+            new Paths(123);
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
+    });
+
+    it('should throw an AssertionError when applicationDirectory is an object', () => {
+        let error;
+        try {
+            new Paths({});
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
+    });
+
+    it('should throw an AssertionError when applicationDirectory is an array', () => {
+        let error;
+        try {
+            new Paths([]);
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
+    });
+
+    it('should throw an AssertionError when applicationDirectory is a boolean', () => {
+        let error;
+        try {
+            new Paths(false);
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
     });
 });
