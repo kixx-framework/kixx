@@ -1,6 +1,6 @@
 {
   "name": "kixx-assert",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Assert things in JavaScript",
   "type": "module",
   "main": "mod.js",
