@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertArray } from 'kixx-assert';
+import { assert, assertEqual, assertArray, assertFunction, assertMatches } from 'kixx-assert';
 import PluginStore from '../../lib/application/plugin-store.js';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -43,7 +43,12 @@ describe('Application/PluginStore#getPluginPaths() with no plugin file', ({ befo
                     }];
                 }
                 if (dir === path.join(directory, 'my-plugin')) {
-                    return [];
+                    return [{
+                        name: 'request-handlers',
+                        isDirectory() {
+                            return true;
+                        },
+                    }];
                 }
                 return [];
             },
@@ -229,5 +234,73 @@ describe('Application/PluginStore#constructor with invalid input', ({ it }) => {
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
+    });
+});
+
+describe('Application/PluginStore#loadPlugins() when the plugin is found', ({ before, it }) => {
+    const directory = path.join(THIS_DIR, 'fixtures', 'app-0', 'plugins');
+    let result;
+
+    before(async () => {
+        const subject = new PluginStore({ directory });
+        result = await subject.loadPlugins();
+    });
+
+    it('returns plugins with loaded register and initialize functions', () => {
+        assertArray(result);
+        assertEqual(1, result.length);
+
+        const plugin = result[0];
+        assertEqual(path.join(directory, 'app'), plugin.directory);
+        assertEqual(path.join(directory, 'app', 'plugin.js'), plugin.filepath);
+        assertFunction(plugin.register);
+        assertFunction(plugin.initialize);
+        assertEqual(path.join(directory, 'app', 'middleware'), plugin.middlewareDirectory);
+        assertEqual(path.join(directory, 'app', 'request-handlers'), plugin.requestHandlerDirectory);
+        assertEqual(path.join(directory, 'app', 'error-handlers'), plugin.errorHandlerDirectory);
+    });
+});
+
+describe('Application/PluginStore#loadPlugins() when the plugin does not exist', ({ before, it }) => {
+    const directory = path.join(THIS_DIR, 'fixtures', 'app-1', 'plugins');
+    let result;
+
+    before(async () => {
+        const subject = new PluginStore({ directory });
+        result = await subject.loadPlugins();
+    });
+
+    it('returns a PluginInfo object without register and initialize functions', () => {
+        assertArray(result);
+        assertEqual(1, result.length);
+        assertEqual(null, result[0].register);
+        assertEqual(null, result[0].initialize);
+    });
+});
+
+describe('Application/PluginStore#loadPlugins() when there is a plugin import error', ({ before, it }) => {
+    const directory = path.join(THIS_DIR, 'fixtures', 'app-3', 'plugins');
+    let error;
+
+    before(async () => {
+        const subject = new PluginStore({ directory });
+
+        try {
+            await subject.loadPlugins();
+        } catch (e) {
+            error = e;
+        }
+    });
+
+    it('throws a WrappedError when plugin has import errors', () => {
+        assert(error);
+        assertEqual('WrappedError', error.name);
+        assertEqual('ERR_MODULE_NOT_FOUND', error.code);
+        assertEqual('Error loading plugin from ' + path.join(directory, 'app', 'plugin.js'), error.message);
+
+        // Test the cause property
+        assert(error.cause);
+        assertEqual('ERR_MODULE_NOT_FOUND', error.cause.code);
+        assertMatches(/^Cannot find module '([^']+)' imported from/, error.cause.message);
     });
 });
