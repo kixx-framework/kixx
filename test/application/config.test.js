@@ -1,5 +1,12 @@
 import { describe } from 'kixx-test';
-import { assertEqual, assertFunction } from 'kixx-assert';
+import sinon from 'sinon';
+import {
+    assert,
+    assertEqual,
+    assertNotEqual,
+    assertUndefined,
+    assertFunction
+} from 'kixx-assert';
 import Config from '../../lib/application/config.js';
 
 describe('Config#constructor with valid input', ({ before, it }) => {
@@ -118,19 +125,65 @@ describe('Config#getNamespace() when namespace does not exist', ({ before, it })
         subject = new Config({}, {});
     });
 
-    it('should return an empty object for non-existent namespace', () => {
+    it('should return a new empty object for non-existent namespace', () => {
         const result = subject.getNamespace('nonexistent');
         assertEqual(0, Object.keys(result).length);
+
+        result.foo = 'bar';
+
+        const result2 = subject.getNamespace('nonexistent');
+        assertNotEqual(result, result2);
+        assertUndefined(result2.foo);
     });
 
-    it('should return empty object for undefined namespace', () => {
-        const result = subject.getNamespace(undefined);
-        assertEqual(0, Object.keys(result).length);
+    it('should throw an AssertionError for undefined namespace', () => {
+        let error;
+        try {
+            subject.getNamespace();
+        } catch (e) {
+            error = e;
+        }
+
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+        assertEqual('getNamespace() requires a non empty string for the namespace key (Expected undefined to be a non-empty String)', error.message);
     });
 
-    it('should return empty object for null namespace', () => {
-        const result = subject.getNamespace(null);
-        assertEqual(0, Object.keys(result).length);
+    it('should throw an AssertionError for null namespace', () => {
+        let error;
+        try {
+            subject.getNamespace(null);
+        } catch (e) {
+            error = e;
+        }
+
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+        assertEqual('getNamespace() requires a non empty string for the namespace key (Expected null to be a non-empty String)', error.message);
+    });
+});
+
+describe('Config#getNamespace() with "environments" as namespace key', ({ before, it }) => {
+    let subject;
+
+    before(() => {
+        subject = new Config({}, {});
+    });
+
+    it('should throw an AssertionError', () => {
+        let error;
+        try {
+            subject.getNamespace('environments');
+        } catch (e) {
+            error = e;
+        }
+
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+        assertEqual('getNamespace() cannot be called with "environments" as namespace key (Expected String(environments) to NOT equal (!==) String(environments))', error.message);
     });
 });
 
@@ -185,24 +238,72 @@ describe('Config#getSecrets() when namespace does not exist', ({ before, it }) =
         subject = new Config({}, {});
     });
 
-    it('should return an empty object for non-existent namespace', () => {
+    it('should return a new empty object for non-existent namespace', () => {
         const result = subject.getSecrets('nonexistent');
         assertEqual(0, Object.keys(result).length);
+
+        result.foo = 'bar';
+
+        const result2 = subject.getNamespace('nonexistent');
+        assertNotEqual(result, result2);
+        assertUndefined(result2.foo);
     });
 
-    it('should return empty object for undefined namespace', () => {
-        const result = subject.getSecrets(undefined);
-        assertEqual(0, Object.keys(result).length);
+    it('should throw an AssertionError for undefined namespace', () => {
+        let error;
+        try {
+            subject.getSecrets();
+        } catch (e) {
+            error = e;
+        }
+
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+        assertEqual('getSecrets() requires a non empty string for the namespace key (Expected undefined to be a non-empty String)', error.message);
     });
 
-    it('should return empty object for null namespace', () => {
-        const result = subject.getSecrets(null);
-        assertEqual(0, Object.keys(result).length);
+    it('should throw an AssertionError for null namespace', () => {
+        let error;
+        try {
+            subject.getSecrets(null);
+        } catch (e) {
+            error = e;
+        }
+
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+        assertEqual('getSecrets() requires a non empty string for the namespace key (Expected null to be a non-empty String)', error.message);
     });
 });
 
-describe('Config#updateConfig() with environment override', ({ before, it }) => {
+describe('Config#getNamespace() with "environments" as namespace key', ({ before, it }) => {
     let subject;
+
+    before(() => {
+        subject = new Config({}, {});
+    });
+
+    it('should throw an AssertionError', () => {
+        let error;
+        try {
+            subject.getSecrets('environments');
+        } catch (e) {
+            error = e;
+        }
+
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+        assertEqual('getSecrets() cannot be called with "environments" as namespace key (Expected String(environments) to NOT equal (!==) String(environments))', error.message);
+    });
+});
+
+describe('Config#updateConfig() with environment override', ({ before, after, it }) => {
+    let subject;
+    const eventHandler = sinon.spy();
+
     const rootConfig = {
         name: 'Root App',
         database: {
@@ -229,7 +330,12 @@ describe('Config#updateConfig() with environment override', ({ before, it }) => 
 
     before(() => {
         subject = new Config({}, {});
+        subject.on('update:config', eventHandler);
         subject.updateConfig('production', rootConfig);
+    });
+
+    after(() => {
+        sinon.restore();
     });
 
     it('should merge environment config with root config', () => {
@@ -240,14 +346,16 @@ describe('Config#updateConfig() with environment override', ({ before, it }) => 
         assertEqual(10000, subject.getNamespace('database').options.timeout);
     });
 
-    it('should remove environments property from final config', () => {
-        const result = subject.getNamespace('environments');
-        assertEqual(0, Object.keys(result).length);
+    it('should emit the "update:config" event', () => {
+        assertEqual(1, eventHandler.callCount);
     });
 });
 
-describe('Config#updateConfig() with missing environment', ({ before, it }) => {
+describe('Config#updateConfig() with missing environment', ({ before, after, it }) => {
     let subject;
+
+    const eventHandler = sinon.spy();
+
     const rootConfig = {
         name: 'Root App',
         database: {
@@ -263,7 +371,12 @@ describe('Config#updateConfig() with missing environment', ({ before, it }) => {
 
     before(() => {
         subject = new Config({}, {});
+        subject.on('update:config', eventHandler);
         subject.updateConfig('development', rootConfig);
+    });
+
+    after(() => {
+        sinon.restore();
     });
 
     it('should use root config when environment does not exist', () => {
@@ -272,14 +385,16 @@ describe('Config#updateConfig() with missing environment', ({ before, it }) => {
         assertEqual(5432, subject.getNamespace('database').port);
     });
 
-    it('should remove environments property from final config', () => {
-        const result = subject.getNamespace('environments');
-        assertEqual(0, Object.keys(result).length);
+    it('should emit the "update:config" event', () => {
+        assertEqual(1, eventHandler.callCount);
     });
 });
 
-describe('Config#updateConfig() with no environments property', ({ before, it }) => {
+describe('Config#updateConfig() with no environments property', ({ before, after, it }) => {
     let subject;
+
+    const eventHandler = sinon.spy();
+
     const rootConfig = {
         name: 'Root App',
         database: {
@@ -290,7 +405,12 @@ describe('Config#updateConfig() with no environments property', ({ before, it })
 
     before(() => {
         subject = new Config({}, {});
+        subject.on('update:config', eventHandler);
         subject.updateConfig('production', rootConfig);
+    });
+
+    after(() => {
+        sinon.restore();
     });
 
     it('should use root config when no environments property exists', () => {
@@ -298,10 +418,17 @@ describe('Config#updateConfig() with no environments property', ({ before, it })
         assertEqual('localhost', subject.getNamespace('database').host);
         assertEqual(5432, subject.getNamespace('database').port);
     });
+
+    it('should emit the "update:config" event', () => {
+        assertEqual(1, eventHandler.callCount);
+    });
 });
 
-describe('Config#updateSecrets() with environment override', ({ before, it }) => {
+describe('Config#updateSecrets() with environment override', ({ before, after, it }) => {
     let subject;
+
+    const eventHandler = sinon.spy();
+
     const rootSecrets = {
         database: {
             password: 'root-password',
@@ -325,7 +452,12 @@ describe('Config#updateSecrets() with environment override', ({ before, it }) =>
 
     before(() => {
         subject = new Config({}, {});
+        subject.on('update:secrets', eventHandler);
         subject.updateSecrets('production', rootSecrets);
+    });
+
+    after(() => {
+        sinon.restore();
     });
 
     it('should merge environment secrets with root secrets', () => {
@@ -336,14 +468,16 @@ describe('Config#updateSecrets() with environment override', ({ before, it }) =>
         assertEqual('root-token', dbSecrets.credentials.token);
     });
 
-    it('should remove environments property from final secrets', () => {
-        const result = subject.getSecrets('environments');
-        assertEqual(0, Object.keys(result).length);
+    it('should emit the "update:secrets" event', () => {
+        assertEqual(1, eventHandler.callCount);
     });
 });
 
-describe('Config#updateSecrets() with missing environment', ({ before, it }) => {
+describe('Config#updateSecrets() with missing environment', ({ before, after, it }) => {
     let subject;
+
+    const eventHandler = sinon.spy();
+
     const rootSecrets = {
         database: {
             password: 'root-password',
@@ -360,7 +494,12 @@ describe('Config#updateSecrets() with missing environment', ({ before, it }) => 
 
     before(() => {
         subject = new Config({}, {});
+        subject.on('update:secrets', eventHandler);
         subject.updateSecrets('development', rootSecrets);
+    });
+
+    after(() => {
+        sinon.restore();
     });
 
     it('should use root secrets when environment does not exist', () => {
@@ -369,14 +508,16 @@ describe('Config#updateSecrets() with missing environment', ({ before, it }) => 
         assertEqual('root-key', dbSecrets.apiKey);
     });
 
-    it('should remove environments property from final secrets', () => {
-        const result = subject.getSecrets('environments');
-        assertEqual(0, Object.keys(result).length);
+    it('should emit the "update:secrets" event', () => {
+        assertEqual(1, eventHandler.callCount);
     });
 });
 
-describe('Config#updateSecrets() with no environments property', ({ before, it }) => {
+describe('Config#updateSecrets() with no environments property', ({ before, after, it }) => {
     let subject;
+
+    const eventHandler = sinon.spy();
+
     const rootSecrets = {
         database: {
             password: 'root-password',
@@ -386,13 +527,22 @@ describe('Config#updateSecrets() with no environments property', ({ before, it }
 
     before(() => {
         subject = new Config({}, {});
+        subject.on('update:secrets', eventHandler);
         subject.updateSecrets('production', rootSecrets);
+    });
+
+    after(() => {
+        sinon.restore();
     });
 
     it('should use root secrets when no environments property exists', () => {
         const dbSecrets = subject.getSecrets('database');
         assertEqual('root-password', dbSecrets.password);
         assertEqual('root-key', dbSecrets.apiKey);
+    });
+
+    it('should emit the "update:secrets" event', () => {
+        assertEqual(1, eventHandler.callCount);
     });
 });
 
@@ -433,16 +583,6 @@ describe('Config.create() with environment override', ({ it }) => {
         assertEqual('prod-db.example.com', config.getNamespace('database').host);
         assertEqual(5432, config.getNamespace('database').port);
         assertEqual('prod-password', config.getSecrets('database').password);
-    });
-
-    it('should remove environments property from both configs and secrets', () => {
-        const config = Config.create('production', rootConfig, rootSecrets);
-
-        const configEnvironments = config.getNamespace('environments');
-        const secretsEnvironments = config.getSecrets('environments');
-
-        assertEqual(0, Object.keys(configEnvironments).length);
-        assertEqual(0, Object.keys(secretsEnvironments).length);
     });
 });
 
