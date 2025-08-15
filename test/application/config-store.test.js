@@ -290,6 +290,28 @@ describe('ConfigStore#loadLatestConfigJSON with invalid filepath parameter', ({ 
     });
 });
 
+describe('ConfigStore#loadLatestConfigJSON with no currentWorkingDirectory, no applicationDirectory, and no filepath', ({ before, it }) => {
+    let subject;
+
+    before(() => {
+        subject = new ConfigStore({});
+    });
+
+    it('should throw AssertionError', async () => {
+        let error;
+        try {
+            await subject.loadLatestConfigJSON();
+        } catch (e) {
+            error = e;
+        }
+
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches(/^Expected .+ to be a non-empty String$/, error.message);
+    });
+});
+
 describe('ConfigStore#loadLatestSecretsJSON with specified filepath', ({ before, after, it }) => {
     let subject;
     let mockFileSystem;
@@ -441,6 +463,28 @@ describe('ConfigStore#loadLatestSecretsJSON with invalid filepath parameter', ({
         let error;
         try {
             await subject.loadLatestSecretsJSON({});
+        } catch (e) {
+            error = e;
+        }
+
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches(/^Expected .+ to be a non-empty String$/, error.message);
+    });
+});
+
+describe('ConfigStore#loadLatestSecretsJSON with no currentWorkingDirectory, no applicationDirectory, and no filepath', ({ before, it }) => {
+    let subject;
+
+    before(() => {
+        subject = new ConfigStore({});
+    });
+
+    it('should throw AssertionError', async () => {
+        let error;
+        try {
+            await subject.loadLatestSecretsJSON();
         } catch (e) {
             error = e;
         }
