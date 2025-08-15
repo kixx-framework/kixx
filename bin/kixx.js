@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import process from 'node:process';
-import * as DevServer from '../cli/kixx-app/dev.js';
-import * as ProdServer from '../cli/kixx-app/server.js';
-import * as RunCommand from '../cli/kixx-app/run.js';
+import * as InitProject from '../cli/init-project.js';
+import * as DevServer from '../cli/dev-server.js';
+import * as AppServer from '../cli/app-server.js';
+import * as RunCommand from '../cli/run-command.js';
 
 
 const args = process.argv.slice(2);
@@ -20,13 +21,16 @@ if (!commandName) {
 let promise;
 
 switch (commandName) {
-    case 'dev':
+    case 'init-project':
+        promise = InitProject.main(args);
+        break;
+    case 'dev-server':
         promise = DevServer.main(args);
         break;
-    case 'server':
-        promise = ProdServer.main(args);
+    case 'app-server':
+        promise = AppServer.main(args);
         break;
-    case 'run':
+    case 'run-command':
         promise = RunCommand.main(args);
         break;
     default:
