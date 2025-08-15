@@ -1,11 +1,13 @@
+import process from 'node:process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import sinon from 'sinon';
 import {
     assert,
     assertEqual,
-    assertUndefined,
-    assertArray,
-    assertFunction
+    assertMatches,
+    assertArray
 } from 'kixx-assert';
 import ConfigStore from '../../lib/application/config-store.js';
 
@@ -92,10 +94,11 @@ describe('ConfigStore#loadLatestConfigJSON with specified filepath', ({ before, 
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(JSON.stringify(testConfig))
+            readUtf8File: sinon.stub().resolves(JSON.stringify(testConfig)),
         };
 
         subject = new ConfigStore({
+            fileSystem: mockFileSystem,
             currentWorkingDirectory: process.cwd(),
         });
 
@@ -128,11 +131,11 @@ describe('ConfigStore#loadLatestConfigJSON with specified filepath that does not
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(null)
+            readUtf8File: sinon.stub().resolves(null),
         };
 
         subject = new ConfigStore({
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
     });
 
@@ -164,12 +167,12 @@ describe('ConfigStore#loadLatestConfigJSON with JSONC file in application direct
     before(async () => {
         mockFileSystem = {
             readUtf8File: sinon.stub()
-                .onFirstCall().resolves(JSON.stringify(testConfig)) // kixx-config.jsonc
+                .onFirstCall().resolves(JSON.stringify(testConfig)), // kixx-config.jsonc
         };
 
         subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.loadLatestConfigJSON();
@@ -200,12 +203,12 @@ describe('ConfigStore#loadLatestConfigJSON with .json file fallback', ({ before,
         mockFileSystem = {
             readUtf8File: sinon.stub()
                 .onFirstCall().resolves(null) // kixx-config.jsonc not found
-                .onSecondCall().resolves(JSON.stringify(testConfig)) // kixx-config.json found
+                .onSecondCall().resolves(JSON.stringify(testConfig)), // kixx-config.json found
         };
 
         subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.loadLatestConfigJSON();
@@ -235,12 +238,12 @@ describe('ConfigStore#loadLatestConfigJSON with no config files found', ({ befor
         mockFileSystem = {
             readUtf8File: sinon.stub()
                 .onFirstCall().resolves(null) // kixx-config.jsonc not found
-                .onSecondCall().resolves(null) // kixx-config.json not found
+                .onSecondCall().resolves(null), // kixx-config.json not found
         };
 
         subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
     });
 
@@ -268,14 +271,14 @@ describe('ConfigStore#loadLatestConfigJSON with invalid filepath parameter', ({ 
 
     before(() => {
         subject = new ConfigStore({
-            currentWorkingDirectory: '/test/cwd'
+            currentWorkingDirectory: '/test/cwd',
         });
     });
 
-    it('should throw AssertionError for undefined filepath', async () => {
+    it('should throw AssertionError for any truthy value which is not a string', async () => {
         let error;
         try {
-            await subject.loadLatestConfigJSON();
+            await subject.loadLatestConfigJSON({});
         } catch (e) {
             error = e;
         }
@@ -283,35 +286,7 @@ describe('ConfigStore#loadLatestConfigJSON with invalid filepath parameter', ({ 
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
-        assertEqual('foo', error.message);
-    });
-
-    it('should throw AssertionError for null filepath', async () => {
-        let error;
-        try {
-            await subject.loadLatestConfigJSON(null);
-        } catch (e) {
-            error = e;
-        }
-
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('ASSERTION_ERROR', error.code);
-        assertEqual('foo', error.message);
-    });
-
-    it('should throw AssertionError for empty string filepath', async () => {
-        let error;
-        try {
-            await subject.loadLatestConfigJSON('');
-        } catch (e) {
-            error = e;
-        }
-
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('ASSERTION_ERROR', error.code);
-        assertEqual('foo', error.message);
+        assertMatches(/^Expected .+ to be a non-empty String$/, error.message);
     });
 });
 
@@ -324,12 +299,12 @@ describe('ConfigStore#loadLatestSecretsJSON with specified filepath', ({ before,
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(JSON.stringify(testSecrets))
+            readUtf8File: sinon.stub().resolves(JSON.stringify(testSecrets)),
         };
 
         subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.loadLatestSecretsJSON(filepath);
@@ -362,12 +337,12 @@ describe('ConfigStore#loadLatestSecretsJSON with JSONC file in application direc
     before(async () => {
         mockFileSystem = {
             readUtf8File: sinon.stub()
-                .onFirstCall().resolves(JSON.stringify(testSecrets)) // .secrets.jsonc
+                .onFirstCall().resolves(JSON.stringify(testSecrets)), // .secrets.jsonc
         };
 
         subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.loadLatestSecretsJSON();
@@ -397,12 +372,12 @@ describe('ConfigStore#loadLatestSecretsJSON with .json file fallback', ({ before
         mockFileSystem = {
             readUtf8File: sinon.stub()
                 .onFirstCall().resolves(null) // .secrets.jsonc not found
-                .onSecondCall().resolves(JSON.stringify(testSecrets)) // .secrets.json found
+                .onSecondCall().resolves(JSON.stringify(testSecrets)), // .secrets.json found
         };
 
         subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.loadLatestSecretsJSON();
@@ -432,13 +407,13 @@ describe('ConfigStore#loadLatestSecretsJSON with no secrets files found', ({ bef
         mockFileSystem = {
             readUtf8File: sinon.stub()
                 .onFirstCall().resolves(null) // .secrets.jsonc not found
-                .onSecondCall().resolves(null) // .secrets.json not found
+                .onSecondCall().resolves(null), // .secrets.json not found
         };
 
         subject = new ConfigStore({
             currentWorkingDirectory: '/test/cwd',
             applicationDirectory: '/test/app',
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.loadLatestSecretsJSON();
@@ -462,10 +437,10 @@ describe('ConfigStore#loadLatestSecretsJSON with invalid filepath parameter', ({
         });
     });
 
-    it('should throw AssertionError for undefined filepath', async () => {
+    it('should throw AssertionError for any truthy value which is not a string', async () => {
         let error;
         try {
-            await subject.loadLatestSecretsJSON();
+            await subject.loadLatestSecretsJSON({});
         } catch (e) {
             error = e;
         }
@@ -473,35 +448,7 @@ describe('ConfigStore#loadLatestSecretsJSON with invalid filepath parameter', ({
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
-        assertEqual('foo', error.message);
-    });
-
-    it('should throw AssertionError for null filepath', async () => {
-        let error;
-        try {
-            await subject.loadLatestSecretsJSON(null);
-        } catch (e) {
-            error = e;
-        }
-
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('ASSERTION_ERROR', error.code);
-        assertEqual('foo', error.message);
-    });
-
-    it('should throw AssertionError for empty string filepath', async () => {
-        let error;
-        try {
-            await subject.loadLatestSecretsJSON('');
-        } catch (e) {
-            error = e;
-        }
-
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('ASSERTION_ERROR', error.code);
-        assertEqual('foo', error.message);
+        assertMatches(/^Expected .+ to be a non-empty String$/, error.message);
     });
 });
 
@@ -513,11 +460,11 @@ describe('ConfigStore#attemptReadJSONFile with valid JSON file', ({ before, afte
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(JSON.stringify(testData))
+            readUtf8File: sinon.stub().resolves(JSON.stringify(testData)),
         };
 
         subject = new ConfigStore({
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.attemptReadJSONFile('/test/file.json');
@@ -555,11 +502,11 @@ describe('ConfigStore#attemptReadJSONFile with JSONC file containing comments', 
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(jsoncContent)
+            readUtf8File: sinon.stub().resolves(jsoncContent),
         };
 
         subject = new ConfigStore({
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.attemptReadJSONFile('/test/file.jsonc');
@@ -586,11 +533,11 @@ describe('ConfigStore#attemptReadJSONFile with empty file', ({ before, after, it
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(null)
+            readUtf8File: sinon.stub().resolves(null),
         };
 
         subject = new ConfigStore({
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         result = await subject.attemptReadJSONFile('/test/empty.json');
@@ -613,11 +560,11 @@ describe('ConfigStore#attemptReadJSONFile with file read error', ({ before, afte
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().rejects(readError)
+            readUtf8File: sinon.stub().rejects(readError),
         };
 
         subject = new ConfigStore({
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
     });
 
@@ -643,15 +590,15 @@ describe('ConfigStore#attemptReadJSONFile with file read error', ({ before, afte
 describe('ConfigStore#attemptReadJSONFile with invalid JSON', ({ before, after, it }) => {
     let subject;
     let mockFileSystem;
-    const invalidJson = '{ "name": "Test", "port": 3000, }'; // trailing comma
+    const invalidJson = '{ "name": "Test", port: 3000 }';
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(invalidJson)
+            readUtf8File: sinon.stub().resolves(invalidJson),
         };
 
         subject = new ConfigStore({
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
     });
 
@@ -670,7 +617,13 @@ describe('ConfigStore#attemptReadJSONFile with invalid JSON', ({ before, after, 
         assert(error);
         assertEqual('ValidationError', error.name);
         assertEqual('JSON parsing errors in config file /test/invalid.json', error.message);
-        assertEqual('/test/invalid.json', error.filepath);
+        assertEqual(3, error.errors.length);
+        assertEqual('InvalidSymbol', error.errors[0].message);
+        assertEqual(18, error.errors[0].source);
+        assertEqual('PropertyNameExpected', error.errors[1].message);
+        assertEqual(22, error.errors[1].source);
+        assertEqual('ValueExpected', error.errors[2].message);
+        assertEqual(29, error.errors[2].source);
     });
 });
 
@@ -680,7 +633,7 @@ describe('ConfigStore#loadLatestConfigJSON with application directory determinat
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(JSON.stringify(testConfig))
+            readUtf8File: sinon.stub().resolves(JSON.stringify(testConfig)),
         };
     });
 
@@ -691,7 +644,7 @@ describe('ConfigStore#loadLatestConfigJSON with application directory determinat
     it('should set application directory to current working directory when not set', async () => {
         const subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
         await subject.loadLatestConfigJSON();
         assertEqual(CURRENT_WORKING_DIRECTORY, subject.applicationDirectory);
@@ -702,7 +655,7 @@ describe('ConfigStore#loadLatestConfigJSON with application directory determinat
         const subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
             applicationDirectory: path.join(CURRENT_WORKING_DIRECTORY, 'app'),
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         await subject.loadLatestConfigJSON();
@@ -716,7 +669,7 @@ describe('ConfigStore#loadLatestSecretsJSON with application directory determina
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(JSON.stringify(testSecrets))
+            readUtf8File: sinon.stub().resolves(JSON.stringify(testSecrets)),
         };
     });
 
@@ -727,7 +680,7 @@ describe('ConfigStore#loadLatestSecretsJSON with application directory determina
     it('should set application directory to current working directory when not set', async () => {
         const subject = new ConfigStore({
             currentWorkingDirectory: CURRENT_WORKING_DIRECTORY,
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
         await subject.loadLatestSecretsJSON();
         assertEqual(CURRENT_WORKING_DIRECTORY, subject.applicationDirectory);
@@ -738,7 +691,7 @@ describe('ConfigStore#loadLatestSecretsJSON with application directory determina
         const subject = new ConfigStore({
             currentWorkingDirectory: '/test/cwd',
             applicationDirectory: '/existing/app',
-            fileSystem: mockFileSystem
+            fileSystem: mockFileSystem,
         });
 
         await subject.loadLatestSecretsJSON();
