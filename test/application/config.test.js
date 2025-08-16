@@ -59,7 +59,7 @@ describe('Config#constructor with default values', ({ before, it }) => {
     });
 
     it('should use default procName when not provided', () => {
-        assertEqual('kixx', subject.procName);
+        assertEqual('kixxapp', subject.procName);
     });
 
     it('should have undefined applicationDirectory when not provided', () => {
@@ -76,7 +76,7 @@ describe('Config#constructor with null/undefined values', ({ before, it }) => {
 
     it('should handle null values gracefully by using default values', () => {
         assertEqual('Kixx Application', subject.name);
-        assertEqual('kixx', subject.procName);
+        assertEqual('kixxapp', subject.procName);
     });
 
     it('should handle null applicationDirectory', () => {
