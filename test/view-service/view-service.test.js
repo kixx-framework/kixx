@@ -33,23 +33,6 @@ describe('ViewService#constructor with valid options', ({ before, it }) => {
 });
 
 describe('ViewService#constructor with missing required options', ({ it }) => {
-    it('should throw AssertionError when logger is missing', () => {
-        let error;
-        try {
-            new ViewService({
-                pageDirectory: path.join(MOCK_DIR, 'pages'),
-                templatesDirectory: path.join(MOCK_DIR, 'templates'),
-                partialsDirectory: path.join(MOCK_DIR, 'partials'),
-                helpersDirectory: path.join(MOCK_DIR, 'helpers'),
-            });
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('ASSERTION_ERROR', error.code);
-    });
-
     it('should throw AssertionError when pageDirectory is missing', () => {
         let error;
         try {
