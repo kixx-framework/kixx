@@ -35,7 +35,30 @@ describe('RoutesStore#constructor with valid options', ({ before, it }) => {
     });
 });
 
-// TODO: Need some tests for getRoutesConfigFilepath()
+describe('RoutesStore#getRoutesConfigFilepath', ({ before, it }) => {
+    let subject;
+
+    before(() => {
+        subject = new RoutesStore({
+            app_directory: '/test/app',
+            routes_directory: '/test/routes',
+        });
+    });
+
+    it('should return correct routes config filepath', () => {
+        const expected = path.join('/test/app', 'routes.jsonc');
+        assertEqual(expected, subject.getRoutesConfigFilepath());
+    });
+
+    it('should use app_directory for path construction', () => {
+        const customSubject = new RoutesStore({
+            app_directory: '/custom/app/dir',
+            routes_directory: '/test/routes',
+        });
+        const expected = path.join('/custom/app/dir', 'routes.jsonc');
+        assertEqual(expected, customSubject.getRoutesConfigFilepath());
+    });
+});
 
 describe('RoutesStore#resolveAppUrnToFilepath with multiple path segments', ({ before, it }) => {
     let subject;
