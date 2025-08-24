@@ -18,7 +18,7 @@ function calculateTotal(basePrice, taxRate, discount = 0) {
 ```
 
 ## Be Precise with Types
-Node.js development often involves complex data structures. Be specific about object shapes, array contents, and union types:
+Node.js development often involves complex data structures. Be specific about object shapes, array contents, and union types. Write @typedef blocks to document these structures:
 
 ```javascript
 /**
@@ -33,6 +33,8 @@ Node.js development often involves complex data structures. Be specific about ob
  * @param {UserProfile|null} user - User object or null if not found
  * @returns {Promise<boolean>} True if user has admin privileges
  */
+function userHasAdminPrivileges(user) {
+}
 ```
 
 ## Document Error Conditions and Edge Cases
@@ -84,7 +86,7 @@ Write concise descriptions that add value beyond the name of the thing you are d
 ```
 
 ## Document Async Behavior Clearly
-In Node.js, async patterns are everywhere. Be explicit about what your Promises resolve to:
+In Node.js, async patterns are everywhere. Mark async functions and methods with the @async tag and be explicit about what your Promises resolve to:
 
 ```javascript
 /**
@@ -93,6 +95,8 @@ In Node.js, async patterns are everywhere. Be explicit about what your Promises 
  * @returns {Promise<UserProfile|null>} Resolves to user profile or null if not found
  * @throws {DatabaseError} When database connection fails
  */
+async function getUser(userId) {
+}
 ```
 
 ## Document Module-Level Concepts
@@ -104,9 +108,6 @@ For complex modules, include overview documentation:
  * 
  * This module provides middleware and helper functions for handling
  * JWT tokens, role-based access control, and session management.
- * 
- * @author Your Name
- * @since 1.0.0
  */
 ```
 
