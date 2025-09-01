@@ -13,7 +13,7 @@ describe('Config#constructor with valid input', ({ before, it }) => {
     let subject;
     const testValues = {
         name: 'Test App',
-        procName: 'test-app',
+        processName: 'test-app',
         database: {
             host: 'localhost',
             port: 5432,
@@ -38,8 +38,8 @@ describe('Config#constructor with valid input', ({ before, it }) => {
         assertEqual('Test App', subject.name);
     });
 
-    it('should have the correct procName property', () => {
-        assertEqual('test-app', subject.procName);
+    it('should have the correct processName property', () => {
+        assertEqual('test-app', subject.processName);
     });
 
     it('should have the correct applicationDirectory property', () => {
@@ -58,8 +58,8 @@ describe('Config#constructor with default values', ({ before, it }) => {
         assertEqual('Kixx Application', subject.name);
     });
 
-    it('should use default procName when not provided', () => {
-        assertEqual('kixxapp', subject.procName);
+    it('should use default processName when not provided', () => {
+        assertEqual('kixxapp', subject.processName);
     });
 
     it('should have undefined applicationDirectory when not provided', () => {
@@ -76,7 +76,7 @@ describe('Config#constructor with null/undefined values', ({ before, it }) => {
 
     it('should handle null values gracefully by using default values', () => {
         assertEqual('Kixx Application', subject.name);
-        assertEqual('kixxapp', subject.procName);
+        assertEqual('kixxapp', subject.processName);
     });
 
     it('should handle null applicationDirectory', () => {

@@ -3,12 +3,12 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import * as jsonc from '../../lib/vendor/jsonc-parser/mod.mjs';
-import * as TemplateEngine from '../../lib/template-engine/mod.js';
-import { isNonEmptyString } from '../../lib/assertions/mod.js';
+import * as jsonc from '../lib/vendor/jsonc-parser/mod.mjs';
+import * as TemplateEngine from '../lib/template-engine/mod.js';
+import { isNonEmptyString } from '../lib/assertions/mod.js';
 
 const PROJECT_DIR = process.cwd();
-const ROOT_DIR = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
+const ROOT_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const TEMPLATE_DIR = path.join(ROOT_DIR, 'project-template');
 
 const options = {
@@ -32,6 +32,7 @@ export async function main(args) {
 
     const packageJson = await readPackageJson();
 
+    // Use the project name from package.json if no name is provided.
     const appName = values.name || packageJson.name;
 
     if (!isNonEmptyString(appName)) {
@@ -57,6 +58,7 @@ async function createReadme(applicationName) {
     const destExists = await statFile(destPathname);
 
     if (destExists) {
+        // Do not update the README.md if it already exists.
         return false;
     }
 
@@ -70,14 +72,12 @@ async function createReadme(applicationName) {
 
 async function createKixxConfig(appName, processName) {
     const destPathname = path.join(PROJECT_DIR, 'kixx-config.jsonc');
-    const destExists = await statFile(destPathname);
-
-    if (destExists) {
-        return false;
-    }
-
     const srcPathname = path.join(TEMPLATE_DIR, 'kixx-config.jsonc');
-    let textContent = await fsp.readFile(srcPathname, 'utf8');
+
+    let textContent = await readUtf8File(destPathname);
+    if (!textContent) {
+        textContent = await readUtf8File(srcPathname);
+    }
 
     let diff = jsonc.modify(textContent, [ 'name' ], appName, {});
     textContent = jsonc.applyEdits(textContent, diff);
@@ -85,24 +85,27 @@ async function createKixxConfig(appName, processName) {
     diff = jsonc.modify(textContent, [ 'processName' ], processName, {});
     textContent = jsonc.applyEdits(textContent, diff);
 
-    await fsp.writeFile(destPathname, textContent, 'utf8');
+    await writeUtf8File(destPathname, textContent);
 }
 
 async function createSitePageData(appName) {
-    const destPathname = path.join(PROJECT_DIR, 'site-page-data.jsonc');
-    const destExists = await statFile(destPathname);
+    const pagesDirectory = path.join(PROJECT_DIR, 'pages');
+    const destPathname = path.join(pagesDirectory, 'page.jsonc');
+    const srcPathname = path.join(TEMPLATE_DIR, 'pages', 'page.jsonc');
 
-    if (destExists) {
-        return false;
+    let textContent = await readUtf8File(destPathname);
+    if (!textContent) {
+        textContent = await readUtf8File(srcPathname);
     }
-
-    const srcPathname = path.join(TEMPLATE_DIR, 'site-page-data.jsonc');
-    let textContent = await fsp.readFile(srcPathname, 'utf8');
 
     const diff = jsonc.modify(textContent, [ 'title' ], appName, {});
     textContent = jsonc.applyEdits(textContent, diff);
 
-    await fsp.writeFile(destPathname, textContent, 'utf8');
+    const dirExists = await statFile(pagesDirectory);
+    if (!dirExists) {
+        await fsp.mkdir(pagesDirectory, { recursive: true });
+    }
+    await writeUtf8File(destPathname, textContent);
 }
 
 function compileTemplate(templateId, utf8) {
@@ -111,7 +114,7 @@ function compileTemplate(templateId, utf8) {
     return TemplateEngine.createRenderFunction(null, new Map(), new Map(), tree);
 }
 
-async function copyDirectoryRecursive(sourceDir, destDir) {
+async function copyDirectoryRecursive(sourceDir, destDir, exclude = []) {
     // Ensure destination directory exists
     await fsp.mkdir(destDir, { recursive: true });
 
@@ -119,6 +122,11 @@ async function copyDirectoryRecursive(sourceDir, destDir) {
 
     for (const entry of entries) {
         const sourcePath = path.join(sourceDir, entry.name);
+
+        if (exclude.includes(sourcePath)) {
+            continue;
+        }
+
         const destPath = path.join(destDir, entry.name);
 
         if (entry.isDirectory()) {
@@ -153,15 +161,41 @@ async function statFile(filepath) {
 
 async function readPackageJson() {
     const filepath = path.join(PROJECT_DIR, 'package.json');
+    let json;
     try {
-        const content = await fsp.readFile(filepath, 'utf8');
-        return JSON.parse(content);
+        json = await readUtf8File(filepath);
     } catch (error) {
-        if (error.code !== 'ENOENT') {
-            console.error('Error reading package.json');
-            console.error(error.name, ':', error.message);
-            process.exit(1);
-        }
-        return {};
+        console.error('Error reading', filepath);
+        console.error(error.name, ':', error.message);
+        process.exit(1);
     }
+
+    if (!json) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(json);
+    } catch (error) {
+        console.error('Error parsing', filepath);
+        console.error(error.name, ':', error.message);
+        process.exit(1);
+    }
+}
+
+async function readUtf8File(filepath) {
+    let utf8;
+    try {
+        utf8 = await fsp.readFile(filepath, 'utf8');
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return null;
+        }
+        throw error;
+    }
+    return utf8;
+}
+
+async function writeUtf8File(filepath, data) {
+    await fsp.writeFile(filepath, data, { encoding: 'utf8' });
 }

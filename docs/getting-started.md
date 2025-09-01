@@ -10,7 +10,7 @@ The `kixx-config.json` file must be created in the root of your project director
 ```json
 {
     "name": "MyApp",
-    "procName": "myapp",
+    "processName": "myapp",
     "environments": {
         "development": {
             "logger": {
@@ -43,7 +43,7 @@ The `kixx-config.json` file must be created in the root of your project director
 | Option | Type | Description |
 |--------|------|-------------|
 | `name` | string | Human-readable application name |
-| `procName` | string | Process name for system services |
+| `processName` | string | Process name for system services |
 | `environments` | object | Environment-specific configurations |
 | `customConfig` | object | Application-specific configuration |
 

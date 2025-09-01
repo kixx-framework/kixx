@@ -1,9 +1,10 @@
 import process from 'node:process';
 import path from 'node:path';
+import fsp from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import DevelopmentServer from '../../lib/application/development-server.js';
-import * as Application from '../../lib/application/application.js';
-import { isNonEmptyString } from '../../lib/assertions/mod.js';
+import DevelopmentServer from '../lib/application/development-server.js';
+import Application from '../lib/application/application.js';
+import { isNonEmptyString } from '../lib/assertions/mod.js';
 
 
 const options = {
@@ -57,14 +58,22 @@ export async function main(args) {
     if (isNonEmptyString(values.config)) {
         configFilepath = path.resolve(values.config);
     } else {
-        configFilepath = path.join(process.cwd(), 'kixx-config.json');
+        configFilepath = path.join(process.cwd(), 'kixx-config.jsonc');
+        const fileExists = await doesFileExist(configFilepath);
+        if (!fileExists) {
+            configFilepath = path.join(process.cwd(), 'kixx-config.json');
+        }
     }
 
     let secretsFilepath;
     if (isNonEmptyString(values.secrets)) {
         secretsFilepath = path.resolve(values.config);
     } else {
-        secretsFilepath = path.join(process.cwd(), '.secrets.json');
+        secretsFilepath = path.join(process.cwd(), '.secrets.jsonc');
+        const fileExists = await doesFileExist(secretsFilepath);
+        if (!fileExists) {
+            secretsFilepath = path.join(process.cwd(), '.secrets.json');
+        }
     }
 
     const port = parseInt(values.port, 10);
@@ -86,9 +95,21 @@ export async function main(args) {
     });
 
     // eslint-disable-next-line require-atomic-updates
-    process.title = `node-${ context.config.procName }`;
+    process.title = `node-${ context.config.processName }`;
 
     const server = new DevelopmentServer(app, { port });
 
     server.startServer();
+}
+
+async function doesFileExist(filepath) {
+    try {
+        const stat = await fsp.stat(filepath);
+        return stat.isFile();
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return false;
+        }
+        throw error;
+    }
 }
