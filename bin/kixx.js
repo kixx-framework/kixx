@@ -2,7 +2,6 @@
 
 import process from 'node:process';
 import * as InitProject from '../cli/init-project.js';
-import * as DevServer from '../cli/dev-server.js';
 import * as AppServer from '../cli/app-server.js';
 import * as RunCommand from '../cli/run-command.js';
 
@@ -23,9 +22,6 @@ let promise;
 switch (commandName) {
     case 'init-project':
         promise = InitProject.main(args);
-        break;
-    case 'dev-server':
-        promise = DevServer.main(args);
         break;
     case 'app-server':
         promise = AppServer.main(args);
