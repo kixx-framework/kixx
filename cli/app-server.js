@@ -94,10 +94,32 @@ export async function main(args) {
         secretsFilepath,
     });
 
+    const { logger } = context;
+
     // eslint-disable-next-line require-atomic-updates
     process.title = `node-${ context.config.processName }`;
 
     const server = new DevelopmentServer(app, { port });
+
+    server.on('error', (event) => {
+        logger.error(event.message, event.info, event.cause);
+        if (event.fatal) {
+            logger.error(`${ event.name }:${ event.message }; fatal error; exiting`);
+            process.exit(1);
+        }
+    });
+
+    server.on('debug', (event) => {
+        logger.debug(event.message, event.info, event.cause);
+    });
+
+    server.on('info', (event) => {
+        logger.info(event.message, event.info, event.cause);
+    });
+
+    server.on('warning', (event) => {
+        logger.warn(event.message, event.info, event.cause);
+    });
 
     server.startServer();
 }
