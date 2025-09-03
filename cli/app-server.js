@@ -1,6 +1,5 @@
 import process from 'node:process';
 import path from 'node:path';
-import fsp from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import DevelopmentServer from '../lib/application/development-server.js';
 import Application from '../lib/application/application.js';
@@ -49,32 +48,9 @@ export async function main(args) {
 
     const currentWorkingDirectory = process.cwd();
 
-    let applicationDirectory;
-    if (isNonEmptyString(values.dir)) {
-        applicationDirectory = values.dir;
-    }
-
-    let configFilepath;
-    if (isNonEmptyString(values.config)) {
-        configFilepath = path.resolve(values.config);
-    } else {
-        configFilepath = path.join(process.cwd(), 'kixx-config.jsonc');
-        const fileExists = await doesFileExist(configFilepath);
-        if (!fileExists) {
-            configFilepath = path.join(process.cwd(), 'kixx-config.json');
-        }
-    }
-
-    let secretsFilepath;
-    if (isNonEmptyString(values.secrets)) {
-        secretsFilepath = path.resolve(values.config);
-    } else {
-        secretsFilepath = path.join(process.cwd(), '.secrets.jsonc');
-        const fileExists = await doesFileExist(secretsFilepath);
-        if (!fileExists) {
-            secretsFilepath = path.join(process.cwd(), '.secrets.json');
-        }
-    }
+    const applicationDirectory = isNonEmptyString(values.dir) ? values.dir : null;
+    const configFilepath = isNonEmptyString(values.config) ? path.resolve(values.config) : null;
+    const secretsFilepath = isNonEmptyString(values.secrets) ? path.resolve(values.secrets) : null;
 
     const port = parseInt(values.port, 10);
 
@@ -122,16 +98,4 @@ export async function main(args) {
     });
 
     server.startServer();
-}
-
-async function doesFileExist(filepath) {
-    try {
-        const stat = await fsp.stat(filepath);
-        return stat.isFile();
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            return false;
-        }
-        throw error;
-    }
 }

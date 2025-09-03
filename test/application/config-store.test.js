@@ -154,7 +154,7 @@ describe('ConfigStore#loadLatestConfigJSON with specified filepath that does not
         assert(error);
         assertEqual('NotFoundError', error.name);
         assertEqual('ENOENT', error.code);
-        assertEqual(`Specified config file does not exist ${ filepath }`, error.message);
+        assertEqual(`Specified config file does not exist: ${ filepath }`, error.message);
     });
 });
 
