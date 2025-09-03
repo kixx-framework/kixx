@@ -24,7 +24,7 @@ describe('RoutesStore#constructor with valid options', ({ before, it }) => {
     });
 
     it('should return correct routes config filepath', () => {
-        const expected = path.join(CURRENT_WORKING_DIRECTORY, 'routes.jsonc');
+        const expected = path.join(CURRENT_WORKING_DIRECTORY, 'virtual-hosts.jsonc');
         assertEqual(expected, subject.getRoutesConfigFilepath());
     });
 
@@ -46,7 +46,7 @@ describe('RoutesStore#getRoutesConfigFilepath', ({ before, it }) => {
     });
 
     it('should return correct routes config filepath', () => {
-        const expected = path.join('/test/app', 'routes.jsonc');
+        const expected = path.join('/test/app', 'virtual-hosts.jsonc');
         assertEqual(expected, subject.getRoutesConfigFilepath());
     });
 
@@ -55,7 +55,7 @@ describe('RoutesStore#getRoutesConfigFilepath', ({ before, it }) => {
             app_directory: '/custom/app/dir',
             routes_directory: '/test/routes',
         });
-        const expected = path.join('/custom/app/dir', 'routes.jsonc');
+        const expected = path.join('/custom/app/dir', 'virtual-hosts.jsonc');
         assertEqual(expected, customSubject.getRoutesConfigFilepath());
     });
 });
@@ -572,7 +572,7 @@ describe('RoutesStore#loadVhostsConfigs with valid config', ({ before, after, it
 
     it('should call readUtf8File with correct path', () => {
         assertEqual(3, mockFileSystem.readUtf8File.callCount);
-        const expectedPath = path.join(CURRENT_WORKING_DIRECTORY, 'routes.jsonc');
+        const expectedPath = path.join(CURRENT_WORKING_DIRECTORY, 'virtual-hosts.jsonc');
         assertEqual(expectedPath, mockFileSystem.readUtf8File.getCall(0).args[0]);
     });
 });
