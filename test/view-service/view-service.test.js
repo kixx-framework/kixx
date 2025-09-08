@@ -414,8 +414,8 @@ describe('ViewService#getPageMarkup with template and markdown', ({ before, afte
         assertUndefined(mockMarkdown.getCall(1).args[0].content);
         assertEqual(1, mockTemplate.callCount);
         assertEqual('About', mockTemplate.getCall(0).args[0].title);
-        assertEqual('<p>markdown content</p>\n', mockTemplate.getCall(0).args[0].content['page-block-1.md']);
-        assertEqual('<p>markdown content</p>\n', mockTemplate.getCall(0).args[0].content['page-block-2.md']);
+        assertEqual('<p>markdown content</p>\n', mockTemplate.getCall(0).args[0].content['page-block-1']);
+        assertEqual('<p>markdown content</p>\n', mockTemplate.getCall(0).args[0].content['page-block-2']);
         assertEqual('<html><body><p>content</p></body></html>', result);
     });
 });
@@ -683,8 +683,8 @@ describe('ViewService#getPageMarkdown with valid markdown files', ({ before, aft
     });
 
     it('should return object with parsed markdown HTML', () => {
-        assertEqual('<h1>About Us</h1>\n<p>Welcome to our about page</p>\n', result['intro.md']);
-        assertEqual('<h2>Team</h2>\n<p>Our amazing team members</p>\n', result['team.md']);
+        assertEqual('<h1>About Us</h1>\n<p>Welcome to our about page</p>\n', result['intro']);
+        assertEqual('<h2>Team</h2>\n<p>Our amazing team members</p>\n', result['team']);
     });
 });
 
@@ -742,7 +742,7 @@ describe('ViewService#getPageMarkdown with trailing slash in pathname', ({ befor
     });
 
     it('should return object with parsed markdown HTML', () => {
-        assertEqual('<h1>About Us</h1>\n<p>Content</p>\n', result['content.md']);
+        assertEqual('<h1>About Us</h1>\n<p>Content</p>\n', result['content']);
     });
 });
 
@@ -813,8 +813,8 @@ describe('ViewService#getPageMarkdown with nested pathname', ({ before, after, i
     });
 
     it('should return object with parsed markdown HTML', () => {
-        assertEqual('<h1>Blog Post</h1>\n<p>Content</p>\n', result['post.md']);
-        assertEqual('<h1>Blog Post</h1>\n<p>Content</p>\n', result['comments.md']);
+        assertEqual('<h1>Blog Post</h1>\n<p>Content</p>\n', result['post']);
+        assertEqual('<h1>Blog Post</h1>\n<p>Content</p>\n', result['comments']);
     });
 });
 
