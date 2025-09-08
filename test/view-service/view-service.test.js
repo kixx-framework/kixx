@@ -352,11 +352,25 @@ describe('ViewService#getPageMarkup with template and markdown', ({ before, afte
         mockTemplate = sinon.stub().returns('<html><body><p>content</p></body></html>');
         mockMarkdown = sinon.stub().returns('markdown content');
 
+        const fileSystem = {
+            readDirectory: sinon.stub().resolves([
+                {
+                    name: 'page-block-1.md',
+                    isFile: sinon.stub().returns(true),
+                },
+                {
+                    name: 'page-block-2.md',
+                    isFile: sinon.stub().returns(true),
+                },
+            ]),
+        };
+
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
             getTemplate: sinon.stub()
                 .onFirstCall().resolves(mockMarkdown)
-                .onSecondCall().resolves(mockTemplate),
+                .onSecondCall().resolves(mockMarkdown)
+                .onThirdCall().resolves(mockTemplate),
         };
 
         const options = {
@@ -366,6 +380,7 @@ describe('ViewService#getPageMarkup with template and markdown', ({ before, afte
             partialsDirectory: path.join(MOCK_DIR, 'partials'),
             helpersDirectory: path.join(MOCK_DIR, 'helpers'),
             pageTemplateEngine: mockTemplateEngine,
+            fileSystem,
         };
 
         subject = new ViewService(options);
@@ -378,27 +393,32 @@ describe('ViewService#getPageMarkup with template and markdown', ({ before, afte
     });
 
     it('should request markdown template', () => {
-        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+        assertEqual(3, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('about/page-block-1.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+        assertEqual('about/page-block-2.md', mockTemplateEngine.getTemplate.getCall(1).args[0]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page-block-1.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page-block-2.md'), mockTemplateEngine.getTemplate.getCall(1).args[1]);
     });
 
     it('should request html template', () => {
-        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.html', mockTemplateEngine.getTemplate.getCall(1).args[0]);
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.html'), mockTemplateEngine.getTemplate.getCall(1).args[1]);
+        assertEqual(3, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('about/page.html', mockTemplateEngine.getTemplate.getCall(2).args[0]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.html'), mockTemplateEngine.getTemplate.getCall(2).args[1]);
     });
 
     it('should render template with content', () => {
-        assertEqual(1, mockMarkdown.callCount);
+        assertEqual(2, mockMarkdown.callCount);
         assertEqual('About', mockMarkdown.getCall(0).args[0].title);
+        assertEqual('About', mockMarkdown.getCall(1).args[0].title);
         assertUndefined(mockMarkdown.getCall(0).args[0].content);
+        assertUndefined(mockMarkdown.getCall(1).args[0].content);
         assertEqual(1, mockTemplate.callCount);
         assertEqual('About', mockTemplate.getCall(0).args[0].title);
-        assertEqual('<p>markdown content</p>\n', mockTemplate.getCall(0).args[0].content);
+        assertEqual('<p>markdown content</p>\n', mockTemplate.getCall(0).args[0].content['page-block-1.md']);
+        assertEqual('<p>markdown content</p>\n', mockTemplate.getCall(0).args[0].content['page-block-2.md']);
         assertEqual('<html><body><p>content</p></body></html>', result);
     });
-}, { disabled: true });
+});
 
 describe('ViewService#getPageMarkup without template or markdown', ({ before, after, it }) => {
     let subject;
@@ -406,11 +426,14 @@ describe('ViewService#getPageMarkup without template or markdown', ({ before, af
     let result;
 
     before(async () => {
+        const fileSystem = {
+            readDirectory: sinon.stub().resolves([]),
+        };
+
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
             getTemplate: sinon.stub()
-                .onFirstCall().resolves(null) // No page template
-                .onSecondCall().resolves(null), // No markdown template
+                .onFirstCall().resolves(null), // No page template
         };
 
         const options = {
@@ -420,6 +443,7 @@ describe('ViewService#getPageMarkup without template or markdown', ({ before, af
             partialsDirectory: path.join(MOCK_DIR, 'partials'),
             helpersDirectory: path.join(MOCK_DIR, 'helpers'),
             pageTemplateEngine: mockTemplateEngine,
+            fileSystem,
         };
 
         subject = new ViewService(options);
@@ -431,22 +455,20 @@ describe('ViewService#getPageMarkup without template or markdown', ({ before, af
         sinon.restore();
     });
 
-    it('should request markdown template', () => {
-        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+    it('should *not* request markdown template', () => {
+        assertEqual(1, mockTemplateEngine.getTemplate.callCount);
     });
 
     it('should request html template', () => {
-        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.html', mockTemplateEngine.getTemplate.getCall(1).args[0]);
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.html'), mockTemplateEngine.getTemplate.getCall(1).args[1]);
+        assertEqual(1, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('about/page.html', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.html'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
     });
 
-    it('should return null when no template or markdown found', () => {
-        assertEqual(null, result);
+    it('should return empty string "" when no template or markdown found', () => {
+        assertEqual('', result);
     });
-}, { disabled: true });
+});
 
 describe('ViewService#getPageMarkup with no html template', ({ before, after, it }) => {
     let subject;
@@ -456,12 +478,28 @@ describe('ViewService#getPageMarkup with no html template', ({ before, after, it
     let result;
 
     before(async () => {
+
+        const fileSystem = {
+            readDirectory: sinon.stub().resolves([
+                {
+                    name: 'page-block-1.md',
+                    isFile: sinon.stub().returns(true),
+                },
+                {
+                    name: 'page-block-2.md',
+                    isFile: sinon.stub().returns(true),
+                },
+            ]),
+        };
+
         mockMarkdownTemplate = sinon.stub().returns('markdown content');
+
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
             getTemplate: sinon.stub()
                 .onFirstCall().resolves(mockMarkdownTemplate)
-                .onSecondCall().resolves(null),
+                .onSecondCall().resolves(mockMarkdownTemplate)
+                .onThirdCall().resolves(null),
         };
 
         const options = {
@@ -471,6 +509,7 @@ describe('ViewService#getPageMarkup with no html template', ({ before, after, it
             partialsDirectory: path.join(MOCK_DIR, 'partials'),
             helpersDirectory: path.join(MOCK_DIR, 'helpers'),
             pageTemplateEngine: mockTemplateEngine,
+            fileSystem,
         };
 
         subject = new ViewService(options);
@@ -483,23 +522,26 @@ describe('ViewService#getPageMarkup with no html template', ({ before, after, it
     });
 
     it('should request markdown template', () => {
-        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+        assertEqual(3, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('about/page-block-1.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+        assertEqual('about/page-block-2.md', mockTemplateEngine.getTemplate.getCall(1).args[0]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page-block-1.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page-block-2.md'), mockTemplateEngine.getTemplate.getCall(1).args[1]);
     });
 
     it('should request html template', () => {
-        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.html', mockTemplateEngine.getTemplate.getCall(1).args[0]);
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.html'), mockTemplateEngine.getTemplate.getCall(1).args[1]);
+        assertEqual(3, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('about/page.html', mockTemplateEngine.getTemplate.getCall(2).args[0]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.html'), mockTemplateEngine.getTemplate.getCall(2).args[1]);
     });
 
     it('should return rendered markdown HTML', () => {
-        assertEqual(1, mockMarkdownTemplate.callCount);
+        assertEqual(2, mockMarkdownTemplate.callCount);
         assertEqual(templateContext, mockMarkdownTemplate.getCall(0).args[0]);
-        assertEqual('<p>markdown content</p>\n', result);
+        assertEqual(templateContext, mockMarkdownTemplate.getCall(1).args[0]);
+        assertEqual('\n<p>markdown content</p>\n\n<p>markdown content</p>\n', result);
     });
-}, { disabled: true });
+});
 
 describe('ViewService#getPageMarkup without markdown template', ({ before, after, it }) => {
     let subject;
@@ -510,11 +552,14 @@ describe('ViewService#getPageMarkup without markdown template', ({ before, after
     before(async () => {
         mockTemplate = sinon.stub().returns('<html><body><p>content</p></body></html>');
 
+        const fileSystem = {
+            readDirectory: sinon.stub().resolves([]),
+        };
+
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
             getTemplate: sinon.stub()
-                .onFirstCall().resolves(null)
-                .onSecondCall().resolves(mockTemplate),
+                .onFirstCall().resolves(mockTemplate),
         };
 
         const options = {
@@ -524,6 +569,7 @@ describe('ViewService#getPageMarkup without markdown template', ({ before, after
             partialsDirectory: path.join(MOCK_DIR, 'partials'),
             helpersDirectory: path.join(MOCK_DIR, 'helpers'),
             pageTemplateEngine: mockTemplateEngine,
+            fileSystem,
         };
 
         subject = new ViewService(options);
@@ -535,38 +581,62 @@ describe('ViewService#getPageMarkup without markdown template', ({ before, after
         sinon.restore();
     });
 
-    it('should request markdown template', () => {
-        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+    it('should not request markdown template', () => {
+        assertEqual(1, mockTemplateEngine.getTemplate.callCount);
     });
 
     it('should request html template', () => {
-        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.html', mockTemplateEngine.getTemplate.getCall(1).args[0]);
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.html'), mockTemplateEngine.getTemplate.getCall(1).args[1]);
+        assertEqual(1, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('about/page.html', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.html'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
     });
 
     it('should return rendered html template', () => {
         assertEqual(1, mockTemplate.callCount);
         assertEqual('About', mockTemplate.getCall(0).args[0].title);
-        assertEqual(null, mockTemplate.getCall(0).args[0].content);
         assertEqual('<html><body><p>content</p></body></html>', result);
     });
-}, { disabled: true });
+});
 
-describe('ViewService#getPageMarkdown with valid markdown template', ({ before, after, it }) => {
+describe('ViewService#getPageMarkdown with valid markdown files', ({ before, after, it }) => {
     let subject;
     let mockTemplateEngine;
-    let mockMarkdownTemplate;
+    let mockFileSystem;
+    let mockMarkdownTemplate1;
+    let mockMarkdownTemplate2;
     const templateContext = { title: 'About', content: 'Welcome to our about page' };
     let result;
 
     before(async () => {
-        mockMarkdownTemplate = sinon.stub().returns('# About Us\n\nWelcome to our about page');
+        mockMarkdownTemplate1 = sinon.stub().returns('# About Us\n\nWelcome to our about page');
+        mockMarkdownTemplate2 = sinon.stub().returns('## Team\n\nOur amazing team members');
+
+        mockFileSystem = {
+            readDirectory: sinon.stub().resolves([
+                {
+                    name: 'intro.md',
+                    isFile: sinon.stub().returns(true),
+                },
+                {
+                    name: 'team.md',
+                    isFile: sinon.stub().returns(true),
+                },
+                {
+                    name: 'not-markdown.txt',
+                    isFile: sinon.stub().returns(true),
+                },
+                {
+                    name: 'subdir',
+                    isFile: sinon.stub().returns(false),
+                },
+            ]),
+        };
+
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
-            getTemplate: sinon.stub().resolves(mockMarkdownTemplate),
+            getTemplate: sinon.stub()
+                .onFirstCall().resolves(mockMarkdownTemplate1)
+                .onSecondCall().resolves(mockMarkdownTemplate2),
         };
 
         const options = {
@@ -576,6 +646,7 @@ describe('ViewService#getPageMarkdown with valid markdown template', ({ before, 
             partialsDirectory: path.join(MOCK_DIR, 'partials'),
             helpersDirectory: path.join(MOCK_DIR, 'helpers'),
             pageTemplateEngine: mockTemplateEngine,
+            fileSystem: mockFileSystem,
         };
 
         subject = new ViewService(options);
@@ -587,33 +658,55 @@ describe('ViewService#getPageMarkdown with valid markdown template', ({ before, 
         sinon.restore();
     });
 
-    it('should request markdown template with correct template ID', () => {
-        assertEqual(1, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+    it('should read directory contents', () => {
+        assertEqual(1, mockFileSystem.readDirectory.callCount);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about'), mockFileSystem.readDirectory.getCall(0).args[0]);
     });
 
-    it('should request markdown template with correct filepath', () => {
-        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'page.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+    it('should request markdown templates with correct template IDs', () => {
+        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('about/intro.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+        assertEqual('about/team.md', mockTemplateEngine.getTemplate.getCall(1).args[0]);
     });
 
-    it('should call markdown template with page data', () => {
-        assertEqual(1, mockMarkdownTemplate.callCount);
-        assertEqual(templateContext, mockMarkdownTemplate.getCall(0).args[0]);
+    it('should request markdown templates with correct filepaths', () => {
+        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'intro.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about', 'team.md'), mockTemplateEngine.getTemplate.getCall(1).args[1]);
     });
 
-    it('should return rendered markdown HTML', () => {
-        assertEqual('<h1>About Us</h1>\n<p>Welcome to our about page</p>\n', result);
+    it('should call markdown templates with page data', () => {
+        assertEqual(1, mockMarkdownTemplate1.callCount);
+        assertEqual(1, mockMarkdownTemplate2.callCount);
+        assertEqual(templateContext, mockMarkdownTemplate1.getCall(0).args[0]);
+        assertEqual(templateContext, mockMarkdownTemplate2.getCall(0).args[0]);
     });
-}, { disabled: true });
+
+    it('should return object with parsed markdown HTML', () => {
+        assertEqual('<h1>About Us</h1>\n<p>Welcome to our about page</p>\n', result['intro.md']);
+        assertEqual('<h2>Team</h2>\n<p>Our amazing team members</p>\n', result['team.md']);
+    });
+});
 
 describe('ViewService#getPageMarkdown with trailing slash in pathname', ({ before, after, it }) => {
     let subject;
     let mockTemplateEngine;
+    let mockFileSystem;
     let mockMarkdownTemplate;
     let result;
 
     before(async () => {
         mockMarkdownTemplate = sinon.stub().returns('# About Us\n\nContent');
+
+        mockFileSystem = {
+            readDirectory: sinon.stub().resolves([
+                {
+                    name: 'content.md',
+                    isFile: sinon.stub().returns(true),
+                },
+            ]),
+        };
+
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
             getTemplate: sinon.stub().resolves(mockMarkdownTemplate),
@@ -626,6 +719,7 @@ describe('ViewService#getPageMarkdown with trailing slash in pathname', ({ befor
             partialsDirectory: path.join(MOCK_DIR, 'partials'),
             helpersDirectory: path.join(MOCK_DIR, 'helpers'),
             pageTemplateEngine: mockTemplateEngine,
+            fileSystem: mockFileSystem,
         };
 
         subject = new ViewService(options);
@@ -637,26 +731,49 @@ describe('ViewService#getPageMarkdown with trailing slash in pathname', ({ befor
         sinon.restore();
     });
 
-    it('should normalize pathname and use correct template ID', () => {
-        assertEqual('about/page.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+    it('should normalize pathname and read correct directory', () => {
+        assertEqual(1, mockFileSystem.readDirectory.callCount);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about'), mockFileSystem.readDirectory.getCall(0).args[0]);
     });
 
-    it('should return rendered markdown HTML', () => {
-        assertEqual('<h1>About Us</h1>\n<p>Content</p>\n', result);
+    it('should use correct template ID for normalized path', () => {
+        assertEqual(1, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('about/content.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
     });
-}, { disabled: true });
+
+    it('should return object with parsed markdown HTML', () => {
+        assertEqual('<h1>About Us</h1>\n<p>Content</p>\n', result['content.md']);
+    });
+});
 
 describe('ViewService#getPageMarkdown with nested pathname', ({ before, after, it }) => {
     let subject;
     let mockTemplateEngine;
+    let mockFileSystem;
     let mockMarkdownTemplate;
     let result;
 
     before(async () => {
         mockMarkdownTemplate = sinon.stub().returns('# Blog Post\n\nContent');
+
+        mockFileSystem = {
+            readDirectory: sinon.stub().resolves([
+                {
+                    name: 'post.md',
+                    isFile: sinon.stub().returns(true),
+                },
+                {
+                    name: 'comments.md',
+                    isFile: sinon.stub().returns(true),
+                },
+            ]),
+        };
+
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
-            getTemplate: sinon.stub().resolves(mockMarkdownTemplate),
+            getTemplate: sinon.stub()
+                .onFirstCall().resolves(mockMarkdownTemplate)
+                .onSecondCall().resolves(mockMarkdownTemplate),
         };
 
         const options = {
@@ -666,6 +783,7 @@ describe('ViewService#getPageMarkdown with nested pathname', ({ before, after, i
             partialsDirectory: path.join(MOCK_DIR, 'partials'),
             helpersDirectory: path.join(MOCK_DIR, 'helpers'),
             pageTemplateEngine: mockTemplateEngine,
+            fileSystem: mockFileSystem,
         };
 
         subject = new ViewService(options);
@@ -677,28 +795,52 @@ describe('ViewService#getPageMarkdown with nested pathname', ({ before, after, i
         sinon.restore();
     });
 
-    it('should use correct template ID for nested path', () => {
-        assertEqual('blog/2023/my-post/page.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+    it('should read correct nested directory', () => {
+        assertEqual(1, mockFileSystem.readDirectory.callCount);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'blog', '2023', 'my-post'), mockFileSystem.readDirectory.getCall(0).args[0]);
     });
 
-    it('should use correct filepath for nested path', () => {
-        assertEqual(path.join(MOCK_DIR, 'pages', 'blog', '2023', 'my-post', 'page.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+    it('should use correct template IDs for nested path', () => {
+        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
+        assertEqual('blog/2023/my-post/post.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+        assertEqual('blog/2023/my-post/comments.md', mockTemplateEngine.getTemplate.getCall(1).args[0]);
     });
 
-    it('should return rendered markdown HTML', () => {
-        assertEqual('<h1>Blog Post</h1>\n<p>Content</p>\n', result);
+    it('should use correct filepaths for nested path', () => {
+        assertEqual(2, mockTemplateEngine.getTemplate.callCount);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'blog', '2023', 'my-post', 'post.md'), mockTemplateEngine.getTemplate.getCall(0).args[1]);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'blog', '2023', 'my-post', 'comments.md'), mockTemplateEngine.getTemplate.getCall(1).args[1]);
     });
-}, { disabled: true });
 
-describe('ViewService#getPageMarkdown without markdown template', ({ before, after, it }) => {
+    it('should return object with parsed markdown HTML', () => {
+        assertEqual('<h1>Blog Post</h1>\n<p>Content</p>\n', result['post.md']);
+        assertEqual('<h1>Blog Post</h1>\n<p>Content</p>\n', result['comments.md']);
+    });
+});
+
+describe('ViewService#getPageMarkdown with no markdown files', ({ before, after, it }) => {
     let subject;
     let mockTemplateEngine;
+    let mockFileSystem;
     let result;
 
     before(async () => {
+        mockFileSystem = {
+            readDirectory: sinon.stub().resolves([
+                {
+                    name: 'not-markdown.txt',
+                    isFile: sinon.stub().returns(true),
+                },
+                {
+                    name: 'subdir',
+                    isFile: sinon.stub().returns(false),
+                },
+            ]),
+        };
+
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
-            getTemplate: sinon.stub().resolves(null), // No markdown template found
+            getTemplate: sinon.stub(),
         };
 
         const options = {
@@ -708,6 +850,7 @@ describe('ViewService#getPageMarkdown without markdown template', ({ before, aft
             partialsDirectory: path.join(MOCK_DIR, 'partials'),
             helpersDirectory: path.join(MOCK_DIR, 'helpers'),
             pageTemplateEngine: mockTemplateEngine,
+            fileSystem: mockFileSystem,
         };
 
         subject = new ViewService(options);
@@ -719,15 +862,19 @@ describe('ViewService#getPageMarkdown without markdown template', ({ before, aft
         sinon.restore();
     });
 
-    it('should request markdown template', () => {
-        assertEqual(1, mockTemplateEngine.getTemplate.callCount);
-        assertEqual('about/page.md', mockTemplateEngine.getTemplate.getCall(0).args[0]);
+    it('should read directory contents', () => {
+        assertEqual(1, mockFileSystem.readDirectory.callCount);
+        assertEqual(path.join(MOCK_DIR, 'pages', 'about'), mockFileSystem.readDirectory.getCall(0).args[0]);
     });
 
-    it('should return null when no markdown template found', () => {
-        assertEqual(null, result);
+    it('should not request any markdown templates', () => {
+        assertEqual(0, mockTemplateEngine.getTemplate.callCount);
     });
-}, { disabled: true });
+
+    it('should return empty object when no markdown files found', () => {
+        assertEqual(0, Object.keys(result).length);
+    });
+});
 
 describe('ViewService#getBaseTemplate', ({ before, after, it }) => {
     let subject;
