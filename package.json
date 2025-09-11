@@ -21,7 +21,8 @@
   "files": [
     "lib/",
     "bin/",
-    "cli/"
+    "cli/",
+    "project-template/"
   ],
   "devDependencies": {
     "@eslint/js": "9.27.0",
@@ -36,12 +37,13 @@
     "http",
     "server",
     "html",
-    "hypermedia"
+    "hypermedia",
+    "agent"
   ],
   "author": "Kris Walker (www.kriswalker.me)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/kixx-platform/kixx/issues"
   },
-  "homepage": "https://github.com/kixx-platform/kixx"
+  "homepage": "https://www.kixx.dev"
 }
