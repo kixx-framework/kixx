@@ -74,6 +74,8 @@ export async function main(args) {
 
     // eslint-disable-next-line require-atomic-updates
     process.title = `node-${ context.config.processName }`;
+    // NOTE: We've seen process names get truncated.
+    // For example, on Ubuntu Linux this is truncated to 15 characters.
 
     const server = new DevelopmentServer(app, { port });
 
