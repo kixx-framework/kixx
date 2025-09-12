@@ -147,7 +147,7 @@ code {
 }
 @media screen and (min-width: 1080px) {
     .site-width-container {
-        max-width: calc(var(--site-width) - var(--layout-right-left-margin) * 2);
+        width: calc(var(--site-width) - var(--layout-right-left-margin) * 2);
         margin-left: auto;
         margin-right: auto;
     }
