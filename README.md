@@ -2,7 +2,7 @@ Kixx
 ====
 __A rapid web development framework for humans and their AI tools.__
 
-Build blazing fast in AI environments like Claude Code and Cursor without generating piles of shit code you’ll need to rewrite later.
+Build blazingly fast in AI environments like Claude Code and Cursor without generating piles of shit code you’ll need to rewrite later.
 
 Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2025.
 
@@ -11,33 +11,39 @@ Concepts
 ### Improved AI Control
 Use AI for what it's good at and otherwise get it out of way.
 
-Kixx manages the LLM context from an MCP server, guiding the LLM to use convention and configuration over code to keep AI agents out of trouble.
-
-Your AI environment has the information and tools it needs to be helpful, but not so much context to waste time thrashing around.
+Kixx manages the LLM context from an MCP server, guiding the LLM to use convention and configuration over code to keep AI agents out of trouble. Your AI environment has the information and tools it needs to be helpful, but not so much context to waste time thrashing around.
 
 ### Developer Power
 Kixx never takes away your power to shoot yourself in the foot.
 
-You'll always have full control over your projects with the ability to extend everything with your own code while directing your AI tools in the background.
-
-All conventions and configurations can be overridden, new code can be added, and existing code can be extended.
+You'll always have full control over your projects with the ability to extend everything with your own code while directing your AI tools in the background. All conventions and configurations can be overridden, new code can be added, and existing code can be extended.
 
 Core Principles
 ---------------
 
 ### 1. Optimize for productivity.
+When a decision needs to be made, we optimize for developer productivity. This is the north star of the Kixx framework, and most of the remaining priciples derive from it.
 
-### 2. Software is a craft.
+### 2. Have opinions
+Kixx has opinions about building great web applications. In our opinion, a good framework needs to have opinions, otherwise, what's the point of using a framework?
 
-### 3. Remove complexity from the framework *and* the applications which are built on it.
+### 3. Software is a craft.
+Humans write software for humans, and even in the age of AI, building software is, and will always be a craft done by a craftsperson.
 
-### 4. The World Wide Web is the best application platform ever invented.
+### 4. Remove complexity.
+There will always be complexity in the problems we choose to solve with our software. But, Kixx will seek out ways to bury incidental complexity and keep our brains concentrated on the real problems.
 
-### 5. AI tools can be used without negative moral, ethical, or environmental impacts.
+### 5. The World Wide Web is the best application platform ever invented.
+Nothing has ever been created that matches the accessibility, openness, power, and distribution of the Web. Kixx is fully committed to improving and contributing to the WWW.
 
-### 6. Bias in favor of monolithic applications over distributed or microservice architectures.
+### 6. AI tools can be built and used without negative moral, ethical, or environmental impacts.
+We can develop AI tools to which are small, productive, focused on the craft of software development, and don't slurp up massive amounts of energy.
 
-### 7. Have opinions.
+### 7. Favor monolithic applications over distributed architectures.
+Distributed microservices might be great for large engineering teams, but Kixx is made for solo developers and small, fast moving teams. Monolithic, hypermedia driven applications, without the complexity of microservices and piles of client side JavaScript, give us a massive velocity boost over our distributed counterparts.
+
+### 8. Convention over Configuration and Code
+Wherever possible Kixx uses conventions over configuration and code for common web application logic. This dramatically reduces the amount of code that needs to be written, generated, and reasoned about to build a web app.
 
 Environment
 -----------
