@@ -1,10 +1,14 @@
 import process from 'node:process';
+import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import * as Application from '../lib/application/application.js';
 import { readDirectory } from '../lib/lib/file-system.js';
 import { isNonEmptyString, assertFunction } from '../lib/assertions/mod.js';
+
+const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
+const DOCS_DIR = path.join(CLI_DIR, 'docs');
 
 
 const options = {
@@ -30,6 +34,13 @@ export async function main(args) {
         allowPositionals: true,
         allowNegative: true,
     });
+
+    if (values.help) {
+        // eslint-disable-next-line no-console
+        console.error(readDocFile('run-command.md'));
+        process.exit(1);
+        return;
+    }
 
     const commandName = positionals[0];
 
@@ -93,4 +104,9 @@ async function loadCommand(filepath) {
         options: mod.options || {},
         run: mod.run,
     };
+}
+
+function readDocFile(filename) {
+    const filepath = path.join(DOCS_DIR, filename);
+    return fs.readFileSync(filepath, { encoding: 'utf8' });
 }
