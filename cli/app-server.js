@@ -3,7 +3,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import DevelopmentServer from '../lib/application/development-server.js';
 import Application from '../lib/application/application.js';
-import { isNonEmptyString } from '../lib/assertions/mod.js';
+import { isNonEmptyString, isNumberNotNaN } from '../lib/assertions/mod.js';
 
 
 const options = {
@@ -52,7 +52,7 @@ export async function main(args) {
     const configFilepath = isNonEmptyString(values.config) ? path.resolve(values.config) : null;
     const secretsFilepath = isNonEmptyString(values.secrets) ? path.resolve(values.secrets) : null;
 
-    const port = parseInt(values.port, 10);
+    let port = values.port ? parseInt(values.port, 10) : null;
 
     const environment = values.environment;
 
@@ -74,6 +74,16 @@ export async function main(args) {
 
     // eslint-disable-next-line require-atomic-updates
     process.title = `node-${ context.config.processName }`;
+    // NOTE: We've seen process names get truncated.
+    // For example, on Ubuntu Linux this is truncated to 15 characters.
+
+    const serverConfig = context.config.getNamespace('server');
+
+    // Allow the port number provided on the command line to override the
+    // port number from the configuration.
+    if (!isNumberNotNaN(port)) {
+        port = serverConfig.port;
+    }
 
     const server = new DevelopmentServer(app, { port });
 

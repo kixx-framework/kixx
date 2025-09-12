@@ -41,7 +41,7 @@ export async function main(args) {
         process.exit(1);
     }
 
-    const processName = appName.replace(/[^a-z0-9]/g, '').slice(0, 15);
+    const processName = appName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     await createReadme(appName);
     await createKixxConfig(appName, processName);

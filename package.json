@@ -1,7 +1,7 @@
 {
   "name": "kixx",
   "version": "5.0.0",
-  "description": "A web development framework for Node.js servers.",
+  "description": "A rapid web development framework for humans and their AI tools.",
   "type": "module",
   "main": "lib/mod.js",
   "engines": {
