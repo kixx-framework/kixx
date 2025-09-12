@@ -36,7 +36,7 @@ const options = {
     environment: {
         short: 'e',
         type: 'string',
-        default: 'development',
+        default: 'production',
     },
 };
 
