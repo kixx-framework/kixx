@@ -1,8 +1,7 @@
 import process from 'node:process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import * as Application from '../lib/application/application.js';
 import { readDirectory } from '../lib/lib/file-system.js';

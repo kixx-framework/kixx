@@ -1,4 +1,5 @@
 import process from 'node:process';
+import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,8 +8,10 @@ import * as jsonc from '../lib/vendor/jsonc-parser/mod.mjs';
 import * as TemplateEngine from '../lib/template-engine/mod.js';
 import { isNonEmptyString } from '../lib/assertions/mod.js';
 
+const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
+const DOCS_DIR = path.join(CLI_DIR, 'docs');
 const PROJECT_DIR = process.cwd();
-const ROOT_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const ROOT_DIR = path.dirname(CLI_DIR);
 const TEMPLATE_DIR = path.join(ROOT_DIR, 'project-template');
 
 const options = {
@@ -29,6 +32,13 @@ export async function main(args) {
         allowPositionals: false,
         allowNegative: true,
     });
+
+    if (values.help) {
+        // eslint-disable-next-line no-console
+        console.error(readDocFile('init-project.md'));
+        process.exit(1);
+        return;
+    }
 
     const packageJson = await readPackageJson();
 
@@ -198,4 +208,9 @@ async function readUtf8File(filepath) {
 
 async function writeUtf8File(filepath, data) {
     await fsp.writeFile(filepath, data, { encoding: 'utf8' });
+}
+
+function readDocFile(filename) {
+    const filepath = path.join(DOCS_DIR, filename);
+    return fs.readFileSync(filepath, { encoding: 'utf8' });
 }
