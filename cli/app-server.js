@@ -1,34 +1,38 @@
 import process from 'node:process';
+import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import DevelopmentServer from '../lib/application/development-server.js';
 import Application from '../lib/application/application.js';
 import { isNonEmptyString, isNumberNotNaN } from '../lib/assertions/mod.js';
 
+const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
+const DOCS_DIR = path.join(CLI_DIR, 'docs');
+
 
 const options = {
-    // [optional] The path to the application directory
+    help: {
+        short: 'h',
+        type: 'boolean',
+    },
     dir: {
         short: 'd',
         type: 'string',
     },
-    // [optional] The path to the application configuration file.
     config: {
         short: 'c',
         type: 'string',
     },
-    // [optional] The path to the application secrets file.
     secrets: {
         short: 's',
         type: 'string',
     },
-    // [optional] The path to the application secrets file.
     port: {
         short: 'p',
         type: 'string',
         default: '3001',
     },
-    // [optional] The environment to run the server in.
     environment: {
         short: 'e',
         type: 'string',
@@ -45,6 +49,13 @@ export async function main(args) {
         allowPositionals: true,
         allowNegative: true,
     });
+
+    if (values.help) {
+        // eslint-disable-next-line no-console
+        console.error(readDocFile('app-server.md'));
+        process.exit(1);
+        return;
+    }
 
     const currentWorkingDirectory = process.cwd();
 
@@ -108,4 +119,9 @@ export async function main(args) {
     });
 
     server.startServer();
+}
+
+function readDocFile(filename) {
+    const filepath = path.join(DOCS_DIR, filename);
+    return fs.readFileSync(filepath, { encoding: 'utf8' });
 }
