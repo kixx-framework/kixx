@@ -1,6 +1,6 @@
 {
   "name": "kixx",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "A rapid web development framework for humans and their AI tools.",
   "type": "module",
   "main": "lib/mod.js",
