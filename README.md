@@ -6,6 +6,20 @@ Build blazingly fast in AI environments like Claude Code and Cursor without gene
 
 Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2025.
 
+Quick Start
+-----------
+First, know that you'll need to be familiar with accessing and using the command terminal on your machine. Not too scary, but just so you're aware.
+
+Ensure you have Node.js 16.13.2 or later installed. Check your node version in the command terminal with `node --version`. If you don't have it, you can download Node.js from [nodejs.org/download](https://nodejs.org/en/download).
+
+*Installing Node.js will also install npm which is required for the next steps.*
+
+1. Create a new project directory with a `package.json` file in it. You can quickly do this with `npm init`.
+2. Install Kixx in your project directory by running `npm install --save kixx`.
+3. Set up your project scaffolding by running `npx kixx init-project --name 'My New Web App'`.
+4. Start your new web app by running `npx kixx app-server --environment development`
+5. Open your browser to http://localhost:3001 to see your app.
+
 Concepts
 --------
 ### Improved AI Control
