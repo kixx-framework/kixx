@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import * as Application from '../lib/application/application.js';
+import Application from '../lib/application/application.js';
 import { readDirectory } from '../lib/lib/file-system.js';
 import { isNonEmptyString, assertFunction } from '../lib/assertions/mod.js';
 
@@ -12,12 +12,22 @@ const DOCS_DIR = path.join(CLI_DIR, 'docs');
 
 
 const options = {
-    // The path to the application configuration file.
+    help: {
+        short: 'h',
+        type: 'boolean',
+    },
+    dir: {
+        short: 'd',
+        type: 'string',
+    },
     config: {
         short: 'c',
         type: 'string',
     },
-    // The environment to run the server in.
+    secrets: {
+        short: 's',
+        type: 'string',
+    },
     environment: {
         short: 'e',
         type: 'string',
@@ -26,17 +36,19 @@ const options = {
 };
 
 
+/* eslint-disable no-console */
+
+
 export async function main(args) {
     const { values, positionals } = parseArgs({
         args,
         options,
-        strict: false,
+        strict: true,
         allowPositionals: true,
         allowNegative: true,
     });
 
     if (values.help) {
-        // eslint-disable-next-line no-console
         console.error(readDocFile('run-command.md'));
         process.exit(1);
         return;
@@ -45,23 +57,51 @@ export async function main(args) {
     const commandName = positionals[0];
 
     if (!isNonEmptyString(commandName)) {
-        throw new Error('Command argument is required');
+        console.error('We need a command name to run.');
+        console.error('(The first positional argument to kixx run-command.)');
+        console.error(readDocFile('run-command.md'));
+        process.exit(1);
+        return;
     }
 
-    let configFilepath;
-    if (isNonEmptyString(values.config)) {
-        configFilepath = path.resolve(values.config);
-    } else {
-        configFilepath = path.join(process.cwd(), 'kixx-config.json');
-    }
+    const currentWorkingDirectory = process.cwd();
+
+    const applicationDirectory = isNonEmptyString(values.dir) ? values.dir : null;
+    const configFilepath = isNonEmptyString(values.config) ? path.resolve(values.config) : null;
+    const secretsFilepath = isNonEmptyString(values.secrets) ? path.resolve(values.secrets) : null;
+
+    const environment = values.environment;
+
+    const app = new Application({
+        currentWorkingDirectory,
+        applicationDirectory,
+    });
 
     const runtime = { command: commandName };
-    const context = await Application.initialize(runtime, configFilepath, values.environment);
+
+    const context = await app.initialize({
+        runtime,
+        environment,
+        configFilepath,
+        secretsFilepath,
+    });
+
+    // eslint-disable-next-line require-atomic-updates
+    process.title = `node-${ context.config.processName }`;
+    // NOTE: We've seen process names get truncated.
+    // For example, on Ubuntu Linux this is truncated to 15 characters.
 
     const commands = await loadCommands(context.paths.commands_directory);
 
     if (!commands.has(commandName)) {
-        throw new Error(`Command "${ commandName }" does not exist`);
+        console.error(`The command "${ commandName }" is not implemented.`);
+        console.error('Available custom commands are:');
+        for (const cmd of commands.keys()) {
+            console.error(`- ${ cmd }`);
+        }
+        console.error(readDocFile('run-command.md'));
+        process.exit(1);
+        return;
     }
 
     const command = commands.get(commandName);
