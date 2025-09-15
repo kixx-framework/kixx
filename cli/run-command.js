@@ -1,7 +1,8 @@
 import process from 'node:process';
+import { EOL } from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import Application from '../lib/application/application.js';
 import { readDirectory, importAbsoluteFilepath } from '../lib/lib/file-system.js';
@@ -43,7 +44,7 @@ export async function main(args) {
     const { values, positionals } = parseArgs({
         args,
         options,
-        strict: true,
+        strict: false,
         allowPositionals: true,
         allowNegative: true,
     });
@@ -55,14 +56,6 @@ export async function main(args) {
     }
 
     const commandName = positionals[0];
-
-    if (!isNonEmptyString(commandName)) {
-        console.error('We need a command name to run.');
-        console.error('(The first positional argument to kixx run-command.)');
-        console.error(readDocFile('run-command.md'));
-        process.exit(1);
-        return;
-    }
 
     const currentWorkingDirectory = process.cwd();
 
@@ -93,13 +86,26 @@ export async function main(args) {
 
     const commands = await loadCommands(context.paths.commands_directory);
 
-    if (!commands.has(commandName)) {
-        console.error(`The command "${ commandName }" is not implemented.`);
-        console.error('Available custom commands are:');
+    if (!isNonEmptyString(commandName)) {
+        console.error('We need a command name to run.');
+        console.error('(The first positional argument to kixx run-command.)' + EOL);
+        console.error('Available custom commands are:' + EOL);
         for (const cmd of commands.keys()) {
             console.error(`- ${ cmd }`);
         }
-        console.error(`\nHelp:`);
+        console.error(EOL + 'Help:' + EOL);
+        console.error(readDocFile('run-command.md'));
+        process.exit(1);
+        return;
+    }
+
+    if (!commands.has(commandName)) {
+        console.error(`The command "${ commandName }" is not implemented.` + EOL);
+        console.error('Available custom commands are:' + EOL);
+        for (const cmd of commands.keys()) {
+            console.error(`- ${ cmd }`);
+        }
+        console.error(EOL + 'Help:' + EOL);
         console.error(readDocFile('run-command.md'));
         process.exit(1);
         return;
@@ -140,7 +146,7 @@ async function loadCommands(directory) {
 }
 
 async function loadCommand(filepath) {
-    const mod = await importAbsoluteFilepath(pathToFileURL(filepath));
+    const mod = await importAbsoluteFilepath(filepath);
 
     assertFunction(mod.run, `A command must export a run function (in ${ filepath })`);
 

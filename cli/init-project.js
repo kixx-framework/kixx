@@ -34,7 +34,6 @@ export async function main(args) {
     });
 
     if (values.help) {
-        // eslint-disable-next-line no-console
         console.error(readDocFile('init-project.md'));
         process.exit(1);
         return;
