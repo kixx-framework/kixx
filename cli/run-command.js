@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import Application from '../lib/application/application.js';
-import { readDirectory } from '../lib/lib/file-system.js';
+import { readDirectory, importAbsoluteFilepath } from '../lib/lib/file-system.js';
 import { isNonEmptyString, assertFunction } from '../lib/assertions/mod.js';
 
 const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -99,6 +99,7 @@ export async function main(args) {
         for (const cmd of commands.keys()) {
             console.error(`- ${ cmd }`);
         }
+        console.error(`\nHelp:`);
         console.error(readDocFile('run-command.md'));
         process.exit(1);
         return;
@@ -121,8 +122,12 @@ export async function main(args) {
 }
 
 async function loadCommands(directory) {
-    const filepaths = await readDirectory(directory);
-    const promises = filepaths.map(loadCommand);
+    const files = await readDirectory(directory);
+
+    const promises = files.map((file) => {
+        return loadCommand(path.join(directory, file.name));
+    });
+
     const commands = await Promise.all(promises);
 
     const map = new Map();
@@ -135,7 +140,7 @@ async function loadCommands(directory) {
 }
 
 async function loadCommand(filepath) {
-    const mod = await import(pathToFileURL(filepath));
+    const mod = await importAbsoluteFilepath(pathToFileURL(filepath));
 
     assertFunction(mod.run, `A command must export a run function (in ${ filepath })`);
 
