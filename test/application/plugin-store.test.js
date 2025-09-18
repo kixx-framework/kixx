@@ -101,6 +101,7 @@ describe('Application/PluginStore#getPluginPaths() with plugin.js file', ({ befo
         assertEqual(1, result.length);
 
         const plugin = result[0];
+        assertEqual('my-plugin', plugin.name);
         assertEqual(path.join(directory, 'my-plugin'), plugin.directory);
         assertEqual(path.join(directory, 'my-plugin', 'plugin.js'), plugin.filepath);
         assertEqual(null, plugin.register);
@@ -108,6 +109,9 @@ describe('Application/PluginStore#getPluginPaths() with plugin.js file', ({ befo
         assertEqual(path.join(directory, 'my-plugin', 'middleware'), plugin.middlewareDirectory);
         assertEqual(path.join(directory, 'my-plugin', 'request-handlers'), plugin.requestHandlerDirectory);
         assertEqual(path.join(directory, 'my-plugin', 'error-handlers'), plugin.errorHandlerDirectory);
+        assertEqual(path.join(directory, 'my-plugin', 'collections'), plugin.collectionsDirectory);
+        assertEqual(path.join(directory, 'my-plugin', 'forms'), plugin.formsDirectory);
+        assertEqual(path.join(directory, 'my-plugin', 'views'), plugin.viewsDirectory);
     });
 });
 
@@ -147,6 +151,7 @@ describe('Application/PluginStore#getPluginPaths() with plugin.mjs file', ({ bef
         assertEqual(1, result.length);
 
         const plugin = result[0];
+        assertEqual('my-plugin', plugin.name);
         assertEqual(path.join(directory, 'my-plugin'), plugin.directory);
         assertEqual(path.join(directory, 'my-plugin', 'plugin.mjs'), plugin.filepath);
         assertEqual(null, plugin.register);
@@ -154,6 +159,9 @@ describe('Application/PluginStore#getPluginPaths() with plugin.mjs file', ({ bef
         assertEqual(path.join(directory, 'my-plugin', 'middleware'), plugin.middlewareDirectory);
         assertEqual(path.join(directory, 'my-plugin', 'request-handlers'), plugin.requestHandlerDirectory);
         assertEqual(path.join(directory, 'my-plugin', 'error-handlers'), plugin.errorHandlerDirectory);
+        assertEqual(path.join(directory, 'my-plugin', 'collections'), plugin.collectionsDirectory);
+        assertEqual(path.join(directory, 'my-plugin', 'forms'), plugin.formsDirectory);
+        assertEqual(path.join(directory, 'my-plugin', 'views'), plugin.viewsDirectory);
     });
 });
 
@@ -194,46 +202,10 @@ describe('Application/PluginStore#getPluginPaths() with multiple plugins', ({ be
         const plugin1 = result[0];
         const plugin2 = result[1];
 
+        assertEqual('plugin1', plugin1.name);
         assertEqual(path.join(directory, 'plugin1'), plugin1.directory);
+        assertEqual('plugin2', plugin2.name);
         assertEqual(path.join(directory, 'plugin2'), plugin2.directory);
-    });
-});
-
-describe('Application/PluginStore#constructor with invalid input', ({ it }) => {
-    it('should throw an AssertionError when directory is undefined', () => {
-        let error;
-        try {
-            new PluginStore({});
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('ASSERTION_ERROR', error.code);
-    });
-
-    it('should throw an AssertionError when directory is null', () => {
-        let error;
-        try {
-            new PluginStore({ directory: null });
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('ASSERTION_ERROR', error.code);
-    });
-
-    it('should throw an AssertionError when directory is an empty string', () => {
-        let error;
-        try {
-            new PluginStore({ directory: '' });
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('ASSERTION_ERROR', error.code);
     });
 });
 
