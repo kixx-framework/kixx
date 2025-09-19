@@ -6,29 +6,15 @@ import PluginStore from '../../lib/application/plugin-store.js';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-describe('Application/PluginStore#getPluginPaths() with empty plugins directory', ({ before, it }) => {
+function getRandomItem(array) {
+    const randomIndex = Math.floor(Math.random() * array.length);
+    return array[randomIndex];
+}
+
+
+describe('Application/PluginStore#getPlugin() with no plugin file', ({ before, it }) => {
     const directory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'plugins');
-    let result;
-
-    before(async () => {
-        const fileSystem = {
-            async readDirectory() {
-                return [];
-            },
-        };
-
-        const subject = new PluginStore({ directory, fileSystem });
-        result = await subject.getPluginPaths();
-    });
-
-    it('returns an empty array', () => {
-        assertArray(result);
-        assertEqual(0, result.length);
-    });
-});
-
-describe('Application/PluginStore#getPluginPaths() with no plugin file', ({ before, it }) => {
-    const directory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'plugins');
+    const pluginDirectory = path.join(directory, 'my-plugin');
     let result;
 
     before(async () => {
@@ -42,7 +28,7 @@ describe('Application/PluginStore#getPluginPaths() with no plugin file', ({ befo
                         },
                     }];
                 }
-                if (dir === path.join(directory, 'my-plugin')) {
+                if (dir === pluginDirectory) {
                     return [{
                         name: 'request-handlers',
                         isDirectory() {
@@ -55,18 +41,17 @@ describe('Application/PluginStore#getPluginPaths() with no plugin file', ({ befo
         };
 
         const subject = new PluginStore({ directory, fileSystem });
-        result = await subject.getPluginPaths();
+        result = await subject.getPlugin(pluginDirectory);
     });
 
     it('returns a PluginInfo object with filepath set to null', () => {
-        assertArray(result);
-        assertEqual(1, result.length);
-        assertEqual(null, result[0].filepath);
+        assertEqual(null, result.filepath);
     });
 });
 
-describe('Application/PluginStore#getPluginPaths() with plugin.js file', ({ before, it }) => {
+describe('Application/PluginStore#getPlugin() with plugins entry file', ({ before, it }) => {
     const directory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'plugins');
+    const pluginDirectory = path.join(directory, 'my-plugin');
     let result;
 
     before(async () => {
@@ -80,9 +65,9 @@ describe('Application/PluginStore#getPluginPaths() with plugin.js file', ({ befo
                         },
                     }];
                 }
-                if (dir === path.join(directory, 'my-plugin')) {
+                if (dir === pluginDirectory) {
                     return [{
-                        name: 'plugin.js',
+                        name: getRandomItem([ 'plugin.js', 'plugin.mjs', 'app.js', 'app.mjs' ]),
                         isFile() {
                             return true;
                         },
@@ -93,17 +78,15 @@ describe('Application/PluginStore#getPluginPaths() with plugin.js file', ({ befo
         };
 
         const subject = new PluginStore({ directory, fileSystem });
-        result = await subject.getPluginPaths();
+        result = await subject.getPlugin(pluginDirectory);
     });
 
     it('returns a PluginInfo object with correct structure', () => {
-        assertArray(result);
-        assertEqual(1, result.length);
-
-        const plugin = result[0];
+        const plugin = result;
         assertEqual('my-plugin', plugin.name);
         assertEqual(path.join(directory, 'my-plugin'), plugin.directory);
-        assertEqual(path.join(directory, 'my-plugin', 'plugin.js'), plugin.filepath);
+        assertEqual(path.join(directory, 'my-plugin'), path.dirname(plugin.filepath));
+        assert([ 'plugin.js', 'plugin.mjs', 'app.js', 'app.mjs' ].includes(path.basename(plugin.filepath)));
         assertEqual(null, plugin.register);
         assertEqual(null, plugin.initialize);
         assertEqual(path.join(directory, 'my-plugin', 'middleware'), plugin.middlewareDirectory);
@@ -115,57 +98,7 @@ describe('Application/PluginStore#getPluginPaths() with plugin.js file', ({ befo
     });
 });
 
-describe('Application/PluginStore#getPluginPaths() with plugin.mjs file', ({ before, it }) => {
-    const directory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'plugins');
-    let result;
-
-    before(async () => {
-        const fileSystem = {
-            async readDirectory(dir) {
-                if (dir === directory) {
-                    return [{
-                        name: 'my-plugin',
-                        isDirectory() {
-                            return true;
-                        },
-                    }];
-                }
-                if (dir === path.join(directory, 'my-plugin')) {
-                    return [{
-                        name: 'plugin.mjs',
-                        isFile() {
-                            return true;
-                        },
-                    }];
-                }
-                return [];
-            },
-        };
-
-        const subject = new PluginStore({ directory, fileSystem });
-        result = await subject.getPluginPaths();
-    });
-
-    it('returns a PluginInfo object with correct structure for .mjs file', () => {
-        assertArray(result);
-        assertEqual(1, result.length);
-
-        const plugin = result[0];
-        assertEqual('my-plugin', plugin.name);
-        assertEqual(path.join(directory, 'my-plugin'), plugin.directory);
-        assertEqual(path.join(directory, 'my-plugin', 'plugin.mjs'), plugin.filepath);
-        assertEqual(null, plugin.register);
-        assertEqual(null, plugin.initialize);
-        assertEqual(path.join(directory, 'my-plugin', 'middleware'), plugin.middlewareDirectory);
-        assertEqual(path.join(directory, 'my-plugin', 'request-handlers'), plugin.requestHandlerDirectory);
-        assertEqual(path.join(directory, 'my-plugin', 'error-handlers'), plugin.errorHandlerDirectory);
-        assertEqual(path.join(directory, 'my-plugin', 'collections'), plugin.collectionsDirectory);
-        assertEqual(path.join(directory, 'my-plugin', 'forms'), plugin.formsDirectory);
-        assertEqual(path.join(directory, 'my-plugin', 'views'), plugin.viewsDirectory);
-    });
-});
-
-describe('Application/PluginStore#getPluginPaths() with multiple plugins', ({ before, it }) => {
+describe('Application/PluginStore#getPlugins() with multiple plugins', ({ before, it }) => {
     const directory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'plugins');
     let result;
 
@@ -192,7 +125,7 @@ describe('Application/PluginStore#getPluginPaths() with multiple plugins', ({ be
         };
 
         const subject = new PluginStore({ directory, fileSystem });
-        result = await subject.getPluginPaths();
+        result = await subject.getPlugins();
     });
 
     it('returns multiple PluginInfo objects', () => {
@@ -209,7 +142,7 @@ describe('Application/PluginStore#getPluginPaths() with multiple plugins', ({ be
     });
 });
 
-describe('Application/PluginStore#loadPlugins() when the plugin is found', ({ before, it }) => {
+describe('Application/PluginStore#loadPlugins() when plugins are found', ({ before, it }) => {
     const directory = path.join(THIS_DIR, 'fixtures', 'app-0', 'plugins');
     let result;
 
@@ -223,6 +156,7 @@ describe('Application/PluginStore#loadPlugins() when the plugin is found', ({ be
         assertEqual(1, result.length);
 
         const plugin = result[0];
+        assertEqual('app', plugin.name);
         assertEqual(path.join(directory, 'app'), plugin.directory);
         assertEqual(path.join(directory, 'app', 'plugin.js'), plugin.filepath);
         assertFunction(plugin.register);
@@ -230,10 +164,13 @@ describe('Application/PluginStore#loadPlugins() when the plugin is found', ({ be
         assertEqual(path.join(directory, 'app', 'middleware'), plugin.middlewareDirectory);
         assertEqual(path.join(directory, 'app', 'request-handlers'), plugin.requestHandlerDirectory);
         assertEqual(path.join(directory, 'app', 'error-handlers'), plugin.errorHandlerDirectory);
+        assertEqual(path.join(directory, 'app', 'collections'), plugin.collectionsDirectory);
+        assertEqual(path.join(directory, 'app', 'forms'), plugin.formsDirectory);
+        assertEqual(path.join(directory, 'app', 'views'), plugin.viewsDirectory);
     });
 });
 
-describe('Application/PluginStore#loadPlugins() when the plugin does not exist', ({ before, it }) => {
+describe('Application/PluginStore#loadPlugins() when plugin does not exist', ({ before, it }) => {
     const directory = path.join(THIS_DIR, 'fixtures', 'app-1', 'plugins');
     let result;
 
@@ -242,11 +179,16 @@ describe('Application/PluginStore#loadPlugins() when the plugin does not exist',
         result = await subject.loadPlugins();
     });
 
-    it('returns a PluginInfo object without register and initialize functions', () => {
+    it('returns PluginInfo objects without register and initialize functions', () => {
         assertArray(result);
         assertEqual(1, result.length);
-        assertEqual(null, result[0].register);
-        assertEqual(null, result[0].initialize);
+
+        const plugin = result[0];
+        assertEqual('app', plugin.name);
+        assertEqual(path.join(directory, 'app'), plugin.directory);
+        assertEqual(null, plugin.filepath);
+        assertEqual(null, plugin.register);
+        assertEqual(null, plugin.initialize);
     });
 });
 
@@ -274,5 +216,171 @@ describe('Application/PluginStore#loadPlugins() when there is a plugin import er
         assert(error.cause);
         assertEqual('ERR_MODULE_NOT_FOUND', error.cause.code);
         assertMatches(/^Cannot find module '([^']+)' imported from/, error.cause.message);
+    });
+});
+
+describe('Application/PluginStore#loadPlugins() with app plugin directory', ({ before, it }) => {
+    const directory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'plugins');
+    const appPluginDirectory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'app');
+    let result;
+
+    before(async () => {
+        const fileSystem = {
+            async readDirectory(dir) {
+                if (dir === directory) {
+                    return [{
+                        name: 'my-plugin',
+                        isDirectory() {
+                            return true;
+                        },
+                    }];
+                }
+                if (dir === path.join(directory, 'my-plugin') || dir === appPluginDirectory) {
+                    return [{
+                        name: getRandomItem([ 'plugin.js', 'plugin.mjs', 'app.js', 'app.mjs' ]),
+                        isFile() {
+                            return true;
+                        },
+                    }];
+                }
+                return [];
+            },
+            async getStats(dir) {
+                if (dir === appPluginDirectory) {
+                    return {
+                        isDirectory() {
+                            return true;
+                        },
+                    };
+                }
+                return null;
+            },
+            async importAbsoluteFilepath() {
+                return {
+                    register: () => {},
+                    initialize: () => {},
+                };
+            },
+        };
+
+        const subject = new PluginStore({ directory, fileSystem });
+        result = await subject.loadPlugins(appPluginDirectory);
+    });
+
+    it('includes app plugin and loads it last', () => {
+        assertArray(result);
+        assertEqual(2, result.length);
+
+        // First plugin should be from the plugins directory
+        const plugin1 = result[0];
+        assertEqual('my-plugin', plugin1.name);
+        assertEqual(path.join(directory, 'my-plugin'), plugin1.directory);
+
+        // App plugin should be loaded last
+        const appPlugin = result[1];
+        assertEqual('app', appPlugin.name);
+        assertEqual(appPluginDirectory, appPlugin.directory);
+        assertEqual(appPluginDirectory, path.dirname(appPlugin.filepath));
+        assert([ 'plugin.js', 'plugin.mjs', 'app.js', 'app.mjs' ].includes(path.basename(appPlugin.filepath)));
+        assertFunction(appPlugin.register);
+        assertFunction(appPlugin.initialize);
+    });
+});
+
+describe('Application/PluginStore#loadPlugins() with non-existent app plugin directory', ({ before, it }) => {
+    const directory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'plugins');
+    const appPluginDirectory = path.join(THIS_DIR, 'non-existent', 'app-plugin');
+    let result;
+
+    before(async () => {
+        const fileSystem = {
+            async readDirectory(dir) {
+                if (dir === directory) {
+                    return [{
+                        name: 'my-plugin',
+                        isDirectory() {
+                            return true;
+                        },
+                    }];
+                }
+                if (dir === path.join(directory, 'my-plugin')) {
+                    return [{
+                        name: 'plugin.js',
+                        isFile() {
+                            return true;
+                        },
+                    }];
+                }
+                return [];
+            },
+            async getStats() {
+                return null; // Directory doesn't exist
+            },
+            async importAbsoluteFilepath() {
+                return {
+                    register: () => {},
+                    initialize: () => {},
+                };
+            },
+        };
+
+        const subject = new PluginStore({ directory, fileSystem });
+        result = await subject.loadPlugins(appPluginDirectory);
+    });
+
+    it('ignores non-existent app plugin directory', () => {
+        assertArray(result);
+        assertEqual(1, result.length);
+
+        const plugin = result[0];
+        assertEqual('my-plugin', plugin.name);
+        assertEqual(path.join(directory, 'my-plugin'), plugin.directory);
+    });
+});
+
+describe('Application/PluginStore#loadPlugins() with null app plugin directory', ({ before, it }) => {
+    const directory = path.join(THIS_DIR, 'my-projects', 'fake-app', 'plugins');
+    let result;
+
+    before(async () => {
+        const fileSystem = {
+            async readDirectory(dir) {
+                if (dir === directory) {
+                    return [{
+                        name: 'my-plugin',
+                        isDirectory() {
+                            return true;
+                        },
+                    }];
+                }
+                if (dir === path.join(directory, 'my-plugin')) {
+                    return [{
+                        name: 'plugin.js',
+                        isFile() {
+                            return true;
+                        },
+                    }];
+                }
+                return [];
+            },
+            async importAbsoluteFilepath() {
+                return {
+                    register: () => {},
+                    initialize: () => {},
+                };
+            },
+        };
+
+        const subject = new PluginStore({ directory, fileSystem });
+        result = await subject.loadPlugins(null);
+    });
+
+    it('works without app plugin directory', () => {
+        assertArray(result);
+        assertEqual(1, result.length);
+
+        const plugin = result[0];
+        assertEqual('my-plugin', plugin.name);
+        assertEqual(path.join(directory, 'my-plugin'), plugin.directory);
     });
 });
