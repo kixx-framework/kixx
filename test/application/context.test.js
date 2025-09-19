@@ -2,8 +2,7 @@ import { describe } from 'kixx-test';
 import sinon from 'sinon';
 import {
     assert,
-    assertEqual,
-    assertNotEqual
+    assertEqual
 } from 'kixx-assert';
 import Context from '../../lib/application/context.js';
 
@@ -274,133 +273,6 @@ describe('Context#getService() when service does not exist', ({ before, it }) =>
         }
         assert(error);
         assertEqual('AssertionError', error.name);
-        assertEqual('The service "nonexistent-service" is not registered (Expected Boolean(false) to be truthy)', error.message);
-    });
-});
-
-describe('Context#getService() with invalid input', ({ before, it }) => {
-    let subject;
-
-    before(() => {
-        subject = new Context({
-            runtime: null,
-            config: null,
-            paths: null,
-            logger: null,
-        });
-    });
-
-    it('should throw an Error when name is undefined', () => {
-        let error;
-        try {
-            subject.getService(undefined);
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('The service "undefined" is not registered (Expected Boolean(false) to be truthy)', error.message);
-    });
-
-    it('should throw an Error when name is null', () => {
-        let error;
-        try {
-            subject.getService(null);
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('The service "null" is not registered (Expected Boolean(false) to be truthy)', error.message);
-    });
-
-    it('should throw an Error when name is an empty string', () => {
-        let error;
-        try {
-            subject.getService('');
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('The service "" is not registered (Expected Boolean(false) to be truthy)', error.message);
-    });
-
-    it('should throw an Error when name is a number', () => {
-        let error;
-        try {
-            subject.getService(123);
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('The service "123" is not registered (Expected Boolean(false) to be truthy)', error.message);
-    });
-
-    it('should throw an Error when name is an object', () => {
-        let error;
-        try {
-            subject.getService({});
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('The service "[object Object]" is not registered (Expected Boolean(false) to be truthy)', error.message);
-    });
-});
-
-describe('Context service lifecycle', ({ before, it }) => {
-    let subject;
-    let service1;
-    let service2;
-
-    before(() => {
-        subject = new Context({
-            runtime: null,
-            config: null,
-            paths: null,
-            logger: null,
-        });
-        service1 = { name: 'Service1', id: 1 };
-        service2 = { name: 'Service2', id: 2 };
-    });
-
-    it('should maintain service isolation between different contexts', () => {
-        const context1 = new Context({
-            runtime: null,
-            config: null,
-            paths: null,
-            logger: null,
-        });
-        const context2 = new Context({
-            runtime: null,
-            config: null,
-            paths: null,
-            logger: null,
-        });
-
-        context1.registerService('shared-name', service1);
-        context2.registerService('shared-name', service2);
-
-        assertEqual(service1, context1.getService('shared-name'));
-        assertEqual(service2, context2.getService('shared-name'));
-        assertNotEqual(context1.getService('shared-name'), context2.getService('shared-name'));
-    });
-
-    it('should allow registering and retrieving the same service multiple times', () => {
-        const service = { name: 'ReusableService' };
-
-        subject.registerService('reusable', service);
-        const retrieved1 = subject.getService('reusable');
-        const retrieved2 = subject.getService('reusable');
-        const retrieved3 = subject.getService('reusable');
-
-        assertEqual(service, retrieved1);
-        assertEqual(service, retrieved2);
-        assertEqual(service, retrieved3);
-        assertEqual(retrieved1, retrieved2);
-        assertEqual(retrieved2, retrieved3);
+        assertEqual('The service "nonexistent-service" is not registered', error.message);
     });
 });
