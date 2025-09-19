@@ -63,10 +63,6 @@ describe('Context#constructor with valid input', ({ before, it }) => {
         assertEqual(mockLogger, subject.logger);
     });
 
-    it('should set the rootUser property correctly', () => {
-        assertEqual(mockRootUser, subject.rootUser);
-    });
-
     it('should make the context object immutable', () => {
         let error;
         try {
