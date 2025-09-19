@@ -245,7 +245,7 @@ describe('Application/PluginStore#loadPlugins() with app plugin directory', ({ b
                 }
                 return [];
             },
-            async getStats(dir) {
+            async getFileStats(dir) {
                 if (dir === appPluginDirectory) {
                     return {
                         isDirectory() {
@@ -313,7 +313,7 @@ describe('Application/PluginStore#loadPlugins() with non-existent app plugin dir
                 }
                 return [];
             },
-            async getStats() {
+            async getFileStats() {
                 return null; // Directory doesn't exist
             },
             async importAbsoluteFilepath() {
