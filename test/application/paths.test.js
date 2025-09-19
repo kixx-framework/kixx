@@ -42,6 +42,10 @@ describe('Application/Paths#constructor with valid input', ({ before, it }) => {
         assertEqual(subject.partials_directory, path.join(FAKE_APP_DIR, 'templates', 'partials'));
     });
 
+    it('should have the correct app_plugin_directory', () => {
+        assertEqual(subject.app_plugin_directory, path.join(FAKE_APP_DIR, 'app'));
+    });
+
     it('should have the correct plugins_directory', () => {
         assertEqual(subject.plugins_directory, path.join(FAKE_APP_DIR, 'plugins'));
     });
