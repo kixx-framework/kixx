@@ -7,7 +7,11 @@ import {
     isLessThan,
     isLessThanOrEqualTo,
     sortIndexListAscending,
-    sortIndexListDescending
+    sortIndexListDescending,
+    findLeftmostPositionAscending,
+    findRightmostPositionAscending,
+    findLeftmostPositionDescending,
+    findRightmostPositionDescending
 } from '../../lib/datastore/binary-search.js';
 
 describe('binary-search isGreaterThan', ({ it }) => {
@@ -315,6 +319,286 @@ describe('binary-search sortIndexListDescending', ({ it }) => {
 
         assertEqual(1, items.length, 'single item array should have one item');
         assertEqual('single', items[0].key, 'single item should maintain its key');
+    });
+});
+
+describe('binary-search findLeftmostPositionAscending', ({ it }) => {
+    it('finds leftmost insertion point for target in ascending sorted array', () => {
+        const sortedList = [
+            { key: '1' },
+            { key: '10' },
+            { key: '2' },
+            { key: 'a' },
+            { key: 'apple' },
+            { key: 'Banana' },
+            { key: 'm' },
+            { key: 'n' },
+            { key: 'ñ' },
+            { key: 'o' },
+            { key: 'z' },
+            { key: 'Zebra' },
+        ].sort(sortIndexListAscending);
+
+        assertEqual(0, findLeftmostPositionAscending(sortedList, ALPHA), 'target ALPHA should insert at position 0');
+        assertEqual(0, findLeftmostPositionAscending(sortedList, '1'), 'target 1 should insert at position 0');
+        assertEqual(1, findLeftmostPositionAscending(sortedList, '10'), 'target 10 should insert at position 1');
+        assertEqual(2, findLeftmostPositionAscending(sortedList, '2'), 'target 2 should insert at position 2');
+        assertEqual(3, findLeftmostPositionAscending(sortedList, 'a'), 'target a should insert at position 3');
+        assertEqual(4, findLeftmostPositionAscending(sortedList, 'apple'), 'target apple should insert at position 4');
+        assertEqual(5, findLeftmostPositionAscending(sortedList, 'Banana'), 'target Banana should insert at position 5');
+        assertEqual(6, findLeftmostPositionAscending(sortedList, 'm'), 'target m should insert at position 6');
+        assertEqual(7, findLeftmostPositionAscending(sortedList, 'n'), 'target n should insert at position 7');
+        assertEqual(8, findLeftmostPositionAscending(sortedList, 'ñ'), 'target ñ should insert at position 8');
+        assertEqual(9, findLeftmostPositionAscending(sortedList, 'o'), 'target o should insert at position 9');
+        assertEqual(10, findLeftmostPositionAscending(sortedList, 'z'), 'target z should insert at position 10');
+        assertEqual(11, findLeftmostPositionAscending(sortedList, 'Zebra'), 'target Zebra should insert at position 11');
+        assertEqual(12, findLeftmostPositionAscending(sortedList, OMEGA), 'target OMEGA should insert at position 12');
+
+        // Test insertion between existing elements
+        assertEqual(0, findLeftmostPositionAscending(sortedList, '0'), 'target 0 should insert at position 0');
+        assertEqual(0, findLeftmostPositionAscending(sortedList, '~'), 'target ~ should insert at position 0');
+        assertEqual(2, findLeftmostPositionAscending(sortedList, '11'), 'target 11 should insert at position 2');
+        assertEqual(4, findLeftmostPositionAscending(sortedList, 'A'), 'target A should insert at position 4');
+    });
+
+    it('handles empty arrays', () => {
+        const sortedList = [];
+
+        assertEqual(0, findLeftmostPositionAscending(sortedList, 'a'), 'target should insert at position 0 in empty array');
+        assertEqual(0, findLeftmostPositionAscending(sortedList, 'z'), 'target should insert at position 0 in empty array');
+    });
+
+    it('handles single item arrays', () => {
+        const sortedList = [{ key: 'm' }];
+
+        assertEqual(0, findLeftmostPositionAscending(sortedList, 'a'), 'target a should insert at position 0');
+        assertEqual(0, findLeftmostPositionAscending(sortedList, 'm'), 'target m should insert at position 0');
+        assertEqual(1, findLeftmostPositionAscending(sortedList, 'z'), 'target z should insert at position 1');
+    });
+
+    it('handles duplicate keys correctly', () => {
+        const sortedList = [
+            { key: 'a' },
+            { key: 'b' },
+            { key: 'b' },
+            { key: 'b' },
+            { key: 'c' },
+        ];
+
+        assertEqual(0, findLeftmostPositionAscending(sortedList, 'a'), 'target a should insert at position 0');
+        assertEqual(1, findLeftmostPositionAscending(sortedList, 'b'), 'target b should insert at leftmost position 1');
+        assertEqual(4, findLeftmostPositionAscending(sortedList, 'c'), 'target c should insert at position 4');
+        assertEqual(5, findLeftmostPositionAscending(sortedList, 'd'), 'target d should insert at position 5');
+    });
+});
+
+describe('binary-search findRightmostPositionAscending', ({ it }) => {
+    it('finds rightmost insertion point for target in ascending sorted array', () => {
+        const sortedList = [
+            { key: '1' },
+            { key: '10' },
+            { key: '2' },
+            { key: 'a' },
+            { key: 'apple' },
+            { key: 'Banana' },
+            { key: 'm' },
+            { key: 'n' },
+            { key: 'ñ' },
+            { key: 'o' },
+            { key: 'z' },
+            { key: 'Zebra' },
+        ].sort(sortIndexListAscending);
+
+        assertEqual(0, findRightmostPositionAscending(sortedList, ALPHA), 'target ALPHA should insert at position 0');
+        assertEqual(1, findRightmostPositionAscending(sortedList, '1'), 'target 1 should insert at position 1');
+        assertEqual(2, findRightmostPositionAscending(sortedList, '10'), 'target 10 should insert at position 2');
+        assertEqual(3, findRightmostPositionAscending(sortedList, '2'), 'target 2 should insert at position 3');
+        assertEqual(4, findRightmostPositionAscending(sortedList, 'a'), 'target a should insert at position 4');
+        assertEqual(5, findRightmostPositionAscending(sortedList, 'apple'), 'target apple should insert at position 5');
+        assertEqual(6, findRightmostPositionAscending(sortedList, 'Banana'), 'target Banana should insert at position 6');
+        assertEqual(7, findRightmostPositionAscending(sortedList, 'm'), 'target m should insert at position 7');
+        assertEqual(8, findRightmostPositionAscending(sortedList, 'n'), 'target n should insert at position 8');
+        assertEqual(9, findRightmostPositionAscending(sortedList, 'ñ'), 'target ñ should insert at position 9');
+        assertEqual(10, findRightmostPositionAscending(sortedList, 'o'), 'target o should insert at position 10');
+        assertEqual(11, findRightmostPositionAscending(sortedList, 'z'), 'target z should insert at position 11');
+        assertEqual(12, findRightmostPositionAscending(sortedList, 'Zebra'), 'target Zebra should insert at position 12');
+        assertEqual(12, findRightmostPositionAscending(sortedList, OMEGA), 'target OMEGA should insert at position 12');
+
+        // Test insertion between existing elements
+        assertEqual(0, findRightmostPositionAscending(sortedList, '0'), 'target 0 should insert at position 0');
+        assertEqual(0, findRightmostPositionAscending(sortedList, '~'), 'target ~ should insert at position 0');
+        assertEqual(2, findRightmostPositionAscending(sortedList, '11'), 'target 11 should insert at position 2');
+        assertEqual(4, findRightmostPositionAscending(sortedList, 'A'), 'target A should insert at position 4');
+    });
+
+    it('handles empty arrays', () => {
+        const sortedList = [];
+
+        assertEqual(0, findRightmostPositionAscending(sortedList, 'a'), 'target should insert at position 0 in empty array');
+        assertEqual(0, findRightmostPositionAscending(sortedList, 'z'), 'target should insert at position 0 in empty array');
+    });
+
+    it('handles single item arrays', () => {
+        const sortedList = [{ key: 'm' }];
+
+        assertEqual(0, findRightmostPositionAscending(sortedList, 'a'), 'target a should insert at position 0');
+        assertEqual(1, findRightmostPositionAscending(sortedList, 'm'), 'target m should insert at position 1');
+        assertEqual(1, findRightmostPositionAscending(sortedList, 'z'), 'target z should insert at position 1');
+    });
+
+    it('handles duplicate keys correctly', () => {
+        const sortedList = [
+            { key: 'a' },
+            { key: 'b' },
+            { key: 'b' },
+            { key: 'b' },
+            { key: 'c' },
+        ];
+
+        assertEqual(1, findRightmostPositionAscending(sortedList, 'a'), 'target a should insert at position 1');
+        assertEqual(4, findRightmostPositionAscending(sortedList, 'b'), 'target b should insert at rightmost position 4');
+        assertEqual(5, findRightmostPositionAscending(sortedList, 'c'), 'target c should insert at position 5');
+        assertEqual(5, findRightmostPositionAscending(sortedList, 'd'), 'target d should insert at position 5');
+    });
+});
+
+describe('binary-search findLeftmostPositionDescending', ({ it }) => {
+    it('finds leftmost insertion point for target in descending sorted array', () => {
+        const sortedList = [
+            { key: '1' },
+            { key: '10' },
+            { key: '2' },
+            { key: 'a' },
+            { key: 'apple' },
+            { key: 'Banana' },
+            { key: 'm' },
+            { key: 'n' },
+            { key: 'ñ' },
+            { key: 'o' },
+            { key: 'z' },
+            { key: 'Zebra' },
+        ].sort(sortIndexListDescending);
+
+        assertEqual(0, findLeftmostPositionDescending(sortedList, OMEGA), 'target OMEGA should insert at position 0');
+        assertEqual(0, findLeftmostPositionDescending(sortedList, 'Zebra'), 'target Zebra should insert at position 0');
+        assertEqual(1, findLeftmostPositionDescending(sortedList, 'z'), 'target z should insert at position 1');
+        assertEqual(2, findLeftmostPositionDescending(sortedList, 'o'), 'target o should insert at position 2');
+        assertEqual(3, findLeftmostPositionDescending(sortedList, 'ñ'), 'target ñ should insert at position 3');
+        assertEqual(4, findLeftmostPositionDescending(sortedList, 'n'), 'target n should insert at position 4');
+        assertEqual(5, findLeftmostPositionDescending(sortedList, 'm'), 'target m should insert at position 5');
+        assertEqual(6, findLeftmostPositionDescending(sortedList, 'Banana'), 'target Banana should insert at position 6');
+        assertEqual(7, findLeftmostPositionDescending(sortedList, 'apple'), 'target apple should insert at position 7');
+        assertEqual(8, findLeftmostPositionDescending(sortedList, 'a'), 'target a should insert at position 8');
+        assertEqual(9, findLeftmostPositionDescending(sortedList, '2'), 'target 2 should insert at position 9');
+        assertEqual(10, findLeftmostPositionDescending(sortedList, '10'), 'target 10 should insert at position 10');
+        assertEqual(11, findLeftmostPositionDescending(sortedList, '1'), 'target 1 should insert at position 11');
+        assertEqual(12, findLeftmostPositionDescending(sortedList, ALPHA), 'target ALPHA should insert at position 12');
+
+        // Test insertion between existing elements
+        assertEqual(8, findLeftmostPositionDescending(sortedList, 'A'), 'target A should insert at position 8');
+        assertEqual(10, findLeftmostPositionDescending(sortedList, '11'), 'target 11 should insert at position 10');
+        assertEqual(12, findLeftmostPositionDescending(sortedList, '0'), 'target 0 should insert at position 12');
+        assertEqual(12, findLeftmostPositionDescending(sortedList, '~'), 'target ~ should insert at position 12');
+    });
+
+    it('handles empty arrays', () => {
+        const sortedList = [];
+
+        assertEqual(0, findLeftmostPositionDescending(sortedList, 'a'), 'target should insert at position 0 in empty array');
+        assertEqual(0, findLeftmostPositionDescending(sortedList, 'z'), 'target should insert at position 0 in empty array');
+    });
+
+    it('handles single item arrays', () => {
+        const sortedList = [{ key: 'm' }];
+
+        assertEqual(1, findLeftmostPositionDescending(sortedList, 'a'), 'target a should insert at position 1');
+        assertEqual(0, findLeftmostPositionDescending(sortedList, 'm'), 'target m should insert at position 0');
+        assertEqual(0, findLeftmostPositionDescending(sortedList, 'z'), 'target z should insert at position 0');
+    });
+
+    it('handles duplicate keys correctly', () => {
+        const sortedList = [
+            { key: 'c' },
+            { key: 'b' },
+            { key: 'b' },
+            { key: 'b' },
+            { key: 'a' },
+        ];
+
+        assertEqual(4, findLeftmostPositionDescending(sortedList, 'a'), 'target a should insert at position 4');
+        assertEqual(1, findLeftmostPositionDescending(sortedList, 'b'), 'target b should insert at leftmost position 1');
+        assertEqual(0, findLeftmostPositionDescending(sortedList, 'c'), 'target c should insert at position 0');
+        assertEqual(0, findLeftmostPositionDescending(sortedList, 'd'), 'target d should insert at position 0');
+    });
+});
+
+describe('binary-search findRightmostPositionDescending', ({ it }) => {
+    it('finds rightmost insertion point for target in descending sorted array', () => {
+        const sortedList = [
+            { key: '1' },
+            { key: '10' },
+            { key: '2' },
+            { key: 'a' },
+            { key: 'apple' },
+            { key: 'Banana' },
+            { key: 'm' },
+            { key: 'n' },
+            { key: 'ñ' },
+            { key: 'o' },
+            { key: 'z' },
+            { key: 'Zebra' },
+        ].sort(sortIndexListDescending);
+
+        assertEqual(0, findRightmostPositionDescending(sortedList, OMEGA), 'target OMEGA should insert at position 0');
+        assertEqual(1, findRightmostPositionDescending(sortedList, 'Zebra'), 'target Zebra should insert at position 1');
+        assertEqual(2, findRightmostPositionDescending(sortedList, 'z'), 'target z should insert at position 2');
+        assertEqual(3, findRightmostPositionDescending(sortedList, 'o'), 'target o should insert at position 3');
+        assertEqual(4, findRightmostPositionDescending(sortedList, 'ñ'), 'target ñ should insert at position 4');
+        assertEqual(5, findRightmostPositionDescending(sortedList, 'n'), 'target n should insert at position 5');
+        assertEqual(6, findRightmostPositionDescending(sortedList, 'm'), 'target m should insert at position 6');
+        assertEqual(7, findRightmostPositionDescending(sortedList, 'Banana'), 'target Banana should insert at position 7');
+        assertEqual(8, findRightmostPositionDescending(sortedList, 'apple'), 'target apple should insert at position 8');
+        assertEqual(9, findRightmostPositionDescending(sortedList, 'a'), 'target a should insert at position 9');
+        assertEqual(10, findRightmostPositionDescending(sortedList, '2'), 'target 2 should insert at position 10');
+        assertEqual(11, findRightmostPositionDescending(sortedList, '10'), 'target 10 should insert at position 11');
+        assertEqual(12, findRightmostPositionDescending(sortedList, '1'), 'target 1 should insert at position 12');
+        assertEqual(12, findRightmostPositionDescending(sortedList, ALPHA), 'target ALPHA should insert at position 12');
+
+        // Test insertion between existing elements
+        assertEqual(8, findRightmostPositionDescending(sortedList, 'A'), 'target A should insert at position 8');
+        assertEqual(10, findRightmostPositionDescending(sortedList, '11'), 'target 11 should insert at position 10');
+        assertEqual(12, findRightmostPositionDescending(sortedList, '0'), 'target 0 should insert at position 12');
+        assertEqual(12, findRightmostPositionDescending(sortedList, '~'), 'target ~ should insert at position 12');
+    });
+
+    it('handles empty arrays', () => {
+        const sortedList = [];
+
+        assertEqual(0, findRightmostPositionDescending(sortedList, 'a'), 'target should insert at position 0 in empty array');
+        assertEqual(0, findRightmostPositionDescending(sortedList, 'z'), 'target should insert at position 0 in empty array');
+    });
+
+    it('handles single item arrays', () => {
+        const sortedList = [{ key: 'm' }];
+
+        assertEqual(1, findRightmostPositionDescending(sortedList, 'a'), 'target a should insert at position 1');
+        assertEqual(1, findRightmostPositionDescending(sortedList, 'm'), 'target m should insert at position 1');
+        assertEqual(0, findRightmostPositionDescending(sortedList, 'z'), 'target z should insert at position 0');
+    });
+
+    it('handles duplicate keys correctly', () => {
+        const sortedList = [
+            { key: 'c' },
+            { key: 'b' },
+            { key: 'b' },
+            { key: 'b' },
+            { key: 'a' },
+        ];
+
+        assertEqual(5, findRightmostPositionDescending(sortedList, 'a'), 'target a should insert at position 5');
+        assertEqual(4, findRightmostPositionDescending(sortedList, 'b'), 'target b should insert at rightmost position 4');
+        assertEqual(1, findRightmostPositionDescending(sortedList, 'c'), 'target c should insert at position 1');
+        assertEqual(0, findRightmostPositionDescending(sortedList, 'd'), 'target d should insert at position 0');
     });
 });
 
