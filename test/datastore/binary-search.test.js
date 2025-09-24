@@ -11,7 +11,9 @@ import {
     findLeftmostPositionAscending,
     findRightmostPositionAscending,
     findLeftmostPositionDescending,
-    findRightmostPositionDescending
+    findRightmostPositionDescending,
+    getAscendingIndexRange,
+    getDescendingIndexRange
 } from '../../lib/datastore/binary-search.js';
 
 describe('binary-search isGreaterThan', ({ it }) => {
@@ -601,4 +603,105 @@ describe('binary-search findRightmostPositionDescending', ({ it }) => {
         assertEqual(0, findRightmostPositionDescending(sortedList, 'd'), 'target d should insert at position 0');
     });
 });
+
+describe('binary-search, getAscendingIndexRange', ({ it }) => {
+    const items = [
+        { key: '1', value: 'one' },
+        { key: '10', value: 'ten' },
+        { key: '2', value: 'two' },
+        { key: 'a', value: 'a' },
+        { key: 'apple', value: 'apple' },
+        { key: 'banana', value: 'banana' },
+        { key: 'Banana', value: 'Banana' },
+        { key: 'm', value: 'middle' },
+        { key: 'n', value: 'n' },
+        { key: 'ñ', value: 'n-tilde' },
+        { key: 'o', value: 'o' },
+        { key: 'z', value: 'last' },
+        { key: 'Zebra', value: 'zebra' },
+    ];
+
+    items.sort(sortIndexListAscending);
+
+    it('fetches every item in the list with ALPHA, OMEGA', () => {
+        const result = getAscendingIndexRange(items, ALPHA, OMEGA);
+        assertEqual(items.length, result.length);
+        assertEqual('1', items[0].key);
+        assertEqual('Zebra', items[12].key);
+    });
+
+    it('fetches the first item in the range inclusively', () => {
+        const result = getAscendingIndexRange(items, 'm', OMEGA);
+        assertEqual('m', result[0].key);
+    });
+
+    it('fetches the last item in the range inclusively', () => {
+        const result = getAscendingIndexRange(items, ALPHA, 'm');
+        assertEqual('m', result[result.length - 1].key);
+    });
+
+    it('fetches expected range', () => {
+        const result = getAscendingIndexRange(items, `a${ ALPHA }`, 'b');
+        assertEqual(2, result.length);
+        assertEqual('a', result[0].key);
+        assertEqual('apple', result[1].key);
+    });
+
+    it('can fetch a single key', () => {
+        const result = getAscendingIndexRange(items, 'a', 'a');
+        assertEqual(1, result.length);
+        assertEqual('a', result[0].key);
+    });
+});
+
+describe('binary-search, getDescendingIndexRange', ({ it }) => {
+    const items = [
+        { key: 'Zebra', value: 'zebra' },
+        { key: 'z', value: 'last' },
+        { key: 'o', value: 'o' },
+        { key: 'ñ', value: 'n-tilde' },
+        { key: 'n', value: 'n' },
+        { key: 'm', value: 'middle' },
+        { key: 'Banana', value: 'Banana' },
+        { key: 'banana', value: 'banana' },
+        { key: 'apple', value: 'apple' },
+        { key: 'a', value: 'a' },
+        { key: '2', value: 'two' },
+        { key: '10', value: 'ten' },
+        { key: '1', value: 'one' },
+    ];
+
+    items.sort(sortIndexListDescending);
+
+    it('fetches every item in the list with ALPHA, OMEGA', () => {
+        const result = getDescendingIndexRange(items, OMEGA, ALPHA);
+        assertEqual(items.length, result.length);
+        assertEqual('Zebra', items[0].key);
+        assertEqual('1', items[12].key);
+    });
+
+    it('fetches the first item in the range inclusively', () => {
+        const result = getDescendingIndexRange(items, 'm', ALPHA);
+        assertEqual('m', result[0].key);
+    });
+
+    it('fetches the last item in the range inclusively', () => {
+        const result = getDescendingIndexRange(items, OMEGA, 'm');
+        assertEqual('m', result[result.length - 1].key);
+    });
+
+    it('fetches expected range', () => {
+        const result = getDescendingIndexRange(items, 'b', `a${ ALPHA }`);
+        assertEqual(2, result.length);
+        assertEqual('apple', result[0].key);
+        assertEqual('a', result[1].key);
+    });
+
+    it('can fetch a single key', () => {
+        const result = getDescendingIndexRange(items, 'a', 'a');
+        assertEqual(1, result.length);
+        assertEqual('a', result[0].key);
+    });
+});
+
 
