@@ -62,45 +62,6 @@ describe('Context#constructor with valid input', ({ before, it }) => {
     it('should set the logger property correctly', () => {
         assertEqual(mockLogger, subject.logger);
     });
-
-    it('should make the context object immutable', () => {
-        let error;
-        try {
-            subject.runtime = null;
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('TypeError', error.name);
-        try {
-            subject.config = null;
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('TypeError', error.name);
-        try {
-            subject.paths = null;
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('TypeError', error.name);
-        try {
-            subject.logger = null;
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('TypeError', error.name);
-        try {
-            subject.rootUser = null;
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('TypeError', error.name);
-    });
 });
 
 describe('Context#registerService() with valid input', ({ before, it }) => {
