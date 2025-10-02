@@ -118,6 +118,11 @@ export async function main(args) {
         logger.warn(event.message, event.info, event.cause);
     });
 
+    // Load configs and routes to sanity check them. If the configuration or
+    // routes are not valid, an error will be thrown here instead of
+    // waiting for the first request.
+    await server.preload();
+
     server.startServer();
 }
 

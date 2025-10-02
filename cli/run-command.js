@@ -1,10 +1,11 @@
 import process from 'node:process';
+import { EOL } from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import * as Application from '../lib/application/application.js';
-import { readDirectory } from '../lib/lib/file-system.js';
+import Application from '../lib/application/application.js';
+import { readDirectory, importAbsoluteFilepath } from '../lib/lib/file-system.js';
 import { isNonEmptyString, assertFunction } from '../lib/assertions/mod.js';
 
 const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -12,18 +13,31 @@ const DOCS_DIR = path.join(CLI_DIR, 'docs');
 
 
 const options = {
-    // The path to the application configuration file.
+    help: {
+        short: 'h',
+        type: 'boolean',
+    },
+    dir: {
+        short: 'd',
+        type: 'string',
+    },
     config: {
         short: 'c',
         type: 'string',
     },
-    // The environment to run the server in.
+    secrets: {
+        short: 's',
+        type: 'string',
+    },
     environment: {
         short: 'e',
         type: 'string',
         default: 'development',
     },
 };
+
+
+/* eslint-disable no-console */
 
 
 export async function main(args) {
@@ -36,7 +50,6 @@ export async function main(args) {
     });
 
     if (values.help) {
-        // eslint-disable-next-line no-console
         console.error(readDocFile('run-command.md'));
         process.exit(1);
         return;
@@ -44,24 +57,58 @@ export async function main(args) {
 
     const commandName = positionals[0];
 
-    if (!isNonEmptyString(commandName)) {
-        throw new Error('Command argument is required');
-    }
+    const currentWorkingDirectory = process.cwd();
 
-    let configFilepath;
-    if (isNonEmptyString(values.config)) {
-        configFilepath = path.resolve(values.config);
-    } else {
-        configFilepath = path.join(process.cwd(), 'kixx-config.json');
-    }
+    const applicationDirectory = isNonEmptyString(values.dir) ? values.dir : null;
+    const configFilepath = isNonEmptyString(values.config) ? path.resolve(values.config) : null;
+    const secretsFilepath = isNonEmptyString(values.secrets) ? path.resolve(values.secrets) : null;
+
+    const environment = values.environment;
+
+    const app = new Application({
+        currentWorkingDirectory,
+        applicationDirectory,
+    });
 
     const runtime = { command: commandName };
-    const context = await Application.initialize(runtime, configFilepath, values.environment);
+
+    const context = await app.initialize({
+        runtime,
+        environment,
+        configFilepath,
+        secretsFilepath,
+    });
+
+    // eslint-disable-next-line require-atomic-updates
+    process.title = `node-${ context.config.processName }`;
+    // NOTE: We've seen process names get truncated.
+    // For example, on Ubuntu Linux this is truncated to 15 characters.
 
     const commands = await loadCommands(context.paths.commands_directory);
 
+    if (!isNonEmptyString(commandName)) {
+        console.error('We need a command name to run.');
+        console.error('(The first positional argument to kixx run-command.)' + EOL);
+        console.error('Available custom commands are:' + EOL);
+        for (const cmd of commands.keys()) {
+            console.error(`- ${ cmd }`);
+        }
+        console.error(EOL + 'Help:' + EOL);
+        console.error(readDocFile('run-command.md'));
+        process.exit(1);
+        return;
+    }
+
     if (!commands.has(commandName)) {
-        throw new Error(`Command "${ commandName }" does not exist`);
+        console.error(`The command "${ commandName }" is not implemented.` + EOL);
+        console.error('Available custom commands are:' + EOL);
+        for (const cmd of commands.keys()) {
+            console.error(`- ${ cmd }`);
+        }
+        console.error(EOL + 'Help:' + EOL);
+        console.error(readDocFile('run-command.md'));
+        process.exit(1);
+        return;
     }
 
     const command = commands.get(commandName);
@@ -81,8 +128,12 @@ export async function main(args) {
 }
 
 async function loadCommands(directory) {
-    const filepaths = await readDirectory(directory);
-    const promises = filepaths.map(loadCommand);
+    const files = await readDirectory(directory);
+
+    const promises = files.map((file) => {
+        return loadCommand(path.join(directory, file.name));
+    });
+
     const commands = await Promise.all(promises);
 
     const map = new Map();
@@ -95,7 +146,7 @@ async function loadCommands(directory) {
 }
 
 async function loadCommand(filepath) {
-    const mod = await import(pathToFileURL(filepath));
+    const mod = await importAbsoluteFilepath(filepath);
 
     assertFunction(mod.run, `A command must export a run function (in ${ filepath })`);
 
