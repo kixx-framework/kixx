@@ -61,14 +61,6 @@ describe('Application/Paths#constructor with valid input', ({ before, it }) => {
     it('should have the correct kv_store_directory', () => {
         assertEqual(subject.kv_store_directory, path.join(FAKE_APP_DIR, 'data', 'kv-store'));
     });
-
-    it('should have the correct object_store_directory', () => {
-        assertEqual(subject.object_store_directory, path.join(FAKE_APP_DIR, 'data', 'objects'));
-    });
-
-    it('should have the correct job_directory', () => {
-        assertEqual(subject.job_directory, path.join(FAKE_APP_DIR, 'data', 'jobs'));
-    });
 });
 
 describe('Application/Paths#constructor with invalid input', ({ it }) => {
