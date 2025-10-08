@@ -27,7 +27,7 @@ describe('Config#constructor with valid input', ({ before, it }) => {
     };
 
     before(() => {
-        subject = new Config(testValues, testSecrets, '/path/to/app');
+        subject = new Config(testValues, testSecrets);
     });
 
     it('should extend EventEmitter', () => {
@@ -40,10 +40,6 @@ describe('Config#constructor with valid input', ({ before, it }) => {
 
     it('should have the correct processName property', () => {
         assertEqual('test-app', subject.processName);
-    });
-
-    it('should have the correct applicationDirectory property', () => {
-        assertEqual('/path/to/app', subject.applicationDirectory);
     });
 });
 
@@ -61,71 +57,18 @@ describe('Config#constructor with default values', ({ before, it }) => {
     it('should use default processName when not provided', () => {
         assertEqual('kixxapp', subject.processName);
     });
-
-    it('should have undefined applicationDirectory when not provided', () => {
-        assertUndefined(subject.applicationDirectory);
-    });
 });
 
 describe('Config#constructor with null/undefined values', ({ before, it }) => {
     let subject;
 
     before(() => {
-        subject = new Config(null, undefined, null);
+        subject = new Config(null, undefined);
     });
 
     it('should handle null values gracefully by using default values', () => {
         assertEqual('Kixx Application', subject.name);
         assertEqual('kixxapp', subject.processName);
-    });
-
-    it('should handle null applicationDirectory', () => {
-        assertEqual(null, subject.applicationDirectory);
-    });
-});
-
-describe('Config#applicationDirectory getter', ({ before, it }) => {
-    let subject;
-
-    before(() => {
-        subject = new Config({}, {}, '/custom/app/path');
-    });
-
-    it('should return the application directory path', () => {
-        assertEqual('/custom/app/path', subject.applicationDirectory);
-    });
-
-    it('should return the same value on multiple calls', () => {
-        const firstCall = subject.applicationDirectory;
-        const secondCall = subject.applicationDirectory;
-        assertEqual(firstCall, secondCall);
-    });
-});
-
-describe('Config#applicationDirectory with different path types', ({ it }) => {
-    it('should handle absolute paths', () => {
-        const subject = new Config({}, {}, '/absolute/path/to/app');
-        assertEqual('/absolute/path/to/app', subject.applicationDirectory);
-    });
-
-    it('should handle relative paths', () => {
-        const subject = new Config({}, {}, './relative/path');
-        assertEqual('./relative/path', subject.applicationDirectory);
-    });
-
-    it('should handle Windows-style paths', () => {
-        const subject = new Config({}, {}, 'C:\\Windows\\Path\\To\\App');
-        assertEqual('C:\\Windows\\Path\\To\\App', subject.applicationDirectory);
-    });
-
-    it('should handle empty string', () => {
-        const subject = new Config({}, {}, '');
-        assertEqual('', subject.applicationDirectory);
-    });
-
-    it('should handle undefined', () => {
-        const subject = new Config({}, {}, undefined);
-        assertUndefined(subject.applicationDirectory);
     });
 });
 
@@ -634,13 +577,12 @@ describe('Config.create() with environment override', ({ it }) => {
     };
 
     it('should create Config instance with merged configs and secrets', () => {
-        const config = Config.create('production', rootConfig, rootSecrets, '/prod/app/path');
+        const config = Config.create('production', rootConfig, rootSecrets);
 
         assertEqual('Production App', config.name);
         assertEqual('prod-db.example.com', config.getNamespace('database').host);
         assertEqual(5432, config.getNamespace('database').port);
         assertEqual('prod-password', config.getSecrets('database').password);
-        assertEqual('/prod/app/path', config.applicationDirectory);
     });
 });
 
@@ -672,13 +614,12 @@ describe('Config.create() with missing environment', ({ it }) => {
     };
 
     it('should use root config and secrets when environment does not exist', () => {
-        const config = Config.create('development', rootConfig, rootSecrets, '/dev/app/path');
+        const config = Config.create('development', rootConfig, rootSecrets);
 
         assertEqual('Root App', config.name);
         assertEqual('localhost', config.getNamespace('database').host);
         assertEqual(5432, config.getNamespace('database').port);
         assertEqual('root-password', config.getSecrets('database').password);
-        assertEqual('/dev/app/path', config.applicationDirectory);
     });
 });
 
@@ -698,48 +639,11 @@ describe('Config.create() with no environments property', ({ it }) => {
     };
 
     it('should use root config and secrets when no environments property exists', () => {
-        const config = Config.create('production', rootConfig, rootSecrets, '/default/app/path');
+        const config = Config.create('production', rootConfig, rootSecrets);
 
         assertEqual('Root App', config.name);
         assertEqual('localhost', config.getNamespace('database').host);
         assertEqual(5432, config.getNamespace('database').port);
         assertEqual('root-password', config.getSecrets('database').password);
-        assertEqual('/default/app/path', config.applicationDirectory);
-    });
-});
-
-describe('Config.create() with null/undefined applicationDirectory', ({ it }) => {
-    const rootConfig = {
-        name: 'Root App',
-        database: {
-            host: 'localhost',
-            port: 5432,
-        },
-    };
-
-    const rootSecrets = {
-        database: {
-            password: 'root-password',
-        },
-    };
-
-    it('should handle null applicationDirectory', () => {
-        const config = Config.create('production', rootConfig, rootSecrets, null);
-
-        assertEqual('Root App', config.name);
-        assertEqual('localhost', config.getNamespace('database').host);
-        assertEqual(5432, config.getNamespace('database').port);
-        assertEqual('root-password', config.getSecrets('database').password);
-        assertEqual(null, config.applicationDirectory);
-    });
-
-    it('should handle undefined applicationDirectory', () => {
-        const config = Config.create('production', rootConfig, rootSecrets, undefined);
-
-        assertEqual('Root App', config.name);
-        assertEqual('localhost', config.getNamespace('database').host);
-        assertEqual(5432, config.getNamespace('database').port);
-        assertEqual('root-password', config.getSecrets('database').password);
-        assertUndefined(config.applicationDirectory);
     });
 });
