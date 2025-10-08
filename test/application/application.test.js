@@ -11,6 +11,361 @@ import { isPlainObject, assert, assertEqual } from 'kixx-assert';
 const DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
 
+describe('Application#initialize() with explicit config filepaths in app directory', ({ before, after, it }) => {
+
+    const configFilepath = path.join(DIRECTORY, 'my', 'application', 'kixx-config.json');
+    const secretsFilepath = path.join(DIRECTORY, 'my', 'application', '.secrets.json');
+
+    const readJSONFile = sinon.stub().resolves({ production: {}, development: {}, test: {} });
+
+    let app;
+    let result;
+
+    before(async () => {
+        app = new Application({
+            currentWorkingDirectory: DIRECTORY,
+            fileSystem: { readJSONFile },
+        });
+
+        // We don't want to actually call these methods.
+        sinon.stub(app, 'createLogger');
+        sinon.stub(app, 'createAndInitializeViewService');
+        sinon.stub(app, 'createAndLoadDatastore');
+        sinon.stub(app, 'initializePlugins');
+
+        result = await app.initialize({
+            runtime: {},
+            environment: 'test',
+            configFilepath,
+            secretsFilepath,
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns the context', () => {
+        assertEqual('Context', result.constructor.name);
+    });
+
+    it('sets the application directory', () => {
+        const appDirectory = path.dirname(configFilepath);
+        assertEqual(appDirectory, app.applicationDirectory);
+        assertEqual(appDirectory, result.paths.app_directory);
+    });
+
+    it('calls readJSONFile() with expected filepaths', () => {
+        assertEqual(2, readJSONFile.callCount);
+        assertEqual(configFilepath, readJSONFile.getCall(0).args[0]);
+        assertEqual(secretsFilepath, readJSONFile.getCall(1).args[0]);
+    });
+});
+
+describe('Application#initialize() with explicit config filepaths outside app directory', ({ before, after, it }) => {
+    const configDirectory = path.dirname(DIRECTORY);
+    const appDirectory = path.join(DIRECTORY, 'application');
+
+    const configFilepath = path.join(configDirectory, 'kixx-config.json');
+    const secretsFilepath = path.join(configDirectory, '.secrets.json');
+
+    const readJSONFile = sinon.stub().resolves({ production: {}, development: {}, test: {} });
+
+    let app;
+    let result;
+
+    before(async () => {
+        app = new Application({
+            currentWorkingDirectory: DIRECTORY,
+            applicationDirectory: appDirectory,
+            fileSystem: { readJSONFile },
+        });
+
+        // We don't want to actually call these methods.
+        sinon.stub(app, 'createLogger');
+        sinon.stub(app, 'createAndInitializeViewService');
+        sinon.stub(app, 'createAndLoadDatastore');
+        sinon.stub(app, 'initializePlugins');
+
+        result = await app.initialize({
+            runtime: {},
+            environment: 'test',
+            configFilepath,
+            secretsFilepath,
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns the context', () => {
+        assertEqual('Context', result.constructor.name);
+    });
+
+    it('sets the application directory to the current working directory', () => {
+        assertEqual(appDirectory, app.applicationDirectory);
+        assertEqual(appDirectory, result.paths.app_directory);
+    });
+
+    it('calls readJSONFile() with expected filepaths', () => {
+        assertEqual(2, readJSONFile.callCount);
+        assertEqual(configFilepath, readJSONFile.getCall(0).args[0]);
+        assertEqual(secretsFilepath, readJSONFile.getCall(1).args[0]);
+    });
+});
+
+describe('Application#initialize() with explicit applicationDirectory', ({ before, after, it }) => {
+    const appDirectory = path.join(DIRECTORY, 'application');
+    const configFilepath = path.join(appDirectory, 'kixx-config.json');
+    const secretsFilepath = path.join(appDirectory, '.secrets.json');
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'kixx-config.json',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: '.secrets.json',
+            isFile() {
+                return true;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves({ production: {}, development: {}, test: {} });
+
+    let app;
+    let result;
+
+    before(async () => {
+        app = new Application({
+            currentWorkingDirectory: DIRECTORY,
+            applicationDirectory: appDirectory,
+            fileSystem: { readDirectory, readJSONFile },
+        });
+
+        // We don't want to actually call these methods.
+        sinon.stub(app, 'createLogger');
+        sinon.stub(app, 'createAndInitializeViewService');
+        sinon.stub(app, 'createAndLoadDatastore');
+        sinon.stub(app, 'initializePlugins');
+
+        result = await app.initialize({
+            runtime: {},
+            environment: 'test',
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns the context', () => {
+        assertEqual('Context', result.constructor.name);
+    });
+
+    it('sets the application directory', () => {
+        assertEqual(appDirectory, app.applicationDirectory);
+        assertEqual(appDirectory, result.paths.app_directory);
+    });
+
+    it('calls readDirectory() with the application directory', () => {
+        assertEqual(2, readDirectory.callCount);
+        assertEqual(appDirectory, readDirectory.getCall(0).args[0]);
+        assertEqual(appDirectory, readDirectory.getCall(1).args[0]);
+    });
+
+    it('calls readJSONFile() with expected filepaths', () => {
+        assertEqual(2, readJSONFile.callCount);
+        assertEqual(configFilepath, readJSONFile.getCall(0).args[0]);
+        assertEqual(secretsFilepath, readJSONFile.getCall(1).args[0]);
+    });
+});
+
+describe('Application#initialize() with only currentWorkingDirectory', ({ before, after, it }) => {
+    const configFilepath = path.join(DIRECTORY, 'kixx-config.json');
+    const secretsFilepath = path.join(DIRECTORY, '.secrets.json');
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'kixx-config.json',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: '.secrets.json',
+            isFile() {
+                return true;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves({ production: {}, development: {}, test: {} });
+
+    let app;
+    let result;
+
+    before(async () => {
+        app = new Application({
+            currentWorkingDirectory: DIRECTORY,
+            fileSystem: { readDirectory, readJSONFile },
+        });
+
+        // We don't want to actually call these methods.
+        sinon.stub(app, 'createLogger');
+        sinon.stub(app, 'createAndInitializeViewService');
+        sinon.stub(app, 'createAndLoadDatastore');
+        sinon.stub(app, 'initializePlugins');
+
+        result = await app.initialize({
+            runtime: {},
+            environment: 'test',
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns the context', () => {
+        assertEqual('Context', result.constructor.name);
+    });
+
+    it('sets the application directory to the current working directory', () => {
+        assertEqual(DIRECTORY, app.applicationDirectory);
+        assertEqual(DIRECTORY, result.paths.app_directory);
+    });
+
+    it('calls readDirectory() with the application directory', () => {
+        assertEqual(2, readDirectory.callCount);
+        assertEqual(DIRECTORY, readDirectory.getCall(0).args[0]);
+        assertEqual(DIRECTORY, readDirectory.getCall(1).args[0]);
+    });
+
+    it('calls readJSONFile() with expected filepaths', () => {
+        assertEqual(2, readJSONFile.callCount);
+        assertEqual(configFilepath, readJSONFile.getCall(0).args[0]);
+        assertEqual(secretsFilepath, readJSONFile.getCall(1).args[0]);
+    });
+});
+
+describe('Application#createRootUser()', ({ before, after, it }) => {
+
+    const rootUser = { id: 1, username: 'root' };
+
+    const collection = {
+        createRootUser: sinon.stub().returns(rootUser),
+    };
+
+    const context = {
+        getCollection: sinon.stub().returns(collection),
+    };
+
+    const fileSystem = {};
+
+    let app;
+    let result;
+
+    before(() => {
+        app = new Application({
+            currentWorkingDirectory: DIRECTORY,
+            fileSystem,
+        });
+
+        result = app.createRootUser(context);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls getCollection with the collectionType', () => {
+        assertEqual(1, context.getCollection.callCount);
+        assertEqual('app.User', context.getCollection.getCall(0).args[0]);
+    });
+
+    it('calls createRootUser on the collection', () => {
+        assertEqual(1, collection.createRootUser.callCount);
+    });
+
+    it('returns the result from collection.createRootUser', () => {
+        assertEqual(rootUser, result);
+    });
+});
+
+describe('Application#createRootUser() with custom collectionType', ({ before, after, it }) => {
+
+    const rootUser = { id: 1, username: 'admin' };
+
+    const collection = {
+        createRootUser: sinon.stub().returns(rootUser),
+    };
+
+    const context = {
+        getCollection: sinon.stub().returns(collection),
+    };
+
+    const fileSystem = {};
+
+    let app;
+    let result;
+
+    before(() => {
+        app = new Application({
+            currentWorkingDirectory: DIRECTORY,
+            fileSystem,
+        });
+
+        result = app.createRootUser(context, 'custom.AdminUser');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls getCollection with the custom collectionType', () => {
+        assertEqual(1, context.getCollection.callCount);
+        assertEqual('custom.AdminUser', context.getCollection.getCall(0).args[0]);
+    });
+
+    it('calls createRootUser on the collection', () => {
+        assertEqual(1, collection.createRootUser.callCount);
+    });
+
+    it('returns the result from collection.createRootUser', () => {
+        assertEqual(rootUser, result);
+    });
+});
+
+describe('Application#createRootUser() when context is null', ({ before, it }) => {
+
+    const fileSystem = {};
+
+    let app;
+    let result;
+
+    before(() => {
+        app = new Application({
+            currentWorkingDirectory: DIRECTORY,
+            fileSystem,
+        });
+
+        try {
+            app.createRootUser();
+        } catch (err) {
+            result = err;
+        }
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', result.name);
+    });
+});
+
 describe('Application#loadLatestSecrets() with explicit filepath', ({ before, after, it }) => {
 
     const originalAppDir = DIRECTORY;
