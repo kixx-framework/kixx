@@ -412,12 +412,9 @@ import sinon from 'sinon';
 describe('stub', () => {
     it('should behave differently on consecutive calls with certain argument', () => {
 
-        const callback = sinon
-            .stub()
-            .onCall(0)
-            .returns(1)
-            .onCall(1)
-            .returns(2);
+        const callback = sinon.stub();
+        callback.onCall(0).returns(1);
+        callback.onCall(1).returns(2);
 
         callback.returns(0);
 
