@@ -11,6 +11,190 @@ import { assert, assertEqual } from 'kixx-assert';
 const DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
 
+describe('Plugin constructor', ({ it }) => {
+
+    const fileSystem = {};
+    const directory = path.join(DIRECTORY, 'my-plugin');
+
+    const plugin = new Plugin(fileSystem, directory);
+
+    it('sets the name from the directory basename', () => {
+        assertEqual('my-plugin', plugin.name);
+    });
+
+    it('sets the directory', () => {
+        assertEqual(directory, plugin.directory);
+    });
+
+    it('sets the usersDirectory', () => {
+        assertEqual(path.join(directory, 'users'), plugin.usersDirectory);
+    });
+
+    it('sets the collectionsDirectory', () => {
+        assertEqual(path.join(directory, 'collections'), plugin.collectionsDirectory);
+    });
+
+    it('sets the formsDirectory', () => {
+        assertEqual(path.join(directory, 'forms'), plugin.formsDirectory);
+    });
+
+    it('sets the viewsDirectory', () => {
+        assertEqual(path.join(directory, 'views'), plugin.viewsDirectory);
+    });
+
+    it('sets the middlewareDirectory', () => {
+        assertEqual(path.join(directory, 'middleware'), plugin.middlewareDirectory);
+    });
+
+    it('sets the requestHandlerDirectory', () => {
+        assertEqual(path.join(directory, 'request-handlers'), plugin.requestHandlerDirectory);
+    });
+
+    it('sets the errorHandlerDirectory', () => {
+        assertEqual(path.join(directory, 'error-handlers'), plugin.errorHandlerDirectory);
+    });
+
+    it('initializes filepath to null', () => {
+        assertEqual(null, plugin.filepath);
+    });
+
+    it('initializes register to null', () => {
+        assertEqual(null, plugin.register);
+    });
+
+    it('initializes initialize to null', () => {
+        assertEqual(null, plugin.initialize);
+    });
+
+    it('initializes collections as an empty Map', () => {
+        assert(plugin.collections instanceof Map);
+        assertEqual(0, plugin.collections.size);
+    });
+
+    it('initializes views as an empty Map', () => {
+        assert(plugin.views instanceof Map);
+        assertEqual(0, plugin.views.size);
+    });
+
+    it('initializes forms as an empty Map', () => {
+        assert(plugin.forms instanceof Map);
+        assertEqual(0, plugin.forms.size);
+    });
+
+    it('initializes middleware as an empty Map', () => {
+        assert(plugin.middleware instanceof Map);
+        assertEqual(0, plugin.middleware.size);
+    });
+
+    it('initializes requestHandlers as an empty Map', () => {
+        assert(plugin.requestHandlers instanceof Map);
+        assertEqual(0, plugin.requestHandlers.size);
+    });
+
+    it('initializes errorHandlers as an empty Map', () => {
+        assert(plugin.errorHandlers instanceof Map);
+        assertEqual(0, plugin.errorHandlers.size);
+    });
+});
+
+describe('Plugin#load()', ({ before, after, it }) => {
+
+    function registerFunction() {}
+    function initializeFunction() {}
+
+    const pluginFilepath = path.join(DIRECTORY, 'plugin.js');
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'plugin.js',
+            isFile() {
+                return true;
+            },
+        },
+    ]);
+
+    const importAbsoluteFilepath = sinon.stub().resolves({
+        register: registerFunction,
+        initialize: initializeFunction,
+    });
+
+    const fileSystem = {
+        readDirectory,
+        importAbsoluteFilepath,
+    };
+
+    const collectionsMap = new Map();
+    const viewsMap = new Map();
+    const formsMap = new Map();
+    const middlewareMap = new Map();
+    const requestHandlersMap = new Map();
+    const errorHandlersMap = new Map();
+
+    let plugin;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+
+        sinon.stub(plugin, 'loadCollections').resolves(collectionsMap);
+        sinon.stub(plugin, 'loadViews').resolves(viewsMap);
+        sinon.stub(plugin, 'loadForms').resolves(formsMap);
+
+        const loadMiddlewareDirectory = sinon.stub(plugin, 'loadMiddlewareDirectory');
+        loadMiddlewareDirectory.onFirstCall().resolves(middlewareMap);
+        loadMiddlewareDirectory.onSecondCall().resolves(requestHandlersMap);
+        loadMiddlewareDirectory.onThirdCall().resolves(errorHandlersMap);
+
+        await plugin.load();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('imports the plugin registration file', () => {
+        assertEqual(1, importAbsoluteFilepath.callCount);
+        assertEqual(pluginFilepath, importAbsoluteFilepath.getCall(0).args[0]);
+    });
+
+    it('sets register and initialize functions', () => {
+        assertEqual(registerFunction, plugin.register);
+        assertEqual(initializeFunction, plugin.initialize);
+    });
+
+    it('loads collections', () => {
+        assertEqual(1, plugin.loadCollections.callCount);
+        assertEqual(collectionsMap, plugin.collections);
+    });
+
+    it('loads forms', () => {
+        assertEqual(1, plugin.loadForms.callCount);
+        assertEqual(formsMap, plugin.forms);
+    });
+
+    it('loads views', () => {
+        assertEqual(1, plugin.loadViews.callCount);
+        assertEqual(viewsMap, plugin.views);
+    });
+
+    it('loads the middleware directory', () => {
+        const loadMiddlewareDirectory = plugin.loadMiddlewareDirectory;
+        assertEqual(plugin.middlewareDirectory, loadMiddlewareDirectory.getCall(0).args[0]);
+        assertEqual(middlewareMap, plugin.middleware);
+    });
+
+    it('loads the request handlers directory', () => {
+        const loadMiddlewareDirectory = plugin.loadMiddlewareDirectory;
+        assertEqual(plugin.requestHandlerDirectory, loadMiddlewareDirectory.getCall(1).args[0]);
+        assertEqual(requestHandlersMap, plugin.requestHandlers);
+    });
+
+    it('loads the error handlers directory', () => {
+        const loadMiddlewareDirectory = plugin.loadMiddlewareDirectory;
+        assertEqual(plugin.errorHandlerDirectory, loadMiddlewareDirectory.getCall(2).args[0]);
+        assertEqual(errorHandlersMap, plugin.errorHandlers);
+    });
+});
+
 describe('Plugin#loadViews()', ({ before, after, it }) => {
 
     class UserView { }
