@@ -11,6 +11,276 @@ import { assert, assertEqual } from 'kixx-assert';
 const DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
 
+describe('Plugin#loadView()', ({ before, after, it }) => {
+
+    class UserView { }
+
+    const directory = path.join(DIRECTORY, 'views', 'user');
+
+    const schema = {
+        type: 'object',
+        properties: {
+            name: { type: 'string' },
+            email: { type: 'string' },
+        },
+    };
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'user.view.mjs',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'user.schema.json',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'README.md',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'helpers.js',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'subdir.view.js',
+            isFile() {
+                return false;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves(schema);
+    const importAbsoluteFilepath = sinon.stub().resolves({ default: UserView });
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+        importAbsoluteFilepath,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+        result = await plugin.loadView(directory);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('only loads JS and schema JSON files', () => {
+        assertEqual(1, readJSONFile.callCount);
+        assertEqual(path.join(directory, 'user.schema.json'), readJSONFile.getCall(0).args[0]);
+
+        assertEqual(1, importAbsoluteFilepath.callCount);
+        assertEqual(path.join(directory, 'user.view.mjs'), importAbsoluteFilepath.getCall(0).args[0]);
+    });
+
+    it('attaches the schema to the constructor function', () => {
+        assertEqual(schema, UserView.schema);
+    });
+
+    it('returns the default export constructor function', () => {
+        assertEqual(UserView, result);
+    });
+});
+
+describe('Plugin#loadView() when class file does not exist', ({ before, after, it }) => {
+
+    const directory = path.join(DIRECTORY, 'views', 'incomplete');
+
+    const schema = {
+        type: 'object',
+        properties: {
+            name: { type: 'string' },
+        },
+    };
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'incomplete.schema.json',
+            isFile() {
+                return true;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves(schema);
+    const importAbsoluteFilepath = sinon.stub();
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+        importAbsoluteFilepath,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+        result = await plugin.loadView(directory);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not attempt to import a class file', () => {
+        assertEqual(0, importAbsoluteFilepath.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('Plugin#loadForm()', ({ before, after, it }) => {
+
+    class UserForm { }
+
+    const directory = path.join(DIRECTORY, 'forms', 'user');
+
+    const schema = {
+        type: 'object',
+        properties: {
+            username: { type: 'string' },
+            password: { type: 'string' },
+        },
+    };
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'user.form.mjs',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'user.schema.json',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'README.md',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'helpers.js',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'subdir.form.js',
+            isFile() {
+                return false;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves(schema);
+    const importAbsoluteFilepath = sinon.stub().resolves({ default: UserForm });
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+        importAbsoluteFilepath,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+        result = await plugin.loadForm(directory);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('only loads JS and schema JSON files', () => {
+        assertEqual(1, readJSONFile.callCount);
+        assertEqual(path.join(directory, 'user.schema.json'), readJSONFile.getCall(0).args[0]);
+
+        assertEqual(1, importAbsoluteFilepath.callCount);
+        assertEqual(path.join(directory, 'user.form.mjs'), importAbsoluteFilepath.getCall(0).args[0]);
+    });
+
+    it('attaches the schema to the constructor function', () => {
+        assertEqual(schema, UserForm.schema);
+    });
+
+    it('returns the default export constructor function', () => {
+        assertEqual(UserForm, result);
+    });
+});
+
+describe('Plugin#loadForm() when class file does not exist', ({ before, after, it }) => {
+
+    const directory = path.join(DIRECTORY, 'forms', 'incomplete');
+
+    const schema = {
+        type: 'object',
+        properties: {
+            name: { type: 'string' },
+        },
+    };
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'incomplete.schema.json',
+            isFile() {
+                return true;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves(schema);
+    const importAbsoluteFilepath = sinon.stub();
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+        importAbsoluteFilepath,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+        result = await plugin.loadForm(directory);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not attempt to import a class file', () => {
+        assertEqual(0, importAbsoluteFilepath.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
 describe('Plugin#loadMiddlewareDirectory()', ({ before, after, it }) => {
 
     function SomeMiddleware() {}
