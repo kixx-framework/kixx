@@ -126,6 +126,7 @@ describe('Plugin#load()', ({ before, after, it }) => {
     const collectionsMap = new Map();
     const viewsMap = new Map();
     const formsMap = new Map();
+    const usersResult = { roles: new Map() };
     const middlewareMap = new Map();
     const requestHandlersMap = new Map();
     const errorHandlersMap = new Map();
@@ -138,6 +139,7 @@ describe('Plugin#load()', ({ before, after, it }) => {
         sinon.stub(plugin, 'loadCollections').resolves(collectionsMap);
         sinon.stub(plugin, 'loadViews').resolves(viewsMap);
         sinon.stub(plugin, 'loadForms').resolves(formsMap);
+        sinon.stub(plugin, 'loadUsers').resolves(usersResult);
 
         const loadMiddlewareDirectory = sinon.stub(plugin, 'loadMiddlewareDirectory');
         loadMiddlewareDirectory.onFirstCall().resolves(middlewareMap);
@@ -174,6 +176,11 @@ describe('Plugin#load()', ({ before, after, it }) => {
     it('loads views', () => {
         assertEqual(1, plugin.loadViews.callCount);
         assertEqual(viewsMap, plugin.views);
+    });
+
+    it('loads users', () => {
+        assertEqual(1, plugin.loadUsers.callCount);
+        assertEqual(usersResult, plugin.users);
     });
 
     it('loads the middleware directory', () => {
@@ -956,5 +963,78 @@ describe('Plugin#loadMiddlewareFunction() when import throws', ({ before, after,
     it('throws a WrappedError', () => {
         assertEqual('WrappedError', result.name);
         assertEqual(error, result.cause);
+    });
+});
+
+describe('Plugin#loadUsers()', ({ before, after, it }) => {
+
+    const role1 = {
+        name: 'anonymous',
+        permissions: [],
+    };
+    const role2 = {
+        name: 'admin',
+        permissions: [],
+    };
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'anonymous.role.json',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'admin.role.jsonc',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'README.md',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'subdir',
+            isFile() {
+                return false;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub();
+    readJSONFile.onFirstCall().resolves(role1);
+    readJSONFile.onSecondCall().resolves(role2);
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+        result = await plugin.loadUsers();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('only user roles JSON files', () => {
+        assertEqual(2, readJSONFile.callCount);
+        assertEqual(path.join(plugin.usersDirectory, 'anonymous.role.json'), readJSONFile.getCall(0).args[0]);
+        assertEqual(path.join(plugin.usersDirectory, 'admin.role.jsonc'), readJSONFile.getCall(1).args[0]);
+    });
+
+
+    it('returns the user roles', () => {
+        assertEqual(2, result.roles.size);
+        assert(result.roles.has('anonymous'));
+        assert(result.roles.has('admin'));
     });
 });
