@@ -899,3 +899,211 @@ describe('Context#getView() when view does not exist', ({ before, it }) => {
         assertEqual('The view "nonexistent-view" is not registered', error.message);
     });
 });
+
+describe('Context#registerUserRole() with valid input', ({ before, it }) => {
+    let subject;
+    let testUserRole;
+
+    before(() => {
+        subject = new Context({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+        testUserRole = {
+            name: 'TestUserRole',
+            permissions: [ 'read', 'write' ],
+        };
+    });
+
+    it('should register a user role with a string name', () => {
+        subject.registerUserRole('test-user-role', testUserRole);
+
+        const retrievedUserRole = subject.getUserRole('test-user-role');
+        assertEqual(testUserRole, retrievedUserRole);
+    });
+
+    it('should register multiple user roles with different names', () => {
+        const userRole1 = { name: 'UserRole1' };
+        const userRole2 = { name: 'UserRole2' };
+
+        subject.registerUserRole('user-role-1', userRole1);
+        subject.registerUserRole('user-role-2', userRole2);
+
+        assertEqual(userRole1, subject.getUserRole('user-role-1'));
+        assertEqual(userRole2, subject.getUserRole('user-role-2'));
+    });
+
+    it('should allow overwriting an existing user role', () => {
+        const originalUserRole = { name: 'Original' };
+        const newUserRole = { name: 'New' };
+
+        subject.registerUserRole('overwrite-test', originalUserRole);
+        subject.registerUserRole('overwrite-test', newUserRole);
+
+        assertEqual(newUserRole, subject.getUserRole('overwrite-test'));
+    });
+});
+
+describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
+    let subject;
+
+    before(() => {
+        subject = new Context({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+    });
+
+    it('should throw an AssertionError when name is undefined', () => {
+        let error;
+        try {
+            subject.registerUserRole(undefined, {});
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('should throw an AssertionError when name is null', () => {
+        let error;
+        try {
+            subject.registerUserRole(null, {});
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('should throw an AssertionError when name is an empty string', () => {
+        let error;
+        try {
+            subject.registerUserRole('', {});
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('should throw an AssertionError when name is a number', () => {
+        let error;
+        try {
+            subject.registerUserRole(123, {});
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('should throw an AssertionError when name is an object', () => {
+        let error;
+        try {
+            subject.registerUserRole({}, {});
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('should throw an AssertionError when name is an array', () => {
+        let error;
+        try {
+            subject.registerUserRole([], {});
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('should throw an AssertionError when name is a boolean', () => {
+        let error;
+        try {
+            subject.registerUserRole(false, {});
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('ASSERTION_ERROR', error.code);
+        assertEqual('AssertionError', error.name);
+    });
+});
+
+describe('Context#getUserRole() when user role exists', ({ before, it }) => {
+    let subject;
+    let testUserRole;
+
+    before(() => {
+        subject = new Context({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+        testUserRole = {
+            name: 'TestUserRole',
+            permissions: [ 'read', 'write' ],
+        };
+        subject.registerUserRole('test-user-role', testUserRole);
+    });
+
+    it('should return the registered user role', () => {
+        const retrievedUserRole = subject.getUserRole('test-user-role');
+        assertEqual(testUserRole, retrievedUserRole);
+    });
+
+    it('should return the same user role instance on multiple calls', () => {
+        const firstCall = subject.getUserRole('test-user-role');
+        const secondCall = subject.getUserRole('test-user-role');
+        assertEqual(firstCall, secondCall);
+    });
+
+    it('should return user roles with different names', () => {
+        const userRole1 = { name: 'UserRole1' };
+
+        subject.registerUserRole('user-role-1', userRole1);
+        subject.registerUserRole('user-role-2', userRole1);
+
+        assertEqual(userRole1, subject.getUserRole('user-role-1'));
+        assertEqual(userRole1, subject.getUserRole('user-role-2'));
+    });
+});
+
+describe('Context#getUserRole() when user role does not exist', ({ before, it }) => {
+    let subject;
+
+    before(() => {
+        subject = new Context({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+    });
+
+    it('should throw an Error when user role name does not exist', () => {
+        let error;
+        try {
+            subject.getUserRole('nonexistent-user-role');
+        } catch (e) {
+            error = e;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+        assertEqual('The user role "nonexistent-user-role" is not registered', error.message);
+    });
+});
