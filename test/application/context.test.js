@@ -1095,15 +1095,8 @@ describe('Context#getUserRole() when user role does not exist', ({ before, it })
         });
     });
 
-    it('should throw an Error when user role name does not exist', () => {
-        let error;
-        try {
-            subject.getUserRole('nonexistent-user-role');
-        } catch (e) {
-            error = e;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-        assertEqual('The user role "nonexistent-user-role" is not registered', error.message);
+    it('returns null when user role name does not exist', () => {
+        const result = subject.getUserRole('nonexistent-user-role');
+        assertEqual(null, result);
     });
 });
