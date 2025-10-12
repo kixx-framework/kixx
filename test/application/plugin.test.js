@@ -970,7 +970,9 @@ describe('Plugin#loadUsers()', ({ before, after, it }) => {
 
     const role1 = {
         name: 'anonymous',
-        permissions: [],
+        permissions: [
+            'kixx:view:customers:getItem:*',
+        ],
     };
     const role2 = {
         name: 'admin',
@@ -1036,5 +1038,189 @@ describe('Plugin#loadUsers()', ({ before, after, it }) => {
         assertEqual(2, result.roles.size);
         assert(result.roles.has('anonymous'));
         assert(result.roles.has('admin'));
+    });
+});
+
+describe('Plugin#loadUsers() when there are no user roles', ({ before, after, it }) => {
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'README.md',
+            isFile() {
+                return true;
+            },
+        },
+        {
+            name: 'subdir',
+            isFile() {
+                return false;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub();
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+        result = await plugin.loadUsers();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not attempt to read any JSON files', () => {
+        assertEqual(0, readJSONFile.callCount);
+    });
+
+    it('returns an object with an empty roles Map', () => {
+        assert(result.roles instanceof Map);
+        assertEqual(0, result.roles.size);
+    });
+});
+
+describe('Plugin#loadUsers() when a role does not have a name', ({ before, after, it }) => {
+
+    const roleWithoutName = {
+        permissions: [
+            'kixx:view:customers:getItem:*',
+        ],
+    };
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'invalid.role.json',
+            isFile() {
+                return true;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves(roleWithoutName);
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+
+        try {
+            await plugin.loadUsers();
+        } catch (err) {
+            result = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', result.name);
+    });
+});
+
+describe('Plugin#loadUsers() when permissions is not an array', ({ before, after, it }) => {
+
+    const roleWithoutPermissions = {
+        name: 'admin',
+    };
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'invalid.role.json',
+            isFile() {
+                return true;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves(roleWithoutPermissions);
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+
+        try {
+            await plugin.loadUsers();
+        } catch (err) {
+            result = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', result.name);
+    });
+});
+
+describe('Plugin#loadUsers() when a permissions item is not a string', ({ before, after, it }) => {
+
+    const roleWithInvalidPermission = {
+        name: 'admin',
+        permissions: [
+            'kixx:view:customers:getItem:*',
+            { invalid: 'permission' },
+        ],
+    };
+
+    const readDirectory = sinon.stub().resolves([
+        {
+            name: 'invalid.role.json',
+            isFile() {
+                return true;
+            },
+        },
+    ]);
+
+    const readJSONFile = sinon.stub().resolves(roleWithInvalidPermission);
+
+    const fileSystem = {
+        readDirectory,
+        readJSONFile,
+    };
+
+    let plugin;
+    let result;
+
+    before(async () => {
+        plugin = new Plugin(fileSystem, DIRECTORY);
+
+        try {
+            await plugin.loadUsers();
+        } catch (err) {
+            result = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', result.name);
     });
 });
