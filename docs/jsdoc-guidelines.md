@@ -50,24 +50,6 @@ Documentation for error conditions and edge cases is crucial for Node.js applica
  */
 ```
 
-## Use Examples for Complex APIs
-When a function has nuanced behavior or multiple use cases, include examples:
-
-```javascript
-/**
- * @example
- * // Basic usage
- * const result = await processData(['item1', 'item2']);
- * 
- * @example
- * // With options
- * const result = await processData(items, { 
- *   parallel: true, 
- *   timeout: 5000 
- * });
- */
-```
-
 ## Keep It Concise
 Write concise descriptions that add value beyond the name of the thing you are documenting. Keeping it concise will help your documentation remain relevant longer too.
 
@@ -97,18 +79,6 @@ In Node.js, async patterns are everywhere. Mark async functions and methods with
  */
 async function getUser(userId) {
 }
-```
-
-## Document Module-Level Concepts
-For complex modules, include overview documentation:
-
-```javascript
-/**
- * @fileoverview User authentication and authorization utilities
- * 
- * This module provides middleware and helper functions for handling
- * JWT tokens, role-based access control, and session management.
- */
 ```
 
 ## Summary
