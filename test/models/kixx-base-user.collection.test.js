@@ -294,3 +294,69 @@ describe('KixxBaseUserCollection#getUserFromSession()', ({ before, after, it }) 
         assertEqual('alice@example.com', result.email, 'result has correct email');
     });
 });
+
+describe('KixxBaseUserCollection#getUserFromSession() when user does not exist', ({ before, after, it }) => {
+    let context;
+    let datastore;
+    let collection;
+    let error;
+    let session;
+
+    before(async () => {
+        // Mock datastore with stubbed getItem that returns null (user not found)
+        datastore = {
+            getItem: sinon.stub().resolves(null),
+        };
+
+        // Mock context that provides the datastore service
+        context = {
+            getService: sinon.stub().returns(datastore),
+            getUserRole: sinon.stub(),
+        };
+
+        // Create collection instance
+        collection = new UserCollection(context);
+
+        // Create session object
+        session = {
+            id: 'session-xyz',
+            userId: 'nonexistent-user-id',
+        };
+
+        // Spy on idToPrimaryKey
+        sinon.spy(collection, 'idToPrimaryKey');
+
+        // Call the method under test and capture the error
+        try {
+            await collection.getUserFromSession(session);
+        } catch (e) {
+            error = e;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls idToPrimaryKey()', () => {
+        assertEqual(1, collection.idToPrimaryKey.callCount, 'idToPrimaryKey() was called once');
+        assertEqual('nonexistent-user-id', collection.idToPrimaryKey.firstCall.args[0], 'idToPrimaryKey() called with session.userId');
+    });
+
+    it('calls datastore.getItem()', () => {
+        assertEqual(1, datastore.getItem.callCount, 'datastore.getItem() was called once');
+        assertEqual('User__nonexistent-user-id', datastore.getItem.firstCall.args[0], 'datastore.getItem() called with user key');
+    });
+
+    it('does not call context.getUserRole()', () => {
+        assertEqual(0, context.getUserRole.callCount, 'getUserRole() was not called');
+    });
+
+    it('throws a NotFoundError', () => {
+        assert(error, 'error was thrown');
+        assertEqual('NotFoundError', error.name, 'error.name');
+        assertEqual('NOT_FOUND_ERROR', error.code, 'error.code');
+        assertEqual(404, error.httpStatusCode, 'error.httpStatusCode');
+        assertMatches('nonexistent-user-id', error.message, 'error message contains userId');
+    });
+});
