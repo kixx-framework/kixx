@@ -77,3 +77,54 @@ describe('KixxBaseUserCollection#getSession() when session exists', ({ before, a
         assertEqual('user-456', result.userId, 'result has correct userId');
     });
 });
+
+describe('KixxBaseUserCollection#getSession() when session does not exist', ({ before, after, it }) => {
+    let context;
+    let datastore;
+    let collection;
+    let result;
+
+    before(async () => {
+        // Mock datastore with stubbed getItem that returns null (session not found)
+        datastore = {
+            getItem: sinon.stub().resolves(null),
+        };
+
+        // Mock context that provides the datastore service
+        context = {
+            getService: sinon.stub().returns(datastore),
+        };
+
+        // Create collection instance
+        collection = new UserCollection(context);
+
+        // Spy on the methods we want to verify are called (or not called)
+        sinon.spy(collection, 'sessionIdToPrimaryKey');
+        sinon.spy(UserSession, 'fromRecord');
+
+        // Call the method under test
+        result = await collection.getSession('nonexistent-session');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls sessionIdToPrimaryKey()', () => {
+        assertEqual(1, collection.sessionIdToPrimaryKey.callCount, 'sessionIdToPrimaryKey() was called once');
+        assertEqual('nonexistent-session', collection.sessionIdToPrimaryKey.firstCall.args[0], 'sessionIdToPrimaryKey() called with session id');
+    });
+
+    it('calls datastore.getItem()', () => {
+        assertEqual(1, datastore.getItem.callCount, 'datastore.getItem() was called once');
+        assertEqual('UserSession__nonexistent-session', datastore.getItem.firstCall.args[0], 'datastore.getItem() called with namespaced key');
+    });
+
+    it('does not call UserSession.fromRecord()', () => {
+        assertEqual(0, UserSession.fromRecord.callCount, 'UserSession.fromRecord() was not called');
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result, 'result is null');
+    });
+});
