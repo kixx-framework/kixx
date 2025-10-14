@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual } from 'kixx-assert';
+import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import sinon from 'sinon';
 import KixxBaseUser from '../../lib/user/kixx-base-user.js';
 
@@ -237,5 +237,240 @@ describe('KixxBaseUser.create() with existing id in props', ({ before, after, it
 
     it('uses the provided id', () => {
         assertEqual('existing-id-456', user.id, 'user.id is the generated ID, not the existing one');
+    });
+});
+
+describe('KixxBaseUser#getItem() with permission', ({ before, after, it }) => {
+    let context;
+    let user;
+    let roles;
+    let view;
+    let hasPermissionStub;
+    let getViewSpy;
+    let getItemStub;
+    let result;
+
+    before(async () => {
+        view = {
+            getItem: sinon.stub().resolves({ id: '123', data: 'test data' }),
+        };
+
+        context = {
+            getView: sinon.stub().returns(view),
+        };
+
+        roles = [];
+
+        user = new KixxBaseUser(context, { id: 'user-1', name: 'Test User' }, roles);
+
+        hasPermissionStub = sinon.stub(user, 'hasPermission').returns(true);
+
+        result = await user.getItem({ view: 'TestView', type: 'TestType' });
+
+        getViewSpy = context.getView;
+        getItemStub = view.getItem;
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls context.getView()', () => {
+        assertEqual(1, getViewSpy.callCount, 'context.getView() was called once');
+        assertEqual('TestView', getViewSpy.firstCall.args[0], 'getView() was called with the view name');
+    });
+
+    it('calls hasPermission() with the correct URN', () => {
+        assertEqual(1, hasPermissionStub.callCount, 'hasPermission() was called once');
+        assertEqual('kixx:view:TestView:getItem:TestType', hasPermissionStub.firstCall.args[0], 'hasPermission() was called with correct URN');
+    });
+
+    it('calls view.getItem()', () => {
+        assertEqual(1, getItemStub.callCount, 'view.getItem() was called once');
+        assertEqual('TestView', getItemStub.firstCall.args[0].view, 'getItem() was called with the view param');
+        assertEqual('TestType', getItemStub.firstCall.args[0].type, 'getItem() was called with the type param');
+    });
+
+    it('returns the result from view.getItem()', () => {
+        assertEqual('123', result.id, 'result.id matches');
+        assertEqual('test data', result.data, 'result.data matches');
+    });
+});
+
+describe('KixxBaseUser#getItem() without permission', ({ before, after, it }) => {
+    let context;
+    let user;
+    let roles;
+    let view;
+    let hasPermissionStub;
+    let getViewSpy;
+    let getItemStub;
+    let error;
+
+    before(async () => {
+        view = {
+            getItem: sinon.stub().resolves({ id: '123', data: 'test data' }),
+        };
+
+        context = {
+            getView: sinon.stub().returns(view),
+        };
+
+        roles = [];
+
+        user = new KixxBaseUser(context, { id: 'user-1', name: 'Test User' }, roles);
+
+        hasPermissionStub = sinon.stub(user, 'hasPermission').returns(false);
+
+        try {
+            await user.getItem({ view: 'TestView', type: 'TestType' });
+        } catch (e) {
+            error = e;
+        }
+
+        getViewSpy = context.getView;
+        getItemStub = view.getItem;
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls context.getView()', () => {
+        assertEqual(1, getViewSpy.callCount, 'context.getView() was called once');
+        assertEqual('TestView', getViewSpy.firstCall.args[0], 'getView() was called with the view name');
+    });
+
+    it('calls hasPermission() with the correct URN', () => {
+        assertEqual(1, hasPermissionStub.callCount, 'hasPermission() was called once');
+        assertEqual('kixx:view:TestView:getItem:TestType', hasPermissionStub.firstCall.args[0], 'hasPermission() was called with correct URN');
+    });
+
+    it('throws an UnauthorizedError', () => {
+        assert(error, 'an error was thrown');
+        assertEqual('UnauthorizedError', error.name, 'error is an UnauthorizedError');
+        assertEqual('UNAUTHORIZED_ERROR', error.code, 'error code is UNAUTHORIZED_ERROR');
+        assertMatches('User type KixxBaseUser is not authorized', error.message, 'error message contains expected text');
+    });
+
+    it('does not call view.getItem()', () => {
+        assertEqual(0, getItemStub.callCount, 'view.getItem() was not called');
+    });
+});
+
+describe('KixxBaseUser#saveFormData() with permission', ({ before, after, it }) => {
+    let context;
+    let user;
+    let roles;
+    let form;
+    let hasPermissionStub;
+    let getFormSpy;
+    let saveStub;
+    let result;
+
+    before(async () => {
+        form = {
+            save: sinon.stub().resolves({ id: '456', status: 'saved' }),
+        };
+
+        context = {
+            getForm: sinon.stub().returns(form),
+        };
+
+        roles = [];
+
+        user = new KixxBaseUser(context, { id: 'user-1', name: 'Test User' }, roles);
+
+        hasPermissionStub = sinon.stub(user, 'hasPermission').returns(true);
+
+        result = await user.saveFormData({ form: 'TestForm', data: { field1: 'value1' } });
+
+        getFormSpy = context.getForm;
+        saveStub = form.save;
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls context.getForm()', () => {
+        assertEqual(1, getFormSpy.callCount, 'context.getForm() was called once');
+        assertEqual('TestForm', getFormSpy.firstCall.args[0], 'getForm() was called with the form name');
+    });
+
+    it('calls hasPermission() with the correct URN', () => {
+        assertEqual(1, hasPermissionStub.callCount, 'hasPermission() was called once');
+        assertEqual('kixx:form:TestForm:save', hasPermissionStub.firstCall.args[0], 'hasPermission() was called with correct URN');
+    });
+
+    it('calls form.save()', () => {
+        assertEqual(1, saveStub.callCount, 'form.save() was called once');
+        assertEqual('value1', saveStub.firstCall.args[0].field1, 'save() was called with the data param');
+    });
+
+    it('returns the result from form.save()', () => {
+        assertEqual('456', result.id, 'result.id matches');
+        assertEqual('saved', result.status, 'result.status matches');
+    });
+});
+
+describe('KixxBaseUser#saveFormData() without permission', ({ before, after, it }) => {
+    let context;
+    let user;
+    let roles;
+    let form;
+    let hasPermissionStub;
+    let getFormSpy;
+    let saveStub;
+    let error;
+
+    before(async () => {
+        form = {
+            save: sinon.stub().resolves({ id: '456', status: 'saved' }),
+        };
+
+        context = {
+            getForm: sinon.stub().returns(form),
+        };
+
+        roles = [];
+
+        user = new KixxBaseUser(context, { id: 'user-1', name: 'Test User' }, roles);
+
+        hasPermissionStub = sinon.stub(user, 'hasPermission').returns(false);
+
+        try {
+            await user.saveFormData({ form: 'TestForm', data: { field1: 'value1' } });
+        } catch (e) {
+            error = e;
+        }
+
+        getFormSpy = context.getForm;
+        saveStub = form.save;
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls context.getForm()', () => {
+        assertEqual(1, getFormSpy.callCount, 'context.getForm() was called once');
+        assertEqual('TestForm', getFormSpy.firstCall.args[0], 'getForm() was called with the form name');
+    });
+
+    it('calls hasPermission() with the correct URN', () => {
+        assertEqual(1, hasPermissionStub.callCount, 'hasPermission() was called once');
+        assertEqual('kixx:form:TestForm:save', hasPermissionStub.firstCall.args[0], 'hasPermission() was called with correct URN');
+    });
+
+    it('throws an UnauthorizedError', () => {
+        assert(error, 'an error was thrown');
+        assertEqual('UnauthorizedError', error.name, 'error is an UnauthorizedError');
+        assertEqual('UNAUTHORIZED_ERROR', error.code, 'error code is UNAUTHORIZED_ERROR');
+        assertMatches('User type KixxBaseUser is not authorized', error.message, 'error message contains expected text');
+    });
+
+    it('does not call form.save()', () => {
+        assertEqual(0, saveStub.callCount, 'form.save() was not called');
     });
 });
