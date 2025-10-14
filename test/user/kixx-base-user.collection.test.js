@@ -12,7 +12,7 @@ class RootUser extends KixxRootUser { }
 class UserSession extends KixxBaseUserSession { }
 
 class UserCollection extends KixxBaseUserCollection {
-    static Model = User;
+    static User = User;
     static RootUser = RootUser;
     static UserSession = UserSession;
 }
@@ -258,8 +258,8 @@ describe('KixxBaseUserCollection#getUserFromSession()', ({ before, after, it }) 
             userId: 'user-789',
         };
 
-        // Spy on idToPrimaryKey
-        sinon.spy(collection, 'idToPrimaryKey');
+        // Spy on userIdToPrimaryKey
+        sinon.spy(collection, 'userIdToPrimaryKey');
 
         // Call the method under test
         result = await collection.getUserFromSession(session);
@@ -269,9 +269,9 @@ describe('KixxBaseUserCollection#getUserFromSession()', ({ before, after, it }) 
         sinon.restore();
     });
 
-    it('calls idToPrimaryKey()', () => {
-        assertEqual(1, collection.idToPrimaryKey.callCount, 'idToPrimaryKey() was called once');
-        assertEqual('user-789', collection.idToPrimaryKey.firstCall.args[0], 'idToPrimaryKey() called with session.userId');
+    it('calls userIdToPrimaryKey()', () => {
+        assertEqual(1, collection.userIdToPrimaryKey.callCount, 'userIdToPrimaryKey() was called once');
+        assertEqual('user-789', collection.userIdToPrimaryKey.firstCall.args[0], 'userIdToPrimaryKey() called with session.userId');
     });
 
     it('calls datastore.getItem()', () => {
@@ -328,8 +328,7 @@ describe('KixxBaseUserCollection#getUserFromSession() when user does not exist',
             userId: 'nonexistent-user-id',
         };
 
-        // Spy on idToPrimaryKey
-        sinon.spy(collection, 'idToPrimaryKey');
+        sinon.spy(collection, 'userIdToPrimaryKey');
 
         // Call the method under test and capture the error
         try {
@@ -343,9 +342,9 @@ describe('KixxBaseUserCollection#getUserFromSession() when user does not exist',
         sinon.restore();
     });
 
-    it('calls idToPrimaryKey()', () => {
-        assertEqual(1, collection.idToPrimaryKey.callCount, 'idToPrimaryKey() was called once');
-        assertEqual('nonexistent-user-id', collection.idToPrimaryKey.firstCall.args[0], 'idToPrimaryKey() called with session.userId');
+    it('calls userIdToPrimaryKey()', () => {
+        assertEqual(1, collection.userIdToPrimaryKey.callCount, 'userIdToPrimaryKey() was called once');
+        assertEqual('nonexistent-user-id', collection.userIdToPrimaryKey.firstCall.args[0], 'userIdToPrimaryKey() called with session.userId');
     });
 
     it('calls datastore.getItem()', () => {
@@ -396,7 +395,7 @@ describe('KixxBaseUserCollection#createAnonymousUser()', ({ before, after, it })
         collection = new UserCollection(context);
 
         sinon.spy(User, 'create');
-        sinon.spy(collection, 'idToPrimaryKey');
+        sinon.spy(collection, 'userIdToPrimaryKey');
 
         result = await collection.createAnonymousUser();
     });
@@ -418,9 +417,9 @@ describe('KixxBaseUserCollection#createAnonymousUser()', ({ before, after, it })
         assertEqual(anonymousRole, User.create.firstCall.args[2][0], 'roles array contains anonymous role');
     });
 
-    it('calls this.idToPrimaryKey()', () => {
-        assertEqual(1, collection.idToPrimaryKey.callCount);
-        assertNonEmptyString(collection.idToPrimaryKey.firstCall.args[0]);
+    it('calls this.userIdToPrimaryKey()', () => {
+        assertEqual(1, collection.userIdToPrimaryKey.callCount);
+        assertNonEmptyString(collection.userIdToPrimaryKey.firstCall.args[0]);
     });
 
     it('calls datastore.setItem', () => {
@@ -479,7 +478,6 @@ describe('KixxBaseUserCollection#createAnonymousUser() with props', ({ before, a
         collection = new UserCollection(context);
 
         sinon.spy(User, 'create');
-        sinon.spy(collection, 'idToPrimaryKey');
 
         result = await collection.createAnonymousUser({ cohort: '2020-10-01' });
     });
