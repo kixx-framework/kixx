@@ -479,7 +479,7 @@ describe('KixxBaseUserCollection#createAnonymousUser() with props', ({ before, a
 
         sinon.spy(User, 'create');
 
-        result = await collection.createAnonymousUser({ cohort: '2020-10-01' });
+        result = await collection.createAnonymousUser({ id: 'john-123-456', cohort: '2020-10-01' });
     });
 
     after(() => {
@@ -492,9 +492,9 @@ describe('KixxBaseUserCollection#createAnonymousUser() with props', ({ before, a
         const key = datastore.setItem.firstCall.args[0];
         const record = datastore.setItem.firstCall.args[1];
 
-        assertMatches(/^User__/, key);
+        assertEqual('User__john-123-456', key);
         assertEqual('User', record.type);
-        assertNonEmptyString(record.id);
+        assertEqual('john-123-456', record.id);
         assertEqual('anonymous', record.roles[0]);
         assertEqual('2020-10-01', record.cohort);
     });
@@ -507,7 +507,7 @@ describe('KixxBaseUserCollection#createAnonymousUser() with props', ({ before, a
     it('returns the new user instance from Model.create()', () => {
         assert(result instanceof User, 'result is instance of User');
         assertEqual('User', result.type);
-        assertNonEmptyString(result.id);
+        assertEqual('john-123-456', result.id);
         assertEqual('anonymous', result.roles[0].name);
         assertArray(result.roles[0].permissions);
         assertEqual('2020-10-01', result.cohort);
