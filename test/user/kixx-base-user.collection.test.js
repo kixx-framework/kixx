@@ -258,8 +258,8 @@ describe('KixxBaseUserCollection#getUserFromSession()', ({ before, after, it }) 
             userId: 'user-789',
         };
 
-        // Spy on userIdToPrimaryKey
         sinon.spy(collection, 'userIdToPrimaryKey');
+        sinon.spy(User, 'fromRecord');
 
         // Call the method under test
         result = await collection.getUserFromSession(session);
@@ -289,6 +289,15 @@ describe('KixxBaseUserCollection#getUserFromSession()', ({ before, after, it }) 
     it('filters out roles which do not exist', () => {
         // Result should have 2 roles (admin and editor), not 3
         assertEqual(2, result.roles.length, 'result has 2 roles');
+    });
+
+    it('calls User.fromRecord()', () => {
+        assertEqual(1, User.fromRecord.callCount);
+        const args = User.fromRecord.getCall(0).args;
+        assertEqual(context, args[0]);
+        assertEqual('user-789', args[1].id);
+        assertEqual('Alice', args[1].name);
+        assertEqual('admin', args[2][0].name);
     });
 
     it('returns a new instance of User with attached roles', () => {
