@@ -360,3 +360,116 @@ describe('KixxBaseUserCollection#getUserFromSession() when user does not exist',
         assertMatches('nonexistent-user-id', error.message, 'error message contains userId');
     });
 });
+
+describe('KixxBaseUserCollection#createAnonymousUser()', ({ before, after, it }) => {
+    let context;
+    let datastore;
+    let collection;
+    let result;
+    let anonymousRole;
+
+    before(async () => {
+        anonymousRole = {
+            name: 'anonymous',
+            permissions: [ 'read' ],
+        };
+
+        datastore = {
+            setItem: sinon.stub().resolves(),
+        };
+
+        context = {
+            getService: sinon.stub().returns(datastore),
+            getUserRole: sinon.stub().callsFake((roleName) => {
+                if (roleName === 'anonymous') {
+                    return anonymousRole;
+                }
+                return null;
+            }),
+        };
+
+        collection = new UserCollection(context);
+
+        sinon.spy(User, 'create');
+        sinon.spy(collection, 'setItem');
+
+        result = await collection.createAnonymousUser();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls context.getUserRole()', () => {
+        assertEqual(1, context.getUserRole.callCount, 'getUserRole() was called once');
+        assertEqual('anonymous', context.getUserRole.firstCall.args[0], 'getUserRole() called with "anonymous"');
+    });
+
+    it('calls Model.create()', () => {
+        assertEqual(1, User.create.callCount, 'User.create() was called once');
+        assertEqual(context, User.create.firstCall.args[0], 'first arg is context');
+        assertEqual(true, User.create.firstCall.args[1].isAnonymous, 'second arg props has isAnonymous: true');
+        assertEqual(1, User.create.firstCall.args[2].length, 'third arg roles array has 1 role');
+        assertEqual(anonymousRole, User.create.firstCall.args[2][0], 'roles array contains anonymous role');
+    });
+
+    it('calls this.setItem()', () => {
+        assertEqual(1, collection.setItem.callCount, 'setItem() was called once');
+        assertEqual(true, collection.setItem.firstCall.args[0].isAnonymous, 'setItem() called with record where isAnonymous: true');
+    });
+
+    it('sets isAnonymous: true', () => {
+        assertEqual(true, collection.setItem.firstCall.args[0].isAnonymous, 'setItem() called with record where isAnonymous: true');
+        assertEqual(true, result.isAnonymous, 'result has isAnonymous: true');
+    });
+
+    it('returns the new user instance from Model.create()', () => {
+        assert(result instanceof User, 'result is instance of User');
+    });
+});
+
+describe('KixxBaseUserCollection#createAnonymousUser() without an anonymous role', ({ before, after, it }) => {
+    let context;
+    let datastore;
+    let collection;
+
+    before(async () => {
+        datastore = {
+            setItem: sinon.stub().resolves(),
+        };
+
+        context = {
+            getService: sinon.stub().returns(datastore),
+            getUserRole: sinon.stub().returns(null),
+        };
+
+        collection = new UserCollection(context);
+
+        sinon.spy(User, 'create');
+        sinon.spy(collection, 'setItem');
+
+        await collection.createAnonymousUser();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls context.getUserRole()', () => {
+        assertEqual(1, context.getUserRole.callCount, 'getUserRole() was called once');
+        assertEqual('anonymous', context.getUserRole.firstCall.args[0], 'getUserRole() called with "anonymous"');
+    });
+
+    it('calls Model.create()', () => {
+        assertEqual(1, User.create.callCount, 'User.create() was called once');
+        assertEqual(context, User.create.firstCall.args[0], 'first arg is context');
+        assertEqual(true, User.create.firstCall.args[1].isAnonymous, 'second arg props has isAnonymous: true');
+        assertEqual(0, User.create.firstCall.args[2].length);
+    });
+
+    it('calls this.setItem()', () => {
+        assertEqual(1, collection.setItem.callCount, 'setItem() was called once');
+        assertEqual(true, collection.setItem.firstCall.args[0].isAnonymous, 'setItem() called with record where isAnonymous: true');
+        assertEqual(0, collection.setItem.firstCall.args[0].roles.length);
+    });
+});
