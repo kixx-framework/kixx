@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches, assertNonEmptyString } from 'kixx-assert';
+import { assert, assertEqual, assertArray, assertMatches, assertNonEmptyString } from 'kixx-assert';
 import sinon from 'sinon';
 import KixxBaseUser from '../../lib/user/kixx-base-user.js';
 import KixxBaseUserCollection from '../../lib/user/kixx-base-user.collection.js';
@@ -391,7 +391,7 @@ describe('KixxBaseUserCollection#createAnonymousUser()', ({ before, after, it })
         collection = new UserCollection(context);
 
         sinon.spy(User, 'create');
-        sinon.spy(collection, 'setItem');
+        sinon.spy(collection, 'idToPrimaryKey');
 
         result = await collection.createAnonymousUser();
     });
@@ -413,18 +413,101 @@ describe('KixxBaseUserCollection#createAnonymousUser()', ({ before, after, it })
         assertEqual(anonymousRole, User.create.firstCall.args[2][0], 'roles array contains anonymous role');
     });
 
-    it('calls this.setItem()', () => {
-        assertEqual(1, collection.setItem.callCount, 'setItem() was called once');
-        assertEqual(true, collection.setItem.firstCall.args[0].isAnonymous, 'setItem() called with record where isAnonymous: true');
+    it('calls this.idToPrimaryKey()', () => {
+        assertEqual(1, collection.idToPrimaryKey.callCount);
+        assertNonEmptyString(collection.idToPrimaryKey.firstCall.args[0]);
+    });
+
+    it('calls datastore.setItem', () => {
+        assertEqual(1, datastore.setItem.callCount);
+
+        const key = datastore.setItem.firstCall.args[0];
+        const record = datastore.setItem.firstCall.args[1];
+
+        assertMatches(/^User__/, key);
+        assertEqual('User', record.type);
+        assertNonEmptyString(record.id);
+        assertEqual('anonymous', record.roles[0]);
     });
 
     it('sets isAnonymous: true', () => {
-        assertEqual(true, collection.setItem.firstCall.args[0].isAnonymous, 'setItem() called with record where isAnonymous: true');
+        assertEqual(true, datastore.setItem.firstCall.args[1].isAnonymous);
         assertEqual(true, result.isAnonymous, 'result has isAnonymous: true');
     });
 
     it('returns the new user instance from Model.create()', () => {
         assert(result instanceof User, 'result is instance of User');
+        assertEqual('User', result.type);
+        assertNonEmptyString(result.id);
+        assertEqual('anonymous', result.roles[0].name);
+        assertArray(result.roles[0].permissions);
+    });
+});
+
+describe('KixxBaseUserCollection#createAnonymousUser() with props', ({ before, after, it }) => {
+    let context;
+    let datastore;
+    let collection;
+    let result;
+    let anonymousRole;
+
+    before(async () => {
+        anonymousRole = {
+            name: 'anonymous',
+            permissions: [ 'read' ],
+        };
+
+        datastore = {
+            setItem: sinon.stub().resolves(),
+        };
+
+        context = {
+            getService: sinon.stub().returns(datastore),
+            getUserRole: sinon.stub().callsFake((roleName) => {
+                if (roleName === 'anonymous') {
+                    return anonymousRole;
+                }
+                return null;
+            }),
+        };
+
+        collection = new UserCollection(context);
+
+        sinon.spy(User, 'create');
+        sinon.spy(collection, 'idToPrimaryKey');
+
+        result = await collection.createAnonymousUser({ cohort: '2020-10-01' });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls datastore.setItem', () => {
+        assertEqual(1, datastore.setItem.callCount);
+
+        const key = datastore.setItem.firstCall.args[0];
+        const record = datastore.setItem.firstCall.args[1];
+
+        assertMatches(/^User__/, key);
+        assertEqual('User', record.type);
+        assertNonEmptyString(record.id);
+        assertEqual('anonymous', record.roles[0]);
+        assertEqual('2020-10-01', record.cohort);
+    });
+
+    it('sets isAnonymous: true', () => {
+        assertEqual(true, datastore.setItem.firstCall.args[1].isAnonymous);
+        assertEqual(true, result.isAnonymous, 'result has isAnonymous: true');
+    });
+
+    it('returns the new user instance from Model.create()', () => {
+        assert(result instanceof User, 'result is instance of User');
+        assertEqual('User', result.type);
+        assertNonEmptyString(result.id);
+        assertEqual('anonymous', result.roles[0].name);
+        assertArray(result.roles[0].permissions);
+        assertEqual('2020-10-01', result.cohort);
     });
 });
 
@@ -446,7 +529,6 @@ describe('KixxBaseUserCollection#createAnonymousUser() without an anonymous role
         collection = new UserCollection(context);
 
         sinon.spy(User, 'create');
-        sinon.spy(collection, 'setItem');
 
         await collection.createAnonymousUser();
     });
@@ -467,9 +549,15 @@ describe('KixxBaseUserCollection#createAnonymousUser() without an anonymous role
         assertEqual(0, User.create.firstCall.args[2].length);
     });
 
-    it('calls this.setItem()', () => {
-        assertEqual(1, collection.setItem.callCount, 'setItem() was called once');
-        assertEqual(true, collection.setItem.firstCall.args[0].isAnonymous, 'setItem() called with record where isAnonymous: true');
-        assertEqual(0, collection.setItem.firstCall.args[0].roles.length);
+    it('calls datastore.setItem()', () => {
+        assertEqual(1, datastore.setItem.callCount);
+
+        const key = datastore.setItem.firstCall.args[0];
+        const record = datastore.setItem.firstCall.args[1];
+
+        assertMatches(/^User__/, key);
+        assertEqual('User', record.type);
+        assertNonEmptyString(record.id);
+        assertEqual(0, record.roles.length);
     });
 });
