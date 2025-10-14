@@ -74,6 +74,7 @@ describe('KixxBaseUserCollection#getSession() when session exists', ({ before, a
         assertEqual(mockSessionRecord, UserSession.fromRecord.firstCall.args[0], 'UserSession.fromRecord() called with datastore record');
         assert(result instanceof UserSession, 'result is instance of UserSession');
         assertEqual('session-abc123', result.id, 'result has correct id');
+        assertEqual('UserSession', result.type);
         assertEqual('user-456', result.userId, 'result has correct userId');
     });
 });
@@ -187,7 +188,9 @@ describe('KixxBaseUserCollection#refreshSession()', ({ before, after, it }) => {
     it('calls datastore.setItem() with the result of newSession.toRecord()', () => {
         assertEqual(1, datastore.setItem.callCount, 'datastore.setItem() was called once');
         assertMatches(/^UserSession__/, datastore.setItem.firstCall.args[0], 'datastore.setItem() called with new session key');
-        assertEqual('user-456', datastore.setItem.firstCall.args[1].userId, 'datastore.setItem() called with new session record');
+        const record = datastore.setItem.firstCall.args[1];
+        assertEqual('user-456', record.userId, 'datastore.setItem() called with new session record');
+        assertEqual('UserSession', record.type);
     });
 
     it('calls datastore.deleteItem() with the result of sessionIdToPrimaryKey(session.id)', () => {
@@ -199,6 +202,7 @@ describe('KixxBaseUserCollection#refreshSession()', ({ before, after, it }) => {
         assert(result instanceof UserSession, 'returns the new session');
         assertNonEmptyString(result.id, 'result has new session id');
         assertEqual('user-456', result.userId, 'result has correct userId');
+        assertEqual('UserSession', result.type);
     });
 });
 
@@ -289,6 +293,7 @@ describe('KixxBaseUserCollection#getUserFromSession()', ({ before, after, it }) 
 
     it('returns a new instance of User with attached roles', () => {
         assert(result instanceof User, 'result is instance of User');
+        assertEqual('User', result.type);
         assertEqual('user-789', result.id, 'result has correct id');
         assertEqual('Alice', result.name, 'result has correct name');
         assertEqual('alice@example.com', result.email, 'result has correct email');
@@ -559,5 +564,75 @@ describe('KixxBaseUserCollection#createAnonymousUser() without an anonymous role
         assertEqual('User', record.type);
         assertNonEmptyString(record.id);
         assertEqual(0, record.roles.length);
+    });
+});
+
+describe('KixxBaseUserCollection#createSessionFromUser()', ({ before, after, it }) => {
+    let context;
+    let datastore;
+    let collection;
+    let result;
+    let user;
+    let sessionRecord;
+
+    before(async () => {
+        // Mock datastore with stubbed setItem method
+        datastore = {
+            setItem: sinon.stub().resolves(),
+        };
+
+        // Mock context that provides the datastore service
+        context = {
+            getService: sinon.stub().returns(datastore),
+        };
+
+        // Create collection instance
+        collection = new UserCollection(context);
+
+        // Create user object
+        user = {
+            id: 'user-456',
+            name: 'Alice',
+            email: 'alice@example.com',
+        };
+
+        // Spy on the methods we want to verify are called
+        sinon.spy(collection, 'sessionIdToPrimaryKey');
+        sinon.spy(UserSession, 'create');
+
+        // Call the method under test
+        result = await collection.createSessionFromUser(user);
+
+        // Capture the session record that was passed to datastore.setItem
+        sessionRecord = datastore.setItem.firstCall.args[1];
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls UserSession.create() with the userId', () => {
+        assertEqual(1, UserSession.create.callCount, 'UserSession.create() was called once');
+        const createArgs = UserSession.create.firstCall.args[0];
+        assertEqual('user-456', createArgs.userId, 'UserSession.create() called with userId');
+    });
+
+    it('calls sessionIdToPrimaryKey()', () => {
+        assertEqual(1, collection.sessionIdToPrimaryKey.callCount, 'sessionIdToPrimaryKey() was called once');
+        assertNonEmptyString(collection.sessionIdToPrimaryKey.firstCall.args[0], 'sessionIdToPrimaryKey() called with session id');
+    });
+
+    it('calls datastore.setItem() with the new session record', () => {
+        assertEqual(1, datastore.setItem.callCount, 'datastore.setItem() was called once');
+        assertMatches(/^UserSession__/, datastore.setItem.firstCall.args[0], 'datastore.setItem() called with session key');
+        assertEqual('user-456', sessionRecord.userId, 'session record has correct userId');
+        assertEqual('UserSession', sessionRecord.type);
+        assertNonEmptyString(sessionRecord.id, 'session record has id');
+    });
+
+    it('returns the new session', () => {
+        assert(result instanceof UserSession, 'result is instance of UserSession');
+        assertEqual('user-456', result.userId, 'result has correct userId');
+        assertNonEmptyString(result.id, 'result has session id');
     });
 });
