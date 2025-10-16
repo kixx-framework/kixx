@@ -171,9 +171,11 @@ describe('cookieAuthentication with sessionId and the session is expired', ({ be
 
     const options = {
         expirationWindowSeconds: 60, // 1 minute expiration
+        refreshWindowEndSeconds: 0,
+        refreshWindowStartSeconds: 0,
     };
-    // eslint-disable-next-line new-cap
-    const middleware = CookieAuthentication(options);
+
+    let middleware;
 
     const config = {};
     const userCollection = {};
@@ -193,6 +195,9 @@ describe('cookieAuthentication with sessionId and the session is expired', ({ be
     let result;
 
     before(async () => {
+        // eslint-disable-next-line new-cap
+        middleware = CookieAuthentication(options);
+
         config.getNamespace = sinon.stub().returns(configSettings);
         context.getCollection = sinon.stub().returns(userCollection);
 
