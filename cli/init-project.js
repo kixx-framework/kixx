@@ -59,7 +59,6 @@ export async function main(args) {
     await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'pages'), path.join(PROJECT_DIR, 'pages'));
     await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'templates'), path.join(PROJECT_DIR, 'templates'));
     await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'routes'), path.join(PROJECT_DIR, 'routes'));
-    await copyFileIfNotExists(path.join(TEMPLATE_DIR, '.gitignore'), path.join(PROJECT_DIR, '.gitignore'));
 }
 
 async function createReadme(applicationName) {
