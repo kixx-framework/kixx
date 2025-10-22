@@ -59,6 +59,7 @@ export async function main(args) {
     await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'pages'), path.join(PROJECT_DIR, 'pages'));
     await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'templates'), path.join(PROJECT_DIR, 'templates'));
     await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'routes'), path.join(PROJECT_DIR, 'routes'));
+    await copyDirectoryRecursive(path.join(TEMPLATE_DIR, 'app'), path.join(PROJECT_DIR, 'app'));
 }
 
 async function createReadme(applicationName) {
@@ -87,6 +88,9 @@ async function createKixxConfig(appName, processName) {
         textContent = await readUtf8File(srcPathname);
     }
 
+    // If the kixx config file already exists, then we just update the
+    // "name" and "processName" fields.
+
     let diff = jsonc.modify(textContent, [ 'name' ], appName, {});
     textContent = jsonc.applyEdits(textContent, diff);
 
@@ -105,6 +109,9 @@ async function createSitePageData(appName) {
     if (!textContent) {
         textContent = await readUtf8File(srcPathname);
     }
+
+    // If the site page data file already exists, then we just update the
+    // "title" field.
 
     const diff = jsonc.modify(textContent, [ 'title' ], appName, {});
     textContent = jsonc.applyEdits(textContent, diff);
@@ -144,7 +151,6 @@ async function copyDirectoryRecursive(sourceDir, destDir, exclude = []) {
             // eslint-disable-next-line no-await-in-loop
             await copyFileIfNotExists(sourcePath, destPath);
         }
-        // Skip other entry types (symbolic links, etc.)
     }
 }
 
