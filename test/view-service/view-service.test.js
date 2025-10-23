@@ -970,7 +970,7 @@ describe('ViewService#hydrateMetadataTemplate with valid template', ({ before, a
         mockRenderFunction = sinon.stub().returns('My Title - My Description');
         mockTemplateEngine = {
             initialize: sinon.stub().resolves(),
-            createMetadataTemplate: sinon.stub().resolves(mockRenderFunction),
+            createMetadataTemplate: sinon.stub().returns(mockRenderFunction),
         };
 
         const options = {

@@ -11,11 +11,17 @@
 {{#if openGraph.type }}
     <meta property="og:type" content="{{ openGraph.type }}">
 {{/if}}
+{{#if openGraph.url }}
+    <meta property="og:url" content="{{ openGraph.url }}">
+{{/if}}
 {{#if openGraph.title }}
     <meta property="og:title" content="{{ openGraph.title }}">
 {{/if}}
-{{#if openGraph.url }}
-    <meta property="og:url" content="{{ openGraph.url }}">
+{{#if openGraph.description }}
+    <meta property="og:description" content="{{ openGraph.description }}">
+{{/if}}
+{{#if openGraph.locale }}
+    <meta property="og:locale" content="{{ openGraph.locale }}">
 {{/if}}
 {{#if openGraph.image }}
     <meta property="og:image" content="{{ openGraph.image.url }}">
