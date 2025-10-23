@@ -34,9 +34,10 @@ You'll always have full control over your projects with the ability to extend ev
 
 Core Principles
 ---------------
+The Kixx Framework has a set of core principles which guide all the decisions made in its design and approach to developing web applications.
 
 ### 1. Optimize for productivity.
-When a design decision needs to be made, Kixx will optimize for developer productivity. This is the north star of the Kixx framework, and most of the remaining priciples derive from it.
+When a design decision needs to be made, Kixx will optimize for developer productivity. This is the north star of the Kixx framework, and most of the remaining principles derive from it.
 
 ### 2. Have opinions
 Kixx has opinions about building great web applications. A framework needs to bring opinions, otherwise, what's the point of using a framework?
