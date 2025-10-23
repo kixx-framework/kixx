@@ -1,0 +1,60 @@
+<style>
+    #error-info-table {
+        border-collapse: collapse;
+        font-family: monospace;
+        font-size: 0.9em;
+    }
+    #error-info-table tr > td:first-child {
+        padding: 0.25em 1em 0.25em 0;
+        font-weight: 700;
+        border-bottom: 1px solid #bbb;
+        border-right: 1px solid #bbb;
+    }
+    #error-info-table tr > td:last-child {
+        padding: 0.25em 0 0.25em 1em;
+        border-bottom: 1px solid #bbb;
+    }
+    #error-info-table tr:last-child > td {
+        border-bottom: none;
+    }
+
+    #error-stack-block {
+        margin-top: 2rem;
+        overflow-x: auto;
+        padding: 1em;
+        background-color: #ddd;
+        border: 1px solid #bbb;
+        border-radius: 0.5em;
+    }
+    #error-stack-block > code {
+        font-family: monospace;
+        font-size: 0.8em;
+    }
+</style>
+
+<main class="site-width-container">
+    <h2>Ruh-roh 😕</h2>
+
+    {{#if error}}
+    <h1>Request Error:</h1>
+
+    <table id="error-info-table">
+        <tbody>
+            {{#if error.httpStatusCode }}
+            <tr><td>HTTP status code</td><td>{{ error.httpStatusCode }}</td></tr>
+            {{/if}}
+            <tr><td>Error name</td><td>{{ error.name }}</td></tr>
+            {{#if error.code }}
+            <tr><td>Error code</td><td>{{ error.code }}</td></tr>
+            {{/if}}
+            <tr><td>Error message</td><td>{{ error.message }}</td></tr>
+        </tbody>
+    </table>
+
+    <pre id="error-stack-block">
+        <code>{{ error.stack }}</code>
+    </pre>
+    {{else}}
+    <p>There was an unexpected error while loading this page.</p>
+    {{/if}}
+</main>

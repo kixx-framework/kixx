@@ -100,9 +100,12 @@ export async function main(args) {
 
     server.on('error', (event) => {
         logger.error(event.message, event.info, event.cause);
+
         if (event.fatal) {
-            logger.error(`${ event.name }:${ event.message }; fatal error; exiting`);
-            process.exit(1);
+            setTimeout(() => {
+                logger.error(`${ event.name }:${ event.message }; fatal error; exiting`);
+                process.exit(1);
+            }, 100);
         }
     });
 

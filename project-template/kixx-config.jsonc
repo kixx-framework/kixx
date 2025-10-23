@@ -12,6 +12,9 @@
             },
             "server": {
                 "port": 3000
+            },
+            "errorHandler": {
+                "exposeErrorDetails": true
             }
         },
         "production": {
