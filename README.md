@@ -36,28 +36,28 @@ Core Principles
 ---------------
 
 ### 1. Optimize for productivity.
-When a decision needs to be made, we optimize for developer productivity. This is the north star of the Kixx framework, and most of the remaining priciples derive from it.
+When a design decision needs to be made, Kixx will optimize for developer productivity. This is the north star of the Kixx framework, and most of the remaining priciples derive from it.
 
 ### 2. Have opinions
-Kixx has opinions about building great web applications. In our opinion, a good framework needs to have opinions, otherwise, what's the point of using a framework?
+Kixx has opinions about building great web applications. A framework needs to bring opinions, otherwise, what's the point of using a framework?
 
 ### 3. Software is a craft.
-Humans write software for humans, and even in the age of AI, building software is, and will always be a craft done by a craftsperson.
+Humans write software for humans. Even in a post AI world, building software will always be a craft done by a craftsperson.
 
 ### 4. Remove complexity.
-There will always be complexity in the problems we choose to solve with our software. But, Kixx will seek out ways to bury incidental complexity and keep our brains concentrated on the real problems.
+Kixx seeks out incidental complexity and eliminates it or buries it so developers can use more brain capacity on the real problems we're trying to solve.
 
 ### 5. The World Wide Web is the best application platform ever invented.
 Nothing has ever been created that matches the accessibility, openness, power, and distribution of the Web. Kixx is fully committed to improving and contributing to the WWW.
 
-### 6. AI tools can be built and used without negative moral, ethical, or environmental impacts.
-We can develop AI tools to which are small, productive, focused on the craft of software development, and don't slurp up massive amounts of energy.
+### 6. AI tools can be built and used without negative side effects.
+AI tools should be small, efficient, productive, and focused on the craft of software development. There is no need to consume our natural resources to use AI effectively in software development.
 
-### 7. Favor monolithic applications over distributed architectures.
-Distributed microservices might be great for large engineering teams, but Kixx is made for solo developers and small, fast moving teams. Monolithic, hypermedia driven applications, without the complexity of microservices and piles of client side JavaScript, give us a massive velocity boost over our distributed counterparts.
+### 7. Favor monolithic, hypermedia driven applications.
+Kixx is for solo developers and small, fast moving teams. Monolithic, hypermedia driven applications give us a massive productivity boost over the complexity of microservices and bloated JavaScript client applications.
 
 ### 8. Convention over Configuration and Code
-Wherever possible Kixx uses conventions over configuration and code for common web application logic. This dramatically reduces the amount of code that needs to be written, generated, and reasoned about to build a web app.
+Wherever possible Kixx uses conventions over configuration and code for common web application logic. This dramatically reduces the amount of code that needs to be written, generated, understood, and debugged.
 
 Environment
 -----------
