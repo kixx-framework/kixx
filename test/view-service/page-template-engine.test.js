@@ -21,8 +21,8 @@ describe('PageTemplateEngine#constructor with valid options', ({ before, it }) =
 
     it('should initialize helpers Map with built-in helpers', () => {
         assert(subject.helpers instanceof Map);
-        assert(subject.helpers.has('format_date'));
-        assert(subject.helpers.has('plus_one'));
+        assert(subject.helpers.has('formatDate'));
+        assert(subject.helpers.has('plusOne'));
     });
 
     it('should initialize partials Map', () => {
@@ -106,8 +106,8 @@ describe('PageTemplateEngine#initialize with empty helpers directory', ({ before
     });
 
     it('should keep only built-in helpers', () => {
-        assert(subject.helpers.has('format_date'));
-        assert(subject.helpers.has('plus_one'));
+        assert(subject.helpers.has('formatDate'));
+        assert(subject.helpers.has('plusOne'));
         // There are 5 built-in helpers from kixx-templating library. Then we add additional built-in
         // helpers from the Kixx framework ViewService.
         assertEqual(8, subject.helpers.size);
@@ -666,8 +666,8 @@ describe('PageTemplateEngine#loadHelpers with valid helper modules', ({ before, 
     });
 
     it('should preserve built-in helpers', () => {
-        assert(subject.helpers.has('format_date'));
-        assert(subject.helpers.has('plus_one'));
+        assert(subject.helpers.has('formatDate'));
+        assert(subject.helpers.has('plusOne'));
     });
 });
 
