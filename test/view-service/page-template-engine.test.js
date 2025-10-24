@@ -110,7 +110,7 @@ describe('PageTemplateEngine#initialize with empty helpers directory', ({ before
         assert(subject.helpers.has('plus_one'));
         // There are 5 built-in helpers from kixx-templating library. Then we add additional built-in
         // helpers from the Kixx framework ViewService.
-        assertEqual(7, subject.helpers.size);
+        assertEqual(8, subject.helpers.size);
     });
 });
 
