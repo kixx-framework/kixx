@@ -56,20 +56,12 @@ HTML output:
 <p>Sales: 470000</p>
 ```
 
-To avoid this problem, see the section on [Nested Property Access](#nested-property-access) below.
+To avoid the "[object Object]" problem, see the section on [Nested Property Access](#nested-property-access) below.
+
+Use the [formatDate helper](#formatdate-helper) to render the Date object with the appropriate time zone, locale, and formatting.
 
 ### Nested Property Access
-Context data:
-```js
-response.updateProps({
-    song: {
-        writer: { firstName: 'Bob', lastName: 'Dylan' },
-        released: { formattedDate: 'August 13th, 1963' },
-    },
-});
-```
-
-HTML template:
+Let's try the example above again, this time using dot "." notation for nested property access:
 ```html
 <p>{{ song.writer.firstName }} {{ song.writer.lastName }}</p>
 <p>Released: {{ song.released.formattedDate }}</p>
@@ -82,7 +74,8 @@ HTML output:
 ```
 
 ### Array Access
-Context data:
+You can also access array elements using the common square bracket "[]" notation.
+
 ```js
 response.updateProps({
     images: [
@@ -114,7 +107,7 @@ HTML template:
 </ul>
 ```
 
-Writing out each array element access is cumbersome and fragile. In most cases you'll want to use a `#each` loop to iterate over arrays, but Kixx templating allows you to access array elements individually for cases where you might need to do that. See the section in this document on the [#each block helper](#each-block-helper) to see how to iterate over an array.
+Writing out each array element access is cumbersome and fragile. In most cases you'll want to use a `#each` loop to iterate over arrays, but Kixx templating allows you to access array elements individually for cases where you might need to do that. See the section in this document on the [#each block helper](#each-helper) to see how to iterate over an array, Map, Set, or object.
 
 ### Quoted Property Access
 Some JavaScript properties need to be quoted:
@@ -128,7 +121,7 @@ response.updateProps({
 });
 ```
 
-HTML template:
+These properties will need to be accessed using the square bracket "[]" notation in your template:
 ```html
 <dl>
     <dt>Date</dt>
@@ -140,10 +133,10 @@ HTML template:
 </dl>
 ```
 
-Note that you do not need quotes inside the brackets `["Content-Type"]` like you would in JavaScript. Instead, just reference the value without quotes like `[Content-Type]`.
+__Note:__ You do *not* need quotes inside the brackets `["Content-Type"]` like you would in JavaScript. Instead, just reference the value without quotes like `[Content-Type]`.
 
 ### Comments
-Comments don't appear in the template output and are useful for documentation, debugging, and disabling sections of your template.
+Comments don't appear in the template output and are useful for documentation, debugging, and temporarily disabling sections of your template.
 
 A single line comment:
 ```html
@@ -207,7 +200,7 @@ HTML template:
     {{/each}}
 </ul>
 ```
-Remember to include the closing `{{/each}}` tag.
+__Remember:__ Include the closing `{{/each}}` tag.
 
 Access the array index value:
 ```html
@@ -221,7 +214,7 @@ Access the array index value:
 </ul>
 ```
 
-You can nest `#each` blocks too:
+You can nest `#each` blocks too. Here we have an `#each` block that iterates over the image tags inside the `#each` block for the images.
 ```html
 <ul>
     {{#each images as |image| }}
@@ -251,7 +244,7 @@ HTML template:
 {{/each}}
 ```
 
-Expressions inside the `#each` block can reference context data outside the block:
+Expressions inside the `#each` block can reference context data outside the block.
 ```js
 response.updateProps({
     photo: {
@@ -262,7 +255,7 @@ response.updateProps({
 });
 ```
 
-HTML template:
+Here we access the `photo.src` from inside the `photo.tags` `#each` block.
 ```html
 {{#each photo.tags as |tag|}}
 <div>
@@ -272,7 +265,7 @@ HTML template:
 {{/each}}
 ```
 
-Iterate over other datatypes like plain objects, Sets, Maps, and arrays:
+Iterate over other datatypes like Maps, Sets, and plain objects:
 ```js
 const airports = new Map();
 
@@ -302,10 +295,15 @@ response.updateProps({
 });
 ```
 
-- When iterating over an Array you can use the second parameter to #each to reference the index.
-- When iterating over a Map you can use the second parameter to #each to reference the key.
-- When iterating over an Object you can use the second parameter to #each to reference the property name.
-- When iterating over a Set the second parameter to #each is not defined.
+#### The second "key name" parameter to `#each`
+The `#each` helper accepts a second parameter which references something slightly different based on the iterable object type.
+
+| Iterable | Second parameter description | Example |
+|----------|------------------------------|---------|
+| Array    | references the index | `{{#each list as |item, index|}}` |
+| Map      | references the key | `{{#each mapItems as |item, key|}}` |
+| Set      | no reference | `{{#each items as |item|}}` |
+| plain Object | references the property name | `{{#each dict as |item, name|}}` |
 
 HTML template:
 ```html
@@ -347,8 +345,9 @@ The `#if` helper provides conditional rendering based on the truthiness of a val
     <p>Please <a href="/login">log in</a>.</p>
 {{/if}}
 ```
+__Remember:__ Include the closing `{{/if}}` tag.
 
-#### if Block Truthiness Rules
+#### Truthiness rules for `if` blocks
 The `#if` helper considers these values as **truthy**:
 
 - Any non-empty string
@@ -369,7 +368,7 @@ These values are considered **falsy**:
 - Empty objects `{}`
 - Empty Maps and Sets
 
-Avoid rendering tags if a value is empty:
+The `#if` helper can be helpful to avoid rendering tags if a value is empty:
 ```html
 {{#if openGraph.type }}
     <meta property="og:type" content="{{ openGraph.type }}">
@@ -379,16 +378,7 @@ Avoid rendering tags if a value is empty:
 {{/if}}
 ```
 
-Conditional rendering with an `else` block:
-```html
-{{#if user.isAuthenticated }}
-<a href="/dashboard">Dashboard</a>
-{{else}}
-<a href="/login">Login</a>
-{{/if}}
-```
-
-Check if an array is empty before iterating over it.
+You can also check if an array (or other iterable) is empty before iterating over it to avoid rendering the outer HTML. In this list, we don't want to render the `<ul></ul>` if the `profile.links` is empty.
 ```html
 {{#if profile.links }}
 <ul>
@@ -410,7 +400,7 @@ The `#ifEqual` helper compares two values using `==` equality and conditionally 
 {{/ifEqual}}
 ```
 
-The `#ifEqual` helper can work as an `if ... else if ... ` chain or case statement:
+The `#ifEqual` helper can work as an `if ... else if ... ` chain or even as a `switch ... case` statement:
 ```html
 {{#ifEqual user.role "admin"}}
     <a href="/dashboard/admin">Administrator</a>
@@ -420,6 +410,7 @@ The `#ifEqual` helper can work as an `if ... else if ... ` chain or case stateme
     <a href="/dashboard">Dashboard</a>
 {{/ifEqual}}{{/ifEqual}}
 ```
+__Remember:__ Include matching closing `{{/if}}` tags.
 
 ### formatDate Helper
 The `formatDate` helper is an inline helper which formats and renders date strings and objects with time zone and locale context.
@@ -449,7 +440,7 @@ You can explicitly set the time zone, locale, and format or use the defaults for
 <p>Game end: {{formatDate game.startTime }}</p>
 ```
 
-A helper mustache can also span multiple lines:
+All helper mustaches can span multiple lines, but this can be especially useful for potentially long ones like `formatDate` when all the attributes are explicitly set:
 ```html
 <p>Game start: {{formatDate game.startTime
     zone="America/New_York"
@@ -463,13 +454,13 @@ HTML output:
 <p>Game start: Oct 24, 2025, 7:00 PM</p>
 <p>Game end: 10/25/2025, 2:00 AM</p>
 ```
-Notice in the game `endTime`, since we didn't provide a time zone, the system used the default UTC time of 2:00AM the next day. Not quite right!
+Notice in the game `endTime`, since we didn't provide a time zone, the system used the default UTC time of 2:00AM the next day, which is probaby not what we wanted. It's better to be safe and explicitly set the `zone` attribute.
 
 For a list of common IANA time zone strings, see the [Wikipedia page](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
 
 The full list of locale language strings can be found in the [IANA registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry) or the [language tag registry search](https://r12a.github.io/app-subtags/).
 
-#### Valid Formats for formatDate
+#### Formats for formatDate
 
 | Name                            | Example in en_US                                 |
 |---------------------------------|--------------------------------------------------|
@@ -511,73 +502,61 @@ HTML template:
 {{/each}}
 ```
 
-### Helpers
-Helpers are functions that can transform data or provide conditional logic. They come in two types: inline helpers and block helpers.
-
-#### Inline Helpers
-Inline helpers are used for data transformation and formatting.
-
+### Multi-line Helpers
+All helper mustaches can span multiple lines, but this technique can be especially useful for potentially long ones like `formatDate` when all the attributes are explicitly set:
 ```html
-<!-- Basic helper usage -->
-<p>{{ format_date article.publishDate }}</p>
-
-<!-- Helper with arguments -->
-<p>{{ format_date article.publishDate format="long" timezone="UTC" }}</p>
-
-<!-- Helper with multiple arguments -->
-<img src="{{ image article.image width=800 height=600 quality="high" }}" />
+<p>Game start: {{formatDate game.startTime
+    zone="America/New_York"
+    locale="en-US"
+    format="DATETIME_MED"
+}}</p>
 ```
 
-#### Block Helpers
-Block helpers control the flow of your template and can contain other content.
-
+## HTML Escaping
+Kixx templating automatically escapes HTML as a security feature to avoid [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). Imagine a bad guy writes a comment on our blog which injects his evil script. Then we render the comment on our blog with this template:
 ```html
-<!-- Conditional rendering -->
-{{#if user.isLoggedIn}}
-    <p>Welcome back, {{ user.name }}!</p>
-{{else}}
-    <p>Please <a href="/login">log in</a>.</p>
-{{/if}}
-
-<!-- Iteration -->
-{{#each articles as |article|}}
-    <article>
-        <h2>{{ article.title }}</h2>
-        <p>{{ article.excerpt }}</p>
-    </article>
+{{#each post.comments as |comment|}}
+<div>
+    {{ comment }}
+</div>
 {{/each}}
 ```
 
-#### Helper Arguments
-Helpers can accept different types of arguments:
-
-Positional Arguments:
-
+It might render something like this. Notice the evil script tag the attacker injected:
 ```html
-{{ format_date "2023-12-25" "long" "America/New_York" }}
+<div>
+    A good comment.
+</div>
+<div>
+    A bad attack: <script src="http://evildoer.evil/evil-script.js" />
+</div>
+<div>
+    Another good comment.
+</div>
+```
+That script tag will load a script which could do anything on our page ranging from mildly annoying to much, much worse.
+
+So, Kixx templating escapes HTML by default, which helps avoid these cross site scripting attacks. Instead of the script being injected like the example above, what actually happens is that the dangerous HTML is escaped like this:
+```html
+<div>
+    A good comment.
+</div>
+<div>
+    Not so bad: &lt;script src&#x3D;&quot;http://evildoer.evil/evil-script.js&quot; /&gt;
+</div>
+<div>
+    Another good comment.
+</div>
 ```
 
-Named Arguments (Hash):
+### Using the `unescape` helper to prevent automatic escaping
+There are times when you want to prevent the automatic HTML escaping. One example might be for markdown content you've converted to HTML and want to render on the page. To prevent HTML escaping, use the built-in `unescape` helper:
 
 ```html
-{{ format_date article.date format="long" timezone="America/New_York" locale="en-US" }}
+<p>{{unescape markdownContent }}</p>
 ```
 
-Mixed Arguments:
-
-```html
-{{ image article.image 800 600 quality="high" format="webp" }}
-```
-
-You can use string literals in helper arguments:
-
-```html
-{{#ifEqual user.role "admin"}}
-    <span class="admin-badge">Administrator</span>
-{{/ifEqual}}
-
-{{ format_date "2023-12-25" format="long" }}
-```
+**⚠️ Security Warning:** Only use `unescape` when you trust the content and want to render HTML. Never use it with untrusted user input.
 
 ### Partials
 
@@ -614,77 +593,6 @@ Partials inherit the current context, so they have access to all the same variab
 </div>
 ```
 
-### Multi-line Expressions
-
-Expressions can span multiple lines for better readability:
-
-```html
-{{image
-    article.featuredImage.src
-    article.featuredImage.alt
-    width=800
-    height=600
-    class="featured-image"
-    }}
-```
-
-## HTML Entity Escaping
-
-Kixx Templating automatically escapes HTML entities for security, but the behavior differs between expressions and helpers:
-
-### Expression Escaping
-
-When you use simple expressions (variable output), HTML entities are automatically escaped:
-
-```html
-<!-- This will escape HTML entities -->
-<p>{{ userInput }}</p>
-
-<!-- If userInput contains "<script>alert('xss')</script>" -->
-<!-- Output: <p>&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;</p> -->
-```
-
-### Helper Escaping
-
-Helper functions return their output **without** automatic HTML escaping:
-
-```html
-<!-- Helper output is NOT automatically escaped -->
-<p>{{ formatHtml userInput }}</p>
-
-<!-- If formatHtml returns "<strong>Bold text</strong>" -->
-<!-- Output: <p><strong>Bold text</strong></p> -->
-```
-
-### Using noop Helper to Prevent Escaping
-
-The `noop` helper can be used to prevent automatic HTML entity escaping for expressions:
-
-```html
-<!-- This will NOT escape HTML entities -->
-<p>{{noop userInput }}</p>
-
-<!-- If userInput contains "<script>alert('xss')</script>" -->
-<!-- Output: <p><script>alert('xss')</script></p> -->
-```
-
-**⚠️ Security Warning:** Only use `noop` when you trust the content and want to render HTML. Never use it with untrusted user input.
-
-### Safe HTML Rendering
-
-For trusted HTML content, you can use helpers or `noop`:
-
-```html
-<!-- Safe: Using a helper for trusted HTML -->
-<p>{{ renderMarkdown article.content }}</p>
-
-<!-- Safe: Using noop for trusted HTML -->
-<p>{{noop trustedHtmlContent }}</p>
-
-<!-- Unsafe: Using noop with untrusted content -->
-<p>{{noop userComment }}</p> <!-- DON'T DO THIS -->
-```
-
 ## Error Handling
 Kixx Templating provides graceful error handling:
 
@@ -703,124 +611,6 @@ If a helper function throws an error, you'll get a clear error message with the 
 
 ```
 Error in helper "format_date" in "template.html" on line 15
-```
-
-## Built-in Helpers
-Kixx comes with a set of essential helper functions that cover common templating needs.
-
-| Helper | Type | Description |
-|--------|------|-------------|
-| `#each` | Block | Iterate over arrays, objects, Maps, and Sets |
-| `#if` | Block | Conditional rendering based on truthiness |
-| `#ifEqual` | Block | Equality comparison using `==` |
-| `#ifEmpty` | Block | Check if a value is empty |
-| `format_date` | Inline | Format JavaScript dates and date strings |
-| `noop` | Inline | No-operation helper to prevent automatic HTML entities encoding |
-
-#### Examples
-
-```html
-<!-- String comparison -->
-{{#ifEqual article.status "published"}}
-    <span class="published">Published</span>
-{{/ifEqual}}
-
-<!-- Number comparison -->
-{{#ifEqual article.viewCount 0}}
-    <span class="unviewed">Not viewed yet</span>
-{{/ifEqual}}
-
-<!-- Boolean comparison -->
-{{#ifEqual user.isVerified true}}
-    <span class="verified">✓ Verified</span>
-{{/ifEqual}}
-```
-
-### noop Helper
-The `noop` helper is a no-operation helper that prevents automatic HTML entity escaping. It's useful when you want to render HTML content without escaping.
-
-```html
-<!-- Prevent HTML entity escaping for trusted content -->
-<p>{{noop trustedHtmlContent }}</p>
-
-<!-- Render HTML from a helper without double-escaping -->
-<div>{{noop renderMarkdown article.content }}</div>
-
-<!-- Debug: check if variable exists (returns empty string) -->
-{{noop user.name }}
-```
-
-### Security Considerations
-
-**⚠️ Important:** Only use `noop` with content you trust. Never use it with untrusted user input as it can lead to XSS attacks.
-
-```html
-<!-- Safe: Trusted content -->
-<p>{{noop adminMessage }}</p>
-
-<!-- Unsafe: Untrusted user input -->
-<p>{{noop userComment }}</p> <!-- DON'T DO THIS -->
-```
-
-### format_date Helper
-
-Kixx includes a built-in `format_date` helper:
-
-```html
-{{!-- Basic usage --}}
-<p>Published: {{ format_date article.publishDate }}</p>
-
-{{!-- With format options --}}
-<p>Year: {{ format_date article.publishDate format="YEAR" }}</p>
-<p>Short date: {{ format_date article.publishDate format="DATE_MONTH_DATE" }}</p>
-<p>ISO format: {{ format_date article.publishDate format="ISO" }}</p>
-
-{{!-- With timezone and locale --}}
-<p>{{ format_date article.publishDate format="DATETIME_FULL" zone="America/New_York" locale="en-US" }}</p>
-```
-
-### Best Practices
-
-#### 1. Use Descriptive Block Parameters
-
-```html
-<!-- Good -->
-{{#each articles as |article, index|}}
-    <article>{{ article.title }}</article>
-{{/each}}
-
-<!-- Avoid -->
-{{#each articles as |a, i|}}
-    <article>{{ a.title }}</article>
-{{/each}}
-```
-
-#### 2. Combine Helpers for Complex Logic
-
-```html
-{{#if user}}
-    {{#ifEqual user.role "admin"}}
-        {{#each adminFeatures as |feature|}}
-            <div>{{ feature.name }}</div>
-        {{/each}}
-    {{else}}
-        {{#each userFeatures as |feature|}}
-            <div>{{ feature.name }}</div>
-        {{/each}}
-    {{/ifEqual}}
-{{/if}}
-```
-
-#### 3. Use Else Blocks for Better UX
-
-```html
-{{#if articles}}
-    {{#each articles as |article|}}
-        <article>{{ article.title }}</article>
-    {{/each}}
-{{else}}
-    <p>No articles available. <a href="/create">Create one</a>?</p>
-{{/if}}
 ```
 
 ## Partials
@@ -1056,6 +846,74 @@ There are two types of helpers you can create:
 
 - **Inline Helpers**: Transform data and return a string value
 - **Block Helpers**: Control template flow and can contain other content
+
+### Helpers
+Helpers are functions that can transform data or provide conditional logic. They come in two types: inline helpers and block helpers.
+
+#### Inline Helpers
+Inline helpers are used for data transformation and formatting.
+
+```html
+<!-- Basic helper usage -->
+<p>{{ format_date article.publishDate }}</p>
+
+<!-- Helper with arguments -->
+<p>{{ format_date article.publishDate format="long" timezone="UTC" }}</p>
+
+<!-- Helper with multiple arguments -->
+<img src="{{ image article.image width=800 height=600 quality="high" }}" />
+```
+
+#### Block Helpers
+Block helpers control the flow of your template and can contain other content.
+
+```html
+<!-- Conditional rendering -->
+{{#if user.isLoggedIn}}
+    <p>Welcome back, {{ user.name }}!</p>
+{{else}}
+    <p>Please <a href="/login">log in</a>.</p>
+{{/if}}
+
+<!-- Iteration -->
+{{#each articles as |article|}}
+    <article>
+        <h2>{{ article.title }}</h2>
+        <p>{{ article.excerpt }}</p>
+    </article>
+{{/each}}
+```
+
+#### Helper Arguments
+Helpers can accept different types of arguments:
+
+Positional Arguments:
+
+```html
+{{ format_date "2023-12-25" "long" "America/New_York" }}
+```
+
+Named Arguments (Hash):
+
+```html
+{{ format_date article.date format="long" timezone="America/New_York" locale="en-US" }}
+```
+
+Mixed Arguments:
+
+```html
+{{ image article.image 800 600 quality="high" format="webp" }}
+```
+
+You can use string literals in helper arguments:
+
+```html
+{{#ifEqual user.role "admin"}}
+    <span class="admin-badge">Administrator</span>
+{{/ifEqual}}
+
+{{ format_date "2023-12-25" format="long" }}
+```
 
 All helper functions follow this signature:
 
