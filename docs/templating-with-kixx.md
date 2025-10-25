@@ -1,168 +1,157 @@
-# Templating with Kixx
-A comprehensive developer guide for building server-side rendered web applications using the Kixx templating system.
+Templating with Kixx
+====================
 
-- [Architecture](#architecture)
-- [Template File Structure](#template-file-structure)
-- [Template Syntax](#template-syntax)
-- [HTML Entity Escaping](#html-entity-escaping)
-- [Error Handling](#error-handling)
-- [Built-in Helpers](#built-in-helpers)
-- [Partials](#partials)
-- [Custom Helpers](#custom-helpers)
-
-## Architecture
-The Kixx templating system follows a layered architecture:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                        │
-├─────────────────────────────────────────────────────────────┤
-│                    View Service                             │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │   Page Data     │  │  Page Template  │  │ Base Template│ │
-│  │   Loading       │  │   Engine        │  │   Engine     │ │
-│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
-├─────────────────────────────────────────────────────────────┤
-│                    Template Engine                          │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │    Tokenize     │  │ Build Syntax    │  │ Create Render│ │
-│  │                 │  │ Tree            │  │ Function     │ │
-│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Components
-
-1. **Template Engine** (`template-engine/`): Core templating primitives
-2. **View Service** (`view-service/`): High-level template management
-3. **Page Template Engine**: Dynamic template loading and compilation
-4. **Helpers**: Built-in and custom helper functions
-5. **Partials**: Reusable template components
-
-## Template File Structure
-Kixx applications follow a structured template organization:
-
-```
-your-app/
-├── templates/
-│   ├── templates/
-│   │   └── base.html          # Base layout template
-│   ├── partials/
-│   │   ├── html-header.html   # Head section
-│   │   ├── site-header.html   # Navigation header
-│   │   ├── site-footer.html   # Footer
-│   │   └── components/        # Reusable components
-│   └── helpers/
-│       ├── format_date.js     # Custom helpers
-│       └── format_currency.js
-├── pages/
-│   ├── page.json              # Site-wide page data
-│   ├── page.html              # Home page template
-│   ├── about/
-│   │   ├── page.json          # Page-specific data
-│   │   └── page.html          # Page template
-│   └── contact/
-│       ├── page.json
-│       └── page.html
-└── site-page-data.json        # Global site data
-```
-
-### Base Template
-
-The base template defines the overall HTML structure:
-
-```html
-<!doctype html>
-<html lang="en-US">
-    <head>
-        {{> html-header.html }}
-    </head>
-    <body id="site-layout">
-        {{> site-header.html }}
-        <!-- START Main Content Container -->
-        <div class="page-body">{{noop body }}</div>
-        <!-- END Main Content Container -->
-        {{> site-footer.html }}
-    </body>
-</html>
-```
-
-**Note**: The `{{noop body }}` helper prevents HTML escaping for the main content, since it contains rendered HTML from page templates.
-
-### Page Templates
-
-Page templates contain the main content for each page:
-
-```html
-<!-- pages/about/page.html -->
-<article class="site-width-container">
-    <header>
-        <h1>{{ page.title }}</h1>
-        {{#if page.subtitle}}
-            <p class="subtitle">{{ page.subtitle }}</p>
-        {{/if}}
-    </header>
-    
-    <div class="content">
-        {{ page.content }}
-    </div>
-    
-    {{#if page.relatedPages}}
-        <aside class="related-pages">
-            <h3>Related Pages</h3>
-            <ul>
-                {{#each page.relatedPages as |relatedPage|}}
-                    <li><a href="{{ relatedPage.url }}">{{ relatedPage.title }}</a></li>
-                {{/each}}
-            </ul>
-        </aside>
-    {{/if}}
-</article>
-```
-
-## Template Syntax
-Kixx Templating uses a clean, intuitive syntax based on mustache-style templating.
-
-### Basic Expressions
+Basic Expressions
+-----------------
 The most fundamental syntax element is the expression, which allows you to output values from your context.
 
-#### Simple Variable Output
-```html
-<h1>{{ title }}</h1>
-<p>Welcome, {{ user.name }}!</p>
+### Simple Variable Output
+Context data:
+```js
+response.updateProps({
+    album: 'Follow the Leader',
+    artist: 'Eric B. & Rakim',
+});
 ```
 
-#### Nested Property Access
+HTML template:
 ```html
-<p>{{ article.author.firstName }} {{ article.author.lastName }}</p>
-<p>Published: {{ article.metadata.publishDate }}</p>
+<h1>{{ album }}</h1>
+<p>by {{ artist }}</p>
 ```
-#### Array and Object Access
 
+HTML output:
 ```html
-<!-- Array access -->
-<img src="{{ images[0].src }}" alt="{{ images[0].alt }}" />
-
-<!-- Object property access -->
-<span>{{ user.preferences.theme }}</span>
-
-<!-- Mixed access -->
-<p>{{ articles[0].comments[2].author.name }}</p>
+<h1>Follow the Leader</h1>
+<p>by Eric B. &amp; Rakim</p>
 ```
+
+Notice that the "&" was converted to an HTML entity. This is because HTML escaping is done automatically by the Kixx templating system as a security feature to avoid [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). To learn more, see the section in this document on [HTML Escaping](#html-escaping).
+
+### Stringification
+Kixx templates will attempt to convert the value you reference to a string before rendering, which can lead to some unexpected results you should be aware of.
+
+Context data:
+```js
+response.updateProps({
+    song: {
+        writer: { firstName: 'Bob', lastName: 'Dylan' },
+        released: new Date('1963-08-13'),
+        sales: 470000,
+    },
+});
+```
+
+HTML template:
+```html
+<p>Writer: {{ song.writer }}</p>
+<p>Released: {{ song.released }}</p>
+<p>Sales: {{ song.sales }}</p>
+```
+
+HTML output:
+```html
+<p>Writer: [object Object]</p>
+<p>Released: Mon Aug 12 1963 20:00:00 GMT-0400 (Eastern Daylight Time)</p>
+<p>Sales: 470000</p>
+```
+
+To avoid this problem, see the section on [Nested Property Access](#nested-property-access) below.
+
+### Nested Property Access
+Context data:
+```js
+response.updateProps({
+    song: {
+        writer: { firstName: 'Bob', lastName: 'Dylan' },
+        released: { formattedDate: 'August 13th, 1963' },
+    },
+});
+```
+
+HTML template:
+```html
+<p>{{ song.writer.firstName }} {{ song.writer.lastName }}</p>
+<p>Released: {{ song.released.formattedDate }}</p>
+```
+
+HTML output:
+```html
+<p>Bob Dylan</p>
+<p>Released: August 13th, 1963</p>
+```
+
+### Array Access
+Context data:
+```js
+response.updateProps({
+    images: [
+        {
+            src: 'https://www.example.com/assets/image-1.jpg',
+            alt: 'A mongoose',
+            tags: [ 'Mammel', 'Mongoose' ],
+        },
+        {
+            src: 'https://www.example.com/assets/image-2.jpg',
+            alt: 'An elephant',
+            tags: [ 'Mammel', 'Elepant' ],
+        },
+    ],
+});
+```
+
+HTML template:
+```html
+<ul>
+    <li>
+        <img src="{{ images[0].src }}" alt="{{ images[0].alt }}" />
+        <span>{{ images[0].tags[0] }}</span><span>{{ images[0].tags[1] }}</span>
+    </li>
+    <li>
+        <img src="{{ images[1].src }}" alt="{{ images[1].alt }}" />
+        <span>{{ images[1].tags[0] }}</span><span>{{ images[1].tags[1] }}</span>
+    </li>
+</ul>
+```
+
+Writing out each array element access is cumbersome and fragile. In most cases you'll want to use a `#each` loop to iterate over arrays, but Kixx templating allows you to access array elements individually for cases where you might need to do that. See the section in this document on the [#each block helper](#each-block-helper) to see how to iterate over an array.
+
+### Quoted Property Access
+Some JavaScript properties need to be quoted:
+```js
+response.updateProps({
+    headers: {
+        Date: "Thu, 23 Oct 2025 17:07:22 GMT",
+        "Content-Type": "text/html",
+        "Content-Length": 199,
+    },
+});
+```
+
+HTML template:
+```html
+<dl>
+    <dt>Date</dt>
+    <dd>{{ headers.Date }}</dd>
+    <dt>Content-Type</dt>
+    <dd>{{ headers[Content-Type] }}</dd>
+    <dt>Content-Length</dt>
+    <dd>{{ headers[Content-Length] }}</dd>
+</dl>
+```
+
+Note that you do not need quotes inside the brackets `["Content-Type"]` like you would in JavaScript. Instead, just reference the value without quotes like `[Content-Type]`.
 
 ### Comments
+Comments don't appear in the template output and are useful for documentation, debugging, and disabling sections of your template.
 
-Comments are useful for documentation and debugging. They don't appear in the final output.
-
-#### Single Line Comments
-
+A single line comment:
 ```html
 {{!-- This is a single line comment --}}
 <h1>{{ title }}</h1>
 ```
 
-#### Multi-line Comments
-
+A multi-line comment including disabled template syntax:
 ```html
 {{!-- 
     This is a multi-line comment.
@@ -172,6 +161,354 @@ Comments are useful for documentation and debugging. They don't appear in the fi
 <div class="content">
     {{ content }}
 </div>
+```
+
+Built-in Helpers
+----------------
+Kixx comes with a set of essential helper functions that cover common use cases. Block helpers begin with `#` to distinguish them from inline helpers.
+
+| Helper | Type | Description |
+|--------|------|-------------|
+| `#each` | Block | Iterate over arrays, objects, Maps, and Sets |
+| `#if` | Block | Conditional rendering based on truthiness |
+| `#ifEqual` | Block | Equality comparison using `==` |
+| `formatDate` | Inline | Format JavaScript dates and date strings |
+| `plusOne` | Inline | Add 1 to the given number for rendering array indexes |
+| `unescape` | Inline | Prevent automatic HTML entities encoding |
+
+### each Helper
+The `#each` block helper allows you to conveniently iterate over iterable objects like arrays and maps.
+
+Context data:
+```js
+response.updateProps({
+    images: [
+        {
+            src: 'https://www.example.com/assets/image-1.jpg',
+            alt: 'A mongoose',
+            tags: [ 'Mammel', 'Mongoose' ],
+        },
+        {
+            src: 'https://www.example.com/assets/image-2.jpg',
+            alt: 'An elephant',
+            tags: [ 'Mammel', 'Elepant' ],
+        },
+    ],
+});
+```
+
+HTML template:
+```html
+<ul>
+    {{#each images as |image| }}
+    <li>
+        <img src="{{ image.src }}" alt="{{ image.alt }}" />
+    </li>
+    {{/each}}
+</ul>
+```
+Remember to include the closing `{{/each}}` tag.
+
+Access the array index value:
+```html
+<ul>
+    {{#each images as |image, index| }}
+    <li>
+        <span>{{ index }}</span>
+        <img src="{{ image.src }}" alt="{{ image.alt }}" />
+    </li>
+    {{/each}}
+</ul>
+```
+
+You can nest `#each` blocks too:
+```html
+<ul>
+    {{#each images as |image| }}
+    <li>
+        <img src="{{ image.src }}" alt="{{ image.alt }}" />
+        {{#each image.tags as |tag| }}<span>{{ tag }}</span>{{/each}}
+    </li>
+    {{/each}}
+</ul>
+```
+
+And, you can use the `else` conditional to handle empty lists:
+```js
+response.updateProps({
+    images: [],
+});
+```
+
+HTML template:
+```html
+{{#each images as |image| }}
+<div>
+    <img src="{{ image.src }}" alt="{{ image.alt }}" />
+</div>
+{{else}}
+<p>No images to display</p>
+{{/each}}
+```
+
+Expressions inside the `#each` block can reference context data outside the block:
+```js
+response.updateProps({
+    photo: {
+        src: 'https://www.example.com/assets/image-1.jpg',
+        alt: 'A dog chasing a cat',
+        tags: [ 'dog', 'cat', 'pets' ],
+    },
+});
+```
+
+HTML template:
+```html
+{{#each photo.tags as |tag|}}
+<div>
+    <img src="{{ photo.src }}">
+    <p>{{ tag }}</p>
+</div>
+{{/each}}
+```
+
+Iterate over other datatypes like plain objects, Sets, Maps, and arrays:
+```js
+const airports = new Map();
+
+airports.set('ATL', {
+    name: 'Hartsfield-Jackson Atlanta International Airport',
+    yearlyPassengersMillions: 108.1,
+});
+
+airports.set('DXB', {
+    name: 'Dubai International Airport',
+    yearlyPassengersMillions: 93.3,
+});
+
+airports.set('DFW', {
+    name: 'Dallas/Fort Worth International Airport',
+    yearlyPassengersMillions: 87.8,
+});
+
+response.updateProps({
+    airports,
+    tags: new Set([ 'airports', 'traffic', 'passengers' ]),
+    headers: {
+        Date: "Thu, 23 Oct 2025 17:07:22 GMT",
+        "Content-Type": "text/html",
+        "Content-Length": 199,
+    },
+});
+```
+
+- When iterating over an Array you can use the second parameter to #each to reference the index.
+- When iterating over a Map you can use the second parameter to #each to reference the key.
+- When iterating over an Object you can use the second parameter to #each to reference the property name.
+- When iterating over a Set the second parameter to #each is not defined.
+
+HTML template:
+```html
+{{!-- When iterating over a Map you can use the second parameter to #each to reference the key --}}
+{{#each airports as |airport, code| }}
+    <div>
+        <p>{{ code }} | {{ airport.name }}</p>
+        <p>Yearly Passengers (millions): {{ airport.yearlyPassengersMillions }}</p>
+    </div>
+{{else}}
+    {{!-- Handle the case where there are no airports --}}
+    <div>
+        <p>No airports to list.</p>
+    </div>
+{{/each}}
+
+{{!-- When iterating over a Set the second parameter to #each is not defined --}}
+<p>
+{{#each tags as |tag|}}
+    <span>{{ tag }}</span>
+{{/each}}
+</p>
+
+<ul>
+{{!-- When iterating over an object you can use the second parameter to #each to reference the property name --}}
+{{#each headers as |val, key|}}
+    <li><strong>key:</strong> {{ val }}</li>
+{{/each}}
+</ul>
+```
+
+### if Helper
+The `#if` helper provides conditional rendering based on the truthiness of a value.
+
+```html
+{{#if user.isLoggedIn}}
+    <p>Welcome back, {{ user.name }}!</p>
+{{else}}
+    <p>Please <a href="/login">log in</a>.</p>
+{{/if}}
+```
+
+#### if Block Truthiness Rules
+The `#if` helper considers these values as **truthy**:
+
+- Any non-empty string
+- Any non-zero number
+- `true`
+- Non-empty arrays
+- Non-empty objects
+- Non-empty Maps and Sets
+
+These values are considered **falsy**:
+
+- `false`
+- `0`
+- `""` (empty string)
+- `null`
+- `undefined`
+- Empty arrays `[]`
+- Empty objects `{}`
+- Empty Maps and Sets
+
+Avoid rendering tags if a value is empty:
+```html
+{{#if openGraph.type }}
+    <meta property="og:type" content="{{ openGraph.type }}">
+{{/if}}
+{{#if openGraph.url }}
+    <meta property="og:url" content="{{ openGraph.url }}">
+{{/if}}
+```
+
+Conditional rendering with an `else` block:
+```html
+{{#if user.isAuthenticated }}
+<a href="/dashboard">Dashboard</a>
+{{else}}
+<a href="/login">Login</a>
+{{/if}}
+```
+
+Check if an array is empty before iterating over it.
+```html
+{{#if profile.links }}
+<ul>
+    {{#each profile.links as |link|}}
+    <li><a href="{{ link.href }}">{{ link.label }}</a></li>
+    {{/each}}
+</ul>
+{{/if}}
+```
+
+### ifEqual Helper
+The `#ifEqual` helper compares two values using `==` equality and conditionally renders content.
+
+```html
+{{#ifEqual user.role "admin"}}
+    <span class="admin-badge">Administrator</span>
+{{else}}
+    <span class="user-badge">User</span>
+{{/ifEqual}}
+```
+
+The `#ifEqual` helper can work as an `if ... else if ... ` chain or case statement:
+```html
+{{#ifEqual user.role "admin"}}
+    <a href="/dashboard/admin">Administrator</a>
+{{else}}{{#ifEqual user.role "moderator"}}
+    <a href="/dashboard/mod">Moderator</a>
+{{else}}
+    <a href="/dashboard">Dashboard</a>
+{{/ifEqual}}{{/ifEqual}}
+```
+
+### formatDate Helper
+The `formatDate` helper is an inline helper which formats and renders date strings and objects with time zone and locale context.
+
+```js
+response.updateProps({
+    game: {
+        timezone: 'America/New_York',
+        startTime: '2025-10-24T23:00:00.000Z',
+        endTime: '2025-10-25T02:00:00.000Z',
+    },
+});
+```
+
+You can explicitly set the time zone, locale, and format or use the defaults for any of them.
+
+| Attribute | Default | Description |
+|-----------|---------|-------------|
+| zone      | system default | Usually UTC for most servers |
+| locale    | system locale | Usually en-US for most servers |
+| format    | DATETIME_SHORT | Outputs "10/14/1983, 1:30 PM" |
+
+```html
+{{!-- Explicitly set the time zone, locale, and format --}}
+<p>Game start: {{formatDate game.startTime zone="America/New_York" locale="en-US" format="DATETIME_MED" }}</p>
+{{!-- Use the default time zone, locale, and format --}}
+<p>Game end: {{formatDate game.startTime }}</p>
+```
+
+A helper mustache can also span multiple lines:
+```html
+<p>Game start: {{formatDate game.startTime
+    zone="America/New_York"
+    locale="en-US"
+    format="DATETIME_MED"
+}}</p>
+```
+
+HTML output:
+```html
+<p>Game start: Oct 24, 2025, 7:00 PM</p>
+<p>Game end: 10/25/2025, 2:00 AM</p>
+```
+Notice in the game `endTime`, since we didn't provide a time zone, the system used the default UTC time of 2:00AM the next day. Not quite right!
+
+For a list of common IANA time zone strings, see the [Wikipedia page](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
+
+The full list of locale language strings can be found in the [IANA registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry) or the [language tag registry search](https://r12a.github.io/app-subtags/).
+
+#### Valid Formats for formatDate
+
+| Name                            | Example in en_US                                 |
+|---------------------------------|--------------------------------------------------|
+| DATE_SHORT                      | 10/14/1983                                       |
+| DATE_MED                        | Oct 14, 1983                                     |
+| DATE_MED_WITH_WEEKDAY           | Fri, Oct 14, 1983                                |
+| DATE_FULL                       | October 14, 1983                                 |
+| DATE_HUGE                       | Friday, October 14, 1983                         |
+| TIME_SIMPLE                     | 1:30 PM                                          |
+| TIME_WITH_SECONDS               | 1:30:23 PM                                       |
+| TIME_WITH_SHORT_OFFSET          | 1:30:23 PM EDT                                   |
+| TIME_WITH_LONG_OFFSET           | 1:30:23 PM Eastern Daylight Time                 |
+| TIME_24_SIMPLE                  | 13:30                                            |
+| TIME_24_WITH_SECONDS            | 13:30:23                                         |
+| TIME_24_WITH_SHORT_OFFSET       | 13:30:23 EDT                                     |
+| TIME_24_WITH_LONG_OFFSET        | 13:30:23 Eastern Daylight Time                   |
+| DATETIME_SHORT                  | 10/14/1983, 1:30 PM                              |
+| DATETIME_MED                    | Oct 14, 1983, 1:30 PM                            |
+| DATETIME_MED_WITH_WEEKDAY       | Fri, Oct 14, 1983, 1:30 PM                       |
+| DATETIME_FULL                   | October 14, 1983 at 1:30 PM EDT                  |
+| DATETIME_HUGE                   | Friday, October 14, 1983 at 1:30 PM Eastern Daylight Time |
+| DATETIME_SHORT_WITH_SECONDS     | 10/14/1983, 1:30:23 PM                           |
+| DATETIME_MED_WITH_SECONDS       | Oct 14, 1983, 1:30:23 PM                         |
+| DATETIME_FULL_WITH_SECONDS      | October 14, 1983 at 1:30:23 PM EDT               |
+| DATETIME_HUGE_WITH_SECONDS      | Friday, October 14, 1983 at 1:30:23 PM Eastern Daylight Time |
+| UTC                             | Wed, 14 Jun 2017 07:00:00 GMT                    |
+| ISO                             | 2017-06-14T07:00:00.000Z                         |
+| ISO_DATE                        | 2017-06-14                                       |
+
+### plusOne Helper
+The `plusOne` helper simply adds 1 to the given number. This is useful for using array indexes in the rendered output.
+
+HTML template:
+```html
+{{#each images as |image, index| }}
+<div>
+    <span>{{plusOne index }}.</span> <img src="{{ image.src }}" alt="{{ image.alt }}" />
+</div>
+{{/each}}
 ```
 
 ### Helpers
@@ -291,16 +628,6 @@ Expressions can span multiple lines for better readability:
     }}
 ```
 
-### Bracket Notation
-
-Use bracket notation for property names with special characters:
-
-```html
-<!-- Access properties with spaces or special characters -->
-<p>{{ article["Published Date"] }}</p>
-<p>{{ user["email-verified"] }}</p>
-```
-
 ## HTML Entity Escaping
 
 Kixx Templating automatically escapes HTML entities for security, but the behavior differs between expressions and helpers:
@@ -390,167 +717,6 @@ Kixx comes with a set of essential helper functions that cover common templating
 | `format_date` | Inline | Format JavaScript dates and date strings |
 | `noop` | Inline | No-operation helper to prevent automatic HTML entities encoding |
 
-### #each Helper
-
-The `#each` helper allows you to iterate over iterable objects and render content for each item.
-
-```html
-{{#each articles as |article|}}
-    <article>
-        <h2>{{ article.title }}</h2>
-        <p>{{ article.excerpt }}</p>
-    </article>
-{{/each}}
-```
-
-**With Index**
-
-```html
-{{#each articles as |article, index|}}
-    <article class="article-{{ index }}">
-        <span class="number">{{ index }}</span>
-        <h2>{{ article.title }}</h2>
-    </article>
-{{/each}}
-```
-
-**With Else Block**
-
-```html
-{{#each articles as |article|}}
-    <article>
-        <h2>{{ article.title }}</h2>
-    </article>
-{{else}}
-    <p>No articles found.</p>
-{{/each}}
-```
-
-#### Supported Data Types
-
-**Arrays**
-
-```html
-{{#each ['apple', 'banana', 'cherry'] as |fruit, index|}}
-    <li>{{ index }}: {{ fruit }}</li>
-{{/each}}
-```
-
-**Objects**
-
-```html
-{{#each user.preferences as |value, key|}}
-    <div>{{ key }}: {{ value }}</div>
-{{/each}}
-```
-
-**Maps**
-
-```html
-{{#each userSettings as |value, key|}}
-    <div>{{ key }}: {{ value }}</div>
-{{/each}}
-```
-
-**Sets**
-
-```html
-{{#each tags as |tag|}}
-    <span class="tag">{{ tag }}</span>
-{{/each}}
-```
-
-#### Context Inheritance
-
-The `#each` block has access to the parent context:
-
-```html
-{{#each articles as |article|}}
-    <article>
-        <h2>{{ article.title }}</h2>
-        <p>By {{ article.author }} for {{ site.name }}</p>
-    </article>
-{{/each}}
-```
-
-### #if Helper
-The `#if` helper provides conditional rendering based on the truthiness of a value.
-
-```html
-{{#if user.isLoggedIn}}
-    <p>Welcome back, {{ user.name }}!</p>
-{{else}}
-    <p>Please <a href="/login">log in</a>.</p>
-{{/if}}
-```
-
-#### Truthiness Rules
-The `#if` helper considers these values as **truthy**:
-
-- Any non-empty string
-- Any non-zero number
-- `true`
-- Non-empty arrays
-- Non-empty objects
-- Non-empty Maps and Sets
-
-These values are considered **falsy**:
-
-- `false`
-- `0`
-- `""` (empty string)
-- `null`
-- `undefined`
-- Empty arrays `[]`
-- Empty objects `{}`
-- Empty Maps and Sets
-
-```html
-<!-- String check -->
-{{#if user.name}}
-    <p>Hello, {{ user.name }}!</p>
-{{/if}}
-
-<!-- Array check -->
-{{#if articles}}
-    <p>Found {{ articles.length }} articles.</p>
-{{else}}
-    <p>No articles available.</p>
-{{/if}}
-
-<!-- Object check -->
-{{#if user.preferences}}
-    <p>User has preferences set.</p>
-{{/if}}
-
-<!-- Number check -->
-{{#if article.viewCount}}
-    <p>Viewed {{ article.viewCount }} times.</p>
-{{/if}}
-```
-
-### #ifEqual Helper
-The `#ifEqual` helper compares two values using `==` equality and renders content conditionally.
-
-```html
-{{#ifEqual user.role "admin"}}
-    <span class="admin-badge">Administrator</span>
-{{else}}
-    <span class="user-badge">User</span>
-{{/ifEqual}}
-```
-
-#### Multiple Comparisons
-```html
-{{#ifEqual user.role "admin"}}
-    <span>Administrator</span>
-{{else}}{{#ifEqual user.role "moderator"}}
-    <span>Moderator</span>
-{{else}}
-    <span>User</span>
-{{/ifEqual}}{{/ifEqual}}
-```
-
 #### Examples
 
 ```html
@@ -568,56 +734,6 @@ The `#ifEqual` helper compares two values using `==` equality and renders conten
 {{#ifEqual user.isVerified true}}
     <span class="verified">✓ Verified</span>
 {{/ifEqual}}
-```
-
-### #ifEmpty Helper
-
-The `#ifEmpty` helper checks if a value is empty and renders content accordingly.
-
-#### Basic Usage
-
-```html
-{{#ifEmpty articles}}
-    <p>No articles available.</p>
-{{else}}
-    <p>Found {{ articles.length }} articles.</p>
-{{/ifEmpty}}
-```
-
-#### Empty Value Rules
-The `#ifEmpty` helper considers these values as **empty**:
-
-- `false`
-- `0`
-- `""` (empty string)
-- `null`
-- `undefined`
-- Empty arrays `[]`
-- Empty objects `{}`
-- Empty Maps and Sets
-
-#### Examples
-```html
-<!-- Array check -->
-{{#ifEmpty user.posts}}
-    <p>No posts yet.</p>
-{{else}}
-    <p>{{ user.posts.length }} posts</p>
-{{/ifEmpty}}
-
-<!-- String check -->
-{{#ifEmpty user.bio}}
-    <p>No bio provided.</p>
-{{else}}
-    <p>{{ user.bio }}</p>
-{{/ifEmpty}}
-
-<!-- Object check -->
-{{#ifEmpty user.preferences}}
-    <p>No preferences set.</p>
-{{else}}
-    <p>Preferences configured</p>
-{{/ifEmpty}}
 ```
 
 ### noop Helper
