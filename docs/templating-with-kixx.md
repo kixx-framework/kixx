@@ -5,6 +5,8 @@ Basic Expressions
 -----------------
 The most fundamental syntax element is the expression, which allows you to output values from your context.
 
+Kixx templating uses mustache style syntax with double curly braces `{{ ... }}` for template expressions.
+
 ### Simple Variable Output
 Context data:
 ```js
@@ -26,7 +28,7 @@ HTML output:
 <p>by Eric B. &amp; Rakim</p>
 ```
 
-Notice that the "&" was converted to an HTML entity. This is because HTML escaping is done automatically by the Kixx templating system as a security feature to avoid [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). To learn more, see the section in this document on [HTML Escaping](#html-escaping).
+Notice that the "&" was converted to an HTML entity: `&amp;`. This is because HTML escaping is done automatically by the Kixx templating system as a security feature to avoid [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). To learn more, see the section in this document on [HTML Escaping](#html-escaping).
 
 ### Stringification
 Kixx templates will attempt to convert the value you reference to a string before rendering, which can lead to some unexpected results you should be aware of.
@@ -55,6 +57,7 @@ HTML output:
 <p>Released: Mon Aug 12 1963 20:00:00 GMT-0400 (Eastern Daylight Time)</p>
 <p>Sales: 470000</p>
 ```
+That's probably not what you wanted 😉
 
 To avoid the "[object Object]" problem, see the section on [Nested Property Access](#nested-property-access) below.
 
@@ -63,14 +66,12 @@ Use the [formatDate helper](#formatdate-helper) to render the Date object with t
 ### Nested Property Access
 Let's try the example above again, this time using dot "." notation for nested property access:
 ```html
-<p>{{ song.writer.firstName }} {{ song.writer.lastName }}</p>
-<p>Released: {{ song.released.formattedDate }}</p>
+<p>Writer {{ song.writer.firstName }} {{ song.writer.lastName }}</p>
 ```
 
-HTML output:
+This is better:
 ```html
-<p>Bob Dylan</p>
-<p>Released: August 13th, 1963</p>
+<p>Writer: Bob Dylan</p>
 ```
 
 ### Array Access
@@ -106,11 +107,12 @@ HTML template:
     </li>
 </ul>
 ```
+Writing out each array element access is cumbersome and fragile, so in most cases you'll want to use an `#each` loop to iterate over arrays. But, there may be cases where you need to access array elements individually, so Kixx templating allows you to do that with the sqaure bracket "[]" notation.
 
-Writing out each array element access is cumbersome and fragile. In most cases you'll want to use a `#each` loop to iterate over arrays, but Kixx templating allows you to access array elements individually for cases where you might need to do that. See the section in this document on the [#each block helper](#each-helper) to see how to iterate over an array, Map, Set, or object.
+See the section in this document on the [#each block helper](#each-helper) to see how to iterate over an array, Map, Set, or object.
 
 ### Quoted Property Access
-Some JavaScript properties need to be quoted:
+Some JavaScript properties need to be quoted because they contain illegal characters like `Content-Type` and `Content-Langth` in this example:
 ```js
 response.updateProps({
     headers: {
@@ -133,10 +135,10 @@ These properties will need to be accessed using the square bracket "[]" notation
 </dl>
 ```
 
-__Note:__ You do *not* need quotes inside the brackets `["Content-Type"]` like you would in JavaScript. Instead, just reference the value without quotes like `[Content-Type]`.
+⚠️ __Note:__ You do *not* need quotes inside the brackets `["Content-Type"]` like you would in JavaScript. Instead, just reference the value without quotes like `[Content-Type]`.
 
 ### Comments
-Comments don't appear in the template output and are useful for documentation, debugging, and temporarily disabling sections of your template.
+Template comments don't appear in the rendered output and are useful for documentation, debugging, and temporarily disabling sections of your template.
 
 A single line comment:
 ```html
@@ -166,8 +168,28 @@ Kixx comes with a set of essential helper functions that cover common use cases.
 | `#if` | Block | Conditional rendering based on truthiness |
 | `#ifEqual` | Block | Equality comparison using `==` |
 | `formatDate` | Inline | Format JavaScript dates and date strings |
+| `unescape` | Inline | Prevent automatic HTML encoding |
 | `plusOne` | Inline | Add 1 to the given number for rendering array indexes |
-| `unescape` | Inline | Prevent automatic HTML entities encoding |
+
+### Helper Arguments
+Helpers can accept different types of arguments:
+
+Positional arguments with a reference to `article.date` as well as 3 literal strings: "long", "America/New_York", and "en-US".
+```html
+{{customFormatDate article.date "long" "America/New_York" locale="en-US"}}
+```
+
+Named arguments with a positional reference to `article.date` and named reference to `article.timezone`.
+```html
+{{customFormatDate date=article.date format="long" timezone=article.timezone locale="en-US" }}
+```
+
+Mixed positional and named arguments including a reference to `article.image`, literal numbers, and literal strings.
+
+⚠️ Note that positional arguments must be written first, in front of named arguments.
+```html
+{{ image article.image 800 600 quality="high" format="webp" }}
+```
 
 ### each Helper
 The `#each` block helper allows you to conveniently iterate over iterable objects like arrays and maps.
@@ -190,7 +212,7 @@ response.updateProps({
 });
 ```
 
-HTML template:
+A single `#each` loop. ⚠️ __Remember__ to include the closing `{{/each}}` tag.
 ```html
 <ul>
     {{#each images as |image| }}
@@ -200,14 +222,13 @@ HTML template:
     {{/each}}
 </ul>
 ```
-__Remember:__ Include the closing `{{/each}}` tag.
 
-Access the array index value:
+You can use the second parameter to `#each` to reference the array index, Map key, or object property name. Use the [plusOne helper](#plusone-helper) to make array indexes more useful.
 ```html
 <ul>
     {{#each images as |image, index| }}
     <li>
-        <span>{{ index }}</span>
+        <span>{{plusOne index }}</span>
         <img src="{{ image.src }}" alt="{{ image.alt }}" />
     </li>
     {{/each}}
@@ -228,19 +249,17 @@ You can nest `#each` blocks too. Here we have an `#each` block that iterates ove
 
 And, you can use the `else` conditional to handle empty lists:
 ```js
-response.updateProps({
-    images: [],
-});
+response.updateProps({ images: [] });
 ```
 
-HTML template:
+Using `else` you can render different markup for a better user experience rather than rendering nothing at all:
 ```html
 {{#each images as |image| }}
-<div>
-    <img src="{{ image.src }}" alt="{{ image.alt }}" />
-</div>
+    <div>
+        <img src="{{ image.src }}" alt="{{ image.alt }}" />
+    </div>
 {{else}}
-<p>No images to display</p>
+    <p>No images to display</p>
 {{/each}}
 ```
 
@@ -258,14 +277,14 @@ response.updateProps({
 Here we access the `photo.src` from inside the `photo.tags` `#each` block.
 ```html
 {{#each photo.tags as |tag|}}
-<div>
-    <img src="{{ photo.src }}">
-    <p>{{ tag }}</p>
-</div>
+    <div>
+        <img src="{{ photo.src }}">
+        <p>{{ tag }}</p>
+    </div>
 {{/each}}
 ```
 
-Iterate over other datatypes like Maps, Sets, and plain objects:
+The `#each` helper can be used to iterate over Arrays, Maps, Sets, and plain objects:
 ```js
 const airports = new Map();
 
@@ -298,16 +317,18 @@ response.updateProps({
 #### The second "key name" parameter to `#each`
 The `#each` helper accepts a second parameter which references something slightly different based on the iterable object type.
 
-| Iterable | Second parameter description | Example |
-|----------|------------------------------|---------|
-| Array    | references the index | `{{#each list as |item, index|}}` |
-| Map      | references the key | `{{#each mapItems as |item, key|}}` |
-| Set      | no reference | `{{#each items as |item|}}` |
-| plain Object | references the property name | `{{#each dict as |item, name|}}` |
+| Iterable | Second parameter description |
+|----------|------------------------------|
+| Array    | references the index |
+| Map      | references the key |
+| Set      | no reference |
+| plain Object | references the property name |
 
 HTML template:
 ```html
-{{!-- When iterating over a Map you can use the second parameter to #each to reference the key --}}
+{{!--
+    When iterating over a Map you can use the second parameter to
+    #each to reference the key --}}
 {{#each airports as |airport, code| }}
     <div>
         <p>{{ code }} | {{ airport.name }}</p>
@@ -320,7 +341,9 @@ HTML template:
     </div>
 {{/each}}
 
-{{!-- When iterating over a Set the second parameter to #each is not defined --}}
+{{!--
+    When iterating over a Set the second parameter to
+    #each is not defined --}}
 <p>
 {{#each tags as |tag|}}
     <span>{{ tag }}</span>
@@ -328,7 +351,9 @@ HTML template:
 </p>
 
 <ul>
-{{!-- When iterating over an object you can use the second parameter to #each to reference the property name --}}
+{{!--
+    When iterating over an object you can use the second parameter to
+    #each to reference the property name --}}
 {{#each headers as |val, key|}}
     <li><strong>key:</strong> {{ val }}</li>
 {{/each}}
@@ -336,7 +361,7 @@ HTML template:
 ```
 
 ### if Helper
-The `#if` helper provides conditional rendering based on the truthiness of a value.
+The `#if` helper provides conditional rendering based on the truthiness of a value. ⚠️ __Remember__ to include the closing `{{/if}}` tag.
 
 ```html
 {{#if user.isLoggedIn}}
@@ -345,7 +370,6 @@ The `#if` helper provides conditional rendering based on the truthiness of a val
     <p>Please <a href="/login">log in</a>.</p>
 {{/if}}
 ```
-__Remember:__ Include the closing `{{/if}}` tag.
 
 #### Truthiness rules for `if` blocks
 The `#if` helper considers these values as **truthy**:
@@ -390,7 +414,7 @@ You can also check if an array (or other iterable) is empty before iterating ove
 ```
 
 ### ifEqual Helper
-The `#ifEqual` helper compares two values using `==` equality and conditionally renders content.
+The `#ifEqual` helper compares two values using `==` equality and conditionally renders content. ⚠️ __Remember__ to include matching closing `{{/if}}` tags.
 
 ```html
 {{#ifEqual user.role "admin"}}
@@ -410,7 +434,6 @@ The `#ifEqual` helper can work as an `if ... else if ... ` chain or even as a `s
     <a href="/dashboard">Dashboard</a>
 {{/ifEqual}}{{/ifEqual}}
 ```
-__Remember:__ Include matching closing `{{/if}}` tags.
 
 ### formatDate Helper
 The `formatDate` helper is an inline helper which formats and renders date strings and objects with time zone and locale context.
@@ -436,11 +459,18 @@ You can explicitly set the time zone, locale, and format or use the defaults for
 ```html
 {{!-- Explicitly set the time zone, locale, and format --}}
 <p>Game start: {{formatDate game.startTime zone="America/New_York" locale="en-US" format="DATETIME_MED" }}</p>
+
 {{!-- Use the default time zone, locale, and format --}}
 <p>Game end: {{formatDate game.startTime }}</p>
 ```
 
-All helper mustaches can span multiple lines, but this can be especially useful for potentially long ones like `formatDate` when all the attributes are explicitly set:
+Formatted output:
+```html
+<p>Game start: Oct 24, 2025, 7:00 PM</p>
+<p>Game end: 10/25/2025, 2:00 AM</p>
+```
+
+All helper mustaches can span multiple lines, but splitting a long `formatDate` helper expression when all the attributes are explicitly set can be particularly helpful:
 ```html
 <p>Game start: {{formatDate game.startTime
     zone="America/New_York"
@@ -448,13 +478,7 @@ All helper mustaches can span multiple lines, but this can be especially useful 
     format="DATETIME_MED"
 }}</p>
 ```
-
-HTML output:
-```html
-<p>Game start: Oct 24, 2025, 7:00 PM</p>
-<p>Game end: 10/25/2025, 2:00 AM</p>
-```
-Notice in the game `endTime`, since we didn't provide a time zone, the system used the default UTC time of 2:00AM the next day, which is probaby not what we wanted. It's better to be safe and explicitly set the `zone` attribute.
+⚠️ __Note__ in the game `endTime`, since we didn't provide a time zone, the system used the default UTC time of 2:00AM the next day, which is probaby not what we wanted. It's better to be safe and explicitly set the `zone` attribute.
 
 For a list of common IANA time zone strings, see the [Wikipedia page](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
 
@@ -462,7 +486,7 @@ The full list of locale language strings can be found in the [IANA registry](htt
 
 #### Formats for formatDate
 
-| Name                            | Example in en_US                                 |
+| Name                            | Example format output in en_US                   |
 |---------------------------------|--------------------------------------------------|
 | DATE_SHORT                      | 10/14/1983                                       |
 | DATE_MED                        | Oct 14, 1983                                     |
@@ -512,8 +536,11 @@ All helper mustaches can span multiple lines, but this technique can be especial
 }}</p>
 ```
 
-## HTML Escaping
-Kixx templating automatically escapes HTML as a security feature to avoid [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). Imagine a bad guy writes a comment on our blog which injects his evil script. Then we render the comment on our blog with this template:
+HTML Escaping
+-------------
+Kixx templating automatically escapes HTML as a security feature to avoid [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection).
+
+Imagine a bad guy writes a comment on our blog which injects his evil script. Then we render the comment on our blog with this template:
 ```html
 {{#each post.comments as |comment|}}
 <div>
@@ -536,7 +563,7 @@ It might render something like this. Notice the evil script tag the attacker inj
 ```
 That script tag will load a script which could do anything on our page ranging from mildly annoying to much, much worse.
 
-So, Kixx templating escapes HTML by default, which helps avoid these cross site scripting attacks. Instead of the script being injected like the example above, what actually happens is that the dangerous HTML is escaped like this:
+To help avoid these cross site scripting attacks Kixx templating escapes HTML by default. Instead of the script being injected like the example above, what actually happens is that the dangerous HTML is escaped like this:
 ```html
 <div>
     A good comment.
@@ -558,62 +585,21 @@ There are times when you want to prevent the automatic HTML escaping. One exampl
 
 **⚠️ Security Warning:** Only use `unescape` when you trust the content and want to render HTML. Never use it with untrusted user input.
 
-### Partials
+### Escaping HTML from custom helpers
+Be sure to also escape any untrusted content from inside custom helper functions you define. See the section on [Custom Helpers](#custom-helpers) for more information.
 
-Partials allow you to include other templates within your current template.
+```javascript
+import { escapeHTMLChars } from 'kixx';
 
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    {{> head.html }}
-</head>
-<body>
-    {{> header.html }}
-    
-    <main>
-        {{ content }}
-    </main>
-    
-    {{> footer.html }}
-</body>
-</html>
+function helperName(context, options, ...positionals) {
+    // In most cases you will want to use escapeHTMLChars() to
+    // avoid leaking HTML into the output.
+    return escapeHTMLChars(output);
+}
 ```
 
-Partials inherit the current context, so they have access to all the same variables.
-
-```html
-<!-- In main template -->
-{{> user-card.html }}
-
-<!-- In user-card.html partial -->
-<div class="user-card">
-    <h3>{{ user.name }}</h3>
-    <p>{{ user.email }}</p>
-</div>
-```
-
-## Error Handling
-Kixx Templating provides graceful error handling:
-
-### Undefined Properties
-
-If a property doesn't exist in your context, it will render as an empty string instead of throwing an error:
-
-```html
-<!-- If article.date doesn't exist, this renders as an empty string -->
-<p>{{ article.date.localized }}</p>
-```
-
-### Helper Errors
-
-If a helper function throws an error, you'll get a clear error message with the file name and line number:
-
-```
-Error in helper "format_date" in "template.html" on line 15
-```
-
-## Partials
+Partials
+--------
 Partials are reusable template components that allow you to break down large templates into smaller, manageable pieces. They help maintain consistency across your application and reduce code duplication.
 
 Use the `{{> partial-name.html }}` syntax to include a partial:
@@ -628,7 +614,7 @@ Use the `{{> partial-name.html }}` syntax to include a partial:
     {{> header.html }}
     
     <main>
-        {{noop content }}
+        {{unescape mainContent }}
     </main>
     
     {{> footer.html }}
@@ -637,7 +623,7 @@ Use the `{{> partial-name.html }}` syntax to include a partial:
 ```
 
 ### Creating Partials
-Partials are just regular template files. Here's an example header partial:
+Partials are just regular template files which you create in the `./templates/partials/` directory of your project. Here's an example header partial:
 
 ```html
 <!-- header.html -->
@@ -653,27 +639,75 @@ Partials are just regular template files. Here's an example header partial:
 </header>
 ```
 
-**Context Inheritance**
-
+### Context Inheritance in Partials
 Partials automatically inherit the context from their parent template, so they have access to all the same variables.
 
-### Example: User Card Partial
+For example, let's say we want to create a table of stats for this hockey game:
+```js
+response.updateProps({
+    formattedName: "vs. Toronto Maple Leafs",
+    startTime: "2025-10-24T23:00:00.000Z",
+    players: [
+        { name: "Wayne Gretzky", points: 3, goals: 1 },
+        { name: "Mario Lemieux", points: 2, goals: 1 },
+        { name: "Alexander Ovechkin", points: 2, goals: 2 }
+    ]
+});
+````
 
+Here is our page template:
 ```html
-<!-- In main template -->
-{{#each users as |user|}}
-    {{> user-card.html }}
-{{/each}}
+<h2>Player stats for the game at {{formatDate game.startTime zone="America/Los_Angeles" locale="en-US" }}</h2>
+<table>
+    <thead>
+        <tr><th>Game</th><th>Player</th><th>Goals</th><th>Points</th></tr>
+    </thead>
+    <tbody>
+        {{#each game.players as |player| }}
+        {{> cards/game-player.html }}
+        {{/each}}
+    </tbody>
+</table>
+```
 
-<!-- user-card.html partial -->
-<div class="user-card">
-    <img src="{{ user.avatar }}" alt="{{ user.name }}" />
-    <h3>{{ user.name }}</h3>
-    <p>{{ user.email }}</p>
-    {{#if user.isOnline}}
-        <span class="status online">Online</span>
-    {{/if}}
-</div>
+And, here is our partial at `./templates/partials/cards/game-player.html`. This partial will create a row of stats for each player as we iterate over them in the `#each` loop above. Also, notice that we can still access the `game` object as we iterate over the `cards/game-player.html` partial.
+```html
+<tr>
+    <td>{{ game.formattedName }}</td>
+    <td>{{ player.name }}</td>
+    <td>{{ player.goals }}</td>
+    <td>{{ player.points }}</td>
+</tr>
+```
+
+The rendered output looks something like this:
+```html
+<h2>Game on 10/24/2025, 4:00 PM</h2>
+<table>
+    <thead>
+        <tr><th>Game</th><th>Player</th><th>Goals</th><th>Points</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>vs. Toronto Maple Leafs</td>
+            <td>Wayne Gretzky</td>
+            <td>1</td>
+            <td>3</td>
+        </tr>
+        <tr>
+            <td>vs. Toronto Maple Leafs</td>
+            <td>Mario Lemieux</td>
+            <td>1</td>
+            <td>2</td>
+        </tr>
+        <tr>
+            <td>vs. Toronto Maple Leafs</td>
+            <td>Alexander Ovechkin</td>
+            <td>2</td>
+            <td>2</td>
+        </tr>
+    </tbody>
+</table>
 ```
 
 ### Common Partial Patterns
@@ -745,7 +779,7 @@ You can conditionally include partials based on context:
 
 ### Best Practices for partials
 
-#### 1. Use Descriptive Names
+__1. Use Descriptive Names__
 
 ```html
 <!-- Good -->
@@ -759,7 +793,7 @@ You can conditionally include partials based on context:
 {{> meta.html }}
 ```
 
-#### 2. Keep Partials Focused
+__2. Keep Partials Focused__
 
 ```html
 <!-- Good: Single responsibility -->
@@ -779,7 +813,7 @@ You can conditionally include partials based on context:
 </div>
 ```
 
-#### 3. Use Consistent Naming Conventions
+__3. Use Consistent Naming Conventions__
 
 ```html
 <!-- Use kebab-case for file names -->
@@ -793,30 +827,31 @@ You can conditionally include partials based on context:
 {{> form-field-select.html }}
 ```
 
-#### 4. Organize Partials by Feature
+__4. Organize Partials by Feature__
 
 ```
 templates/
-├── layout/
-│   ├── base.html
-│   ├── head.html
-│   ├── header.html
-│   └── footer.html
-├── components/
-│   ├── button.html
-│   ├── card.html
-│   └── form-field.html
-├── user/
-│   ├── user-card.html
-│   ├── user-avatar.html
-│   └── user-profile.html
-└── article/
-    ├── article-card.html
-    ├── article-meta.html
-    └── article-content.html
+└── partials/
+    ├── layout/
+    │   ├── base.html
+    │   ├── head.html
+    │   ├── header.html
+    │   └── footer.html
+    ├── components/
+    │   ├── button.html
+    │   ├── card.html
+    │   └── form-field.html
+    ├── user/
+    │   ├── user-card.html
+    │   ├── user-avatar.html
+    │   └── user-profile.html
+    └── article/
+        ├── article-card.html
+        ├── article-meta.html
+        └── article-content.html
 ```
 
-#### 5. Document Partial Dependencies
+__5. Document Partial Dependencies__
 
 ```html
 <!-- user-card.html -->
@@ -839,138 +874,94 @@ templates/
 </div>
 ```
 
-## Custom Helpers
-Kixx Templating allows you to create custom helper functions to extend the template engine's capabilities. This guide covers how to create both inline and block helpers.
+Custom Helpers
+--------------
+Kixx Templating allows you to create custom helper functions to extend the template engine's capabilities.
 
 There are two types of helpers you can create:
 
 - **Inline Helpers**: Transform data and return a string value
 - **Block Helpers**: Control template flow and can contain other content
 
-### Helpers
-Helpers are functions that can transform data or provide conditional logic. They come in two types: inline helpers and block helpers.
-
-#### Inline Helpers
-Inline helpers are used for data transformation and formatting.
-
-```html
-<!-- Basic helper usage -->
-<p>{{ format_date article.publishDate }}</p>
-
-<!-- Helper with arguments -->
-<p>{{ format_date article.publishDate format="long" timezone="UTC" }}</p>
-
-<!-- Helper with multiple arguments -->
-<img src="{{ image article.image width=800 height=600 quality="high" }}" />
-```
-
-#### Block Helpers
-Block helpers control the flow of your template and can contain other content.
-
-```html
-<!-- Conditional rendering -->
-{{#if user.isLoggedIn}}
-    <p>Welcome back, {{ user.name }}!</p>
-{{else}}
-    <p>Please <a href="/login">log in</a>.</p>
-{{/if}}
-
-<!-- Iteration -->
-{{#each articles as |article|}}
-    <article>
-        <h2>{{ article.title }}</h2>
-        <p>{{ article.excerpt }}</p>
-    </article>
-{{/each}}
-```
-
-#### Helper Arguments
-Helpers can accept different types of arguments:
-
-Positional Arguments:
-
-```html
-{{ format_date "2023-12-25" "long" "America/New_York" }}
-```
-
-Named Arguments (Hash):
-
-```html
-{{ format_date article.date format="long" timezone="America/New_York" locale="en-US" }}
-```
-
-Mixed Arguments:
-
-```html
-{{ image article.image 800 600 quality="high" format="webp" }}
-```
-
-You can use string literals in helper arguments:
-
-```html
-{{#ifEqual user.role "admin"}}
-    <span class="admin-badge">Administrator</span>
-{{/ifEqual}}
-
-{{ format_date "2023-12-25" format="long" }}
-```
-
-All helper functions follow this signature:
+All helper functions, both inline and block, follow this signature:
 
 ```javascript
-function helperName(context, options, ...positionals) {
-    // Helper implementation
-    return output;
+import { escapeHTMLChars } from 'kixx';
+
+export const name = 'helperName';
+
+export function helper(context, options, ...positionals) {
+    // In most cases you will want to use escapeHTMLChars() to
+    // avoid leaking HTML into the output.
+    return escapeHTMLChars(output);
 }
 ```
 
-### Parameters
-- `context`: The current template context object
-- `options`: Named arguments (hash) passed to the helper
-- `...positionals`: Rest parameters representing positional arguments
-
-### The `this` Context
-Inside block helpers, the `this` context provides:
-
-- `this.blockParams`: Array of block parameter names
-- `this.renderPrimary(newContext)`: Render the primary block
-- `this.renderInverse(newContext)`: Render the inverse (else) block
+⚠️ Avoid leaking untrusted content into your rendered HTML by using `escapeHTMLChars()`. Rendering unfiltered content can lead to [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). See the section on [HTML Escaping](#html-escaping) for more information.
 
 ### Inline Helpers
 Inline helpers transform data and return a string value.
 
+__Helper function parameters:__
+
+| Parameter         | Description                                         |
+|-------------------|-----------------------------------------------------|
+| `context`         | The current template context object                 |
+| `options`         | Named arguments (hash) passed to the helper         |
+| `...positionals`  | Rest parameters representing positional arguments   |
+
+In this example we take a date string as a positional argument as well as a named arguments for format, zone, locale, and attributes. Then we render a [`<time>` tag](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/time) while also leveraging the existing formatDate helper. This helper should be defined in `./templates/helpers/datetime.js`:
 ```javascript
-function formatDate(context, options, dateString) {
-    const { format = 'short', timezone = 'UTC' } = options;
-    
-    if (!dateString) return '';
-    
-    const date = new Date(dateString);
-    
-    if (format === 'short') {
-        return date.toLocaleDateString();
-    } else if (format === 'long') {
-        return date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+import { templateHelpers, isNonEmptyString } from 'kixx';
+
+export const name = 'datetime';
+
+export function helper(context, options, dateString) {
+    const format = options.format;
+    // Allow the options to override the configured time zone for this page.
+    const zone = options.zone || context.localTimeZone;
+    // Allow the options to override the configured locale for this page.
+    const locale = options.locale || context.locale;
+
+    let attributes = {}; // Default attributes are an empty object.
+    if (isNonEmptyString(options.attributes)) {
+        attributes = JSON.parse(options.attributes);
     }
-    
-    return date.toISOString();
+
+    // Get the value for the "datetime" attribute:
+    attributes.datetime = templateHelpers.formatDate(context, {
+        zone,
+        format: 'ISO',
+    }, dateString);
+
+    const formattedDate = templateHelpers.formatDate(context, {
+        zone,
+        locale,
+        format,
+    }, dateString);
+
+    const attrString = Object.keys(attributes).reduce((attrs, key) => {
+        attrs += ` ${key}="${attributes[key]}"`;
+        return attrs;
+    }, '');
+
+    return `<time${ attrString }>${ formattedDate }</time>`;
 }
 ```
 
+And then we can use our custom datetime helper in a template:
 ```html
-<p>Published: {{ formatDate article.publishDate format="long" }}</p>
-<p>Updated: {{ formatDate article.updatedDate format="short" timezone="America/New_York" }}</p>
+<p>
+    Published: {{datetime article.publishDate format="DATE_MED" attributes='{"class": "published-date"}'}}
+</p>
 ```
 
 **Helper with Multiple Arguments**
 
 ```javascript
-function image(context, options, src, alt, width, height) {
+export const name = 'image';
+
+export function helper(context, options, src, alt, width, height) {
     const { class: className = '', loading = 'lazy' } = options;
     
     if (!src) return '';
@@ -984,30 +975,43 @@ function image(context, options, src, alt, width, height) {
 ```
 
 ### Block Helpers
+The main difference between inline helpers and block helpers is that while inline helpers transform data and output strings, block helpers render sections of content. Block helpers can have an `else` cause, which will cause a different block to be rendered based on some conditional. A standard example of a block helper is the built-in `#if` helper:
 
-Block helpers control template flow and can contain other content.
+```html
+{{#if user.isLoggedIn}}
+    <p>Welcome back!</p>
+{{else}}
+    <p>Please <a href="/login">log in</a> to continue.</p>
+{{/if}}
+```
 
+⚠️ __Remember__ to include the closing tag (`{{/if}}` in this example) when using block helpers.
+
+Inside block helpers, the `this` Context provides the core functionality:
+
+| Property/Method                       | Description                             |
+|---------------------------------------|-----------------------------------------|
+| `this.blockParams`                    | Array of block parameter names          |
+| `this.renderPrimary(newContext)`      | Render the primary block                |
+| `this.renderInverse(newContext)`      | Render the inverse (else) block         |
+
+Here is how we would implement the `#if` block helper:
 ```javascript
-function unless(context, options, condition) {
-    if (!condition) {
+export const name = 'if';
+
+export function helper(context, options, condition) {
+    if (condition) {
         return this.renderPrimary(context);
     }
     return this.renderInverse(context);
 }
 ```
 
-```html
-{{#unless user.isLoggedIn}}
-    <p>Please log in to continue.</p>
-{{else}}
-    <p>Welcome back!</p>
-{{/unless}}
-```
-
-**Block Helper with Parameters**
-
+A simple iteration block helper with parameters:
 ```javascript
-function repeat(context, options, count) {
+export const name = 'repeat';
+
+export function helper(context, options, count) {
     const { separator = '' } = options;
     let output = '';
     
@@ -1029,33 +1033,50 @@ function repeat(context, options, count) {
 {{/repeat}}
 ```
 
-**Complex Block Helper**
-
+This is how we would implement the built-in `#each` block helper for Arrays only. Notice that we can also access `this.blockParams` which are passed in using the `|param1, param2|` syntax.
 ```javascript
-function with(context, options, object) {
-    if (!object) {
+export const name = 'each';
+
+export function helper(context, options, list) {
+    if (list === null || typeof list !== 'object') {
         return this.renderInverse(context);
     }
-    
-    // Merge the object into the current context
-    const newContext = { ...context, ...object };
-    return this.renderPrimary(newContext);
+
+    const [ itemName, indexName ] = this.blockParams;
+
+    if (!itemName) {
+        throw new Error('The first block param |[itemName]| is required for the #each helper');
+    }
+
+    if (iterableObject.length === 0) {
+        return this.renderInverse(context);
+    }
+
+    return iterableObject.reduce((str, item, index) => {
+        const subContext = {};
+        subContext[itemName] = item;
+        if (indexName) {
+            subContext[indexName] = index;
+        }
+
+        return str + this.renderPrimary(Object.assign({}, context, subContext));
+    }, '');
 }
 ```
 
 ```html
-{{#with user.profile}}
-    <h2>{{ name }}</h2>
-    <p>{{ bio }}</p>
-    <p>Email: {{ email }}</p>
+{{#each images as |image| }}
+    <div>
+        <img src="{{ image.src }}" alt="{{ image.alt }}" />
+    </div>
 {{else}}
-    <p>No profile information available.</p>
-{{/with}}
+    <p>No images to display</p>
+{{/each}}
 ```
 
 ### Registering Helpers
 
-Kixx Templating will automatically register any helper functions you define in your project's `templates/helpers` directory. Simply create a JavaScript file for each helper in that directory, and the template engine will load and register them for you—no manual registration required.
+Kixx Templating will automatically register any helper functions you define in your project's `templates/helpers` directory. Simply create a JavaScript file for each helper in that directory, and the template engine will load and register them for you.
 
 For example, to add a custom `formatDate` helper, create a file at `templates/helpers/formatDate.js`:
 
