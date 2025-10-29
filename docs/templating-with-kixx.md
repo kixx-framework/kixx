@@ -3,12 +3,10 @@ Templating with Kixx
 
 Basic Expressions
 -----------------
-The most fundamental syntax element is the expression, which allows you to output values from your context.
-
-Kixx templating uses mustache style syntax with double curly braces `{{ ... }}` for template expressions.
+Kixx templating uses mustache style syntax with double curly braces `{{ ... }}` for template expressions, which allows you to output values from the response props.
 
 ### Simple Variable Output
-Context data:
+Response props:
 ```js
 response.updateProps({
     album: 'Follow the Leader',
@@ -28,12 +26,12 @@ HTML output:
 <p>by Eric B. &amp; Rakim</p>
 ```
 
-Notice that the "&" was converted to an HTML entity: `&amp;`. This is because HTML escaping is done automatically by the Kixx templating system as a security feature to avoid [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). To learn more, see the section in this document on [HTML Escaping](#html-escaping).
+Notice that the "&" was converted to an HTML entity: `&amp;`. This is because HTML escaping is done automatically by the Kixx templating system as a security feature to avoid [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). To learn more, see the section on [HTML Escaping](#html-escaping) in Kixx templating.
 
 ### Stringification
-Kixx templates will attempt to convert the value you reference to a string before rendering, which can lead to some unexpected results you should be aware of.
+Kixx templates will attempt to convert the value you reference from the response props to a String, which can lead to some unexpected results you should be aware of.
 
-Context data:
+Response props:
 ```js
 response.updateProps({
     song: {
@@ -64,7 +62,7 @@ To avoid the "[object Object]" problem, see the section on [Nested Property Acce
 Use the [formatDate helper](#formatdate-helper) to render the Date object with the appropriate time zone, locale, and formatting.
 
 ### Nested Property Access
-Let's try the example above again, this time using dot "." notation for nested property access:
+Let's try the above example again, this time using dot "." notation for nested property access:
 ```html
 <p>Writer {{ song.writer.firstName }} {{ song.writer.lastName }}</p>
 ```
@@ -75,7 +73,7 @@ This is better:
 ```
 
 ### Array Access
-You can also access array elements using the common square bracket "[]" notation.
+You can also access array elements using the bracket "[]" notation common in JavaScript and other programming languages.
 
 ```js
 response.updateProps({
@@ -107,12 +105,12 @@ HTML template:
     </li>
 </ul>
 ```
-Writing out each array element access is cumbersome and fragile, so in most cases you'll want to use an `#each` loop to iterate over arrays. But, there may be cases where you need to access array elements individually, so Kixx templating allows you to do that with the sqaure bracket "[]" notation.
+Writing out each array element access is cumbersome and fragile, so in most cases you'll want to use an `#each` loop to iterate over arrays instead of direct access. But, there may be cases where you need to access array elements directly, so Kixx templating allows you to do that with the sqaure bracket "[]" notation.
 
-See the section in this document on the [#each block helper](#each-helper) to see how to iterate over an array, Map, Set, or object.
+See the section on the [#each block helper](#each-helper) to see how to iterate over an array, Map, Set, or object.
 
 ### Quoted Property Access
-Some JavaScript properties need to be quoted because they contain illegal characters like `Content-Type` and `Content-Langth` in this example:
+Some JavaScript properties need to be quoted because they contain illegal characters like `Content-Type` and `Content-Langth` in this example, which contain the illegal "-" character:
 ```js
 response.updateProps({
     headers: {
@@ -135,7 +133,7 @@ These properties will need to be accessed using the square bracket "[]" notation
 </dl>
 ```
 
-⚠️ __Note:__ You do *not* need quotes inside the brackets `["Content-Type"]` like you would in JavaScript. Instead, just reference the value without quotes like `[Content-Type]`.
+⚠️ __Note:__ You do *not* need quotes inside the brackets `["Content-Type"]` like you would in JavaScript or other programming languages. Instead, just reference the value without quotes like `[Content-Type]`.
 
 ### Comments
 Template comments don't appear in the rendered output and are useful for documentation, debugging, and temporarily disabling sections of your template.
@@ -171,26 +169,6 @@ Kixx comes with a set of essential helper functions that cover common use cases.
 | `unescape` | Inline | Prevent automatic HTML encoding |
 | `plusOne` | Inline | Add 1 to the given number for rendering array indexes |
 
-### Helper Arguments
-Helpers can accept different types of arguments:
-
-Positional arguments with a reference to `article.date` as well as 3 literal strings: "long", "America/New_York", and "en-US".
-```html
-{{customFormatDate article.date "long" "America/New_York" locale="en-US"}}
-```
-
-Named arguments with a positional reference to `article.date` and named reference to `article.timezone`.
-```html
-{{customFormatDate date=article.date format="long" timezone=article.timezone locale="en-US" }}
-```
-
-Mixed positional and named arguments including a reference to `article.image`, literal numbers, and literal strings.
-
-⚠️ Note that positional arguments must be written first, in front of named arguments.
-```html
-{{ image article.image 800 600 quality="high" format="webp" }}
-```
-
 ### each Helper
 The `#each` block helper allows you to conveniently iterate over iterable objects like arrays and maps.
 
@@ -212,7 +190,7 @@ response.updateProps({
 });
 ```
 
-A single `#each` loop. ⚠️ __Remember__ to include the closing `{{/each}}` tag.
+This example uses a single `#each` loop to create multiple `<li><img></li>` tag groups.
 ```html
 <ul>
     {{#each images as |image| }}
@@ -222,18 +200,7 @@ A single `#each` loop. ⚠️ __Remember__ to include the closing `{{/each}}` ta
     {{/each}}
 </ul>
 ```
-
-You can use the second parameter to `#each` to reference the array index, Map key, or object property name. Use the [plusOne helper](#plusone-helper) to make array indexes more useful.
-```html
-<ul>
-    {{#each images as |image, index| }}
-    <li>
-        <span>{{plusOne index }}</span>
-        <img src="{{ image.src }}" alt="{{ image.alt }}" />
-    </li>
-    {{/each}}
-</ul>
-```
+⚠️ __Remember__ to include the closing `{{/each}}` tag.
 
 You can nest `#each` blocks too. Here we have an `#each` block that iterates over the image tags inside the `#each` block for the images.
 ```html
@@ -304,6 +271,9 @@ airports.set('DFW', {
 });
 
 response.updateProps({
+    weatherStations: [
+        'WXL34', 'WXN59', 'WNG671',
+    ],
     airports,
     tags: new Set([ 'airports', 'traffic', 'passengers' ]),
     headers: {
@@ -314,7 +284,7 @@ response.updateProps({
 });
 ```
 
-#### The second "key name" parameter to `#each`
+#### The second "key name" block parameter to `#each`
 The `#each` helper accepts a second parameter which references something slightly different based on the iterable object type.
 
 | Iterable | Second parameter description |
@@ -324,36 +294,39 @@ The `#each` helper accepts a second parameter which references something slightl
 | Set      | no reference |
 | plain Object | references the property name |
 
-HTML template:
+When iterating over an Array you can use the second block parameter to `#each` to reference the array index. Use the [plusOne helper](#plusone-helper) to start the count at 1 instead of 0.
 ```html
-{{!--
-    When iterating over a Map you can use the second parameter to
-    #each to reference the key --}}
+<ul>
+    {{#each weatherStations as |stationCode, index| }}
+    <li>
+        <span>{{plusOne index }}.</span>
+        <a href="https://www.weather.gov/nwr/sites?site={{ stationCode }}">{{ stationCode }}</a>
+    </li>
+    {{/each}}
+</ul>
+```
+When iterating over a Map you can use the second parameter to #each to reference the key:
+```html
 {{#each airports as |airport, code| }}
     <div>
         <p>{{ code }} | {{ airport.name }}</p>
         <p>Yearly Passengers (millions): {{ airport.yearlyPassengersMillions }}</p>
     </div>
-{{else}}
-    {{!-- Handle the case where there are no airports --}}
-    <div>
-        <p>No airports to list.</p>
-    </div>
 {{/each}}
+```
 
-{{!--
-    When iterating over a Set the second parameter to
-    #each is not defined --}}
+When iterating over a Set the second parameter to #each is not defined.
+```html
 <p>
 {{#each tags as |tag|}}
     <span>{{ tag }}</span>
 {{/each}}
 </p>
+```
 
+When iterating over an object you can use the second parameter to #each to reference the property name.
+```html
 <ul>
-{{!--
-    When iterating over an object you can use the second parameter to
-    #each to reference the property name --}}
 {{#each headers as |val, key|}}
     <li><strong>key:</strong> {{ val }}</li>
 {{/each}}
@@ -361,8 +334,7 @@ HTML template:
 ```
 
 ### if Helper
-The `#if` helper provides conditional rendering based on the truthiness of a value. ⚠️ __Remember__ to include the closing `{{/if}}` tag.
-
+The `#if` helper provides conditional rendering based on the truthiness of a value.
 ```html
 {{#if user.isLoggedIn}}
     <p>Welcome back, {{ user.name }}!</p>
@@ -370,6 +342,7 @@ The `#if` helper provides conditional rendering based on the truthiness of a val
     <p>Please <a href="/login">log in</a>.</p>
 {{/if}}
 ```
+⚠️ __Remember__ to include the closing `{{/if}}` tag.
 
 #### Truthiness rules for `if` blocks
 The `#if` helper considers these values as **truthy**:
@@ -414,7 +387,7 @@ You can also check if an array (or other iterable) is empty before iterating ove
 ```
 
 ### ifEqual Helper
-The `#ifEqual` helper compares two values using `==` equality and conditionally renders content. ⚠️ __Remember__ to include matching closing `{{/if}}` tags.
+The `#ifEqual` helper compares two values using `==` equality and conditionally renders content.
 
 ```html
 {{#ifEqual user.role "admin"}}
@@ -423,6 +396,7 @@ The `#ifEqual` helper compares two values using `==` equality and conditionally 
     <span class="user-badge">User</span>
 {{/ifEqual}}
 ```
+⚠️ __Remember__ to include matching closing `{{/if}}` tags.
 
 The `#ifEqual` helper can work as an `if ... else if ... ` chain or even as a `switch ... case` statement:
 ```html
@@ -463,6 +437,10 @@ You can explicitly set the time zone, locale, and format or use the defaults for
 {{!-- Use the default time zone, locale, and format --}}
 <p>Game end: {{formatDate game.startTime }}</p>
 ```
+⚠️ __Note__ That the date positional parameter must be defined first, before the named parameters. For example, this will not work:
+```html
+<p>Game start: {{formatDate zone="America/New_York" game.startTime format="DATETIME_MED" }}</p>
+```
 
 Formatted output:
 ```html
@@ -470,7 +448,7 @@ Formatted output:
 <p>Game end: 10/25/2025, 2:00 AM</p>
 ```
 
-All helper mustaches can span multiple lines, but splitting a long `formatDate` helper expression when all the attributes are explicitly set can be particularly helpful:
+All helper mustaches can span multiple lines, but splitting a long `formatDate` helper expression can be particularly helpful:
 ```html
 <p>Game start: {{formatDate game.startTime
     zone="America/New_York"
@@ -561,7 +539,7 @@ It might render something like this. Notice the evil script tag the attacker inj
     Another good comment.
 </div>
 ```
-That script tag will load a script which could do anything on our page ranging from mildly annoying to much, much worse.
+That script tag will load a script which could do anything on our page ranging from mildly annoying to much worse.
 
 To help avoid these cross site scripting attacks Kixx templating escapes HTML by default. Instead of the script being injected like the example above, what actually happens is that the dangerous HTML is escaped like this:
 ```html
@@ -586,7 +564,7 @@ There are times when you want to prevent the automatic HTML escaping. One exampl
 **⚠️ Security Warning:** Only use `unescape` when you trust the content and want to render HTML. Never use it with untrusted user input.
 
 ### Escaping HTML from custom helpers
-Be sure to also escape any untrusted content from inside custom helper functions you define. See the section on [Custom Helpers](#custom-helpers) for more information.
+Be sure to also escape any untrusted content from inside custom helper functions you define using the `escapeHTMLChars()` utility provided by Kixx. See the section on [Custom Helpers](#custom-helpers) for more information on creating custom helpers.
 
 ```javascript
 import { escapeHTMLChars } from 'kixx';
@@ -883,7 +861,23 @@ There are two types of helpers you can create:
 - **Inline Helpers**: Transform data and return a string value
 - **Block Helpers**: Control template flow and can contain other content
 
+Kixx template helpers are defined by JavaScript modules in `./templates/helpers/`. Kixx will automatically load and register any files in `./templates/helpers/` as helpers in the template engine.
+
+A helper module must export a `name` String and a `helper` function:
+```javascript
+export const name = 'helperName';
+
+export function helper() {
+}
+```
+
 All helper functions, both inline and block, follow this signature:
+
+| Parameter         | Type    | Description                                 |
+|-------------------|---------|---------------------------------------------|
+| `context`         | Object  | The context data object                     |
+| `options`         | Object  | The named params passed into the helper     |
+| `...positionals`  | any     | The positional params passed into the helper|
 
 ```javascript
 import { escapeHTMLChars } from 'kixx';
@@ -897,7 +891,26 @@ export function helper(context, options, ...positionals) {
 }
 ```
 
-⚠️ Avoid leaking untrusted content into your rendered HTML by using `escapeHTMLChars()`. Rendering unfiltered content can lead to [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). See the section on [HTML Escaping](#html-escaping) for more information.
+⚠️ Avoid leaking untrusted content into your rendered HTML by using the `escapeHTMLChars()` utility provided by Kixx. Rendering unfiltered content can lead to [HTML injection attacks](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection). See the section on [HTML Escaping](#html-escaping) for more information.
+
+### Helper Arguments
+Helpers can accept different types of arguments.
+
+Here is an example template with a positional argument referencing `article.date` as well as 3 literal strings as additional positional arguments: "long", "America/New_York", and "en-US".
+```html
+{{customFormatDate1 article.date "long" "America/New_York" "en-US"}}
+```
+
+Here, we use named arguments with both references and string literals.
+```html
+{{customFormatDate2 date=article.date format="long" timezone=article.timezone locale="en-US" }}
+```
+
+And, this example uses mixed positional and named arguments including a reference to `article.image`, literal numbers, and literal strings.
+```html
+{{ image article.image 800 600 quality="high" format="webp" }}
+```
+⚠️ Note that positional arguments must be written first, in front of named arguments.
 
 ### Inline Helpers
 Inline helpers transform data and return a string value.
@@ -910,7 +923,40 @@ __Helper function parameters:__
 | `options`         | Named arguments (hash) passed to the helper         |
 | `...positionals`  | Rest parameters representing positional arguments   |
 
-In this example we take a date string as a positional argument as well as a named arguments for format, zone, locale, and attributes. Then we render a [`<time>` tag](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/time) while also leveraging the existing formatDate helper. This helper should be defined in `./templates/helpers/datetime.js`:
+__Here is a simple inline helper example__ which takes an image object and renders an `<img>` tag.
+
+In `./templates/helpers/image.js`:
+```javascript
+export const name = 'image';
+
+export function helper(context, options, image) {
+    const { src, alt, width, height, className } = image;
+    return `<img src="${src}" alt="${alt}" width="${width}" height="${height}" class="${className}">`;
+}
+```
+
+Response props:
+```javascript
+response.updateProps({
+    user: {
+        avatar: {
+            src: 'https://example.com/cdn/avatars/person-1.jpg',
+            alt: 'Person 1',
+            width: '100px',
+            height: '100px',
+            class: 'avatar',
+        },
+    },
+});
+```
+
+```html
+{{image user.avatar }}
+```
+
+__In this more complex example__ we take a date string as a positional argument as well as named arguments for format, zone, locale, and attributes. Then we render a [`<time>` tag](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/time) while also leveraging the existing formatDate helper.
+
+In `./templates/helpers/datetime.js`:
 ```javascript
 import { templateHelpers, isNonEmptyString } from 'kixx';
 
@@ -956,26 +1002,8 @@ And then we can use our custom datetime helper in a template:
 </p>
 ```
 
-**Helper with Multiple Arguments**
-
-```javascript
-export const name = 'image';
-
-export function helper(context, options, src, alt, width, height) {
-    const { class: className = '', loading = 'lazy' } = options;
-    
-    if (!src) return '';
-    
-    return `<img src="${src}" alt="${alt || ''}" width="${width || ''}" height="${height || ''}" class="${className}" loading="${loading}">`;
-}
-```
-
-```html
-{{image article.image.src article.image.alt 800 600 class="featured" loading="eager"}}
-```
-
 ### Block Helpers
-The main difference between inline helpers and block helpers is that while inline helpers transform data and output strings, block helpers render sections of content. Block helpers can have an `else` cause, which will cause a different block to be rendered based on some conditional. A standard example of a block helper is the built-in `#if` helper:
+The main difference between inline helpers and block helpers is that while inline helpers transform data and output strings, block helpers render sections of content. Block helpers can also have an `else` cause, which will cause a different block to be rendered based on some conditional. A standard example of a block helper is the built-in `#if` helper:
 
 ```html
 {{#if user.isLoggedIn}}
@@ -985,7 +1013,7 @@ The main difference between inline helpers and block helpers is that while inlin
 {{/if}}
 ```
 
-⚠️ __Remember__ to include the closing tag (`{{/if}}` in this example) when using block helpers.
+⚠️ __Remember__ to include the closing tag when using block helpers (the `{{/if}}` in this example).
 
 Inside block helpers, the `this` Context provides the core functionality:
 
@@ -1007,33 +1035,7 @@ export function helper(context, options, condition) {
 }
 ```
 
-A simple iteration block helper with parameters:
-```javascript
-export const name = 'repeat';
-
-export function helper(context, options, count) {
-    const { separator = '' } = options;
-    let output = '';
-    
-    for (let i = 0; i < count; i++) {
-        const subContext = { ...context, index: i };
-        output += this.renderPrimary(subContext);
-        if (i < count - 1 && separator) {
-            output += separator;
-        }
-    }
-    
-    return output;
-}
-```
-
-```html
-{{#repeat 3 separator=", "}}
-    <span>Item {{ index }}</span>
-{{/repeat}}
-```
-
-This is how we would implement the built-in `#each` block helper for Arrays only. Notice that we can also access `this.blockParams` which are passed in using the `|param1, param2|` syntax.
+This example shows how we would implement the built-in `#each` block helper for Arrays only. Notice that we can also access `this.blockParams` which are passed in using the `|param1, param2|` syntax.
 ```javascript
 export const name = 'each';
 
@@ -1048,166 +1050,20 @@ export function helper(context, options, list) {
         throw new Error('The first block param |[itemName]| is required for the #each helper');
     }
 
-    if (iterableObject.length === 0) {
+    if (list.length === 0) {
         return this.renderInverse(context);
     }
 
-    return iterableObject.reduce((str, item, index) => {
+    return list.reduce((str, item, index) => {
         const subContext = {};
         subContext[itemName] = item;
         if (indexName) {
             subContext[indexName] = index;
         }
 
+        // Merge the context object so the block has access to the local
+        // sub context as well as the parent context.
         return str + this.renderPrimary(Object.assign({}, context, subContext));
     }, '');
-}
-```
-
-```html
-{{#each images as |image| }}
-    <div>
-        <img src="{{ image.src }}" alt="{{ image.alt }}" />
-    </div>
-{{else}}
-    <p>No images to display</p>
-{{/each}}
-```
-
-### Registering Helpers
-
-Kixx Templating will automatically register any helper functions you define in your project's `templates/helpers` directory. Simply create a JavaScript file for each helper in that directory, and the template engine will load and register them for you.
-
-For example, to add a custom `formatDate` helper, create a file at `templates/helpers/formatDate.js`:
-
-### Advanced Helper Examples
-
-**Date Formatting Helper**
-
-```javascript
-function formatDate(context, options, dateString) {
-    const { 
-        format = 'short', 
-        timezone = 'UTC',
-        locale = 'en-US' 
-    } = options;
-    
-    if (!dateString) return '';
-    
-    const date = new Date(dateString);
-    
-    const formats = {
-        short: { month: 'short', day: 'numeric', year: 'numeric' },
-        long: { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        },
-        time: { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        },
-        datetime: { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric',
-            hour: '2-digit', 
-            minute: '2-digit' 
-        }
-    };
-    
-    const options = formats[format] || formats.short;
-    return date.toLocaleDateString(locale, options);
-}
-```
-
-**String Manipulation Helper**
-
-```javascript
-function truncate(context, options, text) {
-    const { length = 100, suffix = '...' } = options;
-    
-    if (!text || text.length <= length) {
-        return text;
-    }
-    
-    return text.substring(0, length) + suffix;
-}
-```
-
-**Conditional Class Helper**
-
-```javascript
-function conditionalClass(context, options, ...classes) {
-    const classList = [];
-    
-    for (let i = 0; i < classes.length; i += 2) {
-        const className = classes[i];
-        const condition = classes[i + 1];
-        
-        if (condition) {
-            classList.push(className);
-        }
-    }
-    
-    return classList.join(' ');
-}
-```
-
-```html
-<div class="{{ conditionalClass 'active' user.isActive 'admin' user.isAdmin 'verified' user.isVerified }}">
-    User content
-</div>
-```
-
-**Pagination Helper**
-
-```javascript
-function pagination(context, options, currentPage, totalPages) {
-    const { maxVisible = 5 } = options;
-    
-    if (totalPages <= 1) return '';
-    
-    let output = '<nav class="pagination"><ul>';
-    
-    // Previous button
-    if (currentPage > 1) {
-        output += `<li><a href="?page=${currentPage - 1}">Previous</a></li>`;
-    }
-    
-    // Page numbers
-    const start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-    const end = Math.min(totalPages, start + maxVisible - 1);
-    
-    for (let i = start; i <= end; i++) {
-        if (i === currentPage) {
-            output += `<li class="current"><span>${i}</span></li>`;
-        } else {
-            output += `<li><a href="?page=${i}">${i}</a></li>`;
-        }
-    }
-    
-    // Next button
-    if (currentPage < totalPages) {
-        output += `<li><a href="?page=${currentPage + 1}">Next</a></li>`;
-    }
-    
-    output += '</ul></nav>';
-    return output;
-}
-```
-
-Always handle errors gracefully in your helpers:
-
-```javascript
-function safeHelper(context, options, value) {
-    try {
-        // Your helper logic here
-        return processedValue;
-    } catch (error) {
-        console.error('Helper error:', error);
-        return ''; // Return empty string on error
-    }
 }
 ```
