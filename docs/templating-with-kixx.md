@@ -1,6 +1,35 @@
 Templating with Kixx
 ====================
 
+Table of Contents
+-----------------
+- [Basic Expressions](#basic-expressions)
+  - [Simple Variable Output](#simple-variable-output)
+  - [Stringification](#stringification)
+  - [Nested Property Access](#nested-property-access)
+  - [Array Access](#array-access)
+  - [Quoted Property Access](#quoted-property-access)
+  - [Comments](#comments)
+- [Built-in Helpers](#built-in-helpers)
+  - [each Helper](#each-helper)
+  - [if Helper](#if-helper)
+  - [ifEqual Helper](#ifequal-helper)
+  - [formatDate Helper](#formatdate-helper)
+  - [plusOne Helper](#plusone-helper)
+  - [Multi-line Helpers](#multi-line-helpers)
+- [HTML Escaping](#html-escaping)
+  - [Using the `unescape` helper to prevent automatic escaping](#using-the-unescape-helper-to-prevent-automatic-escaping)
+  - [Escaping HTML from custom helpers](#escaping-html-from-custom-helpers)
+- [Partials](#partials)
+  - [Creating Partials](#creating-partials)
+  - [Context Inheritance in Partials](#context-inheritance-in-partials)
+  - [Common Partial Patterns](#common-partial-patterns)
+  - [Best Practices for partials](#best-practices-for-partials)
+- [Custom Helpers](#custom-helpers)
+  - [Helper Arguments](#helper-arguments)
+  - [Inline Helpers](#inline-helpers)
+  - [Block Helpers](#block-helpers)
+
 Basic Expressions
 -----------------
 Kixx templating uses mustache style syntax with double curly braces `{{ ... }}` for template expressions, which allows you to output values from the response props.
