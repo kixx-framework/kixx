@@ -30,6 +30,9 @@ describe('KixxBaseCollection#getItem() when item exists', ({ before, after, it }
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
@@ -83,6 +86,9 @@ describe('KixxBaseCollection#getItem() when item does not exist', ({ before, aft
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
@@ -139,6 +145,9 @@ describe('KixxBaseCollection#setItem()', ({ before, after, it }) => {
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
@@ -203,6 +212,9 @@ describe('KixxBaseCollection#updateItem()', ({ before, after, it }) => {
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
@@ -276,6 +288,9 @@ describe('KixxBaseCollection#updateItem() when item does not exist', ({ before, 
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
@@ -346,6 +361,9 @@ describe('KixxBaseCollection#deleteItem()', ({ before, after, it }) => {
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
@@ -401,6 +419,9 @@ describe('KixxBaseCollection#scanItems() when startKey and endKey are provided',
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
@@ -468,6 +489,9 @@ describe('KixxBaseCollection#scanItems() using default startKey and endKey for a
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
@@ -534,6 +558,9 @@ describe('KixxBaseCollection#scanItems() using default startKey and endKey for d
         // Mock context that provides the datastore service
         context = {
             getService: sinon.stub().returns(datastore),
+            logger: {
+                createChild() {},
+            },
         };
 
         // Create collection instance
