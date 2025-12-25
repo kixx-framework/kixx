@@ -16,7 +16,7 @@ Options
     "kixx-config.jsonc" and ".secrets.jsonc" as well as other
     conventional application folders.
 
---environment (-d) *optional*
+--environment (-e) *optional*
     The configuration environment you would like to use.
 
     The default value is "production".
