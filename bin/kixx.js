@@ -46,7 +46,7 @@ switch (commandName) {
         break;
     default:
         console.error(`The Kixx command "${ commandName }" is not recognized. Available commands are:` + EOL);
-        console.error(readDocFile('valid-commands.md'));
+        console.log(readDocFile('valid-commands.md'));
         process.exit(1);
 }
 
