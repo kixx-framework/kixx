@@ -348,36 +348,6 @@ describe('RoutesStore#loadJSONFile with invalid file extension', ({ before, it }
     });
 });
 
-describe('RoutesStore#resolveRoutesConfigUrn with kixx:// scheme', ({ before, after, it }) => {
-    let subject;
-    let mockFileSystem;
-    let result;
-
-    before(async () => {
-        mockFileSystem = {
-            readUtf8File: sinon.stub(),
-        };
-
-        subject = new RoutesStore({
-            app_directory: CURRENT_WORKING_DIRECTORY,
-            routes_directory: path.join(CURRENT_WORKING_DIRECTORY, 'routes'),
-            fileSystem: mockFileSystem,
-        });
-
-        const vhostConfig = { name: 'test-vhost', routes: [] };
-        result = await subject.resolveRoutesConfigUrn(vhostConfig, 'kixx://default');
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('should return default routes without file I/O', () => {
-        assertEqual(0, mockFileSystem.readUtf8File.callCount);
-        assertArray(result);
-    });
-});
-
 describe('RoutesStore#resolveRoutesConfigUrn with app:// scheme', ({ before, after, it }) => {
     let subject;
     let mockFileSystem;
@@ -441,7 +411,7 @@ describe('RoutesStore#resolveRoutesConfigUrn with invalid URN scheme', ({ before
 
         assert(error);
         assertEqual('AssertionError', error.name);
-        assertEqual('Invalid routes config URN: invalid://routes (expected kixx:// or app://)', error.message);
+        assertEqual('Invalid routes config URN: invalid://routes (expected app://)', error.message);
     });
 });
 
@@ -502,7 +472,7 @@ describe('RoutesStore#loadRoutesConfigs with multiple URNs', ({ before, after, i
 
         const vhostConfig = {
             name: 'test-vhost',
-            routes: [ 'app://public.json', 'app://admin.jsonc', 'kixx://defaults' ],
+            routes: [ 'app://public.json', 'app://admin.jsonc' ],
         };
 
         result = await subject.loadRoutesConfigs(vhostConfig);
@@ -532,7 +502,7 @@ describe('RoutesStore#loadVhostsConfigs with valid config', ({ before, after, it
     const mockVhostsConfig = [
         {
             name: 'api.example.com',
-            routes: [ 'kixx://default', 'app://api.jsonc' ],
+            routes: [ 'app://api.jsonc' ],
         },
         {
             name: 'www.example.com',
@@ -618,13 +588,16 @@ describe('RoutesStore#loadVhostSpecs with valid configs', ({ before, after, it }
     const mockVhostsConfig = [
         {
             hostname: 'com.example',
-            routes: [ 'kixx://default' ],
+            routes: [ 'app://default' ],
         },
     ];
+    const mockRoutes = [{ pattern: '/api', targets: [] }];
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(JSON.stringify(mockVhostsConfig)),
+            readUtf8File: sinon.stub()
+                .onFirstCall().resolves(JSON.stringify(mockVhostsConfig))
+                .onSecondCall().resolves(JSON.stringify(mockRoutes)),
         };
 
         subject = new RoutesStore({
@@ -657,13 +630,16 @@ describe('RoutesStore#loadVirtualHosts with valid config', ({ before, after, it 
     const mockVhostsConfig = [
         {
             hostname: 'com.example.api',
-            routes: [ 'kixx://default' ],
+            routes: [ 'app://default' ],
         },
     ];
+    const mockRoutes = [{ pattern: '/api', targets: [] }];
 
     before(async () => {
         mockFileSystem = {
-            readUtf8File: sinon.stub().resolves(JSON.stringify(mockVhostsConfig)),
+            readUtf8File: sinon.stub()
+                .onFirstCall().resolves(JSON.stringify(mockVhostsConfig))
+                .onSecondCall().resolves(JSON.stringify(mockRoutes)),
         };
 
         subject = new RoutesStore({
