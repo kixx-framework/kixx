@@ -34,7 +34,7 @@ export async function main(args) {
     });
 
     if (values.help) {
-        console.error(readDocFile('init-project.md'));
+        console.log(readDocFile('init-project.md'));
         process.exit(1);
         return;
     }

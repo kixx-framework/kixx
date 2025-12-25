@@ -50,7 +50,7 @@ export async function main(args) {
     });
 
     if (values.help) {
-        console.error(readDocFile('run-command.md'));
+        console.log(readDocFile('run-command.md'));
         process.exit(1);
         return;
     }

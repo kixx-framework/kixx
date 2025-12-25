@@ -52,7 +52,7 @@ export async function main(args) {
 
     if (values.help) {
         // eslint-disable-next-line no-console
-        console.error(readDocFile('app-server.md'));
+        console.log(readDocFile('app-server.md'));
         process.exit(1);
         return;
     }
