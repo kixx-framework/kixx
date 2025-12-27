@@ -26,8 +26,8 @@ describe('Plugin constructor', ({ it }) => {
         assertEqual(directory, plugin.directory);
     });
 
-    it('sets the usersDirectory', () => {
-        assertEqual(path.join(directory, 'users'), plugin.usersDirectory);
+    it('sets the userRolesDirectory', () => {
+        assertEqual(path.join(directory, 'user-roles'), plugin.userRolesDirectory);
     });
 
     it('sets the collectionsDirectory', () => {
@@ -139,7 +139,7 @@ describe('Plugin#load()', ({ before, after, it }) => {
         sinon.stub(plugin, 'loadCollections').resolves(collectionsMap);
         sinon.stub(plugin, 'loadViews').resolves(viewsMap);
         sinon.stub(plugin, 'loadForms').resolves(formsMap);
-        sinon.stub(plugin, 'loadUsers').resolves(usersResult);
+        sinon.stub(plugin, 'loadUserRoles').resolves(usersResult);
 
         const loadMiddlewareDirectory = sinon.stub(plugin, 'loadMiddlewareDirectory');
         loadMiddlewareDirectory.onFirstCall().resolves(middlewareMap);
@@ -179,7 +179,7 @@ describe('Plugin#load()', ({ before, after, it }) => {
     });
 
     it('loads users', () => {
-        assertEqual(1, plugin.loadUsers.callCount);
+        assertEqual(1, plugin.loadUserRoles.callCount);
         assertEqual(usersResult, plugin.users);
     });
 
@@ -966,7 +966,7 @@ describe('Plugin#loadMiddlewareFunction() when import throws', ({ before, after,
     });
 });
 
-describe('Plugin#loadUsers()', ({ before, after, it }) => {
+describe('Plugin#loadUserRoles()', ({ before, after, it }) => {
 
     const role1 = {
         name: 'anonymous',
@@ -1020,7 +1020,7 @@ describe('Plugin#loadUsers()', ({ before, after, it }) => {
 
     before(async () => {
         plugin = new Plugin(fileSystem, DIRECTORY);
-        result = await plugin.loadUsers();
+        result = await plugin.loadUserRoles();
     });
 
     after(() => {
@@ -1029,8 +1029,8 @@ describe('Plugin#loadUsers()', ({ before, after, it }) => {
 
     it('only user roles JSON files', () => {
         assertEqual(2, readJSONFile.callCount);
-        assertEqual(path.join(plugin.usersDirectory, 'anonymous.role.json'), readJSONFile.getCall(0).args[0]);
-        assertEqual(path.join(plugin.usersDirectory, 'admin.role.jsonc'), readJSONFile.getCall(1).args[0]);
+        assertEqual(path.join(plugin.userRolesDirectory, 'anonymous.role.json'), readJSONFile.getCall(0).args[0]);
+        assertEqual(path.join(plugin.userRolesDirectory, 'admin.role.jsonc'), readJSONFile.getCall(1).args[0]);
     });
 
 
@@ -1041,7 +1041,7 @@ describe('Plugin#loadUsers()', ({ before, after, it }) => {
     });
 });
 
-describe('Plugin#loadUsers() when there are no user roles', ({ before, after, it }) => {
+describe('Plugin#loadUserRoles() when there are no user roles', ({ before, after, it }) => {
 
     const readDirectory = sinon.stub().resolves([
         {
@@ -1070,7 +1070,7 @@ describe('Plugin#loadUsers() when there are no user roles', ({ before, after, it
 
     before(async () => {
         plugin = new Plugin(fileSystem, DIRECTORY);
-        result = await plugin.loadUsers();
+        result = await plugin.loadUserRoles();
     });
 
     after(() => {
@@ -1087,7 +1087,7 @@ describe('Plugin#loadUsers() when there are no user roles', ({ before, after, it
     });
 });
 
-describe('Plugin#loadUsers() when a role does not have a name', ({ before, after, it }) => {
+describe('Plugin#loadUserRoles() when a role does not have a name', ({ before, after, it }) => {
 
     const roleWithoutName = {
         permissions: [
@@ -1118,7 +1118,7 @@ describe('Plugin#loadUsers() when a role does not have a name', ({ before, after
         plugin = new Plugin(fileSystem, DIRECTORY);
 
         try {
-            await plugin.loadUsers();
+            await plugin.loadUserRoles();
         } catch (err) {
             result = err;
         }
@@ -1133,7 +1133,7 @@ describe('Plugin#loadUsers() when a role does not have a name', ({ before, after
     });
 });
 
-describe('Plugin#loadUsers() when permissions is not an array', ({ before, after, it }) => {
+describe('Plugin#loadUserRoles() when permissions is not an array', ({ before, after, it }) => {
 
     const roleWithoutPermissions = {
         name: 'admin',
@@ -1162,7 +1162,7 @@ describe('Plugin#loadUsers() when permissions is not an array', ({ before, after
         plugin = new Plugin(fileSystem, DIRECTORY);
 
         try {
-            await plugin.loadUsers();
+            await plugin.loadUserRoles();
         } catch (err) {
             result = err;
         }
@@ -1177,7 +1177,7 @@ describe('Plugin#loadUsers() when permissions is not an array', ({ before, after
     });
 });
 
-describe('Plugin#loadUsers() when a permissions item is not a string', ({ before, after, it }) => {
+describe('Plugin#loadUserRoles() when a permissions item is not a string', ({ before, after, it }) => {
 
     const roleWithInvalidPermission = {
         name: 'admin',
@@ -1210,7 +1210,7 @@ describe('Plugin#loadUsers() when a permissions item is not a string', ({ before
         plugin = new Plugin(fileSystem, DIRECTORY);
 
         try {
-            await plugin.loadUsers();
+            await plugin.loadUserRoles();
         } catch (err) {
             result = err;
         }
