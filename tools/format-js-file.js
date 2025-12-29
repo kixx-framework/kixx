@@ -28,12 +28,38 @@ async function main() {
     const filepath = path.resolve(sourceFilePath);
     const source = await fsp.readFile(filepath, { encoding: 'utf8' });
 
-    parseSourceFile(source);
+    const objects = parseSourceFile(source);
+    const publicObjects = objects.filter(({ isPublic }) => isPublic);
+
+    const structure = {};
+    let currentClass = null;
+
+    for (const obj of publicObjects) {
+        // The problem with this algorithm is that if there are any module level
+        // definitions after the class definition, they will be ignored. But,
+        // because of the way we organize our module files, that should be ok.
+        if (obj.definition === 'class') {
+            obj.id = obj.name;
+            obj.children = {};
+            currentClass = obj;
+            structure[obj.id] = currentClass;
+        } else if (currentClass) {
+            obj.id = obj.isStatic ? `${ currentClass.name }.${ obj.name }` : `${ currentClass.name }#${ obj.name }`;
+            currentClass.children[obj.id] = obj;
+        } else {
+            obj.id = obj.name;
+            structure[obj.id] = obj;
+        }
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify(structure, null, 4));
 }
 
 function parseSourceFile(source) {
     const lines = source.split(/\r?\n/);
 
+    const objects = [];
     const jsDocBlock = [];
 
     for (let i = 0; i < lines.length; i += 1) {
@@ -45,7 +71,10 @@ function parseSourceFile(source) {
             if (line === '*/') {
                 const tokens = captureSymbolTokens(lines[i + 1]);
                 const jsDocTokens = tokenizeJSDoc(tokens, jsDocBlock);
-                printJSDocBlock(jsDocTokens);
+                // console.log(jsDocTokens);
+                const obj = jsDocTokenStreamToObject(jsDocTokens);
+                // console.log(obj);
+                objects.push(obj);
                 jsDocBlock.length = 0;
                 continue;
             }
@@ -53,12 +82,8 @@ function parseSourceFile(source) {
             jsDocBlock.push(line);
         }
     }
-}
 
-function printJSDocBlock(tokens) {
-    // console.log(tokens);
-    const obj = jsDocTokenStreamToObject(tokens);
-    console.log(obj);
+    return objects;
 }
 
 function jsDocTokenStreamToObject(tokens) {
@@ -74,88 +99,150 @@ function jsDocTokenStreamToObject(tokens) {
         if (parameter) {
             if (type === 'type') {
                 parameter.type = value;
-            } else if (type === 'parameter') {
+                continue;
+            }
+            if (type === 'parameter') {
                 parameter.name = value;
-            } else if (type === 'parameter-optional') {
+                continue;
+            }
+            if (type === 'parameter-optional') {
                 parameter.name = value;
                 parameter.optional = true;
-            } else if (type === 'default-value') {
-                parameter.defaultValue = value;
-            } else if (type === 'description') {
-                parameter.description = value;
-            } else if (type === 'text' && parameter.description) {
-                parameter.description = `${ parameter.description } ${ value }`;
-            } else {
-                // This is the end of the parameter definition
-                parameter.optional = Boolean(parameter.optional);
-                if (!Array.isArray(obj.parameters)) {
-                    obj.parameters = [];
-                }
-                obj.parameters.push(parameter);
-                parameter = null;
+                continue;
             }
+            if (type === 'default-value') {
+                parameter.defaultValue = value;
+                continue;
+            }
+            if (type === 'description') {
+                parameter.description = value;
+                continue;
+            }
+            if (type === 'text' && parameter.description) {
+                parameter.description = `${ parameter.description } ${ value }`;
+                continue;
+            }
+
+            // This is the end of the parameter definition
+            parameter.optional = Boolean(parameter.optional);
+            if (!Array.isArray(obj.parameters)) {
+                obj.parameters = [];
+            }
+            obj.parameters.push(parameter);
+            parameter = null;
+
         } else if (property) {
             if (type === 'type') {
                 property.type = value;
-            } else if (type === 'parameter') {
+                continue;
+            }
+            if (type === 'parameter') {
                 property.name = value;
-            } else if (type === 'parameter-optional') {
+                continue;
+            }
+            if (type === 'parameter-optional') {
                 property.name = value;
                 property.optional = true;
-            } else if (type === 'default-value') {
-                property.defaultValue = value;
-            } else if (type === 'description') {
-                property.description = value;
-            } else if (type === 'text' && property.description) {
-                property.description = `${ property.description } ${ value }`;
-            } else {
-                // This is the end of the property definition
-                property.optional = Boolean(property.optional);
-                if (!Array.isArray(obj.properties)) {
-                    obj.properties = [];
-                }
-                obj.properties.push(property);
-                property = null;
+                continue;
             }
+            if (type === 'default-value') {
+                property.defaultValue = value;
+                continue;
+            }
+            if (type === 'description') {
+                property.description = value;
+                continue;
+            }
+            if (type === 'text' && property.description) {
+                property.description = `${ property.description } ${ value }`;
+                continue;
+            }
+
+            // This is the end of the property definition
+            property.optional = Boolean(property.optional);
+            if (!Array.isArray(obj.properties)) {
+                obj.properties = [];
+            }
+            obj.properties.push(property);
+            property = null;
+
         } else if (error) {
             if (type === 'type') {
                 error.type = value;
-            } else if (type === 'description') {
-                error.description = value;
-            } else if (type === 'text' && error.description) {
-                error.description = `${ error.description } ${ value }`;
-            } else {
-                // This is the end of the error definition
-                if (!Array.isArray(obj.throws)) {
-                    obj.throws = [];
-                }
-                obj.throws.push(error);
-                error = null;
+                continue;
             }
+            if (type === 'description') {
+                error.description = value;
+                continue;
+            }
+            if (type === 'text' && error.description) {
+                error.description = `${ error.description } ${ value }`;
+                continue;
+            }
+
+            // This is the end of the error definition
+            if (!Array.isArray(obj.throws)) {
+                obj.throws = [];
+            }
+            obj.throws.push(error);
+            error = null;
+
         } else if (returns) {
             if (type === 'type') {
                 returns.type = value;
-            } else if (type === 'description') {
-                returns.description = value;
-            } else if (type === 'text' && error.description) {
-                returns.description = `${ returns.description } ${ value }`;
-            } else {
-                // This is the end of the returns definition
-                obj.returns = returns;
-                returns = null;
+                continue;
             }
+            if (type === 'description') {
+                returns.description = value;
+                continue;
+            }
+            if (type === 'text' && error.description) {
+                returns.description = `${ returns.description } ${ value }`;
+                continue;
+            }
+
+            // This is the end of the returns definition
+            obj.returns = returns;
+            returns = null;
+
         } else if (typedef) {
             if (type === 'type') {
                 typedef.type = value;
-            } else if (type === 'parameter') {
-                typedef.name = value;
-            } else {
-                obj.definition = 'typedef';
-                obj.type = typedef.type;
-                obj.name = typedef.name;
-                typedef = null;
+                continue;
             }
-        } else if (type === 'name') {
+            if (type === 'parameter') {
+                typedef.name = value;
+                continue;
+            }
+
+            obj.definition = 'typedef';
+            obj.type = typedef.type;
+            obj.name = typedef.name;
+            typedef = null;
+        }
+
+        if (!parameter && type === 'tag' && value === 'param') {
+            parameter = {};
+            continue;
+        }
+        if (!property && type === 'tag' && value === 'property') {
+            property = {};
+            continue;
+        }
+        if (!error && type === 'tag' && value === 'throws') {
+            error = {};
+            continue;
+        }
+        if (!returns && type === 'tag' && value === 'returns') {
+            returns = {};
+            continue;
+        }
+        if (!typedef && type === 'tag' && value === 'typedef') {
+            typedef = {};
+            continue;
+        }
+
+        if (type === 'name') {
             obj.name = value;
         } else if (type === 'tag' && value === 'name' && typeof obj.name === 'undefined') {
             // Set the name to null to indicate that the value will follow in the next token.
@@ -184,22 +271,6 @@ function jsDocTokenStreamToObject(tokens) {
             obj.description = `${ obj.description } ${ value }`;
         } else if (type === 'empty-line' && obj.description) {
             obj.description = `${ obj.description }\n\n`;
-        }
-
-        if (!parameter && type === 'tag' && value === 'param') {
-            parameter = {};
-        }
-        if (!property && type === 'tag' && value === 'property') {
-            property = {};
-        }
-        if (!error && type === 'tag' && value === 'throws') {
-            error = {};
-        }
-        if (!returns && type === 'tag' && value === 'returns') {
-            returns = {};
-        }
-        if (!typedef && type === 'tag' && value === 'typedef') {
-            typedef = {};
         }
     }
 
