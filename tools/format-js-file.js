@@ -40,12 +40,12 @@ async function main() {
         // because of the way we organize our module files, that should be ok.
         if (obj.definition === 'class') {
             obj.id = obj.name;
-            obj.children = {};
+            obj.children = [];
             currentClass = obj;
             structure[obj.id] = currentClass;
         } else if (currentClass) {
             obj.id = obj.isStatic ? `${ currentClass.name }.${ obj.name }` : `${ currentClass.name }#${ obj.name }`;
-            currentClass.children[obj.id] = obj;
+            currentClass.children.push(obj);
         } else {
             obj.id = obj.name;
             structure[obj.id] = obj;
