@@ -180,7 +180,7 @@ describe('Plugin#load()', ({ before, after, it }) => {
 
     it('loads users', () => {
         assertEqual(1, plugin.loadUserRoles.callCount);
-        assertEqual(usersResult, plugin.users);
+        assertEqual(usersResult, plugin.userRoles);
     });
 
     it('loads the middleware directory', () => {
