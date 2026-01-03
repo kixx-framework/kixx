@@ -52,8 +52,28 @@ async function main() {
         }
     }
 
+    for (const obj of publicObjects) {
+        if (obj.children) {
+            sortClassChildren(obj.children);
+        }
+    }
+
     // eslint-disable-next-line no-console
     console.log(JSON.stringify(structure, null, 4));
+}
+
+function sortClassChildren(children) {
+    return children.sort((a, b) => {
+        if (a.definition === b.definition) {
+            return a.name > b.name ? 1 : -1;
+        }
+        if (a.function) {
+            return 1;
+        }
+        if (b.function) {
+            return -1;
+        }
+    });
 }
 
 function parseSourceFile(source) {
