@@ -1,8 +1,16 @@
 import process from 'node:process';
+import util from 'node:util';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runTests } from 'kixx-test';
+
+const options = {
+    stack: {
+        short: 's',
+        type: 'string',
+    },
+};
 
 import { EOL } from 'node:os';
 
@@ -15,6 +23,20 @@ const MAX_STACK_LENGTH = 4;
 
 
 async function main() {
+    const args = util.parseArgs({
+        args: process.argv.slice(2),
+        options,
+        strict: true,
+        allowPositionals: true,
+        allowNegative: true,
+    });
+
+    let maxStackLength = MAX_STACK_LENGTH;
+    if (args.values.stack) {
+        const i = parseInt(args.values.stack, 10);
+        maxStackLength = Number.isNaN(i) ? null : i;
+    }
+
     const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
     const directory = path.join(rootDirectory, 'test');
     const pattern = /test.js$/;
@@ -47,9 +69,13 @@ async function main() {
         errorCount += 1;
         write(`${ EOL }${ RED }Error: Block [${ block.concatName(' - ') }] had multiple rejections${ COLOR_RESET }${ EOL }`);
         if (error) {
-            const stack = error.stack.split(EOL).map((line) => line.trimEnd()).slice(0, MAX_STACK_LENGTH);
-            for (const line of stack) {
-                write(line + EOL);
+            if (Number.isInteger(maxStackLength)) {
+                const stack = error.stack.split(EOL).map((line) => line.trimEnd()).slice(0, maxStackLength);
+                for (const line of stack) {
+                    write(line + EOL);
+                }
+            } else {
+                write(util.inspect(error, false, 2, true) + EOL);
             }
         }
     });
@@ -81,9 +107,13 @@ async function main() {
         if (error) {
             errorCount += 1;
             write(`${ EOL }${ RED }Test failed: ${ suffix }${ COLOR_RESET }${ EOL }`);
-            const stack = error.stack.split(EOL).map((line) => line.trimEnd()).slice(0, MAX_STACK_LENGTH);
-            for (const line of stack) {
-                write(line + EOL);
+            if (Number.isInteger(maxStackLength)) {
+                const stack = error.stack.split(EOL).map((line) => line.trimEnd()).slice(0, maxStackLength);
+                for (const line of stack) {
+                    write(line + EOL);
+                }
+            } else {
+                write(util.inspect(error, false, 2, true) + EOL);
             }
         }
     });
