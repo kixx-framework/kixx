@@ -1,0 +1,7 @@
+{
+    "type": "object",
+    "properties": {
+        "datetime": { "type": "string" },
+    },
+    "required": [ "datetime" ]
+}

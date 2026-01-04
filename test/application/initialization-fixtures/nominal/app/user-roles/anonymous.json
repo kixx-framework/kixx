@@ -1,0 +1,6 @@
+{
+    "name": "anonymous",
+    "permissions": [
+        "view:app.Products:query:*"
+    ]
+}

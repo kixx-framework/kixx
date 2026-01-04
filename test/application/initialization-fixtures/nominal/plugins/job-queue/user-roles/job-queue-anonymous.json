@@ -1,0 +1,7 @@
+{
+    "name": "job-queue-anonymous",
+    "permissions": [
+        "view:job-queue.Jobs:query:*",
+        "form:job-queue.Jobs:save:*"
+    ]
+}

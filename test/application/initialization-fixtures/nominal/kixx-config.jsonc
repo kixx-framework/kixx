@@ -1,0 +1,21 @@
+{
+    "name": "Test App",
+    // The processName will be included in log output as well as the sytem process lists.
+    // This makes it easier to identify your app in the system process list or log files.
+    "processName": "testapp",
+    // The environments sections contains the configuration for each environment.
+    "environments": {
+        "development": {
+            "logger": {
+                "level": "debug",
+                "mode": "console"
+            },
+        },
+        "production": {
+            "logger": {
+                "level": "info",
+                "mode": "stdout"
+            }
+        }
+    }
+}
