@@ -123,3 +123,89 @@ describe('nominal case with kixx config in CWD', ({ before, it }) => {
         assertEqual('form:job-queue.Jobs:save:*', jobs.permissions[1].urn);
     });
 });
+
+describe('nominal case with specified config filepath', ({ before, it }) => {
+    const fixtureDirectory = path.join(FIXTURE_DIR, 'nominal');
+    const configFilepath = path.join(fixtureDirectory, 'kixx-config.jsonc');
+
+    const app = new Application({ currentWorkingDirectory: THIS_DIR });
+    const runtime = { server: { name: 'server' } };
+    const environment = 'development';
+
+    let context;
+
+    before(async () => {
+        context = await app.initialize({
+            runtime,
+            environment,
+            configFilepath,
+        });
+    });
+
+    it('loaded expected configs', () => {
+        assert(context.config);
+        assertEqual('Test App', context.config.name);
+        assertEqual('testapp', context.config.processName);
+    });
+
+    it('sets the paths', () => {
+        assert(context.paths);
+        const { paths } = context;
+
+        // The app_directory is set as the current working directory
+        assertEqual(fixtureDirectory, paths.app_directory);
+
+        assertEqual(path.join(fixtureDirectory, 'routes'), paths.routes_directory);
+        assertEqual(path.join(fixtureDirectory, 'public'), paths.public_directory);
+        assertEqual(path.join(fixtureDirectory, 'pages'), paths.pages_directory);
+        assertEqual(path.join(fixtureDirectory, 'templates'), paths.templates_directory);
+        assertEqual(path.join(fixtureDirectory, 'app'), paths.app_plugin_directory);
+        assertEqual(path.join(fixtureDirectory, 'plugins'), paths.plugins_directory);
+        assertEqual(path.join(fixtureDirectory, 'commands'), paths.commands_directory);
+        assertEqual(path.join(fixtureDirectory, 'data'), paths.data_directory);
+    });
+});
+
+describe('nominal case with specified app directory', ({ before, it }) => {
+    const fixtureDirectory = path.join(FIXTURE_DIR, 'nominal');
+
+    const app = new Application({
+        currentWorkingDirectory: THIS_DIR,
+        applicationDirectory: fixtureDirectory,
+    });
+
+    const runtime = { server: { name: 'server' } };
+    const environment = 'development';
+
+    let context;
+
+    before(async () => {
+        context = await app.initialize({
+            runtime,
+            environment,
+        });
+    });
+
+    it('loaded expected configs', () => {
+        assert(context.config);
+        assertEqual('Test App', context.config.name);
+        assertEqual('testapp', context.config.processName);
+    });
+
+    it('sets the paths', () => {
+        assert(context.paths);
+        const { paths } = context;
+
+        // The app_directory is set as the current working directory
+        assertEqual(fixtureDirectory, paths.app_directory);
+
+        assertEqual(path.join(fixtureDirectory, 'routes'), paths.routes_directory);
+        assertEqual(path.join(fixtureDirectory, 'public'), paths.public_directory);
+        assertEqual(path.join(fixtureDirectory, 'pages'), paths.pages_directory);
+        assertEqual(path.join(fixtureDirectory, 'templates'), paths.templates_directory);
+        assertEqual(path.join(fixtureDirectory, 'app'), paths.app_plugin_directory);
+        assertEqual(path.join(fixtureDirectory, 'plugins'), paths.plugins_directory);
+        assertEqual(path.join(fixtureDirectory, 'commands'), paths.commands_directory);
+        assertEqual(path.join(fixtureDirectory, 'data'), paths.data_directory);
+    });
+});
