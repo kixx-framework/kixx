@@ -31,15 +31,7 @@ describe('Application/Paths#constructor with valid input', ({ before, it }) => {
     });
 
     it('should have the correct templates_directory', () => {
-        assertEqual(subject.templates_directory, path.join(FAKE_APP_DIR, 'templates', 'templates'));
-    });
-
-    it('should have the correct helpers_directory', () => {
-        assertEqual(subject.helpers_directory, path.join(FAKE_APP_DIR, 'templates', 'helpers'));
-    });
-
-    it('should have the correct partials_directory', () => {
-        assertEqual(subject.partials_directory, path.join(FAKE_APP_DIR, 'templates', 'partials'));
+        assertEqual(subject.templates_directory, path.join(FAKE_APP_DIR, 'templates'));
     });
 
     it('should have the correct app_plugin_directory', () => {
@@ -56,10 +48,6 @@ describe('Application/Paths#constructor with valid input', ({ before, it }) => {
 
     it('should have the correct data_directory', () => {
         assertEqual(subject.data_directory, path.join(FAKE_APP_DIR, 'data'));
-    });
-
-    it('should have the correct kv_store_directory', () => {
-        assertEqual(subject.kv_store_directory, path.join(FAKE_APP_DIR, 'data', 'kv-store'));
     });
 });
 

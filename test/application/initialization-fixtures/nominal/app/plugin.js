@@ -1,11 +1,19 @@
 class Database {
     async initialize() {
+        Object.defineProperty(this, 'initialized', {
+            enumerable: true,
+            value: true,
+        });
         return this;
     }
 }
 
 class Hyperview {
     async initialize() {
+        Object.defineProperty(this, 'initialized', {
+            enumerable: true,
+            value: true,
+        });
         return this;
     }
 }
