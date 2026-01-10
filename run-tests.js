@@ -31,6 +31,11 @@ async function main() {
         allowNegative: true,
     });
 
+    let testFilepath = null;
+    if (args.positionals[0]) {
+        testFilepath = path.resolve(args.positionals[0]);
+    }
+
     let maxStackLength = MAX_STACK_LENGTH;
     if (args.values.stack) {
         const i = parseInt(args.values.stack, 10);
@@ -45,7 +50,13 @@ async function main() {
     let testCount = 0;
     let errorCount = 0;
 
-    await loadTestFilesFromDirectory(directory, pattern);
+    if (testFilepath) {
+        // Load the single test file specified on the CLI.
+        await dynamicallyImportFile({ filepath: testFilepath });
+    } else {
+        // Load all test files from the full, nested test directory.
+        await loadTestFilesFromDirectory(directory, pattern);
+    }
 
     const emitter = runTests();
 
