@@ -7,6 +7,8 @@ import { assert, assertEqual, assertArray, isPlainObject } from 'kixx-assert';
 import PageStore from '../../lib/hyperview/page-store.js';
 
 
+// Get the directory containing this test file - used as the base directory
+// for PageStore in all tests. This pattern works for both CommonJS and ES modules.
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 
@@ -56,6 +58,7 @@ describe('PageStore#doesPageExist() when stats is null', ({ before, it }) => {
 
     before(async () => {
         const store = new PageStore({ directory, fileSystem });
+        // Trailing slash should be normalized - tests path normalization behavior
         result = await store.doesPageExist('/blog/a-blog-post/');
     });
 
@@ -244,6 +247,8 @@ describe('PageStore#getPageData() when the filepath is not a file', ({ before, i
                 },
             },
             {
+                // Simulates a directory entry that looks like a JSON file but isn't
+                // a regular file (e.g., it's a symlink or other special file type)
                 name: 'page.jsonc',
                 isFile() {
                     return false;
@@ -467,6 +472,8 @@ describe('PageStore#getMarkdownContent() with markdown files', ({ before, it }) 
                 },
             },
         ]),
+        // Use stub with onCall() to return different content for each markdown file
+        // since getMarkdownContent() processes multiple files in sequence
         readUtf8File: sinon.stub()
             .onCall(0).resolves('# Introduction')
             .onCall(1).resolves('# Documentation'),
