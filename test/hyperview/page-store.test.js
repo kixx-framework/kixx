@@ -274,6 +274,49 @@ describe('PageStore#getPageData() when the filepath is not a file', ({ before, i
     });
 });
 
+describe('PageStore#getPageData() when file is deleted or renamed before it is read', ({ before, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.fake.resolves([
+            {
+                name: 'page.html',
+                isFile() {
+                    return true;
+                },
+            },
+            {
+                name: 'page.json',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        // Simulates a race condition where the file was deleted or renamed
+        // between directory listing and reading, causing readJSONFile to return null
+        readJSONFile: sinon.fake.resolves(null),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        result = await store.getPageData('/blog/a-blog-post');
+    });
+
+    it('calls readDirectory()', () => {
+        assertEqual(1, fileSystem.readDirectory.callCount);
+    });
+
+    it('calls readJSONFile()', () => {
+        assertEqual(1, fileSystem.readJSONFile.callCount);
+    });
+
+    it('returns an empty object', () => {
+        assert(isPlainObject(result));
+    });
+});
+
 describe('PageStore#getPageTemplate() with .html file', ({ before, it }) => {
     const directory = THIS_DIR;
 
@@ -442,6 +485,49 @@ describe('PageStore#getPageTemplate() when the template file is not a file', ({ 
     });
 });
 
+describe('PageStore#getPageTemplate() when file is deleted or renamed before it is read', ({ before, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.fake.resolves([
+            {
+                name: 'page.json',
+                isFile() {
+                    return true;
+                },
+            },
+            {
+                name: 'page.html',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        // Simulates a race condition where the file was deleted or renamed
+        // between directory listing and reading, causing readUtf8File to return null
+        readUtf8File: sinon.fake.resolves(null),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        result = await store.getPageTemplate('/blog/a-blog-post');
+    });
+
+    it('calls readDirectory()', () => {
+        assertEqual(1, fileSystem.readDirectory.callCount);
+    });
+
+    it('calls readUtf8File()', () => {
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
 describe('PageStore#getMarkdownContent() with markdown files', ({ before, it }) => {
     const directory = THIS_DIR;
 
@@ -544,5 +630,80 @@ describe('PageStore#getMarkdownContent() with no markdown files', ({ before, it 
     it('returns an empty array', () => {
         assertArray(result);
         assertEqual(0, result.length);
+    });
+});
+
+describe('PageStore#getMarkdownContent() when some files are deleted or renamed before they are read', ({ before, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.fake.resolves([
+            {
+                name: 'page.html',
+                isFile() {
+                    return true;
+                },
+            },
+            {
+                name: 'intro.md',
+                isFile() {
+                    return true;
+                },
+            },
+            {
+                name: 'body.md',
+                isFile() {
+                    return true;
+                },
+            },
+            {
+                name: 'footer.md',
+                isFile() {
+                    return true;
+                },
+            },
+            {
+                name: 'page.json',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        // Simulates a race condition where body.md was deleted or renamed
+        // between directory listing and reading, causing readUtf8File to return null
+        readUtf8File: sinon.stub()
+            .onCall(0).resolves('# Introduction')
+            .onCall(1).resolves(null)
+            .onCall(2).resolves('# Footer'),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        result = await store.getMarkdownContent('/documentation');
+    });
+
+    it('calls readDirectory()', () => {
+        assertEqual(1, fileSystem.readDirectory.callCount);
+    });
+
+    it('calls readUtf8File() for each markdown file', () => {
+        assertEqual(3, fileSystem.readUtf8File.callCount);
+        const filepath1 = path.join(directory, 'documentation', 'intro.md');
+        const filepath2 = path.join(directory, 'documentation', 'body.md');
+        const filepath3 = path.join(directory, 'documentation', 'footer.md');
+        assertEqual(filepath1, fileSystem.readUtf8File.getCall(0).firstArg);
+        assertEqual(filepath2, fileSystem.readUtf8File.getCall(1).firstArg);
+        assertEqual(filepath3, fileSystem.readUtf8File.getCall(2).firstArg);
+    });
+
+    it('returns only successfully read files', () => {
+        assertArray(result);
+        assertEqual(2, result.length);
+        assertEqual('intro.md', result[0].filename);
+        assertEqual('# Introduction', result[0].source);
+        assertEqual('footer.md', result[1].filename);
+        assertEqual('# Footer', result[1].source);
     });
 });
