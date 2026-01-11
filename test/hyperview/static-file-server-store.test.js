@@ -1,0 +1,525 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import sinon from 'sinon';
+import { describe } from 'kixx-test';
+import { assertEqual } from 'kixx-assert';
+import StaticFileServerStore, { File } from '../../lib/hyperview/static-file-server-store.js';
+
+
+// Get the directory containing this test file
+const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+const publicDirectory = path.join(THIS_DIR, 'fake-public');
+
+
+describe('File constructor', ({ it }) => {
+
+    const mockStats = {
+        size: 2048,
+        mtime: new Date('2025-01-15'),
+    };
+
+    const mockFileSystem = {
+        createReadStream: sinon.stub(),
+    };
+
+    const config = {
+        filepath: '/var/www/public/images/logo.png',
+        stats: mockStats,
+        fileSystem: mockFileSystem,
+    };
+
+    const file = new File(config);
+
+    it('sets the filepath property', () => {
+        assertEqual('/var/www/public/images/logo.png', file.filepath);
+    });
+
+    it('sets the filepath property as enumerable', () => {
+        const descriptor = Object.getOwnPropertyDescriptor(file, 'filepath');
+        assertEqual(true, descriptor.enumerable);
+    });
+
+    it('sets the filepath property as non-writable', () => {
+        const descriptor = Object.getOwnPropertyDescriptor(file, 'filepath');
+        assertEqual(false, descriptor.writable);
+        assertEqual(undefined, descriptor.set);
+    });
+});
+
+
+describe('File#sizeBytes getter', ({ it }) => {
+
+    const mockStats = {
+        size: 4096,
+        mtime: new Date('2025-01-15'),
+    };
+
+    const mockFileSystem = {
+        createReadStream: sinon.stub(),
+    };
+
+    const file = new File({
+        filepath: '/var/www/public/data.json',
+        stats: mockStats,
+        fileSystem: mockFileSystem,
+    });
+
+    it('returns the size from the stats object', () => {
+        assertEqual(4096, file.sizeBytes);
+    });
+});
+
+
+describe('File#modifiedDate getter', ({ it }) => {
+
+    const modifiedDate = new Date('2025-01-15T10:30:00Z');
+
+    const mockStats = {
+        size: 1024,
+        mtime: modifiedDate,
+    };
+
+    const mockFileSystem = {
+        createReadStream: sinon.stub(),
+    };
+
+    const file = new File({
+        filepath: '/var/www/public/script.js',
+        stats: mockStats,
+        fileSystem: mockFileSystem,
+    });
+
+    it('returns the mtime from the stats object', () => {
+        assertEqual(modifiedDate, file.modifiedDate);
+    });
+});
+
+
+describe('File#contentType getter with .css extension', ({ it }) => {
+
+    const mockStats = {
+        size: 512,
+        mtime: new Date('2025-01-15'),
+    };
+
+    const mockFileSystem = {
+        createReadStream: sinon.stub(),
+    };
+
+    const file = new File({
+        filepath: '/var/www/public/styles/main.css',
+        stats: mockStats,
+        fileSystem: mockFileSystem,
+    });
+
+    it('returns "text/css"', () => {
+        assertEqual('text/css', file.contentType);
+    });
+});
+
+
+describe('File#contentType getter with .js extension', ({ it }) => {
+
+    const mockStats = {
+        size: 512,
+        mtime: new Date('2025-01-15'),
+    };
+
+    const mockFileSystem = {
+        createReadStream: sinon.stub(),
+    };
+
+    const file = new File({
+        filepath: '/var/www/public/app.js',
+        stats: mockStats,
+        fileSystem: mockFileSystem,
+    });
+
+    it('returns "text/javascript"', () => {
+        assertEqual('text/javascript', file.contentType);
+    });
+});
+
+
+describe('File#contentType getter with .png extension', ({ it }) => {
+
+    const mockStats = {
+        size: 512,
+        mtime: new Date('2025-01-15'),
+    };
+
+    const mockFileSystem = {
+        createReadStream: sinon.stub(),
+    };
+
+    const file = new File({
+        filepath: '/var/www/public/images/photo.png',
+        stats: mockStats,
+        fileSystem: mockFileSystem,
+    });
+
+    it('returns "image/png"', () => {
+        assertEqual('image/png', file.contentType);
+    });
+});
+
+
+describe('File#createReadStream()', ({ before, after, it }) => {
+
+    const mockReadStream = { pipe: sinon.stub() };
+
+    const mockStats = {
+        size: 1024,
+        mtime: new Date('2025-01-15'),
+    };
+
+    const mockFileSystem = {
+        createReadStream: sinon.stub().returns(mockReadStream),
+    };
+
+    let file;
+    let result;
+
+    before(() => {
+        file = new File({
+            filepath: '/var/www/public/document.pdf',
+            stats: mockStats,
+            fileSystem: mockFileSystem,
+        });
+
+        result = file.createReadStream();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls fileSystem.createReadStream() with the filepath', () => {
+        assertEqual(1, mockFileSystem.createReadStream.callCount);
+        assertEqual('/var/www/public/document.pdf', mockFileSystem.createReadStream.firstCall.firstArg);
+    });
+
+    it('returns the read stream from fileSystem.createReadStream()', () => {
+        assertEqual(mockReadStream, result);
+    });
+});
+
+
+describe('File#computeHash()', ({ before, after, it }) => {
+
+    const mockStats = {
+        size: 2048,
+        mtime: new Date('2025-01-15'),
+    };
+
+    let mockFileSystem;
+    let file;
+    let result;
+
+    before(async () => {
+        // Create a readable stream with known content for hashing
+        const { Readable } = await import('node:stream');
+        const testStream = Readable.from([ 'test content' ]);
+
+        mockFileSystem = {
+            createReadStream: sinon.stub().returns(testStream),
+        };
+
+        file = new File({
+            filepath: '/var/www/public/bundle.js',
+            stats: mockStats,
+            fileSystem: mockFileSystem,
+        });
+
+        result = await file.computeHash();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls fileSystem.createReadStream() with the filepath', () => {
+        assertEqual(1, mockFileSystem.createReadStream.callCount);
+        assertEqual('/var/www/public/bundle.js', mockFileSystem.createReadStream.firstCall.firstArg);
+    });
+
+    it('returns the MD5 hash as a 32-character hexadecimal string', () => {
+        // MD5 hash of "test content"
+        assertEqual('9473fdd0d880a43c21b7778d34872157', result);
+    });
+});
+
+
+describe('StaticFileServerStore#getFile() with a valid file in public directory', ({ before, after, it }) => {
+
+    const mockStats = {
+        size: 1024,
+        mtime: new Date('2025-01-01'),
+        isFile: sinon.stub().returns(true),
+    };
+
+    const fileSystem = {
+        getFileStats: sinon.stub().resolves(mockStats),
+        createReadStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.getFile('css/style.css');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls getFileStats() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.getFileStats.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
+        assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
+    });
+
+    it('calls isFile() on the stats object', () => {
+        assertEqual(1, mockStats.isFile.callCount);
+    });
+
+    it('returns a File instance with the filepath property set to the resolvedFilepath', () => {
+        const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
+        assertEqual(expectedPath, result.filepath);
+    });
+});
+
+
+describe('StaticFileServerStore#getFile() with a nested subdirectory path', ({ before, after, it }) => {
+
+    const mockStats = {
+        size: 2048,
+        mtime: new Date('2025-01-02'),
+        isFile: sinon.stub().returns(true),
+    };
+
+    const fileSystem = {
+        getFileStats: sinon.stub().resolves(mockStats),
+        createReadStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.getFile('images/icons/logo.png');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls getFileStats() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.getFileStats.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
+        assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
+    });
+
+    it('returns a File instance', () => {
+        const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
+        assertEqual(expectedPath, result.filepath);
+        assertEqual(2048, result.sizeBytes);
+    });
+});
+
+
+describe('StaticFileServerStore#getFile() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    const fileSystem = {
+        getFileStats: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        // Attempt to access parent directory
+        result = await store.getFile('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call getFileStats()', () => {
+        assertEqual(0, fileSystem.getFileStats.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('StaticFileServerStore#getFile() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    const fileSystem = {
+        getFileStats: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        // Attempt to traverse with nested path
+        result = await store.getFile('css/../../outside.txt');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call getFileStats()', () => {
+        assertEqual(0, fileSystem.getFileStats.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('StaticFileServerStore#getFile() when the file is a directory', ({ before, after, it }) => {
+
+    const mockStats = {
+        isFile: sinon.stub().returns(false),
+        isDirectory: sinon.stub().returns(true),
+    };
+
+    const fileSystem = {
+        getFileStats: sinon.stub().resolves(mockStats),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.getFile('css');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls getFileStats() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.getFileStats.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'css'));
+        assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
+    });
+
+    it('calls isFile() on the stats object', () => {
+        assertEqual(1, mockStats.isFile.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('StaticFileServerStore#getFile() when the file does not exist', ({ before, after, it }) => {
+
+    const fileSystem = {
+        getFileStats: sinon.stub().resolves(null),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.getFile('nonexistent.css');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls getFileStats() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.getFileStats.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'nonexistent.css'));
+        assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('StaticFileServerStore#getFile() with pathname starting with slash', ({ before, after, it }) => {
+
+    const mockStats = {
+        size: 512,
+        mtime: new Date('2025-01-03'),
+        isFile: sinon.stub().returns(true),
+    };
+
+    const fileSystem = {
+        getFileStats: sinon.stub().resolves(mockStats),
+        createReadStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.getFile('/js/app.js');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls getFileStats() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.getFileStats.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
+        assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
+    });
+
+    it('returns a File instance', () => {
+        const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
+        assertEqual(expectedPath, result.filepath);
+    });
+});
