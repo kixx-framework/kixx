@@ -98,8 +98,14 @@ Use framework error classes from `lib/errors/`:
 
 See `lib/errors/mod.js` and the error class definitions in `lib/errors/lib/**` for more error classes and documentation.
 
-## Testing Guidelines
+### Inline code comments
 
+See `docs/comment-guidelines.md`for comprehensive code commenting guidance.
+
+### JSDoc code documentation
+See `docs/jsdoc-guidelines.md` for comprehensive documentation guidance.
+
+## Testing Guidelines
 See `docs/unit-testing-guidelines.md` for comprehensive testing documentation.
 
 **Key Points:**
