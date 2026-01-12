@@ -34,11 +34,15 @@ describe('binary-search isGreaterThan', ({ it }) => {
         assertEqual(false, isGreaterThan('hello', 'hello'), 'hello should not be greater than hello');
     });
 
+    // Important: String comparison is lexical, not numeric
+    // This ensures consistent sorting behavior regardless of key format
     it('handles numeric strings with lexical comparison', () => {
         assertEqual(false, isGreaterThan('10', '2'), '10 should not be greater than 2 (lexical)');
         assertEqual(true, isGreaterThan('2', '10'), '2 should be greater than 10 (lexical)');
     });
 
+    // Verifies locale-aware comparison handles international characters correctly
+    // Critical for applications with non-ASCII keys
     it('handles international characters with locale-aware comparison', () => {
         assertEqual(true, isGreaterThan('ñ', 'n'), 'ñ should be greater than n');
         assertEqual(true, isGreaterThan('ö', 'o'), 'ö should be greater than o');
@@ -325,6 +329,8 @@ describe('binary-search sortIndexListDescending', ({ it }) => {
 });
 
 describe('binary-search findLeftmostPositionAscending', ({ it }) => {
+    // Verifies that leftmost position correctly identifies where to insert
+    // elements, including exact matches and elements between existing values
     it('finds leftmost insertion point for target in ascending sorted array', () => {
         const sortedList = [
             { key: '1' },
@@ -356,13 +362,15 @@ describe('binary-search findLeftmostPositionAscending', ({ it }) => {
         assertEqual(11, findLeftmostPositionAscending(sortedList, 'Zebra'), 'target Zebra should insert at position 11');
         assertEqual(12, findLeftmostPositionAscending(sortedList, OMEGA), 'target OMEGA should insert at position 12');
 
-        // Test insertion between existing elements
+        // Test insertion between existing elements - critical for range queries
+        // where startKey might not exist in the list
         assertEqual(0, findLeftmostPositionAscending(sortedList, '0'), 'target 0 should insert at position 0');
         assertEqual(0, findLeftmostPositionAscending(sortedList, '~'), 'target ~ should insert at position 0');
         assertEqual(2, findLeftmostPositionAscending(sortedList, '11'), 'target 11 should insert at position 2');
         assertEqual(4, findLeftmostPositionAscending(sortedList, 'A'), 'target A should insert at position 4');
     });
 
+    // Edge case: empty list should always return 0 (insert at beginning)
     it('handles empty arrays', () => {
         const sortedList = [];
 
@@ -370,6 +378,7 @@ describe('binary-search findLeftmostPositionAscending', ({ it }) => {
         assertEqual(0, findLeftmostPositionAscending(sortedList, 'z'), 'target should insert at position 0 in empty array');
     });
 
+    // Edge case: single element - verify correct behavior at boundaries
     it('handles single item arrays', () => {
         const sortedList = [{ key: 'm' }];
 
@@ -378,6 +387,8 @@ describe('binary-search findLeftmostPositionAscending', ({ it }) => {
         assertEqual(1, findLeftmostPositionAscending(sortedList, 'z'), 'target z should insert at position 1');
     });
 
+    // Critical: leftmost position ensures we include all duplicates in range queries
+    // When querying for 'b', we want position 1 (not 2 or 3) to include all 'b' elements
     it('handles duplicate keys correctly', () => {
         const sortedList = [
             { key: 'a' },
@@ -395,6 +406,8 @@ describe('binary-search findLeftmostPositionAscending', ({ it }) => {
 });
 
 describe('binary-search findRightmostPositionAscending', ({ it }) => {
+    // Rightmost position returns the first index AFTER all matching elements
+    // Used as exclusive end index for slice() to create inclusive ranges
     it('finds rightmost insertion point for target in ascending sorted array', () => {
         const sortedList = [
             { key: '1' },
@@ -448,6 +461,8 @@ describe('binary-search findRightmostPositionAscending', ({ it }) => {
         assertEqual(1, findRightmostPositionAscending(sortedList, 'z'), 'target z should insert at position 1');
     });
 
+    // Critical: rightmost position ensures slice() includes all duplicates
+    // For [a, b, b, b, c], querying 'b' gives rightmost=4, so slice(1, 4) = [b, b, b] ✓
     it('handles duplicate keys correctly', () => {
         const sortedList = [
             { key: 'a' },
@@ -623,6 +638,8 @@ describe('binary-search, getAscendingIndexRange', ({ it }) => {
 
     items.sort(sortIndexListAscending);
 
+    // Verifies that ALPHA/OMEGA sentinel values work for full-range queries
+    // This is the common pattern for "get all items" queries
     it('fetches every item in the list with ALPHA, OMEGA', () => {
         const result = getAscendingIndexRange(items, ALPHA, OMEGA);
         assertEqual(items.length, result.length);
@@ -630,16 +647,20 @@ describe('binary-search, getAscendingIndexRange', ({ it }) => {
         assertEqual('Zebra', items[12].key);
     });
 
+    // Verifies inclusive start boundary - first item in range should match startKey
     it('fetches the first item in the range inclusively', () => {
         const result = getAscendingIndexRange(items, 'm', OMEGA);
         assertEqual('m', result[0].key);
     });
 
+    // Verifies inclusive end boundary - last item in range should match endKey
     it('fetches the last item in the range inclusively', () => {
         const result = getAscendingIndexRange(items, ALPHA, 'm');
         assertEqual('m', result[result.length - 1].key);
     });
 
+    // Tests prefix-based range queries using ALPHA concatenation
+    // Pattern: `a${ALPHA}` matches all keys starting with 'a'
     it('fetches expected range', () => {
         const result = getAscendingIndexRange(items, `a${ ALPHA }`, 'b');
         assertEqual(2, result.length);
@@ -647,6 +668,7 @@ describe('binary-search, getAscendingIndexRange', ({ it }) => {
         assertEqual('apple', result[1].key);
     });
 
+    // Edge case: single-key range query (startKey == endKey)
     it('can fetch a single key', () => {
         const result = getAscendingIndexRange(items, 'a', 'a');
         assertEqual(1, result.length);
@@ -673,6 +695,8 @@ describe('binary-search, getDescendingIndexRange', ({ it }) => {
 
     items.sort(sortIndexListDescending);
 
+    // Note: In descending order, OMEGA is startKey and ALPHA is endKey
+    // This matches the semantic meaning: start with highest values, end with lowest
     it('fetches every item in the list with ALPHA, OMEGA', () => {
         const result = getDescendingIndexRange(items, OMEGA, ALPHA);
         assertEqual(items.length, result.length);
@@ -680,16 +704,20 @@ describe('binary-search, getDescendingIndexRange', ({ it }) => {
         assertEqual('1', items[12].key);
     });
 
+    // Verifies inclusive start boundary in descending order
     it('fetches the first item in the range inclusively', () => {
         const result = getDescendingIndexRange(items, 'm', ALPHA);
         assertEqual('m', result[0].key);
     });
 
+    // Verifies inclusive end boundary in descending order
     it('fetches the last item in the range inclusively', () => {
         const result = getDescendingIndexRange(items, OMEGA, 'm');
         assertEqual('m', result[result.length - 1].key);
     });
 
+    // Tests prefix-based range queries in descending order
+    // Pattern: `a${ALPHA}` matches all keys starting with 'a' (lower bound)
     it('fetches expected range', () => {
         const result = getDescendingIndexRange(items, 'b', `a${ ALPHA }`);
         assertEqual(2, result.length);
@@ -697,6 +725,7 @@ describe('binary-search, getDescendingIndexRange', ({ it }) => {
         assertEqual('a', result[1].key);
     });
 
+    // Edge case: single-key range query in descending order
     it('can fetch a single key', () => {
         const result = getDescendingIndexRange(items, 'a', 'a');
         assertEqual(1, result.length);
