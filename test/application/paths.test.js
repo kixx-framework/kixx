@@ -1,58 +1,58 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
-import { assert, assertEqual } from 'kixx-assert';
+import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import Paths from '../../lib/application/paths.js';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FAKE_APP_DIR = path.join(THIS_DIR, 'my-projects', 'fake-app');
 
-describe('Application/Paths#constructor with valid input', ({ before, it }) => {
-    let subject;
+describe('Paths#constructor with valid input', ({ before, it }) => {
+    let paths;
 
     before(() => {
-        subject = new Paths(FAKE_APP_DIR);
+        paths = new Paths(FAKE_APP_DIR);
     });
 
-    it('should have the correct app_directory', () => {
-        assertEqual(subject.app_directory, FAKE_APP_DIR);
+    it('sets the correct app_directory', () => {
+        assertEqual(FAKE_APP_DIR, paths.app_directory);
     });
 
-    it('should have the correct routes_directory', () => {
-        assertEqual(subject.routes_directory, path.join(FAKE_APP_DIR, 'routes'));
+    it('sets the correct routes_directory', () => {
+        assertEqual(path.join(FAKE_APP_DIR, 'routes'), paths.routes_directory);
     });
 
-    it('should have the correct public_directory', () => {
-        assertEqual(subject.public_directory, path.join(FAKE_APP_DIR, 'public'));
+    it('sets the correct public_directory', () => {
+        assertEqual(path.join(FAKE_APP_DIR, 'public'), paths.public_directory);
     });
 
-    it('should have the correct pages_directory', () => {
-        assertEqual(subject.pages_directory, path.join(FAKE_APP_DIR, 'pages'));
+    it('sets the correct pages_directory', () => {
+        assertEqual(path.join(FAKE_APP_DIR, 'pages'), paths.pages_directory);
     });
 
-    it('should have the correct templates_directory', () => {
-        assertEqual(subject.templates_directory, path.join(FAKE_APP_DIR, 'templates'));
+    it('sets the correct templates_directory', () => {
+        assertEqual(path.join(FAKE_APP_DIR, 'templates'), paths.templates_directory);
     });
 
-    it('should have the correct app_plugin_directory', () => {
-        assertEqual(subject.app_plugin_directory, path.join(FAKE_APP_DIR, 'app'));
+    it('sets the correct app_plugin_directory', () => {
+        assertEqual(path.join(FAKE_APP_DIR, 'app'), paths.app_plugin_directory);
     });
 
-    it('should have the correct plugins_directory', () => {
-        assertEqual(subject.plugins_directory, path.join(FAKE_APP_DIR, 'plugins'));
+    it('sets the correct plugins_directory', () => {
+        assertEqual(path.join(FAKE_APP_DIR, 'plugins'), paths.plugins_directory);
     });
 
-    it('should have the correct commands_directory', () => {
-        assertEqual(subject.commands_directory, path.join(FAKE_APP_DIR, 'commands'));
+    it('sets the correct commands_directory', () => {
+        assertEqual(path.join(FAKE_APP_DIR, 'commands'), paths.commands_directory);
     });
 
-    it('should have the correct data_directory', () => {
-        assertEqual(subject.data_directory, path.join(FAKE_APP_DIR, 'data'));
+    it('sets the correct data_directory', () => {
+        assertEqual(path.join(FAKE_APP_DIR, 'data'), paths.data_directory);
     });
 });
 
-describe('Application/Paths#constructor with invalid input', ({ it }) => {
-    it('should throw an AssertionError when applicationDirectory is undefined', () => {
+describe('Paths#constructor when applicationDirectory is undefined', ({ it }) => {
+    it('throws an AssertionError', () => {
         let error;
         try {
             new Paths();
@@ -62,9 +62,13 @@ describe('Application/Paths#constructor with invalid input', ({ it }) => {
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches('applicationDirectory must be a non-empty string', error.message);
     });
+});
 
-    it('should throw an AssertionError when applicationDirectory is null', () => {
+
+describe('Paths#constructor when applicationDirectory is null', ({ it }) => {
+    it('throws an AssertionError', () => {
         let error;
         try {
             new Paths(null);
@@ -74,9 +78,13 @@ describe('Application/Paths#constructor with invalid input', ({ it }) => {
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches('applicationDirectory must be a non-empty string', error.message);
     });
+});
 
-    it('should throw an AssertionError when applicationDirectory is an empty string', () => {
+
+describe('Paths#constructor when applicationDirectory is an empty string', ({ it }) => {
+    it('throws an AssertionError', () => {
         let error;
         try {
             new Paths('');
@@ -86,9 +94,13 @@ describe('Application/Paths#constructor with invalid input', ({ it }) => {
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches('applicationDirectory must be a non-empty string', error.message);
     });
+});
 
-    it('should throw an AssertionError when applicationDirectory is a number', () => {
+
+describe('Paths#constructor when applicationDirectory is a number', ({ it }) => {
+    it('throws an AssertionError', () => {
         let error;
         try {
             new Paths(123);
@@ -98,9 +110,13 @@ describe('Application/Paths#constructor with invalid input', ({ it }) => {
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches('applicationDirectory must be a non-empty string', error.message);
     });
+});
 
-    it('should throw an AssertionError when applicationDirectory is an object', () => {
+
+describe('Paths#constructor when applicationDirectory is an object', ({ it }) => {
+    it('throws an AssertionError', () => {
         let error;
         try {
             new Paths({});
@@ -110,9 +126,13 @@ describe('Application/Paths#constructor with invalid input', ({ it }) => {
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches('applicationDirectory must be a non-empty string', error.message);
     });
+});
 
-    it('should throw an AssertionError when applicationDirectory is an array', () => {
+
+describe('Paths#constructor when applicationDirectory is an array', ({ it }) => {
+    it('throws an AssertionError', () => {
         let error;
         try {
             new Paths([]);
@@ -122,9 +142,13 @@ describe('Application/Paths#constructor with invalid input', ({ it }) => {
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches('applicationDirectory must be a non-empty string', error.message);
     });
+});
 
-    it('should throw an AssertionError when applicationDirectory is a boolean', () => {
+
+describe('Paths#constructor when applicationDirectory is a boolean', ({ it }) => {
+    it('throws an AssertionError', () => {
         let error;
         try {
             new Paths(false);
@@ -134,5 +158,6 @@ describe('Application/Paths#constructor with invalid input', ({ it }) => {
         assert(error);
         assertEqual('AssertionError', error.name);
         assertEqual('ASSERTION_ERROR', error.code);
+        assertMatches('applicationDirectory must be a non-empty string', error.message);
     });
 });
