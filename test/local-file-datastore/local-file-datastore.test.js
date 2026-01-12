@@ -481,3 +481,128 @@ describe('LocalFileDatastore#setItem() when the document exists and the updated 
         assertEqual(1, retrieved._rev);
     });
 });
+
+describe('LocalFileDatastore#setItem() when writeDocumentFile throws an error', ({ before, after, it }) => {
+    const document = {
+        type: 'User',
+        id: 'foo999',
+        name: 'Test User',
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        writeDocumentFile: sinon.stub().rejects(new Error('Disk write failed')),
+        readDocumentFile: sinon.stub().resolves(null),
+    };
+
+    const lockingQueue = {
+        getLock: sinon.stub().resolves(true),
+        releaseLock: sinon.stub(),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+        lockingQueue,
+    });
+
+    let error;
+
+    before(async () => {
+        await store.initialize();
+        try {
+            await store.setItem(document);
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws the disk write error', () => {
+        assert(error);
+        assertNotEqual(-1, error.message.indexOf('Unexpected error while writing LocalFileDatastore file'));
+    });
+
+    it('releases the lock even when write fails', () => {
+        assertEqual(1, lockingQueue.releaseLock.callCount);
+        assertEqual('User__foo999', lockingQueue.releaseLock.getCall(0).firstArg);
+    });
+
+    it('does not update the document in memory', async () => {
+        const retrieved = await store.getItem('User', 'foo999');
+        assertEqual(null, retrieved);
+    });
+});
+
+describe('LocalFileDatastore#deleteItem() when removeDocumentFile throws an error', ({ before, after, it }) => {
+    const existingDocument = {
+        type: 'User',
+        id: 'foo888',
+        name: 'Test User',
+        _rev: 0,
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([
+            {
+                name: 'User__foo888.json',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        readDocumentFile: sinon.stub().resolves(existingDocument),
+        removeDocumentFile: sinon.stub().rejects(new Error('Disk delete failed')),
+    };
+
+    const lockingQueue = {
+        getLock: sinon.stub().resolves(true),
+        releaseLock: sinon.stub(),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+        lockingQueue,
+    });
+
+    let error;
+
+    before(async () => {
+        await store.initialize();
+        try {
+            await store.deleteItem('User', 'foo888');
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws the disk delete error', () => {
+        assert(error);
+        assertNotEqual(-1, error.message.indexOf('Unexpected error while removing LocalFileDatastore file'));
+    });
+
+    it('releases the lock even when delete fails', () => {
+        assertEqual(1, lockingQueue.releaseLock.callCount);
+        assertEqual('User__foo888', lockingQueue.releaseLock.getCall(0).firstArg);
+    });
+
+    it('does not remove the document from memory', async () => {
+        const retrieved = await store.getItem('User', 'foo888');
+
+        assert(isPlainObject(retrieved));
+
+        // Document should still exist in memory
+        assertEqual('User', retrieved.type);
+        assertEqual('foo888', retrieved.id);
+        assertEqual('Test User', retrieved.name);
+        assertEqual(0, retrieved._rev);
+    });
+});
