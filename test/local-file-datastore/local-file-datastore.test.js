@@ -537,6 +537,172 @@ describe('LocalFileDatastore#setItem() when writeDocumentFile throws an error', 
     });
 });
 
+describe('LocalFileDatastore#setItem() when the document id contains special characters', ({ before, after, it }) => {
+    const testCases = [
+        {
+            description: 'forward slashes',
+            id: 'user/admin/123',
+            expectedEncoding: 'User__user%2Fadmin%2F123.json',
+        },
+        {
+            description: 'backslashes',
+            id: 'path\\to\\resource',
+            expectedEncoding: 'User__path%5Cto%5Cresource.json',
+        },
+        {
+            description: 'colons',
+            id: 'namespace:resource:id',
+            expectedEncoding: 'User__namespace%3Aresource%3Aid.json',
+        },
+        {
+            description: 'spaces',
+            id: 'first last name',
+            expectedEncoding: 'User__first%20last%20name.json',
+        },
+        {
+            description: 'question marks and asterisks',
+            id: 'query?foo=bar*',
+            expectedEncoding: 'User__query%3Ffoo%3Dbar*.json',
+        },
+        {
+            description: 'angle brackets and pipes',
+            id: 'test<tag>|pipe',
+            expectedEncoding: 'User__test%3Ctag%3E%7Cpipe.json',
+        },
+        {
+            description: 'quotes',
+            id: 'test"double\'single',
+            expectedEncoding: 'User__test%22double\'single.json',
+        },
+        {
+            description: 'unicode emoji',
+            id: 'user-🚀-emoji',
+            expectedEncoding: 'User__user-%F0%9F%9A%80-emoji.json',
+        },
+        {
+            description: 'accented characters',
+            id: 'café-señor-naïve',
+            expectedEncoding: 'User__caf%C3%A9-se%C3%B1or-na%C3%AFve.json',
+        },
+        {
+            description: 'dots and hyphens',
+            id: 'test.example-123',
+            expectedEncoding: 'User__test.example-123.json',
+        },
+    ];
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        writeDocumentFile: sinon.stub().resolves(),
+        readDocumentFile: sinon.stub().resolves(null),
+    };
+
+    const lockingQueue = {
+        getLock: sinon.stub().resolves(true),
+        releaseLock: sinon.stub(),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+        lockingQueue,
+    });
+
+    const results = [];
+
+    before(async () => {
+        await store.initialize();
+
+        for (const testCase of testCases) {
+            const document = {
+                type: 'User',
+                id: testCase.id,
+                name: `Test ${ testCase.description }`,
+            };
+
+            // eslint-disable-next-line no-await-in-loop
+            const result = await store.setItem(document);
+            results.push({ testCase, result });
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('saves all documents with special characters', () => {
+        assertEqual(testCases.length, results.length);
+    });
+
+    it('encodes filenames with forward slashes correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(0).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__user%2Fadmin%2F123.json'));
+    });
+
+    it('encodes filenames with backslashes correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(1).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__path%5Cto%5Cresource.json'));
+    });
+
+    it('encodes filenames with colons correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(2).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__namespace%3Aresource%3Aid.json'));
+    });
+
+    it('encodes filenames with spaces correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(3).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__first%20last%20name.json'));
+    });
+
+    it('encodes filenames with question marks and asterisks correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(4).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__query%3Ffoo%3Dbar*.json'));
+    });
+
+    it('encodes filenames with angle brackets and pipes correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(5).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__test%3Ctag%3E%7Cpipe.json'));
+    });
+
+    it('encodes filenames with quotes correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(6).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__test%22double\'single.json'));
+    });
+
+    it('encodes filenames with unicode emoji correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(7).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__user-%F0%9F%9A%80-emoji.json'));
+    });
+
+    it('encodes filenames with accented characters correctly', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(8).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__caf%C3%A9-se%C3%B1or-na%C3%AFve.json'));
+    });
+
+    it('allows dots and hyphens without encoding', () => {
+        const callArg = fileSystem.writeDocumentFile.getCall(9).firstArg;
+        assertNotEqual(-1, callArg.indexOf('User__test.example-123.json'));
+    });
+
+    it('returns documents with original unencoded IDs', () => {
+        for (let i = 0; i < results.length; i += 1) {
+            const { testCase, result } = results[i];
+            assertEqual(testCase.id, result.id);
+            assertEqual('User', result.type);
+        }
+    });
+
+    it('stores documents in memory with original IDs', async () => {
+        for (const testCase of testCases) {
+            // eslint-disable-next-line no-await-in-loop
+            const retrieved = await store.getItem('User', testCase.id);
+            assert(isPlainObject(retrieved));
+            assertEqual(testCase.id, retrieved.id);
+            assertEqual('User', retrieved.type);
+        }
+    });
+});
+
 describe('LocalFileDatastore#deleteItem() when removeDocumentFile throws an error', ({ before, after, it }) => {
     const existingDocument = {
         type: 'User',
@@ -606,3 +772,150 @@ describe('LocalFileDatastore#deleteItem() when removeDocumentFile throws an erro
         assertEqual(0, retrieved._rev);
     });
 });
+
+describe('LocalFileDatastore#deleteItem() when the document exists', ({ before, after, it }) => {
+    const existingDocument = {
+        type: 'User',
+        id: 'foo777',
+        name: 'Delete Me',
+        _rev: 2,
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([
+            {
+                name: 'User__foo777.json',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        readDocumentFile: sinon.stub().resolves(existingDocument),
+        removeDocumentFile: sinon.stub().resolves(),
+    };
+
+    const lockingQueue = {
+        getLock: sinon.stub().resolves(true),
+        releaseLock: sinon.stub(),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+        lockingQueue,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        result = await store.deleteItem('User', 'foo777');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns an object with type and id', () => {
+        assert(isPlainObject(result));
+        assertEqual('User', result.type);
+        assertEqual('foo777', result.id);
+    });
+
+    it('calls removeDocumentFile with correct filepath', () => {
+        assertEqual(1, fileSystem.removeDocumentFile.callCount);
+        assertNotEqual(-1, fileSystem.removeDocumentFile.getCall(0).firstArg.indexOf('User__foo777.json'));
+    });
+
+    it('acquires and releases the lock', () => {
+        assertEqual(1, lockingQueue.getLock.callCount);
+        assertEqual('User__foo777', lockingQueue.getLock.getCall(0).firstArg);
+
+        assertEqual(1, lockingQueue.releaseLock.callCount);
+        assertEqual('User__foo777', lockingQueue.releaseLock.getCall(0).firstArg);
+    });
+
+    it('calls releaseLock after removeDocumentFile', () => {
+        assert(fileSystem.removeDocumentFile.calledBefore(lockingQueue.releaseLock));
+    });
+
+    it('removes the document from memory', async () => {
+        const retrieved = await store.getItem('User', 'foo777');
+        assertEqual(null, retrieved);
+    });
+});
+
+describe('LocalFileDatastore#deleteItem() when the document does not exist', ({ before, after, it }) => {
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        readDocumentFile: sinon.stub().resolves(null),
+        removeDocumentFile: sinon.stub().resolves(),
+    };
+
+    const lockingQueue = {
+        getLock: sinon.stub().resolves(true),
+        releaseLock: sinon.stub(),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+        lockingQueue,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        result = await store.deleteItem('User', 'nonexistent');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns an object with type and id', () => {
+        assert(isPlainObject(result));
+        assertEqual('User', result.type);
+        assertEqual('nonexistent', result.id);
+    });
+
+    it('calls removeDocumentFile even though document does not exist', () => {
+        assertEqual(1, fileSystem.removeDocumentFile.callCount);
+        assertNotEqual(-1, fileSystem.removeDocumentFile.getCall(0).firstArg.indexOf('User__nonexistent.json'));
+    });
+
+    it('acquires and releases the lock', () => {
+        assertEqual(1, lockingQueue.getLock.callCount);
+        assertEqual('User__nonexistent', lockingQueue.getLock.getCall(0).firstArg);
+
+        assertEqual(1, lockingQueue.releaseLock.callCount);
+        assertEqual('User__nonexistent', lockingQueue.releaseLock.getCall(0).firstArg);
+    });
+
+    it('does not throw an error (idempotent operation)', () => {
+        // The operation succeeds even when document doesn't exist
+        // because removeDocumentFile uses force: true
+        assert(isPlainObject(result));
+    });
+});
+
+// describe('LocalFileDatastore#scanItems()', ({ before, after, it }) => {
+//     before(async () => {
+//     });
+
+//     after(() => {
+//         sinon.restore();
+//     });
+
+//     it('returns the expected page sizes', () => {
+//         assertEqual(3, page1.documents.length);
+//         assertEqual(3, page2.documents.length);
+//         assertEqual(1, page3.documents.length);
+//     });
+
+//     it('returns expected documents', () => {
+//     });
+
+//     it('ends with exclusiveEndIndex set to null');
+// });
