@@ -900,22 +900,101 @@ describe('LocalFileDatastore#deleteItem() when the document does not exist', ({ 
     });
 });
 
-// describe('LocalFileDatastore#scanItems()', ({ before, after, it }) => {
-//     before(async () => {
-//     });
+describe('LocalFileDatastore#scanItems()', ({ before, after, it }) => {
+    // Define the documents array to shuffle the key ordering a bit to
+    // test the sort order capability of scanItems().
+    const documents = [
+        {
+            type: 'Record',
+            id: 'ac-xxx',
+        },
+        {
+            type: 'Record',
+            id: 'ca-xxx',
+        },
+        {
+            type: 'Record',
+            id: 'aa-xxx',
+        },
+        {
+            type: 'Record',
+            id: 'ba-xxx',
+        },
+        {
+            type: 'Record',
+            id: 'ab-xxx',
+        },
+        {
+            type: 'Record',
+            id: 'bc-xxx',
+        },
+        {
+            type: 'Record',
+            id: 'bb-xxx',
+        },
+    ];
 
-//     after(() => {
-//         sinon.restore();
-//     });
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
 
-//     it('returns the expected page sizes', () => {
-//         assertEqual(3, page1.documents.length);
-//         assertEqual(3, page2.documents.length);
-//         assertEqual(1, page3.documents.length);
-//     });
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            // Convert the "Record__ac-foo.json" file name to type and id.
+            const key = path.basename(filepath, '.json');
 
-//     it('returns expected documents', () => {
-//     });
+            const [ type, id ] = key.split('__');
 
-//     it('ends with exclusiveEndIndex set to null');
-// });
+            // Find the document by type and id.
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let page1;
+    let page2;
+    let page3;
+
+    before(async () => {
+        await store.initialize();
+
+        page1 = await store.scanItems('Record', { startKey: 'a', endKey: 'z', limit: 3 });
+        page2 = await store.scanItems('Record', { startKey: 'a', endKey: 'z', limit: 3, inclusiveStartIndex: 3 });
+        page3 = await store.scanItems('Record', { startKey: 'a', endKey: 'z', limit: 3, inclusiveStartIndex: 6 });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns the expected page sizes', () => {
+        assertEqual(3, page1.documents.length);
+        assertEqual(3, page2.documents.length);
+        assertEqual(1, page3.documents.length);
+    });
+
+    it('returns expected documents in ascending order', () => {
+        assertEqual('aa-xxx', page1.documents[0].id);
+        assertEqual('ac-xxx', page1.documents[2].id);
+        assertEqual('ba-xxx', page2.documents[0].id);
+        assertEqual('bc-xxx', page2.documents[2].id);
+        assertEqual('ca-xxx', page3.documents[0].id);
+    });
+
+    it('returns expected exclusiveEndIndex values', () => {
+        assertEqual(3, page1.exclusiveEndIndex);
+        assertEqual(6, page2.exclusiveEndIndex);
+        assertEqual(null, page3.exclusiveEndIndex);
+    });
+});
