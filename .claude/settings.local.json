@@ -4,7 +4,10 @@
       "Bash(ls:*)",
       "Bash(npm run lint)",
       "Bash(npm run lint:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npm test:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npm run unit-test:*)"
     ]
   }
 }
