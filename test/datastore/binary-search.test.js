@@ -14,7 +14,7 @@ import {
     findRightmostPositionDescending,
     getAscendingIndexRange,
     getDescendingIndexRange
-} from '../../lib/datastore/binary-search.js';
+} from '../../lib/local-file-datastore/binary-search.js';
 
 describe('binary-search isGreaterThan', ({ it }) => {
     it('returns true when first string is greater than second string', () => {

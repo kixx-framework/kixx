@@ -7,7 +7,7 @@ import {
 import Context from '../../lib/application/context.js';
 
 describe('Context#constructor with valid input', ({ before, it }) => {
-    let subject;
+    let context;
     let mockRuntime;
     let mockConfig;
     let mockPaths;
@@ -38,7 +38,7 @@ describe('Context#constructor with valid input', ({ before, it }) => {
             hasPermission: sinon.stub().returns(true),
         };
 
-        subject = new Context({
+        context = new Context({
             runtime: mockRuntime,
             config: mockConfig,
             paths: mockPaths,
@@ -47,29 +47,29 @@ describe('Context#constructor with valid input', ({ before, it }) => {
         });
     });
 
-    it('should set the runtime property correctly', () => {
-        assertEqual(mockRuntime, subject.runtime);
+    it('sets the runtime property correctly', () => {
+        assertEqual(mockRuntime, context.runtime);
     });
 
-    it('should set the config property correctly', () => {
-        assertEqual(mockConfig, subject.config);
+    it('sets the config property correctly', () => {
+        assertEqual(mockConfig, context.config);
     });
 
-    it('should set the paths property correctly', () => {
-        assertEqual(mockPaths, subject.paths);
+    it('sets the paths property correctly', () => {
+        assertEqual(mockPaths, context.paths);
     });
 
-    it('should set the logger property correctly', () => {
-        assertEqual(mockLogger, subject.logger);
+    it('sets the logger property correctly', () => {
+        assertEqual(mockLogger, context.logger);
     });
 });
 
 describe('Context#registerService() with valid input', ({ before, it }) => {
-    let subject;
+    let context;
     let testService;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -81,40 +81,40 @@ describe('Context#registerService() with valid input', ({ before, it }) => {
         };
     });
 
-    it('should register a service with a string name', () => {
-        subject.registerService('test-service', testService);
+    it('registers a service with a string name', () => {
+        context.registerService('test-service', testService);
 
-        const retrievedService = subject.getService('test-service');
+        const retrievedService = context.getService('test-service');
         assertEqual(testService, retrievedService);
     });
 
-    it('should register multiple services with different names', () => {
+    it('registers multiple services with different names', () => {
         const service1 = { name: 'Service1' };
         const service2 = { name: 'Service2' };
 
-        subject.registerService('service-1', service1);
-        subject.registerService('service-2', service2);
+        context.registerService('service-1', service1);
+        context.registerService('service-2', service2);
 
-        assertEqual(service1, subject.getService('service-1'));
-        assertEqual(service2, subject.getService('service-2'));
+        assertEqual(service1, context.getService('service-1'));
+        assertEqual(service2, context.getService('service-2'));
     });
 
-    it('should allow overwriting an existing service', () => {
+    it('allows overwriting an existing service', () => {
         const originalService = { name: 'Original' };
         const newService = { name: 'New' };
 
-        subject.registerService('overwrite-test', originalService);
-        subject.registerService('overwrite-test', newService);
+        context.registerService('overwrite-test', originalService);
+        context.registerService('overwrite-test', newService);
 
-        assertEqual(newService, subject.getService('overwrite-test'));
+        assertEqual(newService, context.getService('overwrite-test'));
     });
 });
 
 describe('Context#registerService() with invalid input', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -122,10 +122,10 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
         });
     });
 
-    it('should throw an AssertionError when name is undefined', () => {
+    it('throws an AssertionError when name is undefined', () => {
         let error;
         try {
-            subject.registerService(undefined, {});
+            context.registerService(undefined, {});
         } catch (e) {
             error = e;
         }
@@ -134,10 +134,10 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is null', () => {
+    it('throws an AssertionError when name is null', () => {
         let error;
         try {
-            subject.registerService(null, {});
+            context.registerService(null, {});
         } catch (e) {
             error = e;
         }
@@ -146,10 +146,10 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an empty string', () => {
+    it('throws an AssertionError when name is an empty string', () => {
         let error;
         try {
-            subject.registerService('', {});
+            context.registerService('', {});
         } catch (e) {
             error = e;
         }
@@ -158,10 +158,10 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a number', () => {
+    it('throws an AssertionError when name is a number', () => {
         let error;
         try {
-            subject.registerService(123, {});
+            context.registerService(123, {});
         } catch (e) {
             error = e;
         }
@@ -170,10 +170,10 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an object', () => {
+    it('throws an AssertionError when name is an object', () => {
         let error;
         try {
-            subject.registerService({}, {});
+            context.registerService({}, {});
         } catch (e) {
             error = e;
         }
@@ -182,10 +182,10 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an array', () => {
+    it('throws an AssertionError when name is an array', () => {
         let error;
         try {
-            subject.registerService([], {});
+            context.registerService([], {});
         } catch (e) {
             error = e;
         }
@@ -194,10 +194,10 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a boolean', () => {
+    it('throws an AssertionError when name is a boolean', () => {
         let error;
         try {
-            subject.registerService(false, {});
+            context.registerService(false, {});
         } catch (e) {
             error = e;
         }
@@ -208,11 +208,11 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
 });
 
 describe('Context#getService() when service exists', ({ before, it }) => {
-    let subject;
+    let context;
     let testService;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -222,36 +222,36 @@ describe('Context#getService() when service exists', ({ before, it }) => {
             name: 'TestService',
             doSomething: sinon.stub().returns('test result'),
         };
-        subject.registerService('test-service', testService);
+        context.registerService('test-service', testService);
     });
 
-    it('should return the registered service', () => {
-        const retrievedService = subject.getService('test-service');
+    it('returns the registered service', () => {
+        const retrievedService = context.getService('test-service');
         assertEqual(testService, retrievedService);
     });
 
-    it('should return the same service instance on multiple calls', () => {
-        const firstCall = subject.getService('test-service');
-        const secondCall = subject.getService('test-service');
+    it('returns the same service instance on multiple calls', () => {
+        const firstCall = context.getService('test-service');
+        const secondCall = context.getService('test-service');
         assertEqual(firstCall, secondCall);
     });
 
-    it('should return services with different names', () => {
+    it('returns services with different names', () => {
         const service1 = { name: 'Service1' };
 
-        subject.registerService('service-1', service1);
-        subject.registerService('service-2', service1);
+        context.registerService('service-1', service1);
+        context.registerService('service-2', service1);
 
-        assertEqual(service1, subject.getService('service-1'));
-        assertEqual(service1, subject.getService('service-2'));
+        assertEqual(service1, context.getService('service-1'));
+        assertEqual(service1, context.getService('service-2'));
     });
 });
 
 describe('Context#getService() when service does not exist', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -259,10 +259,10 @@ describe('Context#getService() when service does not exist', ({ before, it }) =>
         });
     });
 
-    it('should throw an Error when service name does not exist', () => {
+    it('throws an Error when service name does not exist', () => {
         let error;
         try {
-            subject.getService('nonexistent-service');
+            context.getService('nonexistent-service');
         } catch (e) {
             error = e;
         }
@@ -273,11 +273,11 @@ describe('Context#getService() when service does not exist', ({ before, it }) =>
 });
 
 describe('Context#registerCollection() with valid input', ({ before, it }) => {
-    let subject;
+    let context;
     let testCollection;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -289,40 +289,40 @@ describe('Context#registerCollection() with valid input', ({ before, it }) => {
         };
     });
 
-    it('should register a collection with a string name', () => {
-        subject.registerCollection('test-collection', testCollection);
+    it('registers a collection with a string name', () => {
+        context.registerCollection('test-collection', testCollection);
 
-        const retrievedCollection = subject.getCollection('test-collection');
+        const retrievedCollection = context.getCollection('test-collection');
         assertEqual(testCollection, retrievedCollection);
     });
 
-    it('should register multiple collections with different names', () => {
+    it('registers multiple collections with different names', () => {
         const collection1 = { name: 'Collection1' };
         const collection2 = { name: 'Collection2' };
 
-        subject.registerCollection('collection-1', collection1);
-        subject.registerCollection('collection-2', collection2);
+        context.registerCollection('collection-1', collection1);
+        context.registerCollection('collection-2', collection2);
 
-        assertEqual(collection1, subject.getCollection('collection-1'));
-        assertEqual(collection2, subject.getCollection('collection-2'));
+        assertEqual(collection1, context.getCollection('collection-1'));
+        assertEqual(collection2, context.getCollection('collection-2'));
     });
 
-    it('should allow overwriting an existing collection', () => {
+    it('allows overwriting an existing collection', () => {
         const originalCollection = { name: 'Original' };
         const newCollection = { name: 'New' };
 
-        subject.registerCollection('overwrite-test', originalCollection);
-        subject.registerCollection('overwrite-test', newCollection);
+        context.registerCollection('overwrite-test', originalCollection);
+        context.registerCollection('overwrite-test', newCollection);
 
-        assertEqual(newCollection, subject.getCollection('overwrite-test'));
+        assertEqual(newCollection, context.getCollection('overwrite-test'));
     });
 });
 
 describe('Context#registerCollection() with invalid input', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -330,10 +330,10 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
         });
     });
 
-    it('should throw an AssertionError when name is undefined', () => {
+    it('throws an AssertionError when name is undefined', () => {
         let error;
         try {
-            subject.registerCollection(undefined, {});
+            context.registerCollection(undefined, {});
         } catch (e) {
             error = e;
         }
@@ -342,10 +342,10 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is null', () => {
+    it('throws an AssertionError when name is null', () => {
         let error;
         try {
-            subject.registerCollection(null, {});
+            context.registerCollection(null, {});
         } catch (e) {
             error = e;
         }
@@ -354,10 +354,10 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an empty string', () => {
+    it('throws an AssertionError when name is an empty string', () => {
         let error;
         try {
-            subject.registerCollection('', {});
+            context.registerCollection('', {});
         } catch (e) {
             error = e;
         }
@@ -366,10 +366,10 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a number', () => {
+    it('throws an AssertionError when name is a number', () => {
         let error;
         try {
-            subject.registerCollection(123, {});
+            context.registerCollection(123, {});
         } catch (e) {
             error = e;
         }
@@ -378,10 +378,10 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an object', () => {
+    it('throws an AssertionError when name is an object', () => {
         let error;
         try {
-            subject.registerCollection({}, {});
+            context.registerCollection({}, {});
         } catch (e) {
             error = e;
         }
@@ -390,10 +390,10 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an array', () => {
+    it('throws an AssertionError when name is an array', () => {
         let error;
         try {
-            subject.registerCollection([], {});
+            context.registerCollection([], {});
         } catch (e) {
             error = e;
         }
@@ -402,10 +402,10 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a boolean', () => {
+    it('throws an AssertionError when name is a boolean', () => {
         let error;
         try {
-            subject.registerCollection(false, {});
+            context.registerCollection(false, {});
         } catch (e) {
             error = e;
         }
@@ -416,11 +416,11 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
 });
 
 describe('Context#getCollection() when collection exists', ({ before, it }) => {
-    let subject;
+    let context;
     let testCollection;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -430,36 +430,36 @@ describe('Context#getCollection() when collection exists', ({ before, it }) => {
             name: 'TestCollection',
             find: sinon.stub().returns([]),
         };
-        subject.registerCollection('test-collection', testCollection);
+        context.registerCollection('test-collection', testCollection);
     });
 
-    it('should return the registered collection', () => {
-        const retrievedCollection = subject.getCollection('test-collection');
+    it('returns the registered collection', () => {
+        const retrievedCollection = context.getCollection('test-collection');
         assertEqual(testCollection, retrievedCollection);
     });
 
-    it('should return the same collection instance on multiple calls', () => {
-        const firstCall = subject.getCollection('test-collection');
-        const secondCall = subject.getCollection('test-collection');
+    it('returns the same collection instance on multiple calls', () => {
+        const firstCall = context.getCollection('test-collection');
+        const secondCall = context.getCollection('test-collection');
         assertEqual(firstCall, secondCall);
     });
 
-    it('should return collections with different names', () => {
+    it('returns collections with different names', () => {
         const collection1 = { name: 'Collection1' };
 
-        subject.registerCollection('collection-1', collection1);
-        subject.registerCollection('collection-2', collection1);
+        context.registerCollection('collection-1', collection1);
+        context.registerCollection('collection-2', collection1);
 
-        assertEqual(collection1, subject.getCollection('collection-1'));
-        assertEqual(collection1, subject.getCollection('collection-2'));
+        assertEqual(collection1, context.getCollection('collection-1'));
+        assertEqual(collection1, context.getCollection('collection-2'));
     });
 });
 
 describe('Context#getCollection() when collection does not exist', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -467,10 +467,10 @@ describe('Context#getCollection() when collection does not exist', ({ before, it
         });
     });
 
-    it('should throw an Error when collection name does not exist', () => {
+    it('throws an Error when collection name does not exist', () => {
         let error;
         try {
-            subject.getCollection('nonexistent-collection');
+            context.getCollection('nonexistent-collection');
         } catch (e) {
             error = e;
         }
@@ -481,11 +481,11 @@ describe('Context#getCollection() when collection does not exist', ({ before, it
 });
 
 describe('Context#registerForm() with valid input', ({ before, it }) => {
-    let subject;
+    let context;
     let testForm;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -498,40 +498,40 @@ describe('Context#registerForm() with valid input', ({ before, it }) => {
         };
     });
 
-    it('should register a form with a string name', () => {
-        subject.registerForm('test-form', testForm);
+    it('registers a form with a string name', () => {
+        context.registerForm('test-form', testForm);
 
-        const retrievedForm = subject.getForm('test-form');
+        const retrievedForm = context.getForm('test-form');
         assertEqual(testForm, retrievedForm);
     });
 
-    it('should register multiple forms with different names', () => {
+    it('registers multiple forms with different names', () => {
         const form1 = { name: 'Form1' };
         const form2 = { name: 'Form2' };
 
-        subject.registerForm('form-1', form1);
-        subject.registerForm('form-2', form2);
+        context.registerForm('form-1', form1);
+        context.registerForm('form-2', form2);
 
-        assertEqual(form1, subject.getForm('form-1'));
-        assertEqual(form2, subject.getForm('form-2'));
+        assertEqual(form1, context.getForm('form-1'));
+        assertEqual(form2, context.getForm('form-2'));
     });
 
-    it('should allow overwriting an existing form', () => {
+    it('allows overwriting an existing form', () => {
         const originalForm = { name: 'Original' };
         const newForm = { name: 'New' };
 
-        subject.registerForm('overwrite-test', originalForm);
-        subject.registerForm('overwrite-test', newForm);
+        context.registerForm('overwrite-test', originalForm);
+        context.registerForm('overwrite-test', newForm);
 
-        assertEqual(newForm, subject.getForm('overwrite-test'));
+        assertEqual(newForm, context.getForm('overwrite-test'));
     });
 });
 
 describe('Context#registerForm() with invalid input', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -539,10 +539,10 @@ describe('Context#registerForm() with invalid input', ({ before, it }) => {
         });
     });
 
-    it('should throw an AssertionError when name is undefined', () => {
+    it('throws an AssertionError when name is undefined', () => {
         let error;
         try {
-            subject.registerForm(undefined, {});
+            context.registerForm(undefined, {});
         } catch (e) {
             error = e;
         }
@@ -551,10 +551,10 @@ describe('Context#registerForm() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is null', () => {
+    it('throws an AssertionError when name is null', () => {
         let error;
         try {
-            subject.registerForm(null, {});
+            context.registerForm(null, {});
         } catch (e) {
             error = e;
         }
@@ -563,10 +563,10 @@ describe('Context#registerForm() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an empty string', () => {
+    it('throws an AssertionError when name is an empty string', () => {
         let error;
         try {
-            subject.registerForm('', {});
+            context.registerForm('', {});
         } catch (e) {
             error = e;
         }
@@ -575,10 +575,10 @@ describe('Context#registerForm() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a number', () => {
+    it('throws an AssertionError when name is a number', () => {
         let error;
         try {
-            subject.registerForm(123, {});
+            context.registerForm(123, {});
         } catch (e) {
             error = e;
         }
@@ -587,10 +587,10 @@ describe('Context#registerForm() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an object', () => {
+    it('throws an AssertionError when name is an object', () => {
         let error;
         try {
-            subject.registerForm({}, {});
+            context.registerForm({}, {});
         } catch (e) {
             error = e;
         }
@@ -599,10 +599,10 @@ describe('Context#registerForm() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an array', () => {
+    it('throws an AssertionError when name is an array', () => {
         let error;
         try {
-            subject.registerForm([], {});
+            context.registerForm([], {});
         } catch (e) {
             error = e;
         }
@@ -611,10 +611,10 @@ describe('Context#registerForm() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a boolean', () => {
+    it('throws an AssertionError when name is a boolean', () => {
         let error;
         try {
-            subject.registerForm(false, {});
+            context.registerForm(false, {});
         } catch (e) {
             error = e;
         }
@@ -625,11 +625,11 @@ describe('Context#registerForm() with invalid input', ({ before, it }) => {
 });
 
 describe('Context#getForm() when form exists', ({ before, it }) => {
-    let subject;
+    let context;
     let testForm;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -640,36 +640,36 @@ describe('Context#getForm() when form exists', ({ before, it }) => {
             validate: sinon.stub().returns(true),
             submit: sinon.stub().returns({}),
         };
-        subject.registerForm('test-form', testForm);
+        context.registerForm('test-form', testForm);
     });
 
-    it('should return the registered form', () => {
-        const retrievedForm = subject.getForm('test-form');
+    it('returns the registered form', () => {
+        const retrievedForm = context.getForm('test-form');
         assertEqual(testForm, retrievedForm);
     });
 
-    it('should return the same form instance on multiple calls', () => {
-        const firstCall = subject.getForm('test-form');
-        const secondCall = subject.getForm('test-form');
+    it('returns the same form instance on multiple calls', () => {
+        const firstCall = context.getForm('test-form');
+        const secondCall = context.getForm('test-form');
         assertEqual(firstCall, secondCall);
     });
 
-    it('should return forms with different names', () => {
+    it('returns forms with different names', () => {
         const form1 = { name: 'Form1' };
 
-        subject.registerForm('form-1', form1);
-        subject.registerForm('form-2', form1);
+        context.registerForm('form-1', form1);
+        context.registerForm('form-2', form1);
 
-        assertEqual(form1, subject.getForm('form-1'));
-        assertEqual(form1, subject.getForm('form-2'));
+        assertEqual(form1, context.getForm('form-1'));
+        assertEqual(form1, context.getForm('form-2'));
     });
 });
 
 describe('Context#getForm() when form does not exist', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -677,10 +677,10 @@ describe('Context#getForm() when form does not exist', ({ before, it }) => {
         });
     });
 
-    it('should throw an Error when form name does not exist', () => {
+    it('throws an Error when form name does not exist', () => {
         let error;
         try {
-            subject.getForm('nonexistent-form');
+            context.getForm('nonexistent-form');
         } catch (e) {
             error = e;
         }
@@ -691,11 +691,11 @@ describe('Context#getForm() when form does not exist', ({ before, it }) => {
 });
 
 describe('Context#registerView() with valid input', ({ before, it }) => {
-    let subject;
+    let context;
     let testView;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -708,40 +708,40 @@ describe('Context#registerView() with valid input', ({ before, it }) => {
         };
     });
 
-    it('should register a view with a string name', () => {
-        subject.registerView('test-view', testView);
+    it('registers a view with a string name', () => {
+        context.registerView('test-view', testView);
 
-        const retrievedView = subject.getView('test-view');
+        const retrievedView = context.getView('test-view');
         assertEqual(testView, retrievedView);
     });
 
-    it('should register multiple views with different names', () => {
+    it('registers multiple views with different names', () => {
         const view1 = { name: 'View1' };
         const view2 = { name: 'View2' };
 
-        subject.registerView('view-1', view1);
-        subject.registerView('view-2', view2);
+        context.registerView('view-1', view1);
+        context.registerView('view-2', view2);
 
-        assertEqual(view1, subject.getView('view-1'));
-        assertEqual(view2, subject.getView('view-2'));
+        assertEqual(view1, context.getView('view-1'));
+        assertEqual(view2, context.getView('view-2'));
     });
 
-    it('should allow overwriting an existing view', () => {
+    it('allows overwriting an existing view', () => {
         const originalView = { name: 'Original' };
         const newView = { name: 'New' };
 
-        subject.registerView('overwrite-test', originalView);
-        subject.registerView('overwrite-test', newView);
+        context.registerView('overwrite-test', originalView);
+        context.registerView('overwrite-test', newView);
 
-        assertEqual(newView, subject.getView('overwrite-test'));
+        assertEqual(newView, context.getView('overwrite-test'));
     });
 });
 
 describe('Context#registerView() with invalid input', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -749,10 +749,10 @@ describe('Context#registerView() with invalid input', ({ before, it }) => {
         });
     });
 
-    it('should throw an AssertionError when name is undefined', () => {
+    it('throws an AssertionError when name is undefined', () => {
         let error;
         try {
-            subject.registerView(undefined, {});
+            context.registerView(undefined, {});
         } catch (e) {
             error = e;
         }
@@ -761,10 +761,10 @@ describe('Context#registerView() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is null', () => {
+    it('throws an AssertionError when name is null', () => {
         let error;
         try {
-            subject.registerView(null, {});
+            context.registerView(null, {});
         } catch (e) {
             error = e;
         }
@@ -773,10 +773,10 @@ describe('Context#registerView() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an empty string', () => {
+    it('throws an AssertionError when name is an empty string', () => {
         let error;
         try {
-            subject.registerView('', {});
+            context.registerView('', {});
         } catch (e) {
             error = e;
         }
@@ -785,10 +785,10 @@ describe('Context#registerView() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a number', () => {
+    it('throws an AssertionError when name is a number', () => {
         let error;
         try {
-            subject.registerView(123, {});
+            context.registerView(123, {});
         } catch (e) {
             error = e;
         }
@@ -797,10 +797,10 @@ describe('Context#registerView() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an object', () => {
+    it('throws an AssertionError when name is an object', () => {
         let error;
         try {
-            subject.registerView({}, {});
+            context.registerView({}, {});
         } catch (e) {
             error = e;
         }
@@ -809,10 +809,10 @@ describe('Context#registerView() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an array', () => {
+    it('throws an AssertionError when name is an array', () => {
         let error;
         try {
-            subject.registerView([], {});
+            context.registerView([], {});
         } catch (e) {
             error = e;
         }
@@ -821,10 +821,10 @@ describe('Context#registerView() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a boolean', () => {
+    it('throws an AssertionError when name is a boolean', () => {
         let error;
         try {
-            subject.registerView(false, {});
+            context.registerView(false, {});
         } catch (e) {
             error = e;
         }
@@ -835,11 +835,11 @@ describe('Context#registerView() with invalid input', ({ before, it }) => {
 });
 
 describe('Context#getView() when view exists', ({ before, it }) => {
-    let subject;
+    let context;
     let testView;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -850,36 +850,36 @@ describe('Context#getView() when view exists', ({ before, it }) => {
             render: sinon.stub().returns('<html></html>'),
             getData: sinon.stub().returns({}),
         };
-        subject.registerView('test-view', testView);
+        context.registerView('test-view', testView);
     });
 
-    it('should return the registered view', () => {
-        const retrievedView = subject.getView('test-view');
+    it('returns the registered view', () => {
+        const retrievedView = context.getView('test-view');
         assertEqual(testView, retrievedView);
     });
 
-    it('should return the same view instance on multiple calls', () => {
-        const firstCall = subject.getView('test-view');
-        const secondCall = subject.getView('test-view');
+    it('returns the same view instance on multiple calls', () => {
+        const firstCall = context.getView('test-view');
+        const secondCall = context.getView('test-view');
         assertEqual(firstCall, secondCall);
     });
 
-    it('should return views with different names', () => {
+    it('returns views with different names', () => {
         const view1 = { name: 'View1' };
 
-        subject.registerView('view-1', view1);
-        subject.registerView('view-2', view1);
+        context.registerView('view-1', view1);
+        context.registerView('view-2', view1);
 
-        assertEqual(view1, subject.getView('view-1'));
-        assertEqual(view1, subject.getView('view-2'));
+        assertEqual(view1, context.getView('view-1'));
+        assertEqual(view1, context.getView('view-2'));
     });
 });
 
 describe('Context#getView() when view does not exist', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -887,10 +887,10 @@ describe('Context#getView() when view does not exist', ({ before, it }) => {
         });
     });
 
-    it('should throw an Error when view name does not exist', () => {
+    it('throws an Error when view name does not exist', () => {
         let error;
         try {
-            subject.getView('nonexistent-view');
+            context.getView('nonexistent-view');
         } catch (e) {
             error = e;
         }
@@ -901,11 +901,11 @@ describe('Context#getView() when view does not exist', ({ before, it }) => {
 });
 
 describe('Context#registerUserRole() with valid input', ({ before, it }) => {
-    let subject;
+    let context;
     let testUserRole;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -917,38 +917,38 @@ describe('Context#registerUserRole() with valid input', ({ before, it }) => {
         };
     });
 
-    it('should register a user role with a string name', () => {
-        subject.registerUserRole('test-user-role', testUserRole);
-        assert(subject.getUserRole('test-user-role'));
+    it('registers a user role with a string name', () => {
+        context.registerUserRole('test-user-role', testUserRole);
+        assert(context.getUserRole('test-user-role'));
     });
 
-    it('should register multiple user roles with different names', () => {
+    it('registers multiple user roles with different names', () => {
         const userRole1 = { name: 'UserRole1', permissions: [ 'read', 'write' ] };
         const userRole2 = { name: 'UserRole2', permissions: [ 'read', 'write' ] };
 
-        subject.registerUserRole('user-role-1', userRole1);
-        subject.registerUserRole('user-role-2', userRole2);
+        context.registerUserRole('user-role-1', userRole1);
+        context.registerUserRole('user-role-2', userRole2);
 
-        assert(subject.getUserRole('user-role-1'));
-        assert(subject.getUserRole('user-role-2'));
+        assert(context.getUserRole('user-role-1'));
+        assert(context.getUserRole('user-role-2'));
     });
 
-    it('should allow overwriting an existing user role', () => {
+    it('allows overwriting an existing user role', () => {
         const originalUserRole = { name: 'Original', permissions: [ 'read', 'write' ] };
         const newUserRole = { name: 'New', permissions: [ 'read', 'write' ] };
 
-        subject.registerUserRole('overwrite-test', originalUserRole);
-        subject.registerUserRole('overwrite-test', newUserRole);
+        context.registerUserRole('overwrite-test', originalUserRole);
+        context.registerUserRole('overwrite-test', newUserRole);
 
-        assert(subject.getUserRole('overwrite-test'));
+        assert(context.getUserRole('overwrite-test'));
     });
 });
 
 describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -956,10 +956,10 @@ describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
         });
     });
 
-    it('should throw an AssertionError when name is undefined', () => {
+    it('throws an AssertionError when name is undefined', () => {
         let error;
         try {
-            subject.registerUserRole(undefined, {});
+            context.registerUserRole(undefined, {});
         } catch (e) {
             error = e;
         }
@@ -968,10 +968,10 @@ describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is null', () => {
+    it('throws an AssertionError when name is null', () => {
         let error;
         try {
-            subject.registerUserRole(null, {});
+            context.registerUserRole(null, {});
         } catch (e) {
             error = e;
         }
@@ -980,10 +980,10 @@ describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an empty string', () => {
+    it('throws an AssertionError when name is an empty string', () => {
         let error;
         try {
-            subject.registerUserRole('', {});
+            context.registerUserRole('', {});
         } catch (e) {
             error = e;
         }
@@ -992,10 +992,10 @@ describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a number', () => {
+    it('throws an AssertionError when name is a number', () => {
         let error;
         try {
-            subject.registerUserRole(123, {});
+            context.registerUserRole(123, {});
         } catch (e) {
             error = e;
         }
@@ -1004,10 +1004,10 @@ describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an object', () => {
+    it('throws an AssertionError when name is an object', () => {
         let error;
         try {
-            subject.registerUserRole({}, {});
+            context.registerUserRole({}, {});
         } catch (e) {
             error = e;
         }
@@ -1016,10 +1016,10 @@ describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is an array', () => {
+    it('throws an AssertionError when name is an array', () => {
         let error;
         try {
-            subject.registerUserRole([], {});
+            context.registerUserRole([], {});
         } catch (e) {
             error = e;
         }
@@ -1028,10 +1028,10 @@ describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
         assertEqual('AssertionError', error.name);
     });
 
-    it('should throw an AssertionError when name is a boolean', () => {
+    it('throws an AssertionError when name is a boolean', () => {
         let error;
         try {
-            subject.registerUserRole(false, {});
+            context.registerUserRole(false, {});
         } catch (e) {
             error = e;
         }
@@ -1042,11 +1042,11 @@ describe('Context#registerUserRole() with invalid input', ({ before, it }) => {
 });
 
 describe('Context#getUserRole() when user role exists', ({ before, it }) => {
-    let subject;
+    let context;
     let testUserRole;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -1056,36 +1056,36 @@ describe('Context#getUserRole() when user role exists', ({ before, it }) => {
             name: 'TestUserRole',
             permissions: [ 'read', 'write' ],
         };
-        subject.registerUserRole('test-user-role', testUserRole);
+        context.registerUserRole('test-user-role', testUserRole);
     });
 
-    it('should return the registered user role', () => {
-        const retrievedUserRole = subject.getUserRole('test-user-role');
+    it('returns the registered user role', () => {
+        const retrievedUserRole = context.getUserRole('test-user-role');
         assert(retrievedUserRole);
     });
 
-    it('should return the same user role instance on multiple calls', () => {
-        const firstCall = subject.getUserRole('test-user-role');
-        const secondCall = subject.getUserRole('test-user-role');
+    it('returns the same user role instance on multiple calls', () => {
+        const firstCall = context.getUserRole('test-user-role');
+        const secondCall = context.getUserRole('test-user-role');
         assertEqual(firstCall, secondCall);
     });
 
-    it('should return user roles with different names', () => {
+    it('returns user roles with different names', () => {
         const userRole1 = { name: 'UserRole1', permissions: [ 'read' ] };
 
-        subject.registerUserRole('user-role-1', userRole1);
-        subject.registerUserRole('user-role-2', userRole1);
+        context.registerUserRole('user-role-1', userRole1);
+        context.registerUserRole('user-role-2', userRole1);
 
-        assert(subject.getUserRole('user-role-1'));
-        assert(subject.getUserRole('user-role-2'));
+        assert(context.getUserRole('user-role-1'));
+        assert(context.getUserRole('user-role-2'));
     });
 });
 
 describe('Context#getUserRole() when user role does not exist', ({ before, it }) => {
-    let subject;
+    let context;
 
     before(() => {
-        subject = new Context({
+        context = new Context({
             runtime: null,
             config: null,
             paths: null,
@@ -1094,7 +1094,7 @@ describe('Context#getUserRole() when user role does not exist', ({ before, it })
     });
 
     it('returns null when user role name does not exist', () => {
-        const result = subject.getUserRole('nonexistent-user-role');
+        const result = context.getUserRole('nonexistent-user-role');
         assertEqual(null, result);
     });
 });
