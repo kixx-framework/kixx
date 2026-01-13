@@ -683,3 +683,707 @@ describe('TemplateStore#deleteBaseTemplate() with templateId starting with slash
         assertEqual('/base.html', result);
     });
 });
+
+
+describe('TemplateStore#getPartialFile() with a valid partialId', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readUtf8File: sinon.stub().resolves('<div>user card partial</div>'),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.getPartialFile('header.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls readUtf8File() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
+    });
+
+    it('returns a SourceFile object with filename and source', () => {
+        assertEqual('header.html', result.filename);
+        assertEqual('<div>user card partial</div>', result.source);
+    });
+});
+
+
+describe('TemplateStore#getPartialFile() with a nested partialId', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readUtf8File: sinon.stub().resolves('<div>user card</div>'),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.getPartialFile('cards/user.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls readUtf8File() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'cards', 'user.html'));
+        assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
+    });
+
+    it('returns a SourceFile object with filename and source', () => {
+        assertEqual('cards/user.html', result.filename);
+        assertEqual('<div>user card</div>', result.source);
+    });
+});
+
+
+describe('TemplateStore#getPartialFile() when the partial does not exist', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readUtf8File: sinon.stub().resolves(null),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.getPartialFile('nonexistent.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls readUtf8File() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'nonexistent.html'));
+        assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#getPartialFile() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readUtf8File: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.getPartialFile('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null for invalid path', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#getPartialFile() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readUtf8File: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.getPartialFile('cards/../../outside.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null for invalid path', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#getPartialFile() with partialId starting with slash', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readUtf8File: sinon.stub().resolves('<div>header</div>'),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.getPartialFile('/header.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls readUtf8File() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
+    });
+
+    it('returns a SourceFile object with filename and source', () => {
+        assertEqual('/header.html', result.filename);
+        assertEqual('<div>header</div>', result.source);
+    });
+});
+
+
+describe('TemplateStore#putPartialFile() with a valid partialId', ({ before, after, it }) => {
+
+    let mockWriteStream;
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    const chunks = [];
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'partial content' ]);
+
+        mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                chunks.push(chunk);
+                callback();
+            },
+        });
+
+        sinon.spy(mockWriteStream, 'write');
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        await store.putPartialFile('header.html', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+
+    it('writes to the write stream', () => {
+        assertEqual(1, mockWriteStream.write.callCount);
+        assertEqual('partial content', chunks.join(''));
+    });
+});
+
+
+describe('TemplateStore#putPartialFile() with a nested partialId', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'user card partial content' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        await store.putPartialFile('cards/user.html', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'cards', 'user.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+
+describe('TemplateStore#putPartialFile() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'malicious content' ]);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.putPartialFile('../../etc/passwd', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#putPartialFile() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'malicious content' ]);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.putPartialFile('cards/../../outside.html', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#putPartialFile() with partialId starting with slash', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'header partial content' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        await store.putPartialFile('/header.html', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+
+describe('TemplateStore#putPartialFile() when pipeline fails', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    const writeError = new Error('Write failed: disk full');
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'partial content' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback(writeError);
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        try {
+            result = await store.putPartialFile('header.html', incomingStream);
+        } catch (error) {
+            result = error;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws the pipeline error', () => {
+        assertEqual('Error', result.name);
+        assertEqual('Write failed: disk full', result.message);
+    });
+});
+
+
+describe('TemplateStore#deletePartialFile() with a valid partialId', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deletePartialFile('header.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the partialId', () => {
+        assertEqual('header.html', result);
+    });
+});
+
+
+describe('TemplateStore#deletePartialFile() with a nested partialId', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deletePartialFile('cards/user.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'cards', 'user.html'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the partialId', () => {
+        assertEqual('cards/user.html', result);
+    });
+});
+
+
+describe('TemplateStore#deletePartialFile() with a non-existent partial (idempotent behavior)', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deletePartialFile('nonexistent.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'nonexistent.html'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the partialId', () => {
+        assertEqual('nonexistent.html', result);
+    });
+});
+
+
+describe('TemplateStore#deletePartialFile() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deletePartialFile('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#deletePartialFile() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deletePartialFile('cards/../../outside.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#deletePartialFile() with partialId starting with slash', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deletePartialFile('/header.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the partialId', () => {
+        assertEqual('/header.html', result);
+    });
+});
