@@ -898,34 +898,13 @@ describe('LocalFileDatastore#scanItems()', ({ before, after, it }) => {
     // Define the documents array to shuffle the key ordering a bit to
     // test the sort order capability of scanItems().
     const documents = [
-        {
-            type: 'Record',
-            id: 'ac-xxx',
-        },
-        {
-            type: 'Record',
-            id: 'ca-xxx',
-        },
-        {
-            type: 'Record',
-            id: 'aa-xxx',
-        },
-        {
-            type: 'Record',
-            id: 'ba-xxx',
-        },
-        {
-            type: 'Record',
-            id: 'ab-xxx',
-        },
-        {
-            type: 'Record',
-            id: 'bc-xxx',
-        },
-        {
-            type: 'Record',
-            id: 'bb-xxx',
-        },
+        { type: 'Record', id: 'ac-xxx' },
+        { type: 'Record', id: 'ca-xxx' },
+        { type: 'Record', id: 'aa-xxx' },
+        { type: 'Record', id: 'ba-xxx' },
+        { type: 'Record', id: 'ab-xxx' },
+        { type: 'Record', id: 'bc-xxx' },
+        { type: 'Record', id: 'bb-xxx' },
     ];
 
     const fileSystem = {
@@ -990,5 +969,429 @@ describe('LocalFileDatastore#scanItems()', ({ before, after, it }) => {
         assertEqual(3, page1.exclusiveEndIndex);
         assertEqual(6, page2.exclusiveEndIndex);
         assertEqual(null, page3.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#scanItems() in descending order', ({ before, after, it }) => {
+    // Define the documents array with same data as ascending test
+    const documents = [
+        { type: 'Record', id: 'cc-xxx' },
+        { type: 'Record', id: 'aa-xxx' },
+        { type: 'Record', id: 'ca-xxx' },
+        { type: 'Record', id: 'ba-xxx' },
+        { type: 'Record', id: 'cb-xxx' },
+        { type: 'Record', id: 'bc-xxx' },
+        { type: 'Record', id: 'bb-xxx' },
+    ];
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            // Convert the "Record__ac-foo.json" file name to type and id.
+            const key = path.basename(filepath, '.json');
+
+            const [ type, id ] = key.split('__');
+
+            // Find the document by type and id.
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let page1;
+    let page2;
+    let page3;
+
+    before(async () => {
+        await store.initialize();
+
+        // In descending mode, startKey is high value, endKey is low value
+        page1 = await store.scanItems('Record', { startKey: 'z', endKey: 'a', descending: true, limit: 3 });
+        page2 = await store.scanItems('Record', { startKey: 'z', endKey: 'a', descending: true, limit: 3, inclusiveStartIndex: 3 });
+        page3 = await store.scanItems('Record', { startKey: 'z', endKey: 'a', descending: true, limit: 3, inclusiveStartIndex: 6 });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns the expected page sizes', () => {
+        assertEqual(3, page1.documents.length);
+        assertEqual(3, page2.documents.length);
+        assertEqual(1, page3.documents.length);
+    });
+
+    it('returns expected documents in descending order', () => {
+        // Should be reverse of ascending: ca, bc, bb, ba, ac, ab, aa
+        assertEqual('cc-xxx', page1.documents[0].id);
+        assertEqual('ca-xxx', page1.documents[2].id);
+
+        assertEqual('bc-xxx', page2.documents[0].id);
+        assertEqual('ba-xxx', page2.documents[2].id);
+
+        assertEqual('aa-xxx', page3.documents[0].id);
+    });
+
+    it('returns expected exclusiveEndIndex values', () => {
+        assertEqual(3, page1.exclusiveEndIndex);
+        assertEqual(6, page2.exclusiveEndIndex);
+        assertEqual(null, page3.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#scanItems() descending with range', ({ before, after, it }) => {
+    // Define same 7 documents: aa, ab, ac, ba, bb, bc, ca
+    const documents = [
+        { type: 'Record', id: 'ac-xxx' },
+        { type: 'Record', id: 'ca-xxx' },
+        { type: 'Record', id: 'aa-xxx' },
+        { type: 'Record', id: 'ba-xxx' },
+        { type: 'Record', id: 'ab-xxx' },
+        { type: 'Record', id: 'bc-xxx' },
+        { type: 'Record', id: 'bb-xxx' },
+    ];
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return { name: `${ type }__${ id }.json`, isFile() {
+                return true;
+            } };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => doc.type === type && doc.id === id);
+        }),
+    };
+
+    const store = new LocalFileDatastore({ directory, fileSystem });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        // startKey: 'c' (high), endKey: 'b' (low) in descending mode
+        // Range is inclusive: items >= 'b' AND <= 'c'
+        // Expected: bc, bb, ba (ca is excluded because 'ca' > 'c')
+        result = await store.scanItems('Record', { startKey: 'c', endKey: 'b', descending: true, limit: 10 });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns items in descending range from startKey to endKey', () => {
+        // Range: items >= 'b' AND <= 'c'
+        // bc-: 'bc' is between 'b' and 'c' ✓
+        // bb-: 'bb' is between 'b' and 'c' ✓
+        // ba-: 'ba' is between 'b' and 'c' ✓
+        assertEqual(3, result.documents.length);
+        assertEqual('bc-xxx', result.documents[0].id);
+        assertEqual('bb-xxx', result.documents[1].id);
+        assertEqual('ba-xxx', result.documents[2].id);
+    });
+
+    it('excludes items outside range', () => {
+        // Items with 'a' prefix (aa, ab, ac) should be excluded (< 'b')
+        assertEqual(false, result.documents.some((doc) => doc.id === 'aa-xxx'));
+        assertEqual(false, result.documents.some((doc) => doc.id === 'ab-xxx'));
+        assertEqual(false, result.documents.some((doc) => doc.id === 'ac-xxx'));
+        // ca- is excluded because 'ca' > 'c' (startKey)
+        assertEqual(false, result.documents.some((doc) => doc.id === 'ca-xxx'));
+    });
+});
+
+describe('LocalFileDatastore#scanItems() with no startKey', ({ before, after, it }) => {
+    const documents = [
+        { type: 'Record', id: 'ac-xxx' },
+        { type: 'Record', id: 'ca-xxx' },
+        { type: 'Record', id: 'aa-xxx' },
+        { type: 'Record', id: 'ba-xxx' },
+        { type: 'Record', id: 'ab-xxx' },
+        { type: 'Record', id: 'bc-xxx' },
+        { type: 'Record', id: 'bb-xxx' },
+    ];
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return { name: `${ type }__${ id }.json`, isFile() {
+                return true;
+            } };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => doc.type === type && doc.id === id);
+        }),
+    };
+
+    const store = new LocalFileDatastore({ directory, fileSystem });
+
+    let ascendingResult;
+    let descendingResult;
+
+    before(async () => {
+        await store.initialize();
+        // No startKey in ascending mode - should use ALPHA
+        ascendingResult = await store.scanItems('Record', { endKey: 'z', descending: false });
+        // No startKey in descending mode - should use OMEGA
+        descendingResult = await store.scanItems('Record', { endKey: 'a', descending: true });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('uses ALPHA as startKey for ascending (includes all from beginning)', () => {
+        assertEqual(7, ascendingResult.documents.length);
+        assertEqual('aa-xxx', ascendingResult.documents[0].id);
+    });
+
+    it('uses OMEGA as startKey for descending (includes all from end)', () => {
+        assertEqual(7, descendingResult.documents.length);
+        assertEqual('ca-xxx', descendingResult.documents[0].id);
+    });
+});
+
+describe('LocalFileDatastore#scanItems() with no endKey', ({ before, after, it }) => {
+    const documents = [
+        { type: 'Record', id: 'ac-xxx' },
+        { type: 'Record', id: 'ca-xxx' },
+        { type: 'Record', id: 'aa-xxx' },
+        { type: 'Record', id: 'ba-xxx' },
+        { type: 'Record', id: 'ab-xxx' },
+        { type: 'Record', id: 'bc-xxx' },
+        { type: 'Record', id: 'bb-xxx' },
+    ];
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return { name: `${ type }__${ id }.json`, isFile() {
+                return true;
+            } };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => doc.type === type && doc.id === id);
+        }),
+    };
+
+    const store = new LocalFileDatastore({ directory, fileSystem });
+
+    let ascendingResult;
+    let descendingResult;
+
+    before(async () => {
+        await store.initialize();
+        // No endKey in ascending mode - should use OMEGA
+        ascendingResult = await store.scanItems('Record', { startKey: 'a', descending: false });
+        // No endKey in descending mode - should use ALPHA
+        descendingResult = await store.scanItems('Record', { startKey: 'z', descending: true });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('uses OMEGA as endKey for ascending (includes all to end)', () => {
+        assertEqual(7, ascendingResult.documents.length);
+        assertEqual('ca-xxx', ascendingResult.documents[6].id);
+    });
+
+    it('uses ALPHA as endKey for descending (includes all to beginning)', () => {
+        assertEqual(7, descendingResult.documents.length);
+        assertEqual('aa-xxx', descendingResult.documents[6].id);
+    });
+});
+
+describe('LocalFileDatastore#scanItems() with empty datastore', ({ before, after, it }) => {
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        readDocumentFile: sinon.stub().resolves(null),
+    };
+
+    const store = new LocalFileDatastore({ directory, fileSystem });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        result = await store.scanItems('Record', { startKey: 'a', endKey: 'z' });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns empty documents array', () => {
+        assertEqual(0, result.documents.length);
+    });
+
+    it('returns null exclusiveEndIndex', () => {
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#scanItems() with no matching documents', ({ before, after, it }) => {
+    const documents = [
+        { type: 'Record', id: 'aa-xxx' },
+        { type: 'Record', id: 'ab-xxx' },
+        { type: 'Record', id: 'ac-xxx' },
+    ];
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return { name: `${ type }__${ id }.json`, isFile() {
+                return true;
+            } };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => doc.type === type && doc.id === id);
+        }),
+    };
+
+    const store = new LocalFileDatastore({ directory, fileSystem });
+
+    before(async () => {
+        await store.initialize();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns empty when startKey > all documents', async () => {
+        // startKey: 'z', endKey: 'zz' - no documents match (all start with 'a')
+        const result = await store.scanItems('Record', { startKey: 'z', endKey: 'zz' });
+        assertEqual(0, result.documents.length);
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+
+    it('returns empty when endKey < all documents', async () => {
+        // startKey: '0', endKey: '1' - no documents match (all start with letters)
+        const result = await store.scanItems('Record', { startKey: '0', endKey: '1' });
+        assertEqual(0, result.documents.length);
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#scanItems() with inclusiveStartIndex beyond data', ({ before, after, it }) => {
+    const documents = [
+        { type: 'Record', id: 'aa-xxx' },
+        { type: 'Record', id: 'ab-xxx' },
+        { type: 'Record', id: 'ac-xxx' },
+    ];
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return { name: `${ type }__${ id }.json`, isFile() {
+                return true;
+            } };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => doc.type === type && doc.id === id);
+        }),
+    };
+
+    const store = new LocalFileDatastore({ directory, fileSystem });
+
+    before(async () => {
+        await store.initialize();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns empty when inclusiveStartIndex equals total count', async () => {
+        const result = await store.scanItems('Record', {
+            startKey: 'a',
+            endKey: 'z',
+            inclusiveStartIndex: 3,
+            limit: 3,
+        });
+
+        assertEqual(0, result.documents.length);
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+
+    it('returns empty when inclusiveStartIndex exceeds total count', async () => {
+        const result = await store.scanItems('Record', {
+            startKey: 'a',
+            endKey: 'z',
+            inclusiveStartIndex: 100,
+            limit: 3,
+        });
+
+        assertEqual(0, result.documents.length);
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#scanItems() with limit larger than data', ({ before, after, it }) => {
+    const documents = [
+        { type: 'Record', id: 'aa-xxx' },
+        { type: 'Record', id: 'ab-xxx' },
+        { type: 'Record', id: 'ac-xxx' },
+    ];
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return { name: `${ type }__${ id }.json`, isFile() {
+                return true;
+            } };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => doc.type === type && doc.id === id);
+        }),
+    };
+
+    const store = new LocalFileDatastore({ directory, fileSystem });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        // The startKey will default to ALPHA and endKey will default to OMEGA
+        result = await store.scanItems('Record', { limit: 100 });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns all available documents', () => {
+        assertEqual(3, result.documents.length);
+    });
+
+    it('returns null exclusiveEndIndex (no more pages)', () => {
+        assertEqual(null, result.exclusiveEndIndex);
     });
 });
