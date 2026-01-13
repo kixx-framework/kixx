@@ -1277,3 +1277,314 @@ describe('PageStore#putPageData() when pipeline fails', ({ before, after, it }) 
         assertEqual('Write failed: disk full', result.message);
     });
 });
+
+describe('PageStore#putPageTemplate() with a valid pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let mockWriteStream;
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    const chunks = [];
+
+    before(async () => {
+        // Create a readable stream with test data that ends immediately
+        incomingStream = Readable.from([ '<html><body>test</body></html>' ]);
+
+        // Create a writable stream that collects data
+        mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                chunks.push(chunk);
+                callback();
+            },
+        });
+
+        sinon.spy(mockWriteStream, 'write');
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        await store.putPageTemplate('/blog/a-blog-post', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls readDirectory() to check for existing template files', () => {
+        const dirpath = path.resolve(path.join(directory, 'blog', 'a-blog-post'));
+        assertEqual(1, fileSystem.readDirectory.callCount);
+        assertEqual(dirpath, fileSystem.readDirectory.firstCall.firstArg);
+    });
+
+    it('calls createWriteStream() with page.html (default when no file exists)', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+
+    it('writes to the write stream', () => {
+        assertEqual(1, mockWriteStream.write.callCount);
+        assertEqual('<html><body>test</body></html>', chunks.join(''));
+    });
+});
+
+describe('PageStore#putPageTemplate() with existing page.html file', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([
+            {
+                name: 'page.html',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        incomingStream = Readable.from([ '<html><body>content</body></html>' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        await store.putPageTemplate('/blog/a-blog-post', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with page.html (existing file)', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+describe('PageStore#putPageTemplate() with existing page.xml file', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([
+            {
+                name: 'page.xml',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        incomingStream = Readable.from([ '<xml><body>content</body></xml>' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        await store.putPageTemplate('/sitemap', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with page.xml (existing file)', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(directory, 'sitemap', 'page.xml'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+describe('PageStore#putPageTemplate() with a nested pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        incomingStream = Readable.from([ '<html><body>nested</body></html>' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        await store.putPageTemplate('/documentation/api/reference', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(directory, 'documentation', 'api', 'reference', 'page.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+describe('PageStore#putPageTemplate() with path traversal attempt using ".."', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '<html><body>malicious</body></html>' ]);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putPageTemplate('../../etc/passwd', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putPageTemplate() with path traversal using nested ".." segments', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '<html><body>malicious</body></html>' ]);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putPageTemplate('blog/../../outside', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putPageTemplate() when pipeline fails', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        createWriteStream: sinon.stub(),
+    };
+
+    const writeError = new Error('Write failed: disk full');
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '<html><body>content</body></html>' ]);
+
+        // Create a writable stream that errors on write
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback(writeError);
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        try {
+            result = await store.putPageTemplate('/blog/a-blog-post', incomingStream);
+        } catch (error) {
+            result = error;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws the pipeline error', () => {
+        assertEqual('Error', result.name);
+        assertEqual('Write failed: disk full', result.message);
+    });
+});
