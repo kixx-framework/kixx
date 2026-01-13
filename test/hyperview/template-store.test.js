@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { Readable, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import sinon from 'sinon';
 import { describe } from 'kixx-test';
@@ -207,8 +208,6 @@ describe('TemplateStore#putBaseTemplate() with a valid templateId', ({ before, a
     const chunks = [];
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         // Create a readable stream with test data that ends immediately
         incomingStream = Readable.from([ 'template content' ]);
 
@@ -262,8 +261,6 @@ describe('TemplateStore#putBaseTemplate() with a nested templateId', ({ before, 
     let store;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'marketing template content' ]);
 
         const mockWriteStream = new Writable({
@@ -308,8 +305,6 @@ describe('TemplateStore#putBaseTemplate() with path traversal attempt using ".."
     let result;
 
     before(async () => {
-        const { Readable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'malicious content' ]);
 
         store = new TemplateStore({
@@ -348,8 +343,6 @@ describe('TemplateStore#putBaseTemplate() with path traversal using nested ".." 
     let result;
 
     before(async () => {
-        const { Readable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'malicious content' ]);
 
         store = new TemplateStore({
@@ -387,8 +380,6 @@ describe('TemplateStore#putBaseTemplate() with templateId starting with slash', 
     let store;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'base template content' ]);
 
         const mockWriteStream = new Writable({
@@ -435,8 +426,6 @@ describe('TemplateStore#putBaseTemplate() when pipeline fails', ({ before, after
     let result;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'template content' ]);
 
         // Create a writable stream that errors on write
@@ -914,8 +903,6 @@ describe('TemplateStore#putPartialFile() with a valid partialId', ({ before, aft
     const chunks = [];
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'partial content' ]);
 
         mockWriteStream = new Writable({
@@ -967,8 +954,6 @@ describe('TemplateStore#putPartialFile() with a nested partialId', ({ before, af
     let store;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'user card partial content' ]);
 
         const mockWriteStream = new Writable({
@@ -1013,8 +998,6 @@ describe('TemplateStore#putPartialFile() with path traversal attempt using ".."'
     let result;
 
     before(async () => {
-        const { Readable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'malicious content' ]);
 
         store = new TemplateStore({
@@ -1053,8 +1036,6 @@ describe('TemplateStore#putPartialFile() with path traversal using nested ".." s
     let result;
 
     before(async () => {
-        const { Readable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'malicious content' ]);
 
         store = new TemplateStore({
@@ -1092,8 +1073,6 @@ describe('TemplateStore#putPartialFile() with partialId starting with slash', ({
     let store;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'header partial content' ]);
 
         const mockWriteStream = new Writable({
@@ -1140,8 +1119,6 @@ describe('TemplateStore#putPartialFile() when pipeline fails', ({ before, after,
     let result;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'partial content' ]);
 
         const mockWriteStream = new Writable({
