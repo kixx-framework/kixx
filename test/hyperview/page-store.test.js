@@ -707,3 +707,261 @@ describe('PageStore#getMarkdownContent() when some files are deleted or renamed 
         assertEqual('# Footer', result[1].source);
     });
 });
+
+describe('PageStore#doesPageExist() with path traversal attempt using ".."', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        getFileStats: sinon.stub(),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        // Attempt to access parent directory
+        result = await store.doesPageExist('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call getFileStats()', () => {
+        assertEqual(0, fileSystem.getFileStats.callCount);
+    });
+
+    it('returns false', () => {
+        assertEqual(false, result);
+    });
+});
+
+describe('PageStore#doesPageExist() with path traversal using nested ".." segments', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        getFileStats: sinon.stub(),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        // Attempt to traverse with nested path
+        result = await store.doesPageExist('blog/../../outside');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call getFileStats()', () => {
+        assertEqual(0, fileSystem.getFileStats.callCount);
+    });
+
+    it('returns false', () => {
+        assertEqual(false, result);
+    });
+});
+
+describe('PageStore#getPageData() with path traversal attempt using ".."', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        readJSONFile: sinon.stub(),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        // Attempt to access parent directory
+        result = await store.getPageData('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call readJSONFile()', () => {
+        assertEqual(0, fileSystem.readJSONFile.callCount);
+    });
+
+    it('returns an empty object', () => {
+        assert(isPlainObject(result));
+        assertEqual(0, Object.keys(result).length);
+    });
+});
+
+describe('PageStore#getPageData() with path traversal using nested ".." segments', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        readJSONFile: sinon.stub(),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        // Attempt to traverse with nested path
+        result = await store.getPageData('blog/../../outside');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call readJSONFile()', () => {
+        assertEqual(0, fileSystem.readJSONFile.callCount);
+    });
+
+    it('returns an empty object', () => {
+        assert(isPlainObject(result));
+        assertEqual(0, Object.keys(result).length);
+    });
+});
+
+describe('PageStore#getPageTemplate() with path traversal attempt using ".."', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        readUtf8File: sinon.stub(),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        // Attempt to access parent directory
+        result = await store.getPageTemplate('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#getPageTemplate() with path traversal using nested ".." segments', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        readUtf8File: sinon.stub(),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        // Attempt to traverse with nested path
+        result = await store.getPageTemplate('blog/../../outside');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#getMarkdownContent() with path traversal attempt using ".."', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        readUtf8File: sinon.stub(),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        // Attempt to access parent directory
+        result = await store.getMarkdownContent('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns an empty array', () => {
+        assertArray(result);
+        assertEqual(0, result.length);
+    });
+});
+
+describe('PageStore#getMarkdownContent() with path traversal using nested ".." segments', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        readUtf8File: sinon.stub(),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        // Attempt to traverse with nested path
+        result = await store.getMarkdownContent('blog/../../outside');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns an empty array', () => {
+        assertArray(result);
+        assertEqual(0, result.length);
+    });
+});
