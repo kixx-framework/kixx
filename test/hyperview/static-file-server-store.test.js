@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { Readable, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import sinon from 'sinon';
 import { describe } from 'kixx-test';
@@ -219,7 +220,6 @@ describe('File#computeHash()', ({ before, after, it }) => {
 
     before(async () => {
         // Create a readable stream with known content for hashing
-        const { Readable } = await import('node:stream');
         const testStream = Readable.from([ 'test content' ]);
 
         mockFileSystem = {
@@ -539,8 +539,6 @@ describe('StaticFileServerStore#putFile() with a valid file pathname', ({ before
     const chunks = [];
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         // Create a readable stream with test data that ends immediately
         incomingStream = Readable.from([ 'test file content' ]);
 
@@ -592,8 +590,6 @@ describe('StaticFileServerStore#putFile() with a nested subdirectory path', ({ b
     let store;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'image data' ]);
 
         const mockWriteStream = new Writable({
@@ -636,8 +632,6 @@ describe('StaticFileServerStore#putFile() with path traversal attempt using ".."
     let result;
 
     before(async () => {
-        const { Readable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'malicious content' ]);
 
         store = new StaticFileServerStore({
@@ -674,8 +668,6 @@ describe('StaticFileServerStore#putFile() with path traversal using nested ".." 
     let result;
 
     before(async () => {
-        const { Readable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'malicious content' ]);
 
         store = new StaticFileServerStore({
@@ -711,8 +703,6 @@ describe('StaticFileServerStore#putFile() with pathname starting with slash', ({
     let store;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'javascript code' ]);
 
         const mockWriteStream = new Writable({
@@ -757,8 +747,6 @@ describe('StaticFileServerStore#putFile() when pipeline fails', ({ before, after
     let result;
 
     before(async () => {
-        const { Readable, Writable } = await import('node:stream');
-
         incomingStream = Readable.from([ 'test content' ]);
 
         // Create a writable stream that errors on write
