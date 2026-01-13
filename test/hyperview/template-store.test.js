@@ -471,3 +471,215 @@ describe('TemplateStore#putBaseTemplate() when pipeline fails', ({ before, after
         assertEqual('Write failed: disk full', result.message);
     });
 });
+
+
+describe('TemplateStore#deleteBaseTemplate() with a valid templateId', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteBaseTemplate('base.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(templatesDirectory, 'base.html'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the templateId', () => {
+        assertEqual('base.html', result);
+    });
+});
+
+
+describe('TemplateStore#deleteBaseTemplate() with a nested templateId', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteBaseTemplate('layouts/base.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(templatesDirectory, 'layouts', 'base.html'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the templateId', () => {
+        assertEqual('layouts/base.html', result);
+    });
+});
+
+
+describe('TemplateStore#deleteBaseTemplate() with a non-existent template (idempotent behavior)', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteBaseTemplate('nonexistent.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(templatesDirectory, 'nonexistent.html'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the templateId', () => {
+        assertEqual('nonexistent.html', result);
+    });
+});
+
+
+describe('TemplateStore#deleteBaseTemplate() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteBaseTemplate('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#deleteBaseTemplate() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteBaseTemplate('layouts/../../outside.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#deleteBaseTemplate() with templateId starting with slash', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteBaseTemplate('/base.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(templatesDirectory, 'base.html'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the templateId', () => {
+        assertEqual('/base.html', result);
+    });
+});
