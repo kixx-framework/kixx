@@ -39,7 +39,7 @@ describe('TemplateStore#getBaseTemplate() with a single part templateId beginnin
         sinon.restore();
     });
 
-    it('calls readUtf8File() with the full filepath', () => {
+    it('calls readUtf8File() with the resolved filepath', () => {
         assertEqual(1, fileSystem.readUtf8File.callCount);
         const expectedPath = path.join(templatesDirectory, 'base.html');
         assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
@@ -75,7 +75,7 @@ describe('TemplateStore#getBaseTemplate() with a nested templateId like "marketi
         sinon.restore();
     });
 
-    it('calls readUtf8File() with the full filepath', () => {
+    it('calls readUtf8File() with the resolved filepath', () => {
         assertEqual(1, fileSystem.readUtf8File.callCount);
         const expectedPath = path.join(templatesDirectory, 'marketing', 'base.html');
         assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
@@ -111,13 +111,363 @@ describe('TemplateStore#getBaseTemplate() when the source does not exist', ({ be
         sinon.restore();
     });
 
-    it('calls readUtf8File() with the full filepath', () => {
+    it('calls readUtf8File() with the resolved filepath', () => {
         assertEqual(1, fileSystem.readUtf8File.callCount);
         const expectedPath = path.join(templatesDirectory, 'nonexistent.html');
         assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
     });
 
-    it('returns `null`', () => {
+    it('returns null', () => {
         assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#getBaseTemplate() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readUtf8File: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        // Attempt to access parent directory
+        result = await store.getBaseTemplate('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null for invalid path', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#getBaseTemplate() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readUtf8File: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        // Attempt to traverse with nested path
+        result = await store.getBaseTemplate('layouts/../../outside.html');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null for invalid path', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#putBaseTemplate() with a valid templateId', ({ before, after, it }) => {
+
+    let mockWriteStream;
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    const chunks = [];
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        // Create a readable stream with test data that ends immediately
+        incomingStream = Readable.from([ 'template content' ]);
+
+        // Create a writable stream that collects data
+        mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                chunks.push(chunk);
+                callback();
+            },
+        });
+
+        sinon.spy(mockWriteStream, 'write');
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        await store.putBaseTemplate('layouts/base.html', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(templatesDirectory, 'layouts', 'base.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+
+    it('writes to the write stream', () => {
+        assertEqual(1, mockWriteStream.write.callCount);
+        assertEqual('template content', chunks.join(''));
+    });
+});
+
+
+describe('TemplateStore#putBaseTemplate() with a nested templateId', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'marketing template content' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        await store.putBaseTemplate('marketing/pages/home.html', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(templatesDirectory, 'marketing', 'pages', 'home.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+
+describe('TemplateStore#putBaseTemplate() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'malicious content' ]);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.putBaseTemplate('../../etc/passwd', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#putBaseTemplate() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'malicious content' ]);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        result = await store.putBaseTemplate('layouts/../../outside.html', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('TemplateStore#putBaseTemplate() with templateId starting with slash', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'base template content' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        await store.putBaseTemplate('/base.html', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(templatesDirectory, 'base.html'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+
+describe('TemplateStore#putBaseTemplate() when pipeline fails', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    const writeError = new Error('Write failed: disk full');
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'template content' ]);
+
+        // Create a writable stream that errors on write
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback(writeError);
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new TemplateStore({
+            helpersDirectory,
+            partialsDirectory,
+            templatesDirectory,
+            fileSystem,
+        });
+
+        try {
+            result = await store.putBaseTemplate('layouts/base.html', incomingStream);
+        } catch (error) {
+            result = error;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws the pipeline error', () => {
+        assertEqual('Error', result.name);
+        assertEqual('Write failed: disk full', result.message);
     });
 });
