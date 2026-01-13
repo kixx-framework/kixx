@@ -597,15 +597,9 @@ describe('LocalFileDatastore#setItem() when the document id contains special cha
         readDocumentFile: sinon.stub().resolves(null),
     };
 
-    const lockingQueue = {
-        getLock: sinon.stub().resolves(true),
-        releaseLock: sinon.stub(),
-    };
-
     const store = new LocalFileDatastore({
         directory,
         fileSystem,
-        lockingQueue,
     });
 
     const results = [];
