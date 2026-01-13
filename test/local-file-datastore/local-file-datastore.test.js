@@ -1395,3 +1395,106 @@ describe('LocalFileDatastore#scanItems() with limit larger than data', ({ before
         assertEqual(null, result.exclusiveEndIndex);
     });
 });
+
+describe('LocalFileDatastore#queryView()', ({ before, after, it }) => {
+    // Define the documents array to shuffle the key ordering a bit to
+    // test the sort order capability of scanItems().
+    const documents = [
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+        { type: 'Record', id: 'ca-foo', datetime: '2018-11-21', name: 'C-A' },
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ba-foo', datetime: '2018-11-08', name: 'B-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'bc-foo', datetime: '2018-11-11', name: 'B-C' },
+        { type: 'Record', id: 'bb-foo', datetime: '2018-11-10', name: 'B-B' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            // Convert the "Record__ac-foo.json" file name to type and id.
+            const key = path.basename(filepath, '.json');
+
+            const [ type, id ] = key.split('__');
+
+            // Find the document by type and id.
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let page1;
+    let page2;
+    let page3;
+
+    before(async () => {
+        await store.initialize();
+
+        store.setView('byDate', view);
+
+        page1 = await store.queryView('byDate', { startKey: '0', endKey: '9', limit: 3, includeDocuments: true });
+        page2 = await store.queryView('byDate', { startKey: '0', endKey: '9', limit: 3, includeDocuments: true, inclusiveStartIndex: 3 });
+        page3 = await store.queryView('byDate', { startKey: '0', endKey: '9', limit: 3, includeDocuments: true, inclusiveStartIndex: 6 });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns the expected page sizes', () => {
+        assertEqual(3, page1.items.length);
+        assertEqual(3, page2.items.length);
+        assertEqual(1, page3.items.length);
+    });
+
+    it('returns expected items by key in ascending order', () => {
+        assertEqual('2018-11-01T00:00:00.000Z', page1.items[0].key);
+        assertEqual('2018-11-06T00:00:00.000Z', page1.items[2].key);
+        assertEqual('2018-11-08T00:00:00.000Z', page2.items[0].key);
+        assertEqual('2018-11-11T00:00:00.000Z', page2.items[2].key);
+        assertEqual('2018-11-21T00:00:00.000Z', page3.items[0].key);
+    });
+
+    it('returns the emitted values', () => {
+        assertEqual('2018-11-01', page1.items[0].value);
+        assertEqual('2018-11-06', page1.items[2].value);
+        assertEqual('2018-11-08', page2.items[0].value);
+        assertEqual('2018-11-11', page2.items[2].value);
+        assertEqual('2018-11-21', page3.items[0].value);
+    });
+
+    it('includes the documents', () => {
+        assertEqual('A-A', page1.items[0].document.name);
+        assertEqual('A-C', page1.items[2].document.name);
+        assertEqual('B-A', page2.items[0].document.name);
+        assertEqual('B-C', page2.items[2].document.name);
+        assertEqual('C-A', page3.items[0].document.name);
+    });
+
+    it('returns expected exclusiveEndIndex values', () => {
+        assertEqual(3, page1.exclusiveEndIndex);
+        assertEqual(6, page2.exclusiveEndIndex);
+        assertEqual(null, page3.exclusiveEndIndex);
+    });
+});
