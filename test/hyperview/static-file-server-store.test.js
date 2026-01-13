@@ -523,3 +523,271 @@ describe('StaticFileServerStore#getFile() with pathname starting with slash', ({
         assertEqual(expectedPath, result.filepath);
     });
 });
+
+
+describe('StaticFileServerStore#putFile() with a valid file pathname', ({ before, after, it }) => {
+
+    let mockWriteStream;
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    const chunks = [];
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        // Create a readable stream with test data that ends immediately
+        incomingStream = Readable.from([ 'test file content' ]);
+
+        // Create a writable stream that collects data
+        mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                chunks.push(chunk);
+                callback();
+            },
+        });
+
+        sinon.spy(mockWriteStream, 'write');
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        await store.putFile('css/style.css', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+
+    it('writes to the write stream', () => {
+        assertEqual(1, mockWriteStream.write.callCount);
+        assertEqual('test file content', chunks.join(''));
+    });
+});
+
+
+describe('StaticFileServerStore#putFile() with a nested subdirectory path', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'image data' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        await store.putFile('images/icons/logo.png', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+
+describe('StaticFileServerStore#putFile() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'malicious content' ]);
+
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.putFile('../../etc/passwd', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('StaticFileServerStore#putFile() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'malicious content' ]);
+
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.putFile('css/../../outside.txt', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('StaticFileServerStore#putFile() with pathname starting with slash', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'javascript code' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        await store.putFile('/js/app.js', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+
+describe('StaticFileServerStore#putFile() when pipeline fails', ({ before, after, it }) => {
+
+    let incomingStream;
+
+    const fileSystem = {
+        createWriteStream: sinon.stub(),
+    };
+
+    const writeError = new Error('Write failed: disk full');
+
+    let store;
+    let result;
+
+    before(async () => {
+        const { Readable, Writable } = await import('node:stream');
+
+        incomingStream = Readable.from([ 'test content' ]);
+
+        // Create a writable stream that errors on write
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback(writeError);
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        try {
+            result = await store.putFile('css/style.css', incomingStream);
+        } catch (error) {
+            result = error;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws the pipeline error', () => {
+        assertEqual('Error', result.name);
+        assertEqual('Write failed: disk full', result.message);
+    });
+});
