@@ -791,3 +791,203 @@ describe('StaticFileServerStore#putFile() when pipeline fails', ({ before, after
         assertEqual('Write failed: disk full', result.message);
     });
 });
+
+
+describe('StaticFileServerStore#deleteFile() with a valid file in public directory', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteFile('css/style.css');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the pathname', () => {
+        assertEqual('css/style.css', result);
+    });
+});
+
+
+describe('StaticFileServerStore#deleteFile() with a nested subdirectory path', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteFile('images/icons/logo.png');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the pathname', () => {
+        assertEqual('images/icons/logo.png', result);
+    });
+});
+
+
+describe('StaticFileServerStore#deleteFile() when the file does not exist (idempotent)', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteFile('nonexistent.txt');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'nonexistent.txt'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the pathname (succeeds silently)', () => {
+        assertEqual('nonexistent.txt', result);
+    });
+});
+
+
+describe('StaticFileServerStore#deleteFile() with path traversal attempt using ".."', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteFile('../../etc/passwd');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('StaticFileServerStore#deleteFile() with path traversal using nested ".." segments', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteFile('css/../../outside.txt');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+
+describe('StaticFileServerStore#deleteFile() with pathname starting with slash', ({ before, after, it }) => {
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new StaticFileServerStore({
+            publicDirectory,
+            fileSystem,
+        });
+
+        result = await store.deleteFile('/js/app.js');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the pathname', () => {
+        assertEqual('/js/app.js', result);
+    });
+});
