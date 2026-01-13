@@ -2,7 +2,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sinon from 'sinon';
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertNotEqual, isPlainObject } from 'kixx-assert';
+import {
+    doesMatch,
+    isPlainObject,
+    assert,
+    assertFalsy,
+    assertEqual,
+    assertNotEqual,
+    assertUndefined
+} from 'kixx-assert';
 
 import LocalFileDatastore from '../../lib/local-file-datastore/local-file-datastore.js';
 
@@ -1484,6 +1492,19 @@ describe('LocalFileDatastore#queryView()', ({ before, after, it }) => {
         assertEqual('2018-11-21', page3.items[0].value);
     });
 
+    it('returns the document type and id for each item', () => {
+        assertEqual('Record', page1.items[0].type);
+        assertEqual('aa-foo', page1.items[0].id);
+        assertEqual('Record', page1.items[2].type);
+        assertEqual('ac-foo', page1.items[2].id);
+        assertEqual('Record', page2.items[0].type);
+        assertEqual('ba-foo', page2.items[0].id);
+        assertEqual('Record', page2.items[2].type);
+        assertEqual('bc-foo', page2.items[2].id);
+        assertEqual('Record', page3.items[0].type);
+        assertEqual('ca-foo', page3.items[0].id);
+    });
+
     it('includes the documents', () => {
         assertEqual('A-A', page1.items[0].document.name);
         assertEqual('A-C', page1.items[2].document.name);
@@ -1496,5 +1517,969 @@ describe('LocalFileDatastore#queryView()', ({ before, after, it }) => {
         assertEqual(3, page1.exclusiveEndIndex);
         assertEqual(6, page2.exclusiveEndIndex);
         assertEqual(null, page3.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with unregistered view', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        readDocumentFile: sinon.stub().resolves({}),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let error;
+
+    before(async () => {
+        await store.initialize();
+
+        try {
+            await store.queryView('non-existent-view', {
+                startKey: 'a',
+                endKey: 'z',
+            });
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws AssertionError', () => {
+        assert(error);
+        assertEqual('AssertionError', error.name);
+    });
+});
+
+describe('LocalFileDatastore#queryView() when view map() throws error', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'doc-1', value: 10 },
+        { type: 'Record', id: 'doc-2', value: 'invalid' },
+    ];
+
+    const problematicView = {
+        map(doc, emit) {
+            if (typeof doc.value !== 'number') {
+                throw new TypeError('Value must be a number');
+            }
+            const doubled = doc.value * 2;
+            emit(doc.id, doubled);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            // Convert the "Record__ac-foo.json" file name to type and id.
+            const key = path.basename(filepath, '.json');
+
+            const [ type, id ] = key.split('__');
+
+            // Find the document by type and id.
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let error;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('problematic-view', problematicView);
+
+        try {
+            await store.queryView('problematic-view', {
+                startKey: 'a',
+                endKey: 'z',
+            });
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws WrappedError', () => {
+        assert(error);
+        assertEqual('WrappedError', error.name);
+    });
+
+    it('includes view identifier in error message', () => {
+        assert(doesMatch('problematic-view', error.message));
+    });
+
+    it('wraps the original error', () => {
+        assert(error.cause);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with includeDocuments=false', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('date-view', view);
+
+        result = await store.queryView('date-view', {
+            startKey: '2018-01-01',
+            endKey: '2019-01-01',
+            includeDocuments: false,
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns items with key and value', () => {
+        assertEqual(3, result.items.length);
+        assertEqual('2018-11-01T00:00:00.000Z', result.items[0].key);
+        assertEqual('2018-11-01', result.items[0].value);
+    });
+
+    it('returns items with document type and id reference', () => {
+        assertEqual('aa-foo', result.items[0].id);
+        assertEqual('Record', result.items[0].type);
+        assertEqual('ab-foo', result.items[1].id);
+        assertEqual('Record', result.items[1].type);
+        assertEqual('ac-foo', result.items[2].id);
+        assertEqual('Record', result.items[2].type);
+    });
+
+    it('does not include document property in items', () => {
+        assertUndefined(result.items[0].document);
+        assertUndefined(result.items[1].document);
+        assertUndefined(result.items[2].document);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with includeDocuments=true', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('date-view', view);
+
+        result = await store.queryView('date-view', {
+            startKey: '2018-01-01',
+            endKey: '2019-01-01',
+            includeDocuments: true,
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('includes full document in each item', () => {
+        assert(result.items[0].document);
+        assertEqual('aa-foo', result.items[0].document.id);
+        assertEqual('A-A', result.items[0].document.name);
+    });
+
+    it('includes correct document for all items', () => {
+        assertEqual('ab-foo', result.items[1].document.id);
+        assertEqual('A-B', result.items[1].document.name);
+        assertEqual('ac-foo', result.items[2].document.id);
+        assertEqual('A-C', result.items[2].document.name);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with exact key match', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+        { type: 'Record', id: 'ba-foo', datetime: '2018-11-08', name: 'B-A' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('date-view', view);
+
+        result = await store.queryView('date-view', {
+            key: '2018-11-04T00:00:00.000Z',
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns only items matching exact key', () => {
+        assertEqual(1, result.items.length);
+        assertEqual('2018-11-04T00:00:00.000Z', result.items[0].key);
+    });
+
+    it('returns the correct document', () => {
+        assertEqual('ab-foo', result.items[0].id);
+        assertEqual('2018-11-04', result.items[0].value);
+    });
+
+    it('returns null exclusiveEndIndex', () => {
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with key that matches nothing', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('date-view', view);
+
+        result = await store.queryView('date-view', {
+            key: '2020-01-01T00:00:00.000Z',
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns empty items array', () => {
+        assertEqual(0, result.items.length);
+    });
+
+    it('returns null exclusiveEndIndex', () => {
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() in descending order', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+        { type: 'Record', id: 'ba-foo', datetime: '2018-11-08', name: 'B-A' },
+        { type: 'Record', id: 'bb-foo', datetime: '2018-11-10', name: 'B-B' },
+        { type: 'Record', id: 'bc-foo', datetime: '2018-11-11', name: 'B-C' },
+        { type: 'Record', id: 'ca-foo', datetime: '2018-11-21', name: 'C-A' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let page1;
+    let page2;
+    let page3;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('date-view', view);
+
+        page1 = await store.queryView('date-view', {
+            startKey: '2019-01-01',
+            endKey: '2018-01-01',
+            descending: true,
+            limit: 3,
+        });
+
+        page2 = await store.queryView('date-view', {
+            startKey: '2019-01-01',
+            endKey: '2018-01-01',
+            descending: true,
+            limit: 3,
+            inclusiveStartIndex: 3,
+        });
+
+        page3 = await store.queryView('date-view', {
+            startKey: '2019-01-01',
+            endKey: '2018-01-01',
+            descending: true,
+            limit: 3,
+            inclusiveStartIndex: 6,
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns expected page sizes', () => {
+        assertEqual(3, page1.items.length);
+        assertEqual(3, page2.items.length);
+        assertEqual(1, page3.items.length);
+    });
+
+    it('returns items in descending order by key', () => {
+        assertEqual('2018-11-21T00:00:00.000Z', page1.items[0].key);
+        assertEqual('2018-11-11T00:00:00.000Z', page1.items[1].key);
+        assertEqual('2018-11-10T00:00:00.000Z', page1.items[2].key);
+
+        assertEqual('2018-11-08T00:00:00.000Z', page2.items[0].key);
+        assertEqual('2018-11-06T00:00:00.000Z', page2.items[1].key);
+        assertEqual('2018-11-04T00:00:00.000Z', page2.items[2].key);
+
+        assertEqual('2018-11-01T00:00:00.000Z', page3.items[0].key);
+    });
+
+    it('returns expected exclusiveEndIndex values', () => {
+        assertEqual(3, page1.exclusiveEndIndex);
+        assertEqual(6, page2.exclusiveEndIndex);
+        assertEqual(null, page3.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with filtered documents', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'active-1', status: 'active', name: 'Active 1' },
+        { type: 'Record', id: 'inactive-1', status: 'inactive', name: 'Inactive 1' },
+        { type: 'Record', id: 'active-2', status: 'active', name: 'Active 2' },
+        { type: 'Record', id: 'inactive-2', status: 'inactive', name: 'Inactive 2' },
+        { type: 'Record', id: 'active-3', status: 'active', name: 'Active 3' },
+    ];
+
+    const activeOnlyView = {
+        map(doc, emit) {
+            if (doc.status === 'active') {
+                emit(doc.id, doc.name);
+            }
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('active-view', activeOnlyView);
+
+        result = await store.queryView('active-view', {
+            startKey: 'a',
+            endKey: 'z',
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns only items from documents that emitted', () => {
+        assertEqual(3, result.items.length);
+    });
+
+    it('excludes documents that did not emit', () => {
+        const documentIds = result.items.map((item) => {
+            return item.id;
+        });
+        assert(documentIds.includes('active-1'));
+        assert(documentIds.includes('active-2'));
+        assert(documentIds.includes('active-3'));
+        assertFalsy(documentIds.includes('inactive-1'));
+        assertFalsy(documentIds.includes('inactive-2'));
+    });
+});
+
+describe('LocalFileDatastore#queryView() with one-to-many emissions', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'post-1', tags: [ 'javascript', 'nodejs', 'web' ] },
+        { type: 'Record', id: 'post-2', tags: [ 'python', 'web' ] },
+        { type: 'Record', id: 'post-3', tags: [ 'javascript', 'react' ] },
+    ];
+
+    const tagView = {
+        map(doc, emit) {
+            doc.tags.forEach((tag) => {
+                emit(tag, doc.id);
+            });
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('tag-view', tagView);
+
+        result = await store.queryView('tag-view', {
+            startKey: 'a',
+            endKey: 'z',
+            limit: 100,
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns multiple items per document', () => {
+        assertEqual(7, result.items.length);
+    });
+
+    it('creates separate index items for each emission', () => {
+        const javascriptItems = result.items.filter((item) => {
+            return item.key === 'javascript';
+        });
+        assertEqual(2, javascriptItems.length);
+
+        const webItems = result.items.filter((item) => {
+            return item.key === 'web';
+        });
+        assertEqual(2, webItems.length);
+    });
+
+    it('sorts items by key, not by document', () => {
+        assertEqual('javascript', result.items[0].key);
+        assertEqual('javascript', result.items[1].key);
+        assertEqual('nodejs', result.items[2].key);
+        assertEqual('python', result.items[3].key);
+        assertEqual('react', result.items[4].key);
+        assertEqual('web', result.items[5].key);
+        assertEqual('web', result.items[6].key);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with inclusiveStartIndex beyond data', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let resultAtEnd;
+    let resultBeyondEnd;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('date-view', view);
+
+        resultAtEnd = await store.queryView('date-view', {
+            startKey: '2018-01-01',
+            endKey: '2019-01-01',
+            inclusiveStartIndex: 3,
+            limit: 3,
+        });
+
+        resultBeyondEnd = await store.queryView('date-view', {
+            startKey: '2018-01-01',
+            endKey: '2019-01-01',
+            inclusiveStartIndex: 100,
+            limit: 3,
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns empty when inclusiveStartIndex equals total count', () => {
+        assertEqual(0, resultAtEnd.items.length);
+        assertEqual(null, resultAtEnd.exclusiveEndIndex);
+    });
+
+    it('returns empty when inclusiveStartIndex exceeds total count', () => {
+        assertEqual(0, resultBeyondEnd.items.length);
+        assertEqual(null, resultBeyondEnd.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with limit larger than data', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('date-view', view);
+
+        result = await store.queryView('date-view', {
+            startKey: '2018-01-01',
+            endKey: '2019-01-01',
+            limit: 100,
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns all available items', () => {
+        assertEqual(3, result.items.length);
+    });
+
+    it('returns null exclusiveEndIndex', () => {
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with empty datastore', ({ before, after, it }) => {
+
+    const view = {
+        map(doc, emit) {
+            emit(doc.id, doc.name);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        readDocumentFile: sinon.stub().resolves({}),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('test-view', view);
+
+        result = await store.queryView('test-view', {
+            startKey: 'a',
+            endKey: 'z',
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns empty items array', () => {
+        assertEqual(0, result.items.length);
+    });
+
+    it('returns null exclusiveEndIndex', () => {
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with no matching items', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'aa-foo', datetime: '2018-11-01', name: 'A-A' },
+        { type: 'Record', id: 'ab-foo', datetime: '2018-11-04', name: 'A-B' },
+        { type: 'Record', id: 'ac-foo', datetime: '2018-11-06', name: 'A-C' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            const key = new Date(doc.datetime).toISOString();
+            emit(key, doc.datetime);
+        },
+    };
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let resultBefore;
+    let resultAfter;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('date-view', view);
+
+        resultBefore = await store.queryView('date-view', {
+            startKey: '2017-01-01',
+            endKey: '2017-12-31',
+        });
+
+        resultAfter = await store.queryView('date-view', {
+            startKey: '2019-01-01',
+            endKey: '2020-01-01',
+        });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns empty when range is before all items', () => {
+        assertEqual(0, resultBefore.items.length);
+    });
+
+    it('returns empty when range is after all items', () => {
+        assertEqual(0, resultAfter.items.length);
+    });
+
+    it('returns null exclusiveEndIndex for both cases', () => {
+        assertEqual(null, resultBefore.exclusiveEndIndex);
+        assertEqual(null, resultAfter.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with invalid viewId', ({ before, after, it }) => {
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        readDocumentFile: sinon.stub().resolves({}),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let errorEmptyString;
+    let errorNull;
+
+    before(async () => {
+        await store.initialize();
+
+        try {
+            await store.queryView('', { startKey: 'a', endKey: 'z' });
+        } catch (err) {
+            errorEmptyString = err;
+        }
+
+        try {
+            await store.queryView(null, { startKey: 'a', endKey: 'z' });
+        } catch (err) {
+            errorNull = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws AssertionError when viewId is empty string', () => {
+        assert(errorEmptyString);
+        assertEqual('AssertionError', errorEmptyString.name);
+    });
+
+    it('throws AssertionError when viewId is null', () => {
+        assert(errorNull);
+        assertEqual('AssertionError', errorNull.name);
     });
 });
