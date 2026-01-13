@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { Readable, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import sinon from 'sinon';
 import { describe } from 'kixx-test';
@@ -963,5 +964,316 @@ describe('PageStore#getMarkdownContent() with path traversal using nested ".." s
     it('returns an empty array', () => {
         assertArray(result);
         assertEqual(0, result.length);
+    });
+});
+
+describe('PageStore#putPageData() with a valid pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let mockWriteStream;
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    const chunks = [];
+
+    before(async () => {
+        // Create a readable stream with test data that ends immediately
+        incomingStream = Readable.from([ '{"key": "value"}' ]);
+
+        // Create a writable stream that collects data
+        mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                chunks.push(chunk);
+                callback();
+            },
+        });
+
+        sinon.spy(mockWriteStream, 'write');
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        await store.putPageData('/blog/a-blog-post', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls readDirectory() to check for existing JSON files', () => {
+        const dirpath = path.resolve(path.join(directory, 'blog', 'a-blog-post'));
+        assertEqual(1, fileSystem.readDirectory.callCount);
+        assertEqual(dirpath, fileSystem.readDirectory.firstCall.firstArg);
+    });
+
+    it('calls createWriteStream() with page.jsonc (default when no file exists)', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.jsonc'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+
+    it('writes to the write stream', () => {
+        assertEqual(1, mockWriteStream.write.callCount);
+        assertEqual('{"key": "value"}', chunks.join(''));
+    });
+});
+
+describe('PageStore#putPageData() with existing page.json file', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([
+            {
+                name: 'page.json',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        incomingStream = Readable.from([ '{"data": "content"}' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        await store.putPageData('/blog/a-blog-post', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with page.json (existing file)', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.json'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+describe('PageStore#putPageData() with existing page.jsonc file', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([
+            {
+                name: 'page.jsonc',
+                isFile() {
+                    return true;
+                },
+            },
+        ]),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        incomingStream = Readable.from([ '{"data": "content"}' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        await store.putPageData('/blog/a-blog-post', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with page.jsonc (existing file)', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.jsonc'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+describe('PageStore#putPageData() with a nested pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+
+    before(async () => {
+        incomingStream = Readable.from([ '{"nested": "data"}' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        await store.putPageData('/documentation/api/reference', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls createWriteStream() with the resolved filepath', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.resolve(path.join(directory, 'documentation', 'api', 'reference', 'page.jsonc'));
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+});
+
+describe('PageStore#putPageData() with path traversal attempt using ".."', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '{"malicious": "content"}' ]);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putPageData('../../etc/passwd', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putPageData() with path traversal using nested ".." segments', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '{"malicious": "content"}' ]);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putPageData('blog/../../outside', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readDirectory()', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putPageData() when pipeline fails', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        readDirectory: sinon.stub().resolves([]),
+        createWriteStream: sinon.stub(),
+    };
+
+    const writeError = new Error('Write failed: disk full');
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '{"data": "content"}' ]);
+
+        // Create a writable stream that errors on write
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback(writeError);
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        try {
+            result = await store.putPageData('/blog/a-blog-post', incomingStream);
+        } catch (error) {
+            result = error;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('throws the pipeline error', () => {
+        assertEqual('Error', result.name);
+        assertEqual('Write failed: disk full', result.message);
     });
 });
