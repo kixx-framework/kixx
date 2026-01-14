@@ -2325,3 +2325,149 @@ describe('PageStore#deleteMarkdownFile() with path traversal in pathname', ({ be
         assertEqual(null, result);
     });
 });
+
+describe('PageStore#deletePage() with valid pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeDirectory: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deletePage('/blog/post');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeDirectory() with the correct directory path', () => {
+        assertEqual(1, fileSystem.removeDirectory.callCount);
+        const expectedPath = path.join(directory, 'blog', 'post');
+        assertEqual(expectedPath, fileSystem.removeDirectory.firstCall.firstArg);
+    });
+
+    it('returns the pathname', () => {
+        assertEqual('/blog/post', result);
+    });
+});
+
+describe('PageStore#deletePage() with non-existent directory (idempotent)', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeDirectory: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deletePage('/blog/missing-post');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeDirectory() with the correct directory path', () => {
+        assertEqual(1, fileSystem.removeDirectory.callCount);
+        const expectedPath = path.join(directory, 'blog', 'missing-post');
+        assertEqual(expectedPath, fileSystem.removeDirectory.firstCall.firstArg);
+    });
+
+    it('returns the pathname (idempotent operation)', () => {
+        assertEqual('/blog/missing-post', result);
+    });
+});
+
+describe('PageStore#deletePage() with nested pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeDirectory: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deletePage('/documentation/api/reference');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeDirectory() with the correct nested directory path', () => {
+        assertEqual(1, fileSystem.removeDirectory.callCount);
+        const expectedPath = path.join(directory, 'documentation', 'api', 'reference');
+        assertEqual(expectedPath, fileSystem.removeDirectory.firstCall.firstArg);
+    });
+
+    it('returns the pathname', () => {
+        assertEqual('/documentation/api/reference', result);
+    });
+});
+
+describe('PageStore#deletePage() with path traversal attempt using ".."', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeDirectory: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deletePage('../../etc');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeDirectory()', () => {
+        assertEqual(0, fileSystem.removeDirectory.callCount);
+    });
+
+    it('returns null for path traversal attempt', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#deletePage() with path traversal using nested ".." segments', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeDirectory: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deletePage('blog/../../outside');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeDirectory()', () => {
+        assertEqual(0, fileSystem.removeDirectory.callCount);
+    });
+
+    it('returns null for path traversal attempt', () => {
+        assertEqual(null, result);
+    });
+});
