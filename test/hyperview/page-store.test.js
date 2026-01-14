@@ -1556,7 +1556,7 @@ describe('PageStore#putPageTemplate() when pipeline fails', ({ before, after, it
     const writeError = new Error('Write failed: disk full');
 
     let store;
-    let result;
+    let error;
 
     before(async () => {
         incomingStream = Readable.from([ '<html><body>content</body></html>' ]);
@@ -1573,9 +1573,9 @@ describe('PageStore#putPageTemplate() when pipeline fails', ({ before, after, it
         store = new PageStore({ directory, fileSystem });
 
         try {
-            result = await store.putPageTemplate('/blog/a-blog-post', incomingStream);
-        } catch (error) {
-            result = error;
+            await store.putPageTemplate('/blog/a-blog-post', incomingStream);
+        } catch (err) {
+            error = err;
         }
     });
 
@@ -1584,7 +1584,7 @@ describe('PageStore#putPageTemplate() when pipeline fails', ({ before, after, it
     });
 
     it('throws the pipeline error', () => {
-        assertEqual('Error', result.name);
-        assertEqual('Write failed: disk full', result.message);
+        assertEqual('Error', error.name);
+        assertEqual('Write failed: disk full', error.message);
     });
 });
