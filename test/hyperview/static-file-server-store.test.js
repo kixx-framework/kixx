@@ -531,6 +531,7 @@ describe('StaticFileServerStore#putFile() with a valid file pathname', ({ before
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -566,6 +567,12 @@ describe('StaticFileServerStore#putFile() with a valid file pathname', ({ before
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the parent directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        const expectedPath = path.join(publicDirectory, 'css');
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
         const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
@@ -584,6 +591,7 @@ describe('StaticFileServerStore#putFile() with a nested subdirectory path', ({ b
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -612,6 +620,12 @@ describe('StaticFileServerStore#putFile() with a nested subdirectory path', ({ b
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the parent directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        const expectedPath = path.join(publicDirectory, 'images', 'icons');
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
         const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
@@ -625,6 +639,7 @@ describe('StaticFileServerStore#putFile() with path traversal attempt using ".."
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -646,6 +661,10 @@ describe('StaticFileServerStore#putFile() with path traversal attempt using ".."
         sinon.restore();
     });
 
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
     it('does not call createWriteStream()', () => {
         assertEqual(0, fileSystem.createWriteStream.callCount);
     });
@@ -661,6 +680,7 @@ describe('StaticFileServerStore#putFile() with path traversal using nested ".." 
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -682,6 +702,10 @@ describe('StaticFileServerStore#putFile() with path traversal using nested ".." 
         sinon.restore();
     });
 
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
     it('does not call createWriteStream()', () => {
         assertEqual(0, fileSystem.createWriteStream.callCount);
     });
@@ -697,6 +721,7 @@ describe('StaticFileServerStore#putFile() with pathname starting with slash', ({
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -725,6 +750,12 @@ describe('StaticFileServerStore#putFile() with pathname starting with slash', ({
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the parent directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        const expectedPath = path.join(publicDirectory, 'js');
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
         const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
@@ -738,6 +769,7 @@ describe('StaticFileServerStore#putFile() when pipeline fails', ({ before, after
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -772,6 +804,10 @@ describe('StaticFileServerStore#putFile() when pipeline fails', ({ before, after
 
     after(() => {
         sinon.restore();
+    });
+
+    it('calls ensureDirectory() before the error', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
     });
 
     it('throws the pipeline error', () => {
