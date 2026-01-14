@@ -1674,3 +1674,654 @@ describe('PageStore#putPageTemplate() when pipeline fails', ({ before, after, it
         assertEqual('Write failed: disk full', error.message);
     });
 });
+
+describe('PageStore#getMarkdownFile() with valid pathname and filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readUtf8File: sinon.stub().resolves('# Markdown content'),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.getMarkdownFile('/blog/post', 'body.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls readUtf8File() with the correct file path', () => {
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+        const expectedPath = path.join(directory, 'blog', 'post', 'body.md');
+        assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
+    });
+
+    it('returns a SourceFile object', () => {
+        assertEqual('body.md', result.filename);
+        assertEqual('# Markdown content', result.source);
+    });
+});
+
+describe('PageStore#getMarkdownFile() with non-existent file', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readUtf8File: sinon.stub().resolves(null),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.getMarkdownFile('/blog/post', 'missing.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls readUtf8File() with the correct file path', () => {
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+        const expectedPath = path.join(directory, 'blog', 'post', 'missing.md');
+        assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
+    });
+
+    it('returns null when file does not exist', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#getMarkdownFile() with nested path in filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readUtf8File: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.getMarkdownFile('/blog/post', 'sections/body.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null for nested path', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#getMarkdownFile() with path traversal in filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readUtf8File: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.getMarkdownFile('/blog/post', '../body.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null for path traversal attempt', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#getMarkdownFile() with path traversal in pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readUtf8File: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.getMarkdownFile('../../etc', 'passwd.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call readUtf8File()', () => {
+        assertEqual(0, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null for path traversal in pathname', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putMarkdownFile() with valid pathname and filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let mockWriteStream;
+    let incomingStream;
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    const chunks = [];
+
+    before(async () => {
+        incomingStream = Readable.from([ '# Markdown content' ]);
+
+        mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                chunks.push(chunk);
+                callback();
+            },
+        });
+
+        sinon.spy(mockWriteStream, 'write');
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putMarkdownFile('/blog/post', 'body.md', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'blog', 'post');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
+    it('calls createWriteStream() with the correct file path', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.join(directory, 'blog', 'post', 'body.md');
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+
+    it('writes to the write stream', () => {
+        assertEqual(1, mockWriteStream.write.callCount);
+        assertEqual('# Markdown content', chunks.join(''));
+    });
+
+    it('returns the filename', () => {
+        assertEqual('body.md', result);
+    });
+});
+
+describe('PageStore#putMarkdownFile() with nested pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '# Nested content' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putMarkdownFile('/documentation/api/reference', 'intro.md', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls ensureDirectory() with the nested page directory', () => {
+        const expectedPath = path.join(directory, 'documentation', 'api', 'reference');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
+    it('calls createWriteStream() with the correct file path', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.join(directory, 'documentation', 'api', 'reference', 'intro.md');
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+
+    it('returns the filename', () => {
+        assertEqual('intro.md', result);
+    });
+});
+
+describe('PageStore#putMarkdownFile() overwriting existing file', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '# Updated content' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback();
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putMarkdownFile('/blog/post', 'body.md', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'blog', 'post');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
+    it('calls createWriteStream() with the file path (overwrites existing)', () => {
+        assertEqual(1, fileSystem.createWriteStream.callCount);
+        const expectedPath = path.join(directory, 'blog', 'post', 'body.md');
+        assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
+    });
+
+    it('returns the filename', () => {
+        assertEqual('body.md', result);
+    });
+});
+
+describe('PageStore#putMarkdownFile() with nested path in filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '# Content' ]);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putMarkdownFile('/blog/post', 'sections/body.md', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null for nested path', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putMarkdownFile() with path traversal in filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '# Malicious content' ]);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putMarkdownFile('/blog/post', '../body.md', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null for path traversal attempt', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putMarkdownFile() with non-markdown extension', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ 'Text content' ]);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putMarkdownFile('/blog/post', 'body.txt', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null for non-markdown extension', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putMarkdownFile() with path traversal in pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub(),
+        createWriteStream: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        incomingStream = Readable.from([ '# Malicious content' ]);
+
+        store = new PageStore({ directory, fileSystem });
+
+        result = await store.putMarkdownFile('../../etc', 'passwd.md', incomingStream);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
+    it('does not call createWriteStream()', () => {
+        assertEqual(0, fileSystem.createWriteStream.callCount);
+    });
+
+    it('returns null for path traversal in pathname', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#putMarkdownFile() when pipeline fails', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    let incomingStream;
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
+        createWriteStream: sinon.stub(),
+    };
+
+    const writeError = new Error('Write failed: disk full');
+
+    let store;
+    let error;
+
+    before(async () => {
+        incomingStream = Readable.from([ '# Content' ]);
+
+        const mockWriteStream = new Writable({
+            write(chunk, encoding, callback) {
+                callback(writeError);
+            },
+        });
+
+        fileSystem.createWriteStream.returns(mockWriteStream);
+
+        store = new PageStore({ directory, fileSystem });
+
+        try {
+            await store.putMarkdownFile('/blog/post', 'body.md', incomingStream);
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls ensureDirectory() before the error', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+    });
+
+    it('throws the pipeline error', () => {
+        assertEqual('Error', error.name);
+        assertEqual('Write failed: disk full', error.message);
+    });
+});
+
+describe('PageStore#deleteMarkdownFile() with valid pathname and filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deleteMarkdownFile('/blog/post', 'body.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the correct file path', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.join(directory, 'blog', 'post', 'body.md');
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the filename', () => {
+        assertEqual('body.md', result);
+    });
+});
+
+describe('PageStore#deleteMarkdownFile() with non-existent file (idempotent)', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeFile: sinon.stub().resolves(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deleteMarkdownFile('/blog/post', 'missing.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls removeFile() with the correct file path', () => {
+        assertEqual(1, fileSystem.removeFile.callCount);
+        const expectedPath = path.join(directory, 'blog', 'post', 'missing.md');
+        assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
+    });
+
+    it('returns the filename (idempotent operation)', () => {
+        assertEqual('missing.md', result);
+    });
+});
+
+describe('PageStore#deleteMarkdownFile() with nested path in filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deleteMarkdownFile('/blog/post', 'sections/body.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null for nested path', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#deleteMarkdownFile() with path traversal in filename', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deleteMarkdownFile('/blog/post', '../body.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null for path traversal attempt', () => {
+        assertEqual(null, result);
+    });
+});
+
+describe('PageStore#deleteMarkdownFile() with path traversal in pathname', ({ before, after, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        removeFile: sinon.stub(),
+    };
+
+    let store;
+    let result;
+
+    before(async () => {
+        store = new PageStore({ directory, fileSystem });
+        result = await store.deleteMarkdownFile('../../etc', 'passwd.md');
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not call removeFile()', () => {
+        assertEqual(0, fileSystem.removeFile.callCount);
+    });
+
+    it('returns null for path traversal in pathname', () => {
+        assertEqual(null, result);
+    });
+});
