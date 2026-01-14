@@ -200,6 +200,7 @@ describe('TemplateStore#putBaseTemplate() with a valid templateId', ({ before, a
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -237,9 +238,15 @@ describe('TemplateStore#putBaseTemplate() with a valid templateId', ({ before, a
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the parent directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        const expectedPath = path.join(templatesDirectory, 'layouts');
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(templatesDirectory, 'layouts', 'base.html'));
+        const expectedPath = path.join(templatesDirectory, 'layouts', 'base.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 
@@ -255,6 +262,7 @@ describe('TemplateStore#putBaseTemplate() with a nested templateId', ({ before, 
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -285,9 +293,15 @@ describe('TemplateStore#putBaseTemplate() with a nested templateId', ({ before, 
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the parent directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        const expectedPath = path.join(templatesDirectory, 'marketing', 'pages');
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(templatesDirectory, 'marketing', 'pages', 'home.html'));
+        const expectedPath = path.join(templatesDirectory, 'marketing', 'pages', 'home.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -298,6 +312,7 @@ describe('TemplateStore#putBaseTemplate() with path traversal attempt using ".."
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -321,6 +336,10 @@ describe('TemplateStore#putBaseTemplate() with path traversal attempt using ".."
         sinon.restore();
     });
 
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
     it('does not call createWriteStream()', () => {
         assertEqual(0, fileSystem.createWriteStream.callCount);
     });
@@ -336,6 +355,7 @@ describe('TemplateStore#putBaseTemplate() with path traversal using nested ".." 
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -359,6 +379,10 @@ describe('TemplateStore#putBaseTemplate() with path traversal using nested ".." 
         sinon.restore();
     });
 
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
     it('does not call createWriteStream()', () => {
         assertEqual(0, fileSystem.createWriteStream.callCount);
     });
@@ -374,6 +398,7 @@ describe('TemplateStore#putBaseTemplate() with templateId starting with slash', 
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -404,9 +429,14 @@ describe('TemplateStore#putBaseTemplate() with templateId starting with slash', 
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the templates directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(templatesDirectory, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(templatesDirectory, 'base.html'));
+        const expectedPath = path.join(templatesDirectory, 'base.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -417,6 +447,7 @@ describe('TemplateStore#putBaseTemplate() when pipeline fails', ({ before, after
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -455,6 +486,10 @@ describe('TemplateStore#putBaseTemplate() when pipeline fails', ({ before, after
         sinon.restore();
     });
 
+    it('calls ensureDirectory() before the error', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+    });
+
     it('throws the pipeline error', () => {
         assertEqual('Error', result.name);
         assertEqual('Write failed: disk full', result.message);
@@ -488,7 +523,7 @@ describe('TemplateStore#deleteBaseTemplate() with a valid templateId', ({ before
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(templatesDirectory, 'base.html'));
+        const expectedPath = path.join(templatesDirectory, 'base.html');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -524,7 +559,7 @@ describe('TemplateStore#deleteBaseTemplate() with a nested templateId', ({ befor
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(templatesDirectory, 'layouts', 'base.html'));
+        const expectedPath = path.join(templatesDirectory, 'layouts', 'base.html');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -560,7 +595,7 @@ describe('TemplateStore#deleteBaseTemplate() with a non-existent template (idemp
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(templatesDirectory, 'nonexistent.html'));
+        const expectedPath = path.join(templatesDirectory, 'nonexistent.html');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -664,7 +699,7 @@ describe('TemplateStore#deleteBaseTemplate() with templateId starting with slash
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(templatesDirectory, 'base.html'));
+        const expectedPath = path.join(templatesDirectory, 'base.html');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -700,7 +735,7 @@ describe('TemplateStore#getPartialFile() with a valid partialId', ({ before, aft
 
     it('calls readUtf8File() with the resolved filepath', () => {
         assertEqual(1, fileSystem.readUtf8File.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        const expectedPath = path.join(partialsDirectory, 'header.html');
         assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
     });
 
@@ -737,7 +772,7 @@ describe('TemplateStore#getPartialFile() with a nested partialId', ({ before, af
 
     it('calls readUtf8File() with the resolved filepath', () => {
         assertEqual(1, fileSystem.readUtf8File.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'cards', 'user.html'));
+        const expectedPath = path.join(partialsDirectory, 'cards', 'user.html');
         assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
     });
 
@@ -774,7 +809,7 @@ describe('TemplateStore#getPartialFile() when the partial does not exist', ({ be
 
     it('calls readUtf8File() with the resolved filepath', () => {
         assertEqual(1, fileSystem.readUtf8File.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'nonexistent.html'));
+        const expectedPath = path.join(partialsDirectory, 'nonexistent.html');
         assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
     });
 
@@ -878,7 +913,7 @@ describe('TemplateStore#getPartialFile() with partialId starting with slash', ({
 
     it('calls readUtf8File() with the resolved filepath', () => {
         assertEqual(1, fileSystem.readUtf8File.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        const expectedPath = path.join(partialsDirectory, 'header.html');
         assertEqual(expectedPath, fileSystem.readUtf8File.firstCall.firstArg);
     });
 
@@ -895,6 +930,7 @@ describe('TemplateStore#putPartialFile() with a valid partialId', ({ before, aft
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -930,9 +966,14 @@ describe('TemplateStore#putPartialFile() with a valid partialId', ({ before, aft
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the partials directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(partialsDirectory, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        const expectedPath = path.join(partialsDirectory, 'header.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 
@@ -948,6 +989,7 @@ describe('TemplateStore#putPartialFile() with a nested partialId', ({ before, af
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -978,9 +1020,15 @@ describe('TemplateStore#putPartialFile() with a nested partialId', ({ before, af
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the parent directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        const expectedPath = path.join(partialsDirectory, 'cards');
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'cards', 'user.html'));
+        const expectedPath = path.join(partialsDirectory, 'cards', 'user.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -991,6 +1039,7 @@ describe('TemplateStore#putPartialFile() with path traversal attempt using ".."'
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -1014,6 +1063,10 @@ describe('TemplateStore#putPartialFile() with path traversal attempt using ".."'
         sinon.restore();
     });
 
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
     it('does not call createWriteStream()', () => {
         assertEqual(0, fileSystem.createWriteStream.callCount);
     });
@@ -1029,6 +1082,7 @@ describe('TemplateStore#putPartialFile() with path traversal using nested ".." s
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -1052,6 +1106,10 @@ describe('TemplateStore#putPartialFile() with path traversal using nested ".." s
         sinon.restore();
     });
 
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
+    });
+
     it('does not call createWriteStream()', () => {
         assertEqual(0, fileSystem.createWriteStream.callCount);
     });
@@ -1067,6 +1125,7 @@ describe('TemplateStore#putPartialFile() with partialId starting with slash', ({
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -1097,9 +1156,14 @@ describe('TemplateStore#putPartialFile() with partialId starting with slash', ({
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the partials directory', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(partialsDirectory, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        const expectedPath = path.join(partialsDirectory, 'header.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -1110,6 +1174,7 @@ describe('TemplateStore#putPartialFile() when pipeline fails', ({ before, after,
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         createWriteStream: sinon.stub(),
     };
 
@@ -1147,6 +1212,10 @@ describe('TemplateStore#putPartialFile() when pipeline fails', ({ before, after,
         sinon.restore();
     });
 
+    it('calls ensureDirectory() before the error', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+    });
+
     it('throws the pipeline error', () => {
         assertEqual('Error', result.name);
         assertEqual('Write failed: disk full', result.message);
@@ -1180,7 +1249,7 @@ describe('TemplateStore#deletePartialFile() with a valid partialId', ({ before, 
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        const expectedPath = path.join(partialsDirectory, 'header.html');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -1216,7 +1285,7 @@ describe('TemplateStore#deletePartialFile() with a nested partialId', ({ before,
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'cards', 'user.html'));
+        const expectedPath = path.join(partialsDirectory, 'cards', 'user.html');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -1252,7 +1321,7 @@ describe('TemplateStore#deletePartialFile() with a non-existent partial (idempot
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'nonexistent.html'));
+        const expectedPath = path.join(partialsDirectory, 'nonexistent.html');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -1356,7 +1425,7 @@ describe('TemplateStore#deletePartialFile() with partialId starting with slash',
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(partialsDirectory, 'header.html'));
+        const expectedPath = path.join(partialsDirectory, 'header.html');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
