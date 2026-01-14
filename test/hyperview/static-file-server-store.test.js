@@ -282,7 +282,7 @@ describe('StaticFileServerStore#getFile() with a valid file in public directory'
 
     it('calls getFileStats() with the resolved filepath', () => {
         assertEqual(1, fileSystem.getFileStats.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
+        const expectedPath = path.join(publicDirectory, 'css', 'style.css');
         assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
     });
 
@@ -291,7 +291,7 @@ describe('StaticFileServerStore#getFile() with a valid file in public directory'
     });
 
     it('returns a File instance with the filepath property set to the resolvedFilepath', () => {
-        const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
+        const expectedPath = path.join(publicDirectory, 'css', 'style.css');
         assertEqual(expectedPath, result.filepath);
     });
 });
@@ -328,12 +328,12 @@ describe('StaticFileServerStore#getFile() with a nested subdirectory path', ({ b
 
     it('calls getFileStats() with the resolved filepath', () => {
         assertEqual(1, fileSystem.getFileStats.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
+        const expectedPath = path.join(publicDirectory, 'images', 'icons', 'logo.png');
         assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
     });
 
     it('returns a File instance', () => {
-        const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
+        const expectedPath = path.join(publicDirectory, 'images', 'icons', 'logo.png');
         assertEqual(expectedPath, result.filepath);
         assertEqual(2048, result.sizeBytes);
     });
@@ -435,7 +435,7 @@ describe('StaticFileServerStore#getFile() when the file is a directory', ({ befo
 
     it('calls getFileStats() with the resolved filepath', () => {
         assertEqual(1, fileSystem.getFileStats.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'css'));
+        const expectedPath = path.join(publicDirectory, 'css');
         assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
     });
 
@@ -473,7 +473,7 @@ describe('StaticFileServerStore#getFile() when the file does not exist', ({ befo
 
     it('calls getFileStats() with the resolved filepath', () => {
         assertEqual(1, fileSystem.getFileStats.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'nonexistent.css'));
+        const expectedPath = path.join(publicDirectory, 'nonexistent.css');
         assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
     });
 
@@ -514,12 +514,12 @@ describe('StaticFileServerStore#getFile() with pathname starting with slash', ({
 
     it('calls getFileStats() with the resolved filepath', () => {
         assertEqual(1, fileSystem.getFileStats.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
+        const expectedPath = path.join(publicDirectory, 'js', 'app.js');
         assertEqual(expectedPath, fileSystem.getFileStats.firstCall.firstArg);
     });
 
     it('returns a File instance', () => {
-        const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
+        const expectedPath = path.join(publicDirectory, 'js', 'app.js');
         assertEqual(expectedPath, result.filepath);
     });
 });
@@ -575,7 +575,7 @@ describe('StaticFileServerStore#putFile() with a valid file pathname', ({ before
 
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
+        const expectedPath = path.join(publicDirectory, 'css', 'style.css');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 
@@ -628,7 +628,7 @@ describe('StaticFileServerStore#putFile() with a nested subdirectory path', ({ b
 
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
+        const expectedPath = path.join(publicDirectory, 'images', 'icons', 'logo.png');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -758,7 +758,7 @@ describe('StaticFileServerStore#putFile() with pathname starting with slash', ({
 
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
+        const expectedPath = path.join(publicDirectory, 'js', 'app.js');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -841,7 +841,7 @@ describe('StaticFileServerStore#deleteFile() with a valid file in public directo
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'css', 'style.css'));
+        const expectedPath = path.join(publicDirectory, 'css', 'style.css');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -875,7 +875,7 @@ describe('StaticFileServerStore#deleteFile() with a nested subdirectory path', (
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'images', 'icons', 'logo.png'));
+        const expectedPath = path.join(publicDirectory, 'images', 'icons', 'logo.png');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -909,7 +909,7 @@ describe('StaticFileServerStore#deleteFile() when the file does not exist (idemp
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'nonexistent.txt'));
+        const expectedPath = path.join(publicDirectory, 'nonexistent.txt');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 
@@ -1007,7 +1007,7 @@ describe('StaticFileServerStore#deleteFile() with pathname starting with slash',
 
     it('calls removeFile() with the resolved filepath', () => {
         assertEqual(1, fileSystem.removeFile.callCount);
-        const expectedPath = path.resolve(path.join(publicDirectory, 'js', 'app.js'));
+        const expectedPath = path.join(publicDirectory, 'js', 'app.js');
         assertEqual(expectedPath, fileSystem.removeFile.firstCall.firstArg);
     });
 

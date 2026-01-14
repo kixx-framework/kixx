@@ -974,6 +974,7 @@ describe('PageStore#putPageData() with a valid pathname', ({ before, after, it }
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         createWriteStream: sinon.stub(),
     };
@@ -1007,15 +1008,21 @@ describe('PageStore#putPageData() with a valid pathname', ({ before, after, it }
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls readDirectory() to check for existing JSON files', () => {
-        const dirpath = path.resolve(path.join(directory, 'blog', 'a-blog-post'));
+        const dirpath = path.join(directory, 'blog', 'a-blog-post');
         assertEqual(1, fileSystem.readDirectory.callCount);
         assertEqual(dirpath, fileSystem.readDirectory.firstCall.firstArg);
     });
 
     it('calls createWriteStream() with page.jsonc (default when no file exists)', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.jsonc'));
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post', 'page.jsonc');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 
@@ -1031,6 +1038,7 @@ describe('PageStore#putPageData() with existing page.json file', ({ before, afte
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'page.json',
@@ -1064,9 +1072,15 @@ describe('PageStore#putPageData() with existing page.json file', ({ before, afte
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with page.json (existing file)', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.json'));
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post', 'page.json');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -1077,6 +1091,7 @@ describe('PageStore#putPageData() with existing page.jsonc file', ({ before, aft
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'page.jsonc',
@@ -1110,9 +1125,15 @@ describe('PageStore#putPageData() with existing page.jsonc file', ({ before, aft
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with page.jsonc (existing file)', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.jsonc'));
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post', 'page.jsonc');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -1123,6 +1144,7 @@ describe('PageStore#putPageData() with a nested pathname', ({ before, after, it 
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         createWriteStream: sinon.stub(),
     };
@@ -1149,9 +1171,15 @@ describe('PageStore#putPageData() with a nested pathname', ({ before, after, it 
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'documentation', 'api', 'reference');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(directory, 'documentation', 'api', 'reference', 'page.jsonc'));
+        const expectedPath = path.join(directory, 'documentation', 'api', 'reference', 'page.jsonc');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -1162,6 +1190,7 @@ describe('PageStore#putPageData() with path traversal attempt using ".."', ({ be
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub(),
         createWriteStream: sinon.stub(),
     };
@@ -1179,6 +1208,10 @@ describe('PageStore#putPageData() with path traversal attempt using ".."', ({ be
 
     after(() => {
         sinon.restore();
+    });
+
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
     });
 
     it('does not call readDirectory()', () => {
@@ -1200,6 +1233,7 @@ describe('PageStore#putPageData() with path traversal using nested ".." segments
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub(),
         createWriteStream: sinon.stub(),
     };
@@ -1217,6 +1251,10 @@ describe('PageStore#putPageData() with path traversal using nested ".." segments
 
     after(() => {
         sinon.restore();
+    });
+
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
     });
 
     it('does not call readDirectory()', () => {
@@ -1238,6 +1276,7 @@ describe('PageStore#putPageData() when pipeline fails', ({ before, after, it }) 
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         createWriteStream: sinon.stub(),
     };
@@ -1272,6 +1311,10 @@ describe('PageStore#putPageData() when pipeline fails', ({ before, after, it }) 
         sinon.restore();
     });
 
+    it('calls ensureDirectory() before the error', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+    });
+
     it('throws the pipeline error', () => {
         assertEqual('Error', result.name);
         assertEqual('Write failed: disk full', result.message);
@@ -1285,6 +1328,7 @@ describe('PageStore#putPageTemplate() with a valid pathname', ({ before, after, 
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         createWriteStream: sinon.stub(),
     };
@@ -1318,15 +1362,21 @@ describe('PageStore#putPageTemplate() with a valid pathname', ({ before, after, 
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls readDirectory() to check for existing template files', () => {
-        const dirpath = path.resolve(path.join(directory, 'blog', 'a-blog-post'));
+        const dirpath = path.join(directory, 'blog', 'a-blog-post');
         assertEqual(1, fileSystem.readDirectory.callCount);
         assertEqual(dirpath, fileSystem.readDirectory.firstCall.firstArg);
     });
 
     it('calls createWriteStream() with page.html (default when no file exists)', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.html'));
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post', 'page.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 
@@ -1342,6 +1392,7 @@ describe('PageStore#putPageTemplate() with existing page.html file', ({ before, 
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'page.html',
@@ -1375,9 +1426,15 @@ describe('PageStore#putPageTemplate() with existing page.html file', ({ before, 
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with page.html (existing file)', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(directory, 'blog', 'a-blog-post', 'page.html'));
+        const expectedPath = path.join(directory, 'blog', 'a-blog-post', 'page.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -1388,6 +1445,7 @@ describe('PageStore#putPageTemplate() with existing page.xml file', ({ before, a
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'page.xml',
@@ -1421,9 +1479,15 @@ describe('PageStore#putPageTemplate() with existing page.xml file', ({ before, a
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'sitemap');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with page.xml (existing file)', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(directory, 'sitemap', 'page.xml'));
+        const expectedPath = path.join(directory, 'sitemap', 'page.xml');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -1434,6 +1498,7 @@ describe('PageStore#putPageTemplate() with a nested pathname', ({ before, after,
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         createWriteStream: sinon.stub(),
     };
@@ -1460,9 +1525,15 @@ describe('PageStore#putPageTemplate() with a nested pathname', ({ before, after,
         sinon.restore();
     });
 
+    it('calls ensureDirectory() with the page directory', () => {
+        const expectedPath = path.join(directory, 'documentation', 'api', 'reference');
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(expectedPath, fileSystem.ensureDirectory.firstCall.firstArg);
+    });
+
     it('calls createWriteStream() with the resolved filepath', () => {
         assertEqual(1, fileSystem.createWriteStream.callCount);
-        const expectedPath = path.resolve(path.join(directory, 'documentation', 'api', 'reference', 'page.html'));
+        const expectedPath = path.join(directory, 'documentation', 'api', 'reference', 'page.html');
         assertEqual(expectedPath, fileSystem.createWriteStream.firstCall.firstArg);
     });
 });
@@ -1473,6 +1544,7 @@ describe('PageStore#putPageTemplate() with path traversal attempt using ".."', (
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub(),
         createWriteStream: sinon.stub(),
     };
@@ -1490,6 +1562,10 @@ describe('PageStore#putPageTemplate() with path traversal attempt using ".."', (
 
     after(() => {
         sinon.restore();
+    });
+
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
     });
 
     it('does not call readDirectory()', () => {
@@ -1511,6 +1587,7 @@ describe('PageStore#putPageTemplate() with path traversal using nested ".." segm
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub(),
         createWriteStream: sinon.stub(),
     };
@@ -1528,6 +1605,10 @@ describe('PageStore#putPageTemplate() with path traversal using nested ".." segm
 
     after(() => {
         sinon.restore();
+    });
+
+    it('does not call ensureDirectory()', () => {
+        assertEqual(0, fileSystem.ensureDirectory.callCount);
     });
 
     it('does not call readDirectory()', () => {
@@ -1549,6 +1630,7 @@ describe('PageStore#putPageTemplate() when pipeline fails', ({ before, after, it
     let incomingStream;
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         createWriteStream: sinon.stub(),
     };
@@ -1581,6 +1663,10 @@ describe('PageStore#putPageTemplate() when pipeline fails', ({ before, after, it
 
     after(() => {
         sinon.restore();
+    });
+
+    it('calls ensureDirectory() before the error', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
     });
 
     it('throws the pipeline error', () => {
