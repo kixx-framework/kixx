@@ -1311,7 +1311,7 @@ describe('PageStore#putPageTemplate() with a valid pathname', ({ before, after, 
 
         store = new PageStore({ directory, fileSystem });
 
-        await store.putPageTemplate('/blog/a-blog-post', incomingStream);
+        await store.putPageTemplate('/blog/a-blog-post', incomingStream, 'text/html');
     });
 
     after(() => {
@@ -1453,7 +1453,7 @@ describe('PageStore#putPageTemplate() with a nested pathname', ({ before, after,
 
         store = new PageStore({ directory, fileSystem });
 
-        await store.putPageTemplate('/documentation/api/reference', incomingStream);
+        await store.putPageTemplate('/documentation/api/reference', incomingStream, 'text/html');
     });
 
     after(() => {
