@@ -3,14 +3,15 @@
         "name": "Main",
         "pattern": "com.example.:subdomain",
         "routes": [
-            "app:/defaults.jsonc",
+            "app.jsonc",
+            "defaults.jsonc",
         ],
     },
     {
         "name": "Bare Domain",
         "hostname": "com.example",
         "routes": [
-            "app:/redirect-to-subdomain.jsonc",
+            "redirect-to-subdomain.jsonc",
         ],
     },
 ]
