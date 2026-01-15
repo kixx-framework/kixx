@@ -4,6 +4,7 @@ import { describe } from 'kixx-test';
 import sinon from 'sinon';
 
 import {
+    assert,
     assertEqual
 } from 'kixx-assert';
 
@@ -29,17 +30,9 @@ const routesStore = new HttpRoutesStore({
 const router = new HttpRouter();
 
 
-describe('nominal app structure', ({ before, after, it }) => {
+describe('routing with no matching hostname', ({ before, after, it }) => {
 
-    const routerErrorHandler = sinon.spy();
-
-    const context = createApplicationContext();
-
-    const middleware = new Map();
-    const handlers = new Map();
-    const errorHandlers = new Map();
-
-    const url = new URL('https://www.example.com/appapi/v1/templates/base-templates/base.html');
+    const url = new URL('http://localhost:8080');
 
     const request = createRequest('1', url, {
         method: 'GET',
@@ -50,6 +43,46 @@ describe('nominal app structure', ({ before, after, it }) => {
     });
 
     const response = new HttpServerResponse('1');
+
+    const context = createApplicationContext();
+
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    const authenticationMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    middleware.set('AuthenticationMiddleware', () => {
+        return authenticationMiddleware;
+    });
+
+    const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    middleware.set('HttpCachingMiddleware', () => {
+        return httpCachingMiddleware;
+    });
+
+    const hyperviewHandler = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    handlers.set('HyperviewHandler', () => {
+        return hyperviewHandler;
+    });
+
+    const hyperviewErrorHandler = sinon.spy((_ctx, _req, _res/* , _err */) => {
+        return _res;
+    });
+
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        return hyperviewErrorHandler;
+    });
+
+    const routerErrorHandler = sinon.spy();
 
     let serverResponse;
 
@@ -67,10 +100,32 @@ describe('nominal app structure', ({ before, after, it }) => {
         sinon.restore();
     });
 
+    it('does not emit a router error event', () => {
+        assertEqual(0, routerErrorHandler.callCount);
+    });
+
     it('returns the server response', () => {
         // The same response should be returned, after being
         // mutated by the request/response cycle.
         assertEqual(response, serverResponse);
+    });
+
+    it('calls the inbound authentication middleware', () => {
+        assertEqual(1, authenticationMiddleware.callCount);
+        assert(authenticationMiddleware.calledBefore(hyperviewHandler));
+    });
+
+    it('calls the hyperview page handler', () => {
+        assertEqual(1, hyperviewHandler.callCount);
+        assert(hyperviewHandler.calledBefore(httpCachingMiddleware));
+    });
+
+    it('does not call the hyperview error handler', () => {
+        assertEqual(0, hyperviewErrorHandler.callCount);
+    });
+
+    it('calls the outbound httpCaching middleware', () => {
+        assertEqual(1, httpCachingMiddleware.callCount);
     });
 });
 

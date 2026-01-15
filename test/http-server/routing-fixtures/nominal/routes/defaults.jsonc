@@ -1,0 +1,22 @@
+[
+    {
+        "pattern": "*",
+        "inboundMiddleware": [
+            [ "AuthenticationMiddleware" ],
+        ],
+        "outboundMiddleware": [
+            [ "HttpCachingMiddleware" ],
+        ],
+        "errorHandlers": [
+            [ "HyperviewErrorHandler" ],
+        ],
+        "targets": [
+            {
+                "methods": ["GET", "HEAD"],
+                "handlers": [
+                    [ "HyperviewHandler" ],
+                ],
+            },
+        ],
+    },
+]
