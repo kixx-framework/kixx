@@ -1,0 +1,9 @@
+[
+    {
+        "name": "Main",
+        "hostname": "com.example.:subdomain",
+        "routes": [
+            "app://main.jsonc"
+        ]
+    }
+]
