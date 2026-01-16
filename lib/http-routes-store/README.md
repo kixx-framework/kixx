@@ -40,8 +40,8 @@ The `virtual-hosts.jsonc` file defines hostname-based routing. It must be an arr
         "name": "Main Site",
         "hostname": "com.example.www",
         "routes": [
-            "app://pages.jsonc",
-            "app://api.jsonc"
+            "pages.jsonc",
+            "api.jsonc"
         ]
     }
 ]
@@ -54,7 +54,7 @@ The `virtual-hosts.jsonc` file defines hostname-based routing. It must be an arr
 | `name` | string | No | Display name for debugging (defaults to hostname/pattern) |
 | `hostname` | string | Yes* | Exact hostname to match (reversed format) |
 | `pattern` | string | Yes* | Dynamic hostname pattern using PathToRegexp syntax |
-| `routes` | array | Yes | URNs referencing route configuration files |
+| `routes` | array | Yes | Pathnames referencing route configuration files in the routes directory |
 
 *Must provide either `hostname` OR `pattern`, but not both.
 
@@ -75,7 +75,7 @@ Use `*` to match any hostname:
 ```jsonc
 {
     "hostname": "*",
-    "routes": ["app://default.jsonc"]
+    "routes": ["default.jsonc"]
 }
 ```
 
@@ -86,18 +86,25 @@ Use PathToRegexp syntax for dynamic hostname matching:
 ```jsonc
 {
     "pattern": "com.example.:subdomain",
-    "routes": ["app://tenant.jsonc"]
+    "routes": ["tenant.jsonc"]
 }
 ```
 
 This captures the subdomain as a parameter (e.g., `api.example.com` -> `{ subdomain: "api" }`).
 
-### Route URNs
+### Route Pathnames
 
-Routes are referenced using URN strings:
+Routes are referenced using pathname strings relative to your application's routes directory:
 
-- `app://path/to/routes.jsonc` - Your application's routes directory
-- `kixx://defaults.json` - Built-in Kixx default routes
+```jsonc
+"routes": [
+    "api.jsonc",           // routes/api.jsonc
+    "pages.jsonc",         // routes/pages.jsonc
+    "admin/users.jsonc"    // routes/admin/users.jsonc
+]
+```
+
+Pathnames can include subdirectories to organize route files hierarchically.
 
 ## Route Configuration Files
 
@@ -376,18 +383,16 @@ When routes are nested:
         "name": "Production",
         "hostname": "com.myapp.www",
         "routes": [
-            "app://web.jsonc",
-            "app://api.jsonc",
-            "kixx://defaults.json"
+            "web.jsonc",
+            "api.jsonc"
         ]
     },
     {
         "name": "Development",
         "hostname": "localhost",
         "routes": [
-            "app://web.jsonc",
-            "app://api.jsonc",
-            "kixx://defaults.json"
+            "web.jsonc",
+            "api.jsonc"
         ]
     }
 ]
