@@ -8,7 +8,8 @@
       "Bash(npm test:*)",
       "Bash(npx eslint:*)",
       "Bash(npm run unit-test:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git show:*)"
     ]
   }
 }
