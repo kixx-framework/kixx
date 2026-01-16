@@ -27,10 +27,10 @@ const routesStore = new HttpRoutesStore({
     routes_directory,
 });
 
-const router = new HttpRouter();
 
+describe('routing with no matching route (uses default route)', ({ before, after, it }) => {
 
-describe('routing with no matching route', ({ before, after, it }) => {
+    const router = new HttpRouter();
 
     const url = new URL('http://www.example.com/some-subpage-which-exists');
 
@@ -130,7 +130,9 @@ describe('routing with no matching route', ({ before, after, it }) => {
 });
 
 
-describe('routing with no matching hostname', ({ before, after, it }) => {
+describe('routing with no matching hostname (uses default virtual host)', ({ before, after, it }) => {
+
+    const router = new HttpRouter();
 
     const url = new URL('http://localhost:8080');
 
