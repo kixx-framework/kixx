@@ -1,0 +1,27 @@
+[
+    {
+        "pattern": "/",
+        "inboundMiddleware": [
+            [ "AuthenticationMiddleware" ],
+        ],
+        "outboundMiddleware": [
+            [ "HttpCachingMiddleware" ],
+        ],
+        "errorHandlers": [
+            [ "HyperviewErrorHandler" ],
+        ],
+        "routes": [
+            {
+                "pattern": "/products/:category_id/:product_id",
+                "targets": [
+                    {
+                        "methods": ["GET", "HEAD"],
+                        "handlers": [
+                            [ "PublicViewProduct" ],
+                        ],
+                    },
+                ],
+            }
+        ],
+    },
+]

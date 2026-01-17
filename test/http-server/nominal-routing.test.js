@@ -28,6 +28,120 @@ const routesStore = new HttpRoutesStore({
 });
 
 
+describe('with matching hostname and pathname params', ({ before, after, it }) => {
+
+    const router = new HttpRouter();
+
+    const url = new URL('http://catalog.example.com/products/cat-id-123/prod-id-123');
+
+    const request = createRequest('1', url, {
+        method: 'GET',
+        headers: {
+            accept: '*/*',
+            'user-agent': 'Kixx/Test',
+        },
+    });
+
+    const response = new HttpServerResponse('1');
+
+    const context = createApplicationContext();
+
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    const authenticationMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    middleware.set('AuthenticationMiddleware', () => {
+        return authenticationMiddleware;
+    });
+
+    const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    middleware.set('HttpCachingMiddleware', () => {
+        return httpCachingMiddleware;
+    });
+
+    const publicViwProductHandler = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    handlers.set('PublicViewProduct', () => {
+        return publicViwProductHandler;
+    });
+
+    // The Hyperview handler should not be called
+    const hyperviewHandler = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    handlers.set('HyperviewHandler', () => {
+        return hyperviewHandler;
+    });
+
+    const hyperviewErrorHandler = sinon.spy((_ctx, _req, _res/* , _err */) => {
+        return _res;
+    });
+
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        return hyperviewErrorHandler;
+    });
+
+    const routerErrorHandler = sinon.spy();
+
+    let serverResponse;
+
+    before(async () => {
+        router.on('error', routerErrorHandler);
+
+        const vhosts = await routesStore.loadVirtualHosts(middleware, handlers, errorHandlers);
+        router.resetVirtualHosts(vhosts);
+
+        serverResponse = await router.handleHttpRequest(context, request, response);
+    });
+
+    after(() => {
+        router.off('error', routerErrorHandler);
+        sinon.restore();
+    });
+
+    it('does not emit a router error event', () => {
+        assertEqual(0, routerErrorHandler.callCount);
+    });
+
+    it('returns the server response', () => {
+        // The same response should be returned, after being
+        // mutated by the request/response cycle.
+        assertEqual(response, serverResponse);
+    });
+
+    it('calls the inbound authentication middleware', () => {
+        assertEqual(1, authenticationMiddleware.callCount);
+        assert(authenticationMiddleware.calledBefore(publicViwProductHandler));
+    });
+
+    it('does not call the hyperview page handler', () => {
+        assertEqual(0, hyperviewHandler.callCount);
+    });
+
+    it('calls the public product page handler', () => {
+        assertEqual(1, publicViwProductHandler.callCount);
+        assert(publicViwProductHandler.calledBefore(httpCachingMiddleware));
+    });
+
+    it('does not call the hyperview error handler', () => {
+        assertEqual(0, hyperviewErrorHandler.callCount);
+    });
+
+    it('calls the outbound httpCaching middleware', () => {
+        assertEqual(1, httpCachingMiddleware.callCount);
+    });
+});
+
 describe('routing with no matching route (uses default route)', ({ before, after, it }) => {
 
     const router = new HttpRouter();
@@ -64,6 +178,13 @@ describe('routing with no matching route (uses default route)', ({ before, after
 
     middleware.set('HttpCachingMiddleware', () => {
         return httpCachingMiddleware;
+    });
+
+    handlers.set('PublicViewProduct', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
     });
 
     const hyperviewHandler = sinon.spy((_ctx, _req, _res) => {
@@ -166,6 +287,13 @@ describe('routing with no matching hostname (uses default virtual host)', ({ bef
 
     middleware.set('HttpCachingMiddleware', () => {
         return httpCachingMiddleware;
+    });
+
+    handlers.set('PublicViewProduct', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
     });
 
     const hyperviewHandler = sinon.spy((_ctx, _req, _res) => {

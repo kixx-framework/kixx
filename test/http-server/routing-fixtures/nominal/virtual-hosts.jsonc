@@ -3,7 +3,7 @@
         "name": "Main",
         "pattern": "com.example.:subdomain",
         "routes": [
-            "app.jsonc",
+            "custom.jsonc",
             "defaults.jsonc",
         ],
     },
