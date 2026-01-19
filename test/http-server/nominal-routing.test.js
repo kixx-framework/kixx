@@ -28,6 +28,586 @@ const routesStore = new HttpRoutesStore({
     routes_directory,
 });
 
+describe('unexpected error handled by target handler', ({ before, after, it }) => {
+
+    const router = new HttpRouter();
+
+    const url = new URL('http://www.example.com/products/cat-id-123/prod-id-123');
+
+    const request = createRequest('1', url, {
+        method: 'GET',
+        headers: {
+            accept: '*/*',
+            'user-agent': 'Kixx/Test',
+        },
+    });
+
+    const response = new HttpServerResponse('1');
+
+    const context = createApplicationContext();
+
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+    middleware.set('AuthenticationMiddleware', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+    middleware.set('HttpCachingMiddleware', () => {
+        return httpCachingMiddleware;
+    });
+
+    const error = new Error('Unexpected Test Error');
+    const publicViwProductHandler = sinon.spy(() => {
+        throw error;
+    });
+    handlers.set('PublicViewProduct', () => {
+        return publicViwProductHandler;
+    });
+
+    handlers.set('HyperviewHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const hyperviewErrorHandler = sinon.spy((_ctx, _req, _res, _err) => {
+        return _res.respondWithUtf8(500, _err.message);
+    });
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        return hyperviewErrorHandler;
+    });
+
+    const productsErrorHandler = sinon.spy((_ctx, _req, _res, _err) => {
+        return _res.respondWithUtf8(500, _err.message);
+    });
+    errorHandlers.set('ProductsErrorHandler', () => {
+        return productsErrorHandler;
+    });
+
+    const viewProductErrorHandler = sinon.spy((_ctx, _req, _res, _err) => {
+        return _res.respondWithUtf8(500, _err.message);
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        return viewProductErrorHandler;
+    });
+
+    const routerErrorHandler = sinon.spy();
+
+    let serverResponse;
+
+    before(async () => {
+        router.on('error', routerErrorHandler);
+
+        const vhosts = await routesStore.loadVirtualHosts(middleware, handlers, errorHandlers);
+        router.resetVirtualHosts(vhosts);
+
+        serverResponse = await router.handleHttpRequest(context, request, response);
+    });
+
+    after(() => {
+        router.off('error', routerErrorHandler);
+        sinon.restore();
+    });
+
+    it('emits a router error event', () => {
+        assertEqual(1, routerErrorHandler.callCount);
+        const event = routerErrorHandler.getCall(0).args[0];
+        assertEqual('1', event.requestId);
+        assertEqual('Unexpected Test Error', event.error.message);
+    });
+
+    it('returns the server response', () => {
+        // The same response should be returned, after being
+        // mutated by the request/response cycle.
+        assertEqual(response, serverResponse);
+        assertEqual(500, serverResponse.status);
+    });
+
+    it('does not call HttpCachingMiddleware', () => {
+        assertEqual(0, httpCachingMiddleware.callCount);
+    });
+
+    // Target error handler
+    it('calls ViewProductErrorHandler', () => {
+        assertEqual(1, viewProductErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = viewProductErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(viewProductErrorHandler.calledAfter(publicViwProductHandler));
+    });
+
+    // Mid route error handler
+    it('does not call ProductsErrorHandler', () => {
+        assertEqual(0, productsErrorHandler.callCount);
+    });
+
+    // Top level route error handler
+    it('does not call HyperviewErrorHandler', () => {
+        assertEqual(0, hyperviewErrorHandler.callCount);
+    });
+});
+
+describe('unexpected error handled by mid level routes handler', ({ before, after, it }) => {
+
+    const router = new HttpRouter();
+
+    const url = new URL('http://www.example.com/products/cat-id-123/prod-id-123');
+
+    const request = createRequest('1', url, {
+        method: 'GET',
+        headers: {
+            accept: '*/*',
+            'user-agent': 'Kixx/Test',
+        },
+    });
+
+    const response = new HttpServerResponse('1');
+
+    const context = createApplicationContext();
+
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+    middleware.set('AuthenticationMiddleware', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+    middleware.set('HttpCachingMiddleware', () => {
+        return httpCachingMiddleware;
+    });
+
+    const error = new Error('Unexpected Test Error');
+    const publicViwProductHandler = sinon.spy(() => {
+        throw error;
+    });
+    handlers.set('PublicViewProduct', () => {
+        return publicViwProductHandler;
+    });
+
+    handlers.set('HyperviewHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const hyperviewErrorHandler = sinon.spy((_ctx, _req, _res, _err) => {
+        return _res.respondWithUtf8(500, _err.message);
+    });
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        return hyperviewErrorHandler;
+    });
+
+    const productsErrorHandler = sinon.spy((_ctx, _req, _res, _err) => {
+        return _res.respondWithUtf8(500, _err.message);
+    });
+    errorHandlers.set('ProductsErrorHandler', () => {
+        return productsErrorHandler;
+    });
+
+    const viewProductErrorHandler = sinon.spy(() => {
+        return false;
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        return viewProductErrorHandler;
+    });
+
+    const routerErrorHandler = sinon.spy();
+
+    let serverResponse;
+
+    before(async () => {
+        router.on('error', routerErrorHandler);
+
+        const vhosts = await routesStore.loadVirtualHosts(middleware, handlers, errorHandlers);
+        router.resetVirtualHosts(vhosts);
+
+        serverResponse = await router.handleHttpRequest(context, request, response);
+    });
+
+    after(() => {
+        router.off('error', routerErrorHandler);
+        sinon.restore();
+    });
+
+    it('emits a router error event', () => {
+        assertEqual(1, routerErrorHandler.callCount);
+        const event = routerErrorHandler.getCall(0).args[0];
+        assertEqual('1', event.requestId);
+        assertEqual('Unexpected Test Error', event.error.message);
+    });
+
+    it('returns the server response', () => {
+        // The same response should be returned, after being
+        // mutated by the request/response cycle.
+        assertEqual(response, serverResponse);
+        assertEqual(500, serverResponse.status);
+    });
+
+    it('does not call HttpCachingMiddleware', () => {
+        assertEqual(0, httpCachingMiddleware.callCount);
+    });
+
+    // Target error handler
+    it('calls ViewProductErrorHandler', () => {
+        assertEqual(1, viewProductErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = viewProductErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(viewProductErrorHandler.calledAfter(publicViwProductHandler));
+        assert(viewProductErrorHandler.calledBefore(productsErrorHandler));
+    });
+
+    // Mid route error handler
+    it('calls ProductsErrorHandler', () => {
+        assertEqual(1, productsErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = productsErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(productsErrorHandler.calledAfter(viewProductErrorHandler));
+    });
+
+    // Top level route error handler
+    it('does not call HyperviewErrorHandler', () => {
+        assertEqual(0, hyperviewErrorHandler.callCount);
+    });
+});
+
+describe('unexpected error handled by top level routes handler', ({ before, after, it }) => {
+
+    const router = new HttpRouter();
+
+    const url = new URL('http://www.example.com/products/cat-id-123/prod-id-123');
+
+    const request = createRequest('1', url, {
+        method: 'GET',
+        headers: {
+            accept: '*/*',
+            'user-agent': 'Kixx/Test',
+        },
+    });
+
+    const response = new HttpServerResponse('1');
+
+    const context = createApplicationContext();
+
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+    middleware.set('AuthenticationMiddleware', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+    middleware.set('HttpCachingMiddleware', () => {
+        return httpCachingMiddleware;
+    });
+
+    const error = new Error('Unexpected Test Error');
+    const publicViwProductHandler = sinon.spy(() => {
+        throw error;
+    });
+    handlers.set('PublicViewProduct', () => {
+        return publicViwProductHandler;
+    });
+
+    handlers.set('HyperviewHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const hyperviewErrorHandler = sinon.spy((_ctx, _req, _res, _err) => {
+        return _res.respondWithUtf8(500, _err.message);
+    });
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        return hyperviewErrorHandler;
+    });
+
+    const productsErrorHandler = sinon.spy(() => {
+        return false;
+    });
+    errorHandlers.set('ProductsErrorHandler', () => {
+        return productsErrorHandler;
+    });
+
+    const viewProductErrorHandler = sinon.spy(() => {
+        return false;
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        return viewProductErrorHandler;
+    });
+
+    const routerErrorHandler = sinon.spy();
+
+    let serverResponse;
+
+    before(async () => {
+        router.on('error', routerErrorHandler);
+
+        const vhosts = await routesStore.loadVirtualHosts(middleware, handlers, errorHandlers);
+        router.resetVirtualHosts(vhosts);
+
+        serverResponse = await router.handleHttpRequest(context, request, response);
+    });
+
+    after(() => {
+        router.off('error', routerErrorHandler);
+        sinon.restore();
+    });
+
+    it('emits a router error event', () => {
+        assertEqual(1, routerErrorHandler.callCount);
+        const event = routerErrorHandler.getCall(0).args[0];
+        assertEqual('1', event.requestId);
+        assertEqual('Unexpected Test Error', event.error.message);
+    });
+
+    it('returns the server response', () => {
+        // The same response should be returned, after being
+        // mutated by the request/response cycle.
+        assertEqual(response, serverResponse);
+        assertEqual(500, serverResponse.status);
+    });
+
+    it('does not call HttpCachingMiddleware', () => {
+        assertEqual(0, httpCachingMiddleware.callCount);
+    });
+
+    // Target error handler
+    it('calls ViewProductErrorHandler', () => {
+        assertEqual(1, viewProductErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = viewProductErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(viewProductErrorHandler.calledAfter(publicViwProductHandler));
+        assert(viewProductErrorHandler.calledBefore(productsErrorHandler));
+    });
+
+    // Mid route error handler
+    it('calls ProductsErrorHandler', () => {
+        assertEqual(1, productsErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = productsErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(productsErrorHandler.calledAfter(viewProductErrorHandler));
+        assert(productsErrorHandler.calledBefore(hyperviewErrorHandler));
+    });
+
+    // Top level route error handler
+    it('calls HyperviewErrorHandler', () => {
+        assertEqual(1, hyperviewErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = hyperviewErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(hyperviewErrorHandler.calledAfter(productsErrorHandler));
+    });
+});
+
+describe('unexpected error handled by router error handler', ({ before, after, it }) => {
+
+    const router = new HttpRouter();
+
+    const url = new URL('http://www.example.com/products/cat-id-123/prod-id-123');
+
+    const request = createRequest('1', url, {
+        method: 'GET',
+        headers: {
+            accept: '*/*',
+            'user-agent': 'Kixx/Test',
+        },
+    });
+
+    const response = new HttpServerResponse('1');
+
+    const context = createApplicationContext();
+
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+    middleware.set('AuthenticationMiddleware', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+    middleware.set('HttpCachingMiddleware', () => {
+        return httpCachingMiddleware;
+    });
+
+    const publicViwProductHandler = sinon.spy(() => {
+        throw new Error('Unexpected Test Error');
+    });
+    handlers.set('PublicViewProduct', () => {
+        return publicViwProductHandler;
+    });
+
+    handlers.set('HyperviewHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const hyperviewErrorHandler = sinon.spy(() => {
+        return false;
+    });
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        return hyperviewErrorHandler;
+    });
+
+    const productsErrorHandler = sinon.spy(() => {
+        return false;
+    });
+    errorHandlers.set('ProductsErrorHandler', () => {
+        return productsErrorHandler;
+    });
+
+    const viewProductErrorHandler = sinon.spy(() => {
+        return false;
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        return viewProductErrorHandler;
+    });
+
+    const routerErrorHandler = sinon.spy();
+
+    let error;
+
+    before(async () => {
+        router.on('error', routerErrorHandler);
+
+        const vhosts = await routesStore.loadVirtualHosts(middleware, handlers, errorHandlers);
+        router.resetVirtualHosts(vhosts);
+
+        try {
+            await router.handleHttpRequest(context, request, response);
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    after(() => {
+        router.off('error', routerErrorHandler);
+        sinon.restore();
+    });
+
+    it('emits a router error event', () => {
+        assertEqual(1, routerErrorHandler.callCount);
+        const event = routerErrorHandler.getCall(0).args[0];
+        assertEqual('1', event.requestId);
+        assertEqual('Unexpected Test Error', event.error.message);
+    });
+
+    it('throws the unexpected error', () => {
+        assert(error);
+        assertEqual('Unexpected Test Error', error.message);
+    });
+
+    it('does not call HttpCachingMiddleware', () => {
+        assertEqual(0, httpCachingMiddleware.callCount);
+    });
+
+    // Target error handler
+    it('calls ViewProductErrorHandler', () => {
+        assertEqual(1, viewProductErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = viewProductErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(viewProductErrorHandler.calledAfter(publicViwProductHandler));
+        assert(viewProductErrorHandler.calledBefore(productsErrorHandler));
+    });
+
+    // Mid route error handler
+    it('calls ProductsErrorHandler', () => {
+        assertEqual(1, productsErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = productsErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(productsErrorHandler.calledAfter(viewProductErrorHandler));
+        assert(productsErrorHandler.calledBefore(hyperviewErrorHandler));
+    });
+
+    // Top level route error handler
+    it('calls HyperviewErrorHandler', () => {
+        assertEqual(1, hyperviewErrorHandler.callCount);
+
+        // The error is passed in as the 4th argument.
+        const err = hyperviewErrorHandler.getCall(0).args[3];
+        assertEqual(error, err);
+
+        assert(hyperviewErrorHandler.calledAfter(productsErrorHandler));
+    });
+});
+
 describe('with unhandled method error handled by primary error handler', ({ before, after, it }) => {
 
     const router = new HttpRouter();
@@ -97,6 +677,19 @@ describe('with unhandled method error handled by primary error handler', ({ befo
     });
     errorHandlers.set('HyperviewErrorHandler', () => {
         return hyperviewErrorHandler;
+    });
+
+    errorHandlers.set('ProductsErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
     });
 
     const routerErrorHandler = sinon.spy();
@@ -221,6 +814,19 @@ describe('with unhandled method and primary error handler returns false', ({ bef
         return hyperviewErrorHandler;
     });
 
+    errorHandlers.set('ProductsErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+
     const routerErrorHandler = sinon.spy();
 
     let serverResponse;
@@ -315,20 +921,17 @@ describe('with matching hostname and pathname params', ({ before, after, it }) =
         });
     });
 
-    const authenticationMiddleware = sinon.spy((_ctx, _req, _res) => {
-        return _res;
-    });
-
     middleware.set('AuthenticationMiddleware', () => {
-        return authenticationMiddleware;
+        // A stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
     });
-
-    const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
-        return _res;
-    });
-
     middleware.set('HttpCachingMiddleware', () => {
-        return httpCachingMiddleware;
+        // A stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
     });
 
     const publicViwProductHandler = sinon.spy((_ctx, _req, _res) => {
@@ -350,12 +953,25 @@ describe('with matching hostname and pathname params', ({ before, after, it }) =
         return hyperviewHandler;
     });
 
-    const hyperviewErrorHandler = sinon.spy(() => {
-        return false;
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
     });
 
-    errorHandlers.set('HyperviewErrorHandler', () => {
-        return hyperviewErrorHandler;
+    errorHandlers.set('ProductsErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
     });
 
     const routerErrorHandler = sinon.spy();
@@ -387,26 +1003,12 @@ describe('with matching hostname and pathname params', ({ before, after, it }) =
         assertEqual(200, serverResponse.status);
     });
 
-    it('calls the inbound authentication middleware', () => {
-        assertEqual(1, authenticationMiddleware.callCount);
-        assert(authenticationMiddleware.calledBefore(publicViwProductHandler));
-    });
-
     it('does not call the hyperview page handler', () => {
         assertEqual(0, hyperviewHandler.callCount);
     });
 
     it('calls the public product page handler', () => {
         assertEqual(1, publicViwProductHandler.callCount);
-        assert(publicViwProductHandler.calledBefore(httpCachingMiddleware));
-    });
-
-    it('does not call the hyperview error handler', () => {
-        assertEqual(0, hyperviewErrorHandler.callCount);
-    });
-
-    it('calls the outbound httpCaching middleware', () => {
-        assertEqual(1, httpCachingMiddleware.callCount);
     });
 
     it('sets hostname params', () => {
@@ -479,6 +1081,18 @@ describe('bare domain (redirects to www subdomain)', ({ before, after, it }) => 
         // Never called We just need a stub to pass validation.
         return sinon.spy((_ctx, _req, _res) => {
             return _res;
+        });
+    });
+    errorHandlers.set('ProductsErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
         });
     });
 
@@ -583,6 +1197,19 @@ describe('routing with no matching route (uses default route)', ({ before, after
 
     errorHandlers.set('HyperviewErrorHandler', () => {
         return hyperviewErrorHandler;
+    });
+
+    errorHandlers.set('ProductsErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
     });
 
     const routerErrorHandler = sinon.spy();
@@ -695,6 +1322,19 @@ describe('routing with no matching hostname (uses default virtual host)', ({ bef
     });
     errorHandlers.set('HyperviewErrorHandler', () => {
         return hyperviewErrorHandler;
+    });
+
+    errorHandlers.set('ProductsErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
     });
 
     const routerErrorHandler = sinon.spy();

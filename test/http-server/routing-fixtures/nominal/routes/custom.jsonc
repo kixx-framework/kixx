@@ -12,16 +12,27 @@
         ],
         "routes": [
             {
-                "pattern": "/products/:category_id/:product_id",
-                "targets": [
+                "pattern": "/products",
+                "errorHandlers": [
+                    [ "ProductsErrorHandler" ],
+                ],
+                "routes": [
                     {
-                        "methods": ["GET", "HEAD"],
-                        "handlers": [
-                            [ "PublicViewProduct" ],
+                        "pattern": "/:category_id/:product_id",
+                        "targets": [
+                            {
+                                "methods": ["GET", "HEAD"],
+                                "handlers": [
+                                    [ "PublicViewProduct" ],
+                                ],
+                                "errorHandlers": [
+                                    [ "ViewProductErrorHandler" ],
+                                ],
+                            },
                         ],
                     },
                 ],
-            }
+            },
         ],
     },
 ]
