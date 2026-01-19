@@ -1,0 +1,13 @@
+[
+    {
+        "pattern": "*",
+        "targets": [
+            {
+                "methods": [ "GET", "HEAD" ],
+                "handlers": [
+                    [ "RedirectToWWW" ],
+                ],
+            },
+        ],
+    },
+]

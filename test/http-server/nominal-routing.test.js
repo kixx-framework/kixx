@@ -50,10 +50,16 @@ describe('with unhandled method error handled by primary error handler', ({ befo
     const handlers = new Map();
     const errorHandlers = new Map();
 
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
     const authenticationMiddleware = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     middleware.set('AuthenticationMiddleware', () => {
         return authenticationMiddleware;
     });
@@ -61,7 +67,6 @@ describe('with unhandled method error handled by primary error handler', ({ befo
     const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     middleware.set('HttpCachingMiddleware', () => {
         return httpCachingMiddleware;
     });
@@ -69,7 +74,6 @@ describe('with unhandled method error handled by primary error handler', ({ befo
     const publicViwProductHandler = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     handlers.set('PublicViewProduct', () => {
         return publicViwProductHandler;
     });
@@ -78,7 +82,6 @@ describe('with unhandled method error handled by primary error handler', ({ befo
     const hyperviewHandler = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     handlers.set('HyperviewHandler', () => {
         return hyperviewHandler;
     });
@@ -92,7 +95,6 @@ describe('with unhandled method error handled by primary error handler', ({ befo
             );
         }
     });
-
     errorHandlers.set('HyperviewErrorHandler', () => {
         return hyperviewErrorHandler;
     });
@@ -154,7 +156,6 @@ describe('with unhandled method error handled by primary error handler', ({ befo
     });
 });
 
-
 describe('with unhandled method and primary error handler returns false', ({ before, after, it }) => {
 
     const router = new HttpRouter();
@@ -177,10 +178,16 @@ describe('with unhandled method and primary error handler returns false', ({ bef
     const handlers = new Map();
     const errorHandlers = new Map();
 
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
     const authenticationMiddleware = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     middleware.set('AuthenticationMiddleware', () => {
         return authenticationMiddleware;
     });
@@ -188,7 +195,6 @@ describe('with unhandled method and primary error handler returns false', ({ bef
     const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     middleware.set('HttpCachingMiddleware', () => {
         return httpCachingMiddleware;
     });
@@ -196,7 +202,6 @@ describe('with unhandled method and primary error handler returns false', ({ bef
     const publicViwProductHandler = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     handlers.set('PublicViewProduct', () => {
         return publicViwProductHandler;
     });
@@ -205,7 +210,6 @@ describe('with unhandled method and primary error handler returns false', ({ bef
     const hyperviewHandler = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     handlers.set('HyperviewHandler', () => {
         return hyperviewHandler;
     });
@@ -213,7 +217,6 @@ describe('with unhandled method and primary error handler returns false', ({ bef
     const hyperviewErrorHandler = sinon.spy(() => {
         return false;
     });
-
     errorHandlers.set('HyperviewErrorHandler', () => {
         return hyperviewErrorHandler;
     });
@@ -280,7 +283,6 @@ describe('with unhandled method and primary error handler returns false', ({ bef
     });
 });
 
-
 describe('with matching hostname and pathname params', ({ before, after, it }) => {
 
     const router = new HttpRouter();
@@ -305,6 +307,13 @@ describe('with matching hostname and pathname params', ({ before, after, it }) =
     const middleware = new Map();
     const handlers = new Map();
     const errorHandlers = new Map();
+
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
 
     const authenticationMiddleware = sinon.spy((_ctx, _req, _res) => {
         return _res;
@@ -410,6 +419,104 @@ describe('with matching hostname and pathname params', ({ before, after, it }) =
     });
 });
 
+describe('bare domain (redirects to www subdomain)', ({ before, after, it }) => {
+
+    const router = new HttpRouter();
+
+    const url = new URL('http://example.com/some-subpage-which-exists');
+
+    const request = createRequest('1', url, {
+        method: 'GET',
+        headers: {
+            accept: '*/*',
+            'user-agent': 'Kixx/Test',
+        },
+    });
+
+    const response = new HttpServerResponse('1');
+
+    const context = createApplicationContext();
+
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    const redirectHandler = sinon.spy((_ctx, _req, _res) => {
+        const u = new URL(_req.url);
+        u.protocol = 'https:';
+        u.hostname = 'www.example.com';
+        return _res.respondWithRedirect(301, url);
+    });
+    handlers.set('RedirectToWWW', () => {
+        return redirectHandler;
+    });
+
+    middleware.set('AuthenticationMiddleware', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+    middleware.set('HttpCachingMiddleware', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+    handlers.set('HyperviewHandler', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+    handlers.set('PublicViewProduct', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const routerErrorHandler = sinon.spy();
+
+    let serverResponse;
+
+    before(async () => {
+        router.on('error', routerErrorHandler);
+
+        const vhosts = await routesStore.loadVirtualHosts(middleware, handlers, errorHandlers);
+        router.resetVirtualHosts(vhosts);
+
+        serverResponse = await router.handleHttpRequest(context, request, response);
+    });
+
+    after(() => {
+        router.off('error', routerErrorHandler);
+        sinon.restore();
+    });
+
+    it('does not emit a router error event', () => {
+        assertEqual(0, routerErrorHandler.callCount);
+    });
+
+    it('returns the server response', () => {
+        // The same response should be returned, after being
+        // mutated by the request/response cycle.
+        assertEqual(response, serverResponse);
+        assertEqual(301, serverResponse.status);
+        assertEqual('http://example.com/some-subpage-which-exists', serverResponse.headers.get('location'));
+    });
+
+    it('calls the redirect handler', () => {
+        assertEqual(1, redirectHandler.callCount);
+    });
+});
+
 describe('routing with no matching route (uses default route)', ({ before, after, it }) => {
 
     const router = new HttpRouter();
@@ -431,6 +538,13 @@ describe('routing with no matching route (uses default route)', ({ before, after
     const middleware = new Map();
     const handlers = new Map();
     const errorHandlers = new Map();
+
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
 
     const authenticationMiddleware = sinon.spy((_ctx, _req, _res) => {
         return _res;
@@ -519,7 +633,6 @@ describe('routing with no matching route (uses default route)', ({ before, after
     });
 });
 
-
 describe('routing with no matching hostname (uses default virtual host)', ({ before, after, it }) => {
 
     const router = new HttpRouter();
@@ -542,10 +655,16 @@ describe('routing with no matching hostname (uses default virtual host)', ({ bef
     const handlers = new Map();
     const errorHandlers = new Map();
 
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
     const authenticationMiddleware = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     middleware.set('AuthenticationMiddleware', () => {
         return authenticationMiddleware;
     });
@@ -553,7 +672,6 @@ describe('routing with no matching hostname (uses default virtual host)', ({ bef
     const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     middleware.set('HttpCachingMiddleware', () => {
         return httpCachingMiddleware;
     });
@@ -568,7 +686,6 @@ describe('routing with no matching hostname (uses default virtual host)', ({ bef
     const hyperviewHandler = sinon.spy((_ctx, _req, _res) => {
         return _res;
     });
-
     handlers.set('HyperviewHandler', () => {
         return hyperviewHandler;
     });
@@ -576,7 +693,6 @@ describe('routing with no matching hostname (uses default virtual host)', ({ bef
     const hyperviewErrorHandler = sinon.spy(() => {
         return false;
     });
-
     errorHandlers.set('HyperviewErrorHandler', () => {
         return hyperviewErrorHandler;
     });
