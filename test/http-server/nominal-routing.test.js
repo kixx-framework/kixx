@@ -1131,6 +1131,134 @@ describe('bare domain (redirects to www subdomain)', ({ before, after, it }) => 
     });
 });
 
+describe('when first middleware calls skip()', ({ before, after, it }) => {
+
+    const router = new HttpRouter();
+
+    const url = new URL('http://www.example.com/some-subpage-which-exists');
+
+    const request = createRequest('1', url, {
+        method: 'GET',
+        headers: {
+            accept: '*/*',
+            'user-agent': 'Kixx/Test',
+        },
+    });
+
+    const response = new HttpServerResponse('1');
+
+    const context = createApplicationContext();
+
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    handlers.set('RedirectToWWW', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const authenticationMiddleware = sinon.spy((_ctx, _req, _res, skip) => {
+        _res.respondWithJSON(401, { error: 'Unauthenticated' });
+        skip();
+    });
+
+    middleware.set('AuthenticationMiddleware', () => {
+        return authenticationMiddleware;
+    });
+
+    const httpCachingMiddleware = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    middleware.set('HttpCachingMiddleware', () => {
+        return httpCachingMiddleware;
+    });
+
+    handlers.set('PublicViewProduct', () => {
+        // Never called We just need a stub to pass validation.
+        return sinon.spy((_ctx, _req, _res) => {
+            return _res;
+        });
+    });
+
+    const hyperviewHandler = sinon.spy((_ctx, _req, _res) => {
+        return _res;
+    });
+
+    handlers.set('HyperviewHandler', () => {
+        return hyperviewHandler;
+    });
+
+    const hyperviewErrorHandler = sinon.spy(() => {
+        return false;
+    });
+
+    errorHandlers.set('HyperviewErrorHandler', () => {
+        return hyperviewErrorHandler;
+    });
+
+    errorHandlers.set('ProductsErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+    errorHandlers.set('ViewProductErrorHandler', () => {
+        // Stub to pass validation for this test.
+        return sinon.spy(() => {
+            return false;
+        });
+    });
+
+    const routerErrorHandler = sinon.spy();
+
+    let serverResponse;
+
+    before(async () => {
+        router.on('error', routerErrorHandler);
+
+        const vhosts = await routesStore.loadVirtualHosts(middleware, handlers, errorHandlers);
+        router.resetVirtualHosts(vhosts);
+
+        serverResponse = await router.handleHttpRequest(context, request, response);
+    });
+
+    after(() => {
+        router.off('error', routerErrorHandler);
+        sinon.restore();
+    });
+
+    it('does not emit a router error event', () => {
+        assertEqual(0, routerErrorHandler.callCount);
+    });
+
+    it('returns the server response', () => {
+        // The same response should be returned, after being
+        // mutated by the request/response cycle.
+        assertEqual(response, serverResponse);
+        assertEqual(401, serverResponse.status);
+    });
+
+    it('calls the inbound authentication middleware', () => {
+        assertEqual(1, authenticationMiddleware.callCount);
+    });
+
+    it('calls the hyperview page handler', () => {
+        assertEqual(0, hyperviewHandler.callCount);
+    });
+
+    it('does not call the hyperview error handler', () => {
+        assertEqual(0, hyperviewErrorHandler.callCount);
+    });
+
+    it('calls the outbound httpCaching middleware', () => {
+        assertEqual(0, httpCachingMiddleware.callCount);
+    });
+});
+
 describe('routing with no matching route (uses default route)', ({ before, after, it }) => {
 
     const router = new HttpRouter();
