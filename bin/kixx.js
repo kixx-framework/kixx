@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import * as InitProject from '../cli/init-project.js';
 import * as AppServer from '../cli/app-server.js';
 import * as RunCommand from '../cli/run-command.js';
+import * as DevServer from '../cli/dev-server.js';
 
 
 const ROOT_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -43,6 +44,9 @@ switch (commandName) {
         break;
     case 'init-project':
         promise = InitProject.main(args);
+        break;
+    case 'dev-server':
+        promise = DevServer.main(args);
         break;
     default:
         console.error(`The Kixx command "${ commandName }" is not recognized. Available commands are:` + EOL);

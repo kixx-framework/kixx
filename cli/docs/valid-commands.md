@@ -27,3 +27,11 @@ Use the `init-project` command to initialize a new Kixx project, or update the m
 Example: `npx kixx init-project --name "My Amazing Web App!"`
 
 For more information, run `kixx init-project --help`.
+
+dev-server
+----------
+Use `dev-server` to run a Node.js script and automatically restart it when watched files change.
+
+Example: `npx kixx dev-server ./server.js --watch ./lib`
+
+For more information, run `kixx dev-server --help`.
