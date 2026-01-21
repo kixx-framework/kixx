@@ -9,7 +9,9 @@
       "Bash(npx eslint:*)",
       "Bash(npm run unit-test:*)",
       "Bash(find:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(git -C /Users/kris/Projects/Kixx/kixx show HEAD:lib/application/application.js)",
+      "Bash(git -C /Users/kris/Projects/Kixx/kixx diff lib/application/application.js)"
     ]
   }
 }
