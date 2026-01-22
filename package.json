@@ -17,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kixx-platform/kixx.git"
+    "url": "https://github.com/kixx-framework/kixx.git"
   },
   "files": [
     "lib/",
@@ -44,7 +44,7 @@
   "author": "Kris Walker (www.kriswalker.me)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/kixx-platform/kixx/issues"
+    "url": "https://github.com/kixx-framework/kixx/issues"
   },
   "homepage": "https://www.kixx.dev"
 }
