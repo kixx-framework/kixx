@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import DevelopmentServer from '../lib/application/development-server.js';
 import Application from '../lib/application/application.js';
+import ApplicationServer from '../lib/application/application-server.js';
 import { isNonEmptyString, isNumberNotNaN } from '../lib/assertions/mod.js';
 
 const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -42,6 +42,7 @@ const options = {
 
 
 export async function main(args) {
+    // Parse and validate command line arguments
     const { values } = parseArgs({
         args,
         options,
@@ -57,6 +58,8 @@ export async function main(args) {
         return;
     }
 
+    // Resolve file paths relative to the current working directory so the
+    // server can be started from any directory
     const currentWorkingDirectory = process.cwd();
 
     const applicationDirectory = isNonEmptyString(values.dir) ? values.dir : null;
@@ -67,6 +70,7 @@ export async function main(args) {
 
     const environment = values.environment;
 
+    // Initialize the Application which loads config, secrets, and sets up the logger
     const app = new Application({
         currentWorkingDirectory,
         applicationDirectory,
@@ -83,24 +87,25 @@ export async function main(args) {
 
     const { logger } = context;
 
+    // Set a descriptive process title for easier identification in `ps` output
     // eslint-disable-next-line require-atomic-updates
     process.title = `node-${ context.config.processName }`;
-    // NOTE: We've seen process names get truncated.
-    // For example, on Ubuntu Linux this is truncated to 15 characters.
+    // WARNING: Process names are truncated on some systems (e.g., 15 chars on Ubuntu Linux)
 
     const serverConfig = context.config.getNamespace('server');
 
-    // Allow the port number provided on the command line to override the
-    // port number from the configuration.
+    // Command line port takes precedence over config file for easier ad-hoc testing
     if (!isNumberNotNaN(port)) {
         port = serverConfig.port;
     }
 
-    const server = new DevelopmentServer(app, { port });
+    // Create the server and wire up event handlers for logging
+    const server = new ApplicationServer(app, { port });
 
     server.on('error', (event) => {
         logger.error(event.message, event.info, event.cause);
 
+        // Allow pending log writes to flush before terminating on fatal errors
         if (event.fatal) {
             setTimeout(() => {
                 logger.error(`${ event.name }:${ event.message }; fatal error; exiting`);
@@ -121,10 +126,8 @@ export async function main(args) {
         logger.warn(event.message, event.info, event.cause);
     });
 
-    // Load configs and routes to sanity check them. If the configuration or
-    // routes are not valid, an error will be thrown here instead of
-    // waiting for the first request.
-    await server.preload();
+    // Load application routes and middleware before starting the HTTP listener
+    await server.load();
 
     server.startServer();
 }
