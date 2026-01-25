@@ -14,6 +14,7 @@ Some examples of good JSDoc comments for this project.
 - Do not add the @private tag to private members.
 - Be sure to add JSDoc blocks to members defined by `Object.defineProperties()` and use the @name tag to explicitly provide a name.
 - Be sure to add JSDoc blocks to members defined by `Object.defineProperty()` and use the @name tag to explicitly provide a name.
+- Document events using the @emits as an alias to the @fires tag.
 
 ```javascript
 /**

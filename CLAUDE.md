@@ -12,7 +12,7 @@ This project contains the source files which implement the Kixx framework.
 
 - **No TypeScript**: Allows for flexibility and developer productivity
 - **ES2022+ JavaScript**: with Node.js >= 16.13.2
-- **Vendored Dependencies**: Some dependencies are vendored in `lib/vendor/` (luxon, marked, jsonc-parser, path-to-regexp)
+- **Vendored Dependencies**: Some dependencies are vendored in `lib/vendor/` (luxon, marked, jsonc-parser, minimatch, path-to-regexp)
 
 ## Commands
 
@@ -60,7 +60,7 @@ node run-tests.js --stack 6
 ### Important Notes
 
 - **No TypeScript**: The project intentionally avoids TypeScript for simplicity and developer happiness
-- **Vendored Dependencies**: Some dependencies are vendored in `lib/vendor/` (luxon, marked, jsonc-parser, path-to-regexp)
+- **Vendored Dependencies**: Some dependencies are vendored in `lib/vendor/` (luxon, marked, jsonc-parser, minimatch, path-to-regexp)
 - **ES Modules Only**: The framework uses ES6 modules exclusively (type: "module" in package.json)
 - **Assertions**: Use the assertion library in `lib/assertions/` to make assertions in the code about important assumptions
 - **File System Access**: Use `lib/lib/file-system.js` utilities, not direct Node.js fs calls (enables testing with mocks)
@@ -117,3 +117,4 @@ See `docs/unit-testing-guidelines.md` for comprehensive testing documentation.
 - Do NOT nest `describe()` blocks
 - Test errors by name (`error.name`), not `instanceof`
 - Always call `sinon.restore()` in `after()` blocks when using stubs
+
