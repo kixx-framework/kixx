@@ -588,6 +588,226 @@ describe('Application#registerErrorHandler without function', ({ it }) => {
 });
 
 
+describe('Application#createLogger with config parameter', ({ before, after, it }) => {
+    const configFilepath = path.join(FAKE_APP_DIR, 'kixx-config.jsonc');
+    const secretsFilepath = path.join(FAKE_APP_DIR, '.secrets.jsonc');
+
+    const configData = {
+        name: 'Test App',
+        processName: 'testapp',
+        environments: {
+            development: {
+                logger: { level: 'info', mode: 'stdout' },
+            },
+        },
+    };
+
+    const fileSystem = {
+        readJSONFile: sinon.stub().resolves(configData),
+        readDirectory: sinon.stub(),
+    };
+
+    let app;
+    let config;
+    let logger;
+
+    before(async () => {
+        app = new Application({
+            currentWorkingDirectory: FAKE_CWD,
+            fileSystem,
+        });
+
+        config = await app.loadConfiguration({
+            environment: 'development',
+            configFilepath,
+            secretsFilepath,
+        });
+
+        logger = app.createLogger(config);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns a logger instance', () => {
+        assert(logger);
+    });
+
+    it('sets logger level from config', () => {
+        assertEqual('INFO', logger.level);
+    });
+
+    it('sets logger mode from config', () => {
+        assertEqual('stdout', logger.mode);
+    });
+});
+
+
+describe('Application#createLogger uses cached config', ({ before, after, it }) => {
+    const configFilepath = path.join(FAKE_APP_DIR, 'kixx-config.jsonc');
+    const secretsFilepath = path.join(FAKE_APP_DIR, '.secrets.jsonc');
+
+    const configData = {
+        name: 'Test App',
+        processName: 'testapp',
+        environments: {
+            development: {
+                logger: { level: 'warn', mode: 'console' },
+            },
+        },
+    };
+
+    const fileSystem = {
+        readJSONFile: sinon.stub().resolves(configData),
+        readDirectory: sinon.stub(),
+    };
+
+    let app;
+    let logger;
+
+    before(async () => {
+        app = new Application({
+            currentWorkingDirectory: FAKE_CWD,
+            fileSystem,
+        });
+
+        // Load configuration first to cache it
+        await app.loadConfiguration({
+            environment: 'development',
+            configFilepath,
+            secretsFilepath,
+        });
+
+        // Call createLogger without passing config - should use cached
+        logger = app.createLogger();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns a logger instance', () => {
+        assert(logger);
+    });
+
+    it('uses cached config for logger level', () => {
+        assertEqual('WARN', logger.level);
+    });
+
+    it('uses cached config for logger mode', () => {
+        assertEqual('console', logger.mode);
+    });
+});
+
+
+describe('Application#createLogger with default values', ({ before, after, it }) => {
+    const configFilepath = path.join(FAKE_APP_DIR, 'kixx-config.jsonc');
+    const secretsFilepath = path.join(FAKE_APP_DIR, '.secrets.jsonc');
+
+    // Config without logger settings
+    const configData = {
+        name: 'Test App',
+        processName: 'testapp',
+        environments: {
+            development: {},
+        },
+    };
+
+    const fileSystem = {
+        readJSONFile: sinon.stub().resolves(configData),
+        readDirectory: sinon.stub(),
+    };
+
+    let app;
+    let logger;
+
+    before(async () => {
+        app = new Application({
+            currentWorkingDirectory: FAKE_CWD,
+            fileSystem,
+        });
+
+        await app.loadConfiguration({
+            environment: 'development',
+            configFilepath,
+            secretsFilepath,
+        });
+
+        logger = app.createLogger();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('defaults logger level to debug', () => {
+        assertEqual('DEBUG', logger.level);
+    });
+
+    it('defaults logger mode to console', () => {
+        assertEqual('console', logger.mode);
+    });
+});
+
+
+describe('Application#createLogger subscribes to config changes', ({ before, after, it }) => {
+    const configFilepath = path.join(FAKE_APP_DIR, 'kixx-config.jsonc');
+    const secretsFilepath = path.join(FAKE_APP_DIR, '.secrets.jsonc');
+
+    const configData = {
+        name: 'Test App',
+        processName: 'testapp',
+        environments: {
+            development: {
+                logger: { level: 'debug', mode: 'console' },
+            },
+        },
+    };
+
+    const fileSystem = {
+        readJSONFile: sinon.stub().resolves(configData),
+        readDirectory: sinon.stub(),
+    };
+
+    let app;
+    let config;
+    let logger;
+    let configOnSpy;
+
+    before(async () => {
+        app = new Application({
+            currentWorkingDirectory: FAKE_CWD,
+            fileSystem,
+        });
+
+        config = await app.loadConfiguration({
+            environment: 'development',
+            configFilepath,
+            secretsFilepath,
+        });
+
+        // Spy on config.on to verify the change listener is registered
+        configOnSpy = sinon.spy(config, 'on');
+
+        logger = app.createLogger(config);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns a logger instance', () => {
+        assert(logger);
+    });
+
+    it('registers a change listener on config', () => {
+        assertEqual(1, configOnSpy.callCount);
+        assertEqual('change', configOnSpy.firstCall.firstArg);
+    });
+});
+
+
 describe('Application#initialize without environment throws', ({ before, after, it }) => {
     const fileSystem = {
         readJSONFile: sinon.stub(),
