@@ -8,8 +8,8 @@ Some examples of good JSDoc comments for this project.
 
 ### Documenting a class
 
-- When possible, write @typedef blocks to document complex data structures
-- Include documenation for private members beginning with "#"
+- When possible, write @typedef blocks to document complex data structures, but do not document method options objects using @typedef blocks.
+- For method option objects, use the `@param {Object} options` and `@param {TYPE} options.param1 - description` notation to document the options properties.
 - Attempt to determine if a class member is used as part of the public Kixx framework API, and if so, mark it as @public
 - Do not add the @private tag to private members.
 - Be sure to add JSDoc blocks to members defined by `Object.defineProperties()` and use the @name tag to explicitly provide a name.
