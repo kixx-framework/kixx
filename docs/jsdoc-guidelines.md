@@ -8,13 +8,13 @@ Some examples of good JSDoc comments for this project.
 
 ### Documenting a class
 
-- When possible, write @typedef blocks to document complex data structures, but do not document method options objects using @typedef blocks.
-- For method option objects, use the `@param {Object} options` and `@param {TYPE} options.param1 - description` notation to document the options properties.
-- Attempt to determine if a class member is used as part of the public Kixx framework API, and if so, mark it as @public
-- Do not add the @private tag to private members.
 - Be sure to add JSDoc blocks to members defined by `Object.defineProperties()` and use the @name tag to explicitly provide a name.
 - Be sure to add JSDoc blocks to members defined by `Object.defineProperty()` and use the @name tag to explicitly provide a name.
+- Use @typedef blocks to document complex data structures, but do not document method options objects using @typedef blocks.
+- For method option objects, use the `@param {Object} options` and `@param {TYPE} options.param1 - description` notation to document the options properties.
 - Document events using the @emits as an alias to the @fires tag.
+- Attempt to determine if a class member is used as part of the public Kixx framework API, and if so, mark it as @public
+- Do *not* add the @private tag to private members.
 
 ```javascript
 /**
@@ -227,5 +227,41 @@ In JavaScript, async patterns are everywhere. Mark async functions and methods w
  * @throws {DatabaseError} When database connection fails
  */
 async function getUser(userId) {
+}
+
+/**
+ * @async
+ * @param {number} milliseconds
+ * @returns {Promise<undefined>}
+ */
+function delay(milliseconds) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, milliseconds);
+    });
+}
+```
+
+## Document Events
+
+- Document events using the @emits as an alias to the @fires tag.
+- Use @typedef blocks to document event object structures instead of the @event tag.
+
+```javascript
+import { EventEmitter } from 'node:events';
+import { WrappedError } from '../errors/mod.js';
+
+/**
+ * @typedef {Object} FileChangeEvent
+ * @property {string} filepath - Absolute path to the changed file
+ * @property {string} eventType - Type of change ('rename' or 'change')
+ */
+
+/**
+ * Monitors a directory for file changes using glob patterns to filter events.
+ * @extends EventEmitter
+ * @emits FileWatcher#change - Emits a FileChangeEvent when a matching file changes
+ * @emits FileWatcher#error - Emits a WrappedError when the underlying fs.watch fails
+ */
+export default class FileWatcher extends EventEmitter {
 }
 ```
