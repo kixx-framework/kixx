@@ -5,7 +5,8 @@ Options
 -------
 
 --port (-p) *optional*
-    The port to attach your HTTP server on.
+    The port to attach your HTTP server on. If provided, this value will
+    override the port setting in your server config namespace.
 
 --dir (-d) *optional*
     The path to your application directory.

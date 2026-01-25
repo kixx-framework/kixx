@@ -1,61 +1,41 @@
-The `dev-server` command runs a Node.js script and
-automatically restarts it when watched files change.
-
-This is useful for development workflows where you want
-your server to automatically reload when you make changes.
-
-Usage
------
-
-    kixx dev-server <script> [options] [-- script-args...]
-
-Arguments
----------
-
-<script> *required*
-    The path to the Node.js script to run.
-
-[script-args...] *optional*
-    Arguments to pass to the script. Place these after `--` to
-    separate them from dev-server options.
+The `dev-server` command will start the file watcher and HTTP web application
+server for your project. It will watch for file changes and restart the
+web app server when necessary.
 
 Options
 -------
 
---watch (-w) *optional*
-    The directory to watch for file changes.
+--port (-p) *optional*
+    The port to attach your HTTP server on. If provided, this value will
+    override the port setting in your devserver config namespace.
 
-    If not provided, defaults to the directory containing
-    the script.
+--dir (-d) *optional*
+    The path to your application directory.
 
---pattern (-p) *optional*
-    A glob pattern to filter which files trigger a restart.
+    If not provided, Kixx will assume the current working directory is your
+    application directory. And, unless overridden by --config or --secrets
+    the configuration and secrets files will be expected in this directory as
+    "kixx-config.jsonc" and ".secrets.jsonc" as well as other
+    conventional application folders.
 
-    Default: "**/*.js"
+--environment (-e) *optional*
+    The configuration environment you would like to use.
 
-    Supports common glob syntax:
-    - `*` matches any characters except path separator
-    - `**` matches any characters including path separator
-    - `?` matches a single character
-    - `{a,b}` matches either a or b
+    The default value is "development".
 
---debounce (-d) *optional*
-    Debounce delay in milliseconds before restarting after
-    a file change.
+    You can create different sections in your kixx-config.jsonc file to set
+    configurations for different environments. Typically values like
+    "production" and "development" are common, but you might want to add
+    your own like "staging", or "test".
 
-    Default: 300
+--config (-c) *optional*
+    The file path to your application configuration file.
 
-Examples
---------
+    If not provided, the config file will be assumed to be in the
+    application directory as "kixx-config.jsonc".
 
-Run a server script and watch its directory:
+--secrets (-s) *optional*
+    The file path to your application secrets file.
 
-    kixx dev-server ./server.js
-
-Watch a specific directory with a custom pattern:
-
-    kixx dev-server ./server.js --watch ./lib --pattern "**/*.{js,json}"
-
-Pass arguments to the script:
-
-    kixx dev-server ./server.js -- --port 3000 --env development
+    If not provided, the secrets file will be assumed to be in the
+    application directory as ".secrets.jsonc".
