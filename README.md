@@ -86,7 +86,73 @@ The Kixx framework embodies these principles, providing a productive environment
 For more information about hypermedia-driven applications, see:
 - [Hypermedia-Driven Applications by HTMX](https://htmx.org/essays/hypermedia-driven-applications/)
 - [The Web's Grain by Frank Chimero](https://frankchimero.com/blog/2015/the-webs-grain/)
-- [REST: From Research to Practice](https://www.ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm) 
+- [REST: From Research to Practice](https://www.ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm)
+
+Development
+-----------
+Project development guidelines:
+
+- [Commenting Code](./docs/comment-guidelines.md)
+- [Documenting Code with JSDoc](./docs/jsdoc-guidelines.md)
+- [Writing Unit Tests](./docs/unit-testing-guidelines.md)
+- **No TypeScript**: The project intentionally avoids TypeScript for simplicity and developer happiness
+- **Vendored Dependencies**: Some dependencies are vendored in `lib/vendor/` (luxon, marked, jsonc-parser, minimatch, path-to-regexp)
+- **ES Modules Only**: The framework uses ES6 modules exclusively (type: "module" in package.json)
+- **Assertions**: Use the assertion library in `lib/assertions/` to make assertions in the code about important assumptions
+- **File System Access**: Use `lib/lib/file-system.js` utilities, not direct Node.js fs calls (enables testing with mocks)
+
+### File Organization
+- `lib/` - Kixx framework source code (included in kixx npm package)
+- `test/` - Tests mirroring `lib/` directory structure (e.g., `lib/foo/bar.js` → `test/foo/bar.test.js`)
+- `bin/` - CLI entry point (included in kixx npm package)
+- `cli/` - CLI command implementations (included in kixx npm package)
+- `project-template/` - Scaffolding for new projects (included in kixx npm package)
+- `docs/` - Internal documentation for developers working in this project. This is *not* external documentation for using the Kixx framework for applications.
+- `tools/` - Various tools for working on this project
+- `tmp/` - Dump any temporary files here which should be excluded from git source control
+
+### Testing
+- `npm test` - Runs ESLint and unit tests
+- `npm run unit-test` - Runs only unit tests (uses `node run-tests.js`)
+- `npm run lint` - Runs ESLint only
+
+The test runner (`run-tests.js`) recursively loads all `*.test.js` files from the `test/` directory.
+
+**Running a single test file:**
+
+```bash
+node run-tests.js test/path/to/your.test.js
+```
+
+**Controlling the stack trace size**
+
+When running tests, you can set the size (number of lines) of stack traces to avoid filling your terminal with useless information when lots of errors are present. The default stack trace size is 4 lines.
+
+You can set the stack trace size to unlimited with:
+
+```bash
+node run-tests.js --stack no-limit
+```
+
+Or explicitly set a limit with:
+
+```bash
+node run-tests.js --stack 6
+```
+
+### Code Style and Conventions
+
+### Error Handling
+Use framework error classes from `lib/errors/`:
+
+- `BadRequestError` - 400
+- `UnauthenticatedError` - 401
+- `UnauthorizedError` - 403
+- `NotFoundError` - 404
+- `ValidationError` - 400 with validation details
+- `OperationalError` - Expected runtime errors
+
+See `lib/errors/mod.js` and the error class definitions in `lib/errors/lib/**` for more error classes and documentation.
 
 Copyright and License
 ---------------------
