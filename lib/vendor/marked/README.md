@@ -17,7 +17,7 @@
 
 ## Demo
 
-Checkout the [demo page](https://marked.js.org/demo/) to see marked in action ⛹️
+Check out the [demo page](https://marked.js.org/demo/) to see Marked in action ⛹️
 
 ## Docs
 
@@ -32,7 +32,7 @@ Also read about:
 
 **Node.js:** Only [current and LTS](https://nodejs.org/en/about/releases/) Node.js versions are supported. End of life Node.js versions may become incompatible with Marked at any point in time.
 
-**Browser:** Not IE11 :)
+**Browser:** [Baseline Widely Available](https://developer.mozilla.org/en-US/docs/Glossary/Baseline/Compatibility)
 
 ## Installation
 
@@ -103,4 +103,5 @@ or import esm module
 
 ## License
 
-Copyright (c) 2011-2022, Christopher Jeffrey. (MIT License)
+Copyright (c) 2018+, MarkedJS. (MIT License)
+Copyright (c) 2011-2018, Christopher Jeffrey. (MIT License)
