@@ -115,7 +115,8 @@ class ProcessManager {
         });
 
         this.#fileWatcher.on('change', (event) => {
-            this.handleFileChange(event.info.filepath);
+            this.#logger.debug('file changed', { file: event.filename });
+            this.handleFileChange();
         });
 
         this.#fileWatcher.on('error', (error) => {
@@ -146,9 +147,7 @@ class ProcessManager {
 
     // Debounce file changes to batch rapid consecutive changes into a single restart.
     // Each new change resets the timer, so restart only happens after changes settle.
-    handleFileChange(filepath) {
-        this.#logger.debug('file changed', { filepath });
-
+    handleFileChange() {
         if (this.#debounceTimer) {
             clearTimeout(this.#debounceTimer);
         }
@@ -194,7 +193,9 @@ class ProcessManager {
 
         this.#childProcess.on('exit', (code, signal) => {
             this.#childProcess = null;
-            this.#logger.info('child http server exited', { code, signal });
+            if (!this.#isRestarting) {
+                this.#logger.info('child http server exited', { code, signal });
+            }
         });
 
         // Handle automatic restart after unexpected crashes.
@@ -213,7 +214,6 @@ class ProcessManager {
             // (likely a startup error that would just crash again)
             if (Date.now() < maturityTime) {
                 this.#logger.warn('will not restart http server; avoiding circular crash');
-                this.stop();
                 return;
             }
 
