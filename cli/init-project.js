@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import * as jsonc from '../lib/vendor/jsonc-parser/mod.mjs';
+import { jsonc } from '../lib/vendor/mod.js';
 import * as TemplateEngine from '../lib/kixx-templating/mod.js';
 import { isNonEmptyString } from '../lib/assertions/mod.js';
 

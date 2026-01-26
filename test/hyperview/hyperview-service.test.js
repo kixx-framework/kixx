@@ -3,7 +3,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, isPlainObject } from 'kixx-assert';
 
 import HyperviewService from '../../lib/hyperview/hyperview-service.js';
-import * as markedModule from '../../lib/vendor/marked/mod.js';
+import { marked } from '../../lib/vendor/mod.js';
 
 
 describe('HyperviewService#getPageData() when page does not exist', ({ before, after, it }) => {
@@ -1146,7 +1146,7 @@ describe('HyperviewService#getPageMarkdown() when single markdown file exists', 
     let result;
 
     before(async () => {
-        markedParseStub = sinon.stub(markedModule.marked, 'parse').returns('<h1>Introduction</h1>\n<p>This is the body.</p>');
+        markedParseStub = sinon.stub(marked, 'parse').returns('<h1>Introduction</h1>\n<p>This is the body.</p>');
 
         await service.initialize({
             pageStore,
@@ -1234,7 +1234,7 @@ describe('HyperviewService#getPageMarkdown() when multiple markdown files exist'
     let result;
 
     before(async () => {
-        markedParseStub = sinon.stub(markedModule.marked, 'parse')
+        markedParseStub = sinon.stub(marked, 'parse')
             .onCall(0).returns('<h1>Introduction</h1>')
             .onCall(1).returns('<p>Body content here.</p>')
             .onCall(2).returns('<p>Footer content.</p>');
@@ -1322,7 +1322,7 @@ describe('HyperviewService#getPageMarkdown() when markdown contains template syn
     let result;
 
     before(async () => {
-        markedParseStub = sinon.stub(markedModule.marked, 'parse').returns('<h1>My Post</h1>\n<p>Published on 2024-01-01</p>');
+        markedParseStub = sinon.stub(marked, 'parse').returns('<h1>My Post</h1>\n<p>Published on 2024-01-01</p>');
 
         await service.initialize({
             pageStore,
@@ -1387,7 +1387,7 @@ describe('HyperviewService#getPageMarkdown() when useCache is true and cache is 
     let result;
 
     before(async () => {
-        markedParseStub = sinon.stub(markedModule.marked, 'parse').returns('<h1>Content</h1>');
+        markedParseStub = sinon.stub(marked, 'parse').returns('<h1>Content</h1>');
 
         await service.initialize({
             pageStore,
@@ -1455,7 +1455,7 @@ describe('HyperviewService#getPageMarkdown() when useCache is true and cache has
     let result;
 
     before(async () => {
-        markedParseStub = sinon.stub(markedModule.marked, 'parse').returns('<h1>Cached Content</h1>');
+        markedParseStub = sinon.stub(marked, 'parse').returns('<h1>Cached Content</h1>');
 
         await service.initialize({
             pageStore,
