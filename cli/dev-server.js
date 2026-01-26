@@ -7,6 +7,8 @@ import { parseArgs } from 'node:util';
 import Application from '../lib/application/application.js';
 import Logger from '../lib/logger/mod.js';
 import DevelopmentServer from '../lib/application/development-server.js';
+import HttpRouter from '../lib/http-server/http-router.js';
+import HttpRoutesStore from '../lib/http-routes-store/http-routes-store.js';
 import FileWatcher from '../lib/lib/file-watcher.js';
 import { AssertionError } from '../lib/errors/mod.js';
 import {
@@ -396,8 +398,15 @@ async function startHttpServer(args) {
         port = serverConfig.port;
     }
 
+    const router = new HttpRouter();
+
+    const routesStore = new HttpRoutesStore({
+        app_directory: context.paths.app_directory,
+        routes_directory: context.paths.routes_directory,
+    });
+
     // Create and configure the development server
-    const server = new DevelopmentServer(app, { port });
+    const server = new DevelopmentServer(app, router, routesStore, { port });
 
     server.on('error', (event) => {
         logger.error(event.message, event.info, event.cause);

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import * as jsonc from '../lib/vendor/jsonc-parser/mod.mjs';
-import * as TemplateEngine from '../lib/template-engine/mod.js';
+import * as TemplateEngine from '../lib/kixx-templating/mod.js';
 import { isNonEmptyString } from '../lib/assertions/mod.js';
 
 const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));

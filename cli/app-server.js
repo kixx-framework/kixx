@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import Application from '../lib/application/application.js';
 import ApplicationServer from '../lib/application/application-server.js';
+import HttpRouter from '../lib/http-server/http-router.js';
+import HttpRoutesStore from '../lib/http-routes-store/http-routes-store.js';
 import { isNonEmptyString, isNumberNotNaN } from '../lib/assertions/mod.js';
 
 const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -99,8 +101,15 @@ export async function main(args) {
         port = serverConfig.port;
     }
 
+    const router = new HttpRouter();
+
+    const routesStore = new HttpRoutesStore({
+        app_directory: context.paths.app_directory,
+        routes_directory: context.paths.routes_directory,
+    });
+
     // Create the server and wire up event handlers for logging
-    const server = new ApplicationServer(app, { port });
+    const server = new ApplicationServer(app, router, routesStore, { port });
 
     server.on('error', (event) => {
         logger.error(event.message, event.info, event.cause);
