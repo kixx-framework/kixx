@@ -213,6 +213,7 @@ class ProcessManager {
             // (likely a startup error that would just crash again)
             if (Date.now() < maturityTime) {
                 this.#logger.warn('will not restart http server; avoiding circular crash');
+                this.stop();
                 return;
             }
 
@@ -224,6 +225,13 @@ class ProcessManager {
     // Graceful shutdown with force-kill fallback.
     // Sends SIGTERM first, then SIGKILL if the process doesn't exit in time.
     killServer(callback) {
+        if (!this.#childProcess) {
+            if (isFunction(callback)) {
+                callback();
+            }
+            return;
+        }
+
         const forceKillTimeout = setTimeout(() => {
             if (this.#childProcess && this.#childProcess.exitCode === null) {
                 this.#logger.warn('force killing http server child process after timeout');
