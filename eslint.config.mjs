@@ -10,9 +10,7 @@ export default [
             'lib/assertions/',
             'lib/errors/',
             'lib/logger/',
-            'lib/template-engine/',
-            // Client side JS in reference app:
-            'reference-app/templates/',
+            'lib/kixx-templating/',
         ],
     },
     js.configs.recommended,
