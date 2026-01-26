@@ -52,7 +52,6 @@ const options = {
     port: {
         short: 'p',
         type: 'string',
-        default: '3001',
     },
     environment: {
         short: 'e',
@@ -285,48 +284,36 @@ export async function main(args) {
         environment,
     });
 
-    // Extract devserver settings from config
-    let settings;
-    try {
-        settings = config.getNamespace('devserver');
-    } catch (error) {
-        if (error.name === 'AssertionError') {
-            // eslint-disable-next-line no-console
-            console.error('The kixx config must have a "devserver" namespace');
-            return;
-        }
-        throw error;
-    }
+    // Set a descriptive process title for easier identification of the application process.
+    // WARNING: Process names are truncated on some systems (e.g., 15 chars on Ubuntu).
+    // eslint-disable-next-line require-atomic-updates
+    process.title = config.processName;
+
+    const settings = config.getNamespace('devserver');
 
     const {
-        watchDirectory,
-        fileIncludePatterns,
-        fileExcludePatterns,
-        debounceMs,
-        logLevel,
-        logMode,
+        watchDirectory = app.applicationDirectory,
+        watchFileIncludePatterns = [],
+        watchFileExcludePatterns = [],
+        debounceMs = DEBOUNCE_MS,
+        logLevel = 'debug',
+        logMode = 'console',
     } = settings;
 
     const logger = new Logger({
         name: 'devserver',
-        level: logLevel || 'debug',
-        mode: logMode || 'console',
+        level: logLevel,
+        mode: logMode,
     });
-
-    if (!isNonEmptyString(watchDirectory)) {
-        // eslint-disable-next-line no-console
-        console.error('The kixx config "devserver" namespace must have a "watchDirectory" directory path');
-        return;
-    }
 
     // Start the process manager which will fork the HTTP server child process
     const processManager = new ProcessManager({
         logger,
         scriptArgs: args,
         watchDirectory,
-        fileIncludePatterns,
-        fileExcludePatterns,
-        debounceMs: debounceMs || DEBOUNCE_MS,
+        fileIncludePatterns: watchFileIncludePatterns,
+        fileExcludePatterns: watchFileExcludePatterns,
+        debounceMs,
     });
 
     processManager.start();
@@ -385,11 +372,6 @@ async function startHttpServer(args) {
     });
 
     const { logger } = context;
-
-    // Set process title for easier identification in `ps` output.
-    // WARNING: Process names are truncated on some systems (e.g., 15 chars on Ubuntu).
-    // eslint-disable-next-line require-atomic-updates
-    process.title = `node-${ context.config.processName }`;
 
     // Configure server port (command line overrides config file)
     const serverConfig = context.config.getNamespace('devserver');

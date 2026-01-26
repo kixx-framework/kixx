@@ -33,7 +33,6 @@ const options = {
     port: {
         short: 'p',
         type: 'string',
-        default: '3001',
     },
     environment: {
         short: 'e',
@@ -89,10 +88,10 @@ export async function main(args) {
 
     const { logger } = context;
 
-    // Set a descriptive process title for easier identification in `ps` output
-    // eslint-disable-next-line require-atomic-updates
-    process.title = `node-${ context.config.processName }`;
+    // Set a descriptive process title for easier identification of the application process.
     // WARNING: Process names are truncated on some systems (e.g., 15 chars on Ubuntu Linux)
+    // eslint-disable-next-line require-atomic-updates
+    process.title = context.config.processName;
 
     const serverConfig = context.config.getNamespace('server');
 
