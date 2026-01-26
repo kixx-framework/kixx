@@ -127,6 +127,8 @@ class ProcessManager {
         this.#logger.info('file watcher started', { directory });
 
         this.startServer();
+
+        this.#logger.info('use ctrl-c to exit');
     }
 
     stop(callback) {
