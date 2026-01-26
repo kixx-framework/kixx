@@ -4,7 +4,7 @@ __A rapid web development framework for humans and their AI tools.__
 
 Build blazingly fast in AI environments like Claude Code and Cursor without generating piles of shit code you’ll need to rewrite later. Kixx is designed to build server-rendered, hypermedia-driven applications (HTML as the engine of application state) with minimal client side scripting. It emphasizes productivity, simplicity, and efficiency.
 
-Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2025.
+Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2026.
 
 Quick Start
 -----------
@@ -90,6 +90,6 @@ For more information about hypermedia-driven applications, see:
 
 Copyright and License
 ---------------------
-Copyright: (c) 2017 - 2025 by Kris Walker (www.kriswalker.me)
+Copyright: (c) 2017 - 2026 by Kris Walker (www.kriswalker.me)
 
 Unless otherwise indicated, all source code is licensed under the MIT license. See LICENSE for details.
