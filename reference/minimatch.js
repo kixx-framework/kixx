@@ -19,7 +19,10 @@ glob = new Minimatch(pattern, {
 pathname = 'lib/lib/urn-pattern-to-regexp.js';
 console.log('#pattern', pattern, '#pathname', pathname, glob.match(pathname)); // true
 
-pattern = '**/*.js';
+pathname = 'mod.js';
+console.log('#pattern', pattern, '#pathname', pathname, glob.match(pathname)); // true
+
+pattern = 'app/**/*.js';
 
 glob = new Minimatch(pattern, {
     // We want to match filenames that begin with a dot:
@@ -27,5 +30,11 @@ glob = new Minimatch(pattern, {
     dot: true,
 });
 
-pathname = 'mod.js';
+pathname = 'app/plugin.js';
 console.log('#pattern', pattern, '#pathname', pathname, glob.match(pathname)); // true
+
+pathname = 'app/collections/user/user.model.js';
+console.log('#pattern', pattern, '#pathname', pathname, glob.match(pathname)); // true
+
+pathname = 'plugins/auth/plugin.js';
+console.log('#pattern', pattern, '#pathname', pathname, glob.match(pathname)); // false
