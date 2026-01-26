@@ -384,6 +384,15 @@ async function startHttpServer(args) {
 
     const router = new HttpRouter();
 
+    router.on('error', ({ error, requestId }) => {
+        if (!error.expected && !error.httpError) {
+            logger.error('unexpected error', { requestId }, error);
+        } else if (error.httpStatusCode >= 500) {
+            const { httpStatusCode } = error;
+            logger.error('internal server error', { requestId, httpStatusCode }, error);
+        }
+    });
+
     const routesStore = new HttpRoutesStore({
         app_directory: context.paths.app_directory,
         routes_directory: context.paths.routes_directory,

@@ -102,6 +102,15 @@ export async function main(args) {
 
     const router = new HttpRouter();
 
+    router.on('error', ({ error, requestId }) => {
+        if (!error.expected && !error.httpError) {
+            logger.error('unexpected error', { requestId }, error);
+        } else if (error.httpStatusCode >= 500) {
+            const { httpStatusCode } = error;
+            logger.error('internal server error', { requestId, httpStatusCode }, error);
+        }
+    });
+
     const routesStore = new HttpRoutesStore({
         app_directory: context.paths.app_directory,
         routes_directory: context.paths.routes_directory,
@@ -113,6 +122,7 @@ export async function main(args) {
     server.on('error', (event) => {
         logger.error(event.message, event.info, event.cause);
 
+        // When we are not running in a dev server environment we crash on fatal errors.
         // Allow pending log writes to flush before terminating on fatal errors
         if (event.fatal) {
             setTimeout(() => {
