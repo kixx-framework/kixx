@@ -2,7 +2,7 @@ Kixx
 ====
 __A rapid web development framework for humans and their AI tools.__
 
-Build blazingly fast in AI environments like Claude Code and Cursor without generating piles of shit code you’ll need to rewrite later.
+Build blazingly fast in AI environments like Claude Code and Cursor without generating piles of shit code you’ll need to rewrite later. Kixx is designed to build server-rendered, hypermedia-driven applications (HTML as the engine of application state) with minimal client side scripting. It emphasizes productivity, simplicity, and efficiency.
 
 Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2025.
 
@@ -17,8 +17,8 @@ Ensure you have Node.js 16.13.2 or later installed. Check your node version in t
 1. Create a new project directory with a `package.json` file in it. You can quickly do this with `npm init`.
 2. Install Kixx in your project directory by running `npm install --save kixx`.
 3. Set up your project scaffolding by running `npx kixx init-project --name 'My New Web App'`.
-4. Start your new web app by running `npx kixx app-server --environment development`
-5. Open your browser to http://localhost:3001 to see your app.
+4. Start your new web app by running `npx kixx dev-server`
+5. Open your browser to http://localhost:3000 to see your app.
 
 Concepts
 --------
@@ -46,13 +46,13 @@ Kixx has opinions about building great web applications. A framework needs to br
 Humans write software for humans. Even in a post AI world, building software will always be a craft done by a craftsperson.
 
 ### 4. Remove complexity.
-Kixx seeks out incidental complexity and eliminates it or buries it so developers can use more brain capacity on the real problems we're trying to solve.
+Kixx seeks out and eliminates incidental complexity so developers can use more brain capacity on the real problems we're trying to solve.
 
 ### 5. The World Wide Web is the best application platform ever invented.
 Nothing has ever been created that matches the accessibility, openness, power, and distribution of the Web. Kixx is fully committed to improving and contributing to the WWW.
 
-### 6. AI tools can be built and used without negative side effects.
-AI tools should be small, efficient, productive, and focused on the craft of software development. There is no need to consume our natural resources to use AI effectively in software development.
+### 6. AI tools can be built and used without negative externalities.
+AI tools should be small, efficient, productive, and focused on the craft of software development. There is no need to over-consume our natural resources and invade our privacy to use AI effectively in software development.
 
 ### 7. Favor monolithic, hypermedia driven applications.
 Kixx is for solo developers and small, fast moving teams. Monolithic, hypermedia driven applications give us a massive productivity boost over the complexity of microservices and bloated JavaScript client applications.
