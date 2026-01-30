@@ -24,6 +24,10 @@ describe('Application#constructor with valid currentWorkingDirectory', ({ it }) 
         assertEqual(null, app.applicationDirectory);
     });
 
+    it('has null configFilepath by default', () => {
+        assertEqual(null, app.configFilepath);
+    });
+
     it('has null context by default', () => {
         assertEqual(null, app.context);
     });
@@ -165,6 +169,10 @@ describe('Application#loadConfiguration with all options provided', ({ before, a
     it('sets the applicationDirectory from config file location', () => {
         assertEqual(FAKE_APP_DIR, app.applicationDirectory);
     });
+
+    it('sets the configFilepath from the provided option', () => {
+        assertEqual(configFilepath, app.configFilepath);
+    });
 });
 
 
@@ -218,6 +226,10 @@ describe('Application#loadConfiguration with only environment option', ({ before
 
     it('sets applicationDirectory to currentWorkingDirectory', () => {
         assertEqual(FAKE_CWD, app.applicationDirectory);
+    });
+
+    it('sets configFilepath to the discovered config file', () => {
+        assertEqual(path.join(FAKE_CWD, 'kixx-config.jsonc'), app.configFilepath);
     });
 });
 
