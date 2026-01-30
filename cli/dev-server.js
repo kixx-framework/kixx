@@ -282,7 +282,7 @@ export async function main(args) {
     if (values.help) {
         // eslint-disable-next-line no-console
         console.log(readDocFile('dev-server.md'));
-        process.exit(0);
+        process.exit(1);
         return;
     }
 
