@@ -66,7 +66,7 @@ const options = {
 // then watches for file changes and restarts the child when source files change.
 class ProcessManager {
 
-    #watchDirectory = null;
+    #watchDirectories = [];
     #fileIncludePatterns = [];
     #fileExcludePatterns = [];
     #script = THIS_FILEPATH;
@@ -78,7 +78,7 @@ class ProcessManager {
     #isRestarting = false;
 
     #logger = null;
-    #fileWatcher = null;
+    #fileWatchers = [];
     #childProcess = null;
     #debounceTimer = null;
 
@@ -87,17 +87,24 @@ class ProcessManager {
             logger,
             scriptArgs,
             debounceMs,
-            watchDirectory,
+            watchDirectories,
             fileIncludePatterns,
             fileExcludePatterns,
         } = opts;
 
         assertNumberNotNaN(debounceMs);
-        assertNonEmptyString(watchDirectory);
+
+        if (!Array.isArray(watchDirectories) || watchDirectories.length === 0) {
+            throw new AssertionError('watchDirectories must be a non-empty array');
+        }
+
+        for (const dir of watchDirectories) {
+            assertNonEmptyString(dir);
+        }
 
         this.#logger = logger;
 
-        this.#watchDirectory = watchDirectory;
+        this.#watchDirectories = watchDirectories;
         this.#fileIncludePatterns = fileIncludePatterns;
         this.#fileExcludePatterns = fileExcludePatterns;
         this.#scriptArgs = scriptArgs;
@@ -105,27 +112,29 @@ class ProcessManager {
     }
 
     start() {
-        const directory = this.#watchDirectory;
+        for (const directory of this.#watchDirectories) {
+            const fileWatcher = new FileWatcher({
+                directory,
+                recursive: true,
+                includePatterns: this.#fileIncludePatterns,
+                excludePatterns: this.#fileExcludePatterns,
+            });
 
-        this.#fileWatcher = new FileWatcher({
-            directory,
-            recursive: true,
-            includePatterns: this.#fileIncludePatterns,
-            excludePatterns: this.#fileExcludePatterns,
-        });
+            fileWatcher.on('change', (event) => {
+                this.#logger.debug('file changed', { file: event.filename });
+                this.handleFileChange();
+            });
 
-        this.#fileWatcher.on('change', (event) => {
-            this.#logger.debug('file changed', { file: event.filename });
-            this.handleFileChange();
-        });
+            fileWatcher.on('error', (error) => {
+                this.#logger.error('file watcher error', null, error);
+            });
 
-        this.#fileWatcher.on('error', (error) => {
-            this.#logger.error('file watcher error', null, error);
-        });
+            fileWatcher.start();
 
-        this.#fileWatcher.start();
+            this.#fileWatchers.push(fileWatcher);
 
-        this.#logger.info('file watcher started', { directory });
+            this.#logger.info('file watcher started', { directory });
+        }
 
         this.startServer();
 
@@ -140,7 +149,9 @@ class ProcessManager {
             this.#debounceTimer = null;
         }
 
-        this.#fileWatcher.stop();
+        for (const fileWatcher of this.#fileWatchers) {
+            fileWatcher.stop();
+        }
 
         this.killServer(callback);
     }
@@ -302,13 +313,19 @@ export async function main(args) {
     const settings = config.getNamespace('devserver');
 
     const {
-        watchDirectory = app.applicationDirectory,
+        watchDirectories,
         watchFileIncludePatterns = [],
         watchFileExcludePatterns = [],
         debounceMs = DEBOUNCE_MS,
         logLevel = 'debug',
         logMode = 'console',
     } = settings;
+
+    if (!Array.isArray(watchDirectories) || watchDirectories.length === 0) {
+        // eslint-disable-next-line no-console
+        console.error(`The configured watchDirectories must be a non-empty Array (${ app.configFilepath })`);
+        process.exit(1);
+    }
 
     const logger = new Logger({
         name: 'devserver',
@@ -320,7 +337,7 @@ export async function main(args) {
     const processManager = new ProcessManager({
         logger,
         scriptArgs: args,
-        watchDirectory,
+        watchDirectories,
         fileIncludePatterns: watchFileIncludePatterns,
         fileExcludePatterns: watchFileExcludePatterns,
         debounceMs,
@@ -340,7 +357,7 @@ export async function main(args) {
 
 // Entry point when run as a child process (forked by ProcessManager).
 // Initializes the full application and starts the HTTP server.
-async function startHttpServer(args) {
+export async function startHttpServer(args) {
     const { values } = parseArgs({
         args,
         options,
@@ -348,13 +365,6 @@ async function startHttpServer(args) {
         allowPositionals: true,
         allowNegative: true,
     });
-
-    if (values.help) {
-        // eslint-disable-next-line no-console
-        console.log(readDocFile('app-server.md'));
-        process.exit(1);
-        return;
-    }
 
     // Resolve paths and initialize the application with plugins
     const currentWorkingDirectory = process.cwd();
