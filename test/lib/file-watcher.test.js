@@ -214,6 +214,69 @@ describe('FileWatcher#start() when not yet started', ({ before, after, it }) => 
     });
 });
 
+describe('FileWatcher#start() when directory does not exist (ENOENT)', ({ before, after, it }) => {
+    let watcher;
+    let error;
+
+    before(() => {
+        const enoentError = new Error('ENOENT: no such file or directory');
+        enoentError.code = 'ENOENT';
+
+        sinon.stub(fs, 'watch').throws(enoentError);
+
+        watcher = new FileWatcher({ directory: '/nonexistent/directory' });
+
+        try {
+            watcher.start();
+        } catch (e) {
+            error = e;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('does not throw an error', () => {
+        assertFalsy(error);
+    });
+
+    it('calls fs.watch', () => {
+        assertEqual(1, fs.watch.callCount);
+    });
+});
+
+describe('FileWatcher#start() when fs.watch throws non-ENOENT error', ({ before, after, it }) => {
+    let error;
+    const originalError = new Error('EACCES: permission denied');
+    originalError.code = 'EACCES';
+
+    before(() => {
+        sinon.stub(fs, 'watch').throws(originalError);
+
+        const watcher = new FileWatcher({ directory: '/restricted/directory' });
+
+        try {
+            watcher.start();
+        } catch (e) {
+            error = e;
+        }
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('rethrows the error', () => {
+        assert(error);
+        assertEqual(originalError, error);
+    });
+
+    it('error has correct code', () => {
+        assertEqual('EACCES', error.code);
+    });
+});
+
 describe('FileWatcher#start() when already started', ({ before, after, it }) => {
     let watcher;
     let error;

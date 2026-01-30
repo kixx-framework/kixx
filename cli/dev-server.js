@@ -313,7 +313,6 @@ export async function main(args) {
     const settings = config.getNamespace('devserver');
 
     const {
-        watchDirectories,
         watchFileIncludePatterns = [],
         watchFileExcludePatterns = [],
         debounceMs = DEBOUNCE_MS,
@@ -321,11 +320,19 @@ export async function main(args) {
         logMode = 'console',
     } = settings;
 
-    if (!Array.isArray(watchDirectories) || watchDirectories.length === 0) {
+    if (!Array.isArray(settings.watchDirectories) || settings.watchDirectories.length === 0) {
         // eslint-disable-next-line no-console
         console.error(`The configured watchDirectories must be a non-empty Array (${ app.configFilepath })`);
         process.exit(1);
     }
+
+    // Watch directories are configured using posix style pathnames relative to the
+    // application directory, so we convert them platform natives paths and
+    // resolve them to absolute filepaths.
+    const watchDirectories = settings.watchDirectories.map((pathname) => {
+        const parts = pathname.split('/');
+        return path.join(app.applicationDirectory, ...parts);
+    });
 
     const logger = new Logger({
         name: 'devserver',
