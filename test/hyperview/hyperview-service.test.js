@@ -1926,3 +1926,259 @@ describe('HyperviewService#getStaticFile() with different pathnames', ({ before,
     });
 });
 
+describe('HyperviewService partials reloading when useCache is false', ({ before, after, it }) => {
+    const templateFile = {
+        filename: 'page.html',
+        source: '<h1>{{ title }}</h1>',
+    };
+
+    const partialFiles = [
+        { filename: 'header.html', source: '<header>Header</header>' },
+    ];
+
+    const compiledTemplate = sinon.stub().returns('<h1>Rendered</h1>');
+
+    const pageStore = {
+        getPageTemplate: sinon.stub().resolves(templateFile),
+    };
+
+    const templateStore = {
+        loadHelperFiles: sinon.stub().resolves([]),
+        loadPartialFiles: sinon.stub().resolves(partialFiles),
+    };
+
+    const templateEngine = {
+        compileTemplate: sinon.stub().returns(compiledTemplate),
+    };
+
+    const staticFileServerStore = {};
+
+    const service = new HyperviewService();
+
+    before(async () => {
+        await service.initialize({
+            pageStore,
+            templateStore,
+            templateEngine,
+            staticFileServerStore,
+        });
+
+        // First call with useCache=false
+        await service.getPageTemplate('/blog/post', { useCache: false });
+
+        // Second call with useCache=false
+        await service.getPageTemplate('/blog/post', { useCache: false });
+
+        // Third call with useCache=false
+        await service.getPageTemplate('/blog/post', { useCache: false });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls loadPartialFiles() on every call when useCache is false', () => {
+        assertEqual(3, templateStore.loadPartialFiles.callCount);
+    });
+
+    it('recompiles partials on every call when useCache is false', () => {
+        // compileTemplate is called for each partial (1) + each page template (1) = 2 per call
+        // With 3 calls: 3 partial compilations + 3 page template compilations = 6 total
+        assertEqual(6, templateEngine.compileTemplate.callCount);
+    });
+});
+
+describe('HyperviewService partials caching when useCache is true', ({ before, after, it }) => {
+    const templateFile = {
+        filename: 'page.html',
+        source: '<h1>{{ title }}</h1>',
+    };
+
+    const partialFiles = [
+        { filename: 'header.html', source: '<header>Header</header>' },
+    ];
+
+    const compiledTemplate = sinon.stub().returns('<h1>Rendered</h1>');
+
+    const pageStore = {
+        getPageTemplate: sinon.stub().resolves(templateFile),
+    };
+
+    const templateStore = {
+        loadHelperFiles: sinon.stub().resolves([]),
+        loadPartialFiles: sinon.stub().resolves(partialFiles),
+    };
+
+    const templateEngine = {
+        compileTemplate: sinon.stub().returns(compiledTemplate),
+    };
+
+    const staticFileServerStore = {};
+
+    const service = new HyperviewService();
+
+    before(async () => {
+        await service.initialize({
+            pageStore,
+            templateStore,
+            templateEngine,
+            staticFileServerStore,
+        });
+
+        // First call with useCache=true to populate cache
+        await service.getPageTemplate('/blog/post1', { useCache: true });
+
+        // Second call with useCache=true for different pathname
+        await service.getPageTemplate('/blog/post2', { useCache: true });
+
+        // Third call with useCache=true for another pathname
+        await service.getPageTemplate('/blog/post3', { useCache: true });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls loadPartialFiles() only once when useCache is true', () => {
+        assertEqual(1, templateStore.loadPartialFiles.callCount);
+    });
+});
+
+describe('HyperviewService partials reloading across different methods when useCache is false', ({ before, after, it }) => {
+    const templateFile = {
+        filename: 'page.html',
+        source: '<h1>{{ title }}</h1>',
+    };
+
+    const markdownFiles = [
+        { filename: 'body.md', source: '# Content' },
+    ];
+
+    const baseTemplateFile = {
+        filename: 'layouts/base.html',
+        source: '<html><body>{{> content}}</body></html>',
+    };
+
+    const partialFiles = [
+        { filename: 'header.html', source: '<header>Header</header>' },
+    ];
+
+    const compiledTemplate = sinon.stub().returns('<h1>Rendered</h1>');
+
+    const pageStore = {
+        getPageTemplate: sinon.stub().resolves(templateFile),
+        getMarkdownContent: sinon.stub().resolves(markdownFiles),
+    };
+
+    const templateStore = {
+        loadHelperFiles: sinon.stub().resolves([]),
+        loadPartialFiles: sinon.stub().resolves(partialFiles),
+        getBaseTemplate: sinon.stub().resolves(baseTemplateFile),
+    };
+
+    const templateEngine = {
+        compileTemplate: sinon.stub().returns(compiledTemplate),
+    };
+
+    const staticFileServerStore = {};
+
+    const service = new HyperviewService();
+
+    before(async () => {
+        sinon.stub(marked, 'parse').returns('<h1>Content</h1>');
+
+        await service.initialize({
+            pageStore,
+            templateStore,
+            templateEngine,
+            staticFileServerStore,
+        });
+
+        // Call getPageTemplate with useCache=false
+        await service.getPageTemplate('/blog/post', { useCache: false });
+
+        // Call getPageMarkdown with useCache=false
+        await service.getPageMarkdown('/blog/post', { title: 'Test' }, { useCache: false });
+
+        // Call getBaseTemplate with useCache=false
+        await service.getBaseTemplate('layouts/base.html', { useCache: false });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls loadPartialFiles() for each method when useCache is false', () => {
+        assertEqual(3, templateStore.loadPartialFiles.callCount);
+    });
+});
+
+describe('HyperviewService partials caching across different methods when useCache is true', ({ before, after, it }) => {
+    const templateFile = {
+        filename: 'page.html',
+        source: '<h1>{{ title }}</h1>',
+    };
+
+    const markdownFiles = [
+        { filename: 'body.md', source: '# Content' },
+    ];
+
+    const baseTemplateFile = {
+        filename: 'layouts/base.html',
+        source: '<html><body>{{> content}}</body></html>',
+    };
+
+    const partialFiles = [
+        { filename: 'header.html', source: '<header>Header</header>' },
+    ];
+
+    const compiledTemplate = sinon.stub().returns('<h1>Rendered</h1>');
+
+    const pageStore = {
+        getPageTemplate: sinon.stub().resolves(templateFile),
+        getMarkdownContent: sinon.stub().resolves(markdownFiles),
+    };
+
+    const templateStore = {
+        loadHelperFiles: sinon.stub().resolves([]),
+        loadPartialFiles: sinon.stub().resolves(partialFiles),
+        getBaseTemplate: sinon.stub().resolves(baseTemplateFile),
+    };
+
+    const templateEngine = {
+        compileTemplate: sinon.stub().returns(compiledTemplate),
+    };
+
+    const staticFileServerStore = {};
+
+    const service = new HyperviewService();
+
+    before(async () => {
+        sinon.stub(marked, 'parse').returns('<h1>Content</h1>');
+
+        await service.initialize({
+            pageStore,
+            templateStore,
+            templateEngine,
+            staticFileServerStore,
+        });
+
+        // Call getPageTemplate with useCache=true
+        await service.getPageTemplate('/blog/post', { useCache: true });
+
+        // Call getPageMarkdown with useCache=true
+        await service.getPageMarkdown('/blog/post', { title: 'Test' }, { useCache: true });
+
+        // Call getBaseTemplate with useCache=true
+        await service.getBaseTemplate('layouts/base.html', { useCache: true });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls loadPartialFiles() only once across all methods when useCache is true', () => {
+        assertEqual(1, templateStore.loadPartialFiles.callCount);
+    });
+});
+
