@@ -21,6 +21,40 @@ const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const directory = path.join(THIS_DIR, 'fake-datatstore');
 
 
+describe('LocalFileDatastore#initialize()', ({ before, after, it }) => {
+    const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
+        readDirectory: sinon.stub().resolves([]),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    before(async () => {
+        await store.initialize();
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('calls ensureDirectory with the directory path', () => {
+        assertEqual(1, fileSystem.ensureDirectory.callCount);
+        assertEqual(directory, fileSystem.ensureDirectory.getCall(0).firstArg);
+    });
+
+    it('calls ensureDirectory before readDirectory', () => {
+        assert(fileSystem.ensureDirectory.calledBefore(fileSystem.readDirectory));
+    });
+
+    it('calls readDirectory with the directory path', () => {
+        assertEqual(1, fileSystem.readDirectory.callCount);
+        assertEqual(directory, fileSystem.readDirectory.getCall(0).firstArg);
+    });
+});
+
 describe('LocalFileDatastore#getItem() when document exists', ({ before, after, it }) => {
     const document = {
         type: 'User',
@@ -28,6 +62,7 @@ describe('LocalFileDatastore#getItem() when document exists', ({ before, after, 
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'User__foo123.json',
@@ -78,6 +113,7 @@ describe('LocalFileDatastore#getItem() when document *does not* exist', ({ befor
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'User__foo123.json',
@@ -117,6 +153,7 @@ describe('LocalFileDatastore#setItem() when the document *does not* exist', ({ b
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         writeDocumentFile: sinon.stub().resolves(),
         readDocumentFile: sinon.stub().resolves(null),
@@ -208,6 +245,7 @@ describe('LocalFileDatastore#setItem() when the document exists but the updated 
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'User__foo123.json',
@@ -311,6 +349,7 @@ describe('LocalFileDatastore#setItem() when the document exists and the updated 
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'User__foo456.json',
@@ -414,6 +453,7 @@ describe('LocalFileDatastore#setItem() when the document exists and the updated 
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'User__foo789.json',
@@ -498,6 +538,7 @@ describe('LocalFileDatastore#setItem() when writeDocumentFile throws an error', 
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         writeDocumentFile: sinon.stub().rejects(new Error('Disk write failed')),
         readDocumentFile: sinon.stub().resolves(null),
@@ -600,6 +641,7 @@ describe('LocalFileDatastore#setItem() when the document id contains special cha
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         writeDocumentFile: sinon.stub().resolves(),
         readDocumentFile: sinon.stub().resolves(null),
@@ -714,6 +756,7 @@ describe('LocalFileDatastore#deleteItem() when removeDocumentFile throws an erro
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'User__foo888.json',
@@ -784,6 +827,7 @@ describe('LocalFileDatastore#deleteItem() when the document exists', ({ before, 
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([
             {
                 name: 'User__foo777.json',
@@ -849,6 +893,7 @@ describe('LocalFileDatastore#deleteItem() when the document exists', ({ before, 
 
 describe('LocalFileDatastore#deleteItem() when the document does not exist', ({ before, after, it }) => {
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         readDocumentFile: sinon.stub().resolves(null),
         removeDocumentFile: sinon.stub().resolves(),
@@ -916,6 +961,7 @@ describe('LocalFileDatastore#scanItems()', ({ before, after, it }) => {
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -993,6 +1039,7 @@ describe('LocalFileDatastore#scanItems() in descending order', ({ before, after,
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -1074,6 +1121,7 @@ describe('LocalFileDatastore#scanItems() descending with range', ({ before, afte
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return { name: `${ type }__${ id }.json`, isFile() {
                 return true;
@@ -1136,6 +1184,7 @@ describe('LocalFileDatastore#scanItems() with no startKey', ({ before, after, it
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return { name: `${ type }__${ id }.json`, isFile() {
                 return true;
@@ -1189,6 +1238,7 @@ describe('LocalFileDatastore#scanItems() with no endKey', ({ before, after, it }
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return { name: `${ type }__${ id }.json`, isFile() {
                 return true;
@@ -1232,6 +1282,7 @@ describe('LocalFileDatastore#scanItems() with no endKey', ({ before, after, it }
 
 describe('LocalFileDatastore#scanItems() with empty datastore', ({ before, after, it }) => {
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         readDocumentFile: sinon.stub().resolves(null),
     };
@@ -1266,6 +1317,7 @@ describe('LocalFileDatastore#scanItems() with no matching documents', ({ before,
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return { name: `${ type }__${ id }.json`, isFile() {
                 return true;
@@ -1312,6 +1364,7 @@ describe('LocalFileDatastore#scanItems() with inclusiveStartIndex beyond data', 
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return { name: `${ type }__${ id }.json`, isFile() {
                 return true;
@@ -1368,6 +1421,7 @@ describe('LocalFileDatastore#scanItems() with limit larger than data', ({ before
     ];
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return { name: `${ type }__${ id }.json`, isFile() {
                 return true;
@@ -1425,6 +1479,7 @@ describe('LocalFileDatastore#queryView()', ({ before, after, it }) => {
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -1523,6 +1578,7 @@ describe('LocalFileDatastore#queryView()', ({ before, after, it }) => {
 describe('LocalFileDatastore#queryView() with unregistered view', ({ before, after, it }) => {
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         readDocumentFile: sinon.stub().resolves({}),
     };
@@ -1575,6 +1631,7 @@ describe('LocalFileDatastore#queryView() when view map() throws error', ({ befor
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -1652,6 +1709,7 @@ describe('LocalFileDatastore#queryView() with includeDocuments=false', ({ before
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -1730,6 +1788,7 @@ describe('LocalFileDatastore#queryView() with includeDocuments=true', ({ before,
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -1801,6 +1860,7 @@ describe('LocalFileDatastore#queryView() with exact key match', ({ before, after
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -1870,6 +1930,7 @@ describe('LocalFileDatastore#queryView() with key that matches nothing', ({ befo
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -1937,6 +1998,7 @@ describe('LocalFileDatastore#queryView() in descending order', ({ before, after,
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -2040,6 +2102,7 @@ describe('LocalFileDatastore#queryView() with filtered documents', ({ before, af
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -2112,6 +2175,7 @@ describe('LocalFileDatastore#queryView() with one-to-many emissions', ({ before,
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -2195,6 +2259,7 @@ describe('LocalFileDatastore#queryView() with inclusiveStartIndex beyond data', 
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -2271,6 +2336,7 @@ describe('LocalFileDatastore#queryView() with limit larger than data', ({ before
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -2329,6 +2395,7 @@ describe('LocalFileDatastore#queryView() with empty datastore', ({ before, after
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         readDocumentFile: sinon.stub().resolves({}),
     };
@@ -2379,6 +2446,7 @@ describe('LocalFileDatastore#queryView() with no matching items', ({ before, aft
     };
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
             return {
                 name: `${ type }__${ id }.json`,
@@ -2441,6 +2509,7 @@ describe('LocalFileDatastore#queryView() with no matching items', ({ before, aft
 describe('LocalFileDatastore#queryView() with invalid viewId', ({ before, after, it }) => {
 
     const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
         readDirectory: sinon.stub().resolves([]),
         readDocumentFile: sinon.stub().resolves({}),
     };
