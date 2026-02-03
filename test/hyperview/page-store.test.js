@@ -529,6 +529,67 @@ describe('PageStore#getPageTemplate() when file is deleted or renamed before it 
     });
 });
 
+describe('PageStore#getPageTemplate() with explicit templateFilename option', ({ before, it }) => {
+    const directory = THIS_DIR;
+
+    const source = '<custom-template>';
+
+    const fileSystem = {
+        readDirectory: sinon.fake.resolves([]),
+        readUtf8File: sinon.fake.resolves(source),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        result = await store.getPageTemplate('/blog/a-blog-post', { templateFilename: 'custom.html' });
+    });
+
+    it('does not call readDirectory() when templateFilename is provided', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('passes the explicit template filepath to readUtf8File()', () => {
+        const filepath = path.join(directory, 'blog', 'a-blog-post', 'custom.html');
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+        assertEqual(filepath, fileSystem.readUtf8File.getCall(0).firstArg);
+    });
+
+    it('returns the file object with the explicit filename', () => {
+        assertEqual('custom.html', result.filename);
+        assertEqual(source, result.source);
+    });
+});
+
+describe('PageStore#getPageTemplate() with explicit templateFilename when file does not exist', ({ before, it }) => {
+    const directory = THIS_DIR;
+
+    const fileSystem = {
+        readDirectory: sinon.fake.resolves([]),
+        readUtf8File: sinon.fake.resolves(null),
+    };
+
+    let result;
+
+    before(async () => {
+        const store = new PageStore({ directory, fileSystem });
+        result = await store.getPageTemplate('/blog/a-blog-post', { templateFilename: 'missing.html' });
+    });
+
+    it('does not call readDirectory() when templateFilename is provided', () => {
+        assertEqual(0, fileSystem.readDirectory.callCount);
+    });
+
+    it('calls readUtf8File() with the explicit filename', () => {
+        assertEqual(1, fileSystem.readUtf8File.callCount);
+    });
+
+    it('returns null when file does not exist', () => {
+        assertEqual(null, result);
+    });
+});
+
 describe('PageStore#getMarkdownContent() with markdown files', ({ before, it }) => {
     const directory = THIS_DIR;
 
