@@ -811,6 +811,76 @@ describe('HttpServerResponse#respondWithHTML() with invalid body', ({ it }) => {
 });
 
 
+describe('HttpServerResponse#respondWithHTML() with custom contentType', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithHTML(200, '<xml/>', { contentType: 'application/xhtml+xml' });
+    });
+
+    it('uses the custom content type with charset', () => {
+        assertEqual('application/xhtml+xml; charset=utf-8', response.headers.get('content-type'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithHTML() with options.headers as object', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithHTML(200, '<html></html>', {
+            headers: { 'x-custom': 'value', 'cache-control': 'no-cache' },
+        });
+    });
+
+    it('sets the default content-type', () => {
+        assertEqual('text/html; charset=utf-8', response.headers.get('content-type'));
+    });
+
+    it('sets additional headers from object', () => {
+        assertEqual('value', response.headers.get('x-custom'));
+        assertEqual('no-cache', response.headers.get('cache-control'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithHTML() with options.headers as Headers instance', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = new Headers();
+        headers.set('x-request-id', '12345');
+        response.respondWithHTML(200, '<html></html>', { headers });
+    });
+
+    it('sets additional headers from Headers instance', () => {
+        assertEqual('12345', response.headers.get('x-request-id'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithHTML() with options.headers as array of tuples', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = [
+            [ 'x-foo', 'bar' ],
+            [ 'x-baz', 'qux' ],
+        ];
+        response.respondWithHTML(200, '<html></html>', { headers });
+    });
+
+    it('sets additional headers from array of tuples', () => {
+        assertEqual('bar', response.headers.get('x-foo'));
+        assertEqual('qux', response.headers.get('x-baz'));
+    });
+});
+
+
 describe('HttpServerResponse#respondWithUtf8() basic usage', ({ before, it }) => {
     let response;
     let result;
