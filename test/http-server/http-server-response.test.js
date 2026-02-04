@@ -503,6 +503,85 @@ describe('HttpServerResponse#respondWithRedirect() with invalid newLocation', ({
 });
 
 
+describe('HttpServerResponse#respondWithRedirect() with options.headers as object', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithRedirect(302, '/new-path', {
+            headers: { 'x-redirect-reason': 'moved', 'cache-control': 'no-cache' },
+        });
+    });
+
+    it('sets the location header', () => {
+        assertEqual('/new-path', response.headers.get('location'));
+    });
+
+    it('sets additional headers from object', () => {
+        assertEqual('moved', response.headers.get('x-redirect-reason'));
+        assertEqual('no-cache', response.headers.get('cache-control'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithRedirect() with options.headers as Headers instance', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = new Headers();
+        headers.set('x-custom', 'value');
+        response.respondWithRedirect(301, '/permanent', { headers });
+    });
+
+    it('sets the location header', () => {
+        assertEqual('/permanent', response.headers.get('location'));
+    });
+
+    it('sets additional headers from Headers instance', () => {
+        assertEqual('value', response.headers.get('x-custom'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithRedirect() with options.headers as array of tuples', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = [
+            [ 'x-foo', 'bar' ],
+            [ 'x-baz', 'qux' ],
+        ];
+        response.respondWithRedirect(307, '/temporary', { headers });
+    });
+
+    it('sets the location header', () => {
+        assertEqual('/temporary', response.headers.get('location'));
+    });
+
+    it('sets additional headers from array of tuples', () => {
+        assertEqual('bar', response.headers.get('x-foo'));
+        assertEqual('qux', response.headers.get('x-baz'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithRedirect() without options', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithRedirect(302, '/path');
+    });
+
+    it('works without options argument', () => {
+        assertEqual(302, response.status);
+        assertEqual('/path', response.headers.get('location'));
+    });
+});
+
+
 describe('HttpServerResponse#respondWithJSON() basic usage', ({ before, it }) => {
     let response;
     let result;
@@ -591,6 +670,79 @@ describe('HttpServerResponse#respondWithJSON() with invalid statusCode', ({ it }
         assertEqual('AssertionError', error.name);
     });
 });
+
+
+describe('HttpServerResponse#respondWithJSON() with options.headers as object', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithJSON(200, { data: 'test' }, {
+            headers: { 'x-request-id': '12345', 'x-custom': 'value' },
+        });
+    });
+
+    it('sets the JSON content-type', () => {
+        assertEqual('application/json; charset=utf-8', response.headers.get('content-type'));
+    });
+
+    it('sets additional headers from object', () => {
+        assertEqual('12345', response.headers.get('x-request-id'));
+        assertEqual('value', response.headers.get('x-custom'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithJSON() with options.headers as Headers instance', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = new Headers();
+        headers.set('x-correlation-id', 'abc-123');
+        response.respondWithJSON(201, { created: true }, { headers });
+    });
+
+    it('sets additional headers from Headers instance', () => {
+        assertEqual('abc-123', response.headers.get('x-correlation-id'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithJSON() with options.headers as array of tuples', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = [
+            [ 'x-foo', 'bar' ],
+            [ 'x-baz', 'qux' ],
+        ];
+        response.respondWithJSON(200, {}, { headers });
+    });
+
+    it('sets additional headers from array of tuples', () => {
+        assertEqual('bar', response.headers.get('x-foo'));
+        assertEqual('qux', response.headers.get('x-baz'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithJSON() with options.headers can override content-type', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithJSON(200, { data: 'test' }, {
+            headers: { 'content-type': 'application/vnd.custom+json' },
+        });
+    });
+
+    it('allows headers to override content-type', () => {
+        assertEqual('application/vnd.custom+json', response.headers.get('content-type'));
+    });
+});
+
 
 
 describe('HttpServerResponse#respondWithHTML() basic usage', ({ before, it }) => {
@@ -735,6 +887,99 @@ describe('HttpServerResponse#respondWithUtf8() with invalid body', ({ it }) => {
 
         assert(error);
         assertEqual('AssertionError', error.name);
+    });
+});
+
+
+describe('HttpServerResponse#respondWithUtf8() with options.headers as object', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithUtf8(200, 'Hello', {
+            headers: { 'x-request-id': '12345', 'cache-control': 'no-store' },
+        });
+    });
+
+    it('sets the default content-type', () => {
+        assertEqual('text/html; charset=utf-8', response.headers.get('content-type'));
+    });
+
+    it('sets additional headers from object', () => {
+        assertEqual('12345', response.headers.get('x-request-id'));
+        assertEqual('no-store', response.headers.get('cache-control'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithUtf8() with options.headers as Headers instance', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = new Headers();
+        headers.set('x-correlation-id', 'abc-123');
+        response.respondWithUtf8(200, 'Content', { headers });
+    });
+
+    it('sets additional headers from Headers instance', () => {
+        assertEqual('abc-123', response.headers.get('x-correlation-id'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithUtf8() with options.headers as array of tuples', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = [
+            [ 'x-foo', 'bar' ],
+            [ 'x-baz', 'qux' ],
+        ];
+        response.respondWithUtf8(200, 'Body', { headers });
+    });
+
+    it('sets additional headers from array of tuples', () => {
+        assertEqual('bar', response.headers.get('x-foo'));
+        assertEqual('qux', response.headers.get('x-baz'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithUtf8() with options.headers can override content-type', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithUtf8(200, 'Text', {
+            headers: { 'content-type': 'text/custom' },
+        });
+    });
+
+    it('allows headers to override content-type', () => {
+        assertEqual('text/custom', response.headers.get('content-type'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithUtf8() with both contentType and headers options', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respondWithUtf8(200, 'Text', {
+            contentType: 'text/plain',
+            headers: { 'x-custom': 'value' },
+        });
+    });
+
+    it('sets content-type from contentType option with charset', () => {
+        assertEqual('text/plain; charset=utf-8', response.headers.get('content-type'));
+    });
+
+    it('sets additional headers', () => {
+        assertEqual('value', response.headers.get('x-custom'));
     });
 });
 
