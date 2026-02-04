@@ -984,33 +984,6 @@ describe('HttpServerResponse#respondWithUtf8() with both contentType and headers
 });
 
 
-describe('HttpServerResponse#respondNotModified()', ({ before, it }) => {
-    let response;
-    let result;
-
-    before(() => {
-        response = new HttpServerResponse('test-id');
-        result = response.respondNotModified();
-    });
-
-    it('sets status to 304', () => {
-        assertEqual(304, response.status);
-    });
-
-    it('sets content-length to 0', () => {
-        assertEqual('0', response.headers.get('content-length'));
-    });
-
-    it('sets body to null', () => {
-        assertEqual(null, response.body);
-    });
-
-    it('returns the response instance for chaining', () => {
-        assertEqual(response, result);
-    });
-});
-
-
 describe('HttpServerResponse#respondWithStream() with contentLength', ({ before, it }) => {
     let response;
     let result;
@@ -1019,7 +992,7 @@ describe('HttpServerResponse#respondWithStream() with contentLength', ({ before,
     before(() => {
         response = new HttpServerResponse('test-id');
         stream = Readable.from([ 'hello' ]);
-        result = response.respondWithStream(200, 5, stream);
+        result = response.respondWithStream(200, stream, { contentLength: 5 });
     });
 
     it('sets the status code', () => {
@@ -1040,14 +1013,14 @@ describe('HttpServerResponse#respondWithStream() with contentLength', ({ before,
 });
 
 
-describe('HttpServerResponse#respondWithStream() without contentLength', ({ before, it }) => {
+describe('HttpServerResponse#respondWithStream() without options', ({ before, it }) => {
     let response;
     let stream;
 
     before(() => {
         response = new HttpServerResponse('test-id');
         stream = Readable.from([ 'hello' ]);
-        response.respondWithStream(200, null, stream);
+        response.respondWithStream(200, stream);
     });
 
     it('does not set content-length header', () => {
@@ -1068,13 +1041,76 @@ describe('HttpServerResponse#respondWithStream() with invalid statusCode', ({ it
         let error;
 
         try {
-            response.respondWithStream('200', 5, stream);
+            response.respondWithStream('200', stream);
         } catch (err) {
             error = err;
         }
 
         assert(error);
         assertEqual('AssertionError', error.name);
+    });
+});
+
+
+describe('HttpServerResponse#respondWithStream() with options.headers as object', ({ before, it }) => {
+    let response;
+    let stream;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        stream = Readable.from([ 'data' ]);
+        response.respondWithStream(200, stream, {
+            contentLength: 4,
+            headers: { 'content-type': 'application/octet-stream', 'x-custom': 'value' },
+        });
+    });
+
+    it('sets content-length from options', () => {
+        assertEqual('4', response.headers.get('content-length'));
+    });
+
+    it('sets additional headers from object', () => {
+        assertEqual('application/octet-stream', response.headers.get('content-type'));
+        assertEqual('value', response.headers.get('x-custom'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithStream() with options.headers as Headers instance', ({ before, it }) => {
+    let response;
+    let stream;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        stream = Readable.from([ 'data' ]);
+        const headers = new Headers();
+        headers.set('x-correlation-id', 'abc-123');
+        response.respondWithStream(200, stream, { headers });
+    });
+
+    it('sets additional headers from Headers instance', () => {
+        assertEqual('abc-123', response.headers.get('x-correlation-id'));
+    });
+});
+
+
+describe('HttpServerResponse#respondWithStream() with options.headers as array of tuples', ({ before, it }) => {
+    let response;
+    let stream;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        stream = Readable.from([ 'data' ]);
+        const headers = [
+            [ 'x-foo', 'bar' ],
+            [ 'x-baz', 'qux' ],
+        ];
+        response.respondWithStream(200, stream, { headers });
+    });
+
+    it('sets additional headers from array of tuples', () => {
+        assertEqual('bar', response.headers.get('x-foo'));
+        assertEqual('qux', response.headers.get('x-baz'));
     });
 });
 
