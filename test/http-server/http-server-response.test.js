@@ -270,6 +270,167 @@ describe('HttpServerResponse#setCookie() with sameSite option', ({ before, it })
 });
 
 
+describe('HttpServerResponse#respond() with all parameters', ({ before, it }) => {
+    let response;
+    let result;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        result = response.respond(201, { 'content-type': 'text/plain', 'x-custom': 'value' }, 'Hello');
+    });
+
+    it('sets the status code', () => {
+        assertEqual(201, response.status);
+    });
+
+    it('sets headers from object', () => {
+        assertEqual('text/plain', response.headers.get('content-type'));
+        assertEqual('value', response.headers.get('x-custom'));
+    });
+
+    it('sets the body', () => {
+        assertEqual('Hello', response.body);
+    });
+
+    it('returns the response instance for chaining', () => {
+        assertEqual(response, result);
+    });
+});
+
+
+describe('HttpServerResponse#respond() with no parameters', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respond();
+    });
+
+    it('keeps default status of 200', () => {
+        assertEqual(200, response.status);
+    });
+
+    it('keeps default body of null', () => {
+        assertEqual(null, response.body);
+    });
+});
+
+
+describe('HttpServerResponse#respond() with only statusCode', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respond(404);
+    });
+
+    it('sets the status code', () => {
+        assertEqual(404, response.status);
+    });
+
+    it('keeps default body of null', () => {
+        assertEqual(null, response.body);
+    });
+});
+
+
+describe('HttpServerResponse#respond() with Headers instance', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = new Headers();
+        headers.set('content-type', 'application/json');
+        headers.set('x-request-id', '12345');
+        response.respond(200, headers, '{}');
+    });
+
+    it('sets headers from Headers instance', () => {
+        assertEqual('application/json', response.headers.get('content-type'));
+        assertEqual('12345', response.headers.get('x-request-id'));
+    });
+});
+
+
+describe('HttpServerResponse#respond() with array of tuples', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        const headers = [
+            [ 'content-type', 'text/xml' ],
+            [ 'cache-control', 'no-cache' ],
+        ];
+        response.respond(200, headers, '<xml/>');
+    });
+
+    it('sets headers from array of tuples', () => {
+        assertEqual('text/xml', response.headers.get('content-type'));
+        assertEqual('no-cache', response.headers.get('cache-control'));
+    });
+
+    it('sets the body', () => {
+        assertEqual('<xml/>', response.body);
+    });
+});
+
+
+describe('HttpServerResponse#respond() merges with existing headers', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.setHeader('x-existing', 'preserved');
+        response.respond(200, { 'x-new': 'added' });
+    });
+
+    it('preserves existing headers', () => {
+        assertEqual('preserved', response.headers.get('x-existing'));
+    });
+
+    it('adds new headers', () => {
+        assertEqual('added', response.headers.get('x-new'));
+    });
+});
+
+
+describe('HttpServerResponse#respond() with null body', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.body = 'previous body';
+        response.respond(200, null, null);
+    });
+
+    it('explicitly sets body to null', () => {
+        assertEqual(null, response.body);
+    });
+});
+
+
+describe('HttpServerResponse#respond() with invalid statusCode type', ({ before, it }) => {
+    let response;
+
+    before(() => {
+        response = new HttpServerResponse('test-id');
+        response.respond('200', { 'content-type': 'text/plain' }, 'body');
+    });
+
+    it('ignores non-number statusCode and keeps default', () => {
+        assertEqual(200, response.status);
+    });
+
+    it('still sets headers', () => {
+        assertEqual('text/plain', response.headers.get('content-type'));
+    });
+
+    it('still sets body', () => {
+        assertEqual('body', response.body);
+    });
+});
+
+
 describe('HttpServerResponse#respondWithRedirect() with string URL', ({ before, it }) => {
     let response;
     let result;
