@@ -649,8 +649,8 @@ describe('HttpServerResponse#respondWithJSON() with custom contentType', ({ befo
         response.respondWithJSON(200, { a: 1 }, { contentType: 'application/vnd.api+json' });
     });
 
-    it('uses the custom content type', () => {
-        assertEqual('application/vnd.api+json', response.headers.get('content-type'));
+    it('uses the custom content type with charset', () => {
+        assertEqual('application/vnd.api+json; charset=utf-8', response.headers.get('content-type'));
     });
 });
 
