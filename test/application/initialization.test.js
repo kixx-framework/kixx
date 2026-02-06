@@ -25,6 +25,8 @@ describe('nominal case with kixx config in CWD', ({ before, it }) => {
             runtime,
             environment,
         });
+
+        await app.initializePlugins();
     });
 
     it('loaded expected configs', () => {
@@ -140,6 +142,8 @@ describe('nominal case with specified config filepath', ({ before, it }) => {
             environment,
             configFilepath,
         });
+
+        await app.initializePlugins();
     });
 
     it('loaded expected configs', () => {
@@ -184,6 +188,8 @@ describe('nominal case with specified app directory', ({ before, it }) => {
             runtime,
             environment,
         });
+
+        await app.initializePlugins();
     });
 
     it('loaded expected configs', () => {

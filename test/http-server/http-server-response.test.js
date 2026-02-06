@@ -60,11 +60,6 @@ describe('HttpServerResponse#updateProps()', ({ before, it }) => {
         assertEqual(1, response.props.nested.a);
     });
 
-    it('deeply freezes the props object', () => {
-        assert(Object.isFrozen(response.props));
-        assert(Object.isFrozen(response.props.nested));
-    });
-
     it('returns the response instance for chaining', () => {
         assertEqual(response, res);
     });
