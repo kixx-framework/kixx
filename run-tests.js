@@ -14,9 +14,9 @@ async function main() {
         allowPositionals: true,
     });
 
-    let testFilepath = null;
+    let testPath = null;
     if (args.positionals[0]) {
-        testFilepath = path.resolve(args.positionals[0]);
+        testPath = path.resolve(args.positionals[0]);
     }
 
     const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -27,9 +27,24 @@ async function main() {
     let testCount = 0;
     let errorCount = 0;
 
-    if (testFilepath) {
-        // Load the single test file specified on the CLI.
-        await dynamicallyImportFile({ filepath: testFilepath });
+    if (testPath) {
+        let stats;
+        try {
+            stats = await fsp.stat(testPath);
+        } catch (cause) {
+            if (cause.code === 'ENOENT') {
+                write(`Test path does not exist: ${ testPath }${ EOL }`);
+                process.exit(1);
+            }
+            throw cause;
+        }
+        if (stats.isDirectory()) {
+            // Load all test files from the specified directory.
+            await loadTestFilesFromDirectory(testPath, pattern);
+        } else {
+            // Load the single test file specified on the CLI.
+            await dynamicallyImportFile({ filepath: testPath });
+        }
     } else {
         // Load all test files from the full, nested test directory.
         await loadTestFilesFromDirectory(directory, pattern);
