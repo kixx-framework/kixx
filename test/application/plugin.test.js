@@ -18,20 +18,8 @@ describe('Plugin#constructor', ({ it }) => {
         assertEqual(directory, plugin.directory);
     });
 
-    it('sets the userRolesDirectory', () => {
-        assertEqual(path.join(directory, 'user-roles'), plugin.userRolesDirectory);
-    });
-
     it('sets the collectionsDirectory', () => {
         assertEqual(path.join(directory, 'collections'), plugin.collectionsDirectory);
-    });
-
-    it('sets the formsDirectory', () => {
-        assertEqual(path.join(directory, 'forms'), plugin.formsDirectory);
-    });
-
-    it('sets the viewsDirectory', () => {
-        assertEqual(path.join(directory, 'views'), plugin.viewsDirectory);
     });
 
     it('sets the middlewareDirectory', () => {
@@ -61,21 +49,6 @@ describe('Plugin#constructor', ({ it }) => {
     it('initializes collections as empty Map', () => {
         assert(plugin.collections instanceof Map);
         assertEqual(0, plugin.collections.size);
-    });
-
-    it('initializes views as empty Map', () => {
-        assert(plugin.views instanceof Map);
-        assertEqual(0, plugin.views.size);
-    });
-
-    it('initializes forms as empty Map', () => {
-        assert(plugin.forms instanceof Map);
-        assertEqual(0, plugin.forms.size);
-    });
-
-    it('initializes userRoles as empty Map', () => {
-        assert(plugin.userRoles instanceof Map);
-        assertEqual(0, plugin.userRoles.size);
     });
 
     it('initializes middleware as empty Map', () => {
@@ -383,317 +356,6 @@ describe('Plugin#loadCollection when class has no Model property', ({ before, af
 });
 
 
-describe('Plugin#loadForm with valid form directory', ({ before, after, it }) => {
-    const pluginDirectory = '/path/to/my-plugin';
-    const formDirectory = '/path/to/my-plugin/forms/login';
-
-    class LoginForm {}
-
-    const schema = { type: 'object' };
-
-    const fileSystem = {
-        readDirectory: sinon.stub().resolves([
-            { name: 'login.form.js', isFile: () => true },
-            { name: 'login.schema.jsonc', isFile: () => true },
-        ]),
-        readJSONFile: sinon.stub().resolves(schema),
-        importAbsoluteFilepath: sinon.stub().resolves({ default: LoginForm }),
-    };
-
-    let result;
-
-    before(async () => {
-        const plugin = new Plugin(fileSystem, pluginDirectory);
-        result = await plugin.loadForm(formDirectory);
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('returns the form definition with correct name', () => {
-        assertEqual('LoginForm', result.name);
-    });
-
-    it('returns the form definition with FormConstructor', () => {
-        assertEqual(LoginForm, result.FormConstructor);
-    });
-
-    it('returns the form definition with schema', () => {
-        assertEqual(schema, result.schema);
-    });
-});
-
-
-describe('Plugin#loadForm without class file', ({ before, after, it }) => {
-    const pluginDirectory = '/path/to/my-plugin';
-    const formDirectory = '/path/to/my-plugin/forms/login';
-
-    const fileSystem = {
-        readDirectory: sinon.stub().resolves([]),
-        readJSONFile: sinon.stub(),
-        importAbsoluteFilepath: sinon.stub(),
-    };
-
-    let error;
-
-    before(async () => {
-        const plugin = new Plugin(fileSystem, pluginDirectory);
-        try {
-            await plugin.loadForm(formDirectory);
-        } catch (err) {
-            error = err;
-        }
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('throws an AssertionError', () => {
-        assert(error);
-        assertEqual('AssertionError', error.name);
-    });
-});
-
-
-describe('Plugin#loadView with valid view directory', ({ before, after, it }) => {
-    const pluginDirectory = '/path/to/my-plugin';
-    const viewDirectory = '/path/to/my-plugin/views/homepage';
-
-    class HomepageView {}
-
-    const schema = { type: 'object' };
-
-    const fileSystem = {
-        readDirectory: sinon.stub().resolves([
-            { name: 'homepage.view.mjs', isFile: () => true },
-            { name: 'homepage.schema.json', isFile: () => true },
-        ]),
-        readJSONFile: sinon.stub().resolves(schema),
-        importAbsoluteFilepath: sinon.stub().resolves({ default: HomepageView }),
-    };
-
-    let result;
-
-    before(async () => {
-        const plugin = new Plugin(fileSystem, pluginDirectory);
-        result = await plugin.loadView(viewDirectory);
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('returns the view definition with correct name', () => {
-        assertEqual('HomepageView', result.name);
-    });
-
-    it('returns the view definition with ViewConstructor', () => {
-        assertEqual(HomepageView, result.ViewConstructor);
-    });
-
-    it('returns the view definition with schema', () => {
-        assertEqual(schema, result.schema);
-    });
-});
-
-
-describe('Plugin#loadView without class file', ({ before, after, it }) => {
-    const pluginDirectory = '/path/to/my-plugin';
-    const viewDirectory = '/path/to/my-plugin/views/homepage';
-
-    const fileSystem = {
-        readDirectory: sinon.stub().resolves([]),
-        readJSONFile: sinon.stub(),
-        importAbsoluteFilepath: sinon.stub(),
-    };
-
-    let error;
-
-    before(async () => {
-        const plugin = new Plugin(fileSystem, pluginDirectory);
-        try {
-            await plugin.loadView(viewDirectory);
-        } catch (err) {
-            error = err;
-        }
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('throws an AssertionError', () => {
-        assert(error);
-        assertEqual('AssertionError', error.name);
-    });
-});
-
-
-describe('Plugin#loadUserRole with valid role file', ({ before, after, it }) => {
-    const pluginDirectory = '/path/to/my-plugin';
-    const roleFilepath = '/path/to/my-plugin/user-roles/admin.json';
-
-    const roleData = {
-        name: 'admin',
-        permissions: [ 'urn:kixx:*' ],
-    };
-
-    const fileSystem = {
-        readJSONFile: sinon.stub().resolves(roleData),
-    };
-
-    let result;
-
-    before(async () => {
-        const plugin = new Plugin(fileSystem, pluginDirectory);
-        result = await plugin.loadUserRole(roleFilepath);
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('reads the role file', () => {
-        assertEqual(roleFilepath, fileSystem.readJSONFile.firstCall.firstArg);
-    });
-
-    it('returns the role definition', () => {
-        assertEqual('admin', result.name);
-        assertEqual(1, result.permissions.length);
-        assertEqual('urn:kixx:*', result.permissions[0]);
-    });
-});
-
-
-describe('Plugin#loadUserRole without name property', ({ before, after, it }) => {
-    const pluginDirectory = '/path/to/my-plugin';
-    const roleFilepath = '/path/to/my-plugin/user-roles/admin.json';
-
-    const roleData = {
-        permissions: [ 'urn:kixx:*' ],
-    };
-
-    const fileSystem = {
-        readJSONFile: sinon.stub().resolves(roleData),
-    };
-
-    let error;
-
-    before(async () => {
-        const plugin = new Plugin(fileSystem, pluginDirectory);
-        try {
-            await plugin.loadUserRole(roleFilepath);
-        } catch (err) {
-            error = err;
-        }
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('throws an AssertionError', () => {
-        assert(error);
-        assertEqual('AssertionError', error.name);
-    });
-
-    it('mentions name in error message', () => {
-        assert(error.message.includes('name'));
-    });
-});
-
-
-describe('Plugin#loadUserRole without permissions property', ({ before, after, it }) => {
-    const pluginDirectory = '/path/to/my-plugin';
-    const roleFilepath = '/path/to/my-plugin/user-roles/admin.json';
-
-    const roleData = {
-        name: 'admin',
-    };
-
-    const fileSystem = {
-        readJSONFile: sinon.stub().resolves(roleData),
-    };
-
-    let error;
-
-    before(async () => {
-        const plugin = new Plugin(fileSystem, pluginDirectory);
-        try {
-            await plugin.loadUserRole(roleFilepath);
-        } catch (err) {
-            error = err;
-        }
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('throws an AssertionError', () => {
-        assert(error);
-        assertEqual('AssertionError', error.name);
-    });
-
-    it('mentions permissions in error message', () => {
-        assert(error.message.includes('permissions'));
-    });
-});
-
-
-describe('Plugin#loadUserRoles with multiple role files', ({ before, after, it }) => {
-    const pluginDirectory = '/path/to/my-plugin';
-
-    const adminRole = { name: 'admin', permissions: [ 'urn:kixx:*' ] };
-    const userRole = { name: 'user', permissions: [ 'urn:kixx:read:*' ] };
-
-    const fileSystem = {
-        readDirectory: sinon.stub().resolves([
-            { name: 'admin.json', isFile: () => true },
-            { name: 'user.jsonc', isFile: () => true },
-            { name: 'readme.md', isFile: () => true },
-        ]),
-        readJSONFile: sinon.stub(),
-    };
-
-    let result;
-
-    before(async () => {
-        fileSystem.readJSONFile
-            .withArgs(path.join(pluginDirectory, 'user-roles', 'admin.json'))
-            .resolves(adminRole);
-        fileSystem.readJSONFile
-            .withArgs(path.join(pluginDirectory, 'user-roles', 'user.jsonc'))
-            .resolves(userRole);
-
-        const plugin = new Plugin(fileSystem, pluginDirectory);
-        result = await plugin.loadUserRoles();
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('returns a Map with two roles', () => {
-        assert(result instanceof Map);
-        assertEqual(2, result.size);
-    });
-
-    it('contains the admin role keyed by name', () => {
-        assertEqual(adminRole, result.get('admin'));
-    });
-
-    it('contains the user role keyed by name', () => {
-        assertEqual(userRole, result.get('user'));
-    });
-
-    it('ignores non-json files', () => {
-        assertEqual(2, fileSystem.readJSONFile.callCount);
-    });
-});
-
 
 describe('Plugin#loadMiddlewareFunction with named function', ({ before, after, it }) => {
     const pluginDirectory = '/path/to/my-plugin';
@@ -858,14 +520,9 @@ describe('Plugin#load with full plugin structure', ({ before, after, it }) => {
         static Model = User;
     }
 
-    class LoginForm {}
-    class HomepageView {}
-
     function authMiddleware() {}
     function pageHandler() {}
     function errorHandler() {}
-
-    const adminRole = { name: 'admin', permissions: [ 'urn:kixx:*' ] };
 
     const fileSystem = {
         readDirectory: sinon.stub(),
@@ -905,53 +562,6 @@ describe('Plugin#load with full plugin structure', ({ before, after, it }) => {
         fileSystem.importAbsoluteFilepath
             .withArgs(path.join(pluginDirectory, 'collections', 'users', 'users.collection.js'))
             .resolves({ default: UsersCollection });
-
-        // Forms directory
-        fileSystem.readDirectory
-            .withArgs(path.join(pluginDirectory, 'forms'))
-            .resolves([
-                { name: 'login', isDirectory: () => true },
-            ]);
-
-        // Login form directory
-        fileSystem.readDirectory
-            .withArgs(path.join(pluginDirectory, 'forms', 'login'))
-            .resolves([
-                { name: 'login.form.js', isFile: () => true },
-            ]);
-
-        fileSystem.importAbsoluteFilepath
-            .withArgs(path.join(pluginDirectory, 'forms', 'login', 'login.form.js'))
-            .resolves({ default: LoginForm });
-
-        // Views directory
-        fileSystem.readDirectory
-            .withArgs(path.join(pluginDirectory, 'views'))
-            .resolves([
-                { name: 'homepage', isDirectory: () => true },
-            ]);
-
-        // Homepage view directory
-        fileSystem.readDirectory
-            .withArgs(path.join(pluginDirectory, 'views', 'homepage'))
-            .resolves([
-                { name: 'homepage.view.js', isFile: () => true },
-            ]);
-
-        fileSystem.importAbsoluteFilepath
-            .withArgs(path.join(pluginDirectory, 'views', 'homepage', 'homepage.view.js'))
-            .resolves({ default: HomepageView });
-
-        // User roles directory
-        fileSystem.readDirectory
-            .withArgs(path.join(pluginDirectory, 'user-roles'))
-            .resolves([
-                { name: 'admin.json', isFile: () => true },
-            ]);
-
-        fileSystem.readJSONFile
-            .withArgs(path.join(pluginDirectory, 'user-roles', 'admin.json'))
-            .resolves(adminRole);
 
         // Middleware directory
         fileSystem.readDirectory
@@ -1009,21 +619,6 @@ describe('Plugin#load with full plugin structure', ({ before, after, it }) => {
     it('loads collections with fully-qualified keys', () => {
         assertEqual(1, plugin.collections.size);
         assert(plugin.collections.has('my-plugin.User'));
-    });
-
-    it('loads forms with fully-qualified keys', () => {
-        assertEqual(1, plugin.forms.size);
-        assert(plugin.forms.has('my-plugin.LoginForm'));
-    });
-
-    it('loads views with fully-qualified keys', () => {
-        assertEqual(1, plugin.views.size);
-        assert(plugin.views.has('my-plugin.HomepageView'));
-    });
-
-    it('loads user roles keyed by role name', () => {
-        assertEqual(1, plugin.userRoles.size);
-        assert(plugin.userRoles.has('admin'));
     });
 
     it('loads middleware with fully-qualified keys', () => {

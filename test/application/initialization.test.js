@@ -84,28 +84,6 @@ describe('nominal case with kixx config in CWD', ({ before, it }) => {
         assertEqual('string', jobCollection.schema.properties.datetime.type);
     });
 
-    it('registers views', () => {
-        const userView = context.getView('app.UserView');
-        const jobView = context.getView('job-queue.JobView');
-
-        assertEqual(context, userView.context);
-        assertEqual(context, jobView.context);
-
-        assertEqual('string', userView.schema.properties.email.type);
-        assertEqual('string', jobView.schema.properties.datetime.type);
-    });
-
-    it('registers forms', () => {
-        const userForm = context.getForm('app.UserForm');
-        const jobForm = context.getForm('job-queue.JobForm');
-
-        assertEqual(context, userForm.context);
-        assertEqual(context, jobForm.context);
-
-        assertEqual('string', userForm.schema.properties.email.type);
-        assertEqual('string', jobForm.schema.properties.datetime.type);
-    });
-
     it('registers and initializes services', () => {
         const database = context.getService('Database');
         const hyperview = context.getService('Hyperview');
@@ -114,15 +92,6 @@ describe('nominal case with kixx config in CWD', ({ before, it }) => {
         assert(database.initialized);
         assert(hyperview.initialized);
         assert(queue.initialized);
-    });
-
-    it('registers user roles', () => {
-        const anonymous = context.getUserRole('anonymous');
-        assertEqual('view:app.Products:query:*', anonymous.permissions[0].urn);
-
-        const jobs = context.getUserRole('job-queue-anonymous');
-        assertEqual('view:job-queue.Jobs:query:*', jobs.permissions[0].urn);
-        assertEqual('form:job-queue.Jobs:save:*', jobs.permissions[1].urn);
     });
 });
 
