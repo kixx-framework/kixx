@@ -495,12 +495,12 @@ describe('Plugin#loadMiddlewareDirectory with multiple files', ({ before, after,
         assertEqual(2, result.size);
     });
 
-    it('contains auth middleware with fully-qualified key', () => {
-        assertEqual(authMiddleware, result.get('my-plugin.authMiddleware'));
+    it('contains auth middleware keyed by function name', () => {
+        assertEqual(authMiddleware, result.get('authMiddleware'));
     });
 
-    it('contains logging middleware with fully-qualified key', () => {
-        assertEqual(loggingMiddleware, result.get('my-plugin.loggingMiddleware'));
+    it('contains logging middleware keyed by function name', () => {
+        assertEqual(loggingMiddleware, result.get('loggingMiddleware'));
     });
 
     it('ignores non-js files', () => {
@@ -616,24 +616,24 @@ describe('Plugin#load with full plugin structure', ({ before, after, it }) => {
         assertEqual(initialize, plugin.initialize);
     });
 
-    it('loads collections with fully-qualified keys', () => {
+    it('loads collections keyed by collection name', () => {
         assertEqual(1, plugin.collections.size);
-        assert(plugin.collections.has('my-plugin.User'));
+        assert(plugin.collections.has('User'));
     });
 
-    it('loads middleware with fully-qualified keys', () => {
+    it('loads middleware keyed by function name', () => {
         assertEqual(1, plugin.middleware.size);
-        assert(plugin.middleware.has('my-plugin.authMiddleware'));
+        assert(plugin.middleware.has('authMiddleware'));
     });
 
-    it('loads request handlers with fully-qualified keys', () => {
+    it('loads request handlers keyed by function name', () => {
         assertEqual(1, plugin.requestHandlers.size);
-        assert(plugin.requestHandlers.has('my-plugin.pageHandler'));
+        assert(plugin.requestHandlers.has('pageHandler'));
     });
 
-    it('loads error handlers with fully-qualified keys', () => {
+    it('loads error handlers keyed by function name', () => {
         assertEqual(1, plugin.errorHandlers.size);
-        assert(plugin.errorHandlers.has('my-plugin.errorHandler'));
+        assert(plugin.errorHandlers.has('errorHandler'));
     });
 
     it('returns the plugin instance', async () => {

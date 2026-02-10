@@ -71,8 +71,8 @@ describe('nominal case with kixx config in CWD', ({ before, it }) => {
     });
 
     it('registers collections', () => {
-        const userCollection = context.getCollection('app.User');
-        const jobCollection = context.getCollection('job-queue.Job');
+        const userCollection = context.getCollection('User');
+        const jobCollection = context.getCollection('Job');
 
         assertEqual('UserCollection', userCollection.constructor.name);
         assertEqual('JobCollection', jobCollection.constructor.name);
