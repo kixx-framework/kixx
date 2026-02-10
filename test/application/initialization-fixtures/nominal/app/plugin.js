@@ -18,15 +18,9 @@ class Hyperview {
     }
 }
 
-class RootUser {
-    id = 'root-user-fixture';
-}
-
 export function register(context) {
     context.registerService('Database', new Database());
     context.registerService('Hyperview', new Hyperview());
-
-    context.setRootUser(new RootUser(context));
 }
 
 export async function initialize(context) {
