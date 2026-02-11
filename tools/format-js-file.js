@@ -275,6 +275,9 @@ function jsDocTokenStreamToObject(tokens) {
             obj.definition = 'class';
         } else if (type === 'tag' && value === 'function') {
             obj.definition = 'function';
+        } else if (type === 'tag' && value === 'static') {
+            obj.isStatic = true;
+            obj.isClassProperty = true;
         } else if (type === 'tag' && value === 'public') {
             obj.isPublic = true;
             obj.isPrivate = false;
@@ -467,21 +470,38 @@ function parseJSDocTagContent(content, tokens) {
     }
 
     // Check for type annotation {Type}
-    const typeMatch = content.match(/^\{([^}]+)\}(?:\s+(.+))?$/);
-    if (typeMatch) {
-        const typeValue = typeMatch[1];
-        const rest = typeMatch[2] || '';
+    // Handle nested braces by counting brace depth
+    if (content.startsWith('{')) {
+        let braceDepth = 0;
+        let endIndex = -1;
 
-        tokens.push({
-            type: 'type',
-            value: typeValue,
-        });
-
-        if (rest) {
-            // Parse parameter name and description
-            parseJSDocParameterAndDescription(rest, tokens);
+        for (let i = 0; i < content.length; i += 1) {
+            if (content[i] === '{') {
+                braceDepth += 1;
+            } else if (content[i] === '}') {
+                braceDepth -= 1;
+                if (braceDepth === 0) {
+                    endIndex = i;
+                    break;
+                }
+            }
         }
-        return;
+
+        if (endIndex !== -1) {
+            const typeValue = content.substring(1, endIndex);
+            const rest = content.substring(endIndex + 1).trim();
+
+            tokens.push({
+                type: 'type',
+                value: typeValue,
+            });
+
+            if (rest) {
+                // Parse parameter name and description
+                parseJSDocParameterAndDescription(rest, tokens);
+            }
+            return;
+        }
     }
 
     // No type annotation, could be description or parameter name
