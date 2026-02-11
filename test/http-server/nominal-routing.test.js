@@ -1513,6 +1513,61 @@ describe('routing with no matching hostname (uses default virtual host)', ({ bef
     });
 });
 
+describe('virtual host and route names', ({ before, it }) => {
+    const middleware = new Map();
+    const handlers = new Map();
+    const errorHandlers = new Map();
+
+    // Create stub handlers and middleware for all required items in fixtures
+    handlers.set('RedirectToWWW', () => sinon.spy());
+    handlers.set('PublicViewProduct', () => sinon.spy());
+    handlers.set('HyperviewHandler', () => sinon.spy());
+    middleware.set('AuthenticationMiddleware', () => sinon.spy());
+    middleware.set('HttpCachingMiddleware', () => sinon.spy());
+    errorHandlers.set('HyperviewErrorHandler', () => sinon.spy());
+    errorHandlers.set('ProductsErrorHandler', () => sinon.spy());
+    errorHandlers.set('ViewProductErrorHandler', () => sinon.spy());
+
+    let vhosts;
+
+    before(async () => {
+        vhosts = await routesStore.loadVirtualHosts(middleware, handlers, errorHandlers);
+    });
+
+    it('composes route names using virtual host name from config', () => {
+        // Virtual host "Main" from virtual-hosts.jsonc
+        const mainVHost = vhosts.find((vh) => vh.name === 'Main');
+        assert(mainVHost, 'Should find Main virtual host');
+
+        // Check that route names use virtual host name "Main", not the pattern
+        const routeNames = mainVHost.routes.map((route) => route.name);
+
+        // Route names should start with "Main/" (the vhost name), not "com.example.:subdomain/"
+        for (const routeName of routeNames) {
+            assert(
+                routeName.startsWith('Main/'),
+                `Route name "${ routeName }" should start with "Main/"`
+            );
+        }
+    });
+
+    it('uses explicit virtual host name over hostname or pattern', () => {
+        // Virtual host "Bare Domain" from virtual-hosts.jsonc
+        const bareDomainVHost = vhosts.find((vh) => vh.name === 'Bare Domain');
+        assert(bareDomainVHost, 'Should find Bare Domain virtual host');
+
+        const routeNames = bareDomainVHost.routes.map((route) => route.name);
+
+        // Route names should use "Bare Domain/" not "com.example/"
+        for (const routeName of routeNames) {
+            assert(
+                routeName.startsWith('Bare Domain/'),
+                `Route name "${ routeName }" should start with "Bare Domain/"`
+            );
+        }
+    });
+});
+
 function createApplicationContext() {
     const runtime = { server: { name: 'test' } };
     const config = {};
