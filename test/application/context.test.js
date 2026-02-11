@@ -4,9 +4,9 @@ import {
     assert,
     assertEqual
 } from 'kixx-assert';
-import Context from '../../lib/application/context.js';
+import ApplicationContext from '../../lib/application/application-context.js';
 
-describe('Context#constructor with valid input', ({ before, it }) => {
+describe('ApplicationContext#constructor with valid input', ({ before, it }) => {
     let context;
     let mockRuntime;
     let mockConfig;
@@ -38,7 +38,7 @@ describe('Context#constructor with valid input', ({ before, it }) => {
             hasPermission: sinon.stub().returns(true),
         };
 
-        context = new Context({
+        context = new ApplicationContext({
             runtime: mockRuntime,
             config: mockConfig,
             paths: mockPaths,
@@ -64,12 +64,12 @@ describe('Context#constructor with valid input', ({ before, it }) => {
     });
 });
 
-describe('Context#registerService() with valid input', ({ before, it }) => {
+describe('ApplicationContext#registerService() with valid input', ({ before, it }) => {
     let context;
     let testService;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -110,11 +110,11 @@ describe('Context#registerService() with valid input', ({ before, it }) => {
     });
 });
 
-describe('Context#registerService() with invalid input', ({ before, it }) => {
+describe('ApplicationContext#registerService() with invalid input', ({ before, it }) => {
     let context;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -207,12 +207,12 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
     });
 });
 
-describe('Context#getService() when service exists', ({ before, it }) => {
+describe('ApplicationContext#getService() when service exists', ({ before, it }) => {
     let context;
     let testService;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -247,11 +247,11 @@ describe('Context#getService() when service exists', ({ before, it }) => {
     });
 });
 
-describe('Context#getService() when service does not exist', ({ before, it }) => {
+describe('ApplicationContext#getService() when service does not exist', ({ before, it }) => {
     let context;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -272,12 +272,12 @@ describe('Context#getService() when service does not exist', ({ before, it }) =>
     });
 });
 
-describe('Context#registerCollection() with valid input', ({ before, it }) => {
+describe('ApplicationContext#registerCollection() with valid input', ({ before, it }) => {
     let context;
     let testCollection;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -318,11 +318,11 @@ describe('Context#registerCollection() with valid input', ({ before, it }) => {
     });
 });
 
-describe('Context#registerCollection() with invalid input', ({ before, it }) => {
+describe('ApplicationContext#registerCollection() with invalid input', ({ before, it }) => {
     let context;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -415,12 +415,12 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
     });
 });
 
-describe('Context#getCollection() when collection exists', ({ before, it }) => {
+describe('ApplicationContext#getCollection() when collection exists', ({ before, it }) => {
     let context;
     let testCollection;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -455,11 +455,11 @@ describe('Context#getCollection() when collection exists', ({ before, it }) => {
     });
 });
 
-describe('Context#getCollection() when collection does not exist', ({ before, it }) => {
+describe('ApplicationContext#getCollection() when collection does not exist', ({ before, it }) => {
     let context;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,

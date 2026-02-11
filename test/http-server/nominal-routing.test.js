@@ -13,7 +13,7 @@ import HttpRoutesStore from '../../lib/http-routes-store/http-routes-store.js';
 import HttpRouter from '../../lib/http-server/http-router.js';
 import HttpServerRequest from '../../lib/http-server/http-server-request.js';
 import HttpServerResponse from '../../lib/http-server/http-server-response.js';
-import Context from '../../lib/application/context.js';
+import ApplicationContext from '../../lib/application/application-context.js';
 
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -1574,7 +1574,7 @@ function createApplicationContext() {
     const paths = {};
     const logger = {};
 
-    return new Context({
+    return new ApplicationContext({
         runtime,
         config,
         paths,
