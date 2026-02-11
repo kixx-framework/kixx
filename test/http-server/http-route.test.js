@@ -1,6 +1,6 @@
 import sinon from 'sinon';
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertArray } from 'kixx-assert';
+import { assert, assertEqual, assertArray, assertNonEmptyString } from 'kixx-assert';
 import HttpRoute from '../../lib/http-server/http-route.js';
 import HttpTarget from '../../lib/http-server/http-target.js';
 
@@ -869,5 +869,454 @@ describe('HttpRoute#handleError() distinguishes between falsy values', ({ before
 
     it('returns first truthy response', () => {
         assertEqual('res-success', result.id);
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() with valid target and params', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ViewContext',
+        allowedMethods: [ 'HEAD', 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let result;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Contexts',
+            pattern: '/contexts/:id',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+        result = route.compileTargetPathname('Contexts/ViewContext', { id: '2026-02-08T10-17-42' });
+    });
+
+    it('returns an object with method property', () => {
+        assertNonEmptyString(result.method);
+    });
+
+    it('returns an object with pathname property', () => {
+        assertNonEmptyString(result.pathname);
+    });
+
+    it('returns the compiled pathname with params substituted', () => {
+        assertEqual('/contexts/2026-02-08T10-17-42', result.pathname);
+    });
+
+    it('returns GET as the preferred method (over HEAD)', () => {
+        assertEqual('GET', result.method);
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() with multiple targets', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ViewContext',
+        allowedMethods: [ 'HEAD', 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    const target2 = new HttpTarget({
+        name: 'UpdateContext',
+        allowedMethods: [ 'POST' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    const target3 = new HttpTarget({
+        name: 'DeleteContext',
+        allowedMethods: [ 'DELETE' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Contexts',
+            pattern: '/contexts/:id',
+            targets: [ target1, target2, target3 ],
+            errorHandlers: [],
+        });
+    });
+
+    it('finds ViewContext target and returns GET method', () => {
+        const result = route.compileTargetPathname('Contexts/ViewContext', { id: 'abc' });
+        assertEqual('GET', result.method);
+        assertEqual('/contexts/abc', result.pathname);
+    });
+
+    it('finds UpdateContext target and returns POST method', () => {
+        const result = route.compileTargetPathname('Contexts/UpdateContext', { id: 'abc' });
+        assertEqual('POST', result.method);
+        assertEqual('/contexts/abc', result.pathname);
+    });
+
+    it('finds DeleteContext target and returns DELETE method', () => {
+        const result = route.compileTargetPathname('Contexts/DeleteContext', { id: 'abc' });
+        assertEqual('DELETE', result.method);
+        assertEqual('/contexts/abc', result.pathname);
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() method priority with POST and PUT', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ModifyResource',
+        allowedMethods: [ 'POST', 'PUT' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let result;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Resources',
+            pattern: '/resources/:id',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+        result = route.compileTargetPathname('Resources/ModifyResource', { id: '123' });
+    });
+
+    it('returns POST as the preferred method (over PUT)', () => {
+        assertEqual('POST', result.method);
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() with single method', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'DeleteItem',
+        allowedMethods: [ 'DELETE' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let result;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Items',
+            pattern: '/items/:id',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+        result = route.compileTargetPathname('Items/DeleteItem', { id: '456' });
+    });
+
+    it('returns the single method', () => {
+        assertEqual('DELETE', result.method);
+    });
+
+    it('returns the compiled pathname', () => {
+        assertEqual('/items/456', result.pathname);
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() with optional path segments', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ViewContext',
+        allowedMethods: [ 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Contexts',
+            pattern: '/contexts/:id{.json}',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+    });
+
+    it('compiles pathname including optional segment', () => {
+        // path-to-regexp compile() includes optional groups by default
+        const result = route.compileTargetPathname('Contexts/ViewContext', { id: 'abc' });
+        assertEqual('/contexts/abc.json', result.pathname);
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() with multiple path params', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ViewComment',
+        allowedMethods: [ 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let result;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Comments',
+            pattern: '/posts/:postId/comments/:commentId',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+        result = route.compileTargetPathname('Comments/ViewComment', { postId: '42', commentId: '99' });
+    });
+
+    it('compiles pathname with all params substituted', () => {
+        assertEqual('/posts/42/comments/99', result.pathname);
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() with no params required', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ListItems',
+        allowedMethods: [ 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let result;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Items',
+            pattern: '/items',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+        result = route.compileTargetPathname('Items/ListItems', {});
+    });
+
+    it('compiles pathname without params', () => {
+        assertEqual('/items', result.pathname);
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() when target not found', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ViewContext',
+        allowedMethods: [ 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let error;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Contexts',
+            pattern: '/contexts/:id',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+
+        try {
+            route.compileTargetPathname('Contexts/NonExistentTarget', { id: 'abc' });
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('includes target name in error message', () => {
+        assert(error.message.includes('NonExistentTarget'));
+    });
+
+    it('includes route name in error message', () => {
+        assert(error.message.includes('Contexts'));
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() when route name does not match', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ViewContext',
+        allowedMethods: [ 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let error;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Contexts',
+            pattern: '/contexts/:id',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+
+        try {
+            route.compileTargetPathname('WrongRoute/ViewContext', { id: 'abc' });
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('includes mismatch details in error message', () => {
+        assert(error.message.includes('WrongRoute'));
+        assert(error.message.includes('Contexts'));
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() with invalid targetId format', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'ViewContext',
+        allowedMethods: [ 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let error;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Contexts',
+            pattern: '/contexts/:id',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+
+        try {
+            route.compileTargetPathname('InvalidTargetIdWithoutSlash', { id: 'abc' });
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('includes format guidance in error message', () => {
+        assert(error.message.includes('RouteName/TargetName'));
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() with wildcard pattern', ({ before, it }) => {
+    const target1 = new HttpTarget({
+        name: 'CatchAll',
+        allowedMethods: [ 'GET' ],
+        middleware: [],
+        errorHandlers: [],
+    });
+
+    let route;
+    let error;
+
+    before(() => {
+        route = new HttpRoute({
+            name: 'Fallback',
+            pattern: '*',
+            targets: [ target1 ],
+            errorHandlers: [],
+        });
+
+        try {
+            route.compileTargetPathname('Fallback/CatchAll', {});
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('includes wildcard explanation in error message', () => {
+        assert(error.message.includes('wildcard'));
+    });
+});
+
+
+describe('HttpRoute#compileTargetPathname() method priority order', ({ it }) => {
+    // Test the full priority order: GET > POST > PUT > PATCH > DELETE > HEAD > OPTIONS
+
+    function createRouteWithMethods(methods) {
+        const target = new HttpTarget({
+            name: 'TestTarget',
+            allowedMethods: methods,
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        return new HttpRoute({
+            name: 'TestRoute',
+            pattern: '/test',
+            targets: [ target ],
+            errorHandlers: [],
+        });
+    }
+
+    it('prefers GET over all other methods', () => {
+        const route = createRouteWithMethods([ 'HEAD', 'OPTIONS', 'DELETE', 'PATCH', 'PUT', 'POST', 'GET' ]);
+        const result = route.compileTargetPathname('TestRoute/TestTarget', {});
+        assertEqual('GET', result.method);
+    });
+
+    it('prefers POST when GET is not available', () => {
+        const route = createRouteWithMethods([ 'HEAD', 'OPTIONS', 'DELETE', 'PATCH', 'PUT', 'POST' ]);
+        const result = route.compileTargetPathname('TestRoute/TestTarget', {});
+        assertEqual('POST', result.method);
+    });
+
+    it('prefers PUT when GET and POST are not available', () => {
+        const route = createRouteWithMethods([ 'HEAD', 'OPTIONS', 'DELETE', 'PATCH', 'PUT' ]);
+        const result = route.compileTargetPathname('TestRoute/TestTarget', {});
+        assertEqual('PUT', result.method);
+    });
+
+    it('prefers PATCH when GET, POST, and PUT are not available', () => {
+        const route = createRouteWithMethods([ 'HEAD', 'OPTIONS', 'DELETE', 'PATCH' ]);
+        const result = route.compileTargetPathname('TestRoute/TestTarget', {});
+        assertEqual('PATCH', result.method);
+    });
+
+    it('prefers DELETE when only DELETE, HEAD, and OPTIONS are available', () => {
+        const route = createRouteWithMethods([ 'HEAD', 'OPTIONS', 'DELETE' ]);
+        const result = route.compileTargetPathname('TestRoute/TestTarget', {});
+        assertEqual('DELETE', result.method);
+    });
+
+    it('prefers HEAD when only HEAD and OPTIONS are available', () => {
+        const route = createRouteWithMethods([ 'OPTIONS', 'HEAD' ]);
+        const result = route.compileTargetPathname('TestRoute/TestTarget', {});
+        assertEqual('HEAD', result.method);
+    });
+
+    it('returns OPTIONS when it is the only method', () => {
+        const route = createRouteWithMethods([ 'OPTIONS' ]);
+        const result = route.compileTargetPathname('TestRoute/TestTarget', {});
+        assertEqual('OPTIONS', result.method);
+    });
+
+    it('falls back to first method for unknown methods', () => {
+        const route = createRouteWithMethods([ 'CUSTOM', 'WEIRD' ]);
+        const result = route.compileTargetPathname('TestRoute/TestTarget', {});
+        assertEqual('CUSTOM', result.method);
     });
 });
