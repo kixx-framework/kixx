@@ -11,6 +11,8 @@ export default [
             'lib/errors/',
             'lib/logger/',
             'lib/kixx-templating/',
+            // The scratch pad
+            'tmp/',
         ],
     },
     js.configs.recommended,
