@@ -3,6 +3,7 @@ import sinon from 'sinon';
 import { assert, assertEqual, assertFalsy } from 'kixx-assert';
 import ApplicationContext from '../../lib/application/application-context.js';
 import RequestContext from '../../lib/application/request-context.js';
+import HttpTarget from '../../lib/http-server/http-target.js';
 
 
 describe('RequestContext#constructor exposes read-only properties', ({ before, after, it }) => {
@@ -546,5 +547,486 @@ describe('RequestContext shares same instances with application context', ({ bef
 
     it('shares same paths instance', () => {
         assertEqual(true, requestContext.paths === appContext.paths);
+    });
+});
+
+
+describe('RequestContext#constructor with no routes provided', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        requestContext = new RequestContext(appContext);
+    });
+
+    it('getAllHttpTargets returns empty array', () => {
+        const targets = requestContext.getAllHttpTargets();
+        assertEqual(0, targets.length);
+    });
+
+    it('getHttpTargetsByTag returns empty array', () => {
+        const targets = requestContext.getHttpTargetsByTag('public');
+        assertEqual(0, targets.length);
+    });
+});
+
+
+describe('RequestContext#getAllHttpTargets() with routes', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+    let target1;
+    let target2;
+    let target3;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        target1 = new HttpTarget({
+            name: 'Target1',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        target2 = new HttpTarget({
+            name: 'Target2',
+            allowedMethods: [ 'POST' ],
+            tags: [ 'api' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        target3 = new HttpTarget({
+            name: 'Target3',
+            allowedMethods: [ 'DELETE' ],
+            tags: [ 'admin' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: 'Route1', targets: [ target1, target2 ] },
+            { name: 'Route2', targets: [ target3 ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('returns all targets from all routes', () => {
+        const targets = requestContext.getAllHttpTargets();
+        assertEqual(3, targets.length);
+    });
+
+    it('includes target1', () => {
+        const targets = requestContext.getAllHttpTargets();
+        assert(targets.includes(target1));
+    });
+
+    it('includes target2', () => {
+        const targets = requestContext.getAllHttpTargets();
+        assert(targets.includes(target2));
+    });
+
+    it('includes target3', () => {
+        const targets = requestContext.getAllHttpTargets();
+        assert(targets.includes(target3));
+    });
+});
+
+
+describe('RequestContext#getAllHttpTargets() returns new array each time', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        const target = new HttpTarget({
+            name: 'Target1',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: 'Route1', targets: [ target ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('returns different array instances', () => {
+        const targets1 = requestContext.getAllHttpTargets();
+        const targets2 = requestContext.getAllHttpTargets();
+        assertFalsy(targets1 === targets2);
+    });
+});
+
+
+describe('RequestContext#getHttpTarget() with valid route and target', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+    let target1;
+    let target2;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        target1 = new HttpTarget({
+            name: 'ViewUser',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        target2 = new HttpTarget({
+            name: 'CreateUser',
+            allowedMethods: [ 'POST' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/users', targets: [ target1, target2 ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('returns the correct target for ViewUser', () => {
+        const target = requestContext.getHttpTarget('/users', 'ViewUser');
+        assertEqual(target1, target);
+    });
+
+    it('returns the correct target for CreateUser', () => {
+        const target = requestContext.getHttpTarget('/users', 'CreateUser');
+        assertEqual(target2, target);
+    });
+});
+
+
+describe('RequestContext#getHttpTarget() with non-existent route', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        const target = new HttpTarget({
+            name: 'Target1',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/users', targets: [ target ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('throws AssertionError', () => {
+        let error;
+        try {
+            requestContext.getHttpTarget('/posts', 'Target1');
+        } catch (err) {
+            error = err;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('error message includes route name', () => {
+        let error;
+        try {
+            requestContext.getHttpTarget('/posts', 'Target1');
+        } catch (err) {
+            error = err;
+        }
+        assert(error.message.includes('/posts'));
+    });
+});
+
+
+describe('RequestContext#getHttpTarget() with non-existent target', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        const target = new HttpTarget({
+            name: 'ViewUser',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/users', targets: [ target ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('throws AssertionError', () => {
+        let error;
+        try {
+            requestContext.getHttpTarget('/users', 'DeleteUser');
+        } catch (err) {
+            error = err;
+        }
+        assert(error);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('error message includes target name', () => {
+        let error;
+        try {
+            requestContext.getHttpTarget('/users', 'DeleteUser');
+        } catch (err) {
+            error = err;
+        }
+        assert(error.message.includes('DeleteUser'));
+    });
+
+    it('error message includes route name', () => {
+        let error;
+        try {
+            requestContext.getHttpTarget('/users', 'DeleteUser');
+        } catch (err) {
+            error = err;
+        }
+        assert(error.message.includes('/users'));
+    });
+});
+
+
+describe('RequestContext#getHttpTargetsByTag() with matching targets', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+    let publicTarget1;
+    let publicTarget2;
+    let privateTarget;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        publicTarget1 = new HttpTarget({
+            name: 'PublicTarget1',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public', 'cacheable' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        publicTarget2 = new HttpTarget({
+            name: 'PublicTarget2',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        privateTarget = new HttpTarget({
+            name: 'PrivateTarget',
+            allowedMethods: [ 'POST' ],
+            tags: [ 'private', 'admin' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/route1', targets: [ publicTarget1 ] },
+            { name: '/route2', targets: [ publicTarget2, privateTarget ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('returns targets with matching tag', () => {
+        const targets = requestContext.getHttpTargetsByTag('public');
+        assertEqual(2, targets.length);
+    });
+
+    it('includes publicTarget1', () => {
+        const targets = requestContext.getHttpTargetsByTag('public');
+        assert(targets.includes(publicTarget1));
+    });
+
+    it('includes publicTarget2', () => {
+        const targets = requestContext.getHttpTargetsByTag('public');
+        assert(targets.includes(publicTarget2));
+    });
+
+    it('does not include privateTarget', () => {
+        const targets = requestContext.getHttpTargetsByTag('public');
+        assertFalsy(targets.includes(privateTarget));
+    });
+
+    it('returns targets with cacheable tag', () => {
+        const targets = requestContext.getHttpTargetsByTag('cacheable');
+        assertEqual(1, targets.length);
+        assertEqual(publicTarget1, targets[0]);
+    });
+
+    it('returns targets with admin tag', () => {
+        const targets = requestContext.getHttpTargetsByTag('admin');
+        assertEqual(1, targets.length);
+        assertEqual(privateTarget, targets[0]);
+    });
+});
+
+
+describe('RequestContext#getHttpTargetsByTag() with no matching targets', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        const target = new HttpTarget({
+            name: 'Target1',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/route1', targets: [ target ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('returns empty array for non-existent tag', () => {
+        const targets = requestContext.getHttpTargetsByTag('nonexistent');
+        assertEqual(0, targets.length);
+    });
+
+    it('returns an array', () => {
+        const targets = requestContext.getHttpTargetsByTag('nonexistent');
+        assertEqual(true, Array.isArray(targets));
+    });
+});
+
+
+describe('RequestContext#getHttpTargetsByTag() returns new array each time', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        const target = new HttpTarget({
+            name: 'Target1',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/route1', targets: [ target ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('returns different array instances', () => {
+        const targets1 = requestContext.getHttpTargetsByTag('public');
+        const targets2 = requestContext.getHttpTargetsByTag('public');
+        assertFalsy(targets1 === targets2);
+    });
+});
+
+
+describe('RequestContext#getHttpTargetsByTag() is case-sensitive', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+    let target;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        target = new HttpTarget({
+            name: 'Target1',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'Public' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/route1', targets: [ target ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
+    });
+
+    it('returns empty array for lowercase when tag is uppercase', () => {
+        const targets = requestContext.getHttpTargetsByTag('public');
+        assertEqual(0, targets.length);
+    });
+
+    it('returns target for exact case match', () => {
+        const targets = requestContext.getHttpTargetsByTag('Public');
+        assertEqual(1, targets.length);
+        assertEqual(target, targets[0]);
     });
 });
