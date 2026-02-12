@@ -12,6 +12,7 @@
         ],
         "targets": [
             {
+                "name": "DefaultHandler",
                 "methods": ["GET", "HEAD"],
                 "handlers": [
                     [ "HyperviewHandler" ],

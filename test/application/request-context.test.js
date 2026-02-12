@@ -696,14 +696,14 @@ describe('RequestContext#getHttpTarget() with valid route and target', ({ before
         });
 
         target1 = new HttpTarget({
-            name: 'ViewUser',
+            name: '/users/ViewUser',
             allowedMethods: [ 'GET' ],
             middleware: [],
             errorHandlers: [],
         });
 
         target2 = new HttpTarget({
-            name: 'CreateUser',
+            name: '/users/CreateUser',
             allowedMethods: [ 'POST' ],
             middleware: [],
             errorHandlers: [],
@@ -717,62 +717,13 @@ describe('RequestContext#getHttpTarget() with valid route and target', ({ before
     });
 
     it('returns the correct target for ViewUser', () => {
-        const target = requestContext.getHttpTarget('/users', 'ViewUser');
+        const target = requestContext.getHttpTarget('/users/ViewUser');
         assertEqual(target1, target);
     });
 
     it('returns the correct target for CreateUser', () => {
-        const target = requestContext.getHttpTarget('/users', 'CreateUser');
+        const target = requestContext.getHttpTarget('/users/CreateUser');
         assertEqual(target2, target);
-    });
-});
-
-
-describe('RequestContext#getHttpTarget() with non-existent route', ({ before, it }) => {
-    let appContext;
-    let requestContext;
-
-    before(() => {
-        appContext = new ApplicationContext({
-            runtime: null,
-            config: null,
-            paths: null,
-            logger: null,
-        });
-
-        const target = new HttpTarget({
-            name: 'Target1',
-            allowedMethods: [ 'GET' ],
-            middleware: [],
-            errorHandlers: [],
-        });
-
-        const routes = [
-            { name: '/users', targets: [ target ] },
-        ];
-
-        requestContext = new RequestContext(appContext, routes);
-    });
-
-    it('throws AssertionError', () => {
-        let error;
-        try {
-            requestContext.getHttpTarget('/posts', 'Target1');
-        } catch (err) {
-            error = err;
-        }
-        assert(error);
-        assertEqual('AssertionError', error.name);
-    });
-
-    it('error message includes route name', () => {
-        let error;
-        try {
-            requestContext.getHttpTarget('/posts', 'Target1');
-        } catch (err) {
-            error = err;
-        }
-        assert(error.message.includes('/posts'));
     });
 });
 
@@ -790,7 +741,7 @@ describe('RequestContext#getHttpTarget() with non-existent target', ({ before, i
         });
 
         const target = new HttpTarget({
-            name: 'ViewUser',
+            name: '/users/Target1',
             allowedMethods: [ 'GET' ],
             middleware: [],
             errorHandlers: [],
@@ -806,7 +757,7 @@ describe('RequestContext#getHttpTarget() with non-existent target', ({ before, i
     it('throws AssertionError', () => {
         let error;
         try {
-            requestContext.getHttpTarget('/users', 'DeleteUser');
+            requestContext.getHttpTarget('/posts/Target1');
         } catch (err) {
             error = err;
         }
@@ -817,21 +768,60 @@ describe('RequestContext#getHttpTarget() with non-existent target', ({ before, i
     it('error message includes target name', () => {
         let error;
         try {
-            requestContext.getHttpTarget('/users', 'DeleteUser');
+            requestContext.getHttpTarget('/posts/Target1');
         } catch (err) {
             error = err;
         }
-        assert(error.message.includes('DeleteUser'));
+        assert(error.message.includes('/posts/Target1'));
+    });
+});
+
+
+describe('RequestContext#getHttpTarget() with non-existent target name', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        const target = new HttpTarget({
+            name: '/users/ViewUser',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/users', targets: [ target ] },
+        ];
+
+        requestContext = new RequestContext(appContext, routes);
     });
 
-    it('error message includes route name', () => {
+    it('throws AssertionError', () => {
         let error;
         try {
-            requestContext.getHttpTarget('/users', 'DeleteUser');
+            requestContext.getHttpTarget('/users/DeleteUser');
         } catch (err) {
             error = err;
         }
-        assert(error.message.includes('/users'));
+        assert(error);
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('error message includes target name', () => {
+        let error;
+        try {
+            requestContext.getHttpTarget('/users/DeleteUser');
+        } catch (err) {
+            error = err;
+        }
+        assert(error.message.includes('/users/DeleteUser'));
     });
 });
 

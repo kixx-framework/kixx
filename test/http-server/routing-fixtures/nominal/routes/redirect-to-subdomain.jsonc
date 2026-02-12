@@ -3,6 +3,7 @@
         "pattern": "*",
         "targets": [
             {
+                "name": "RedirectToWWW",
                 "methods": [ "GET", "HEAD" ],
                 "handlers": [
                     [ "RedirectToWWW" ],

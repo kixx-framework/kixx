@@ -21,6 +21,7 @@
                         "pattern": "/:category_id/:product_id",
                         "targets": [
                             {
+                                "name": "ViewProduct",
                                 "methods": ["GET", "HEAD"],
                                 "handlers": [
                                     [ "PublicViewProduct" ],

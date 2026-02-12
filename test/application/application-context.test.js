@@ -707,14 +707,14 @@ describe('ApplicationContext#cloneToRequestContext() passes routes to RequestCon
         });
 
         target1 = new HttpTarget({
-            name: 'ViewUser',
+            name: '/users/ViewUser',
             allowedMethods: [ 'GET' ],
             middleware: [],
             errorHandlers: [],
         });
 
         target2 = new HttpTarget({
-            name: 'CreateUser',
+            name: '/users/CreateUser',
             allowedMethods: [ 'POST' ],
             middleware: [],
             errorHandlers: [],
@@ -746,8 +746,8 @@ describe('ApplicationContext#cloneToRequestContext() passes routes to RequestCon
         assert(targets.includes(target2));
     });
 
-    it('request context can look up target by route and target name', () => {
-        const target = requestContext.getHttpTarget('/users', 'ViewUser');
+    it('request context can look up target by fully-qualified name', () => {
+        const target = requestContext.getHttpTarget('/users/ViewUser');
         assertEqual(target1, target);
     });
 });
