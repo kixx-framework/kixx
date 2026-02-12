@@ -1,19 +1,20 @@
 import sinon from 'sinon';
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertFalsy } from 'kixx-assert';
+import { assert, assertEqual, assertFalsy, assertNonEmptyString } from 'kixx-assert';
 import HttpTarget from '../../lib/http-server/http-target.js';
 
 
 describe('HttpTarget#constructor with valid input', ({ before, it }) => {
     const name = 'test-target';
     const allowedMethods = [ 'GET', 'POST' ];
+    const tags = [ 'public', 'cacheable' ];
     const middleware = [ sinon.spy(), sinon.spy() ];
     const errorHandlers = [ sinon.spy() ];
 
     let target;
 
     before(() => {
-        target = new HttpTarget({ name, allowedMethods, middleware, errorHandlers });
+        target = new HttpTarget({ name, allowedMethods, tags, middleware, errorHandlers });
     });
 
     it('sets the name property', () => {
@@ -26,6 +27,12 @@ describe('HttpTarget#constructor with valid input', ({ before, it }) => {
         assertEqual('POST', target.allowedMethods[1]);
     });
 
+    it('sets the tags property', () => {
+        assertEqual(2, target.tags.length);
+        assertEqual('public', target.tags[0]);
+        assertEqual('cacheable', target.tags[1]);
+    });
+
     it('makes name enumerable', () => {
         const descriptor = Object.getOwnPropertyDescriptor(target, 'name');
         assertEqual(true, descriptor.enumerable);
@@ -33,6 +40,11 @@ describe('HttpTarget#constructor with valid input', ({ before, it }) => {
 
     it('makes allowedMethods enumerable', () => {
         const descriptor = Object.getOwnPropertyDescriptor(target, 'allowedMethods');
+        assertEqual(true, descriptor.enumerable);
+    });
+
+    it('makes tags enumerable', () => {
+        const descriptor = Object.getOwnPropertyDescriptor(target, 'tags');
         assertEqual(true, descriptor.enumerable);
     });
 });
@@ -57,6 +69,48 @@ describe('HttpTarget#constructor creates a copy of allowedMethods', ({ before, i
 });
 
 
+describe('HttpTarget#constructor with no tags provided', ({ before, it }) => {
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'test-target',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('defaults tags to an empty array', () => {
+        assertEqual(0, target.tags.length);
+    });
+
+    it('tags is an array', () => {
+        assertEqual(true, Array.isArray(target.tags));
+    });
+});
+
+
+describe('HttpTarget#constructor creates a copy of tags', ({ before, it }) => {
+    const tags = [ 'public', 'api' ];
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'test-target',
+            allowedMethods: [ 'GET' ],
+            tags,
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('does not reference the original array', () => {
+        assertFalsy(target.tags === tags);
+    });
+});
+
+
 describe('HttpTarget#constructor freezes allowedMethods', ({ before, it }) => {
     let target;
 
@@ -77,6 +131,35 @@ describe('HttpTarget#constructor freezes allowedMethods', ({ before, it }) => {
         let error;
         try {
             target.allowedMethods.push('DELETE');
+        } catch (err) {
+            error = err;
+        }
+        assertEqual('TypeError', error.name);
+    });
+});
+
+
+describe('HttpTarget#constructor freezes tags', ({ before, it }) => {
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'test-target',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public', 'api' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('makes tags array frozen', () => {
+        assertEqual(true, Object.isFrozen(target.tags));
+    });
+
+    it('prevents modification to tags', () => {
+        let error;
+        try {
+            target.tags.push('new-tag');
         } catch (err) {
             error = err;
         }
@@ -125,6 +208,31 @@ describe('HttpTarget#constructor makes allowedMethods non-writable', ({ before, 
         let error;
         try {
             target.allowedMethods = [ 'POST' ];
+        } catch (err) {
+            error = err;
+        }
+        assertEqual('TypeError', error.name);
+    });
+});
+
+
+describe('HttpTarget#constructor makes tags non-writable', ({ before, it }) => {
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'test-target',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('throws TypeError when attempting to replace tags', () => {
+        let error;
+        try {
+            target.tags = [ 'private' ];
         } catch (err) {
             error = err;
         }
@@ -195,6 +303,97 @@ describe('HttpTarget#isMethodAllowed() is case-sensitive', ({ before, it }) => {
 
     it('returns false for lowercase method name', () => {
         assertEqual(false, target.isMethodAllowed('get'));
+    });
+});
+
+
+describe('HttpTarget#hasTag() when tag exists', ({ before, it }) => {
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'test-target',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public', 'api', 'cacheable' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('returns true for first tag', () => {
+        assertEqual(true, target.hasTag('public'));
+    });
+
+    it('returns true for middle tag', () => {
+        assertEqual(true, target.hasTag('api'));
+    });
+
+    it('returns true for last tag', () => {
+        assertEqual(true, target.hasTag('cacheable'));
+    });
+});
+
+
+describe('HttpTarget#hasTag() when tag does not exist', ({ before, it }) => {
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'test-target',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'public', 'api' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('returns false for non-existent tag', () => {
+        assertEqual(false, target.hasTag('private'));
+    });
+
+    it('returns false for empty string', () => {
+        assertEqual(false, target.hasTag(''));
+    });
+});
+
+
+describe('HttpTarget#hasTag() is case-sensitive', ({ before, it }) => {
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'test-target',
+            allowedMethods: [ 'GET' ],
+            tags: [ 'Public', 'API' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('returns false for lowercase when tag is uppercase', () => {
+        assertEqual(false, target.hasTag('public'));
+    });
+
+    it('returns true for exact case match', () => {
+        assertEqual(true, target.hasTag('Public'));
+    });
+});
+
+
+describe('HttpTarget#hasTag() with no tags', ({ before, it }) => {
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'test-target',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('returns false for any tag when no tags are set', () => {
+        assertEqual(false, target.hasTag('public'));
     });
 });
 
@@ -700,5 +899,269 @@ describe('HttpTarget#handleError() distinguishes between falsy values', ({ befor
 
     it('returns first truthy response', () => {
         assertEqual('res-never-reached', result.id);
+    });
+});
+
+
+describe('HttpTarget#compilePathname() with valid pattern and params', ({ before, it }) => {
+    let target;
+    let result;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'ViewContext',
+            pattern: '/contexts/:id',
+            allowedMethods: [ 'HEAD', 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+        result = target.compilePathname({ id: '2026-02-08T10-17-42' });
+    });
+
+    it('returns an object with method property', () => {
+        assertNonEmptyString(result.method);
+    });
+
+    it('returns an object with pathname property', () => {
+        assertNonEmptyString(result.pathname);
+    });
+
+    it('returns the compiled pathname with params substituted', () => {
+        assertEqual('/contexts/2026-02-08T10-17-42', result.pathname);
+    });
+
+    it('returns GET as the preferred method (over HEAD)', () => {
+        assertEqual('GET', result.method);
+    });
+});
+
+
+describe('HttpTarget#compilePathname() method priority with POST and PUT', ({ before, it }) => {
+    let target;
+    let result;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'ModifyResource',
+            pattern: '/resources/:id',
+            allowedMethods: [ 'POST', 'PUT' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+        result = target.compilePathname({ id: '123' });
+    });
+
+    it('returns POST as the preferred method (over PUT)', () => {
+        assertEqual('POST', result.method);
+    });
+});
+
+
+describe('HttpTarget#compilePathname() with single method', ({ before, it }) => {
+    let target;
+    let result;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'DeleteItem',
+            pattern: '/items/:id',
+            allowedMethods: [ 'DELETE' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+        result = target.compilePathname({ id: '456' });
+    });
+
+    it('returns the single method', () => {
+        assertEqual('DELETE', result.method);
+    });
+
+    it('returns the compiled pathname', () => {
+        assertEqual('/items/456', result.pathname);
+    });
+});
+
+
+describe('HttpTarget#compilePathname() with optional path segments', ({ before, it }) => {
+    let target;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'ViewContext',
+            pattern: '/contexts/:id{.json}',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+    });
+
+    it('compiles pathname including optional segment', () => {
+        // path-to-regexp compile() includes optional groups by default
+        const result = target.compilePathname({ id: 'abc' });
+        assertEqual('/contexts/abc.json', result.pathname);
+    });
+});
+
+
+describe('HttpTarget#compilePathname() with multiple path params', ({ before, it }) => {
+    let target;
+    let result;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'ViewComment',
+            pattern: '/posts/:postId/comments/:commentId',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+        result = target.compilePathname({ postId: '42', commentId: '99' });
+    });
+
+    it('compiles pathname with all params substituted', () => {
+        assertEqual('/posts/42/comments/99', result.pathname);
+    });
+});
+
+
+describe('HttpTarget#compilePathname() with no params required', ({ before, it }) => {
+    let target;
+    let result;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'ListItems',
+            pattern: '/items',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+        result = target.compilePathname({});
+    });
+
+    it('compiles pathname without params', () => {
+        assertEqual('/items', result.pathname);
+    });
+});
+
+
+describe('HttpTarget#compilePathname() with wildcard pattern', ({ before, it }) => {
+    let target;
+    let error;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'CatchAll',
+            pattern: '*',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        try {
+            target.compilePathname({});
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('includes wildcard explanation in error message', () => {
+        assert(error.message.includes('wildcard'));
+    });
+});
+
+
+describe('HttpTarget#compilePathname() with no pattern', ({ before, it }) => {
+    let target;
+    let error;
+
+    before(() => {
+        target = new HttpTarget({
+            name: 'NoPattern',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        try {
+            target.compilePathname({});
+        } catch (err) {
+            error = err;
+        }
+    });
+
+    it('throws an AssertionError', () => {
+        assertEqual('AssertionError', error.name);
+    });
+
+    it('includes explanation in error message', () => {
+        assert(error.message.includes('without a route pattern'));
+    });
+});
+
+
+describe('HttpTarget#compilePathname() method priority order', ({ it }) => {
+    // Test the full priority order: GET > POST > PUT > PATCH > DELETE > HEAD > OPTIONS
+
+    function createTargetWithMethods(methods) {
+        return new HttpTarget({
+            name: 'TestTarget',
+            pattern: '/test',
+            allowedMethods: methods,
+            middleware: [],
+            errorHandlers: [],
+        });
+    }
+
+    it('prefers GET over all other methods', () => {
+        const target = createTargetWithMethods([ 'HEAD', 'OPTIONS', 'DELETE', 'PATCH', 'PUT', 'POST', 'GET' ]);
+        const result = target.compilePathname({});
+        assertEqual('GET', result.method);
+    });
+
+    it('prefers POST when GET is not available', () => {
+        const target = createTargetWithMethods([ 'HEAD', 'OPTIONS', 'DELETE', 'PATCH', 'PUT', 'POST' ]);
+        const result = target.compilePathname({});
+        assertEqual('POST', result.method);
+    });
+
+    it('prefers PUT when GET and POST are not available', () => {
+        const target = createTargetWithMethods([ 'HEAD', 'OPTIONS', 'DELETE', 'PATCH', 'PUT' ]);
+        const result = target.compilePathname({});
+        assertEqual('PUT', result.method);
+    });
+
+    it('prefers PATCH when GET, POST, and PUT are not available', () => {
+        const target = createTargetWithMethods([ 'HEAD', 'OPTIONS', 'DELETE', 'PATCH' ]);
+        const result = target.compilePathname({});
+        assertEqual('PATCH', result.method);
+    });
+
+    it('prefers DELETE when only DELETE, HEAD, and OPTIONS are available', () => {
+        const target = createTargetWithMethods([ 'HEAD', 'OPTIONS', 'DELETE' ]);
+        const result = target.compilePathname({});
+        assertEqual('DELETE', result.method);
+    });
+
+    it('prefers HEAD when only HEAD and OPTIONS are available', () => {
+        const target = createTargetWithMethods([ 'OPTIONS', 'HEAD' ]);
+        const result = target.compilePathname({});
+        assertEqual('HEAD', result.method);
+    });
+
+    it('returns OPTIONS when it is the only method', () => {
+        const target = createTargetWithMethods([ 'OPTIONS' ]);
+        const result = target.compilePathname({});
+        assertEqual('OPTIONS', result.method);
+    });
+
+    it('falls back to first method for unknown methods', () => {
+        const target = createTargetWithMethods([ 'CUSTOM', 'WEIRD' ]);
+        const result = target.compilePathname({});
+        assertEqual('CUSTOM', result.method);
     });
 });

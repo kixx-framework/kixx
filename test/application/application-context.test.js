@@ -4,9 +4,11 @@ import {
     assert,
     assertEqual
 } from 'kixx-assert';
-import Context from '../../lib/application/context.js';
+import ApplicationContext from '../../lib/application/application-context.js';
+import RequestContext from '../../lib/application/request-context.js';
+import HttpTarget from '../../lib/http-server/http-target.js';
 
-describe('Context#constructor with valid input', ({ before, it }) => {
+describe('ApplicationContext#constructor with valid input', ({ before, it }) => {
     let context;
     let mockRuntime;
     let mockConfig;
@@ -38,7 +40,7 @@ describe('Context#constructor with valid input', ({ before, it }) => {
             hasPermission: sinon.stub().returns(true),
         };
 
-        context = new Context({
+        context = new ApplicationContext({
             runtime: mockRuntime,
             config: mockConfig,
             paths: mockPaths,
@@ -64,12 +66,12 @@ describe('Context#constructor with valid input', ({ before, it }) => {
     });
 });
 
-describe('Context#registerService() with valid input', ({ before, it }) => {
+describe('ApplicationContext#registerService() with valid input', ({ before, it }) => {
     let context;
     let testService;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -110,11 +112,11 @@ describe('Context#registerService() with valid input', ({ before, it }) => {
     });
 });
 
-describe('Context#registerService() with invalid input', ({ before, it }) => {
+describe('ApplicationContext#registerService() with invalid input', ({ before, it }) => {
     let context;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -207,12 +209,12 @@ describe('Context#registerService() with invalid input', ({ before, it }) => {
     });
 });
 
-describe('Context#getService() when service exists', ({ before, it }) => {
+describe('ApplicationContext#getService() when service exists', ({ before, it }) => {
     let context;
     let testService;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -247,11 +249,11 @@ describe('Context#getService() when service exists', ({ before, it }) => {
     });
 });
 
-describe('Context#getService() when service does not exist', ({ before, it }) => {
+describe('ApplicationContext#getService() when service does not exist', ({ before, it }) => {
     let context;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -272,12 +274,12 @@ describe('Context#getService() when service does not exist', ({ before, it }) =>
     });
 });
 
-describe('Context#registerCollection() with valid input', ({ before, it }) => {
+describe('ApplicationContext#registerCollection() with valid input', ({ before, it }) => {
     let context;
     let testCollection;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -318,11 +320,11 @@ describe('Context#registerCollection() with valid input', ({ before, it }) => {
     });
 });
 
-describe('Context#registerCollection() with invalid input', ({ before, it }) => {
+describe('ApplicationContext#registerCollection() with invalid input', ({ before, it }) => {
     let context;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -415,12 +417,12 @@ describe('Context#registerCollection() with invalid input', ({ before, it }) => 
     });
 });
 
-describe('Context#getCollection() when collection exists', ({ before, it }) => {
+describe('ApplicationContext#getCollection() when collection exists', ({ before, it }) => {
     let context;
     let testCollection;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -455,11 +457,11 @@ describe('Context#getCollection() when collection exists', ({ before, it }) => {
     });
 });
 
-describe('Context#getCollection() when collection does not exist', ({ before, it }) => {
+describe('ApplicationContext#getCollection() when collection does not exist', ({ before, it }) => {
     let context;
 
     before(() => {
-        context = new Context({
+        context = new ApplicationContext({
             runtime: null,
             config: null,
             paths: null,
@@ -480,8 +482,272 @@ describe('Context#getCollection() when collection does not exist', ({ before, it
     });
 });
 
+describe('ApplicationContext#cloneToRequestContext()', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+    let mockRuntime;
+    let mockConfig;
+    let mockPaths;
+    let mockLogger;
+    let testService;
+    let testCollection;
+
+    before(() => {
+        mockRuntime = { command: 'test-command' };
+        mockConfig = { name: 'Test App' };
+        mockPaths = { app_directory: '/test/app/path' };
+        mockLogger = { info: sinon.stub() };
+        testService = { name: 'TestService' };
+        testCollection = { name: 'TestCollection' };
+
+        appContext = new ApplicationContext({
+            runtime: mockRuntime,
+            config: mockConfig,
+            paths: mockPaths,
+            logger: mockLogger,
+        });
+
+        appContext.registerService('test.Service', testService);
+        appContext.registerCollection('app.Test', testCollection);
+
+        requestContext = appContext.cloneToRequestContext();
+    });
+
+    it('returns a RequestContext instance', () => {
+        assertEqual(true, requestContext instanceof RequestContext);
+    });
+
+    it('request context has same logger', () => {
+        assertEqual(mockLogger, requestContext.logger);
+    });
+
+    it('request context has same config', () => {
+        assertEqual(mockConfig, requestContext.config);
+    });
+
+    it('request context has same runtime', () => {
+        assertEqual(mockRuntime, requestContext.runtime);
+    });
+
+    it('request context has same paths', () => {
+        assertEqual(mockPaths, requestContext.paths);
+    });
+
+    it('request context can access registered services', () => {
+        const service = requestContext.getService('test.Service');
+        assertEqual(testService, service);
+    });
+
+    it('request context can access registered collections', () => {
+        const collection = requestContext.getCollection('app.Test');
+        assertEqual(testCollection, collection);
+    });
+});
+
+describe('ApplicationContext#cloneToRequestContext() returns new instance each call', ({ before, it }) => {
+    let appContext;
+    let requestContext1;
+    let requestContext2;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        requestContext1 = appContext.cloneToRequestContext();
+        requestContext2 = appContext.cloneToRequestContext();
+    });
+
+    it('returns different RequestContext instances', () => {
+        assertEqual(false, requestContext1 === requestContext2);
+    });
+
+    it('both are RequestContext instances', () => {
+        assertEqual(true, requestContext1 instanceof RequestContext);
+        assertEqual(true, requestContext2 instanceof RequestContext);
+    });
+});
 
 
+describe('ApplicationContext#constructor makes properties non-writable', ({ before, it }) => {
+    let context;
+
+    before(() => {
+        context = new ApplicationContext({
+            runtime: { command: 'test' },
+            config: { name: 'Test' },
+            paths: { app_directory: '/test' },
+            logger: { info: sinon.stub() },
+        });
+    });
+
+    it('throws TypeError when attempting to modify logger', () => {
+        let error;
+        try {
+            context.logger = { info: sinon.stub() };
+        } catch (err) {
+            error = err;
+        }
+        assertEqual('TypeError', error.name);
+    });
+
+    it('throws TypeError when attempting to modify config', () => {
+        let error;
+        try {
+            context.config = { name: 'New Config' };
+        } catch (err) {
+            error = err;
+        }
+        assertEqual('TypeError', error.name);
+    });
+
+    it('throws TypeError when attempting to modify runtime', () => {
+        let error;
+        try {
+            context.runtime = { command: 'new-command' };
+        } catch (err) {
+            error = err;
+        }
+        assertEqual('TypeError', error.name);
+    });
+
+    it('throws TypeError when attempting to modify paths', () => {
+        let error;
+        try {
+            context.paths = { app_directory: '/new/path' };
+        } catch (err) {
+            error = err;
+        }
+        assertEqual('TypeError', error.name);
+    });
+});
 
 
+describe('ApplicationContext#registerService() returns this for method chaining', ({ before, it }) => {
+    let context;
+    let result;
 
+    before(() => {
+        context = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        result = context.registerService('test.Service', { name: 'TestService' });
+    });
+
+    it('returns the application context instance', () => {
+        assertEqual(context, result);
+    });
+
+    it('supports chaining multiple registrations', () => {
+        const service1 = { name: 'Service1' };
+        const service2 = { name: 'Service2' };
+
+        context
+            .registerService('chain.Service1', service1)
+            .registerService('chain.Service2', service2);
+
+        assertEqual(service1, context.getService('chain.Service1'));
+        assertEqual(service2, context.getService('chain.Service2'));
+    });
+});
+
+
+describe('ApplicationContext#registerCollection() returns this for method chaining', ({ before, it }) => {
+    let context;
+    let result;
+
+    before(() => {
+        context = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        result = context.registerCollection('app.Test', { name: 'TestCollection' });
+    });
+
+    it('returns the application context instance', () => {
+        assertEqual(context, result);
+    });
+
+    it('supports chaining multiple registrations', () => {
+        const collection1 = { name: 'Collection1' };
+        const collection2 = { name: 'Collection2' };
+
+        context
+            .registerCollection('chain.Collection1', collection1)
+            .registerCollection('chain.Collection2', collection2);
+
+        assertEqual(collection1, context.getCollection('chain.Collection1'));
+        assertEqual(collection2, context.getCollection('chain.Collection2'));
+    });
+});
+
+
+describe('ApplicationContext#cloneToRequestContext() passes routes to RequestContext', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+    let target1;
+    let target2;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        target1 = new HttpTarget({
+            name: 'ViewUser',
+            allowedMethods: [ 'GET' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        target2 = new HttpTarget({
+            name: 'CreateUser',
+            allowedMethods: [ 'POST' ],
+            middleware: [],
+            errorHandlers: [],
+        });
+
+        const routes = [
+            { name: '/users', targets: [ target1, target2 ] },
+        ];
+
+        requestContext = appContext.cloneToRequestContext(routes);
+    });
+
+    it('returns a RequestContext instance', () => {
+        assertEqual(true, requestContext instanceof RequestContext);
+    });
+
+    it('request context has access to all targets from routes', () => {
+        const targets = requestContext.getAllHttpTargets();
+        assertEqual(2, targets.length);
+    });
+
+    it('request context includes target1', () => {
+        const targets = requestContext.getAllHttpTargets();
+        assert(targets.includes(target1));
+    });
+
+    it('request context includes target2', () => {
+        const targets = requestContext.getAllHttpTargets();
+        assert(targets.includes(target2));
+    });
+
+    it('request context can look up target by route and target name', () => {
+        const target = requestContext.getHttpTarget('/users', 'ViewUser');
+        assertEqual(target1, target);
+    });
+});
