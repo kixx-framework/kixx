@@ -5,6 +5,7 @@ import {
     assertEqual
 } from 'kixx-assert';
 import ApplicationContext from '../../lib/application/application-context.js';
+import RequestContext from '../../lib/application/request-context.js';
 
 describe('ApplicationContext#constructor with valid input', ({ before, it }) => {
     let context;
@@ -480,8 +481,93 @@ describe('ApplicationContext#getCollection() when collection does not exist', ({
     });
 });
 
+describe('ApplicationContext#cloneToRequestContext()', ({ before, it }) => {
+    let appContext;
+    let requestContext;
+    let mockRuntime;
+    let mockConfig;
+    let mockPaths;
+    let mockLogger;
+    let testService;
+    let testCollection;
 
+    before(() => {
+        mockRuntime = { command: 'test-command' };
+        mockConfig = { name: 'Test App' };
+        mockPaths = { app_directory: '/test/app/path' };
+        mockLogger = { info: sinon.stub() };
+        testService = { name: 'TestService' };
+        testCollection = { name: 'TestCollection' };
 
+        appContext = new ApplicationContext({
+            runtime: mockRuntime,
+            config: mockConfig,
+            paths: mockPaths,
+            logger: mockLogger,
+        });
 
+        appContext.registerService('test.Service', testService);
+        appContext.registerCollection('app.Test', testCollection);
+
+        requestContext = appContext.cloneToRequestContext();
+    });
+
+    it('returns a RequestContext instance', () => {
+        assertEqual(true, requestContext instanceof RequestContext);
+    });
+
+    it('request context has same logger', () => {
+        assertEqual(mockLogger, requestContext.logger);
+    });
+
+    it('request context has same config', () => {
+        assertEqual(mockConfig, requestContext.config);
+    });
+
+    it('request context has same runtime', () => {
+        assertEqual(mockRuntime, requestContext.runtime);
+    });
+
+    it('request context has same paths', () => {
+        assertEqual(mockPaths, requestContext.paths);
+    });
+
+    it('request context can access registered services', () => {
+        const service = requestContext.getService('test.Service');
+        assertEqual(testService, service);
+    });
+
+    it('request context can access registered collections', () => {
+        const collection = requestContext.getCollection('app.Test');
+        assertEqual(testCollection, collection);
+    });
+});
+
+describe('ApplicationContext#cloneToRequestContext() returns new instance each call', ({ before, it }) => {
+    let appContext;
+    let requestContext1;
+    let requestContext2;
+
+    before(() => {
+        appContext = new ApplicationContext({
+            runtime: null,
+            config: null,
+            paths: null,
+            logger: null,
+        });
+
+        requestContext1 = appContext.cloneToRequestContext();
+        requestContext2 = appContext.cloneToRequestContext();
+    });
+
+    it('returns different RequestContext instances', () => {
+        assertEqual(false, requestContext1 === requestContext2);
+    });
+
+    it('both are RequestContext instances', () => {
+        assertEqual(true, requestContext1 instanceof RequestContext);
+        assertEqual(true, requestContext2 instanceof RequestContext);
+    });
+});
 
 
