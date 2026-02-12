@@ -37,7 +37,7 @@ describe('NewTicketForm#constructor', ({ before, after, it }) => {
     });
 
     it('sets the target property', () => {
-        assertEqual('CreateNewTicket', form.target);
+        assertEqual('Dashboard/Tickets/CreateNewTicket', form.target);
     });
 
     it('defines the fields array', () => {
