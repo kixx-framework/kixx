@@ -1,6 +1,6 @@
 ---
 name: jsdocs
-description: Guidelines and examples for writing effective JSDoc comments. Use this skill whenever you need to update or write new JSDoc comments in the source code.
+description: Guidelines and examples for writing effective JSDoc comments. Apply when writing, refactoring, or reviewing code.
 ---
 
 ## JSDoc Guidelines
