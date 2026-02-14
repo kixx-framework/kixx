@@ -815,7 +815,7 @@ describe('Application#createLogger subscribes to config changes', ({ before, aft
 
     it('registers a change listener on config', () => {
         assertEqual(1, configOnSpy.callCount);
-        assertEqual('change', configOnSpy.firstCall.firstArg);
+        assertEqual('update:config', configOnSpy.firstCall.firstArg);
     });
 });
 
