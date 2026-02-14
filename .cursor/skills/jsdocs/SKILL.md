@@ -1,6 +1,6 @@
 ---
 name: jsdocs
-description: Guidelines and examples for writing effective JSDoc comments. Apply when writing, refactoring, or reviewing code.
+description: Guidelines and examples for writing effective JSDoc comments. Apply when writing, refactoring, or reviewing JavaScript code.
 ---
 
 ## JSDoc Guidelines

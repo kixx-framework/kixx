@@ -1,16 +1,9 @@
-# Kixx Framework - ESLint Coding Styles and Conventions
+---
+name: javascript-coding-conventions
+description: Guidelines and examples for writing good quality JavaScript code. Apply when writing, refactoring, or reviewing JavaScript code in this project.
+---
 
-This document summarizes the JavaScript coding styles and conventions enforced by ESLint in the Kixx framework project.
-
-## Ignored Directories
-
-The following directories are excluded from ESLint checking:
-- `node_modules/`
-- `lib/vendor/` - Third-party vendored libraries
-- `lib/assertions/` - External assertion library
-- `lib/errors/` - External error library
-- `lib/logger/` - External logger library
-- `lib/kixx-templating/` - External templating library
+This document summarizes the JavaScript coding styles and conventions, many of which are defined in ./eslint-config.mjs and enforced by ESLint.
 
 ## Summary of Key Conventions
 
@@ -43,7 +36,6 @@ The following directories are excluded from ESLint checking:
 
 ## Configuration Overview
 
-- **Base Configuration**: `@eslint/js` recommended rules
 - **ECMAScript Version**: ES2022
 - **Module System**: ES6 Modules (`import`/`export`)
 

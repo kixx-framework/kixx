@@ -1,6 +1,6 @@
 ---
 name: inline-code-comments
-description: Guidelines for writing effective inline comments in JavaScript source code. Apply when writing, refactoring, or reviewing code.
+description: Guidelines for writing effective inline comments in JavaScript source code. Apply when writing, refactoring, or reviewing JavaScript code.
 ---
 
 # Inline code comment guidelines

@@ -1,14 +1,48 @@
-# Unit Testing Guidelines
-General guidelines for writing and updating unit tests when working in this project.
+---
+name: writing-tests
+description: Guidelines, examples, and reference documentation for writing, updating, and fixing tests in this project.
+---
 
 ## Running Tests
-Tests can be run with:
+Note that all test modules are nested in the `./tests/` directory.
 
-- `$ npm test` which runs the linter and unit tests
-- `$ npm run unit-test` which just runs the unit tests
-- Or simply `node ./run-tests.js`
+**Run all tests in the './tests/' directory:**
 
-## Dependencies
+```bash
+node ./run-tests.js
+```
+
+**Run a specifc directory of tests. The directory will be read recursively**
+
+```bash
+node ./run-tests.js test/application/
+```
+
+Running a directory of tests can be helpfull when working on a specific component or capability of the system.
+
+**Run a specifc file of tests.**
+
+```bash
+node ./run-tests.js test/application/application-context.test.js
+```
+
+Running only a single file of tests can help isolate testing a specific module you're working on.
+
+**Run the linter and full test suite**
+
+```bash
+npm test
+```
+
+It's good to run the linter and full test suite when your tests are complete to be sure there are no regressions.
+
+## Test File Naming Conventions
+There are two rules to follow when creating test files:
+
+1. Test files should be located in the `test/` directory and the nested directory structure should match the directory structure of the `lib/` directory. For example: The tests for `lib/applications/paths.js` should be in `test/application/paths.test.js` and the tests for `lib/hyperview/helpers/format-date.js` should be in `test/hyperview/helpers/format-date.test.js`.
+2. Test files should end in `test.js`. For example: The tests for `paths.js` becomes `paths.test.js` and the tests for `format-date.js` becomes `format-data.test.js`.
+
+## Testing Dependencies
 We use these supporting libraries for automated testing. You can find the documentation for each of them in this document.
 
 - [Kixx Test Framework](#kixx-test-framework)
@@ -122,12 +156,6 @@ describe('PageStore#doesPageExist() when stats isDirectory is true', ({ before, 
     });
 });
 ```
-
-## File Structure
-There are two rules to follow when creating test files:
-
-1. Test files should be located in the `test/` directory and the nested directory structure should match the directory structure of the `lib/` directory. For example: The tests for `lib/applications/paths.js` should be in `test/application/paths.test.js` and the tests for `lib/hyperview/helpers/format-date.js` should be in `test/hyperview/helpers/format-date.test.js`.
-2. Test files should end in `test.js`. For example: The tests for `paths.js` becomes `paths.test.js` and the tests for `format-date.js` becomes `format-data.test.js`.
 
 ## Kixx Test Framework
 The Kixx Test frameowrk provides a basic and reliable framework for creating unit tests for JavaScript code. Tests are created in Kixx Test using `describe()` blocks, `before()` setup blocks, `after()` teardown blocks, and `it()` test blocks.
