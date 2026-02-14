@@ -1,12 +1,48 @@
-# Error Library Reference
+# Error Handling
+Ethos and guidelines for handling errors in the Kixx framework.
 
+## Expected operational errors vs. unexpected errors
+It’s helpful to divide all errors into two broad categories:
+
+### Expected Operational Errors
+Expected errors represent run-time problems experienced by correctly-written programs. These are not bugs in the program. In fact, these are usually problems with something else: the system itself (e.g., out of memory or too many open files), the system’s configuration (e.g., no route to a remote host), the network (e.g., socket hang-up), or a remote service (e.g., a 500 error, failure to connect, or the like):
+
+- failed to connect to server
+- failed to resolve hostname
+- invalid user input
+- request timeout
+- server returned a 500 response
+- socket hang-up
+- system is out of memory
+
+For expected operational errors we want to handle them at several levels of the stack. This happens when lower levels can’t do anything useful except propagate the error to their caller, which propagates the error to its caller, and so on. Often, only the top-level caller has the context to know what to do next. But that means we need to pass up the error context through the layers. In the error library (`lib/errors/mod.js`) we do this by wrapping errors and including the thrown error as a `cause` option. See the [MDN docs on `Error:cause`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/cause) for more information.
+
+### Unexpected Errors
+Unexpected errors are bugs in the program. These are things that can always be avoided by changing the code. They can never be handled properly (since by definition the code in question is broken).
+
+- tried to read property of “undefined”
+- called an asynchronous function without a callback
+- passed a “string” where an object was expected
+- passed an object where an IP address string was expected
+
+*__The best way to recover from unexpected errors is to crash immediately.__* You should run your programs using a restarter that will automatically restart in the event of a crash. With a restarter in place, crashing is the fastest way to restore reliable service in the face of a transient programmer error.
+
+Some people advocate attempting to recover from unexpected errors — that is, allow the current operation to fail, but keep handling requests. This is not recommended. Consider unexpected errors as cases that you didn’t think about when you wrote the original code. How can you be sure that the problem won’t affect other requests? If other requests share any common state (a server, a socket, a pool of database connections, etc.), it’s very possible that the other requests will do the wrong thing.
+
+## Error Library Reference
 The error library (`lib/errors/mod.js`) provides a set of error classes that extend the native `Error` class with standardized properties for error handling and HTTP responses.
 
 ```javascript
 import { WrappedError, BadRequestError, OperationalError } from 'kixx';
 ```
 
-## Common Properties
+These error classes exist to meet 3 objectives for better error handling in server-side JavaScript:
+
+1. Make it easy to differentiate between unexpected errors and expected operational errors.
+2. Provide a mechanism to augment error information as it is caught and rethrown with the added context from each layer.
+3. Throw errors with specific HTTP application constructs which can help formulate an appropriate HTTP response to clients.
+
+### Common Properties
 
 All error classes inherit from `WrappedError` and share these instance properties (all read-only and enumerable):
 
@@ -20,7 +56,7 @@ All error classes inherit from `WrappedError` and share these instance propertie
 | `httpStatusCode` | number | HTTP status code (only present on HTTP error classes) |
 | `cause` | Error | The underlying cause, if provided via options |
 
-## Common Constructor Signature
+### Common Constructor Signature
 
 All error classes share the same constructor signature:
 
@@ -45,7 +81,7 @@ new ErrorClass(message, options, sourceFunction)
 
 If `code` is not provided in options, it falls back to `cause.code` if available, then to the class static `CODE`.
 
-## WrappedError
+### WrappedError
 
 The base class for all errors in this library. Use for unexpected errors that need to preserve the original cause.
 
@@ -63,7 +99,7 @@ try {
 }
 ```
 
-## OperationalError
+### OperationalError
 
 For expected operational errors (network failures, missing files, etc.) that the application can handle gracefully.
 
@@ -82,7 +118,7 @@ if (cause.code === 'ENOENT') {
 }
 ```
 
-## AssertionError
+### AssertionError
 
 For assertion failures indicating a violated internal invariant or contract.
 
@@ -98,9 +134,9 @@ if (!doc?.id) {
 }
 ```
 
-Note: The assertions library (`lib/assertions/mod.js`) defines its own `AssertionError` with an additional `operator` property. See the [Assertions Library](./assertions-library.md) docs.
+Note: The assertions library (`lib/assertions/mod.js`) defines its own `AssertionError` with an additional `operator` property. See the [Assertions Library](./assertions-library-reference.md) docs.
 
-## ValidationError
+### ValidationError
 
 For data validation failures. Provides an `errors` array to aggregate multiple validation issues. Sets HTTP status 422.
 
@@ -137,7 +173,7 @@ function validateForm(formData) {
 }
 ```
 
-## HTTP Error Classes
+### HTTP Error Classes
 
 All HTTP error classes set `expected: true` and define an `httpStatusCode`. They share the common constructor signature with no additional options (except where noted).
 
