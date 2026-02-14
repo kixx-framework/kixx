@@ -23,7 +23,7 @@ Ensure you have Node.js 16.13.2 or later installed. Check your node version in t
 Concepts
 --------
 ### Improved AI Control
-Use AI for what it's good at and otherwise get it out of way.
+Use AI for what it's good at and otherwise get it out of the way.
 
 Kixx manages the LLM context from an MCP server, guiding the LLM to use convention and configuration over code to keep AI agents out of trouble. Your AI environment has the information and tools it needs to be helpful, but not so much context to waste time thrashing around.
 
@@ -84,75 +84,110 @@ Hypermedia-Driven Applications are web application where **hypermedia (HTML) ser
 The Kixx framework embodies these principles, providing a productive environment for building web apps that are simple, fast, and maintainable.
 
 For more information about hypermedia-driven applications, see:
+
 - [Hypermedia-Driven Applications by HTMX](https://htmx.org/essays/hypermedia-driven-applications/)
 - [The Web's Grain by Frank Chimero](https://frankchimero.com/blog/2015/the-webs-grain/)
 - [REST: From Research to Practice](https://www.ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm)
 
-Development
------------
-Project development guidelines:
+Kixx Application Developer Documentation
+----------------------------------------
+You can find developer documentation for building web applications with Kixx at [www.kixx.dev](https://www.kixx.dev). The remaining documentation here is for developers working on the Kixx framework itself.
 
-- [Commenting Code](./docs/comment-guidelines.md)
-- [Documenting Code with JSDoc](./docs/jsdoc-guidelines.md)
-- [Writing Unit Tests](./docs/unit-testing-guidelines.md)
-- **No TypeScript**: The project intentionally avoids TypeScript for simplicity and developer happiness
-- **Vendored Dependencies**: Some dependencies are vendored in `lib/vendor/` (luxon, marked, jsonc-parser, minimatch, path-to-regexp)
-- **ES Modules Only**: The framework uses ES6 modules exclusively (type: "module" in package.json)
-- **Assertions**: Use the assertion library in `lib/assertions/` to make assertions in the code about important assumptions
-- **File System Access**: Use `lib/lib/file-system.js` utilities, not direct Node.js fs calls (enables testing with mocks)
+Kixx Framework Development
+--------------------------
+Information for developers who want to better understand how Kixx works, need to modify the source code, or want to make contributions to the Kixx framework.
 
-### File Organization
-- `lib/` - Kixx framework source code (included in kixx npm package)
-- `test/` - Tests mirroring `lib/` directory structure (e.g., `lib/foo/bar.js` → `test/foo/bar.test.js`)
-- `bin/` - CLI entry point (included in kixx npm package)
-- `cli/` - CLI command implementations (included in kixx npm package)
-- `project-template/` - Scaffolding for new projects (included in kixx npm package)
-- `docs/` - Internal documentation for developers working in this project. This is *not* external documentation for using the Kixx framework for applications.
-- `tools/` - Various tools for working on this project
-- `tmp/` - Dump any temporary files here which should be excluded from git source control
+### Project Structure
+The Kixx framework project is organized into several top-level directories, each serving a specific purpose in the framework's architecture.
 
-### Testing
-- `npm test` - Runs ESLint and unit tests
-- `npm run unit-test` - Runs only unit tests (uses `node run-tests.js`)
-- `npm run lint` - Runs ESLint only
-
-The test runner (`run-tests.js`) recursively loads all `*.test.js` files from the `test/` directory.
-
-**Running a single test file:**
-
-```bash
-node run-tests.js test/path/to/your.test.js
+```
+kixx/
+├── bin/                    # CLI entry point (included in npm package)
+├── cli/                    # CLI command implementations (included in npm package)
+├── docs/                   # Internal developer documentation (NOT in npm package)
+├── lib/                    # Core framework source code (included in npm package)
+├── project-template/       # Scaffolding for new projects (included in npm package)
+├── test/                   # Test suite mirroring lib/ structure (NOT in npm package)
+├── tools/                  # Development tools (NOT in npm package)
+├── tmp/                    # Temporary files (git-ignored)
+├── reference/              # Reference implementations
+├── eslint.config.mjs       # ESLint configuration
+├── package.json            # NPM package configuration
+└── run-tests.js            # Test runner script
 ```
 
-**Controlling the stack trace size**
+For a much more detailed look at the project file organization structure, have a look at the documentation at `docs/project-structure.md`.
 
-When running tests, you can set the size (number of lines) of stack traces to avoid filling your terminal with useless information when lots of errors are present. The default stack trace size is 4 lines.
+### A note about Cursor and Claude Code
+Cursor and Claude Code are often used when working on the Kixx framework. So, you'll find helpful artifacts for framework development in `CLAUDE.md` and `.claude/skills/`.
 
-You can set the stack trace size to unlimited with:
+### Coding Conventions and Linting
+You can find the coding conventions for this project documented in javascript-coding-conventions skill at `.claude/skills/javascript-coding-conventions/SKILL.md`.
 
-```bash
-node run-tests.js --stack no-limit
-```
-
-Or explicitly set a limit with:
+**Run the full lint check:**
 
 ```bash
-node run-tests.js --stack 6
+npx eslint ./
 ```
 
-### Code Style and Conventions
+**Run the linter on a specific directory of source files. The directory will be read recursively.*
 
-### Error Handling
-Use framework error classes from `lib/errors/`:
+```bash
+npx eslint lib/application/
+```
 
-- `BadRequestError` - 400
-- `UnauthenticatedError` - 401
-- `UnauthorizedError` - 403
-- `NotFoundError` - 404
-- `ValidationError` - 400 with validation details
-- `OperationalError` - Expected runtime errors
+**Run the linter on a specific file:**
 
-See `lib/errors/mod.js` and the error class definitions in `lib/errors/lib/**` for more error classes and documentation.
+```bash
+npx eslint lib/application/request-context.js
+```
+
+**Run the linter to fix issues that it finds in a specific file:**
+
+```bash
+npx eslint --fix lib/application/request-context.js
+```
+
+Note that the eslint linter cannot fix all issues, but may be able to fix many of them faster and easier than you can.
+
+### Running Tests
+All test modules are located in the `test/` directory.
+
+**Run all tests:**
+
+```bash
+node ./run-tests.js
+```
+
+**Run a specific directory of tests (read recursively):**
+
+```bash
+node ./run-tests.js test/application/
+```
+
+Running a directory of tests can be helpful when working on a specific component or capability of the system.
+
+**Run a specific file of tests:**
+
+```bash
+node ./run-tests.js test/application/application-context.test.js
+```
+
+Running only a single file of tests can help isolate testing a specific module you're working on.
+
+**Run the linter and full test suite**
+
+```bash
+npm test
+```
+
+It's good to run the linter and full test suite when your tests are complete to be sure there are no regressions.
+
+### Detailed Kixx Framework Development Documentation
+
+- [Project Structure](docs/project-structure.md)
+- [Error Handling](docs/error-handling.md)
+- [Assertion Library Reference](docs/assertions-library-reference.md)
 
 Copyright and License
 ---------------------
