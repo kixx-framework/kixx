@@ -9,7 +9,7 @@
     },
     {
         "name": "Bare Domain",
-        "hostname": "com.example",
+        "hostname": "example.com",
         "routes": [
             "redirect-to-subdomain.jsonc",
         ],

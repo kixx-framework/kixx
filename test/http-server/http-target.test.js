@@ -647,8 +647,8 @@ describe('HttpTarget#invokeMiddleware() with no middleware', ({ before, it }) =>
         result = await target.invokeMiddleware(context, request, response);
     });
 
-    it('returns undefined when no middleware is present', () => {
-        assertEqual(undefined, result);
+    it('returns the response object when no middleware is present', () => {
+        assertEqual(response, result);
     });
 });
 
