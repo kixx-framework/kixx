@@ -1841,6 +1841,12 @@ describe('LocalFileDatastore#queryView() with includeDocuments=true', ({ before,
         assertEqual('ac-foo', result.items[2].document.id);
         assertEqual('A-C', result.items[2].document.name);
     });
+
+    it('returns cloned documents (mutating result does not affect datastore)', async () => {
+        result.items[0].document.name = 'Mutated';
+        const retrieved = await store.getItem('Record', 'aa-foo');
+        assertEqual('A-A', retrieved.name);
+    });
 });
 
 describe('LocalFileDatastore#queryView() with exact key match', ({ before, after, it }) => {
@@ -1971,6 +1977,70 @@ describe('LocalFileDatastore#queryView() with key that matches nothing', ({ befo
 
     it('returns empty items array', () => {
         assertEqual(0, result.items.length);
+    });
+
+    it('returns null exclusiveEndIndex', () => {
+        assertEqual(null, result.exclusiveEndIndex);
+    });
+});
+
+describe('LocalFileDatastore#queryView() with numeric key zero', ({ before, after, it }) => {
+
+    const documents = [
+        { type: 'Record', id: 'zero', score: 0, name: 'Zero' },
+        { type: 'Record', id: 'one', score: 1, name: 'One' },
+        { type: 'Record', id: 'two', score: 2, name: 'Two' },
+    ];
+
+    const view = {
+        map(doc, emit) {
+            emit(doc.score, doc.name);
+        },
+    };
+
+    const fileSystem = {
+        ensureDirectory: sinon.stub().resolves(),
+        readDirectory: sinon.stub().resolves(documents.map(({ type, id }) => {
+            return {
+                name: `${ type }__${ id }.json`,
+                isFile() {
+                    return true;
+                },
+            };
+        })),
+
+        readDocumentFile: sinon.stub().callsFake((filepath) => {
+            const key = path.basename(filepath, '.json');
+            const [ type, id ] = key.split('__');
+            return documents.find((doc) => {
+                return doc.type === type && doc.id === id;
+            });
+        }),
+    };
+
+    const store = new LocalFileDatastore({
+        directory,
+        fileSystem,
+    });
+
+    let result;
+
+    before(async () => {
+        await store.initialize();
+        store.setView('score-view', view);
+
+        result = await store.queryView('score-view', { key: 0 });
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('returns exact match for key 0 (falsy key)', () => {
+        assertEqual(1, result.items.length);
+        assertEqual(0, result.items[0].key);
+        assertEqual('Zero', result.items[0].value);
+        assertEqual('zero', result.items[0].id);
     });
 
     it('returns null exclusiveEndIndex', () => {

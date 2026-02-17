@@ -1834,7 +1834,7 @@ describe('HyperviewService#getStaticFile() when file exists', ({ before, after, 
     const mockFile = {
         filepath: '/path/to/public/static/css/style.css',
         modifiedDate: new Date('2024-01-01T00:00:00Z'),
-        computeEtag: sinon.stub().resolves('abc123'),
+        computeHash: sinon.stub().resolves('abc123'),
         createReadStream: sinon.stub(),
     };
 

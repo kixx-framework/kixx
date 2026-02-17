@@ -1,14 +1,48 @@
-# Unit Testing Guidelines
-General guidelines for writing and updating unit tests when working in this project.
+---
+name: writing-tests
+description: Guidelines, examples, and reference documentation for writing, updating, and fixing tests in this project.
+---
 
 ## Running Tests
-Tests can be run with:
+All test modules are located in the `test/` directory.
 
-- `$ npm test` which runs the linter and unit tests
-- `$ npm run unit-test` which just runs the unit tests
-- Or simply `node ./run-tests.js`
+**Run all tests:**
 
-## Dependencies
+```bash
+node ./run-tests.js
+```
+
+**Run a specific directory of tests (read recursively):**
+
+```bash
+node ./run-tests.js test/application/
+```
+
+Running a directory of tests can be helpful when working on a specific component or capability of the system.
+
+**Run a specific file of tests:**
+
+```bash
+node ./run-tests.js test/application/application-context.test.js
+```
+
+Running only a single file of tests can help isolate testing a specific module you're working on.
+
+**Run the linter and full test suite:**
+
+```bash
+npm test
+```
+
+It's good to run the linter and full test suite when your tests are complete to be sure there are no regressions.
+
+## Test File Naming Conventions
+There are two rules to follow when creating test files:
+
+1. Test files should be located in the `test/` directory and the nested directory structure should match the directory structure of the `lib/` directory. For example: The tests for `lib/application/paths.js` should be in `test/application/paths.test.js` and the tests for `lib/hyperview/helpers/format-date.js` should be in `test/hyperview/helpers/format-date.test.js`.
+2. Test files should end in `test.js`. For example: The tests for `paths.js` becomes `paths.test.js` and the tests for `format-date.js` becomes `format-date.test.js`.
+
+## Testing Dependencies
 We use these supporting libraries for automated testing. You can find the documentation for each of them in this document.
 
 - [Kixx Test Framework](#kixx-test-framework)
@@ -69,7 +103,7 @@ describe('Application/Paths#constructor with valid input', ({ before, it }) => {
 });
 ```
 
-This is a more complex example in `test/hyperview/page-store.test.js` with mocks defined by Sinon and a `before()` setup with asynchronous calls for the PageStore module in `lib/hyperview/page-store.js`:
+This is a more complex example in `test/hyperview/page-store.test.js` with mocks defined by Sinon and a `before()` setup with asynchronous calls for the PageStore module in `lib/hyperview/page-store.js`. See [Making assertions about errors](#making-assertions-about-errors) for examples of testing error conditions.
 
 ```javascript
 import path from 'node:path';
@@ -103,7 +137,7 @@ describe('PageStore#doesPageExist() when stats isDirectory is true', ({ before, 
     });
 
     after(() => {
-        // Always restore the sinon state when using stubs.
+        // Always restore the sinon state when using stubs or spies on existing methods.
         sinon.restore();
     });
 
@@ -123,19 +157,13 @@ describe('PageStore#doesPageExist() when stats isDirectory is true', ({ before, 
 });
 ```
 
-## File Structure
-There are two rules to follow when creating test files:
-
-1. Test files should be located in the `test/` directory and the nested directory structure should match the directory structure of the `lib/` directory. For example: The tests for `lib/applications/paths.js` should be in `test/application/paths.test.js` and the tests for `lib/hyperview/helpers/format-date.js` should be in `test/hyperview/helpers/format-date.test.js`.
-2. Test files should end in `test.js`. For example: The tests for `paths.js` becomes `paths.test.js` and the tests for `format-date.js` becomes `format-data.test.js`.
-
 ## Kixx Test Framework
-The Kixx Test frameowrk provides a basic and reliable framework for creating unit tests for JavaScript code. Tests are created in Kixx Test using `describe()` blocks, `before()` setup blocks, `after()` teardown blocks, and `it()` test blocks.
+The Kixx Test framework provides a basic and reliable framework for creating unit tests for JavaScript code. Tests are created in Kixx Test using `describe()` blocks, `before()` setup blocks, `after()` teardown blocks, and `it()` test blocks.
 
 ### Setting up describe() test blocks
-Each discrete piece of functionality should have its own describe block which a short description statement and nested `it()` blocks which assert some behavior or state. A common pattern is to create a describe block for each logical code branch in a method. Optionally, nested before and after blocks can be used to define the setup and teardown of the test(s) in the describe block.
+Each discrete piece of functionality should have its own describe block with a short description statement and nested `it()` blocks which assert some behavior or state. A common pattern is to create a describe block for each logical code branch in a method. Optionally, nested before and after blocks can be used to define the setup and teardown of the test(s) in the describe block.
 
-Define your test subject, spies and stubs, and any results or state at the top of your `describe(({ before, after, it }) => {});` block using the JavaScript `let` keyword. Then you can define those block level values from inside your `before(() => {});` block and use them throughout your describe block scope.
+Define your test subject, spies and stubs, and any results or state at the top of your `describe(({ before, after, it }) => {});` block using the JavaScript `let` keyword. Use `let` because these variables are declared in the describe scope but assigned inside `before()`.
 
 Here is a basic example of using the kixx framework:
 
@@ -218,47 +246,26 @@ The "kixx-assert" library is a JavaScript assertion library.
 
 It contains test functions like `isNumberNotNaN()` which return Booleans, and assertion functions like `assertEqual()` which throw an AssertionError if the condition(s) fail.
 
-### kixx-assert Usage
-```javascript
-// In Node.js:
-import { assertEqual } from 'kixx-assert';
+Assertion functions come in two flavors: single subject checks and control/subject checks. A message string can be passed into either type of assertion as the last argument. Use message strings to provide context when a test failure would otherwise be ambiguous.
 
-assertEqual('hello world', 'hello world');
-assertEqual({}, {}); // Throws an AssertionError
-```
-
-Also supports currying :tada:
-
-```javascript
-const assertFoo = assertEqual('Foo');
-
-assertFoo('Foo', 'Expecting Foo'); // Passes
-assertFoo('hello world', 'Expecting Foo'); // Throws an AssertionError
-```
-
-Assertion functions generally come in two flavors: Single subject or control and subject checks. A message string can be passed into either type of assertion as the last argument.
-
-An example of a single subject check with a message string:
+A single subject check with a message string:
 
 ```javascript
 assertNonEmptyString(null, 'This value should be a string');
 // Throws an AssertionError("This value should be a string (Expected null to be a non-empty String)")
 ```
 
-An example of a control and subject check with a message string:
+A control/subject check with a message string:
 ```javascript
-const control = 'foo';
-const subject = 'bar';
-
-assertEqual(control, subject, 'Subject is equal to control');
+assertEqual('foo', 'bar', 'Subject is equal to control');
 // Throws an AssertionError("Subject is equal to control (Expected String(bar) to equal (===) String(foo))")
 ```
 
-The control/subject checks can be curried:
+Control/subject checks can be curried:
 ```javascript
 const assertFoo = assertEqual('foo');
 
-assertFoo(subject, 'Subject is foo');
+assertFoo('bar', 'Subject is foo');
 // Throws an AssertionError("Subject is foo (Expected String(bar) to equal (===) String(foo))")
 ```
 
@@ -282,36 +289,31 @@ assertFalsy(null) // Passes
 ```
 
 ### assertEqual
-Throw an AssertionError if the passed values are *not strictly* equal. Dates and NaN are special cases handled separately.
+Throw an AssertionError if the passed values are *not strictly* equal. Dates and NaN are special cases handled separately. Can be curried.
 
 ```javascript
 assertEqual(1, 2) // Throws AssertionError
 assertEqual(1, '1') // Throws AssertionError
 assertEqual(1, 1) // passes
 
-// If you do NaN === NaN you'll get false (dumb).
-// assertEqual() corrects that behavior.
+// assertEqual() correctly handles NaN comparison (unlike NaN === NaN which is false).
 assertEqual(NaN, NaN) // passes
 
-// Compare dates :D
+// Compare dates
 assertEqual(new Date('1999'), new Date('1999')) // passes
-```
 
-You can curry it! :tada:
-
-```javascript
+// Curried usage
 const assertIs1 = assertEqual(1);
-
 assertIs1(1) // passes
 ```
 
-Remember that `assertEqual()` does not do deep equality testing or matching. This feature has been left out intentionally to avoid complexity. It is better, and more clearly understood, to compare objects by reference where possible, or by comparing their properties if not.
+Does not do deep equality testing or matching. Compare objects by reference where possible, or by comparing their properties if not.
 
 ### assertNotEqual
-The inverse of [assertEqual()](#assertequal)
+The inverse of [assertEqual()](#assertequal). Can be curried.
 
 ### assertMatches
-A wiz at matching strings and RegExp, but can match just about anything.
+Matches strings and RegExp, but can match just about anything. Can be curried.
 
 ```javascript
 assertMatches(matcher, subject);
@@ -319,18 +321,13 @@ assertMatches(matcher, subject);
 
 If the matcher is a regular expression then doesMatch() will call RegExp.test(subject) with the subject. If the subject is strictly equal to the matcher then return true. If the subject is a String then check to see if the String contains the matcher with subject.includes(matcher). If the subject is a valid Date then convert it to a string using Date.toISOString() before making the comparison.
 
-Can be curried.
-
 ```javascript
 assertMatches(/^foo/i, 'BAR') // Throws AssertionError
 assertMatches(/^foo/i, 'FOOBAR') // passes
 assertMatches('oba', 'foobar') // passes
 assertMatches('fox', 'The quick brown fox jumped over the...') // passes
-```
 
-You can curry it! :tada:
-
-```javascript
+// Curried usage
 const assertShortDateString = assertMatches(/^[\d]{4}-[\d]{2}-[\d]{2}$/);
 
 assertShortDateString('14 September 2020') // Throws AssertionError
@@ -338,7 +335,7 @@ assertShortDateString('2020-09-14') // passes
 ```
 
 ### assertNotMatches
-The inverse of [assertMatches()](#assertmatches)
+The inverse of [assertMatches()](#assertmatches). Can be curried.
 
 ### assertDefined
 Will pass for any value which is not `undefined`.
@@ -437,41 +434,28 @@ assertRegExp(new RegExp('^foo', 'i')) // true
 ```
 
 ### assertGreaterThan
-If the subject is less than or equal to the control the test will fail.
-
-Can be curried.
+If the subject is less than or equal to the control the test will fail. Can be curried.
 
 ```javascript
 const control = new Date();
 
 // This comparison of 1970 to today will throw an AssertionError
 assertGreaterThan(control, new Date(0));
-```
 
-You can curry it! :tada:
-
-```javascript
+// Curried usage
 const assertGreaterThan100 = assertGreaterThan(100);
-
 assertGreaterThan100(99); // Will throw an AssertionError
 ```
 
 ### assertLessThan
-If the subject is greater than or equal to the control the test will fail.
-
-Can be curried.
+If the subject is greater than or equal to the control the test will fail. Can be curried.
 
 ```javascript
 const control = 'A';
-
 assertLessThan(control, 'B'); // Will throw an AssertionError
-```
 
-You can curry it! :tada:
-
-```javascript
+// Curried usage
 const assertBeforeToday = assertLessThan(new Date());
-
 assertBeforeToday(new Date()); // Will throw an AssertionError
 ```
 
@@ -493,77 +477,16 @@ assertIsZero(1, 'What happens when we pass in 1?'); // Throws AssertionError
 ```
 
 ## Sinon
-We use a subset of the Sinon library for mocking with spies and stubs like this:
+We use a subset of the Sinon library for mocking with spies and stubs.
 
-```javascript
-import { describe } from 'kixx-test';
-import { assertEqual } from 'kixx-assert';
-import sinon from 'sinon';
-
-class File {
-
-    getLastModifiedTime() {
-        return new Date();
-    }
-
-    read(callback) {
-        // Read the file then call the callback() with the data.
-        callback(data);
-    }
-}
-
-describe('Mock File#getLastModifiedTime() with a sinon stub', ({ before, after, it }) => {
-    const file = new File();
-    const date = new Date();
-    let result;
-
-    before(() => {
-        // Mock the getLastModifiedTime() method and return a custom value.
-        sinon.stub(file, 'getLastModifiedTime').returns(date);
-
-        result = file.getLastModifiedTime();
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('captures the call to getLastModifiedTime()', () => {
-        assertEqual(1, file.getLastModifiedTime.callCount);
-    });
-
-    it('returns the custom value', () => {
-        assertEqual(date, result);
-    });
-});
-
-describe('Passing a sinon spy as a callback', () => {
-    const file = new File();
-    const callback = sinon.spy();
-
-    before(() => {
-        // Pass the callback spy into the read() method.
-        file.read(callback);
-    });
-
-    after(() => {
-        sinon.restore();
-    });
-
-    it('captures the call to the callback', () => {
-        assertEqual(1, callback.callCount);
-    });
-});
-```
-
-## When to use a sinon spy or stub
+### When to use a sinon spy or stub
 Here are some rules of thumb to help when deciding to use a sinon spy or stub:
 
-Use a spy ([Sinon Spy API](#sinon-spy-api)) to create simple functions without defined behavior when you just need to get information about the call from the [Sinon Say API](#sinon-say-api).
+**Use a spy** ([Sinon Spy API](#sinon-spy-api)) to create simple functions without defined behavior when you just need to capture call information from the [Spy Call API](#spy-call-api).
 
 ```javascript
 import { EventEmitter } from 'node:events';
-import sinon from 'node:sinon';
+import sinon from 'sinon';
 
 const emitter = new EventEmitter();
 
@@ -593,10 +516,10 @@ mockObject.getSomeState();
 assertEqual(2, mockObject.getSomeState.callCount);
 ```
 
-Use a spy ([Sinon Spy API](#sinon-spy-api)) if you still want the original function or method to be called but need to get information about the call from the [Sinon Say API](#sinon-say-api).
+**Use a spy** if you still want the original function or method to be called but need to capture call information.
 
 ```javascript
-import sinon from 'node:sinon';
+import sinon from 'sinon';
 
 const mockObject = {
 
@@ -634,11 +557,11 @@ assertEqual(99, flagGetterSetterSpy.set.getCall(0).firstArg);
 assertEqual(1, flagGetterSetterSpy.get.callCount);
 ```
 
-Use a stub ([Sinon Stub API](#sinon-stub-api)) to create a simple function on which you can define specific behavior.
+**Use a stub** ([Sinon Stub API](#sinon-stub-api)) to create a function with pre-programmed behavior, or to prevent the underlying function from being called.
 
 ```javascript
 import { EventEmitter } from 'node:events';
-import sinon from 'node:sinon';
+import sinon from 'sinon';
 
 const emitter = new EventEmitter();
 
@@ -656,32 +579,6 @@ try {
 
 // Capture call count from the stub
 assertEqual(1, customCallback.callCount);
-// Capture arguments from the stub
-const event = customCallback.getCall(0).firstArg;
-assertEqual('customEvent', event.name);
-
-const mockObject = {
-    // Create a method on an object literal without any defined behavior.
-    getSomeState: sinon.stub().returns(99),
-};
-
-const result1 = mockObject.getSomeState();
-const result2 = mockObject.getSomeState();
-
-// Capture call count from the stub
-assertEqual(2, mockObject.getSomeState.callCount);
-// Returns the value defined by the stub.
-assertEqual(99, result1);
-assertEqual(99, result2);
-
-// Be sure to call sinon.restore() after using sinon stubs.
-sinon.restore();
-```
-
-Use a stub ([Sinon Stub API](#sinon-stub-api)) if you need to prevent the underlying function or method from being called and intend on modifying its behavior.
-
-```javascript
-import sinon from 'node:sinon';
 
 const mockObject = {
     getSomeState() {
@@ -695,15 +592,34 @@ sinon.stub(mockObject, 'getSomeState').returns(99);
 const result1 = mockObject.getSomeState();
 const result2 = mockObject.getSomeState();
 
-// Capture call count from the spy
 assertEqual(2, mockObject.getSomeState.callCount);
 assertEqual(99, result1);
 assertEqual(99, result2);
 
+// Always call sinon.restore() after using sinon stubs or spies on existing methods.
 sinon.restore();
 ```
 
-## Sinon spy API
+### sinon.restore()
+Always call `sinon.restore()` in the `after()` block when using stubs or when using spies on existing methods. This restores original method behavior and prevents test pollution. Standalone spies created with `sinon.spy()` (not wrapping an existing method) don't strictly require restore, but calling it is good practice regardless.
+
+```javascript
+describe('Something with stubs', ({ before, after, it }) => {
+    before(() => {
+        sinon.stub(myObj, 'method').returns(42);
+    });
+
+    after(() => {
+        sinon.restore();
+    });
+
+    it('works', () => {
+        assertEqual(42, myObj.method());
+    });
+});
+```
+
+## Sinon Spy API
 A test spy is a function that records arguments, return value, the value of this and exception thrown (if any) for all its calls.
 
 Create a simple spy function:
@@ -767,10 +683,10 @@ assertEqual(2000, setMillisecondsSpy.getCall(0).firstArg);
 assertEqual(1, getSecondsSpy.callCount);
 ```
 
-All spy instances will follow the [Sinon Say API](#sinon-say-api).
+All spy instances support the properties and methods described in the [Spy/Stub Common API](#spystub-common-api).
 
-## Sinon stub API
-Test stubs are functions (spies) with pre-programmed behavior. They support the full [Sinon Say API](#sinon-say-api) in addition to methods which can be used to alter the stub’s behavior.
+## Sinon Stub API
+Test stubs are functions (spies) with pre-programmed behavior. They support the full [Spy/Stub Common API](#spystub-common-api) in addition to methods which can be used to alter the stub's behavior.
 
 Create a simple stub function:
 ```javascript
@@ -805,7 +721,7 @@ sinon.restore();
 ### onCall(n)
 Defines the behavior of the stub on the _nth_ call. Useful for testing sequential interactions.
 
-There are methods `onFirstCall`, `onSecondCall`,`onThirdCall` to make stub definitions read more naturally.
+There are alias methods `onFirstCall` (`onCall(0)`), `onSecondCall` (`onCall(1)`), and `onThirdCall` (`onCall(2)`) to make stub definitions read more naturally.
 
 `onCall` can be combined with all of the behavior defining methods in this section.
 
@@ -817,11 +733,10 @@ import sinon from 'sinon';
 describe('stub', ({ it, after }) => {
 
     after(() => {
-        // Always restore the sandbox state after using stubs.
         sinon.restore();
     });
 
-    it('should behave differently on consecutive calls with certain argument', () => {
+    it('should behave differently on consecutive calls', () => {
 
         const callback = sinon.stub()
             .onCall(0).returns(1)
@@ -850,15 +765,6 @@ describe('stub', ({ it, after }) => {
     });
 });
 ```
-
-### .onFirstCall()
-Calling `sinon.stub.onFirstCall()` is an alias to `sinon.stub.onCall(0)`.
-
-### .onSecondCall()
-Calling `sinon.stub.onSecondCall()` is an alias to `sinon.stub.onCall(1)`.
-
-### .onThirdCall()
-Calling `sinon.stub.onThirdCall()` is an alias to `sinon.stub.onCall(2)`.
 
 ### .callsFake(fakeFunction)
 Makes the stub call the provided `fakeFunction` when invoked.
@@ -896,8 +802,8 @@ Makes the stub return the provided value.
 ```javascript
 const component = {
     updateState: sinon.stub()
-        onFirstCall().returns(false)
-        onSecondCall().returns(true),
+        .onFirstCall().returns(false)
+        .onSecondCall().returns(true),
 };
 
 const result1 = component.updateState();
@@ -910,14 +816,14 @@ sinon.restore();
 ```
 
 ### .returnsThis()
-Causes the stub to return its `this` value.
+Causes the stub to return its `this` value. Useful for testing method chaining.
 ```javascript
 class Job {
     start() { }
 }
 
 const job = new Job();
-sinon.stub(job, 'start').returnThis();
+sinon.stub(job, 'start').returnsThis();
 
 // The .returnsThis() method will allow object method chaining.
 const result = job.start().start();
@@ -931,8 +837,8 @@ Causes the stub to return a Promise which resolves to the provided value.
 ```javascript
 const component = {
     updateState: sinon.stub()
-        onFirstCall().resolves(false)
-        onSecondCall().resolves(true),
+        .onFirstCall().resolves(false)
+        .onSecondCall().resolves(true),
 };
 
 const result1 = await component.updateState();
@@ -947,9 +853,9 @@ sinon.restore();
 ### .throws()
 Causes the stub to throw the provided exception object, or the object returned by the factory function.
 ```javascript
-const func1 = spy.stub().throws(new Error('first test error'));
+const func1 = sinon.stub().throws(new Error('first test error'));
 
-const func2 = spy.stub().throws(() => {
+const func2 = sinon.stub().throws(() => {
     return new Error('second test error');
 })
 
@@ -971,9 +877,9 @@ sinon.restore();
 ### .rejects(value)
 Causes the stub to return a Promise which rejects with the provided value.
 ```javascript
-const func1 = spy.stub().rejects(new Error('first test error'));
+const func1 = sinon.stub().rejects(new Error('first test error'));
 
-const func2 = spy.stub().rejects(() => {
+const func2 = sinon.stub().rejects(() => {
     return new Error('second test error');
 })
 
@@ -992,206 +898,77 @@ try {
 sinon.restore();
 ```
 
-## Sinon Say API
-Sinon Say objects are objects returned from `sinon.spy()` and `sinon.stub()`. When spying on existing methods with `sinon.spy(object, "method")` and `sinon.stub(object, "method")`, the following properties and methods are also available on `object.method`.
-
-### .getCall(n)
-Returns the _nth_ [call](#spy-call-api) instance.
-
-If _n_ is negative, the _nth_ call from the end is returned. For example, `spy.getCall(-1)` returns the last call, and `spy.getCall(-2)` returns the second to last call.
-
-Accessing individual calls helps with more detailed behavior verification when the spy is called more than once.
-
-```javascript
-import fs from 'node:fs';
-
-sinon.stub(fs, 'readFileSync');
-
-fs.readFileSync('./README.md');
-fs.readFileSync('./package.json');
-
-assertEqual('./package.json', fs.readFileSync.getCall(1).firstArg);
-
-sinon.restore();
-```
-
-### .firstCall
-The first [Spy Call API](#spy-call-api) object. An alias for `getCall(0)`.
-
-```javascript
-import fs from 'node:fs';
-
-sinon.stub(fs, 'readFileSync');
-
-fs.readFileSync('./README.md');
-fs.readFileSync('./package.json');
-
-assertEqual('./README.md', fs.readFileSync.firstCall.firstArg);
-
-sinon.restore();
-```
-
-### .secondCall
-The second [Spy Call API](#spy-call-api). An alias for `getCall(1)`.
-
-```javascript
-import fs from 'node:fs';
-
-sinon.stub(fs, 'readFileSync');
-
-fs.readFileSync('./README.md');
-fs.readFileSync('./package.json');
-
-assertEqual('./package.json', fs.readFileSync.secondCall.firstArg);
-
-sinon.restore();
-```
-
-### .thirdCall
-The third [Spy Call API](#spy-call-api). An alias for `getCall(2)`.
-
-```javascript
-import fs from 'node:fs';
-
-sinon.stub(fs, 'readFileSync');
-
-fs.readFileSync('./README.md');
-fs.readFileSync('./package.json');
-fs.readFileSync('./.gitignore');
-
-assertEqual('./.gitignore', fs.readFileSync.thirdCall.firstArg);
-
-sinon.restore();
-```
-
-### .lastCall
-The last [Spy Call API](#spy-call-api) An alias for `getCall(-1)`.
-
-```javascript
-import fs from 'node:fs';
-
-sinon.stub(fs, 'readFileSync');
-
-fs.readFileSync('./README.md');
-fs.readFileSync('./package.json');
-
-assertEqual('./package.json', fs.readFileSync.lastCall.firstArg);
-
-sinon.restore();
-```
+## Spy/Stub Common API
+These properties and methods are available on all objects returned from `sinon.spy()` and `sinon.stub()`. When spying on existing methods with `sinon.spy(object, "method")` and `sinon.stub(object, "method")`, they are also available on `object.method`.
 
 ### .callCount
 The number of recorded calls.
 
+### .getCall(n)
+Returns the _nth_ [Spy Call](#spy-call-api) instance.
+
+If _n_ is negative, the _nth_ call from the end is returned. For example, `spy.getCall(-1)` returns the last call, and `spy.getCall(-2)` returns the second to last call.
+
+### .firstCall, .secondCall, .thirdCall, .lastCall
+Convenience aliases for `getCall(0)`, `getCall(1)`, `getCall(2)`, and `getCall(-1)` respectively. Each returns a [Spy Call](#spy-call-api) object.
+
 ```javascript
-import fs from 'node:fs';
+import sinon from 'sinon';
 
-sinon.stub(fs, 'readFileSync');
+const spy = sinon.spy();
 
-const contents = fs.readFileSync('./README.md');
+spy('first');
+spy('second');
+spy('third');
 
-assertEqual(1, fs.readFileSync.callCount);
-
-sinon.restore();
+assertEqual(3, spy.callCount);
+assertEqual('first', spy.getCall(0).firstArg);
+assertEqual('first', spy.firstCall.firstArg);
+assertEqual('second', spy.secondCall.firstArg);
+assertEqual('third', spy.thirdCall.firstArg);
+assertEqual('third', spy.lastCall.firstArg);
 ```
 
-### .calledBefore()
-Returns `true` if the spy was called before `anotherSpy`
+### .calledBefore() and .calledAfter()
+Returns `true` if the spy was called before (or after) `anotherSpy`.
+
+### .calledImmediatelyBefore() and .calledImmediatelyAfter()
+Returns `true` if `spy` was called before (or after) `anotherSpy`, and no other spy calls occurred between them.
 
 ```javascript
 const readFile = sinon.stub().resolves('<html></html>');
 const validateSource = sinon.spy();
+const compileTemplate = sinon.stub().returns(() => {});
 
 async function test() {
     const source = await readFile();
     validateSource(source);
-    return source;
+    return compileTemplate(source);
 }
 
-test();
+await test();
 
 assert(readFile.calledBefore(validateSource));
-
-sinon.restore();
-```
-
-### .calledAfter()
-Returns `true` if the spy was called after `anotherSpy`
-
-```javascript
-const readFile = sinon.stub().resolves('<html></html>');
-const validateSource = sinon.spy();
-
-async function test() {
-    const source = await readFile();
-    validateSource(source);
-    return source;
-}
-
-test();
-
 assert(validateSource.calledAfter(readFile));
-
-sinon.restore();
-```
-
-### .calledImmediatelyBefore()
-Returns `true` if `spy` was called before `anotherSpy`, and no spy [calls](#spy-call-api) occurred between `spy` and `anotherSpy`.
-
-```javascript
-// A no-op template for testing.
-const template = () => {};
-
-const readFile = sinon.stub().resolves('<html></html>');
-const validateSource = sinon.spy();
-const compileTemplate = sinon.stub().returns(template);
-
-async function test() {
-    const source = await readFile();
-    validateSource(source);
-    return compileTemplate(source);
-}
-
-test();
-
 assert(validateSource.calledImmediatelyBefore(compileTemplate));
 assertFalsy(readFile.calledImmediatelyBefore(compileTemplate));
-
-sinon.restore();
-```
-
-### .calledImmediatelyAfter()
-Returns `true` if `spy` was called after `anotherSpy`, and no spy [calls](#spy-call-api) occurred between `anotherSpy` and `spy`.
-
-```javascript
-// A no-op template for testing.
-const template = () => {};
-
-const readFile = sinon.stub().resolves('<html></html>');
-const validateSource = sinon.spy();
-const compileTemplate = sinon.stub().returns(template);
-
-async function test() {
-    const source = await readFile();
-    validateSource(source);
-    return compileTemplate(source);
-}
-
-test();
-
 assert(compileTemplate.calledImmediatelyAfter(validateSource));
-assertFalsy(compileTemplate.calledImmediatelyBefore(readFile));
 
 sinon.restore();
 ```
 
 ## Spy Call API
-A spy call is an object representation of an individual call to a _spied_ function, which could be a [spy](#sinon-spy-api) or [stub](#sinon-stub-api).
+A spy call is an object representation of an individual call to a _spied_ function, which could be a [spy](#sinon-spy-api) or [stub](#sinon-stub-api). Access spy calls using `.getCall(n)`, `.firstCall`, `.secondCall`, `.thirdCall`, or `.lastCall`.
 
 ### .args
 Array of received arguments.
 
 ```javascript
+const spy = sinon.spy();
+spy('a', 'b', 'c');
+assertEqual('a', spy.firstCall.args[0]);
+assertEqual('b', spy.firstCall.args[1]);
+assertEqual('c', spy.firstCall.args[2]);
 ```
 
 ### .firstArg
@@ -1203,7 +980,7 @@ const date = new Date();
 
 spy(date, 1, 2);
 
-assertEqual(date, spy.lastCall.lastArg);
+assertEqual(date, spy.lastCall.firstArg);
 ```
 
 ### .lastArg
@@ -1255,7 +1032,7 @@ describe('validateAuthHeader() with valid header', ({ before, it }) => {
         testSubject = sinon.spy(validateAuthHeader);
     });
 
-    it('throws an AuthenticationError', () => {
+    it('returns true', () => {
         testSubject('foobarbaz');
         assertEqual(true, testSubject.firstCall.returnValue);
     });
@@ -1293,9 +1070,7 @@ describe('validateAuthHeader() when authHeader is empty', ({ before, it }) => {
 ```
 
 ### Making assertions about errors
-While there is no specific function in our test framework for testing errors, you can test for thrown errors using a simple try ... catch sequence in your it() blocks. When making assertions about errors, use error names and codes instead of using `instance of` to identify a specific type of error like in the example above. This avoids unexpected reference mismatches with imported Node.js modules.
-
-For example:
+There is no specific function in our test framework for testing errors. Test for thrown errors using a try/catch in your `it()` blocks. When making assertions about errors, use error names and codes instead of `instanceof` to identify error types. This avoids unexpected reference mismatches with imported Node.js modules.
 
 ```javascript
 import { AuthenticationError, BadRequestError, isNonEmptyString } from 'kixx';
@@ -1343,7 +1118,7 @@ describe('validateAuthHeader() when authHeader invalid', ({ before, it }) => {
 
     it('throws a BadRequestError', () => {
         try {
-            validateAuthHeader('foobar');
+            testSubject('foobar');
         } catch { }
 
         assertEqual(1, testSubject.callCount);

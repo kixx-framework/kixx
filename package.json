@@ -12,7 +12,6 @@
   },
   "scripts": {
     "test": "eslint ./ && node run-tests.js",
-    "unit-test": "node run-tests.js",
     "lint": "eslint ./"
   },
   "repository": {
