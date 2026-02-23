@@ -29,6 +29,7 @@
     "eslint": "9.39.2",
     "kixx-assert": "2.1.0",
     "kixx-server-errors": "5.0.0",
+    "kixx-templating": "5.0.0",
     "kixx-test": "2.1.0",
     "sinon": "~21.0.1"
   },
