@@ -147,8 +147,9 @@ export default [
             // benefits of async/await.
             // Often, the code can be refactored to create all the promises at
             // once, then get access to the results using Promise.all()
+            // Turning this off and letting developers take control.
             'no-await-in-loop': [
-                'warn',
+                'off',
             ],
             'no-bitwise': [
                 'warn',

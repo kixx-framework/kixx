@@ -145,10 +145,10 @@ async function copyDirectoryRecursive(sourceDir, destDir, exclude = []) {
         const destPath = path.join(destDir, entry.name);
 
         if (entry.isDirectory()) {
-            // eslint-disable-next-line no-await-in-loop
+
             await copyDirectoryRecursive(sourcePath, destPath);
         } else if (entry.isFile()) {
-            // eslint-disable-next-line no-await-in-loop
+
             await copyFileIfNotExists(sourcePath, destPath);
         }
     }
