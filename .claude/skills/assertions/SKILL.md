@@ -1,6 +1,6 @@
 ---
 name: assertions
-description: Guidelines for using the kixx-assert library to validate assumptions and inputs in the codebase. Apply when writing new code or refactoring.
+description: This project makes good use of an assertion library called kixx-assert to enforce invariants in the code. This skill contains an overview and some guidelines for using the kixx-assert library to enforce invariants in the codebase, like validating assumptions and inputs to methods and classes. Apply this assertions library skill when writing new code or refactoring existing code in this project.
 ---
 
 ## Overview
@@ -9,7 +9,13 @@ This project uses **kixx-assert** (vendored at `lib/vendor/kixx-assert/`, re-exp
 1. **Test functions** (e.g. `isNonEmptyString`, `isPlainObject`) — return a boolean. Use for conditional logic.
 2. **Assertion functions** (e.g. `assertEqual`, `assertNonEmptyString`) — throw `AssertionError` on failure. Use to enforce invariants.
 
+To view the kixx-assert documentation directly, review the README at `lib/vendor/kixx-assert/README.md`.
+
+All the source code for the kixx-assert library is available in a single module at `lib/vendor/kixx-assert/mod.js`.
+
 ## Why Use Assertions?
+Assertions are used to enforce invariants in the system.
+
 - **Fail fast** — surface programmer errors at the call boundary instead of deep in execution.
 - **Document assumptions** — assertions make preconditions and invariants explicit.
 - **Validate API boundaries** — enforce that callers pass valid arguments (non-empty strings, defined values, correct types).
@@ -17,11 +23,11 @@ This project uses **kixx-assert** (vendored at `lib/vendor/kixx-assert/`, re-exp
 Assertions are for programmer errors (bugs), not user input validation. For expected invalid input, validate and return operational errors instead.
 
 ## Import
-```javascript
-import { assert, assertNonEmptyString, assertArray, isPlainObject } from '../assertions/mod.js';
-```
+Example import code:
 
-When building on kixx, assertions are also available as `kixx.assert`, `kixx.assertNonEmptyString`, etc.
+```javascript
+import { assert, assertNonEmptyString, assertArray, isPlainObject } from '../assertions.js';
+```
 
 ## When to Use What
 
@@ -51,14 +57,9 @@ Use `assertEqual(expected, actual)` — expected first, actual second. Same for 
 ### Currying
 Control/subject assertions can be curried for repeated checks:
 ```javascript
+const HTTP_METHODS = [ 'GET', 'HEAD' ];
 const assertIsValidMethod = (method) => assert(HTTP_METHODS.includes(method), `Invalid HTTP method: ${ method }`);
 ```
-
-### No deep equality
-kixx-assert does not compare objects by structure. Compare by reference where possible, or assert individual properties.
-
-### AssertionError
-Failed assertions throw `AssertionError` with `name`, `code` (`'ASSERTION_ERROR'`), and `operator` (e.g. `'assertNonEmptyString'`). Use `error.name === 'AssertionError'` or `error.code` when catching or testing.
 
 ## Common Patterns in This Codebase
 - **Constructor/options validation** — assert required options at the top of constructors.
