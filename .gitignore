@@ -27,5 +27,9 @@ node_modules/
 # There are no dependencies, so we ignore package-lock
 package-lock.json
 
+# Claude configs
+.claude/settings.local.json
+
 # Scratch pad
 tmp/
+
