@@ -29,11 +29,3 @@ package-lock.json
 
 # Scratch pad
 tmp/
-
-# Reference application data files
-reference-app/data/
-
-# Reference application secrets
-reference-app/.secrets.json
-
-
