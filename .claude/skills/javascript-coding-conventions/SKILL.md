@@ -1,6 +1,6 @@
 ---
 name: javascript-coding-conventions
-description: Guidelines and examples for writing good quality JavaScript code. Apply when writing, refactoring, or reviewing JavaScript code in this project.
+description: Guidelines and examples for writing good quality JavaScript code. Apply this skill when writing, refactoring, or reviewing JavaScript code in this project.
 ---
 
 This document summarizes the JavaScript coding styles and conventions, many of which are defined in ./eslint-config.mjs and enforced by ESLint.

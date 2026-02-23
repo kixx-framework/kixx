@@ -1,6 +1,6 @@
 ---
 name: jsdocs
-description: Guidelines and examples for writing effective JSDoc comments. Apply when writing, refactoring, or reviewing JavaScript code.
+description: Guidelines and examples for writing effective JSDoc comments in this project. Apply this skill when writing, refactoring, or reviewing JavaScript code in this code base.
 ---
 
 ## JSDoc Guidelines
@@ -73,7 +73,6 @@ Do not use `@typedef` for method options objects. Instead, use dotted `@param` n
 
 ```javascript
 /**
- * Creates a new application context instance with runtime configuration and core services.
  * @param {Object} options - Context initialization options
  * @param {AppRuntime} options.runtime - Runtime configuration
  * @param {Config} options.config - Application configuration manager instance
@@ -178,6 +177,7 @@ export default class FileWatcher extends EventEmitter {
 - Do *not* add the `@private` tag to private members. JavaScript's `#private` syntax already communicates visibility.
 - Sparse documentation is acceptable for private methods and members — a brief description is sufficient without full `@param`/`@returns`/`@throws` detail.
 - Document events using `@emits` — see the Document Events section above.
+- **Do not include a description for `constructor` JSDoc blocks.** It is self-evident that a constructor creates an instance of the class. Only document the `@param` tags (and `@throws` if relevant).
 
 ### Using @name with Object.defineProperties
 
@@ -265,7 +265,6 @@ export default class Context {
      */
 
     /**
-     * Creates a new application context instance with runtime configuration and core services.
      * @param {Object} options - Context initialization options
      * @param {AppRuntime} options.runtime - Runtime configuration indicating whether the application
      *   is running as a CLI command or server

@@ -36,7 +36,4 @@ reference-app/data/
 # Reference application secrets
 reference-app/.secrets.json
 
-# Claude settings files
-.claude/
-
 
