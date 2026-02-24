@@ -31,6 +31,7 @@ export default [
                 URL: 'readonly',
                 URLSearchParams: 'readonly',
                 Headers: 'readonly',
+                Response: 'readonly',
                 // Node.js globals
                 global: 'readonly',
                 Buffer: 'readonly',
