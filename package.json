@@ -5,7 +5,7 @@
   "type": "module",
   "main": "lib/mod.js",
   "engines": {
-    "node": ">=16.13.2"
+    "node": ">=24"
   },
   "bin": {
     "kixx": "bin/kixx.js"

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Kixx is a framework for building server-rendered, hypermedia-driven web applications in an Object Oriented way. It uses ES2022 JavaScript (no TypeScript) and supports applications written for Node.js (>=16.13.2), Deno, Cloudflare Workers, and AWS Lambda. The package entry point is `lib/mod.js`.
+Kixx is a framework for building server-rendered, hypermedia-driven web applications in an Object Oriented way. It uses ES2022 JavaScript (no TypeScript) and supports applications written for Node.js (>=24), Deno, Cloudflare Workers, and AWS Lambda. The package entry point is `lib/mod.js`.
 
 ## Commands
 
