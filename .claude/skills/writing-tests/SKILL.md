@@ -4,8 +4,9 @@ description: Guidelines, examples, and reference documentation for writing effec
 ---
 
 ## Test File Naming
-- Mirror `lib/` structure in `test/` (e.g. `lib/application/paths.js` → `test/application/paths.test.js`)
-- Suffix: `*.test.js`
+- Test file suffix: `*.test.js`
+- Mirror `lib/` structure in `test/lib/` (e.g, `lib/node-http-server/server-request.js` → `test/lib/node-http-server/server-request.test.js`)
+- Mirror `examples/` structure in `test/examples/` (e.g, `examples/forms/todo-item.form.js` → `test/examples/forms/todo-item.form.test.js`)
 
 ## Testing Dependencies
 In this project, use the Kixx Test Framework for organizing and orchestrating tests, the Kixx Assertion Library to make assertions, and use Sinon to mock objects, methods, and functions.
@@ -71,7 +72,7 @@ describe('toBinary(): when value >= 1', ({ it }) => {
 ### Helpers and fixtures
 Extract helpers like `createRequest()`, `createApplicationContext()` at module level. Use `const THIS_DIR = path.dirname(fileURLToPath(import.meta.url))` for test-file-relative paths.
 
-Use `assert(isPlainObject(result))` and `assertArray(result)` for type checks when you assert properties separately.
+Use `assert(isPlainObject(result))` and `assertArray(result)` for type checks when asserting properties separately. Both `isPlainObject` and `assertArray` are imported from `kixx-assert`.
 
 ## Kixx Assertion Library
 Assertion functions throw on failure. Add a message string as the last argument when the failure would be ambiguous: `assertEqual(true, regex.test(urn), 'exact match')`. Control/subject assertions (e.g. assertEqual) can be curried: `const assertFoo = assertEqual('foo'); assertFoo('bar');`
@@ -88,7 +89,9 @@ Strict equality. Handles NaN and Dates. Curriable. `assertEqual(expected, actual
 Inverse of assertEqual. Curriable.
 
 ### assertMatches / assertNotMatches
-`assertMatches(matcher, subject)` — RegExp.test, string includes, or strict equality. Curriable. Use `assert(doesMatch('substring', error.message))` for substring checks in error assertions.
+`assertMatches(matcher, subject)` — Matcher can be a RegExp (`RegExp.test(subject)`), a string (`subject.includes(matcher)`), or any value (strict equality). Curriable.
+
+`doesMatch(matcher, subject)` — non-throwing version; returns a boolean. Import from `kixx-assert`. Useful for substring checks: `assert(doesMatch('substring', error.message))`.
 
 ### Type checks (throw on failure)
 | Function | Purpose |
@@ -142,13 +145,18 @@ Access via `.getCall(n)`, `.firstCall`, `.lastCall`. Properties: `.args`, `.firs
 ## Test Patterns
 
 ### Error assertions
-Use try/catch in `it()` blocks. Assert `error.name` and `error.code` (not `instanceof`) to avoid module reference mismatches. Use `assert(doesMatch('substring', error.message))` for message substring checks.
+Use try/catch in `it()` blocks. Assert `error.name` and `error.code` (not `instanceof`) to avoid module reference mismatches. Use `assertMatches('substring', error.message)` for message substring checks.
 
 ```javascript
-it('throws AuthenticationError', () => {
-    try { testSubject(null); } catch { }
-    const error = testSubject.firstCall.exception;
-    assertEqual('AuthenticationError', error.name);
+describe('authenticate() with null input', ({ it, after }) => {
+    const testSubject = sinon.spy(auth, 'authenticate');
+    after(() => sinon.restore());
+
+    it('throws AuthenticationError', () => {
+        try { testSubject(null); } catch { }
+        const error = testSubject.firstCall.exception;
+        assertEqual('AuthenticationError', error.name);
+    });
 });
 ```
 
