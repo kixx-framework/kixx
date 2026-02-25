@@ -4,21 +4,26 @@ description: Guidelines and examples for writing effective JSDoc comments in thi
 ---
 
 ## JSDoc Guidelines
-Good code documentation reduces the cognitive load for developers (including your future self). JSDoc blocks should answer the questions: "What does this do?", "How do I use it?", and "What can go wrong?"
+Good code documentation reduces the cognitive load for developers. JSDoc blocks should answer the questions: "What does this do?", "How do I use it?", and "What can go wrong?"
 
-## Order Tags Consistently
-Within a JSDoc block, always put the free-text description first. Follow it with tags in this order:
+## Add Value Beyond the Name
+Write concise descriptions that add value beyond the name of the thing you are documenting. Keeping it concise will help your documentation remain relevant longer too.
 
-1. Description (free text, always first)
-2. `@name` (when needed for computed properties)
-3. `@public`
-4. `@async`
-5. `@param`
-6. `@returns`
-7. `@throws`
-8. `@emits`
-9. `@type`
-10. `@see`
+**Bad:**
+```javascript
+/**
+ * This function takes a user ID parameter and returns user data
+ */
+function getUserById() {}
+```
+
+**Good:**
+```javascript
+/**
+ * Retrieves user data from the database with role information populated
+ */
+function getUserById() {}
+```
 
 ## Document the Contract, Not the Implementation
 Focus on *what* your function does and *how* to use it, not *how* it works internally. Your JSDoc should serve as a contract between your code and its consumers.
@@ -36,25 +41,19 @@ function calculateTotal(basePrice, taxRate, discount = 0) {
 }
 ```
 
-## Specify Types Precisely
-JavaScript development often involves complex data structures. Be specific about object shapes, array contents, and union types. Use `@typedef` blocks to document complex data structures:
+## Order Tags Consistently
+Within a JSDoc block, always put the free-text description first. Follow it with tags in this order:
 
-```javascript
-/**
- * @typedef {Object} UserProfile
- * @property {string} id - Unique user identifier
- * @property {string} email - User's email address
- * @property {string[]} roles - Array of role names
- * @property {Date} createdAt - Account creation timestamp
- */
-
-/**
- * @param {UserProfile|null} user - User object or null if not found
- * @returns {Promise<boolean>} True if user has admin privileges
- */
-function userHasAdminPrivileges(user) {
-}
-```
+1. Description (free text, always first)
+2. `@name` (when needed)
+3. `@public`
+4. `@async`
+5. `@param`
+6. `@returns`
+7. `@throws`
+8. `@emits`
+9. `@type`
+10. `@see`
 
 When documenting callback or function-typed parameters, specify the full signature:
 
@@ -69,7 +68,27 @@ function watch(pattern, handler) {
 }
 ```
 
-Do not use `@typedef` for method options objects. Instead, use dotted `@param` notation:
+## Specify Types Precisely
+JavaScript development often involves complex data structures. Be specific about object shapes, array contents, and union types. Use `@typedef` blocks to document complex data structures:
+
+```javascript
+/**
+ * @typedef {Object} UserProfile
+ * @property {string} id - Unique user identifier
+ * @property {string} email - User's email address
+ * @property {string[]} roles - Array of role names
+ * @property {function(String): Boolean} hasPermission - Check to see if the user has the given permission
+ */
+
+/**
+ * @param {UserProfile|null} user - User object or null if not found
+ * @returns {Promise<boolean>} True if user has admin privileges
+ */
+function userHasAdminPrivileges(user) {
+}
+```
+
+Use the dotted `@param` notation for method options objects instead of a `@typedef`:
 
 ```javascript
 /**
@@ -94,37 +113,27 @@ Documentation for error conditions and edge cases is crucial for Node.js applica
  */
 ```
 
-## Add Value Beyond the Name
-Write concise descriptions that add value beyond the name of the thing you are documenting. Keeping it concise will help your documentation remain relevant longer too.
-
-**Bad:**
-```javascript
-/**
- * This function takes a user ID parameter and returns user data
- */
-function getUserById() {}
-```
-
-**Good:**
-```javascript
-/**
- * Retrieves user data from the database with role information populated
- */
-function getUserById() {}
-```
-
 ## Know When to Skip JSDoc
-A well-named function with obvious parameters sometimes needs no JSDoc at all. Avoid cargo-culting empty or redundant doc blocks. If the JSDoc would just restate the function name and parameter names, leave it out — the code is the documentation.
+A well-named private function with obvious parameters sometimes needs no JSDoc at all. If the function is *not* public and the JSDoc would just restate the function name and parameter names, leave it out — the code is the documentation.
 
 ```javascript
 // No JSDoc needed — the name and signature say it all
 function isEven(n) {
     return n % 2 === 0;
 }
+
+class CustomNumber {
+    // No JSDoc needed — private member with simple interface.
+    #isEven(n) {
+        return n % 2 === 0;
+    }
+}
 ```
 
 ## Document Async Behavior
-In JavaScript, async patterns are everywhere. Be explicit about what your Promises resolve to. Use `Promise<void>` (not `Promise<undefined>`) for functions that don't resolve to a meaningful value:
+In JavaScript, async patterns are everywhere. Be explicit about what your Promises resolve to. Use `Promise<void>` (not `Promise<undefined>`) for functions that don't resolve to a meaningful value.
+
+If the `async` keyword is used, then the `@async` tag is redundant.
 
 ```javascript
 /**
