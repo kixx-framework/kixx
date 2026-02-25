@@ -4,6 +4,7 @@ import js from '@eslint/js';
 export default [
     {
         ignores: [
+            '.claude/',
             'node_modules/',
             'lib/vendor/',
             // Other vendor/dependency directories:
