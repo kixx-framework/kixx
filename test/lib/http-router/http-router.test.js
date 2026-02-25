@@ -510,6 +510,58 @@ describe('HttpRouter#reloadRoutesAndHandleRequest() always reloads routes', ({ b
 
 
 // ===========================================================================
+// loadRoutes()
+// ===========================================================================
+
+describe('HttpRouter#loadRoutes() calls store.loadVirtualHosts()', ({ before, it }) => {
+    const store = createStore([ createVhostSpec() ]);
+
+    before(async () => {
+        await createRouter({ store }).loadRoutes();
+    });
+
+    it('calls store.loadVirtualHosts() once', () => {
+        assertEqual(1, store.loadVirtualHosts.callCount);
+    });
+});
+
+describe('HttpRouter#loadRoutes() return value', ({ before, it }) => {
+    let result;
+
+    before(async () => {
+        result = await createRouter().loadRoutes();
+    });
+
+    it('returns an array', () => {
+        assertArray(result);
+    });
+
+    it('returns one virtual host per spec', () => {
+        assertEqual(1, result.length);
+    });
+});
+
+describe('HttpRouter#loadRoutes() caches routes so handleRequest() does not reload', ({ before, it }) => {
+    const store = createStore([ createVhostSpec() ]);
+
+    before(async () => {
+        const router = new HttpRouter({
+            store,
+            middleware: new Map(),
+            handlers: new Map(),
+            errorHandlers: new Map(),
+        });
+        await router.loadRoutes();
+        await router.handleRequest(createAppContext(), createRequest(), createResponse());
+    });
+
+    it('only calls store.loadVirtualHosts() once even after handleRequest()', () => {
+        assertEqual(1, store.loadVirtualHosts.callCount);
+    });
+});
+
+
+// ===========================================================================
 // handleError()
 // ===========================================================================
 
