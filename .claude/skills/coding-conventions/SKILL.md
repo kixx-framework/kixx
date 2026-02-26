@@ -1,6 +1,6 @@
 ---
-name: javascript-coding-conventions
-description: Guidelines and examples for writing good quality JavaScript code. Apply this skill when writing, refactoring, or reviewing JavaScript code in this project.
+name: coding-conventions
+description: Guidelines for writing good quality JavaScript code. Apply this skill when you will be writing or refactoring JavaScript code in this project.
 ---
 
 This document summarizes the JavaScript coding styles and conventions, many of which are defined in ./eslint-config.mjs and enforced by ESLint.
@@ -274,16 +274,6 @@ counter += 1;
 // ✗ BAD
 let name = 'John';  // Should be const
 var counter = 0;  // Never use var
-```
-
-**No `var` keyword allowed**
-```javascript
-// ✓ GOOD
-const x = 10;
-let y = 20;
-
-// ✗ BAD
-var x = 10;
 ```
 
 **No multiple assignments in one statement**
@@ -668,18 +658,6 @@ i++;
 i--;
 ```
 
-**Warn about await in loops** (usually indicates missing parallelization)
-```javascript
-// ⚠ WARNING - Consider using Promise.all()
-for (const item of items) {
-    await processItem(item);  // Sequential, may be slow
-}
-
-// ✓ BETTER - Parallel execution
-const promises = items.map((item) => processItem(item));
-await Promise.all(promises);
-```
-
 ### Object Literals
 
 **Use object shorthand**
@@ -740,22 +718,6 @@ const date = new Date();
 
 // ✗ BAD
 const date = Date();  // Missing new
-```
-
-**No useless constructors**
-```javascript
-// ✗ BAD
-class Example {
-    constructor() {  // Does nothing
-    }
-}
-
-// ✓ GOOD
-class Example {
-    constructor(value) {
-        this.value = value;
-    }
-}
 ```
 
 **Group accessor pairs (getters before setters)**
@@ -867,17 +829,6 @@ const num = parseInt(str);
 
 ### Dangerous Practices
 
-**No `eval()` or implied eval**
-```javascript
-// ✗ BAD
-eval('const x = 10');
-setTimeout('doSomething()', 100);
-
-// ✓ GOOD
-const x = 10;
-setTimeout(() => doSomething(), 100);
-```
-
 **No extending native prototypes**
 ```javascript
 // ✗ BAD
@@ -913,15 +864,6 @@ throw new Error('Something went wrong');
 // ✗ BAD
 throw 'Something went wrong';
 throw { message: 'error' };
-```
-
-**No template literals in strings**
-```javascript
-// ✗ BAD
-const message = 'Hello ${name}';  // Should use backticks
-
-// ✓ GOOD
-const message = `Hello ${ name }`;
 ```
 
 **No mixed operators without parentheses** (warning)

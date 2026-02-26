@@ -1,10 +1,10 @@
 ---
 name: error-handling
-description: This project makes good use of a standard error types library called kixx-server-errors to facilitate good error handling flows. This skill contains an overview and some guidelines for good error handling using the kixx-server-errors library. Apply this error-handling skill when writing new code or refactoring existing code in the codebase.
+description: This project makes use of a standard error types library to facilitate good error handling flows. This skill contains an overview of the library and guidelines for good error handling. Apply this error-handling skill when writing new code or refactoring existing code in the codebase.
 ---
 
 ## Overview
-This project uses **kixx-server-errors** (vendored at `lib/vendor/kixx-server-errors/`, re-exported via `lib/errors.js`) for typed, HTTP-aware errors. The library meets three goals:
+This project uses an error library (vendored at `lib/vendor/kixx-server-errors/`, re-exported via `lib/errors.js`) for typed, HTTP-aware errors. The library meets three goals:
 
 1. **Differentiate** between unexpected errors (bugs) and expected operational errors (recoverable).
 2. **Augment** error context as errors propagate—wrap and rethrow with added context using `cause`.

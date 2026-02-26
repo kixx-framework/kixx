@@ -1,6 +1,6 @@
 ---
 name: assertions
-description: This project makes good use of an assertion library called kixx-assert to enforce invariants in the code. This skill contains an overview and some guidelines for using the kixx-assert library to enforce invariants in the codebase, like validating assumptions and inputs to methods and classes. Apply this assertions library skill when writing new code or refactoring existing code in this project.
+description: This project makes heavy use of an assertion library to enforce invariants in the code. This skill contains an overview of the assertion library and guidelines for using it to enforce invariants in the codebase, like validating assumptions and inputs to methods and classes. Apply this skill when you will be writing new code or refactoring existing code in this project.
 ---
 
 ## Overview
