@@ -50,61 +50,14 @@ describe('Config#on() return value', ({ it }) => {
     });
 });
 
-describe('Config#load() store method calls', ({ before, it }) => {
-    let store;
-
-    before(async () => {
-        store = createMockStore();
-        await new Config(store, 'development').load();
-    });
-
-    it('calls store.loadConfig() once', () => {
-        assertEqual(1, store.loadConfig.callCount);
-    });
-
-    it('calls store.loadSecrets() once', () => {
-        assertEqual(1, store.loadSecrets.callCount);
-    });
-});
-
-describe('Config#load() update:config event emission', ({ before, it }) => {
-    let callCount = 0;
-
-    before(async () => {
-        const subject = new Config(createMockStore(), 'development');
-        subject.on('update:config', () => {
-            callCount += 1;
-        });
-        await subject.load();
-    });
-
-    it('emits update:config once', () => {
-        assertEqual(1, callCount);
-    });
-});
-
-describe('Config#load() update:secrets event emission', ({ before, it }) => {
-    let callCount = 0;
-
-    before(async () => {
-        const subject = new Config(createMockStore(), 'development');
-        subject.on('update:secrets', () => {
-            callCount += 1;
-        });
-        await subject.load();
-    });
-
-    it('emits update:secrets once', () => {
-        assertEqual(1, callCount);
-    });
-});
-
 describe('Config#name getter when config has no name', ({ before, it }) => {
     let subject;
 
     before(async () => {
-        subject = new Config(createMockStore({ config: {} }), 'development');
-        await subject.load();
+        const store = createMockStore({ config: {} });
+        subject = new Config(store, 'development');
+        await store.loadConfig();
+        await store.loadSecrets();
     });
 
     it('returns default KixxApp', () => {
@@ -116,8 +69,10 @@ describe('Config#name getter when config has a name', ({ before, it }) => {
     let subject;
 
     before(async () => {
-        subject = new Config(createMockStore({ config: { name: 'MyApp' } }), 'development');
-        await subject.load();
+        const store = createMockStore({ config: { name: 'MyApp' } });
+        subject = new Config(store, 'development');
+        await store.loadConfig();
+        await store.loadSecrets();
     });
 
     it('returns the name from config', () => {
@@ -129,8 +84,10 @@ describe('Config#processName getter when config has no processName', ({ before, 
     let subject;
 
     before(async () => {
-        subject = new Config(createMockStore({ config: {} }), 'development');
-        await subject.load();
+        const store = createMockStore({ config: {} });
+        subject = new Config(store, 'development');
+        await store.loadConfig();
+        await store.loadSecrets();
     });
 
     it('returns default kixxapp', () => {
@@ -142,8 +99,10 @@ describe('Config#processName getter when config has a processName', ({ before, i
     let subject;
 
     before(async () => {
-        subject = new Config(createMockStore({ config: { processName: 'my-api' } }), 'development');
-        await subject.load();
+        const store = createMockStore({ config: { processName: 'my-api' } });
+        subject = new Config(store, 'development');
+        await store.loadConfig();
+        await store.loadSecrets();
     });
 
     it('returns the processName from config', () => {
@@ -169,8 +128,10 @@ describe('Config#getNamespace() when namespace is not in config', ({ before, it 
     let result;
 
     before(async () => {
-        const subject = new Config(createMockStore({ config: {} }), 'development');
-        await subject.load();
+        const store = createMockStore({ config: {} });
+        const subject = new Config(store, 'development');
+        await store.loadConfig();
+        await store.loadSecrets();
         result = subject.getNamespace('database');
     });
 
@@ -191,7 +152,8 @@ describe('Config#getNamespace() when namespace exists in config', ({ before, it 
             config: { database: { host: 'localhost', port: 5432 } },
         });
         const subject = new Config(store, 'development');
-        await subject.load();
+        await store.loadConfig();
+        await store.loadSecrets();
         result = subject.getNamespace('database');
     });
 
@@ -212,7 +174,8 @@ describe('Config#getNamespace() returns an independent deep copy', ({ before, it
             config: { database: { host: 'localhost' } },
         });
         subject = new Config(store, 'development');
-        await subject.load();
+        await store.loadConfig();
+        await store.loadSecrets();
     });
 
     it('mutations to the returned copy do not affect internal state', () => {
@@ -240,8 +203,10 @@ describe('Config#getSecrets() when namespace is not in secrets', ({ before, it }
     let result;
 
     before(async () => {
-        const subject = new Config(createMockStore({ secrets: {} }), 'development');
-        await subject.load();
+        const store = createMockStore({ secrets: {} });
+        const subject = new Config(store, 'development');
+        await store.loadConfig();
+        await store.loadSecrets();
         result = subject.getSecrets('api');
     });
 
@@ -262,7 +227,8 @@ describe('Config#getSecrets() when namespace exists in secrets', ({ before, it }
             secrets: { api: { key: 'abc123', endpoint: 'https://api.example.com' } },
         });
         const subject = new Config(store, 'development');
-        await subject.load();
+        await store.loadConfig();
+        await store.loadSecrets();
         result = subject.getSecrets('api');
     });
 
@@ -275,7 +241,7 @@ describe('Config#getSecrets() when namespace exists in secrets', ({ before, it }
     });
 });
 
-describe('Config#load() merges environment config overrides into root config', ({ before, it }) => {
+describe('Config merges environment config overrides into root config', ({ before, it }) => {
     let subject;
 
     before(async () => {
@@ -290,7 +256,8 @@ describe('Config#load() merges environment config overrides into root config', (
             },
         });
         subject = new Config(store, 'production');
-        await subject.load();
+        await store.loadConfig();
+        await store.loadSecrets();
     });
 
     it('overrides root values with environment-specific values', () => {
@@ -302,7 +269,7 @@ describe('Config#load() merges environment config overrides into root config', (
     });
 });
 
-describe('Config#load() when environment has no matching config override', ({ before, it }) => {
+describe('Config when environment has no matching config override', ({ before, it }) => {
     let subject;
 
     before(async () => {
@@ -317,7 +284,8 @@ describe('Config#load() when environment has no matching config override', ({ be
             },
         });
         subject = new Config(store, 'development');
-        await subject.load();
+        await store.loadConfig();
+        await store.loadSecrets();
     });
 
     it('uses root config host unchanged', () => {
@@ -329,7 +297,7 @@ describe('Config#load() when environment has no matching config override', ({ be
     });
 });
 
-describe('Config#load() removes the environments key from merged config', ({ before, it }) => {
+describe('Config removes the environments key from merged config', ({ before, it }) => {
     let result;
 
     before(async () => {
@@ -341,7 +309,8 @@ describe('Config#load() removes the environments key from merged config', ({ bef
             },
         });
         const subject = new Config(store, 'production');
-        await subject.load();
+        await store.loadConfig();
+        await store.loadSecrets();
         result = subject.getNamespace('environments');
     });
 
@@ -350,7 +319,7 @@ describe('Config#load() removes the environments key from merged config', ({ bef
     });
 });
 
-describe('Config#load() merges environment secrets overrides into root secrets', ({ before, it }) => {
+describe('Config merges environment secrets overrides into root secrets', ({ before, it }) => {
     let subject;
 
     before(async () => {
@@ -365,7 +334,8 @@ describe('Config#load() merges environment secrets overrides into root secrets',
             },
         });
         subject = new Config(store, 'production');
-        await subject.load();
+        await store.loadConfig();
+        await store.loadSecrets();
     });
 
     it('overrides root values with environment-specific values', () => {
@@ -377,7 +347,7 @@ describe('Config#load() merges environment secrets overrides into root secrets',
     });
 });
 
-describe('Config#load() removes the environments key from merged secrets', ({ before, it }) => {
+describe('Config removes the environments key from merged secrets', ({ before, it }) => {
     let result;
 
     before(async () => {
@@ -389,7 +359,8 @@ describe('Config#load() removes the environments key from merged secrets', ({ be
             },
         });
         const subject = new Config(store, 'production');
-        await subject.load();
+        await store.loadConfig();
+        await store.loadSecrets();
         result = subject.getSecrets('environments');
     });
 
