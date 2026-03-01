@@ -1,9 +1,0 @@
-{
-    "type": "object",
-    "properties": {
-        "type": { "type": "string" },
-        "id": { "type": "string" },
-        "datetime": { "type": "string" },
-    },
-    "required": [ "type", "id", "datetime" ]
-}

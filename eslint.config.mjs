@@ -4,6 +4,7 @@ import js from '@eslint/js';
 export default [
     {
         ignores: [
+            '.claude/',
             'node_modules/',
             'lib/vendor/',
             // Other vendor/dependency directories:
@@ -31,6 +32,7 @@ export default [
                 URL: 'readonly',
                 URLSearchParams: 'readonly',
                 Headers: 'readonly',
+                Response: 'readonly',
                 // Node.js globals
                 global: 'readonly',
                 Buffer: 'readonly',
@@ -147,8 +149,9 @@ export default [
             // benefits of async/await.
             // Often, the code can be refactored to create all the promises at
             // once, then get access to the results using Promise.all()
+            // Turning this off and letting developers take control.
             'no-await-in-loop': [
-                'warn',
+                'off',
             ],
             'no-bitwise': [
                 'warn',

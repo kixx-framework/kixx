@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:jsr.io)",
+      "Bash(npx eslint:*)",
+      "Bash(node:*)"
+    ]
+  }
+}
