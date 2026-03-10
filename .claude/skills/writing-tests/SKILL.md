@@ -145,7 +145,7 @@ Access via `.getCall(n)`, `.firstCall`, `.lastCall`. Properties: `.args`, `.firs
 ## Test Patterns
 
 ### Error assertions
-Use try/catch in `it()` blocks. Assert `error.name` and `error.code` (not `instanceof`) to avoid module reference mismatches. Use `assertMatches('substring', error.message)` for message substring checks.
+Use try/catch in `it()` blocks. Assert `error.name` and `error.code` (not `instanceof`) to avoid module reference mismatches. Use `assertMatches('substring', error.message)` for message substring checks. See also: `error-handling` — for the rationale behind `error.name`/`error.code` over `instanceof`, and for the full list of error classes and their codes used in this project.
 
 ```javascript
 describe('authenticate() with null input', ({ it, after }) => {

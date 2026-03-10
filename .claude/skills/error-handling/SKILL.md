@@ -14,6 +14,8 @@ To view the kixx-server-errors documentation directly, review the README at `lib
 
 All the source code for the kixx-server-errors classes is available in `lib/vendor/kixx-server-errors/lib/`.
 
+See also: `runtime-assertions` — assertions are the first line of defense against programmer errors (wrong types, missing required options). When a caller violates a contract, an assertion throws immediately at the boundary. Only use the error classes below for errors that propagate through the call stack.
+
 ## Error Handling Principles: Expected vs. Unexpected Errors
 When handling errors in the Kixx library, it is important to keep these error handling principles in mind:
 

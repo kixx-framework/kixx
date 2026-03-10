@@ -1,6 +1,6 @@
 ---
-name: assertions
-description: This project makes heavy use of an assertion library to enforce invariants in the code. This skill contains an overview of the assertion library and guidelines for using it to enforce invariants in the codebase, like validating assumptions and inputs to methods and classes. Apply this skill when you will be writing new code or refactoring existing code in this project.
+name: runtime-assertions
+description: Guidelines for using the kixx-assert library to enforce invariants in production code — validating assumptions, constructor options, and method parameters. These are runtime guards for programmer errors (bugs), not user input validation or test assertions. Apply this skill when writing new code or refactoring existing code in this project.
 ---
 
 ## Overview
@@ -20,7 +20,7 @@ Assertions are used to enforce invariants in the system.
 - **Document assumptions** — assertions make preconditions and invariants explicit.
 - **Validate API boundaries** — enforce that callers pass valid arguments (non-empty strings, defined values, correct types).
 
-Assertions are for programmer errors (bugs), not user input validation. For expected invalid input, validate and return operational errors instead.
+Assertions are for programmer errors (bugs), not user input validation. For expected invalid input, validate and return operational errors instead. See also: `error-handling` — for the distinction between programmer errors (assertion failures) and expected operational errors, and how to handle each.
 
 ## Import
 Example import code:
