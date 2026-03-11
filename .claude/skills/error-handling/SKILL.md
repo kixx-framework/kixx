@@ -1,6 +1,6 @@
 ---
 name: error-handling
-description: This project makes use of a standard error types library to facilitate good error handling flows. This skill contains an overview of the library and guidelines for good error handling. Apply this error-handling skill when writing new code or refactoring existing code in the codebase.
+description: "Error handling conventions for this project using the kixx-server-errors library (re-exported via `lib/errors.js`). Covers the expected vs. unexpected error distinction, all error classes (WrappedError, OperationalError, NotFoundError, BadRequestError, ValidationError, UnauthorizedError, ConflictError, and more) with their code values, how to wrap errors with `cause`, when to catch vs. propagate, and why to use `error.name`/`error.code` instead of `instanceof`. Apply when writing, refactoring, or reviewing any code that throws, catches, or handles errors."
 ---
 
 ## Overview
@@ -16,7 +16,7 @@ All the source code for the kixx-server-errors classes is available in `lib/vend
 
 See also: `runtime-assertions` — assertions are the first line of defense against programmer errors (wrong types, missing required options). When a caller violates a contract, an assertion throws immediately at the boundary. Only use the error classes below for errors that propagate through the call stack.
 
-## Error Handling Principles: Expected vs. Unexpected Errors
+## Expected vs. Unexpected Errors
 When handling errors in the Kixx library, it is important to keep these error handling principles in mind:
 
 **Expected Operational Errors** are run-time problems experienced by correctly-written programs. These are *not* bugs—they are usually problems with the system, config, network, or remote services:
@@ -39,7 +39,6 @@ When handling errors in the Kixx library, it is important to keep these error ha
 **The best way to recover from unexpected errors is to crash immediately.** Applications built with Kixx should be run with a restarter (e.g. PM2, systemd) so they restart on crash. Do not try to "recover" and keep handling other requests, since shared state (connections, sockets) may be corrupted.
 
 ## Import
-example import code:
 
 ```javascript
 import { WrappedError, NotFoundError, BadRequestError, OperationalError } from '../errors.js';
@@ -85,19 +84,19 @@ try {
 ### HTTP Error Classes
 Use when the error maps to an HTTP response. All set `expected: true` and `httpStatusCode`.
 
-| Class | Status | Use when |
-|-------|--------|----------|
-| BadRequestError | 400 | Malformed or invalid request |
-| UnauthenticatedError | 401 | No credentials provided (AuthN) |
-| UnauthorizedError | 401 | Credentials insufficient/invalid (AuthZ) |
-| ForbiddenError | 403 | Server refuses request |
-| NotFoundError | 404 | Resource not found |
-| MethodNotAllowedError | 405 | Method not supported for resource |
-| NotAcceptableError | 406 | Cannot satisfy Accept headers |
-| ConflictError | 409 | Request conflicts with current state |
-| UnsupportedMediaTypeError | 415 | Request payload format not supported |
-| ValidationError | 422 | Data validation failures |
-| NotImplementedError | 501 | Functionality not implemented |
+| Class | `code` | Status | Use when |
+|-------|--------|--------|----------|
+| BadRequestError | `BAD_REQUEST_ERROR` | 400 | Malformed or invalid request |
+| UnauthenticatedError | `UNAUTHENTICATED_ERROR` | 401 | No credentials provided (AuthN) |
+| UnauthorizedError | `UNAUTHORIZED_ERROR` | 401 | Credentials insufficient/invalid (AuthZ) |
+| ForbiddenError | `FORBIDDEN_ERROR` | 403 | Server refuses request |
+| NotFoundError | `NOT_FOUND_ERROR` | 404 | Resource not found |
+| MethodNotAllowedError | `METHOD_NOT_ALLOWED_ERROR` | 405 | Method not supported for resource |
+| NotAcceptableError | `NOT_ACCEPTABLE_ERROR` | 406 | Cannot satisfy Accept headers |
+| ConflictError | `CONFLICT_ERROR` | 409 | Request conflicts with current state |
+| UnsupportedMediaTypeError | `UNSUPPORTED_MEDIA_TYPE_ERROR` | 415 | Request payload format not supported |
+| ValidationError | `VALIDATION_ERROR` | 422 | Data validation failures |
+| NotImplementedError | `NOT_IMPLEMENTED_ERROR` | 501 | Functionality not implemented |
 
 ### Special Options
 
@@ -125,7 +124,7 @@ new ErrorClass(message, options, sourceFunction)
 |-----------|-------------|
 | `message` | Human-readable message |
 | `options` | `{ cause, code, name, expected, ... }` |
-| `sourceFunction` | Excluded from stack trace via `Error.captureStackTrace` |
+| `sourceFunction` | Pass the throwing function itself to strip it from the stack trace, so the error points to the *caller* rather than the internal helper. Use when throwing from a shared helper (e.g. `throw new BadRequestError(msg, {}, validateInput)`). Uses `Error.captureStackTrace` internally. |
 
 ## Best Practices
 
