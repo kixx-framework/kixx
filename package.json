@@ -19,10 +19,7 @@
     "url": "https://github.com/kixx-framework/kixx.git"
   },
   "files": [
-    "lib/",
-    "bin/",
-    "cli/",
-    "project-template/"
+    "lib/"
   ],
   "devDependencies": {
     "@eslint/js": "9.39.2",
