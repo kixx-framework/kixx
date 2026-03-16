@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assertEqual, assertArray, assertFunction } from 'kixx-assert';
 import sinon from 'sinon';
-import TemplateStore from '../../../../lib/hyperview/local/template-store.js';
+import TemplateStore from '../../../../lib/hyperview/node-local-store/template-store.js';
 
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
