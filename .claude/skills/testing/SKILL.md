@@ -1,19 +1,12 @@
 ---
-name: writing-tests
-description: Guidelines, examples, and reference documentation for writing effective tests in this project. Apply this skill when writing, updating, and fixing tests.
+name: testing
+description: "Testing conventions and reference for this project. Covers the Kixx Test Framework (describe, before, after, it — no nested describe(), one block per code branch, ClassName#method() when <condition> naming), Kixx Assertion Library (assertEqual, assertMatches, assertNonEmptyString, assertArray, assertDefined, doesMatch, etc.), and Sinon (spies, stubs, fakes, sinon.restore() in after()). Apply when writing, updating, or debugging any test file."
 ---
 
 ## Test File Naming
 - Test file suffix: `*.test.js`
-- Mirror `lib/` structure in `test/lib/` (e.g, `lib/node-http-server/server-request.js` → `test/lib/node-http-server/server-request.test.js`)
-- Mirror `examples/` structure in `test/examples/` (e.g, `examples/forms/todo-item.form.js` → `test/examples/forms/todo-item.form.test.js`)
-
-## Testing Dependencies
-In this project, use the Kixx Test Framework for organizing and orchestrating tests, the Kixx Assertion Library to make assertions, and use Sinon to mock objects, methods, and functions.
-
-- [Kixx Test Framework](#kixx-test-framework) — describe, before, after, it
-- [Kixx Assertion Library](#kixx-assertion-library) — assertEqual, assertMatches, etc.
-- [Sinon](#sinon) — spies and stubs for mocking
+- Mirror `lib/` structure in `test/lib/` (e.g., `lib/node-http-server/server-request.js` → `test/lib/node-http-server/server-request.test.js`)
+- Mirror `examples/` structure in `test/examples/` (e.g., `examples/forms/todo-item.form.js` → `test/examples/forms/todo-item.form.test.js`)
 
 ## Getting Started
 
@@ -69,13 +62,22 @@ describe('toBinary(): when value >= 1', ({ it }) => {
 });
 ```
 
+### Describe block naming
+Name describe blocks using the pattern `ClassName#methodName() when <condition>` or `functionName() when <condition>`:
+
+```javascript
+describe('PageStore#doesPageExist() when the file does not exist', ...)
+describe('HttpRouter#route() when the method is not allowed', ...)
+describe('parseDate() when the input is not a string', ...)
+```
+
 ### Helpers and fixtures
 Extract helpers like `createRequest()`, `createApplicationContext()` at module level. Use `const THIS_DIR = path.dirname(fileURLToPath(import.meta.url))` for test-file-relative paths.
 
 Use `assert(isPlainObject(result))` and `assertArray(result)` for type checks when asserting properties separately. Both `isPlainObject` and `assertArray` are imported from `kixx-assert`.
 
 ## Kixx Assertion Library
-Assertion functions throw on failure. Add a message string as the last argument when the failure would be ambiguous: `assertEqual(true, regex.test(urn), 'exact match')`. Control/subject assertions (e.g. assertEqual) can be curried: `const assertFoo = assertEqual('foo'); assertFoo('bar');`
+Assertion functions throw on failure. Add a message string as the last argument when the failure would be ambiguous: `assertEqual(true, regex.test(urn), 'exact match')`. Control/subject assertions (e.g. `assertEqual`) can be curried: `const assertFoo = assertEqual('foo'); assertFoo('bar');`
 
 **No deep equality** — compare objects by reference or by their properties.
 
@@ -119,33 +121,32 @@ Inverse of assertEqual. Curriable.
 
 **sinon.restore()** — Call in `after()` when using stubs or spies on existing methods. Prevents test pollution.
 
-## Sinon Spy API
+### Sinon Spy API
 Records arguments, return value, `this`, and exceptions. `sinon.spy()` (new) or `sinon.spy(fn)` / `sinon.spy(obj, 'method')` (wrap). For getters/setters: `sinon.spy(obj, 'prop', ['get','set'])`.
 
-## Sinon Stub API
+### Sinon Stub API
 Stubs are spies with pre-programmed behavior. Supports [Spy/Stub Common API](#spystub-common-api).
 
-### Stub behavior methods
 | Method | Effect |
 |--------|--------|
-| .returns(val) | Return value |
-| .returnsThis() | Return `this` (method chaining) |
-| .resolves(val) | Resolve Promise |
-| .rejects(val) | Reject Promise |
-| .throws(err) | Throw (err or factory fn) |
-| .callsFake(fn) | Call custom function |
-| .onCall(n) / .onFirstCall() / .onSecondCall() | Per-call behavior |
+| `.returns(val)` | Return value |
+| `.returnsThis()` | Return `this` (method chaining) |
+| `.resolves(val)` | Resolve Promise |
+| `.rejects(val)` | Reject Promise |
+| `.throws(err)` | Throw (err or factory fn) |
+| `.callsFake(fn)` | Call custom function |
+| `.onCall(n)` / `.onFirstCall()` / `.onSecondCall()` | Per-call behavior |
 
-## Spy/Stub Common API
+### Spy/Stub Common API
 `.callCount` · `.getCall(n)` (negative n = from end) · `.firstCall`, `.secondCall`, `.lastCall` · `.calledBefore(spy)` / `.calledAfter(spy)` · `.calledImmediatelyBefore` / `.calledImmediatelyAfter`
 
-## Spy Call API
+### Spy Call API
 Access via `.getCall(n)`, `.firstCall`, `.lastCall`. Properties: `.args`, `.firstArg`, `.lastArg`, `.thisValue`, `.returnValue`, `.exception`.
 
 ## Test Patterns
 
 ### Error assertions
-Use try/catch in `it()` blocks. Assert `error.name` and `error.code` (not `instanceof`) to avoid module reference mismatches. Use `assertMatches('substring', error.message)` for message substring checks.
+Use try/catch in `it()` blocks. Assert `error.name` and `error.code` (not `instanceof`) to avoid module reference mismatches. Use `assertMatches('substring', error.message)` for message substring checks. See also: `error-handling` — for the rationale behind `error.name`/`error.code` over `instanceof`, and for the full list of error classes and their codes used in this project.
 
 ```javascript
 describe('authenticate() with null input', ({ it, after }) => {

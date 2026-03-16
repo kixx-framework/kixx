@@ -24,9 +24,8 @@ npm test                                                         # Lint + all te
 ## Skills Reference
 Development guidelines are documented as skills in `.claude/skills/`:
 
-- `writing-tests/SKILL.md` — Detailed guidelines on writing and using automated tests to verify your code; including the test framework, assertion library, and sinon mocking library reference
+- `testing/SKILL.md` — Kixx Test Framework, Kixx Assertion Library, and Sinon reference for writing automated tests in this project
 - `coding-conventions/SKILL.md` — Coding style rules and ESLint configuration
-- `jsdocs/SKILL.md` — JSDoc comment and tag usage guidelines
-- `inline-code-comments/SKILL.md` — When and how to write inline code comments
-- `assertions/SKILL.md` — Using assertions to enforce invariants and validate inputs
+- `code-documentation/SKILL.md` — JSDoc block comments and inline code comments: when, how, and what to document
+- `runtime-assertions/SKILL.md` — Using the kixx-assert library to enforce invariants and validate inputs in production code
 - `error-handling/SKILL.md` — Error handling patterns and conventions when writing new code or refactoring existing code

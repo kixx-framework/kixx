@@ -3,7 +3,14 @@
     "allow": [
       "WebFetch(domain:jsr.io)",
       "Bash(npx eslint:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(find /Users/kris/Projects/Kixx/kixx/main/lib/hyperview -type f -name \"*.js\" 2>/dev/null | head -20)",
+      "Bash(grep -n \"from './lib/\" /Users/kris/Projects/Kixx/kixx/main/docs/*.md)",
+      "Bash(grep -n -B2 -A2 \"from './lib/\" /Users/kris/Projects/Kixx/kixx/main/docs/getting-started.md)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//Users/kris/Projects/Kixx/kixx/main/**)",
+      "Bash(done)"
     ]
   }
 }

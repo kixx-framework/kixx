@@ -1,6 +1,6 @@
 ---
 name: coding-conventions
-description: Guidelines for writing good quality JavaScript code. Apply this skill when you will be writing or refactoring JavaScript code in this project.
+description: "ESLint-enforced formatting and style rules for this project's JavaScript. Key project-specific conventions to get right: 4-space indentation; single quotes; spaces inside array brackets ([ 1, 2, 3 ]) and template literals (`${ value }`); trailing commas in multiline objects/arrays but NOT in function params or imports; arrow function params always need parens; use i += 1 not i++; operators go at the start of continued lines, not the end. Apply when writing or refactoring any JavaScript code."
 ---
 
 This document summarizes the JavaScript coding styles and conventions, many of which are defined in ./eslint-config.mjs and enforced by ESLint.
@@ -34,12 +34,10 @@ This document summarizes the JavaScript coding styles and conventions, many of w
 4. **`async` without `await`** (for promisification)
 5. **`undefined` keyword** can be used
 
-## Configuration Overview
-
 - **ECMAScript Version**: ES2022
 - **Module System**: ES6 Modules (`import`/`export`)
 
-### Indentation and Spacing
+## Indentation and Spacing
 
 **4 spaces for indentation** (not tabs)
 ```javascript
@@ -138,7 +136,7 @@ const sum = a+b;
 const result = x*y;
 ```
 
-### Semicolons
+## Semicolons
 
 **Always use semicolons**
 ```javascript
@@ -164,7 +162,7 @@ for (let i = 0 ; i < 10 ; i += 1) {
 }
 ```
 
-### Quotes
+## Quotes
 
 **Use single quotes** (except when avoiding escapes or using template literals)
 ```javascript
@@ -178,7 +176,7 @@ const message = "Hello world";
 const withApostrophe = 'It\'s working';  // Should use double quotes
 ```
 
-### Commas
+## Commas
 
 **Trailing commas in multiline arrays and objects**
 ```javascript
@@ -225,7 +223,7 @@ const arr = [ 1,2,3 ];
 function example(a,b) { }
 ```
 
-### Line Breaks
+## Line Breaks
 
 **End files with a newline**
 
@@ -262,7 +260,7 @@ class Example {
 }
 ```
 
-### Variables and Constants
+## Variables and Constants
 
 **Use `const` by default, `let` when reassignment is needed**
 ```javascript
@@ -309,7 +307,7 @@ console.log(x);  // Not allowed
 const x = 10;
 ```
 
-### Functions
+## Functions
 
 **Prefer function declarations, allow arrow functions**
 ```javascript
@@ -495,7 +493,7 @@ function example(x) {
 }
 ```
 
-### Conditionals
+## Conditionals
 
 **Always use curly braces** (even for single-line blocks)
 ```javascript
@@ -578,7 +576,7 @@ const result = condition ? 'yes' : 'no';
 const result = condition1 ? 'yes' : condition2 ? 'maybe' : 'no';
 ```
 
-### Switch Statements
+## Switch Statements
 
 **Default case must be last**
 ```javascript
@@ -605,7 +603,7 @@ switch (value) {
 }
 ```
 
-### Loops
+## Loops
 
 **Guard for-in loops**
 ```javascript
@@ -658,7 +656,7 @@ i++;
 i--;
 ```
 
-### Object Literals
+## Object Literals
 
 **Use object shorthand**
 ```javascript
@@ -699,7 +697,7 @@ const obj = {
 };
 ```
 
-### Classes
+## Classes
 
 **Constructor names must be capitalized**
 ```javascript
@@ -792,7 +790,7 @@ async function example() {
 }
 ```
 
-### Comparisons
+## Comparisons
 
 **No implicit type coercion**
 ```javascript
@@ -827,7 +825,7 @@ const num = parseInt(str, 10);
 const num = parseInt(str);
 ```
 
-### Dangerous Practices
+## Dangerous Practices
 
 **No extending native prototypes**
 ```javascript
@@ -854,7 +852,7 @@ function example() {
 }
 ```
 
-### Code Quality
+## Code Quality
 
 **No throwing literals**
 ```javascript
@@ -885,7 +883,7 @@ const y = 20;
 const x = 10; const y = 20;
 ```
 
-### Naming and Underscores
+## Naming and Underscores
 
 **Underscores in identifiers are allowed**
 ```javascript
@@ -902,3 +900,9 @@ if (value === undefined) {
     doSomething();
 }
 ```
+
+## See Also
+
+- `code-documentation` — JSDoc block comments and inline comment guidelines; loads alongside this skill for most coding tasks
+- `runtime-assertions` — enforcing invariants and validating inputs in production code using the kixx-assert library
+- `error-handling` — error class conventions and patterns for expected vs. unexpected errors
