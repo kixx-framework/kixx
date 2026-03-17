@@ -22,11 +22,11 @@ function createMockStore({ config = {}, secrets = {} } = {}) {
 }
 
 
-describe('Config constructor() when environment is not provided', ({ it }) => {
+describe('Config constructor() when store is not provided', ({ it }) => {
     it('throws an AssertionError', () => {
         let error;
         try {
-            new Config(createMockStore(), null);
+            new Config(null, 'production', '/app');
         } catch (err) {
             error = err;
         }
@@ -34,8 +34,32 @@ describe('Config constructor() when environment is not provided', ({ it }) => {
     });
 });
 
-describe('Config#environment getter', ({ it }) => {
-    const subject = new Config(createMockStore(), 'production');
+describe('Config constructor() when environment is not provided', ({ it }) => {
+    it('throws an AssertionError', () => {
+        let error;
+        try {
+            new Config(createMockStore(), null, '/app');
+        } catch (err) {
+            error = err;
+        }
+        assertEqual('AssertionError', error.name);
+    });
+});
+
+describe('Config constructor() when applicationDirectory is not provided', ({ it }) => {
+    it('throws an AssertionError', () => {
+        let error;
+        try {
+            new Config(createMockStore(), 'production', null);
+        } catch (err) {
+            error = err;
+        }
+        assertEqual('AssertionError', error.name);
+    });
+});
+
+describe('Config#environment', ({ it }) => {
+    const subject = new Config(createMockStore(), 'production', '/app');
 
     it('returns the environment string', () => {
         assertEqual('production', subject.environment);
@@ -43,7 +67,7 @@ describe('Config#environment getter', ({ it }) => {
 });
 
 describe('Config#on() return value', ({ it }) => {
-    const subject = new Config(createMockStore(), 'development');
+    const subject = new Config(createMockStore(), 'development', '/app');
 
     it('returns this for chaining', () => {
         assertEqual(subject, subject.on('update:config', () => {}));
@@ -55,7 +79,7 @@ describe('Config#name getter when config has no name', ({ before, it }) => {
 
     before(async () => {
         const store = createMockStore({ config: {} });
-        subject = new Config(store, 'development');
+        subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
     });
@@ -70,7 +94,7 @@ describe('Config#name getter when config has a name', ({ before, it }) => {
 
     before(async () => {
         const store = createMockStore({ config: { name: 'MyApp' } });
-        subject = new Config(store, 'development');
+        subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
     });
@@ -85,7 +109,7 @@ describe('Config#processName getter when config has no processName', ({ before, 
 
     before(async () => {
         const store = createMockStore({ config: {} });
-        subject = new Config(store, 'development');
+        subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
     });
@@ -100,7 +124,7 @@ describe('Config#processName getter when config has a processName', ({ before, i
 
     before(async () => {
         const store = createMockStore({ config: { processName: 'my-api' } });
-        subject = new Config(store, 'development');
+        subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
     });
@@ -111,7 +135,7 @@ describe('Config#processName getter when config has a processName', ({ before, i
 });
 
 describe('Config#getNamespace() with invalid namespace argument', ({ it }) => {
-    const subject = new Config(createMockStore(), 'development');
+    const subject = new Config(createMockStore(), 'development', '/app');
 
     it('throws an AssertionError', () => {
         let error;
@@ -129,7 +153,7 @@ describe('Config#getNamespace() when namespace is not in config', ({ before, it 
 
     before(async () => {
         const store = createMockStore({ config: {} });
-        const subject = new Config(store, 'development');
+        const subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
         result = subject.getNamespace('database');
@@ -151,7 +175,7 @@ describe('Config#getNamespace() when namespace exists in config', ({ before, it 
         const store = createMockStore({
             config: { database: { host: 'localhost', port: 5432 } },
         });
-        const subject = new Config(store, 'development');
+        const subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
         result = subject.getNamespace('database');
@@ -173,7 +197,7 @@ describe('Config#getNamespace() returns an independent deep copy', ({ before, it
         const store = createMockStore({
             config: { database: { host: 'localhost' } },
         });
-        subject = new Config(store, 'development');
+        subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
     });
@@ -186,7 +210,7 @@ describe('Config#getNamespace() returns an independent deep copy', ({ before, it
 });
 
 describe('Config#getSecrets() with invalid namespace argument', ({ it }) => {
-    const subject = new Config(createMockStore(), 'development');
+    const subject = new Config(createMockStore(), 'development', '/app');
 
     it('throws an AssertionError', () => {
         let error;
@@ -204,7 +228,7 @@ describe('Config#getSecrets() when namespace is not in secrets', ({ before, it }
 
     before(async () => {
         const store = createMockStore({ secrets: {} });
-        const subject = new Config(store, 'development');
+        const subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
         result = subject.getSecrets('api');
@@ -226,7 +250,7 @@ describe('Config#getSecrets() when namespace exists in secrets', ({ before, it }
         const store = createMockStore({
             secrets: { api: { key: 'abc123', endpoint: 'https://api.example.com' } },
         });
-        const subject = new Config(store, 'development');
+        const subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
         result = subject.getSecrets('api');
@@ -255,7 +279,7 @@ describe('Config merges environment config overrides into root config', ({ befor
                 },
             },
         });
-        subject = new Config(store, 'production');
+        subject = new Config(store, 'production', '/app');
         await store.loadConfig();
         await store.loadSecrets();
     });
@@ -283,7 +307,7 @@ describe('Config when environment has no matching config override', ({ before, i
                 },
             },
         });
-        subject = new Config(store, 'development');
+        subject = new Config(store, 'development', '/app');
         await store.loadConfig();
         await store.loadSecrets();
     });
@@ -308,7 +332,7 @@ describe('Config removes the environments key from merged config', ({ before, it
                 },
             },
         });
-        const subject = new Config(store, 'production');
+        const subject = new Config(store, 'production', '/app');
         await store.loadConfig();
         await store.loadSecrets();
         result = subject.getNamespace('environments');
@@ -333,7 +357,7 @@ describe('Config merges environment secrets overrides into root secrets', ({ bef
                 },
             },
         });
-        subject = new Config(store, 'production');
+        subject = new Config(store, 'production', '/app');
         await store.loadConfig();
         await store.loadSecrets();
     });
@@ -358,7 +382,7 @@ describe('Config removes the environments key from merged secrets', ({ before, i
                 },
             },
         });
-        const subject = new Config(store, 'production');
+        const subject = new Config(store, 'production', '/app');
         await store.loadConfig();
         await store.loadSecrets();
         result = subject.getSecrets('environments');
