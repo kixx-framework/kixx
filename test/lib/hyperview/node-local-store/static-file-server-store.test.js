@@ -5,9 +5,18 @@ import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 import sinon from 'sinon';
 import StaticFileServerStore, { File } from '../../../../lib/hyperview/node-local-store/static-file-server-store.js';
+import { testHyperviewStaticFileServerStoreConformance } from '../../../conformance/hyperview-static-file-server-store.js';
 
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+testHyperviewStaticFileServerStoreConformance(() => {
+    const fileSystem = {
+        getFileStats: sinon.stub().resolves(null),
+        createReadStream: sinon.stub().returns(null),
+    };
+    return new StaticFileServerStore({ publicDirectory: '/public', fileSystem });
+});
 
 function createMockFileSystem(overrides = {}) {
     return {
