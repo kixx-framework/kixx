@@ -49,7 +49,7 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/hyperview/node-local-store/` | Adapters | Page, template, and static file stores for local filesystem |
 | `lib/node-filesystem/` | Adapters | Node.js `fs`/`fs/promises` implementation of the Filesystem port |
 | `lib/node-http-server/` | Adapters | Node.js `http.Server` wrapper |
-| `lib/boostrap/` | Composition Root | NodeBootstrap — wires all adapters and core together for Node.js |
+| `lib/bootstrap/` | Composition Root | NodeBootstrap — wires all adapters and core together for Node.js |
 
 ---
 
