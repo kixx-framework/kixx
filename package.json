@@ -9,7 +9,9 @@
     "./core": "./lib/core/mod.js",
     "./node": "./lib/node/mod.js",
     "./assertions": "./lib/assertions.js",
-    "./errors": "./lib/errors.js"
+    "./errors": "./lib/errors.js",
+    "./datastore": "./lib/datastore/mod.js",
+    "./datastore/sqlite": "./lib/node-datastore/mod.js"
   },
   "engines": {
     "node": ">=24"

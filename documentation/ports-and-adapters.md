@@ -44,6 +44,7 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/context/` | Core | ApplicationContext, RequestContext — DI container and request state |
 | `lib/hyperview/` (top level) | Core | HyperviewService plus rendering/template collaborators |
 | `lib/logger/` | Core | BaseLogger, DevLogger, ProdLogger — log formatting |
+| `lib/datastore/` | Core | DataStore — schemaless document store with optimistic concurrency control |
 | `lib/ports/` | Ports | One file per port — the authoritative contracts |
 | `lib/config-stores/` | Adapters | In-memory config sources for tests and embedded config |
 | `lib/node-config-store/` | Adapters | Node.js JSONC config file adapter |
@@ -51,6 +52,7 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/hyperview/node-local-store/` | Adapters | Page, template, and static file stores for local filesystem |
 | `lib/node-filesystem/` | Adapters | Node.js `fs`/`fs/promises` implementation of the Filesystem port |
 | `lib/node-http-server/` | Adapters | Node.js `http.Server` wrapper; `ServerRequest` (Node.js adapter) |
+| `lib/node-datastore/` | Adapters | Node.js `node:sqlite` implementation of the StorageEngine port |
 | `lib/bootstrap/` | Assembly | `ApplicationAssembler` plus runtime bootstraps such as `NodeBootstrap` |
 | `lib/core/` | Public API | Platform-neutral entry point |
 | `lib/node/` | Public API | Node-specific entry point |
@@ -74,6 +76,7 @@ Each port is defined in `lib/ports/` with its full behavioral contract (not just
 | `plugin.js` | `NodeBootstrap` | `node-local-store/plugin` |
 | `middleware.js` | `HttpTarget`, `HttpRoute` | Application-defined middleware functions |
 | `filesystem.js` | `PageStore`, `TemplateStore`, `StaticFileServerStore` | `NodeFilesystem` (`node-filesystem/mod.js`) |
+| `storage-engine.js` | `DataStore` | `SQLiteStorageEngine` (`node-datastore/mod.js`) |
 
 ---
 

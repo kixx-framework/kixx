@@ -33,6 +33,8 @@ export default [
                 URLSearchParams: 'readonly',
                 Headers: 'readonly',
                 Response: 'readonly',
+                btoa: 'readonly',
+                atob: 'readonly',
                 // Node.js globals
                 global: 'readonly',
                 Buffer: 'readonly',
