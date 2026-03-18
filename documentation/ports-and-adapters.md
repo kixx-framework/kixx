@@ -39,6 +39,7 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | Directory | Layer | Role |
 |-----------|-------|------|
 | `lib/config/` | Core | Config — subscribes to a ConfigStore, merges environment overrides |
+| `lib/http/` | Core | ServerResponse — platform-agnostic HTTP response (Web API only) |
 | `lib/http-router/` | Core | HttpRouter, HttpRoute, HttpTarget — routing logic |
 | `lib/context/` | Core | ApplicationContext, RequestContext — DI container and request state |
 | `lib/hyperview/` (top level) | Core | HyperviewService, request/error handlers |
@@ -48,7 +49,7 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/http-routes-stores/` | Adapters | Route sources (currently: JS array in memory) |
 | `lib/hyperview/node-local-store/` | Adapters | Page, template, and static file stores for local filesystem |
 | `lib/node-filesystem/` | Adapters | Node.js `fs`/`fs/promises` implementation of the Filesystem port |
-| `lib/node-http-server/` | Adapters | Node.js `http.Server` wrapper |
+| `lib/node-http-server/` | Adapters | Node.js `http.Server` wrapper; `ServerRequest` (Node.js adapter) |
 | `lib/bootstrap/` | Composition Root | NodeBootstrap — wires all adapters and core together for Node.js |
 
 ---
@@ -61,6 +62,8 @@ Each port is defined in `lib/ports/` with its full behavioral contract (not just
 |-----------|---------|-------------------|
 | `config-store.js` | `Config` | `JSModuleConfigStore` |
 | `http-routes-store.js` | `HttpRouter` | `JSModuleHttpRoutesStore` |
+| `http-server-request.js` | `HttpRouter`, `HttpRoute`, middleware | `node-http-server/ServerRequest` (Node.js) |
+| `http-server-response.js` | `HttpRouter`, middleware | `lib/http/ServerResponse` (all platforms — no adapter needed) |
 | `hyperview-page-store.js` | `HyperviewService` | `node-local-store/PageStore` |
 | `hyperview-template-store.js` | `HyperviewService` | `node-local-store/TemplateStore` |
 | `hyperview-template-engine.js` | `HyperviewService` | `TemplateEngine` (Kixx Templating) |
@@ -80,8 +83,12 @@ HTTP request arrives
         │
         ▼
   [ADAPTER] NodeServer (lib/node-http-server/)
-  Wraps Node.js IncomingMessage → ServerRequest
-  Wraps Node.js ServerResponse → ServerResponse
+  Wraps Node.js IncomingMessage → ServerRequest  (Node.js adapter; implements port)
+  Creates ServerResponse                         (lib/http/ — core, no wrapping needed)
+        │
+        ▼
+  [PORT] ServerRequest / ServerResponse (lib/ports/http-server-request.js, http-server-response.js)
+  The boundary the router and middleware depend on; adapters are swapped here per platform
         │
         ▼
   [CORE] HttpRouter (lib/http-router/)
@@ -167,7 +174,11 @@ To support a new runtime (Cloudflare Workers, AWS Lambda, Deno, Bun):
 
 2. **Identify which adapters need replacing.** Typically:
    - `Filesystem` → platform-specific or not needed (Workers have no filesystem)
-   - `NodeServer` → replace with the platform's request/response model
+   - `ServerRequest` → replace with a platform-specific adapter (e.g. wrap the native
+     Workers `Request` to add `id`, `hostnameParams`, `pathnameParams`, and Kixx helpers)
+   - `NodeServer` → replace with the platform's request dispatch mechanism
+   - `ServerResponse` → **no replacement needed**; `lib/http/ServerResponse` uses only
+     Web APIs and works on all platforms unchanged
    - Config/route stores → replace if the platform needs different loading strategies
 
 3. **Keep all core classes unchanged.** `Config`, `HttpRouter`, `HyperviewService`, etc. are platform-agnostic by design.
@@ -180,6 +191,8 @@ A hypothetical Cloudflare Workers setup would look like:
 lib/
   cloudflare-bootstrap/          ← new composition root
     cloudflare-bootstrap.js
+  cloudflare-http-server/        ← new adapter: wraps native Workers Request
+    server-request.js            ← thin wrapper adding id, hostnameParams, etc.
   cloudflare-config-store/       ← new adapter: reads from CF env bindings
     cloudflare-config-store.js
   cloudflare-hyperview-store/    ← new adapter: reads pages from KV or R2
@@ -187,6 +200,8 @@ lib/
     template-store.js
     static-file-server-store.js
     plugin.js
+  http/
+    server-response.js           ← unchanged; no Workers adapter needed
   # node-filesystem/ not needed
   # node-http-server/ not needed
   # Everything in lib/config/, lib/http-router/, lib/hyperview/ unchanged
