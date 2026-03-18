@@ -7,23 +7,23 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 ## The Three Layers
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                         CORE                            │
-│  Config  HttpRouter  ApplicationContext  HyperviewService│
-│           middleware  request handlers                  │
-└───────────────────────┬─────────────────────────────────┘
-                        │ depends on
-┌───────────────────────▼─────────────────────────────────┐
-│                        PORTS                            │
-│  ConfigStore  HttpRoutesStore  HyperviewPageStore  ...  │
-│           (lib/ports/ — pure JSDoc, no runtime code)    │
-└───────────────────────┬─────────────────────────────────┘
-                        │ implemented by
-┌───────────────────────▼─────────────────────────────────┐
-│                      ADAPTERS                           │
-│  JSModuleConfigStore  NodeFilesystem  NodeServer  ...   │
-│  (lib/*-stores/, lib/node-*/, lib/hyperview/node-local/)│
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                           CORE                               │
+│  Config  HttpRouter  ApplicationContext  HyperviewService    │
+│  TemplateCatalog  PageRenderer  middleware  request handlers │
+└────────────────────────┬─────────────────────────────────────┘
+                         │ depends on
+┌────────────────────────▼─────────────────────────────────────┐
+│                           PORTS                              │
+│   ConfigStore  HttpRoutesStore  HyperviewPageStore  ...      │
+│              (lib/ports/ — pure JSDoc contracts)             │
+└────────────────────────┬─────────────────────────────────────┘
+                         │ implemented by
+┌────────────────────────▼─────────────────────────────────────┐
+│                         ADAPTERS                              │
+│  NodeConfigStore  JSModuleConfigStore  NodeFilesystem  ...    │
+│  (lib/node-*/, lib/*-stores/, lib/hyperview/node-local/)      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 **Core** — the business logic. It knows about ports but is completely ignorant of platforms.
@@ -42,7 +42,7 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/http/` | Core | ServerResponse — platform-agnostic HTTP response (Web API only) |
 | `lib/http-router/` | Core | HttpRouter, HttpRoute, HttpTarget — routing logic |
 | `lib/context/` | Core | ApplicationContext, RequestContext — DI container and request state |
-| `lib/hyperview/` (top level) | Core | HyperviewService, request/error handlers |
+| `lib/hyperview/` (top level) | Core | HyperviewService plus rendering/template collaborators |
 | `lib/logger/` | Core | BaseLogger, DevLogger, ProdLogger — log formatting |
 | `lib/ports/` | Ports | One file per port — the authoritative contracts |
 | `lib/config-stores/` | Adapters | In-memory config sources for tests and embedded config |
@@ -51,7 +51,9 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/hyperview/node-local-store/` | Adapters | Page, template, and static file stores for local filesystem |
 | `lib/node-filesystem/` | Adapters | Node.js `fs`/`fs/promises` implementation of the Filesystem port |
 | `lib/node-http-server/` | Adapters | Node.js `http.Server` wrapper; `ServerRequest` (Node.js adapter) |
-| `lib/bootstrap/` | Composition Root | NodeBootstrap — wires all adapters and core together for Node.js |
+| `lib/bootstrap/` | Assembly | `ApplicationAssembler` plus runtime bootstraps such as `NodeBootstrap` |
+| `lib/core/` | Public API | Platform-neutral entry point |
+| `lib/node/` | Public API | Node-specific entry point |
 
 ---
 
@@ -101,8 +103,8 @@ HTTP request arrives
   e.g. HyperviewRequestHandler calls HyperviewService
         │
         ▼
-  [CORE] HyperviewService (lib/hyperview/)
-  Orchestrates page rendering — calls ports to load data, templates, files
+  [CORE] HyperviewService + collaborators (lib/hyperview/)
+  Orchestrates page loading while TemplateCatalog/PageRenderer handle rendering concerns
         │
         ├──── [PORT] HyperviewPageStore.getPageData()
         │         └── [ADAPTER] node-local-store/PageStore
@@ -122,27 +124,63 @@ HTTP request arrives
   [ADAPTER] NodeServer writes response to Node.js socket
 ```
 
-Notice that `HyperviewService` never touches `node:fs` directly. It only calls port methods. The filesystem adapter is two layers away, hidden behind two ports.
+Notice that the Hyperview core never touches `node:fs` directly. It only calls port methods. The filesystem adapter is two layers away, hidden behind two ports.
 
 ---
 
 ## How Dependency Injection Works
 
-Kixx does not use a DI framework. Dependencies are injected by the **Composition Root** (`NodeBootstrap`) using plain constructor arguments.
+Kixx does not use a DI framework. Dependencies are injected using plain constructor
+arguments. The current Node runtime splits this into two steps:
+
+- `NodeBootstrap` creates Node-specific adapters
+- `ApplicationAssembler` wires those adapters into core framework objects
 
 ```javascript
-// lib/boostrap/node-bootstrap.js (simplified)
+// lib/bootstrap/node-bootstrap.js (simplified)
 
-const config = new Config(new NodeConfigStore({ configFilepath, secretsFilepath, fileSystem }), env, appDir);
+const configStore = new NodeConfigStore({
+    configFilepath,
+    secretsFilepath,
+    fileSystem,
+});
 
-const router = new HttpRouter(new JSModuleHttpRoutesStore(vhostsConfig), appContext);
+const appContext = await assembler.bootstrapApplication({
+    runtime,
+    plugins,
+    configStore,
+});
+
+const router = assembler.createHttpRouter(
+    appContext,
+    new JSModuleHttpRoutesStore(vhostsConfig)
+);
 
 // Plugins inject their own adapters into the context
-plugin.register(applicationContext);  // PageStore, TemplateStore, etc. registered here
-plugin.initialize(applicationContext); // async setup
+plugin.register(applicationContext);   // sync registration phase
+plugin.initialize(applicationContext); // async initialization phase
 ```
 
-The core classes (`Config`, `HttpRouter`, `HyperviewService`) receive their adapters at construction time and never know which concrete class they received — only that it satisfies the port contract.
+The core classes (`Config`, `HttpRouter`, `HyperviewService`, etc.) receive their
+adapters at construction time and never know which concrete class they received
+— only that it satisfies the port contract.
+
+---
+
+## Public Entry Points
+
+Kixx now exposes separate public module surfaces so applications can choose the
+layer they want to depend on:
+
+- `lib/core/mod.js` — framework core and platform-neutral utilities
+- `lib/node/mod.js` — Node-specific adapters and bootstrap modules
+- `lib/mod.js` — compatibility entry point that re-exports both surfaces
+
+This split is intentionally architectural, not just organizational:
+
+- code that only needs core abstractions should depend on `core`
+- code that needs runtime adapters or bootstrapping should depend on `node`
+- future runtimes can add peer entry points such as `lib/cloudflare/mod.js`
 
 ---
 
@@ -171,7 +209,7 @@ To support a different config source, route source, page store, etc.:
 
 To support a new runtime (Cloudflare Workers, AWS Lambda, Deno, Bun):
 
-1. **Create a new bootstrap module** (e.g., `lib/cloudflare-bootstrap/cloudflare-bootstrap.js`). It mirrors the shape of `NodeBootstrap` but wires in platform-specific adapters.
+1. **Create a new bootstrap module** (e.g., `lib/cloudflare-bootstrap/cloudflare-bootstrap.js`). It should mirror the role of `NodeBootstrap`: create platform-specific adapters, then delegate core assembly to `ApplicationAssembler`.
 
 2. **Identify which adapters need replacing.** Typically:
    - `Filesystem` → platform-specific or not needed (Workers have no filesystem)
@@ -186,21 +224,14 @@ To support a new runtime (Cloudflare Workers, AWS Lambda, Deno, Bun):
 
 4. **Core never needs to change** when adding a platform — if it does, that's a sign the port contract needs updating, not the core logic.
 
-## Public Entry Points
-
-Kixx now exposes separate public module surfaces so applications can choose the
-layer they want to depend on:
-
-- `lib/core/mod.js` — framework core and platform-neutral utilities
-- `lib/node/mod.js` — Node-specific adapters and bootstrap modules
-- `lib/mod.js` — compatibility entry point that re-exports both surfaces
-
 A hypothetical Cloudflare Workers setup would look like:
 
 ```
 lib/
   cloudflare-bootstrap/          ← new composition root
     cloudflare-bootstrap.js
+  cloudflare/                    ← optional public entry point
+    mod.js
   cloudflare-http-server/        ← new adapter: wraps native Workers Request
     server-request.js            ← thin wrapper adding id, hostnameParams, etc.
   cloudflare-config-store/       ← new adapter: reads from CF env bindings
