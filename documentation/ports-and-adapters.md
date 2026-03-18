@@ -45,7 +45,8 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/hyperview/` (top level) | Core | HyperviewService, request/error handlers |
 | `lib/logger/` | Core | BaseLogger, DevLogger, ProdLogger — log formatting |
 | `lib/ports/` | Ports | One file per port — the authoritative contracts |
-| `lib/config-stores/` | Adapters | Config sources (currently: JS object in memory) |
+| `lib/config-stores/` | Adapters | In-memory config sources for tests and embedded config |
+| `lib/node-config-store/` | Adapters | Node.js JSONC config file adapter |
 | `lib/http-routes-stores/` | Adapters | Route sources (currently: JS array in memory) |
 | `lib/hyperview/node-local-store/` | Adapters | Page, template, and static file stores for local filesystem |
 | `lib/node-filesystem/` | Adapters | Node.js `fs`/`fs/promises` implementation of the Filesystem port |
@@ -60,7 +61,7 @@ Each port is defined in `lib/ports/` with its full behavioral contract (not just
 
 | Port file | Used by | Current adapter(s) |
 |-----------|---------|-------------------|
-| `config-store.js` | `Config` | `JSModuleConfigStore` |
+| `config-store.js` | `Config` | `NodeConfigStore`, `JSModuleConfigStore` |
 | `http-routes-store.js` | `HttpRouter` | `JSModuleHttpRoutesStore` |
 | `http-server-request.js` | `HttpRouter`, `HttpRoute`, middleware | `node-http-server/ServerRequest` (Node.js) |
 | `http-server-response.js` | `HttpRouter`, middleware | `lib/http/ServerResponse` (all platforms — no adapter needed) |
@@ -132,7 +133,7 @@ Kixx does not use a DI framework. Dependencies are injected by the **Composition
 ```javascript
 // lib/boostrap/node-bootstrap.js (simplified)
 
-const config = new Config(new JSModuleConfigStore({ config, secrets }), env, appDir);
+const config = new Config(new NodeConfigStore({ configFilepath, secretsFilepath, fileSystem }), env, appDir);
 
 const router = new HttpRouter(new JSModuleHttpRoutesStore(vhostsConfig), appContext);
 
@@ -184,6 +185,15 @@ To support a new runtime (Cloudflare Workers, AWS Lambda, Deno, Bun):
 3. **Keep all core classes unchanged.** `Config`, `HttpRouter`, `HyperviewService`, etc. are platform-agnostic by design.
 
 4. **Core never needs to change** when adding a platform — if it does, that's a sign the port contract needs updating, not the core logic.
+
+## Public Entry Points
+
+Kixx now exposes separate public module surfaces so applications can choose the
+layer they want to depend on:
+
+- `lib/core/mod.js` — framework core and platform-neutral utilities
+- `lib/node/mod.js` — Node-specific adapters and bootstrap modules
+- `lib/mod.js` — compatibility entry point that re-exports both surfaces
 
 A hypothetical Cloudflare Workers setup would look like:
 

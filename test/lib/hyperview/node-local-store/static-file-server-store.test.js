@@ -16,6 +16,19 @@ testHyperviewStaticFileServerStoreConformance(() => {
         createReadStream: sinon.stub().returns(null),
     };
     return new StaticFileServerStore({ publicDirectory: '/public', fileSystem });
+}, {
+    createExistingFileStore() {
+        const fileSystem = {
+            getFileStats: sinon.stub().resolves({
+                size: 5,
+                mtime: new Date('2025-01-15T10:00:00Z'),
+                isFile: true,
+            }),
+            createReadStream: sinon.stub().returns(Readable.from([ Buffer.from('hello') ])),
+        };
+        return new StaticFileServerStore({ publicDirectory: '/public', fileSystem });
+    },
+    existingPathname: '/css/site.css',
 });
 
 function createMockFileSystem(overrides = {}) {

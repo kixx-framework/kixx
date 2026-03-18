@@ -32,8 +32,13 @@ const MISSING_PATHNAME = '/conformance-test/does-not-exist.css';
  *
  * @param {function(): import('../../lib/ports/hyperview-static-file-server-store.js').HyperviewStaticFileServerStore} createStore
  *   Factory that returns a store where no static files exist.
+ * @param {Object} [options]
+ * @param {function(): import('../../lib/ports/hyperview-static-file-server-store.js').HyperviewStaticFileServerStore} [options.createExistingFileStore]
+ *   Factory that returns a store where `existingPathname` resolves to a real file descriptor.
+ * @param {string} [options.existingPathname]
+ *   Pathname expected to exist in the store returned by createExistingFileStore().
  */
-export function testHyperviewStaticFileServerStoreConformance(createStore) {
+export function testHyperviewStaticFileServerStoreConformance(createStore, options = {}) {
 
     describe('HyperviewStaticFileServerStore port - getFile() must resolve with null for a missing file', ({ before, it }) => {
         let result;
@@ -64,4 +69,35 @@ export function testHyperviewStaticFileServerStoreConformance(createStore) {
             assertEqual(undefined, caughtError);
         });
     });
+
+    if (options.createExistingFileStore && options.existingPathname) {
+        describe('HyperviewStaticFileServerStore port - getFile() returns a usable file descriptor', ({ before, it }) => {
+            let file;
+
+            before(async () => {
+                const store = options.createExistingFileStore();
+                file = await store.getFile(options.existingPathname);
+            });
+
+            it('returns an object', () => {
+                assertEqual('object', typeof file);
+            });
+
+            it('exposes a sizeBytes number', () => {
+                assertEqual('number', typeof file.sizeBytes);
+            });
+
+            it('exposes a modifiedDate', () => {
+                assertEqual('Date', file.modifiedDate.constructor.name);
+            });
+
+            it('exposes a createReadStream function', () => {
+                assertEqual('function', typeof file.createReadStream);
+            });
+
+            it('exposes a computeHash function', () => {
+                assertEqual('function', typeof file.computeHash);
+            });
+        });
+    }
 }
