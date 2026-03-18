@@ -2,6 +2,21 @@ import { Readable } from 'node:stream';
 import { describe } from 'kixx-test';
 import { assertEqual, assertMatches, assertArray } from 'kixx-assert';
 import ServerRequest from '../../../lib/node-http-server/server-request.js';
+import { testServerRequestConformance } from '../../conformance/http-server-request.js';
+
+
+testServerRequestConformance((spec) => {
+    const url = spec.url || new URL('https://example.com/');
+    let req;
+    if (spec.bodyChunks) {
+        req = Readable.from(spec.bodyChunks);
+        req.method = spec.method || 'POST';
+        req.headers = spec.headers || {};
+    } else {
+        req = { method: spec.method || 'GET', headers: spec.headers || {} };
+    }
+    return new ServerRequest(req, url, spec.id || 'req-conformance');
+});
 
 
 function createMockReq(overrides = {}) {

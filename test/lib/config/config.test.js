@@ -1,4 +1,4 @@
-import { EventEmitter } from 'node:events';
+import EventEmitter from '../../../lib/event-emitter.js';
 import { describe } from 'kixx-test';
 import { assertEqual, assert, isPlainObject } from 'kixx-assert';
 import sinon from 'sinon';

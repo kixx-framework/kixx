@@ -4,9 +4,24 @@ import { describe } from 'kixx-test';
 import { assertEqual, assertArray, assertFunction } from 'kixx-assert';
 import sinon from 'sinon';
 import TemplateStore from '../../../../lib/hyperview/node-local-store/template-store.js';
+import { testHyperviewTemplateStoreConformance } from '../../../conformance/hyperview-template-store.js';
 
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+testHyperviewTemplateStoreConformance(() => {
+    const fileSystem = {
+        readUtf8File: sinon.stub().resolves(null),
+        readDirectory: sinon.stub().resolves([]),
+        importAbsoluteFilepath: sinon.stub().resolves({}),
+    };
+    return new TemplateStore({
+        helpersDirectory: '/helpers',
+        partialsDirectory: '/partials',
+        templatesDirectory: '/templates',
+        fileSystem,
+    });
+});
 
 function createMockFileSystem(overrides = {}) {
     return {

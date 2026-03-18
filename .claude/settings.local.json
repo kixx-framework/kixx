@@ -10,7 +10,9 @@
       "Bash(for f:*)",
       "Bash(do echo:*)",
       "Read(//Users/kris/Projects/Kixx/kixx/main/**)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(find:*)",
+      "Bash(npm test:*)"
     ]
   }
 }

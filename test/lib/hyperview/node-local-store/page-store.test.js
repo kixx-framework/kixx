@@ -4,9 +4,20 @@ import { describe } from 'kixx-test';
 import { assertEqual, assertArray } from 'kixx-assert';
 import sinon from 'sinon';
 import PageStore from '../../../../lib/hyperview/node-local-store/page-store.js';
+import { testHyperviewPageStoreConformance } from '../../../conformance/hyperview-page-store.js';
 
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+testHyperviewPageStoreConformance(() => {
+    const fileSystem = {
+        getFileStats: sinon.stub().resolves(null),
+        readDirectory: sinon.stub().resolves([]),
+        readJSONFile: sinon.stub().resolves(null),
+        readUtf8File: sinon.stub().resolves(null),
+    };
+    return new PageStore({ directory: '/pages', fileSystem });
+});
 
 function createMockFileSystem(overrides = {}) {
     return {

@@ -4,11 +4,15 @@
   "description": "A rapid web development framework for humans and their AI tools.",
   "type": "module",
   "main": "lib/mod.js",
+  "exports": {
+    ".": "./lib/mod.js",
+    "./core": "./lib/core/mod.js",
+    "./node": "./lib/node/mod.js",
+    "./assertions": "./lib/assertions.js",
+    "./errors": "./lib/errors.js"
+  },
   "engines": {
     "node": ">=24"
-  },
-  "bin": {
-    "kixx": "bin/kixx.js"
   },
   "scripts": {
     "test": "eslint ./ && node run-tests.js",

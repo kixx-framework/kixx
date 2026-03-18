@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import { describe } from 'kixx-test';
 import { assertEqual, assertMatches } from 'kixx-assert';
-import ServerResponse from '../../../lib/node-http-server/server-response.js';
+import ServerResponse from '../../../lib/http/server-response.js';
 
 
 describe('ServerResponse constructor', ({ it }) => {
