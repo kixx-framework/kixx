@@ -14,7 +14,9 @@
       "Bash(find:*)",
       "Bash(npm test:*)",
       "Bash(ls /Users/kris/Projects/Kixx/kixx/main/eslint*)",
-      "Bash(ls /Users/kris/Projects/Kixx/kixx/main/*.mjs)"
+      "Bash(ls /Users/kris/Projects/Kixx/kixx/main/*.mjs)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
