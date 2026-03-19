@@ -23,6 +23,10 @@ import { assertEqual, assert, assertNonEmptyString, assertArray, doesMatch } fro
 /**
  * Registers StorageEngine port conformance tests against any adapter implementation.
  *
+ * The shared suite focuses on deterministic cursor behavior over a static dataset.
+ * Portability guarantees around inserts between pages are documented in the port
+ * itself and are intentionally weaker than "fully stable under concurrent writes".
+ *
  * @param {function(): Promise<import('../../lib/ports/storage-engine.js').StorageEngine>} createEngine
  *   Async factory that returns a fresh, already-initialized StorageEngine.
  */
@@ -481,6 +485,117 @@ export function testStorageEngineConformance(createEngine) {
                 ...page3.records.map((r) => r.doc.id),
             ];
             assertEqual(5, new Set(ids).size);
+        });
+    });
+
+    describe('StorageEngine#query() reverse cursor pagination', ({ before, after, it }) => {
+        let engine;
+        let page1;
+        let page2;
+        let page3;
+        before(async () => {
+            engine = await createEngine();
+            for (let i = 1; i <= 5; i += 1) {
+                await engine.put({
+                    id: `qrev_${ String(i).padStart(3, '0') }`,
+                    type: 'QueryReversePaginate',
+                    sortKey: `2026-0${ i }-01`,
+                });
+            }
+            page1 = await engine.query('QueryReversePaginate', { limit: 2, reverse: true });
+            page2 = await engine.query('QueryReversePaginate', {
+                limit: 2,
+                reverse: true,
+                cursor: page1.cursor,
+            });
+            page3 = await engine.query('QueryReversePaginate', {
+                limit: 2,
+                reverse: true,
+                cursor: page2.cursor,
+            });
+        });
+        after(async () => {
+            await engine.close();
+        });
+
+        it('page1 starts at the latest sortKey', () => {
+            assertEqual('2026-05-01', page1.records[0].doc.sortKey);
+        });
+        it('page3 ends at the earliest sortKey', () => {
+            assertEqual('2026-01-01', page3.records[0].doc.sortKey);
+        });
+        it('all reverse pages cover different records', () => {
+            const ids = [
+                ...page1.records.map((r) => r.doc.id),
+                ...page2.records.map((r) => r.doc.id),
+                ...page3.records.map((r) => r.doc.id),
+            ];
+            assertEqual(5, new Set(ids).size);
+        });
+    });
+
+    describe('StorageEngine#query() cursor pagination with duplicate sort_key values', ({ before, after, it }) => {
+        let engine;
+        let page1;
+        let page2;
+        before(async () => {
+            engine = await createEngine();
+            await engine.put({ id: 'qdup_001', type: 'QueryDuplicatePaginate', sortKey: '2026-02-01' });
+            await engine.put({ id: 'qdup_002', type: 'QueryDuplicatePaginate', sortKey: '2026-02-01' });
+            await engine.put({ id: 'qdup_003', type: 'QueryDuplicatePaginate', sortKey: '2026-03-01' });
+            page1 = await engine.query('QueryDuplicatePaginate', { limit: 2 });
+            page2 = await engine.query('QueryDuplicatePaginate', { limit: 2, cursor: page1.cursor });
+        });
+        after(async () => {
+            await engine.close();
+        });
+
+        it('page1 includes both records at the duplicate boundary', () => {
+            assertEqual(2, page1.records.length);
+            assertEqual('2026-02-01', page1.records[0].doc.sortKey);
+            assertEqual('2026-02-01', page1.records[1].doc.sortKey);
+        });
+        it('page2 resumes after the duplicate boundary', () => {
+            assertEqual(1, page2.records.length);
+            assertEqual('qdup_003', page2.records[0].doc.id);
+        });
+    });
+
+    describe('StorageEngine#query() cursor pagination with a range filter', ({ before, after, it }) => {
+        let engine;
+        let page1;
+        let page2;
+        before(async () => {
+            engine = await createEngine();
+            await engine.put({ id: 'qrange_001', type: 'QueryRangePaginate', sortKey: '2026-01-01' });
+            await engine.put({ id: 'qrange_002', type: 'QueryRangePaginate', sortKey: '2026-02-01' });
+            await engine.put({ id: 'qrange_003', type: 'QueryRangePaginate', sortKey: '2026-03-01' });
+            await engine.put({ id: 'qrange_004', type: 'QueryRangePaginate', sortKey: '2026-04-01' });
+            await engine.put({ id: 'qrange_005', type: 'QueryRangePaginate', sortKey: '2026-05-01' });
+            page1 = await engine.query('QueryRangePaginate', {
+                greaterThanOrEqualTo: '2026-02-01',
+                lessThanOrEqualTo: '2026-04-01',
+                limit: 2,
+            });
+            page2 = await engine.query('QueryRangePaginate', {
+                greaterThanOrEqualTo: '2026-02-01',
+                lessThanOrEqualTo: '2026-04-01',
+                limit: 2,
+                cursor: page1.cursor,
+            });
+        });
+        after(async () => {
+            await engine.close();
+        });
+
+        it('page1 stays inside the requested range', () => {
+            assertEqual(2, page1.records.length);
+            assertEqual('2026-02-01', page1.records[0].doc.sortKey);
+            assertEqual('2026-03-01', page1.records[1].doc.sortKey);
+        });
+        it('page2 continues inside the requested range', () => {
+            assertEqual(1, page2.records.length);
+            assertEqual('2026-04-01', page2.records[0].doc.sortKey);
         });
     });
 

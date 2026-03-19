@@ -1,7 +1,10 @@
 import sinon from 'sinon';
 import { describe } from 'kixx-test';
-import { assertEqual, assert, assertMatches } from 'kixx-assert';
-import { DataStore } from '../../../lib/datastore/mod.js';
+import { assertEqual, assert } from 'kixx-assert';
+import {
+    DataStore,
+    IndexNotConfiguredError
+} from '../../../lib/datastore/mod.js';
 
 
 function createMockEngine(overrides) {
@@ -138,12 +141,15 @@ describe('DataStore#query() expands beginsWith into gte + lt range', ({ before, 
     });
 });
 
-// --- custom index validation ------------------------------------------------
+// --- custom index delegation ------------------------------------------------
 
-describe('DataStore#query() with unconfigured index throws IndexNotConfiguredError', ({ before, after, it }) => {
+describe('DataStore#query() with a custom index delegates validation to the engine', ({ before, after, it }) => {
+    let engine;
     let error;
     before(async () => {
-        const engine = createMockEngine();
+        engine = createMockEngine({
+            query: sinon.fake.rejects(new IndexNotConfiguredError('Customer', 'email')),
+        });
         const store = new DataStore(engine);
         await store.initialize();
         try {
@@ -154,6 +160,9 @@ describe('DataStore#query() with unconfigured index throws IndexNotConfiguredErr
     });
     after(() => sinon.restore());
 
+    it('calls engine.query()', () => {
+        assertEqual(1, engine.query.callCount);
+    });
     it('throws IndexNotConfiguredError', () => {
         assert(error);
         assertEqual('IndexNotConfiguredError', error.name);
@@ -163,23 +172,18 @@ describe('DataStore#query() with unconfigured index throws IndexNotConfiguredErr
     });
 });
 
-describe('DataStore#query() with configured index does not throw', ({ before, after, it }) => {
-    let error;
+describe('DataStore#query() with a custom index passes the index through unchanged', ({ before, after, it }) => {
+    let engine;
     before(async () => {
-        const engine = createMockEngine();
+        engine = createMockEngine();
         const store = new DataStore(engine);
         await store.initialize();
-        await store.configureIndexes([{ type: 'Customer', attribute: 'email' }]);
-        try {
-            await store.query('Customer', { index: 'email' });
-        } catch (err) {
-            error = err;
-        }
+        await store.query('Customer', { index: 'email' });
     });
     after(() => sinon.restore());
 
-    it('does not throw', () => {
-        assertEqual(undefined, error);
+    it('engine receives the index name', () => {
+        assertEqual('email', engine.query.firstCall.args[1].index);
     });
 });
 
@@ -246,7 +250,7 @@ describe('DataStore#query() when startKey and greaterThanOrEqualTo both provided
         assertEqual('ValidationError', error.name);
     });
     it('errors array mentions mutual exclusivity', () => {
-        assert(error.errors.some((e) => assertMatches !== null && e.message.includes('mutually exclusive')));
+        assert(error.errors.some((e) => e.message.includes('mutually exclusive')));
     });
 });
 

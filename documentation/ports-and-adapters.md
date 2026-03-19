@@ -261,4 +261,4 @@ The conformance test helpers in `test/conformance/` are the mechanically-verifie
 - **Focused on invariants** — they test behavioral requirements (emit before resolve, return `[]` not `null`) not just that methods exist
 - **Cheap to run on new adapters** — two lines added to any adapter test file covers the full contract
 
-When you write a new adapter, add a conformance call to its test file. If the conformance tests pass, the adapter is guaranteed to work with the core classes that consume that port.
+When you write a new adapter, add a conformance call to its test file. If the conformance tests pass, the adapter satisfies the shared core contract for that port. Adapter-specific tests are still required for backend-specific behavior and edge cases outside the shared suite.

@@ -17,6 +17,8 @@ Error classes are also exported from `kixx/datastore`:
 
 ```javascript
 import {
+    DataStoreClosedError,
+    DataStoreNotInitializedError,
     DocumentAlreadyExistsError,
     DocumentNotFoundError,
     VersionConflictError,
@@ -101,7 +103,17 @@ All read and write operations return a `DocumentRecord`:
 await store.initialize();
 ```
 
-Prepares the storage engine. Must be called once before any other method. Idempotent — safe to call on an existing database.
+Prepares the storage engine. Must be called before `put()`, `get()`, `delete()`, `query()`, or `configureIndexes()`. Idempotent — repeated calls are a no-op.
+
+---
+
+### `store.close()`
+
+```javascript
+await store.close();
+```
+
+Releases any resources held by the underlying engine. Idempotent — repeated calls are a no-op.
 
 ---
 
@@ -194,7 +206,7 @@ await store.configureIndexes([
 await store.configureIndexes([]);
 ```
 
-Each `IndexDefinition` has a `type` (document type pattern) and an `attribute` (top-level attribute name, no hyphens — used as a SQL identifier).
+Each `IndexDefinition` has a `type` (document type pattern) and an `attribute` (top-level attribute name).
 
 - **Adding** a new index over existing data causes the engine to backfill the index automatically.
 - **Removing** an index drops the underlying storage structure.
@@ -292,7 +304,7 @@ await store.query('Customer', {
 
 Index values are treated as strings for comparison purposes. Documents missing the indexed attribute sort with a `null` index value.
 
-In the SQLite engine, each unique attribute name maps to a single generated column (`idx_<attribute>`) across all document types. The SQL index on `(type, idx_<attribute>)` scopes queries to one type, so two types indexing the same attribute name share a column — this is by design and has no impact on correctness or performance.
+Storage engines are responsible for translating public attribute names into whatever internal schema objects they need. SQLite uses generated columns and SQL indexes internally, but those names are an adapter detail rather than part of the public API.
 
 ---
 
@@ -314,6 +326,7 @@ do {
 Seek-based cursors mean:
 - Fetching page N is O(log n), not O(n).
 - The model maps directly to DynamoDB's `ExclusiveStartKey` for future portability.
+- Engines resume from the last seen record instead of re-counting rows with `OFFSET`.
 - If records are inserted between pages, the cursor may occasionally skip or repeat a record at the boundary — this is expected and consistent with DynamoDB behavior.
 
 ---
@@ -324,12 +337,14 @@ All errors extend `WrappedError` (from `lib/errors.js`) and carry `expected: tru
 
 | Class | `code` | `httpStatusCode` | When thrown |
 |-------|--------|-----------------|-------------|
+| `DataStoreNotInitializedError` | `DATASTORE_NOT_INITIALIZED` | — | Any operation other than `initialize()` before initialization completes. |
+| `DataStoreClosedError` | `DATASTORE_CLOSED` | — | Any operation after `close()`. |
 | `DocumentAlreadyExistsError` | `DOCUMENT_EXISTS` | 409 | Create when `(type, id)` already exists. |
 | `DocumentNotFoundError` | `DOCUMENT_NOT_FOUND` | 404 | Update or delete when `(type, id)` does not exist. |
 | `VersionConflictError` | `VERSION_CONFLICT` | 409 | Write or delete when stored version ≠ provided version. |
 | `IndexNotConfiguredError` | `INDEX_NOT_CONFIGURED` | 400 | Query referencing an undeclared index. |
 
-`VersionConflictError` carries extra properties for retry/merge logic:
+Datastore errors carry structured properties so callers do not need to parse message text. `VersionConflictError` includes extra version details for retry or merge logic:
 
 ```javascript
 try {
@@ -348,13 +363,7 @@ try {
 
 ## Graceful Shutdown
 
-`close()` is not on `DataStore` — call it directly on the engine:
-
-```javascript
-await engine.close();
-```
-
-This releases the database file lock. Applications using a process manager (PM2, systemd) should call `engine.close()` on `SIGTERM`.
+Call `store.close()` during shutdown to release any resources held by the underlying engine. Applications using a process manager (PM2, systemd) should call `store.close()` on `SIGTERM`.
 
 ---
 
@@ -386,8 +395,10 @@ This releases the database file lock. Applications using a process manager (PM2,
 
 The `DataStore` class:
 - Validates all inputs and throws typed errors for invalid arguments.
-- Maintains an in-memory `Map<type, Set<attribute>>` of configured indexes. This lets `query()` validate index references without an engine round-trip.
+- Owns the public lifecycle so callers get datastore-specific errors instead of adapter-specific failures when they use the store before `initialize()` or after `close()`.
 - Resolves query option aliases (`startKey` → `greaterThanOrEqualTo`) and expands `beginsWith` into a canonical `greaterThanOrEqualTo + lessThan` range before calling the engine. Engines receive only the canonical operators.
+
+The SQLite engine persists the configured index catalog in the database itself. That keeps index availability durable across process restarts and makes the engine, not the `DataStore` instance, the source of truth for custom-index queries.
 
 The `StorageEngine` port is defined in `lib/ports/storage-engine.js` as a pure JSDoc file with no runtime code. The port documents behavioral invariants that go beyond method signatures — read it before writing a new adapter.
 
@@ -399,7 +410,7 @@ The `StorageEngine` port is defined in `lib/ports/storage-engine.js` as a pure J
 
 2. **Create your adapter** in a new directory, e.g. `lib/cloudflare-d1-datastore/`. Add a `@see` reference to the port in the class JSDoc.
 
-3. **Run the conformance tests** — they exercise every behavioral requirement of the port contract:
+3. **Run the conformance tests** — they exercise the core behavioral requirements of the port contract over a static dataset:
 
    ```javascript
    // In your adapter's test file:
@@ -415,4 +426,4 @@ The `StorageEngine` port is defined in `lib/ports/storage-engine.js` as a pure J
 
 4. **Write adapter-specific tests** for constructor validation, platform-specific error paths, and anything the conformance suite does not cover.
 
-If the conformance tests pass, the adapter is guaranteed to work correctly with `DataStore` and any application code built on top of it.
+If the conformance tests pass, the adapter satisfies the shared core contract expected by `DataStore`. Add adapter-specific tests for any backend behaviors or edge cases the shared suite does not cover.

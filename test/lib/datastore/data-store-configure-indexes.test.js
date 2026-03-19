@@ -119,68 +119,17 @@ describe('DataStore#configureIndexes() when type is invalid', ({ before, after, 
 });
 
 describe('DataStore#configureIndexes() when attribute contains a hyphen', ({ before, after, it }) => {
-    let error;
+    let engine;
     before(async () => {
-        const engine = createMockEngine();
+        engine = createMockEngine();
         const store = new DataStore(engine);
         await store.initialize();
-        try {
-            await store.configureIndexes([{ type: 'Customer', attribute: 'my-attr' }]);
-        } catch (err) {
-            error = err;
-        }
+        await store.configureIndexes([{ type: 'Customer', attribute: 'my-attr' }]);
     });
     after(() => sinon.restore());
 
-    it('throws ValidationError (hyphens not allowed in attribute names)', () => {
-        assertEqual('ValidationError', error.name);
-    });
-});
-
-describe('DataStore#configureIndexes() populates in-memory index registry', ({ before, after, it }) => {
-    let engine;
-    let store;
-    let queryError;
-    before(async () => {
-        engine = createMockEngine();
-        store = new DataStore(engine);
-        await store.initialize();
-        await store.configureIndexes([{ type: 'Customer', attribute: 'email' }]);
-        // Query with the configured index — should not throw.
-        try {
-            await store.query('Customer', { index: 'email' });
-        } catch (err) {
-            queryError = err;
-        }
-    });
-    after(() => sinon.restore());
-
-    it('query with configured index does not throw IndexNotConfiguredError', () => {
-        assertEqual(undefined, queryError);
-    });
-});
-
-describe('DataStore#configureIndexes() after replacing the index set, old index is removed', ({ before, after, it }) => {
-    let store;
-    let engine;
-    let errorAfterRemoval;
-    before(async () => {
-        engine = createMockEngine();
-        store = new DataStore(engine);
-        await store.initialize();
-        await store.configureIndexes([{ type: 'Customer', attribute: 'email' }]);
-        // Replace with a different attribute — email is no longer configured.
-        await store.configureIndexes([{ type: 'Customer', attribute: 'region' }]);
-        try {
-            await store.query('Customer', { index: 'email' });
-        } catch (err) {
-            errorAfterRemoval = err;
-        }
-    });
-    after(() => sinon.restore());
-
-    it('querying removed index throws IndexNotConfiguredError', () => {
-        assert(errorAfterRemoval);
-        assertEqual('IndexNotConfiguredError', errorAfterRemoval.name);
+    it('passes the hyphenated attribute through to the engine', () => {
+        const indexes = engine.configureIndexes.firstCall.firstArg;
+        assertEqual('my-attr', indexes[0].attribute);
     });
 });

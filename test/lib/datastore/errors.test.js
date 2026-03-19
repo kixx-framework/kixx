@@ -2,12 +2,42 @@ import { describe } from 'kixx-test';
 import { assertEqual, assert, assertMatches } from 'kixx-assert';
 import { WrappedError } from '../../../lib/errors.js';
 import {
+    DataStoreClosedError,
+    DataStoreNotInitializedError,
     DocumentAlreadyExistsError,
     DocumentNotFoundError,
     VersionConflictError,
     IndexNotConfiguredError
 } from '../../../lib/datastore/errors.js';
 
+
+describe('DataStoreNotInitializedError', ({ it }) => {
+    const err = new DataStoreNotInitializedError('query');
+
+    it('name is DataStoreNotInitializedError', () => {
+        assertEqual('DataStoreNotInitializedError', err.name);
+    });
+    it('code is DATASTORE_NOT_INITIALIZED', () => {
+        assertEqual('DATASTORE_NOT_INITIALIZED', err.code);
+    });
+    it('operation property', () => {
+        assertEqual('query', err.operation);
+    });
+});
+
+describe('DataStoreClosedError', ({ it }) => {
+    const err = new DataStoreClosedError('get');
+
+    it('name is DataStoreClosedError', () => {
+        assertEqual('DataStoreClosedError', err.name);
+    });
+    it('code is DATASTORE_CLOSED', () => {
+        assertEqual('DATASTORE_CLOSED', err.code);
+    });
+    it('operation property', () => {
+        assertEqual('get', err.operation);
+    });
+});
 
 describe('DocumentAlreadyExistsError', ({ it }) => {
     const err = new DocumentAlreadyExistsError('Customer', 'cust_001');
@@ -27,6 +57,12 @@ describe('DocumentAlreadyExistsError', ({ it }) => {
     it('message includes type and id', () => {
         assertMatches('Customer', err.message);
         assertMatches('cust_001', err.message);
+    });
+    it('type property', () => {
+        assertEqual('Customer', err.type);
+    });
+    it('id property', () => {
+        assertEqual('cust_001', err.id);
     });
 });
 
@@ -48,6 +84,12 @@ describe('DocumentNotFoundError', ({ it }) => {
     it('message includes type and id', () => {
         assertMatches('Order', err.message);
         assertMatches('ord_42', err.message);
+    });
+    it('type property', () => {
+        assertEqual('Order', err.type);
+    });
+    it('id property', () => {
+        assertEqual('ord_42', err.id);
     });
 });
 
@@ -104,5 +146,11 @@ describe('IndexNotConfiguredError', ({ it }) => {
     it('message includes type and attribute', () => {
         assertMatches('Customer', err.message);
         assertMatches('email', err.message);
+    });
+    it('type property', () => {
+        assertEqual('Customer', err.type);
+    });
+    it('attribute property', () => {
+        assertEqual('email', err.attribute);
     });
 });
