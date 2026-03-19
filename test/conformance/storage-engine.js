@@ -272,12 +272,12 @@ export function testStorageEngineConformance(createEngine) {
 
     // --- delete() ------------------------------------------------------------
 
-    describe('StorageEngine#delete() when the document does not exist', ({ before, after, it }) => {
+    describe('StorageEngine#delete() without version when the document does not exist', ({ before, after, it }) => {
         let engine;
         let result;
         before(async () => {
             engine = await createEngine();
-            result = await engine.delete('ConformanceTest', 'ghost_del_001', 1);
+            result = await engine.delete('ConformanceTest', 'ghost_del_001');
         });
         after(async () => {
             await engine.close();
@@ -288,13 +288,13 @@ export function testStorageEngineConformance(createEngine) {
         });
     });
 
-    describe('StorageEngine#delete() when the document exists with correct version', ({ before, after, it }) => {
+    describe('StorageEngine#delete() without version when the document exists', ({ before, after, it }) => {
         let engine;
         let result;
         before(async () => {
             engine = await createEngine();
             await engine.put({ id: 'del_001', type: 'ConformanceTest' });
-            result = await engine.delete('ConformanceTest', 'del_001', 1);
+            result = await engine.delete('ConformanceTest', 'del_001');
         });
         after(async () => {
             await engine.close();
@@ -311,7 +311,7 @@ export function testStorageEngineConformance(createEngine) {
         before(async () => {
             engine = await createEngine();
             await engine.put({ id: 'del_gone_001', type: 'ConformanceTest' });
-            await engine.delete('ConformanceTest', 'del_gone_001', 1);
+            await engine.delete('ConformanceTest', 'del_gone_001');
             afterGet = await engine.get('ConformanceTest', 'del_gone_001');
         });
         after(async () => {
@@ -323,7 +323,51 @@ export function testStorageEngineConformance(createEngine) {
         });
     });
 
-    describe('StorageEngine#delete() when version does not match', ({ before, after, it }) => {
+    describe('StorageEngine#delete() with version when the document exists and version matches', ({ before, after, it }) => {
+        let engine;
+        let result;
+        before(async () => {
+            engine = await createEngine();
+            await engine.put({ id: 'del_versioned_001', type: 'ConformanceTest' });
+            result = await engine.delete('ConformanceTest', 'del_versioned_001', 1);
+        });
+        after(async () => {
+            await engine.close();
+        });
+
+        it('returns true', () => {
+            assertEqual(true, result);
+        });
+    });
+
+    describe('StorageEngine#delete() with version when the document does not exist', ({ before, after, it }) => {
+        let engine;
+        let error;
+        before(async () => {
+            engine = await createEngine();
+            try {
+                await engine.delete('ConformanceTest', 'ghost_del_versioned_001', 1);
+            } catch (err) {
+                error = err;
+            }
+        });
+        after(async () => {
+            await engine.close();
+        });
+
+        it('throws DocumentNotFoundError', () => {
+            assert(error);
+            assertEqual('DocumentNotFoundError', error.name);
+        });
+        it('error code is DOCUMENT_NOT_FOUND', () => {
+            assertEqual('DOCUMENT_NOT_FOUND', error.code);
+        });
+        it('error is expected', () => {
+            assertEqual(true, error.expected);
+        });
+    });
+
+    describe('StorageEngine#delete() with version when version does not match', ({ before, after, it }) => {
         let engine;
         let error;
         before(async () => {

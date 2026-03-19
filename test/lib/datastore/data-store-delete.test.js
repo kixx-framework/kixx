@@ -17,7 +17,7 @@ function createMockEngine(overrides) {
 }
 
 
-describe('DataStore#delete() with valid arguments', ({ before, after, it }) => {
+describe('DataStore#delete() with version', ({ before, after, it }) => {
     let engine;
     let result;
     before(async () => {
@@ -38,13 +38,34 @@ describe('DataStore#delete() with valid arguments', ({ before, after, it }) => {
     });
 });
 
+describe('DataStore#delete() without version', ({ before, after, it }) => {
+    let engine;
+    let result;
+    before(async () => {
+        engine = createMockEngine({ delete: sinon.fake.resolves(true) });
+        const store = new DataStore(engine);
+        await store.initialize();
+        result = await store.delete('Customer', 'cust_001');
+    });
+    after(() => sinon.restore());
+
+    it('calls engine.delete() with undefined version', () => {
+        assertEqual('Customer', engine.delete.firstCall.args[0]);
+        assertEqual('cust_001', engine.delete.firstCall.args[1]);
+        assertEqual(undefined, engine.delete.firstCall.args[2]);
+    });
+    it('returns the engine result (true)', () => {
+        assertEqual(true, result);
+    });
+});
+
 describe('DataStore#delete() when document does not exist', ({ before, after, it }) => {
     let result;
     before(async () => {
         const engine = createMockEngine({ delete: sinon.fake.resolves(false) });
         const store = new DataStore(engine);
         await store.initialize();
-        result = await store.delete('Customer', 'ghost', { version: 1 });
+        result = await store.delete('Customer', 'ghost');
     });
     after(() => sinon.restore());
 
@@ -81,25 +102,6 @@ describe('DataStore#delete() when id is empty', ({ before, after, it }) => {
         await store.initialize();
         try {
             await store.delete('Customer', '', { version: 1 });
-        } catch (err) {
-            error = err;
-        }
-    });
-    after(() => sinon.restore());
-
-    it('throws ValidationError', () => {
-        assertEqual('ValidationError', error.name);
-    });
-});
-
-describe('DataStore#delete() when options.version is missing', ({ before, after, it }) => {
-    let error;
-    before(async () => {
-        const engine = createMockEngine();
-        const store = new DataStore(engine);
-        await store.initialize();
-        try {
-            await store.delete('Customer', 'cust_001', {});
         } catch (err) {
             error = err;
         }

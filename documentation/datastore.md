@@ -163,21 +163,27 @@ Returns the `DocumentRecord`, or `null` if no document exists for `(type, id)`.
 
 ---
 
-### `store.delete(type, id, options)`
+### `store.delete(type, id, options?)`
 
 ```javascript
+// Delete without a version check — returns false if the document did not exist.
+const deleted = await store.delete('Customer', 'cust_001');
+
+// Optimistic delete — pass { version } to guard against concurrent writes.
 const deleted = await store.delete('Customer', 'cust_001', { version: record.version });
-// true if deleted, false if the document did not exist
 ```
 
-`options.version` is required. The version must match the stored version for the delete to proceed.
+Behavior is determined by `options.version`:
+- **No `version`** — delete. Returns `true` if deleted, `false` if the document did not exist.
+- **`version` provided** — optimistic delete. Fails if the document does not exist or the stored version does not match.
 
 **Throws:**
 
 | Error | Condition |
 |-------|-----------|
-| `ValidationError` | Missing or invalid arguments. |
-| `VersionConflictError` | Stored version ≠ provided version. |
+| `ValidationError` | Invalid arguments or non-integer version. |
+| `DocumentNotFoundError` | Versioned delete when `(type, id)` does not exist. |
+| `VersionConflictError` | Versioned delete when stored version ≠ provided version. |
 
 ---
 
@@ -319,7 +325,7 @@ do {
 } while (cursor);
 ```
 
-Seek-based cursors mean:
+Seek-based cursors give us:
 - Fetching page N is O(log n), not O(n).
 - The model maps directly to DynamoDB's `ExclusiveStartKey` for future portability.
 - Engines resume from the last seen record instead of re-counting rows with `OFFSET`.
