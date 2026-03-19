@@ -5,7 +5,7 @@
  *
  *   import { testHttpRoutesStoreConformance } from '../../../conformance/http-routes-store.js';
  *
- *   testHttpRoutesStoreConformance(() => new JSModuleHttpRoutesStore([]));
+ *   testHttpRoutesStoreConformance(() => new MemoryHttpRoutesStore([]));
  *
  * The factory must return a store instance that is ready to use. It will be called
  * once per describe block — pass a fresh instance each time.

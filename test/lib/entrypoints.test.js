@@ -1,19 +1,8 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
-import * as core from '../../lib/core/mod.js';
 import * as node from '../../lib/node/mod.js';
 import * as mod from '../../lib/mod.js';
 
-
-describe('lib/core/mod.js exports', ({ it }) => {
-    it('exports HttpRouter from the core surface', () => {
-        assertEqual('function', typeof core.HttpRouter);
-    });
-
-    it('does not export NodeServer from the core surface', () => {
-        assertEqual(undefined, core.NodeServer);
-    });
-});
 
 describe('lib/node/mod.js exports', ({ it }) => {
     it('exports NodeBootstrap from the node surface', () => {
@@ -26,11 +15,11 @@ describe('lib/node/mod.js exports', ({ it }) => {
 });
 
 describe('lib/mod.js exports', ({ it }) => {
-    it('re-exports the core surface', () => {
-        assertEqual(core.HttpRouter, mod.HttpRouter);
+    it('exports HttpRouter', () => {
+        assertEqual('function', typeof mod.HttpRouter);
     });
 
-    it('re-exports the node surface', () => {
-        assertEqual(node.NodeBootstrap, mod.NodeBootstrap);
+    it('does not export NodeServer from the main surface', () => {
+        assertEqual(undefined, mod.NodeServer);
     });
 });

@@ -10,7 +10,7 @@ It is built on the same Ports and Adapters pattern as the rest of Kixx: a platfo
 
 ```javascript
 import { DataStore } from 'kixx/datastore';
-import { SQLiteStorageEngine } from 'kixx/datastore/sqlite';
+import { SQLiteStorageEngine } from 'kixx/node';
 ```
 
 Error classes are also exported from `kixx/datastore`:
@@ -31,7 +31,7 @@ import {
 
 ```javascript
 import { DataStore } from 'kixx/datastore';
-import { SQLiteStorageEngine } from 'kixx/datastore/sqlite';
+import { SQLiteStorageEngine } from 'kixx/node';
 
 const engine = new SQLiteStorageEngine({ path: './data/app.db' });
 const store = new DataStore(engine);

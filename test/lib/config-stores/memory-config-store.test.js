@@ -1,17 +1,17 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
-import JSModuleConfigStore from '../../../lib/config-stores/js-module-config-store.js';
+import MemoryConfigStore from '../../../lib/config-stores/memory-config-store.js';
 import { testConfigStoreConformance } from '../../conformance/config-store.js';
 
 
-testConfigStoreConformance(() => new JSModuleConfigStore({ config: {}, secrets: {} }));
+testConfigStoreConformance(() => new MemoryConfigStore({ config: {}, secrets: {} }));
 
 
-describe('JSModuleConfigStore constructor when config is not provided', ({ it }) => {
+describe('MemoryConfigStore constructor when config is not provided', ({ it }) => {
     it('throws an AssertionError', () => {
         let error;
         try {
-            new JSModuleConfigStore({});
+            new MemoryConfigStore({});
         } catch (err) {
             error = err;
         }
@@ -19,11 +19,11 @@ describe('JSModuleConfigStore constructor when config is not provided', ({ it })
     });
 });
 
-describe('JSModuleConfigStore#loadConfig() when config is provided', ({ before, it }) => {
+describe('MemoryConfigStore#loadConfig() when config is provided', ({ before, it }) => {
     let emittedConfig;
 
     before(async () => {
-        const store = new JSModuleConfigStore({ config: { database: { host: 'localhost' } } });
+        const store = new MemoryConfigStore({ config: { database: { host: 'localhost' } } });
         store.on('update:config', (v) => {
             emittedConfig = v;
         });
@@ -35,11 +35,11 @@ describe('JSModuleConfigStore#loadConfig() when config is provided', ({ before, 
     });
 });
 
-describe('JSModuleConfigStore#loadSecrets() when secrets is provided', ({ before, it }) => {
+describe('MemoryConfigStore#loadSecrets() when secrets is provided', ({ before, it }) => {
     let emittedSecrets;
 
     before(async () => {
-        const store = new JSModuleConfigStore({ config: {}, secrets: { apiKey: 'abc123' } });
+        const store = new MemoryConfigStore({ config: {}, secrets: { apiKey: 'abc123' } });
         store.on('update:secrets', (v) => {
             emittedSecrets = v;
         });

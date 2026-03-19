@@ -21,7 +21,7 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
                          │ implemented by
 ┌────────────────────────▼─────────────────────────────────────┐
 │                         ADAPTERS                              │
-│  NodeConfigStore  JSModuleConfigStore  NodeFilesystem  ...    │
+│  NodeConfigStore  MemoryConfigStore  NodeFilesystem  ...    │
 │  (lib/node-*/, lib/*-stores/, lib/hyperview/node-local/)      │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -53,8 +53,8 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/node-filesystem/` | Adapters | Node.js `fs`/`fs/promises` implementation of the Filesystem port |
 | `lib/node-http-server/` | Adapters | Node.js `http.Server` wrapper; `ServerRequest` (Node.js adapter) |
 | `lib/node-datastore/` | Adapters | Node.js `node:sqlite` implementation of the StorageEngine port |
-| `lib/bootstrap/` | Assembly | `ApplicationAssembler` plus runtime bootstraps such as `NodeBootstrap` |
-| `lib/core/` | Public API | Platform-neutral entry point |
+| `lib/bootstrap/` | Assembly | `ApplicationBootstrap` — wires adapters into core framework objects |
+| `lib/node-bootstrap/` | Assembly | `NodeBootstrap` — Node.js composition root; creates Node-specific adapters |
 | `lib/node/` | Public API | Node-specific entry point |
 
 ---
@@ -65,8 +65,8 @@ Each port is defined in `lib/ports/` with its full behavioral contract (not just
 
 | Port file | Used by | Current adapter(s) |
 |-----------|---------|-------------------|
-| `config-store.js` | `Config` | `NodeConfigStore`, `JSModuleConfigStore` |
-| `http-routes-store.js` | `HttpRouter` | `JSModuleHttpRoutesStore` |
+| `config-store.js` | `Config` | `NodeConfigStore`, `MemoryConfigStore` |
+| `http-routes-store.js` | `HttpRouter` | `MemoryHttpRoutesStore` |
 | `http-server-request.js` | `HttpRouter`, `HttpRoute`, middleware | `node-http-server/ServerRequest` (Node.js) |
 | `http-server-response.js` | `HttpRouter`, middleware | `lib/http/ServerResponse` (all platforms — no adapter needed) |
 | `hyperview-page-store.js` | `HyperviewService` | `node-local-store/PageStore` |
@@ -76,7 +76,7 @@ Each port is defined in `lib/ports/` with its full behavioral contract (not just
 | `plugin.js` | `NodeBootstrap` | `node-local-store/plugin` |
 | `middleware.js` | `HttpTarget`, `HttpRoute` | Application-defined middleware functions |
 | `filesystem.js` | `PageStore`, `TemplateStore`, `StaticFileServerStore` | `NodeFilesystem` (`node-filesystem/mod.js`) |
-| `storage-engine.js` | `DataStore` | `SQLiteStorageEngine` (`node-datastore/mod.js`) |
+| `storage-engine.js` | `DataStore` | `SQLiteStorageEngine` (`node-datastore/sqlite-storage-engine.js`) |
 
 ---
 
@@ -137,10 +137,10 @@ Kixx does not use a DI framework. Dependencies are injected using plain construc
 arguments. The current Node runtime splits this into two steps:
 
 - `NodeBootstrap` creates Node-specific adapters
-- `ApplicationAssembler` wires those adapters into core framework objects
+- `ApplicationBootstrap` wires those adapters into core framework objects
 
 ```javascript
-// lib/bootstrap/node-bootstrap.js (simplified)
+// lib/node-bootstrap/node-bootstrap.js (simplified)
 
 const configStore = new NodeConfigStore({
     configFilepath,
@@ -156,7 +156,7 @@ const appContext = await assembler.bootstrapApplication({
 
 const router = assembler.createHttpRouter(
     appContext,
-    new JSModuleHttpRoutesStore(vhostsConfig)
+    new MemoryHttpRoutesStore(vhostsConfig)
 );
 
 // Plugins inject their own adapters into the context
@@ -172,18 +172,18 @@ adapters at construction time and never know which concrete class they received
 
 ## Public Entry Points
 
-Kixx now exposes separate public module surfaces so applications can choose the
-layer they want to depend on:
+Kixx exposes two public module surfaces:
 
-- `lib/core/mod.js` — framework core and platform-neutral utilities
-- `lib/node/mod.js` — Node-specific adapters and bootstrap modules
-- `lib/mod.js` — compatibility entry point that re-exports both surfaces
+- `lib/mod.js` (`kixx`) — framework core, platform-neutral utilities, and vendor re-exports
+- `lib/node/mod.js` (`kixx/node`) — Node-specific adapters and `NodeBootstrap`
 
-This split is intentionally architectural, not just organizational:
+Additional focused entry points:
 
-- code that only needs core abstractions should depend on `core`
-- code that needs runtime adapters or bootstrapping should depend on `node`
-- future runtimes can add peer entry points such as `lib/cloudflare/mod.js`
+- `kixx/assertions` — runtime assertion helpers
+- `kixx/errors` — error classes
+- `kixx/utils` — utility functions (`deepFreeze`, `deepMerge`, etc.)
+
+Future runtimes add a peer entry point such as `lib/cloudflare/mod.js` (`kixx/cloudflare`) without touching any existing surface.
 
 ---
 
@@ -212,7 +212,7 @@ To support a different config source, route source, page store, etc.:
 
 To support a new runtime (Cloudflare Workers, AWS Lambda, Deno, Bun):
 
-1. **Create a new bootstrap module** (e.g., `lib/cloudflare-bootstrap/cloudflare-bootstrap.js`). It should mirror the role of `NodeBootstrap`: create platform-specific adapters, then delegate core assembly to `ApplicationAssembler`.
+1. **Create a new bootstrap module** (e.g., `lib/cloudflare-bootstrap/cloudflare-bootstrap.js`). It should mirror the role of `NodeBootstrap`: create platform-specific adapters, then delegate core assembly to `ApplicationBootstrap`.
 
 2. **Identify which adapters need replacing.** Typically:
    - `Filesystem` → platform-specific or not needed (Workers have no filesystem)

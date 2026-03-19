@@ -6,12 +6,12 @@
   "main": "lib/mod.js",
   "exports": {
     ".": "./lib/mod.js",
-    "./core": "./lib/core/mod.js",
-    "./node": "./lib/node/mod.js",
     "./assertions": "./lib/assertions.js",
     "./errors": "./lib/errors.js",
-    "./datastore": "./lib/datastore/mod.js",
-    "./datastore/sqlite": "./lib/node-datastore/mod.js"
+    "./utils": "./lib/utils/mod.js",
+    "./node": "./lib/node/mod.js",
+    "./bootstrap": "./lib/bootstrap/application-bootstrap.js",
+    "./datastore": "./lib/datastore/mod.js"
   },
   "engines": {
     "node": ">=24"

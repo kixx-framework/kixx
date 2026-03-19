@@ -1,17 +1,17 @@
 import { describe } from 'kixx-test';
 import { assertEqual, assertArray } from 'kixx-assert';
-import JSModuleHttpRoutesStore from '../../../lib/http-routes-stores/js-module-http-routes-store.js';
+import MemoryHttpRoutesStore from '../../../lib/http-routes-stores/memory-http-routes-store.js';
 import { testHttpRoutesStoreConformance } from '../../conformance/http-routes-store.js';
 
 
-testHttpRoutesStoreConformance(() => new JSModuleHttpRoutesStore([]));
+testHttpRoutesStoreConformance(() => new MemoryHttpRoutesStore([]));
 
 
-describe('JSModuleHttpRoutesStore constructor when vhostsConfigs is not an Array', ({ it }) => {
+describe('MemoryHttpRoutesStore constructor when vhostsConfigs is not an Array', ({ it }) => {
     it('throws an Error', () => {
         let error;
         try {
-            new JSModuleHttpRoutesStore(null);
+            new MemoryHttpRoutesStore(null);
         } catch (err) {
             error = err;
         }
@@ -19,11 +19,11 @@ describe('JSModuleHttpRoutesStore constructor when vhostsConfigs is not an Array
     });
 });
 
-describe('JSModuleHttpRoutesStore#loadVirtualHosts() when configured with an empty array', ({ before, it }) => {
+describe('MemoryHttpRoutesStore#loadVirtualHosts() when configured with an empty array', ({ before, it }) => {
     let result;
 
     before(async () => {
-        const store = new JSModuleHttpRoutesStore([]);
+        const store = new MemoryHttpRoutesStore([]);
         result = await store.loadVirtualHosts();
     });
 

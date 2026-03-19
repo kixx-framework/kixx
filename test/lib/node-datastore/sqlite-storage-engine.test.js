@@ -6,7 +6,7 @@ import { describe } from 'kixx-test';
 import { assertEqual, assert } from 'kixx-assert';
 import { testStorageEngineConformance } from '../../conformance/storage-engine.js';
 import { IndexNotConfiguredError } from '../../../lib/datastore/mod.js';
-import { SQLiteStorageEngine } from '../../../lib/node-datastore/mod.js';
+import { default as SQLiteStorageEngine } from '../../../lib/node-datastore/sqlite-storage-engine.js';
 
 
 // Run the full StorageEngine conformance suite using in-memory SQLite databases.

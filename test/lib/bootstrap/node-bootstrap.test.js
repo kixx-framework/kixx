@@ -1,6 +1,6 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
-import NodeBootstrap from '../../../lib/bootstrap/node-bootstrap.js';
+import NodeBootstrap from '../../../lib/node-bootstrap/node-bootstrap.js';
 
 const subject = new NodeBootstrap({
     environment: 'development',
@@ -17,7 +17,7 @@ describe('NodeBootstrap#createConfigStore()', ({ it }) => {
 describe('NodeBootstrap#createHttpRoutesStore()', ({ it }) => {
     it('returns the JS module routes store adapter', () => {
         const store = subject.createHttpRoutesStore([]);
-        assertEqual('JSModuleHttpRoutesStore', store.constructor.name);
+        assertEqual('MemoryHttpRoutesStore', store.constructor.name);
     });
 });
 

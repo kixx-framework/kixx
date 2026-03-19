@@ -5,7 +5,7 @@
  *
  *   import { testConfigStoreConformance } from '../../../conformance/config-store.js';
  *
- *   testConfigStoreConformance(() => new JSModuleConfigStore({ config: {}, secrets: {} }));
+ *   testConfigStoreConformance(() => new MemoryConfigStore({ config: {}, secrets: {} }));
  *
  * The factory must return a store instance that is ready to use. It will be called
  * once per describe block — pass a fresh instance each time.

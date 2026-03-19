@@ -1,4 +1,4 @@
-import ApplicationAssembler from '../../../lib/bootstrap/application-assembler.js';
+import ApplicationBootstrap from '../../../lib/bootstrap/application-bootstrap.js';
 import { testPluginLifecycleConformance } from '../../conformance/plugin.js';
 
 
@@ -16,7 +16,7 @@ function createMockBootstrap() {
     };
 }
 
-const subject = new ApplicationAssembler({
+const subject = new ApplicationBootstrap({
     environment: 'development',
     applicationDirectory: '/app',
     bootstrap: createMockBootstrap(),
