@@ -56,7 +56,7 @@ describe('DataStore#query() applies default limit 100', ({ before, after, it }) 
     });
 });
 
-describe('DataStore#query() applies default reverse false', ({ before, after, it }) => {
+describe('DataStore#query() applies default descending false', ({ before, after, it }) => {
     let engine;
     before(async () => {
         engine = createMockEngine();
@@ -66,9 +66,9 @@ describe('DataStore#query() applies default reverse false', ({ before, after, it
     });
     after(() => sinon.restore());
 
-    it('engine receives reverse false', () => {
+    it('engine receives descending false', () => {
         const opts = engine.query.firstCall.args[1];
-        assertEqual(false, opts.reverse);
+        assertEqual(false, opts.descending);
     });
 });
 

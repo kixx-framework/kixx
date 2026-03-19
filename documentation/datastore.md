@@ -226,7 +226,7 @@ const page = await store.query('Customer', {
     greaterThanOrEqualTo: '2026-01-01',
     lessThanOrEqualTo:    '2026-12-31',
     limit: 25,
-    reverse: true,
+    descending: true,
 });
 
 // Custom index
@@ -242,7 +242,7 @@ if (page.cursor) {
         greaterThanOrEqualTo: '2026-01-01',
         lessThanOrEqualTo:    '2026-12-31',
         limit: 25,
-        reverse: true,
+        descending: true,
         cursor: page.cursor,
     });
 }
@@ -270,7 +270,7 @@ Returns a `QueryResult`:
 | `lessThan` | `string` | — | Exclusive upper bound. |
 | `beginsWith` | `string` | — | Prefix match. Cannot be combined with other range operators. |
 | `limit` | `number` | `100` | Page size (1–1000). |
-| `reverse` | `boolean` | `false` | Descending order. |
+| `descending` | `boolean` | `false` | Descending order. |
 | `cursor` | `string` | — | Opaque token from a previous result to fetch the next page. |
 
 **Mutual exclusivity rules:**

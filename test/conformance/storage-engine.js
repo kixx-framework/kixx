@@ -422,7 +422,7 @@ export function testStorageEngineConformance(createEngine) {
             await engine.put({ id: 'q_b', type: 'QueryTest', sortKey: '2026-02-01' });
             await engine.put({ id: 'q_a', type: 'QueryTest', sortKey: '2026-01-01' });
             await engine.put({ id: 'q_c', type: 'QueryTest', sortKey: '2026-03-01' });
-            result = await engine.query('QueryTest', { reverse: false });
+            result = await engine.query('QueryTest', { descending: false });
         });
         after(async () => {
             await engine.close();
@@ -447,7 +447,7 @@ export function testStorageEngineConformance(createEngine) {
             await engine.put({ id: 'qd_b', type: 'QueryDesc', sortKey: '2026-02-01' });
             await engine.put({ id: 'qd_a', type: 'QueryDesc', sortKey: '2026-01-01' });
             await engine.put({ id: 'qd_c', type: 'QueryDesc', sortKey: '2026-03-01' });
-            result = await engine.query('QueryDesc', { reverse: true });
+            result = await engine.query('QueryDesc', { descending: true });
         });
         after(async () => {
             await engine.close();
@@ -531,7 +531,7 @@ export function testStorageEngineConformance(createEngine) {
         });
     });
 
-    describe('StorageEngine#query() reverse cursor pagination', ({ before, after, it }) => {
+    describe('StorageEngine#query() descending cursor pagination', ({ before, after, it }) => {
         let engine;
         let page1;
         let page2;
@@ -545,15 +545,15 @@ export function testStorageEngineConformance(createEngine) {
                     sortKey: `2026-0${ i }-01`,
                 });
             }
-            page1 = await engine.query('QueryReversePaginate', { limit: 2, reverse: true });
+            page1 = await engine.query('QueryReversePaginate', { limit: 2, descending: true });
             page2 = await engine.query('QueryReversePaginate', {
                 limit: 2,
-                reverse: true,
+                descending: true,
                 cursor: page1.cursor,
             });
             page3 = await engine.query('QueryReversePaginate', {
                 limit: 2,
-                reverse: true,
+                descending: true,
                 cursor: page2.cursor,
             });
         });
@@ -567,7 +567,7 @@ export function testStorageEngineConformance(createEngine) {
         it('page3 ends at the earliest sortKey', () => {
             assertEqual('2026-01-01', page3.records[0].doc.sortKey);
         });
-        it('all reverse pages cover different records', () => {
+        it('all descending pages cover different records', () => {
             const ids = [
                 ...page1.records.map((r) => r.doc.id),
                 ...page2.records.map((r) => r.doc.id),
