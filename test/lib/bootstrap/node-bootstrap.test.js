@@ -3,7 +3,6 @@ import { assertEqual } from 'kixx-assert';
 import NodeBootstrap from '../../../lib/node/bootstrap/node-bootstrap.js';
 
 const subject = new NodeBootstrap({
-    environment: 'development',
     applicationDirectory: '/app',
 });
 
