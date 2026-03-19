@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 import sinon from 'sinon';
-import NodeConfigStore from '../../../lib/node-config-store/node-config-store.js';
+import NodeConfigStore from '../../../lib/node/config-store/node-config-store.js';
 import { testConfigStoreConformance } from '../../conformance/config-store.js';
 
 

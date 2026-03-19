@@ -5,7 +5,7 @@
  *
  *   import { Readable } from 'node:stream';
  *   import { testServerRequestConformance } from '../../../conformance/http-server-request.js';
- *   import ServerRequest from '../../../../lib/node-http-server/server-request.js';
+ *   import ServerRequest from '../../../../lib/node/http-server/server-request.js';
  *
  *   testServerRequestConformance((spec) => {
  *       const url = spec.url || new URL('https://example.com/');

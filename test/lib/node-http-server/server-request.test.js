@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import { describe } from 'kixx-test';
 import { assertEqual, assertMatches, assertArray } from 'kixx-assert';
-import ServerRequest from '../../../lib/node-http-server/server-request.js';
+import ServerRequest from '../../../lib/node/http-server/server-request.js';
 import { testServerRequestConformance } from '../../conformance/http-server-request.js';
 
 

@@ -1,6 +1,6 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
-import NodeBootstrap from '../../../lib/node-bootstrap/node-bootstrap.js';
+import NodeBootstrap from '../../../lib/node/bootstrap/node-bootstrap.js';
 
 const subject = new NodeBootstrap({
     environment: 'development',

@@ -4,12 +4,12 @@ import fsp from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assertEqual, assert, assertNonEmptyString } from 'kixx-assert';
-import * as NodeFilesystem from '../../../lib/node-filesystem/mod.js';
+import * as NodeFilesystem from '../../../lib/node/filesystem/mod.js';
 import { testFilesystemConformance } from '../../conformance/filesystem.js';
 
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
-const NODE_FILESYSTEM_FILE = path.resolve(THIS_DIR, '../../../lib/node-filesystem/mod.js');
+const NODE_FILESYSTEM_FILE = path.resolve(THIS_DIR, '../../../lib/node/filesystem/mod.js');
 
 testFilesystemConformance(() => NodeFilesystem);
 
