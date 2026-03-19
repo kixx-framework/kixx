@@ -2,7 +2,7 @@
 
 The DataStore is a schemaless document database embedded in the Kixx framework. It stores JSON documents identified by a composite `(type, id)` key, enforces optimistic concurrency control through document versioning, and supports indexed queries on top-level document attributes.
 
-It is built on the same Ports and Adapters pattern as the rest of Kixx: a platform-neutral `DataStore` class delegates all persistence work to a pluggable `StorageEngine` adapter. Today the only shipped adapter is `SQLiteStorageEngine` (backed by the Node.js built-in `node:sqlite` module). Future adapters can target DynamoDB, Cloudflare D1/KV, or any other backend without changing any DataStore or application code.
+It is built on the same Ports and Adapters pattern as the rest of Kixx: a platform-neutral `DataStore` class delegates all persistence work to a pluggable `StorageEngine` adapter. Today the only available adapter is `SQLiteStorageEngine` (backed by the Node.js built-in `node:sqlite` module). Future adapters can target DynamoDB, Cloudflare D1/KV, or any other backend without changing application code.
 
 ---
 
@@ -63,8 +63,6 @@ A document is any plain JSON-serializable object. It must include:
 | `sortKey`  | `string` | No       | Enables range queries on the built-in sort index. |
 
 Any additional top-level attributes are allowed as long as their values are JSON-serializable. Nested objects and arrays are supported.
-
-The following names are **reserved** and must not appear in the document — they live in the `DocumentRecord` wrapper, not inside the document itself: `version`, `createdAt`, `updatedAt`.
 
 ---
 
@@ -206,10 +204,10 @@ await store.configureIndexes([
 await store.configureIndexes([]);
 ```
 
-Each `IndexDefinition` has a `type` (document type pattern) and an `attribute` (top-level attribute name).
+Each `IndexDefinition` has a `type` (document type pattern) and an `attribute` (top-level attribute name). Attribute names may include letters, numbers, underscores, and hyphens, so document keys such as `signup-date` are valid custom-index targets.
 
 - **Adding** a new index over existing data causes the engine to backfill the index automatically.
-- **Removing** an index drops the underlying storage structure.
+- **Removing** an index removes query support for that custom index.
 - Calling with the same list twice is a no-op.
 
 ---
@@ -344,7 +342,13 @@ All errors extend `WrappedError` (from `lib/errors.js`) and carry `expected: tru
 | `VersionConflictError` | `VERSION_CONFLICT` | 409 | Write or delete when stored version ≠ provided version. |
 | `IndexNotConfiguredError` | `INDEX_NOT_CONFIGURED` | 400 | Query referencing an undeclared index. |
 
-Datastore errors carry structured properties so callers do not need to parse message text. `VersionConflictError` includes extra version details for retry or merge logic:
+Datastore errors carry structured properties so callers do not need to parse message text:
+- `DataStoreNotInitializedError` and `DataStoreClosedError` expose `operation`.
+- `DocumentAlreadyExistsError` and `DocumentNotFoundError` expose `type` and `id`.
+- `IndexNotConfiguredError` exposes `type` and `attribute`.
+- `VersionConflictError` exposes `type`, `id`, `expectedVersion`, and `actualVersion`.
+
+For example, `VersionConflictError` includes extra version details for retry or merge logic:
 
 ```javascript
 try {
@@ -377,7 +381,7 @@ Call `store.close()` during shutdown to release any resources held by the underl
                    │ uses
 ┌──────────────────▼───────────────────────┐
 │         DataStore  (lib/datastore/)      │
-│  Validates inputs, tracks index registry,│
+│  Validates inputs, owns lifecycle,       │
 │  normalizes query options, delegates I/O │
 └──────────────────┬───────────────────────┘
                    │ depends on
@@ -398,7 +402,7 @@ The `DataStore` class:
 - Owns the public lifecycle so callers get datastore-specific errors instead of adapter-specific failures when they use the store before `initialize()` or after `close()`.
 - Resolves query option aliases (`startKey` → `greaterThanOrEqualTo`) and expands `beginsWith` into a canonical `greaterThanOrEqualTo + lessThan` range before calling the engine. Engines receive only the canonical operators.
 
-The SQLite engine persists the configured index catalog in the database itself. That keeps index availability durable across process restarts and makes the engine, not the `DataStore` instance, the source of truth for custom-index queries.
+The SQLite engine persists the configured index catalog in the database itself. That keeps index availability durable across process restarts and makes the engine, not the `DataStore` instance, the source of truth for custom-index queries. SQLite still retains generated columns for removed indexes because of SQLite schema limitations, but those columns become inert once query support for the removed index is dropped.
 
 The `StorageEngine` port is defined in `lib/ports/storage-engine.js` as a pure JSDoc file with no runtime code. The port documents behavioral invariants that go beyond method signatures — read it before writing a new adapter.
 
@@ -406,7 +410,7 @@ The `StorageEngine` port is defined in `lib/ports/storage-engine.js` as a pure J
 
 ## Adding a New Storage Engine
 
-1. **Read `lib/ports/storage-engine.js`** — the invariants section documents requirements that are not obvious from the method signatures alone (cursor stability, version conflict semantics, etc.).
+1. **Read `lib/ports/storage-engine.js`** — the invariants section documents requirements that are not obvious from the method signatures alone (cursor semantics, version conflict semantics, etc.).
 
 2. **Create your adapter** in a new directory, e.g. `lib/cloudflare-d1-datastore/`. Add a `@see` reference to the port in the class JSDoc.
 
