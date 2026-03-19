@@ -223,8 +223,8 @@ Retrieve a page of documents for a given type using an index.
 ```javascript
 // Default index (sort by sortKey)
 const page = await store.query('Customer', {
-    startKey: '2026-01-01',
-    endKey:   '2026-12-31',
+    greaterThanOrEqualTo: '2026-01-01',
+    lessThanOrEqualTo:    '2026-12-31',
     limit: 25,
     reverse: true,
 });
@@ -239,8 +239,8 @@ const byEmail = await store.query('Customer', {
 // Next page
 if (page.cursor) {
     const page2 = await store.query('Customer', {
-        startKey: '2026-01-01',
-        endKey:   '2026-12-31',
+        greaterThanOrEqualTo: '2026-01-01',
+        lessThanOrEqualTo:    '2026-12-31',
         limit: 25,
         reverse: true,
         cursor: page.cursor,
@@ -264,8 +264,6 @@ Returns a `QueryResult`:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `index` | `string` | — | Attribute name of a custom index. Omit to use the built-in `sortKey` index. |
-| `startKey` | `string` | — | Inclusive lower bound. Alias for `greaterThanOrEqualTo`. |
-| `endKey` | `string` | — | Inclusive upper bound. Alias for `lessThanOrEqualTo`. |
 | `greaterThanOrEqualTo` | `string` | — | Inclusive lower bound. |
 | `lessThanOrEqualTo` | `string` | — | Inclusive upper bound. |
 | `greaterThan` | `string` | — | Exclusive lower bound. |
@@ -276,10 +274,8 @@ Returns a `QueryResult`:
 | `cursor` | `string` | — | Opaque token from a previous result to fetch the next page. |
 
 **Mutual exclusivity rules:**
-- `startKey` and `greaterThanOrEqualTo` are aliases — providing both is a `ValidationError`.
-- `endKey` and `lessThanOrEqualTo` are aliases — providing both is a `ValidationError`.
-- `greaterThan` and any inclusive lower bound are mutually exclusive.
-- `lessThan` and any inclusive upper bound are mutually exclusive.
+- `greaterThan` and `greaterThanOrEqualTo` are mutually exclusive.
+- `lessThan` and `lessThanOrEqualTo` are mutually exclusive.
 - `beginsWith` cannot be combined with any other range operator.
 
 All range bound values must be strings.
@@ -335,7 +331,7 @@ Seek-based cursors give us:
 
 ## Errors
 
-All errors extend `WrappedError` (from `lib/errors.js`) and carry `expected: true`.
+All errors extend `WrappedError` (from `lib/errors.js`) and carry `expected: true`, making them operational errors.
 
 | Class | `code` | `httpStatusCode` | When thrown |
 |-------|--------|-----------------|-------------|
@@ -403,7 +399,7 @@ Call `store.close()` during shutdown to release any resources held by the underl
 The `DataStore` class:
 - Validates all inputs and throws typed errors for invalid arguments.
 - Owns the public lifecycle so callers get datastore-specific errors instead of adapter-specific failures when they use the store before `initialize()` or after `close()`.
-- Resolves query option aliases (`startKey` → `greaterThanOrEqualTo`) and expands `beginsWith` into a canonical `greaterThanOrEqualTo + lessThan` range before calling the engine. Engines receive only the canonical operators.
+- Expands `beginsWith` into a canonical `greaterThanOrEqualTo + lessThan` range before calling the engine. Engines receive only the canonical operators.
 
 The SQLite engine persists the configured index catalog in the database itself. That keeps index availability durable across process restarts and makes the engine, not the `DataStore` instance, the source of truth for custom-index queries. SQLite still retains generated columns for removed indexes because of SQLite schema limitations, but those columns become inert once query support for the removed index is dropped.
 

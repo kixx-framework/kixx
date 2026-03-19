@@ -72,48 +72,6 @@ describe('DataStore#query() applies default reverse false', ({ before, after, it
     });
 });
 
-// --- alias resolution -------------------------------------------------------
-
-describe('DataStore#query() resolves startKey alias to greaterThanOrEqualTo', ({ before, after, it }) => {
-    let engine;
-    before(async () => {
-        engine = createMockEngine();
-        const store = new DataStore(engine);
-        await store.initialize();
-        await store.query('Customer', { startKey: '2026-01-01' });
-    });
-    after(() => sinon.restore());
-
-    it('engine receives greaterThanOrEqualTo', () => {
-        const opts = engine.query.firstCall.args[1];
-        assertEqual('2026-01-01', opts.greaterThanOrEqualTo);
-    });
-    it('engine does not receive startKey', () => {
-        const opts = engine.query.firstCall.args[1];
-        assertEqual(undefined, opts.startKey);
-    });
-});
-
-describe('DataStore#query() resolves endKey alias to lessThanOrEqualTo', ({ before, after, it }) => {
-    let engine;
-    before(async () => {
-        engine = createMockEngine();
-        const store = new DataStore(engine);
-        await store.initialize();
-        await store.query('Customer', { endKey: '2026-12-31' });
-    });
-    after(() => sinon.restore());
-
-    it('engine receives lessThanOrEqualTo', () => {
-        const opts = engine.query.firstCall.args[1];
-        assertEqual('2026-12-31', opts.lessThanOrEqualTo);
-    });
-    it('engine does not receive endKey', () => {
-        const opts = engine.query.firstCall.args[1];
-        assertEqual(undefined, opts.endKey);
-    });
-});
-
 // --- beginsWith expansion ---------------------------------------------------
 
 describe('DataStore#query() expands beginsWith into gte + lt range', ({ before, after, it }) => {
@@ -229,17 +187,14 @@ describe('DataStore#query() with limit above 1000', ({ before, after, it }) => {
 
 // --- mutual exclusivity validation ------------------------------------------
 
-describe('DataStore#query() when startKey and greaterThanOrEqualTo both provided', ({ before, after, it }) => {
+describe('DataStore#query() when greaterThan and greaterThanOrEqualTo both provided', ({ before, after, it }) => {
     let error;
     before(async () => {
         const engine = createMockEngine();
         const store = new DataStore(engine);
         await store.initialize();
         try {
-            await store.query('Customer', {
-                startKey: 'a',
-                greaterThanOrEqualTo: 'b',
-            });
+            await store.query('Customer', { greaterThan: 'a', greaterThanOrEqualTo: 'b' });
         } catch (err) {
             error = err;
         }
@@ -254,52 +209,14 @@ describe('DataStore#query() when startKey and greaterThanOrEqualTo both provided
     });
 });
 
-describe('DataStore#query() when endKey and lessThanOrEqualTo both provided', ({ before, after, it }) => {
+describe('DataStore#query() when lessThan and lessThanOrEqualTo both provided', ({ before, after, it }) => {
     let error;
     before(async () => {
         const engine = createMockEngine();
         const store = new DataStore(engine);
         await store.initialize();
         try {
-            await store.query('Customer', { endKey: 'z', lessThanOrEqualTo: 'y' });
-        } catch (err) {
-            error = err;
-        }
-    });
-    after(() => sinon.restore());
-
-    it('throws ValidationError', () => {
-        assertEqual('ValidationError', error.name);
-    });
-});
-
-describe('DataStore#query() when greaterThan and startKey both provided', ({ before, after, it }) => {
-    let error;
-    before(async () => {
-        const engine = createMockEngine();
-        const store = new DataStore(engine);
-        await store.initialize();
-        try {
-            await store.query('Customer', { greaterThan: 'a', startKey: 'b' });
-        } catch (err) {
-            error = err;
-        }
-    });
-    after(() => sinon.restore());
-
-    it('throws ValidationError', () => {
-        assertEqual('ValidationError', error.name);
-    });
-});
-
-describe('DataStore#query() when lessThan and endKey both provided', ({ before, after, it }) => {
-    let error;
-    before(async () => {
-        const engine = createMockEngine();
-        const store = new DataStore(engine);
-        await store.initialize();
-        try {
-            await store.query('Customer', { lessThan: 'z', endKey: 'y' });
+            await store.query('Customer', { lessThan: 'z', lessThanOrEqualTo: 'y' });
         } catch (err) {
             error = err;
         }
@@ -319,25 +236,6 @@ describe('DataStore#query() when beginsWith combined with greaterThan', ({ befor
         await store.initialize();
         try {
             await store.query('Customer', { beginsWith: 'foo', greaterThan: 'bar' });
-        } catch (err) {
-            error = err;
-        }
-    });
-    after(() => sinon.restore());
-
-    it('throws ValidationError', () => {
-        assertEqual('ValidationError', error.name);
-    });
-});
-
-describe('DataStore#query() when beginsWith combined with startKey', ({ before, after, it }) => {
-    let error;
-    before(async () => {
-        const engine = createMockEngine();
-        const store = new DataStore(engine);
-        await store.initialize();
-        try {
-            await store.query('Customer', { beginsWith: 'foo', startKey: 'bar' });
         } catch (err) {
             error = err;
         }
