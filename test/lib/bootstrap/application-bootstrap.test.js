@@ -4,6 +4,7 @@ import { testPluginLifecycleConformance } from '../../conformance/plugin.js';
 
 function createMockBootstrap() {
     return {
+        applicationDirectory: '/app',
         createConfigStore() {
             return null;
         },
@@ -18,7 +19,6 @@ function createMockBootstrap() {
 
 const subject = new ApplicationBootstrap({
     environment: 'development',
-    applicationDirectory: '/app',
     bootstrap: createMockBootstrap(),
 });
 
