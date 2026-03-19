@@ -1,4 +1,4 @@
-import * as plugin from '../../../../lib/hyperview/node-local-store/plugin.js';
+import * as plugin from '../../../../lib/node/hyperview-local-store/plugin.js';
 import { testPluginConformance } from '../../../conformance/plugin.js';
 
 

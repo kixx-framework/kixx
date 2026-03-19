@@ -4,7 +4,7 @@ import { Readable } from 'node:stream';
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 import sinon from 'sinon';
-import StaticFileServerStore, { File } from '../../../../lib/hyperview/node-local-store/static-file-server-store.js';
+import StaticFileServerStore, { File } from '../../../../lib/node/hyperview-local-store/static-file-server-store.js';
 import { testHyperviewStaticFileServerStoreConformance } from '../../../conformance/hyperview-static-file-server-store.js';
 
 

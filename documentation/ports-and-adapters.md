@@ -49,7 +49,7 @@ Kixx is structured around the **Ports and Adapters** pattern (also called Hexago
 | `lib/config-stores/` | Adapters | In-memory config sources for tests and embedded config |
 | `lib/node-config-store/` | Adapters | Node.js JSONC config file adapter |
 | `lib/http-routes-stores/` | Adapters | Route sources (currently: JS array in memory) |
-| `lib/hyperview/node-local-store/` | Adapters | Page, template, and static file stores for local filesystem |
+| `lib/node/hyperview-local-store/` | Adapters | Page, template, and static file stores for local filesystem |
 | `lib/node-filesystem/` | Adapters | Node.js `fs`/`fs/promises` implementation of the Filesystem port |
 | `lib/node-http-server/` | Adapters | Node.js `http.Server` wrapper; `ServerRequest` (Node.js adapter) |
 | `lib/node-datastore/` | Adapters | Node.js `node:sqlite` implementation of the StorageEngine port |

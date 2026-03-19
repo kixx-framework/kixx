@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assertEqual, assertArray } from 'kixx-assert';
 import sinon from 'sinon';
-import PageStore from '../../../../lib/hyperview/node-local-store/page-store.js';
+import PageStore from '../../../../lib/node/hyperview-local-store/page-store.js';
 import { testHyperviewPageStoreConformance } from '../../../conformance/hyperview-page-store.js';
 
 
