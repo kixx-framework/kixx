@@ -102,31 +102,30 @@ export function testStorageEngineConformance(createEngine) {
         });
     });
 
-    describe('StorageEngine#put() when creating a duplicate (type, id)', ({ before, after, it }) => {
+    describe('StorageEngine#put() when overwriting an existing document (no version)', ({ before, after, it }) => {
         let engine;
-        let error;
+        let original;
+        let overwritten;
         before(async () => {
             engine = await createEngine();
-            await engine.put({ id: 'dup_001', type: 'ConformanceTest' });
-            try {
-                await engine.put({ id: 'dup_001', type: 'ConformanceTest' });
-            } catch (err) {
-                error = err;
-            }
+            original = await engine.put({ id: 'dup_001', type: 'ConformanceTest', name: 'Alice' });
+            overwritten = await engine.put({ id: 'dup_001', type: 'ConformanceTest', name: 'Bob' });
         });
         after(async () => {
             await engine.close();
         });
 
-        it('throws DocumentAlreadyExistsError', () => {
-            assert(error);
-            assertEqual('DocumentAlreadyExistsError', error.name);
+        it('resolves without error', () => {
+            assert(overwritten !== null && typeof overwritten === 'object');
         });
-        it('error code is DOCUMENT_EXISTS', () => {
-            assertEqual('DOCUMENT_EXISTS', error.code);
+        it('version increments', () => {
+            assertEqual(2, overwritten.version);
         });
-        it('error is expected', () => {
-            assertEqual(true, error.expected);
+        it('doc reflects the new content', () => {
+            assertEqual('Bob', overwritten.doc.name);
+        });
+        it('createdAt is preserved from the original', () => {
+            assertEqual(original.createdAt, overwritten.createdAt);
         });
     });
 

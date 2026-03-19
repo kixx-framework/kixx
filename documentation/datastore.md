@@ -19,7 +19,6 @@ Error classes are also exported from `kixx/datastore`:
 import {
     DataStoreClosedError,
     DataStoreNotInitializedError,
-    DocumentAlreadyExistsError,
     DocumentNotFoundError,
     VersionConflictError,
     IndexNotConfiguredError,
@@ -117,19 +116,19 @@ Releases any resources held by the underlying engine. Idempotent — repeated ca
 
 ### `store.put(doc, options?)`
 
-Create or update a document.
+Write a document.
 
 ```javascript
-// Create
+// Upsert — creates the document if it does not exist, overwrites it if it does.
 const record = await store.put({
     id: 'cust_001',
     type: 'Customer',
     sortKey: '2026-03-18',
     name: 'Acme Corp',
 });
-// record.version === 1
+// record.version === 1 (new document)
 
-// Update — pass { version } for optimistic concurrency control
+// Optimistic update — pass { version } to guard against concurrent writes.
 const updated = await store.put(
     { ...record.doc, name: 'Acme Corporation' },
     { version: record.version }
@@ -138,15 +137,14 @@ const updated = await store.put(
 ```
 
 Behavior is determined by `options.version`:
-- **No `version`** — create. Fails if `(type, id)` already exists.
-- **`version` provided** — update. Fails if the document does not exist or the stored version does not match.
+- **No `version`** — upsert. Creates the document if it does not exist; overwrites it if it does.
+- **`version` provided** — optimistic update. Fails if the document does not exist or the stored version does not match.
 
 **Throws:**
 
 | Error | Condition |
 |-------|-----------|
 | `ValidationError` | Invalid `doc` or `options.version`. |
-| `DocumentAlreadyExistsError` | Create when `(type, id)` already exists. |
 | `DocumentNotFoundError` | Update when `(type, id)` does not exist. |
 | `VersionConflictError` | Update when stored version ≠ provided version. |
 
@@ -337,14 +335,13 @@ All errors extend `WrappedError` (from `lib/errors.js`) and carry `expected: tru
 |-------|--------|-----------------|-------------|
 | `DataStoreNotInitializedError` | `DATASTORE_NOT_INITIALIZED` | — | Any operation other than `initialize()` before initialization completes. |
 | `DataStoreClosedError` | `DATASTORE_CLOSED` | — | Any operation after `close()`. |
-| `DocumentAlreadyExistsError` | `DOCUMENT_EXISTS` | 409 | Create when `(type, id)` already exists. |
 | `DocumentNotFoundError` | `DOCUMENT_NOT_FOUND` | 404 | Update or delete when `(type, id)` does not exist. |
 | `VersionConflictError` | `VERSION_CONFLICT` | 409 | Write or delete when stored version ≠ provided version. |
 | `IndexNotConfiguredError` | `INDEX_NOT_CONFIGURED` | 400 | Query referencing an undeclared index. |
 
 Datastore errors carry structured properties so callers do not need to parse message text:
 - `DataStoreNotInitializedError` and `DataStoreClosedError` expose `operation`.
-- `DocumentAlreadyExistsError` and `DocumentNotFoundError` expose `type` and `id`.
+- `DocumentNotFoundError` exposes `type` and `id`.
 - `IndexNotConfiguredError` exposes `type` and `attribute`.
 - `VersionConflictError` exposes `type`, `id`, `expectedVersion`, and `actualVersion`.
 
