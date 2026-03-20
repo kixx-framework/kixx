@@ -17,7 +17,9 @@
       "Bash(ls /Users/kris/Projects/Kixx/kixx/main/*.mjs)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(ls:*)",
+      "Bash(xargs cat:*)"
     ]
   }
 }

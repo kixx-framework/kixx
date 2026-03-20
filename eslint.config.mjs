@@ -29,6 +29,7 @@ export default [
                 clearTimeout: 'readonly',
                 structuredClone: 'readonly',
                 Blob: 'readonly',
+                TextEncoder: 'readonly',
                 URL: 'readonly',
                 URLSearchParams: 'readonly',
                 Headers: 'readonly',
