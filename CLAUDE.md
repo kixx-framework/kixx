@@ -21,6 +21,15 @@ node ./run-tests.js test/http-router/http-target.test.js # Single test file
 npm test                                                         # Lint + all tests
 ```
 
+## Type Checking Helpers
+Before writing raw `typeof x === ...`, `x instanceof ...`, or `x === null` / `x === undefined` checks, prefer the project's `is*` test helpers from `lib/assertions.js`:
+
+- `isFunction(value)` — instead of `typeof x === 'function'`
+- `isUndefined(value)` — instead of `x === undefined`
+- `isDate(value)` / `isValidDate(value)` — instead of `x instanceof Date`
+
+See the `runtime-assertions` skill for the full list of `is*` helpers.
+
 ## Skills Reference
 Development guidelines are documented as skills in `.claude/skills/`:
 
