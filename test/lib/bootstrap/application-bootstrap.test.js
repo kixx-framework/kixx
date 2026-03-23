@@ -269,3 +269,48 @@ describe('ApplicationBootstrap#createHttpServer()', ({ before, it }) => {
         assertEqual(mockServer, result);
     });
 });
+
+describe('ApplicationBootstrap#createHttpRouter()', ({ before, it }) => {
+    const mockStore = {};
+    const mockApplicationContext = {
+        getHttpRouterRegistries: sinon.fake.returns({
+            middleware: new Map(),
+            requestHandlers: new Map(),
+            errorHandlers: new Map(),
+        }),
+    };
+    const mockBootstrap = {
+        applicationDirectory: '/app',
+        createConfigStore() {
+            return null;
+        },
+        createHttpRoutesStore: sinon.fake.returns(mockStore),
+        getPrintWriter() {
+            return null;
+        },
+    };
+
+    let router;
+    const vhostsConfigs = [{ name: 'default', routes: [] }];
+
+    before(() => {
+        const appBootstrap = new ApplicationBootstrap({
+            environment: 'development',
+            bootstrap: mockBootstrap,
+        });
+        router = appBootstrap.createHttpRouter(mockApplicationContext, vhostsConfigs);
+    });
+
+    it('loads router registries from application context', () => {
+        assertEqual(1, mockApplicationContext.getHttpRouterRegistries.callCount);
+    });
+
+    it('creates the routes store from vhost configs', () => {
+        assertEqual(1, mockBootstrap.createHttpRoutesStore.callCount);
+        assertEqual(vhostsConfigs, mockBootstrap.createHttpRoutesStore.firstCall.args[0]);
+    });
+
+    it('returns an HttpRouter instance', () => {
+        assertEqual('HttpRouter', router.constructor.name);
+    });
+});
