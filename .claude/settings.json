@@ -1,4 +1,5 @@
 {
   "includeGitInstructions": false,
-  "respectGitignore": false
+  "respectGitignore": false,
+  "autoMemoryEnabled": false
 }
