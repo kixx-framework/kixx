@@ -5,7 +5,7 @@
     "type": "module",
     "main": "lib/mod.js",
     "exports": {
-        ".": "./lib/mod.js",
+        ".": "./lib/mod.js"
     },
     "engines": {
         "node": ">=24"
@@ -31,5 +31,10 @@
     "bugs": {
         "url": "https://github.com/kixx-framework/kixx/issues"
     },
-    "homepage": "https://www.kixx.dev"
+    "homepage": "https://www.kixx.dev",
+    "devDependencies": {
+        "kixx-assert": "2.1.1",
+        "kixx-linting": "1.1.0",
+        "kixx-test": "3.0.0"
+    }
 }
