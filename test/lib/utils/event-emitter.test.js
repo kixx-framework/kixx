@@ -67,6 +67,19 @@ describe('EventEmitter', ({ describe }) => {
             assertEqual(1, secondHandler.mock.callCount());
             assertEqual('next', secondHandler.mock.getCall(0).arguments[0]);
         });
+
+        it('deduplicates the same handler for the same event', () => {
+            const tracker = new MockTracker();
+            const emitter = new EventEmitter();
+            const handler = tracker.fn();
+
+            emitter
+                .once('change', handler)
+                .once('change', handler)
+                .emit('change');
+
+            assertEqual(1, handler.mock.callCount());
+        });
     });
 
     describe('EventEmitter#off', ({ it }) => {
@@ -96,6 +109,18 @@ describe('EventEmitter', ({ describe }) => {
                 .once('change', handler)
                 .off('change', handler)
                 .emit('change');
+
+            assertEqual(0, handler.mock.callCount());
+        });
+
+        it('ignores removal of a handler for an event with no registered handlers', () => {
+            const tracker = new MockTracker();
+            const emitter = new EventEmitter();
+            const handler = tracker.fn();
+
+            assertEqual(emitter, emitter.off('change', handler));
+
+            emitter.emit('change');
 
             assertEqual(0, handler.mock.callCount());
         });
@@ -237,6 +262,46 @@ describe('EventEmitter', ({ describe }) => {
 
             emitter.emit('change', 'current');
             emitter.emit('change', 'next');
+
+            assertEqual(1, secondHandler.mock.callCount());
+            assertEqual('current', secondHandler.mock.getCall(0).arguments[0]);
+        });
+
+        it('delivers a single emit to both persistent and one-time handlers', () => {
+            const tracker = new MockTracker();
+            const emitter = new EventEmitter();
+            const persistentHandler = tracker.fn();
+            const onceHandler = tracker.fn();
+
+            emitter
+                .on('change', persistentHandler)
+                .once('change', onceHandler)
+                .emit('change', 'first')
+                .emit('change', 'second');
+
+            assertEqual(2, persistentHandler.mock.callCount());
+            assertEqual('first', persistentHandler.mock.getCall(0).arguments[0]);
+            assertEqual('second', persistentHandler.mock.getCall(1).arguments[0]);
+
+            assertEqual(1, onceHandler.mock.callCount());
+            assertEqual('first', onceHandler.mock.getCall(0).arguments[0]);
+        });
+
+        it('delivers to one-time handlers snapshotted before emit-time removal', () => {
+            const tracker = new MockTracker();
+            const emitter = new EventEmitter();
+            const secondHandler = tracker.fn();
+
+            // The first one-time handler removes the second mid-emit. Because emit
+            // deletes the one-time set before invoking, the off() call is a no-op
+            // and the second handler still receives the current event.
+            emitter
+                .once('change', () => {
+                    emitter.off('change', secondHandler);
+                })
+                .once('change', secondHandler);
+
+            emitter.emit('change', 'current');
 
             assertEqual(1, secondHandler.mock.callCount());
             assertEqual('current', secondHandler.mock.getCall(0).arguments[0]);
