@@ -1,24 +1,18 @@
 {
     "name": "kixx",
     "version": "6.0.0",
-    "description": "A rapid web development framework for humans and their AI tools.",
+    "description": "A web development framework for humans and their clankers.",
     "type": "module",
     "main": "lib/mod.js",
     "exports": {
         ".": "./lib/mod.js",
-        "./assertions": "./lib/assertions.js",
-        "./errors": "./lib/errors.js",
-        "./utils": "./lib/utils/mod.js",
-        "./node": "./lib/node/mod.js",
-        "./bootstrap": "./lib/bootstrap/application-bootstrap.js",
-        "./datastore": "./lib/datastore/mod.js"
     },
     "engines": {
         "node": ">=24"
     },
     "scripts": {
-        "test": "eslint ./ && node run-tests.js",
-        "lint": "eslint ./"
+        "test": "node run-linter && node run-tests.js",
+        "lint": "node run-linter"
     },
     "repository": {
         "type": "git",
@@ -27,22 +21,10 @@
     "files": [
         "lib/"
     ],
-    "devDependencies": {
-        "@eslint/js": "9.39.2",
-        "eslint": "9.39.2",
-        "kixx-assert": "2.1.0",
-        "kixx-server-errors": "5.0.0",
-        "kixx-templating": "5.0.0",
-        "kixx-test": "2.1.0",
-        "sinon": "~21.0.1"
-    },
     "keywords": [
         "kixx",
-        "http",
-        "server",
-        "html",
-        "hypermedia",
-        "agent"
+        "web",
+        "hypermedia"
     ],
     "author": "Kris Walker (www.kriswalker.me)",
     "license": "MIT",
