@@ -1,90 +1,46 @@
-import js from '@eslint/js';
-
-
 export default [
     {
         ignores: [
-            '.claude/',
-            'node_modules/',
             'lib/vendor/',
-            // Other vendor/dependency directories:
-            'lib/assertions/',
-            'lib/errors/',
-            'lib/logger/',
-            'lib/kixx-templating/',
-            // The scratch pad
+            'node_modules/',
             'tmp/',
         ],
-    },
-    js.configs.recommended,
-    {
         languageOptions: {
-            // See https://node.green/#ES2022
             ecmaVersion: 2022,
             sourceType: 'module',
             globals: {
-                // Web globals
-                console: 'readonly',
-                setTimeout: 'readonly',
-                clearTimeout: 'readonly',
-                structuredClone: 'readonly',
                 Blob: 'readonly',
+                Uint8Array: 'readonly',
                 TextEncoder: 'readonly',
-                URL: 'readonly',
-                URLSearchParams: 'readonly',
+                TextDecoder: 'readonly',
+                FormData: 'readonly',
+                Date: 'readonly',
+                fetch: 'readonly',
                 Headers: 'readonly',
+                ReadableStream: 'readonly',
+                Request: 'readonly',
                 Response: 'readonly',
-                btoa: 'readonly',
+                URL: 'readonly',
                 atob: 'readonly',
-                // Node.js globals
-                global: 'readonly',
-                Buffer: 'readonly',
-                queueMicrotask: 'readonly',
+                btoa: 'readonly',
+                setTimeout: 'readonly',
+                console: 'readonly',
+                structuredClone: 'readonly',
+                crypto: 'readonly',
             },
         },
         rules: {
-            'array-bracket-spacing': [
-                'error',
-                'always',
-                { objectsInArrays: false },
-            ],
-            'arrow-parens': [
-                'error',
-                'always',
-            ],
-            'arrow-spacing': [
-                'error',
-            ],
-            'block-spacing': [
-                'error',
-            ],
-            'brace-style': [
-                'error',
-            ],
-            'capitalized-comments': [
-                'off',
-            ],
             'comma-dangle': [
                 'error',
                 {
                     arrays: 'always-multiline',
                     objects: 'always-multiline',
-                    functions: 'never',
-                    imports: 'never',
-                    exports: 'never',
+                    functions: 'always-multiline',
+                    imports: 'always-multiline',
+                    exports: 'always-multiline',
                 },
             ],
-            'comma-spacing': [
-                'error',
-            ],
-            'comma-style': [
-                'error',
-            ],
-            // Authors have the freedom to return something or not.
-            'consistent-return': [
-                'off',
-            ],
-            curly: [
+            'constructor-super': [
                 'error',
             ],
             'default-case-last': [
@@ -93,7 +49,10 @@ export default [
             'eol-last': [
                 'error',
             ],
-            eqeqeq: [
+            'eqeqeq': [
+                'error',
+            ],
+            'for-direction': [
                 'error',
             ],
             'func-call-spacing': [
@@ -104,80 +63,89 @@ export default [
                 'declaration',
                 { allowArrowFunctions: true },
             ],
+            'getter-return': [
+                'error',
+            ],
             'grouped-accessor-pairs': [
                 'error',
                 'getBeforeSet',
-            ],
-            'guard-for-in': [
-                'error',
-            ],
-            'implicit-arrow-linebreak': [
-                'error',
             ],
             indent: [
                 'error',
                 4,
                 { SwitchCase: 1 },
             ],
-            'key-spacing': [
-                'error',
-                { beforeColon: false, afterColon: true },
-            ],
-            'keyword-spacing': [
-                'error',
-            ],
-            // Turn linebreak-style off to accomodate windows. Linebreaks will be converted
-            // to Windows format on checkout, but converted back to unix on commit.
-            'linebreak-style': [
-                'off',
-                'unix',
-            ],
-            'lines-between-class-members': [
-                'error',
-                'always',
-                { exceptAfterSingleLine: true },
-            ],
             'max-statements-per-line': [
                 'error',
                 { max: 1 },
             ],
-            'new-cap': [
-                'error',
-            ],
             'new-parens': [
                 'error',
             ],
-            // Performing an await as part of each operation may indicate that
-            // the program is not taking full advantage of the parallelization
-            // benefits of async/await.
-            // Often, the code can be refactored to create all the promises at
-            // once, then get access to the results using Promise.all()
-            // Turning this off and letting developers take control.
-            'no-await-in-loop': [
-                'off',
-            ],
-            'no-bitwise': [
-                'warn',
+            'no-async-promise-executor': [
+                'error',
             ],
             'no-caller': [
+                'error',
+            ],
+            'no-case-declarations': [
+                'error',
+            ],
+            'no-class-assign': [
+                'error',
+            ],
+            'no-compare-neg-zero': [
+                'error',
+            ],
+            'no-cond-assign': [
                 'error',
             ],
             'no-console': [
                 'error',
             ],
+            'no-const-assign': [
+                'error',
+            ],
             'no-constant-binary-expression': [
+                'error',
+            ],
+            'no-constant-condition': [
+                'error',
+            ],
+            'no-control-regex': [
+                'error',
+            ],
+            'no-debugger': [
                 'error',
             ],
             'no-duplicate-imports': [
                 'error',
             ],
+            'no-dupe-class-members': [
+                'error',
+            ],
+            'no-dupe-else-if': [
+                'error',
+            ],
+            'no-dupe-keys': [
+                'error',
+            ],
+            'no-duplicate-case': [
+                'error',
+            ],
             'no-else-return': [
+                'error',
+            ],
+            'no-empty': [
+                'error',
+            ],
+            'no-empty-character-class': [
                 'error',
             ],
             'no-eq-null': [
                 'error',
             ],
-            'no-eval': [
+            'no-ex-assign': [
                 'error',
             ],
             'no-extend-native': [
@@ -186,13 +154,22 @@ export default [
             'no-floating-decimal': [
                 'error',
             ],
+            'no-func-assign': [
+                'error',
+            ],
+            'no-global-assign': [
+                'error',
+            ],
             'no-implicit-coercion': [
                 'error',
             ],
-            'no-implied-eval': [
+            'no-invalid-regexp': [
                 'error',
             ],
             'no-invalid-this': [
+                'error',
+            ],
+            'no-irregular-whitespace': [
                 'error',
             ],
             'no-lonely-if': [
@@ -201,41 +178,58 @@ export default [
             'no-loop-func': [
                 'error',
             ],
+            'no-loss-of-precision': [
+                'error',
+            ],
+            'no-misleading-character-class': [
+                'error',
+            ],
             'no-mixed-operators': [
                 'warn',
             ],
             'no-multi-assign': [
                 'error',
             ],
-            'no-multi-spaces': [
+            'no-nested-ternary': [
                 'error',
             ],
-            'no-nested-ternary': [
+            'no-new-native-nonconstructor': [
                 'error',
             ],
             'no-new-wrappers': [
                 'error',
             ],
+            'no-obj-calls': [
+                'error',
+            ],
             'no-plusplus': [
+                'error',
+            ],
+            'no-prototype-builtins': [
                 'error',
             ],
             'no-promise-executor-return': [
                 'error',
             ],
-            'no-return-assign': [
+            'no-regex-spaces': [
                 'error',
             ],
-            'no-return-await': [
+            'no-return-assign': [
                 'error',
             ],
             'no-sequences': [
                 'error',
             ],
-            'no-shadow': [
+            'no-setter-return': [
                 'error',
-                { builtinGlobals: true, hoist: 'all' },
+            ],
+            'no-shadow-restricted-names': [
+                'error',
             ],
             'no-template-curly-in-string': [
+                'error',
+            ],
+            'no-this-before-super': [
                 'error',
             ],
             'no-throw-literal': [
@@ -244,41 +238,56 @@ export default [
             'no-trailing-spaces': [
                 'error',
             ],
-            // In ECMAScript 3 it was possible to overwrite the value of
-            // undefined. ECMAScript 5 disallows overwriting undefined and we
-            // assume authors are responsible about mistakenly shadowing it.
-            'no-undefined': [
-                'off',
+            'no-unassigned-vars': [
+                'error',
             ],
-            // Authors should be able to dangles as they see fit to
-            // make code readable.
-            'no-underscore-dangle': [
-                'off',
+            'no-undef': [
+                'error',
+            ],
+            'no-unexpected-multiline': [
+                'error',
             ],
             'no-unmodified-loop-condition': [
                 'error',
             ],
-            'no-unreachable-loop': [
+            'no-unreachable': [
+                'error',
+            ],
+            'no-unsafe-finally': [
+                'error',
+            ],
+            'no-unsafe-negation': [
                 'error',
             ],
             'no-unused-expressions': [
                 'error',
             ],
-            'no-useless-computed-key': [
+            'no-unused-labels': [
                 'error',
             ],
-            'no-useless-concat': [
+            'no-unused-private-class-members': [
                 'error',
             ],
-            'no-useless-constructor': [
+            'no-unused-vars': [
                 'error',
-            ],
-            'no-useless-return': [
-                'error',
+                {
+                    vars: 'all',
+                    args: 'all',
+                    caughtErrors: 'all',
+                    varsIgnorePattern: '^_',
+                    argsIgnorePattern: '^_',
+                    destructuredArrayIgnorePattern: '^_',
+                },
             ],
             'no-use-before-define': [
                 'error',
                 { functions: false, classes: false },
+            ],
+            'no-useless-catch': [
+                'error',
+            ],
+            'no-useless-computed-key': [
+                'error',
             ],
             'no-var': [
                 'error',
@@ -287,20 +296,8 @@ export default [
                 'warn',
                 { location: 'anywhere' },
             ],
-            'no-whitespace-before-property': [
+            'preserve-caught-error': [
                 'error',
-            ],
-            'object-curly-spacing': [
-                'error',
-                'always',
-            ],
-            'object-shorthand': [
-                'error',
-                'always',
-            ],
-            'operator-linebreak': [
-                'error',
-                'before',
             ],
             // Prevents programmer errors mistakenly refering to the wrong `this`.
             'prefer-arrow-callback': [
@@ -322,79 +319,32 @@ export default [
             'prefer-rest-params': [
                 'error',
             ],
-            quotes: [
-                'error',
-                'single',
-                { avoidEscape: true, allowTemplateLiterals: true },
-            ],
-            // Authors can quote props, even when not necessary, to
-            // make the code readable.
-            'quote-props': [
-                'off',
-            ],
-            radix: [
+            'radix': [
                 'error',
             ],
-            'require-atomic-updates': [
+            'require-yield': [
                 'error',
-            ],
-            // Sometimes we want to use the async keyword to promisify a
-            // function without using await internally.
-            'require-await': [
-                'off',
             ],
             'rest-spread-spacing': [
                 'error',
                 'never',
             ],
-            semi: [
+            'semi': [
                 'error',
                 'always',
+                { omitLastInOneLineBlock: true },
             ],
-            'semi-spacing': [
+            'strict': [
+                // Turn strict off:
+                // 1. We use modules for server and tooling code (which is strict by default).
+                // 2. Browser scripts are embedded in self-invoking functions with "use strict" already there.
+                'off',
+            ],
+            'use-isnan': [
                 'error',
             ],
-            'spaced-comment': [
+            'valid-typeof': [
                 'error',
-            ],
-            'space-before-blocks': [
-                'error',
-            ],
-            'space-before-function-paren': [
-                'error',
-                {
-                    anonymous: 'always',
-                    asyncArrow: 'always',
-                    named: 'never',
-                },
-            ],
-            'space-in-parens': [
-                'error',
-            ],
-            'space-infix-ops': [
-                'error',
-            ],
-            'space-unary-ops': [
-                'error',
-                { words: true, nonwords: false },
-            ],
-            strict: [
-                'error',
-            ],
-            'switch-colon-spacing': [
-                'error',
-            ],
-            'template-curly-spacing': [
-                'error',
-                'always',
-            ],
-            'template-tag-spacing': [
-                'error',
-                'always',
-            ],
-            'wrap-iife': [
-                'error',
-                'outside',
             ],
         },
     },
