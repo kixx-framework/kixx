@@ -31,6 +31,9 @@ node run-linter.js
 
 # Run the linter on specified files or directories.
 node run-linter.js [pathname ...]
+
+# Run the linter with Deno. Use the -P flag to pull permissions from deno.json
+deno run -P run-linter.js
 ```
 Pathname arguments are optional. If omitted, the CLI uses the current working directory.
 
@@ -58,8 +61,8 @@ node run-tests.js
 # Run all test files (*.test.js) in the files and directories passed into run-tests.js
 node run-tests.js [pathname ...]
 
-# Include tests from ./test/integration/
-node run-tests.js --integration
+# Run the tests with Deno. Use the -P flag to pull permissions from deno.json
+deno run -P run-tests.js
 ```
 Pathname arguments are optional. If omitted, the CLI uses `./test/`.
 

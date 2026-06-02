@@ -1,0 +1,33 @@
+{
+    "name": "@kixx/kixx",
+    "version": "6.0.0",
+    "license": "MIT",
+    "exports": "lib/mod.js",
+    "publish": {
+        "include": [
+            "lib/",
+            "LICENSE",
+            "lib/mod.js",
+            "README.md"
+        ]
+    },
+    "lint": {
+        "exclude": [
+            "node_modules/",
+            "lib/vendor/",
+            "tmp/"
+        ],
+        "rules": {
+            "exclude": [
+                "no-slow-types",
+                "no-this-alias"
+            ]
+        }
+    },
+    "permissions": {
+        "default": {
+            "sys": true,
+            "read": ["./"]
+        }
+    }
+}
