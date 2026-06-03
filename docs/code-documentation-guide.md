@@ -150,15 +150,34 @@ Prefer the error class that callers can reasonably catch or that the framework
 will translate. Do not document every assertion in a deeply private helper
 unless it changes how the public API is used.
 
-### Know When to Skip JSDoc
+### Do Not Use JSDoc for Module-Private Functions
 
-Skip JSDoc for well-named private functions when the documentation would only repeat the function name and parameters.
+JSDoc documents a module's public contract — the exported functions, classes, and types that other modules call. Functions that are private to a module (those that are not exported) must not have JSDoc block comments. They have no external callers, and a JSDoc block above an internal helper only adds ceremony that drifts out of sync with the code.
+
+When a private helper needs explanation — a non-obvious decision, a constraint, or a surprising return value — use a short inline comment instead. Place it where the reasoning lives, not as a header block.
+
+```javascript
+function isPlainObject(value) {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    // A null prototype (e.g. Object.create(null) dictionaries) also counts as
+    // plain, alongside ordinary object literals.
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+}
+```
+
+A well-named helper whose behavior is obvious from its name and body needs neither JSDoc nor an inline comment:
 
 ```javascript
 function isEven(n) {
     return n % 2 === 0;
 }
 ```
+
+This rule is about module-private *functions*. Class members declared with `#private` syntax are covered separately under "Document Classes" below.
 
 ### Document Async Behavior
 
