@@ -1,3 +1,5 @@
+Read the @README.md for the project overview, including what this project is and why it exists.
+
 Before starting any task, including planning, ALWAYS review the documentation index at @docs/index.md
 
 Use the @docs/index.md to identify which linked documents are relevant to your task, then read the full text of each relevant document — the index entries are summaries only. Keep the available documentation in mind as you work, so you can review additional documents that become relevant as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.

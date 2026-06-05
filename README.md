@@ -1,18 +1,27 @@
 Kixx
 ====
-__A web development framework for humans and their AI tools.__
 
-Build web applications with AI agents like Claude Code and Codex without generating piles of shit code you’ll need to rewrite later. Kixx is designed to build server-rendered, hypermedia-driven applications (HTML as the engine of application state) with minimal client side scripting. It emphasizes productivity, craftsmanship, and durability.
+__A web development framework for you and your clankers to build anything from a home-cooked website to the next unicorn.__
+
+Build web applications with AI agents without generating piles of shit code you’ll need to rewrite later. Kixx is optimized for solo developers and small teams and emphasizes productivity, craftsmanship, portability, and durability.
+
+- JavaScript backend.
+- Supports hypermedia-driven applications (HTML as the engine of application state).
+- You can build a great JSON API with it too.
+- Supports server-side rendering of markup (but you can build an SPA too).
+- Component based design. You choose only what you like.
+- Provide desired paths, but also include escape hatches.
+- Keep you apps easy to hack on.
+- Token efficiency for the coding agents.
 
 Deploy on:
 
 - [x] Node.js
 - [ ] Deno
 - [ ] Cloudflare
-- [ ] Deno Deploy
 - [ ] AWS Lambda
 
-Started by [Kris Walker](https://www.kriswalker.me) 2017 - 2026.
+Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2026.
 
 Development
 -----------
