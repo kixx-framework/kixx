@@ -1,7 +1,7 @@
-import DocumentAlreadyExistsError from '../../document-store/document-already-exists-error.js';
-import DocumentNotFoundError from '../../document-store/document-not-found-error.js';
-import DocumentUniqueIndexViolationError from '../../document-store/document-unique-index-violation-error.js';
-import VersionConflictError from '../../document-store/version-conflict-error.js';
+import DocumentAlreadyExistsError from '../../../kixx/document-store/document-already-exists-error.js';
+import DocumentNotFoundError from '../../../kixx/document-store/document-not-found-error.js';
+import DocumentUniqueIndexViolationError from '../../../kixx/document-store/document-unique-index-violation-error.js';
+import VersionConflictError from '../../../kixx/document-store/version-conflict-error.js';
 import {
     AssertionError,
     isBoolean,
@@ -10,7 +10,7 @@ import {
     assert,
     assertArray,
     assertNonEmptyString,
-} from '../../assertions/mod.js';
+} from '../../../kixx/assertions/mod.js';
 
 
 /*
@@ -74,7 +74,7 @@ export default class DocumentStoreEngine {
 
     /**
      * @param {Object} options - Configuration options
-     * @param {import('../../logger/logger.js').default} options.logger - Root logger used to create a named child logger
+     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a named child logger
      * @throws {Error} When logger is not provided
      */
     constructor(options) {

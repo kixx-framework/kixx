@@ -1,7 +1,7 @@
-import { assert } from '../../assertions/mod.js';
+import { assert } from '../../../kixx/assertions/mod.js';
 
 /**
- * @typedef {import('../../context/request-context.js').default} RequestContext
+ * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
  */
 
 const BASE_TEMPLATE_PREFIX = 'base-templates/';
@@ -26,7 +26,7 @@ export default class TemplateFileStore {
 
     /**
      * @param {Object} options - Store configuration
-     * @param {import('../../logger/logger.js').default} options.logger - Root logger used to create a TemplateFileStore child logger
+     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a TemplateFileStore child logger
      * @throws {Error} When logger is not provided
      */
     constructor(options) {

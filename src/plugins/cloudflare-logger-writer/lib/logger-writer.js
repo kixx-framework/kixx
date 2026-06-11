@@ -6,7 +6,7 @@
 import {
     createJSONLogEntry,
     stringifyJSONLogEntry,
-} from '../../logger/json-log-entry-serializer.js';
+} from '../../../kixx/logger/json-log-entry-serializer.js';
 
 /**
  * Cloudflare-specific implementation of the Logger writer interface. Serializes
