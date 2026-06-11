@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import HyperviewRequestHandler from '../../../lib/hyperview/hyperview-request-handler.js';
-import ServerResponse from '../../../lib/http-router/server-response.js';
+import HyperviewRequestHandler from '../../../src/kixx/hyperview/hyperview-request-handler.js';
+import ServerResponse from '../../../src/kixx/http-router/server-response.js';
 
 
 function makeService(options) {

@@ -6,7 +6,7 @@ import {
     assertNotMatches,
 } from 'kixx-assert';
 
-import ServerResponse from '../../../lib/http-router/server-response.js';
+import ServerResponse from '../../../src/kixx/http-router/server-response.js';
 
 
 function catchError(fn) {

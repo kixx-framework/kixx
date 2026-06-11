@@ -5,7 +5,7 @@ import {
     assertUndefined,
 } from 'kixx-assert';
 
-import LoggerWriter from '../../../../lib/cloudflare/logger/logger-writer.js';
+import LoggerWriter from '../../../../src/kixx/cloudflare/logger/logger-writer.js';
 
 
 function parseConsoleEntry(mock, index = 0) {

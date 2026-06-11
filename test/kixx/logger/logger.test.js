@@ -6,7 +6,7 @@ import {
     assertUndefined,
 } from 'kixx-assert';
 
-import Logger from '../../../lib/logger/logger.js';
+import Logger from '../../../src/kixx/logger/logger.js';
 
 
 // A writer test double records each write() call so tests can assert on the

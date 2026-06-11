@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertUndefined, assertMatches } from 'kixx-assert';
 
-import HyperviewService from '../../../lib/hyperview/hyperview-service.js';
-import Logger from '../../../lib/logger/logger.js';
+import HyperviewService from '../../../src/kixx/hyperview/hyperview-service.js';
+import Logger from '../../../src/kixx/logger/logger.js';
 
 
 function makeLogger() {

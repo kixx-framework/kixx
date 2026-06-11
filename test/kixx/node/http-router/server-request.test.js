@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+import { Buffer } from 'node:buffer';
 import { describe } from 'kixx-test';
 import {
     assert,
@@ -7,24 +9,39 @@ import {
     assertValidDate,
 } from 'kixx-assert';
 
-import ServerRequest from '../../../../lib/cloudflare/http-router/server-request.js';
+import ServerRequest from '../../../../src/kixx/node/http-router/server-request.js';
 
 
-function makeNativeRequest(options) {
+// Build a stand-in for http.IncomingMessage: a Readable stream carrying the body
+// bytes, plus the method/url/headers/socket fields the adapter reads. Header keys
+// are lowercased to match Node's IncomingMessage behavior.
+function makeIncoming(options) {
     const opts = options ?? {};
-    const url = opts.url ?? 'https://www.example.com/';
-    const init = { method: opts.method ?? 'GET', headers: opts.headers ?? {} };
 
-    // GET/HEAD requests cannot carry a body, so only attach one when provided.
-    if (opts.body !== undefined) {
-        init.body = opts.body;
+    const headers = {};
+    const rawHeaders = Object.assign({ host: 'www.example.com' }, opts.headers ?? {});
+    for (const [ key, value ] of Object.entries(rawHeaders)) {
+        headers[ key.toLowerCase() ] = value;
     }
 
-    return new Request(url, init);
+    const hasBody = opts.body !== undefined;
+
+    // Frame the body so the adapter detects it, unless the caller set framing.
+    if (hasBody && headers['content-length'] === undefined && headers['transfer-encoding'] === undefined) {
+        headers['content-length'] = String(Buffer.byteLength(opts.body));
+    }
+
+    const incoming = hasBody ? Readable.from([ Buffer.from(opts.body) ]) : Readable.from([]);
+    incoming.method = opts.method ?? 'GET';
+    incoming.url = opts.url ?? '/';
+    incoming.headers = headers;
+    incoming.socket = { encrypted: Boolean(opts.encrypted) };
+
+    return incoming;
 }
 
 function makeServerRequest(options) {
-    return new ServerRequest(makeNativeRequest(options));
+    return new ServerRequest(makeIncoming(options));
 }
 
 function catchError(fn) {
@@ -46,19 +63,19 @@ async function catchAsyncError(fn) {
 }
 
 
-describe('Cloudflare ServerRequest', ({ describe }) => {
+describe('Node ServerRequest', ({ describe }) => {
 
     describe('id', ({ it }) => {
-        it('uses the cf-ray header when present', () => {
-            const request = makeServerRequest({ headers: { 'cf-ray': '8a1b2c3d4e5f-IAD' } });
+        it('uses the x-request-id header when present', () => {
+            const request = makeServerRequest({ headers: { 'x-request-id': 'req-abc-123' } });
 
-            assertEqual('8a1b2c3d4e5f-IAD', request.id);
+            assertEqual('req-abc-123', request.id);
         });
 
-        it('falls back to a generated id when cf-ray is absent', () => {
+        it('falls back to a generated id when x-request-id is absent', () => {
             const request = makeServerRequest();
 
-            assertMatches(/^kixx-cf-/, request.id);
+            assertMatches(/^kixx-node-/, request.id);
         });
 
         it('generates a distinct fallback id per request', () => {
@@ -69,37 +86,65 @@ describe('Cloudflare ServerRequest', ({ describe }) => {
         });
 
         it('is immutable after construction', () => {
-            const request = makeServerRequest({ headers: { 'cf-ray': 'ray-1' } });
+            const request = makeServerRequest({ headers: { 'x-request-id': 'req-1' } });
 
             const caught = catchError(() => {
                 request.id = 'tampered';
             });
 
             assertEqual('TypeError', caught.name);
-            assertEqual('ray-1', request.id);
+            assertEqual('req-1', request.id);
         });
     });
 
     describe('core properties', ({ it }) => {
         it('uppercases the HTTP method', () => {
-            const request = new ServerRequest(makeNativeRequest({ method: 'post' }));
+            const request = new ServerRequest(makeIncoming({ method: 'post', body: '{}', headers: { 'content-type': 'application/json' } }));
 
             assertEqual('POST', request.method);
         });
 
-        it('exposes a fully parsed URL', () => {
-            const request = makeServerRequest({ url: 'https://shop.example.com/items?id=9' });
+        it('reconstructs the URL from the request target and Host header', () => {
+            const request = makeServerRequest({ url: '/items?id=9', headers: { host: 'shop.example.com' } });
 
+            assertEqual('http', request.url.protocol.replace(':', ''));
             assertEqual('shop.example.com', request.url.hostname);
             assertEqual('/items', request.url.pathname);
             assertEqual('9', request.url.searchParams.get('id'));
         });
 
-        it('exposes the native headers with case-insensitive access', () => {
+        it('honors X-Forwarded-Proto for the scheme', () => {
+            const request = makeServerRequest({ url: '/', headers: { 'x-forwarded-proto': 'https' } });
+
+            assertEqual('https:', request.url.protocol);
+        });
+
+        it('uses https when the socket is encrypted and no forwarded proto is set', () => {
+            const request = makeServerRequest({ url: '/', encrypted: true });
+
+            assertEqual('https:', request.url.protocol);
+        });
+
+        it('resolves the authority from the HTTP/2 :authority pseudo-header', () => {
+            const request = makeServerRequest({ url: '/', headers: { ':authority': 'h2.example.com', host: 'ignored.example.com' } });
+
+            assertEqual('h2.example.com', request.url.hostname);
+        });
+
+        it('exposes a Web Headers instance with case-insensitive access', () => {
             const request = makeServerRequest({ headers: { 'X-Custom': 'yes' } });
 
             assert(request.headers instanceof Headers);
             assertEqual('yes', request.headers.get('x-custom'));
+        });
+
+        it('excludes HTTP/2 pseudo-headers from the headers set', () => {
+            const request = makeServerRequest({ url: '/', headers: { ':authority': 'h2.example.com' } });
+
+            // ':authority' is an invalid Web Headers name, so verify exclusion by
+            // confirming no stamped header name carries the pseudo-header colon.
+            const names = Array.from(request.headers.keys());
+            assertFalsy(names.some((name) => name.startsWith(':')));
         });
     });
 
@@ -226,19 +271,19 @@ describe('Cloudflare ServerRequest', ({ describe }) => {
 
     describe('queryParams', ({ it }) => {
         it('returns a string for a single-valued key', () => {
-            const request = makeServerRequest({ url: 'https://www.example.com/?q=hello' });
+            const request = makeServerRequest({ url: '/?q=hello' });
 
             assertEqual('hello', request.queryParams.q);
         });
 
         it('returns an array for a repeated key', () => {
-            const request = makeServerRequest({ url: 'https://www.example.com/?tag=a&tag=b' });
+            const request = makeServerRequest({ url: '/?tag=a&tag=b' });
 
             assertEqual('a,b', request.queryParams.tag.join(','));
         });
 
         it('returns an empty object when there is no query string', () => {
-            const request = makeServerRequest({ url: 'https://www.example.com/path' });
+            const request = makeServerRequest({ url: '/path' });
 
             assertEqual(0, Object.keys(request.queryParams).length);
         });
@@ -260,7 +305,7 @@ describe('Cloudflare ServerRequest', ({ describe }) => {
 
     describe('isJSONRequest', ({ it }) => {
         it('is true when the pathname ends with .json', () => {
-            const request = makeServerRequest({ url: 'https://www.example.com/users/42.json' });
+            const request = makeServerRequest({ url: '/users/42.json' });
 
             assert(request.isJSONRequest());
         });
@@ -466,19 +511,25 @@ describe('Cloudflare ServerRequest', ({ describe }) => {
         });
 
         it('parses a multipart form body', async () => {
-            const form = new FormData();
-            form.append('name', 'kris');
+            const boundary = '----kixxBoundary';
+            const body = [
+                `--${ boundary }`,
+                'Content-Disposition: form-data; name="name"',
+                '',
+                'kris',
+                `--${ boundary }--`,
+                '',
+            ].join('\r\n');
 
-            // Passing a FormData body lets the runtime set the multipart
-            // content-type (with boundary) automatically.
-            const request = new ServerRequest(new Request('https://www.example.com/', {
+            const request = makeServerRequest({
                 method: 'POST',
-                body: form,
-            }));
+                headers: { 'content-type': `multipart/form-data; boundary=${ boundary }` },
+                body,
+            });
 
-            const parsed = await request.formData();
+            const form = await request.formData();
 
-            assertEqual('kris', parsed.get('name'));
+            assertEqual('kris', form.get('name'));
         });
 
         it('rejects with UnsupportedMediaTypeError for an unsupported content type', async () => {

@@ -5,7 +5,7 @@ import {
     assertMatches,
 } from 'kixx-assert';
 
-import HttpRoute from '../../../lib/http-router/http-route.js';
+import HttpRoute from '../../../src/kixx/http-router/http-route.js';
 
 
 function makeTargetDouble(name, methods) {

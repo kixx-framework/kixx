@@ -1,7 +1,7 @@
 import { describe, MockTracker } from 'kixx-test';
 import { assertEqual, assertMatches } from 'kixx-assert';
 
-import { generateShortId } from '../../../lib/utils/crypto.js';
+import { generateShortId } from '../../../src/kixx/utils/crypto.js';
 
 
 describe('crypto', ({ describe }) => {

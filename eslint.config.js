@@ -1,7 +1,7 @@
 export default [
     {
         ignores: [
-            'lib/vendor/',
+            'src/kixx/vendor/',
             'node_modules/',
             'tmp/',
         ],

@@ -28,8 +28,8 @@ The project test runner is `node run-tests.js`. It imports test files first, whi
 ## File Conventions
 
 - Put tests under `test/`.
-- Name test files with the project convention `*.test.js`, for example `test/lib/logger/logger.test.js`.
-- Mirror the source tree where practical: `lib/logger/logger.js` is tested by `test/lib/logger/logger.test.js`.
+- Name test files with the project convention `*.test.js`, for example `test/kixx/logger/logger.test.js`.
+- Mirror the source tree where practical: `src/kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`.
 - Use one top-level `describe` per test file, named after the module, class, or behavior under test.
 
 ---

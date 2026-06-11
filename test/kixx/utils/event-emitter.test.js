@@ -1,7 +1,7 @@
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import EventEmitter from '../../../lib/utils/event-emitter.js';
+import EventEmitter from '../../../src/kixx/utils/event-emitter.js';
 
 
 describe('EventEmitter', ({ describe }) => {

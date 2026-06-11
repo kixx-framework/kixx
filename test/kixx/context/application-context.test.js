@@ -6,8 +6,8 @@ import {
     assertUndefined,
 } from 'kixx-assert';
 
-import ApplicationContext from '../../../lib/context/application-context.js';
-import RequestContext from '../../../lib/context/request-context.js';
+import ApplicationContext from '../../../src/kixx/context/application-context.js';
+import RequestContext from '../../../src/kixx/context/request-context.js';
 
 
 function makeApplicationContext(options) {

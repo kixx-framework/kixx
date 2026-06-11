@@ -5,9 +5,9 @@ import {
     assertMatches,
 } from 'kixx-assert';
 
-import HttpRouter from '../../../lib/http-router/http-router.js';
-import ServerResponse from '../../../lib/http-router/server-response.js';
-import { MethodNotAllowedError, NotFoundError } from '../../../lib/errors/mod.js';
+import HttpRouter from '../../../src/kixx/http-router/http-router.js';
+import ServerResponse from '../../../src/kixx/http-router/server-response.js';
+import { MethodNotAllowedError, NotFoundError } from '../../../src/kixx/errors/mod.js';
 
 
 function makeContext() {

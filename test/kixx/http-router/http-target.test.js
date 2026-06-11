@@ -5,8 +5,8 @@ import {
     assertMatches,
 } from 'kixx-assert';
 
-import HttpTarget from '../../../lib/http-router/http-target.js';
-import { HTTP_METHODS } from '../../../lib/utils/http.js';
+import HttpTarget from '../../../src/kixx/http-router/http-target.js';
+import { HTTP_METHODS } from '../../../src/kixx/utils/http.js';
 
 
 function makeTarget(overrides) {

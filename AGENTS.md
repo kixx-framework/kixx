@@ -112,7 +112,7 @@ When completed, put the plan document in the prompts/plans/ directory.
 
 ## Dependencies
 
-This project uses vendored dependencies. They live in the `lib/vendor/` and are imported using relative paths directly in project files — not as package names. Do not use `npm install` or bare package name imports for vendored deps.
+This project uses vendored dependencies. They live in the `src/kixx/vendor/` tree and are imported using relative paths directly in project files — not as package names. Do not use `npm install` or bare package name imports for vendored deps.
 
 NEVER install dependencies without explicitly being asked to install them by the user.
 

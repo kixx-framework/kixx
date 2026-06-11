@@ -6,7 +6,7 @@ import {
     assertUndefined,
 } from 'kixx-assert';
 
-import LoggerWriter from '../../../../lib/node/logger/logger-writer.js';
+import LoggerWriter from '../../../../src/kixx/node/logger/logger-writer.js';
 
 
 function parseStreamEntry(mock, index = 0) {

@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertUndefined, assertMatches } from 'kixx-assert';
 
-import deepMerge from '../../../lib/utils/deep-merge.js';
+import deepMerge from '../../../src/kixx/utils/deep-merge.js';
 
 
 function catchError(fn) {

@@ -5,7 +5,7 @@ import {
     assertMatches,
 } from 'kixx-assert';
 
-import VirtualHost from '../../../lib/http-router/virtual-host.js';
+import VirtualHost from '../../../src/kixx/http-router/virtual-host.js';
 
 
 function makeVirtualHost(overrides) {
