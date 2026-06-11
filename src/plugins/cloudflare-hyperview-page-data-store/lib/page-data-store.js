@@ -1,4 +1,4 @@
-import { assert } from '../../../kixx/assertions/mod.js';
+import { assert, assertNonEmptyString, isObjectNotNull } from '../../../kixx/assertions/mod.js';
 
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
@@ -44,21 +44,19 @@ export default class PageDataStore {
         }
 
         const kvStore = context.env.PAGE_DATA_STORE;
-        const buildId = context.runtime.build?.id || '';
-
-        const normalizedPaths = filepaths.map((fp) => fp.replace(/^\//, ''));
-        const kvKeys = normalizedPaths.map((fp) => buildId ? `${buildId}/${fp}` : fp);
+        const resolved = filepaths.map((fp) => this.#resolveKey(context, fp));
+        const kvKeys = resolved.map((r) => r.kvKey);
 
         this.#logger.debug('getJSONFiles() loading keys', { keys: kvKeys });
 
         const resultMap = await kvStore.get(kvKeys, { type: 'json' });
 
-        return normalizedPaths.map((filepath, i) => {
-            const json = resultMap.get(kvKeys[i]) ?? null;
+        return resolved.map(({ logicalKey, kvKey }) => {
+            const json = resultMap.get(kvKey) ?? null;
             if (json === null) {
                 return null;
             }
-            return { filepath, json };
+            return { filepath: logicalKey, json };
         });
     }
 
@@ -78,19 +76,17 @@ export default class PageDataStore {
         }
 
         const kvStore = context.env.PAGE_DATA_STORE;
-        const buildId = context.runtime.build?.id || '';
-
-        const normalizedPaths = filepaths.map((fp) => fp.replace(/^\//, ''));
-        const kvKeys = normalizedPaths.map((fp) => buildId ? `${buildId}/${fp}` : fp);
+        const resolved = filepaths.map((fp) => this.#resolveKey(context, fp));
+        const kvKeys = resolved.map((r) => r.kvKey);
 
         this.#logger.debug('getTextFiles() loading keys', { keys: kvKeys });
 
         const resultMap = await kvStore.get(kvKeys, { type: 'text' });
 
-        return normalizedPaths.map((filepath, i) => {
-            const source = resultMap.get(kvKeys[i]);
+        return resolved.map(({ logicalKey, kvKey }) => {
+            const source = resultMap.get(kvKey);
             if (source) {
-                return { filepath, source };
+                return { filepath: logicalKey, source };
             }
             return null;
         });
@@ -104,12 +100,66 @@ export default class PageDataStore {
      */
     async getTextFile(context, filepath) {
         this.#logger.debug('getTextFile() loading filepath', { filepath });
-        const kvStore = context.env.PAGE_DATA_STORE;
-        const buildId = context.runtime.build?.id || '';
-        const normalizedPath = filepath.replace(/^\//, '');
-        const kvKey = buildId ? `${buildId}/${normalizedPath}` : normalizedPath;
+        const { kvKey } = this.#resolveKey(context, filepath);
         this.#logger.debug('getTextFile() loading key', { key: kvKey });
+        const kvStore = context.env.PAGE_DATA_STORE;
         const text = await kvStore.get(kvKey, { type: 'text' });
         return text ?? null;
+    }
+
+    /**
+     * Writes (creates or updates) a JSON file in the page data KV store under
+     * the current build ID. The value is serialized to JSON text for storage.
+     * @param {RequestContext} context
+     * @param {string} filepath - Logical file path (without build ID prefix)
+     * @param {Object} json - JSON-serializable value to store
+     * @returns {Promise<{filepath: string}>} Resolves with the logical filepath that was written
+     */
+    async putJSONFile(context, filepath, json) {
+        assert(isObjectNotNull(json), 'PageDataStore write requires a non-null JSON object');
+        return await this.#putFile(context, filepath, JSON.stringify(json));
+    }
+
+    /**
+     * Writes (creates or updates) a text file in the page data KV store under
+     * the current build ID.
+     * @param {RequestContext} context
+     * @param {string} filepath - Logical file path (without build ID prefix)
+     * @param {string} source - File source text to store
+     * @returns {Promise<{filepath: string}>} Resolves with the logical filepath that was written
+     */
+    async putTextFile(context, filepath, source) {
+        assertNonEmptyString(source, 'PageDataStore write requires source text');
+        return await this.#putFile(context, filepath, source);
+    }
+
+    async #putFile(context, filepath, value) {
+        assertNonEmptyString(filepath, 'PageDataStore write requires a filepath');
+        // Reject path traversal so a client cannot escape the build namespace.
+        assert(
+            !filepath.split('/').includes('..'),
+            'PageDataStore write filepath must not contain ".." segments',
+        );
+
+        const { logicalKey, kvKey } = this.#resolveKey(context, filepath);
+        this.#logger.debug('putFile() writing key', { key: kvKey });
+        const kvStore = context.env.PAGE_DATA_STORE;
+        await kvStore.put(kvKey, value);
+
+        return { filepath: logicalKey };
+    }
+
+    /**
+     * Resolves a single file's keys, owning the `{buildId}/{filepath}` encoding
+     * shared by the read and write methods.
+     * @param {RequestContext} context
+     * @param {string} filepath - Logical file path (without build ID prefix)
+     * @returns {{logicalKey: string, kvKey: string}} The build-id-free logical key and the build-id-prefixed KV key
+     */
+    #resolveKey(context, filepath) {
+        const buildId = context.runtime.build?.id || '';
+        const logicalKey = filepath.replace(/^\//, '');
+        const kvKey = buildId ? `${ buildId }/${ logicalKey }` : logicalKey;
+        return { logicalKey, kvKey };
     }
 }
