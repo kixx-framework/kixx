@@ -13,7 +13,7 @@ function makePageDataStore(options) {
     const { jsonFiles = {}, textFiles = {}, calls } = options ?? {};
 
     return {
-        async getJSONFiles(_context, filepaths) {
+        async getJSONFiles(_context, _namespace, filepaths) {
             if (calls) {
                 calls.getJSONFilesCallCount = (calls.getJSONFilesCallCount || 0) + 1;
                 calls.jsonFilepaths = filepaths;
@@ -23,13 +23,13 @@ function makePageDataStore(options) {
                 return json ? { filepath, json } : null;
             });
         },
-        async getTextFiles(_context, filepaths) {
+        async getTextFiles(_context, _namespace, filepaths) {
             return filepaths.map((filepath) => {
                 const source = textFiles[filepath];
                 return source ? { filepath, source } : null;
             });
         },
-        async getTextFile(_context, filepath) {
+        async getTextFile(_context, _namespace, filepath) {
             return textFiles[filepath] ?? null;
         },
     };
