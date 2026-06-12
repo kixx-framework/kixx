@@ -10,6 +10,7 @@ export default [
             sourceType: 'module',
             globals: {
                 Blob: 'readonly',
+                ArrayBuffer: 'readonly',
                 Uint8Array: 'readonly',
                 TextEncoder: 'readonly',
                 TextDecoder: 'readonly',
