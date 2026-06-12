@@ -39,11 +39,11 @@ function makeTemplateFileStore(options) {
     const { templates = {}, partials = [] } = options ?? {};
 
     return {
-        async getTemplate(_context, templateId) {
+        async getTemplate(_context, _namespace, templateId) {
             const source = templates[templateId];
             return source ? { filepath: `base-templates/${ templateId }`, source } : null;
         },
-        async getPartials() {
+        async getPartials(_context, _namespace) {
             return partials;
         },
     };

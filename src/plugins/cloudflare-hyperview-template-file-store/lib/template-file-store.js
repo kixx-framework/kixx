@@ -6,7 +6,6 @@ import { assert, assertNonEmptyString } from '../../../kixx/assertions/mod.js';
 
 const BASE_TEMPLATE_PREFIX = 'base-templates/';
 const PARTIALS_PREFIX = 'partials/';
-const BUNDLED_FILES_PREFIX = 'bundled-files/';
 
 /**
  * Cloudflare KV-backed store for shared Hyperview templates.
@@ -15,10 +14,16 @@ const BUNDLED_FILES_PREFIX = 'bundled-files/';
  * from `partials/` and returned with their full logical filepath for downstream
  * name normalization.
  *
- * All KV keys are prefixed with the build ID (`{buildId}/{key}`) to ensure
- * deployments are idempotent and multiple build versions can coexist in the
- * same KV namespace. Callers always work with logical filepaths; the build ID
- * prefix is applied and stripped internally.
+ * Every read and write method accepts an optional `namespace`. When provided, KV
+ * keys are namespaced as `{namespace}/{key}` so that multiple versions of a build
+ * can coexist in the same KV namespace and deployments stay idempotent. When the
+ * namespace is omitted, keys are stored at the flat, unprefixed namespace —
+ * which supports use cases which do *not* use idempotent deployments.
+ * Callers always work with logical filepaths; the namespace prefix is applied
+ * and stripped internally, and keeping the read and write
+ * namespaces consistent is the caller's responsibility.
+ *
+ * @implements {import('../../../kixx/hyperview/template-file-store-interface.js').TemplateFileStoreInterface}
  */
 export default class TemplateFileStore {
 
@@ -38,12 +43,13 @@ export default class TemplateFileStore {
     /**
      * Retrieves a base template source file from the shared template KV store.
      * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
      * @param {string} filepath - Base template filename relative to `base-templates/`
      * @returns {Promise<{filepath: string, source: string}|null>} Resolves to template source with logical filepath, or null when missing
      */
-    async getTemplate(context, filepath) {
+    async getTemplate(context, namespace, filepath) {
         this.#logger.debug('getTemplate() loading filepath', { filepath });
-        const { logicalKey, kvKey } = this.#resolveKey(context, BASE_TEMPLATE_PREFIX, filepath);
+        const { logicalKey, kvKey } = this.#resolveKey(namespace, BASE_TEMPLATE_PREFIX, filepath);
         this.#logger.debug('getTemplate() loading key', { key: kvKey });
         const kvStore = context.env.TEMPLATE_FILE_STORE;
         const source = await kvStore.get(kvKey, { type: 'text' }) ?? null;
@@ -57,68 +63,50 @@ export default class TemplateFileStore {
 
     /**
      * Writes (creates or updates) a base template source file in the shared
-     * template KV store under the current build ID.
+     * template KV store under the optional namespace.
      * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
      * @param {string} filepath - Base template filename relative to `base-templates/`
      * @param {string} source - Template source text to store
      * @returns {Promise<{filepath: string}>} Resolves with the logical filepath that was written
      */
-    async putTemplate(context, filepath, source) {
-        return await this.#putFile(context, BASE_TEMPLATE_PREFIX, filepath, source);
+    async putTemplate(context, namespace, filepath, source) {
+        return await this.#putFile(context, namespace, BASE_TEMPLATE_PREFIX, filepath, source);
     }
 
     /**
      * Writes (creates or updates) a partial template source file in the shared
-     * template KV store under the current build ID.
+     * template KV store under the optional namespace.
      * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
      * @param {string} filepath - Partial filename relative to `partials/`
      * @param {string} source - Partial source text to store
      * @returns {Promise<{filepath: string}>} Resolves with the logical filepath that was written
      */
-    async putPartial(context, filepath, source) {
-        return await this.#putFile(context, PARTIALS_PREFIX, filepath, source);
-    }
-
-    /**
-     * Writes (creates or updates) a bundled file in the shared template KV store
-     * under the current build ID.
-     * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
-     * @param {string} filepath - Bundled filename relative to `bundled-files/`
-     * @param {string} source - File source text to store
-     * @returns {Promise<{filepath: string}>} Resolves with the logical filepath that was written
-     */
-    async putBundledFile(context, filepath, source) {
-        return await this.#putFile(context, BUNDLED_FILES_PREFIX, filepath, source);
+    async putPartial(context, namespace, filepath, source) {
+        return await this.#putFile(context, namespace, PARTIALS_PREFIX, filepath, source);
     }
 
     /**
      * Retrieves all available partial templates from the shared template KV store.
      * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {string|null} [namespace] - Optional namespace used to prefix the KV listing
      * @returns {Promise<{filepath: string, source: string}[]>} Resolves to existing partial source files with logical filepaths in KV listing order
      */
-    async getPartials(context) {
-        return await this.#loadPrefixedFiles(context, PARTIALS_PREFIX);
+    async getPartials(context, namespace) {
+        return await this.#loadPrefixedFiles(context, namespace, PARTIALS_PREFIX);
     }
 
-    /**
-     * Retrieves all available bundled files from the shared template KV store.
-     * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
-     * @returns {Promise<{filepath: string, source: string}[]>} Resolves to existing source files with logical filepaths in KV listing order
-     */
-    async getBundledFiles(context) {
-        return await this.#loadPrefixedFiles(context, BUNDLED_FILES_PREFIX);
-    }
-
-    async #putFile(context, barePrefix, filepath, source) {
+    async #putFile(context, namespace, barePrefix, filepath, source) {
         assertNonEmptyString(filepath, 'TemplateFileStore write requires a filepath');
         assertNonEmptyString(source, 'TemplateFileStore write requires source text');
-        // Reject path traversal so a client cannot escape its prefix or the build namespace.
+        // Reject path traversal so a client cannot escape its prefix or the namespace.
         assert(
             !filepath.split('/').includes('..'),
             'TemplateFileStore write filepath must not contain ".." segments',
         );
 
-        const { logicalKey, kvKey } = this.#resolveKey(context, barePrefix, filepath);
+        const { logicalKey, kvKey } = this.#resolveKey(namespace, barePrefix, filepath);
         this.#logger.debug('putFile() writing key', { key: kvKey });
         const kvStore = context.env.TEMPLATE_FILE_STORE;
         await kvStore.put(kvKey, source);
@@ -127,24 +115,46 @@ export default class TemplateFileStore {
     }
 
     /**
-     * Resolves a single file's keys, owning the `{buildId}/{barePrefix}{filepath}`
+     * Resolves a single file's keys, owning the `{namespace}/{barePrefix}{filepath}`
      * encoding shared by the read and write methods.
-     * @param {RequestContext} context
+     * @param {string|null} namespace - Optional namespace used to prefix the KV key
      * @param {string} barePrefix - Logical prefix (e.g. `base-templates/`)
      * @param {string} filepath - Logical filename relative to the prefix
-     * @returns {{logicalKey: string, kvKey: string}} The build-id-free logical key and the build-id-prefixed KV key
+     * @returns {{logicalKey: string, kvKey: string}} The namespace-free logical key and the namespace-prefixed KV key
      */
-    #resolveKey(context, barePrefix, filepath) {
-        const buildId = context.runtime.build?.id || '';
+    #resolveKey(namespace, barePrefix, filepath) {
+        const safeNamespace = this.#resolveNamespace(namespace);
         const logicalKey = `${ barePrefix }${ filepath.replace(/^\//, '') }`;
-        const kvKey = buildId ? `${ buildId }/${ logicalKey }` : logicalKey;
+        const kvKey = safeNamespace ? `${ safeNamespace }/${ logicalKey }` : logicalKey;
         return { logicalKey, kvKey };
     }
 
-    async #loadPrefixedFiles(context, barePrefix) {
+    /**
+     * Validates and normalizes an optional namespace. Treats nullish and empty
+     * values as "no namespace" (the flat, unprefixed namespace).
+     * @param {string|null} [namespace] - Optional namespace supplied by the caller
+     * @returns {string} The validated namespace, or an empty string when omitted
+     * @throws {Error} When a non-empty namespace is not a string or contains ".." segments
+     */
+    #resolveNamespace(namespace) {
+        if (namespace === null || namespace === undefined || namespace === '') {
+            return '';
+        }
+
+        assertNonEmptyString(namespace, 'TemplateFileStore namespace must be a string when provided');
+        // Reject path traversal so a caller cannot escape the namespace.
+        assert(
+            !namespace.split('/').includes('..'),
+            'TemplateFileStore namespace must not contain ".." segments',
+        );
+
+        return namespace;
+    }
+
+    async #loadPrefixedFiles(context, namespace, barePrefix) {
         const kvStore = context.env.TEMPLATE_FILE_STORE;
-        const buildId = context.runtime.build?.id || '';
-        const prefix = buildId ? `${buildId}/${barePrefix}` : barePrefix;
+        const safeNamespace = this.#resolveNamespace(namespace);
+        const prefix = safeNamespace ? `${safeNamespace}/${barePrefix}` : barePrefix;
         this.#logger.debug('load prefixed files', { prefix });
 
         const { keys } = await kvStore.list({ prefix });
@@ -160,8 +170,8 @@ export default class TemplateFileStore {
         for (const kvFilepath of kvFilepaths) {
             const source = resultMap.get(kvFilepath) ?? null;
             if (source !== null) {
-                // Strip the build ID prefix to return a logical filepath to callers.
-                const filepath = buildId ? kvFilepath.slice(buildId.length + 1) : kvFilepath;
+                // Strip the namespace prefix to return a logical filepath to callers.
+                const filepath = safeNamespace ? kvFilepath.slice(safeNamespace.length + 1) : kvFilepath;
                 files.push({ filepath, source });
             }
         }

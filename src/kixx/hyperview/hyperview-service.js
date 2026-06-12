@@ -101,7 +101,7 @@ export default class HyperviewService {
 
         this.#logger.debug('getPageData() fetching page data', { pathname });
 
-        const items = await this.#pageDataStore.getJSONFiles(context, filepaths);
+        const items = await this.#pageDataStore.getJSONFiles(context, null, filepaths);
 
         if (!items[items.length - 1]) {
             this.#logger.debug('getPageData() page data not found', { pathname });
@@ -200,7 +200,7 @@ export default class HyperviewService {
                 return `${ path }/${ filename }`;
             });
 
-            const files = await this.#pageDataStore.getTextFiles(context, includedFilepaths);
+            const files = await this.#pageDataStore.getTextFiles(context, null, includedFilepaths);
 
             const includedContent = files
                 .map((file, index) => {
@@ -241,7 +241,7 @@ export default class HyperviewService {
     async getBaseTemplate(context, templateId, options) {
         const { useCache = false } = options ?? {};
         const partials = await this.loadPartials(context, { useCache });
-        const file = await this.#templateFileStore.getTemplate(context, templateId);
+        const file = await this.#templateFileStore.getTemplate(context, null, templateId);
         if (file) {
             let template = useCache ? this.#templateCache.get(file.filepath) : null;
             if (!template) {
@@ -273,7 +273,7 @@ export default class HyperviewService {
         if (cachedTemplate) {
             return cachedTemplate;
         }
-        const source = await this.#pageDataStore.getTextFile(context, filepath) ?? null;
+        const source = await this.#pageDataStore.getTextFile(context, null, filepath) ?? null;
         if (source !== null) {
             const template = this.compileTemplate(filepath, source, this.#customHelpers, partials);
             if (useCache) {
@@ -294,7 +294,7 @@ export default class HyperviewService {
      */
     async loadPartials(context, options) {
         const { useCache = false } = options ?? {};
-        const files = await this.#templateFileStore.getPartials(context);
+        const files = await this.#templateFileStore.getPartials(context, null);
 
         const partials = new Map();
 
