@@ -5,7 +5,7 @@
  * should remain consistent so that `HyperviewService` and deploy tooling stay
  * runtime-agnostic.
  *
- * The store persists template source files under two logical prefixes and
+ * The store persists template source files under three logical prefixes and
  * exposes a read path (consumed by the runtime serving requests) and a write
  * path (consumed by deploy tooling that publishes a build's templates).
  *
@@ -16,8 +16,11 @@
  * keys, filesystem paths, object-store keys — but callers only ever see logical
  * filepaths.
  *
- * - Files live under one of two prefixes, selected by the method:
- *   `base-templates/` (base templates) and `partials/` (shared partials).
+ * - Files live under one of three prefixes, selected by the method:
+ *   `base/` (base templates), `pages/` (page templates), and `partials/`
+ *   (shared partials).
+ * - A page template `filepath` may be nested several segments deep, delimited
+ *   by `/` (e.g. `pages/blog/posts/welcome.html`).
  * - An optional `namespace` isolates a whole build: when present, files are
  *   addressed as `{namespace}/{prefix}{filepath}`; when absent, files are
  *   addressed at the flat, unprefixed `{prefix}{filepath}`. The namespace lets
@@ -25,7 +28,7 @@
  *   idempotent; omitting it supports callers who overwrite previous builds in
  *   place rather than versioning them.
  * - Callers always pass and receive logical filepaths (e.g.
- *   `base-templates/home.html`). The `namespace` prefix is applied on write and
+ *   `base/home.html`). The `namespace` prefix is applied on write and
  *   stripped on read by the adapter; it never appears in a returned filepath.
  *
  * ## Namespace contract
@@ -49,9 +52,9 @@
  * - A write `source` MUST be a non-empty string.
  * - A leading slash on a `filepath` MUST be ignored when resolving the address,
  *   so `'/home.html'` and `'home.html'` address the same file.
- * - `getTemplate()` MUST resolve to `null` when the template does not exist, and
- *   otherwise to a `{ filepath, source }` whose `filepath` is the logical path
- *   with the `namespace` prefix stripped.
+ * - `getBaseTemplate()` and `getPageTemplate()` MUST resolve to `null` when the
+ *   template does not exist, and otherwise to a `{ filepath, source }` whose
+ *   `filepath` is the logical path with the `namespace` prefix stripped.
  * - The `put*()` methods MUST create or overwrite the file and resolve with the
  *   logical `{ filepath }` that was written (namespace prefix stripped).
  * - `getPartials()` MUST resolve to an array of `{ filepath, source }` for the
@@ -82,7 +85,7 @@
  *
  * @typedef {Object} TemplateFile
  * @property {string} filepath - Logical filepath within the prefix, with the
- *   namespace prefix stripped (e.g. `base-templates/home.html`).
+ *   namespace prefix stripped (e.g. `base/home.html`).
  * @property {string} source - The file's source text.
  */
 
@@ -99,13 +102,23 @@
  *
  * @typedef {Object} TemplateFileStoreInterface
  *
- * @property {function(Object, (string|null), string): Promise<TemplateFile|null>} getTemplate
- *   Retrieves a base template source file from the `base-templates/` prefix.
+ * @property {function(Object, (string|null), string): Promise<TemplateFile|null>} getBaseTemplate
+ *   Retrieves a base template source file from the `base/` prefix.
  *   Resolves to a `TemplateFile`, or `null` when the template does not exist.
  *
- * @property {function(Object, (string|null), string, string): Promise<TemplateFileRef>} putTemplate
- *   Creates or overwrites a base template source file under the `base-templates/`
+ * @property {function(Object, (string|null), string, string): Promise<TemplateFileRef>} putBaseTemplate
+ *   Creates or overwrites a base template source file under the `base/`
  *   prefix. Resolves with the logical filepath that was written.
+ *
+ * @property {function(Object, (string|null), string): Promise<TemplateFile|null>} getPageTemplate
+ *   Retrieves a page template source file from the `pages/` prefix. The
+ *   `filepath` may be nested several segments deep, delimited by `/`. Resolves
+ *   to a `TemplateFile`, or `null` when the template does not exist.
+ *
+ * @property {function(Object, (string|null), string, string): Promise<TemplateFileRef>} putPageTemplate
+ *   Creates or overwrites a page template source file under the `pages/` prefix.
+ *   The `filepath` may be nested several segments deep, delimited by `/`.
+ *   Resolves with the logical filepath that was written.
  *
  * @property {function(Object, (string|null), string, string): Promise<TemplateFileRef>} putPartial
  *   Creates or overwrites a partial template source file under the `partials/`

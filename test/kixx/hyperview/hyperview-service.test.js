@@ -39,9 +39,9 @@ function makeTemplateFileStore(options) {
     const { templates = {}, partials = [] } = options ?? {};
 
     return {
-        async getTemplate(_context, _namespace, templateId) {
+        async getBaseTemplate(_context, _namespace, templateId) {
             const source = templates[templateId];
-            return source ? { filepath: `base-templates/${ templateId }`, source } : null;
+            return source ? { filepath: `base/${ templateId }`, source } : null;
         },
         async getPartials(_context, _namespace) {
             return partials;

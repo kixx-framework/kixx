@@ -241,7 +241,7 @@ export default class HyperviewService {
     async getBaseTemplate(context, templateId, options) {
         const { useCache = false } = options ?? {};
         const partials = await this.loadPartials(context, { useCache });
-        const file = await this.#templateFileStore.getTemplate(context, null, templateId);
+        const file = await this.#templateFileStore.getBaseTemplate(context, null, templateId);
         if (file) {
             let template = useCache ? this.#templateCache.get(file.filepath) : null;
             if (!template) {
