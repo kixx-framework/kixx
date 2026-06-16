@@ -46,6 +46,32 @@ export default class HyperviewService {
         this.#logger = logger.createChild('HyperviewService');
     }
 
+    async getStaticPage() {
+        const cacheKey = await this.getCacheKey(context);
+        const key = `page_cache:${ cacheKey }`;
+        const cachedPage = await this.#kvStore.get(context, key, { type: 'text' });
+        if (cachedPage) {
+            return cachedPage;
+        }
+
+        const pageData = await this.getPageData();
+    }
+
+    async getCacheKey(context) {
+        const buildId = context.runtime.build.id || 'default';
+        const key = `content_cache_key:${ buildId }`;
+        let val = await this.#kvStore.get(context, key, { type: 'text' });
+
+        if (!val) {
+            val = buildId;
+            await this.#kvStore.set(context, key, val, { type: 'text' });
+        }
+
+        this.#logger.debug('using cache key', { key, val });
+
+        return val;
+    }
+
     /**
      * @param {Object} args
      * @param {Object} args.pageDataStore - Store for fetching page JSON and text file assets
