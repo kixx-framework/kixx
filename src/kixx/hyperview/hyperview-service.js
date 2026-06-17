@@ -59,134 +59,9 @@ export default class HyperviewService {
         this.#templateFileStore = templateFileStore;
     }
 
-    async getContentCacheKey(context) {
-        const buildId = context.runtime.build.id || 'default';
-        const key = `content_cache_key:${ buildId }`;
-        let val = await this.#kvStore.get(context, key, { type: 'text' });
-
-        if (!val) {
-            val = buildId;
-            await this.#kvStore.set(context, key, val, { type: 'text' });
-        }
-
-        this.#logger.debug('using cache key', { key, val });
-
-        return val;
-    }
-
-    async getStaticPage(context, pathname, options) {
-        options = options ?? {};
-
-        const contentCacheKey = await this.getContentCacheKey(context);
-        const key = `page_cache:${ contentCacheKey }:${ pathname }`;
-
-        if (options.useCache) {
-            const cachedPage = await this.#kvStore.get(context, key, { type: 'text' });
-            if (cachedPage) {
-                this.#logger.debug('page cache hit', { pathname, key });
-                return cachedPage;
-            }
-            this.#logger.debug('page cache miss', { pathname, key });
-        }
-
-        let baseTemplateId = options.baseTemplate;
-        if (isNonEmptyString(pageData.baseTemplate)) {
-            baseTemplateId = pageData.baseTemplate;
-        }
-        if (!isNonEmptyString(baseTemplateId)) {
-            throw new AssertionError(
-                `A baseTemplate ID must be provided by the HyperviewRequestHandler options, or page metadata (pathname:${ pathname })`,
-            );
-        }
-
-        const metadata = await this.getPageMetadata(context, contentCacheKey, pathname);
-
-        let pageTemplateId = 'page.html';
-        if (isNonEmptyString(metadata.pageTemplate)) {
-            pageTemplateId = metadata.pageTemplate;
-        } else if (isNonEmptyString(options.pageTemplate)) {
-            pageTemplateId = options.pageTemplate;
-        }
-
-        const [ baseTemplate, pageTemplate ] = await Promise.all([
-            this.getBaseTemplate(context, baseTemplateId),
-            this.getPageTemplate(context, pathname, pageTemplateId),
-        ]);
-
-        if (!baseTemplate) {
-            throw new AssertionError(
-                `The base template was not found (id:${ baseTemplateId }, pathname:${ pathname })`,
-            );
-        }
-
-        if (pageTemplate) {
-            metadata.body = pageTemplate(metadata);
-        }
-
-        const page = baseTemplate(metadata);
-
-        if (options.useCache) {
-            this.#logger.debug('cache page', { pathname, key });
-            await this.#kvStore.set(context, key, page, { type: 'text' });
-        }
-
-        return page;
-    }
-
-    async getDynamicPage(context, pathname, options) {
-        options = options ?? {};
-        const { useCache = false } = options;
-
-        const contentCacheKey = await this.getContentCacheKey(context);
-        const key = `page_cache:${ contentCacheKey }:${ pathname }`;
-
-        let baseTemplateId = options.baseTemplate;
-        if (isNonEmptyString(pageData.baseTemplate)) {
-            baseTemplateId = pageData.baseTemplate;
-        }
-        if (!isNonEmptyString(baseTemplateId)) {
-            throw new AssertionError(
-                `A baseTemplate ID must be provided by the HyperviewRequestHandler options, or page metadata (pathname:${ pathname })`,
-            );
-        }
-
-        const metadata = await this.getPageMetadata(context, contentCacheKey, pathname);
-
-        let pageTemplateId = 'page.html';
-        if (isNonEmptyString(metadata.pageTemplate)) {
-            pageTemplateId = metadata.pageTemplate;
-        } else if (isNonEmptyString(options.pageTemplate)) {
-            pageTemplateId = options.pageTemplate;
-        }
-
-        const [ baseTemplate, pageTemplate ] = await Promise.all([
-            this.getBaseTemplate(context, baseTemplateId),
-            this.getPageTemplate(context, pathname, pageTemplateId),
-        ]);
-
-        if (!baseTemplate) {
-            throw new AssertionError(
-                `The base template was not found (id:${ baseTemplateId }, pathname:${ pathname })`,
-            );
-        }
-
-        if (pageTemplate) {
-            metadata.body = pageTemplate(metadata);
-        }
-
-        const page = baseTemplate(metadata);
-
-        if (options.useCache) {
-            this.#logger.debug('cache page', { pathname, key });
-            await this.#kvStore.set(context, key, page, { type: 'text' });
-        }
-
-        return page;
-    }
-
-    async getPageMetadata(context, pathname, options) {
-        const { useCache = false, contentCacheKey } = options ?? {};
-        assertNonEmptyString(contentCacheKey, 'HyperviewService#getPageMetadata() requires options.contentCacheKey');
+    async getPageMetadata(context, pathname) {
+        const { useCache = false } = options ?? {};
+        const buildId = context.runtime.build?.id ?? null;
 
         // We need to get the page data for this page - the page at `pathname` - and
         // all its parent pages. So for pathname "/blog/reviews/music/led-zeppelin" we need:
@@ -208,46 +83,40 @@ export default class HyperviewService {
             }
         }
 
-        const items = await this.#pageDataStore.getJSONFiles(context, null, filepaths);
+        const items = await this.#pageDataStore.getJSONFiles(context, buildId, filepaths);
 
         if (!items[items.length - 1]) {
             this.#logger.debug('page metadata not found', { pathname });
             return null;
         }
 
-        // Extract json payloads for merging. Parent page.json files are optional, nulls are skipped.
-        const jsonItems = items.filter((x) => x).map((x) => x.json);
+        let version = '';
 
-        // The props override all pages when present.
-        if (isObjectNotNull(props)) {
-            jsonItems.push(props);
-        }
+        // Extract json payloads for merging. Parent page.json files are optional, nulls are skipped.
+        const jsonItems = items
+            .filter((x) => x)
+            .map((x) => {
+                version = version ? `${ version }:${ x.json.version }` : x.json.version;
+                return x.json;
+            });
 
         // Merge the pages together, with the more specific page data objects overriding
         // their parents.
         const metadata = deepMerge(...jsonItems);
 
-        if (metadata.page) {
+        return { version, metadata };
+    }
+
+    async getCachedPage(context, pathname, version) {
+        const buildId = context.runtime.build?.id || '';
+        const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
+        const page = await this.#kvStore.get(context, key, { type: 'text' });
+        if (page) {
+            this.#logger.debug('cached page hit', { pathname, key });
+        } else {
+            this.#logger.debug('cached page miss', { pathname, key });
         }
-
-        if (metadata.includes && Object.keys(metadata.includes).length > 0) {
-            this.#logger.debug('loading included resources', { pathname, includes: Object.keys(metadata.includes) });
-            const includes = await this.getIncludes(path, metadata.includes, { useCache, contentCacheKey });
-
-            const includedContent = {};
-            for (const [ name, template ] of includes) {
-                if (isFunction(template)) {
-                    includedContent[name] = template(metadata);
-                } else {
-                    // Text based content like HTML or markdown.
-                    includedContent[name] = template;
-                }
-            }
-
-            metadata.includes = includedContent;
-        }
-
-        return metadata;
+        return page;
     }
 
     mergePageMetadata(url, page) {
@@ -297,9 +166,9 @@ export default class HyperviewService {
         return page;
     }
 
-    async getIncludes(path, includes, options) {
-        const { useCache = false, contentCacheKey } = options ?? {};
-        assertNonEmptyString(contentCacheKey, 'HyperviewService#getIncludes() requires options.contentCacheKey');
+    async getIncludes(context, pathname, includes, options) {
+        const { useCache = false, version } = options ?? {};
+        const buildId = context.runtime.build?.id ?? null;
 
         // Process included files. Example:
         // const data = {
@@ -310,10 +179,15 @@ export default class HyperviewService {
         //     },
         // };
 
-        const cacheKey = `${ path }:${ contentCacheKey }`;
-        const cachedIncludes = useCache ? this.#includesCache.get(cacheKey) : null;
-        if (cachedIncludes) {
-            return cachedIncludes;
+        let cacheKey;
+        if (useCache && version) {
+            cacheKey = `${ buildId }:${ pathname }:${ version }`;
+            const cachedIncludes = this.#includesCache.get(cacheKey);
+            if (cachedIncludes) {
+                this.#logger.debug('page includes cache hit', { pathname, key: cacheKey });
+                return cachedIncludes;
+            }
+            this.#logger.debug('page includes cache miss', { pathname, key: cacheKey });
         }
 
         // Build a flat list without mutating data.includes — the name is carried
@@ -342,7 +216,7 @@ export default class HyperviewService {
             return `${ path }/${ filename }`;
         });
 
-        const files = await this.#pageDataStore.getTextFiles(context, contentCacheKey, includedFilepaths);
+        const files = await this.#pageDataStore.getTextFiles(context, buildId, includedFilepaths);
 
         const includedContent = files
             .map((file, index) => {
@@ -371,181 +245,11 @@ export default class HyperviewService {
             }
         }
 
-        if (useCache) {
+        if (cacheKey) {
             this.#includesCache.set(cacheKey, compiledIncludes);
         }
 
         return compiledIncludes;
-    }
-
-    /**
-     * Fetches and assembles page data for a pathname by merging all ancestor page.json files,
-     * resolving title/description templates, and loading file includes.
-     * @param {Object} context - Request context passed through to the page data store
-     * @param {URL} url - Request URL used to derive canonical_url and href defaults
-     * @param {string} pathname - URL pathname identifying the page (e.g., '/blog/2026/post-slug')
-     * @param {Object|null} [props=null] - Optional props merged last, overriding all page data
-     * @param {Object} [options] - Page data loading options
-     * @param {boolean} [options.useCache=false] - Reuse assembled static page data from this service instance
-     * @returns {Promise<Object|null>} Assembled page data, or null if the leaf page.json does not exist
-     * @throws {AssertionError} When an include entry is missing its required filename property
-     */
-    async getPageData(context, url, pathname, props = null, options) {
-        const { useCache = false } = options ?? {};
-        const canUseCache = useCache && (props === null || isUndefined(props));
-        if (canUseCache && this.#pageDataCache.has(pathname)) {
-            this.#logger.debug('getPageData() using cached data for pathname', { pathname });
-            return this.#pageDataCache.get(pathname);
-        }
-
-        // We need to get the page data for this page - the page at `pathname` - and
-        // all its parent pages. So for pathname "/blog/reviews/music/led-zeppelin" we need:
-        //
-        // /page.json
-        // /blog/page.json
-        // /blog/reviews/page.json
-        // /blog/reviews/music/page.json
-        // /blog/reviews/music/led-zeppelin/page.json
-
-        const parts = pathname.split('/').filter((part) => part);
-        const filepaths = [ '/page.json' ];
-        let path = '';
-
-        if (pathname !== '/') {
-            for (const part of parts) {
-                path = `${ path }/${ part }`;
-                filepaths.push(`${ path }/page.json`);
-            }
-        }
-
-        this.#logger.debug('getPageData() fetching page data', { pathname });
-
-        const items = await this.#pageDataStore.getJSONFiles(context, null, filepaths);
-
-        if (!items[items.length - 1]) {
-            this.#logger.debug('getPageData() page data not found', { pathname });
-            if (canUseCache) {
-                this.#pageDataCache.set(pathname, null);
-            }
-            return null;
-        }
-
-        // Extract json payloads for merging. Parent page.json files are optional, nulls are skipped.
-        const jsonItems = items.filter((x) => x).map((x) => x.json);
-
-        // The props override all pages when present.
-        if (isObjectNotNull(props)) {
-            jsonItems.push(props);
-        }
-
-        // Merge the pages together, with the more specific page data objects overriding
-        // their parents.
-        const data = deepMerge(...jsonItems);
-
-        if (data.page) {
-            const { page } = data;
-
-            // Set canonical URL from request URL if not already defined in page data
-            // Canonical URL excludes query string and hash to provide a stable reference
-            if (!page.canonical_url) {
-                page.canonical_url = this.#urlToCanonicalURLString(url);
-            }
-            if (!page.href) {
-                page.href = url.href;
-            }
-
-            if (isNonEmptyString(page.title?.template)) {
-                const tpl = this.#createMiniTemplate(`${ path }/page.title`, page.title.template);
-                page.title = tpl(data);
-            }
-            if (isNonEmptyString(page.description?.template)) {
-                const tpl = this.#createMiniTemplate(`${ path }/page.description`, page.description.template);
-                page.description = tpl(data);
-            }
-
-            // Create the Open Graph object if it does not yet exist.
-            if (!page.open_graph) {
-                page.open_graph = {};
-            }
-
-            const { open_graph } = page;
-
-            // Let existing open_graph values override the page values
-
-            if (isUndefined(open_graph.url)) {
-                open_graph.url = page.canonical_url;
-            }
-            if (isUndefined(open_graph.type)) {
-                open_graph.type = 'website';
-            }
-            if (isUndefined(open_graph.title)) {
-                open_graph.title = page.title;
-            }
-            if (isUndefined(open_graph.description)) {
-                open_graph.description = page.description;
-            }
-            if (isUndefined(open_graph.locale)) {
-                open_graph.locale = page.locale;
-            }
-        }
-
-        // Process included files. Example:
-        // const data = {
-        //     includes: {
-        //         header: { filename: 'header.html', template: true },
-        //         summary: { filename: 'summary.md' },
-        //         body: { filename: 'body.md', template: true },
-        //     },
-        // };
-        if (data.includes) {
-            this.#logger.debug('getPageData() loading included resources', { pathname, includes: data.includes });
-
-            // Build a flat list without mutating data.includes — the name is carried
-            // separately so missing files leave the original slot untouched.
-            const includesList = Object.keys(data.includes)
-                .map((name) => {
-                    const item = data.includes[name];
-                    if (item) {
-                        return Object.assign({}, item, { name });
-                    }
-                    return null;
-                })
-                .filter((x) => x);
-
-            const includedFilepaths = includesList.map(({ name, filename }) => {
-                if (!isNonEmptyString(filename)) {
-                    throw new AssertionError(`Missing includes[${name}].filename from ${pathname}`, null, this.getPageData);
-                }
-                return `${ path }/${ filename }`;
-            });
-
-            const files = await this.#pageDataStore.getTextFiles(context, null, includedFilepaths);
-
-            const includedContent = files
-                .map((file, index) => {
-                    if (file) {
-                        const { filepath, source } = file;
-                        return Object.assign(includesList[index], { filepath, source });
-                    }
-                    return null;
-                })
-                .filter((x) => x);
-
-            for (const item of includedContent) {
-                if (item.template) {
-                    const tpl = this.#createMiniTemplate(item.filepath, item.source);
-                    data.includes[item.name] = tpl(data);
-                } else {
-                    data.includes[item.name] = item.source;
-                }
-            }
-        }
-
-        if (canUseCache) {
-            this.#pageDataCache.set(pathname, data);
-        }
-
-        return data;
     }
 
     /**
@@ -559,23 +263,30 @@ export default class HyperviewService {
      */
     async getBaseTemplate(context, templateId, options) {
         const { useCache = false } = options ?? {};
-        const cacheKey = `base/${ templateId }`;
-        const cachedTemplate = useCache ? this.#templateCache.get(cacheKey) : null;
-        if (cachedTemplate) {
-            return cachedTemplate;
+        const buildId = context.runtime.build?.id ?? null;
+
+        let template;
+        const cacheKey = `${ buildId }:base:${ filepath }`;
+        if (useCache) {
+            template = this.#templateCache.get(cacheKey);
+            if (template) {
+                this.#logger.debug('base template cache hit', { pathname, key: cacheKey });
+                return template;
+            }
+            this.#logger.debug('base template cache miss', { pathname, key: cacheKey });
         }
 
-        const buildId = context.runtime.build.id;
-        const file = await this.#templateFileStore.getBaseTemplate(context, null, templateId);
+        const file = await this.#templateFileStore.getBaseTemplate(context, buildId, templateId);
         if (file) {
             const partials = await this.loadPartials(context, { useCache });
-            const template = this.compileTemplate(file.filepath, file.source, this.#customHelpers, partials);
-            if (useCache) {
-                this.#templateCache.set(cacheKey, template);
-            }
-            return template;
+            template = this.compileTemplate(file.filepath, file.source, this.#customHelpers, partials);
         }
-        return null;
+
+        if (useCache) {
+            this.#templateCache.set(cacheKey, template);
+        }
+
+        return template ?? null;
     }
 
     /**
@@ -589,24 +300,31 @@ export default class HyperviewService {
      */
     async getPageTemplate(context, pathname, templateId, options) {
         const { useCache = false } = options ?? {};
+        const buildId = context.runtime.build?.id ?? null;
         const filepath = pathname === '/' ? `/${ templateId }` : `${ pathname }/${ templateId }`;
-        const cacheKey = `page/${ filepath }`;
-        const cachedTemplate = useCache ? this.#templateCache.get(cacheKey) : null;
-        if (cachedTemplate) {
-            return cachedTemplate;
+
+        let template;
+        const cacheKey = `${ buildId }:page:${ filepath }`;
+        if (useCache) {
+            template = this.#templateCache.get(cacheKey);
+            if (template) {
+                this.#logger.debug('page template cache hit', { pathname, key: cacheKey });
+                return template;
+            }
+            this.#logger.debug('page template cache miss', { pathname, key: cacheKey });
         }
 
-        const buildId = context.runtime.build.id;
-        const file = await this.#pageDataStore.getTextFile(context, buildId, filepath);
+        const file = await this.#templateFileStore.getPageTemplate(context, buildId, filepath);
         if (file) {
             const partials = await this.loadPartials(context, { useCache });
-            const template = this.compileTemplate(file.filepath, file.source, this.#customHelpers, partials);
-            if (useCache) {
-                this.#templateCache.set(cacheKey, template);
-            }
-            return template;
+            template = this.compileTemplate(file.filepath, file.source, this.#customHelpers, partials);
         }
-        return null;
+
+        if (useCache) {
+            this.#templateCache.set(cacheKey, template);
+        }
+
+        return template ?? null;
     }
 
     /**
@@ -618,14 +336,22 @@ export default class HyperviewService {
      */
     async loadPartials(context, options) {
         const { useCache = false } = options ?? {};
-        if (useCache && this.#cachedPartialTemplates.size > 0) {
-            return this.#cachedPartialTemplates;
+        const buildId = context.runtime.build?.id ?? null;
+
+        let partials;
+        const cacheKey = buildId || 'null';
+        if (useCache) {
+            partials = this.#cachedPartialTemplates.get(cacheKey);
+            if (partials) {
+                this.#logger.debug('template partials cache hit', { key: cacheKey });
+                return partials;
+            }
+            this.#logger.debug('template partials cache miss', { key: cacheKey });
         }
 
-        const buildId = context.runtime.build.id;
         const files = await this.#templateFileStore.getPartials(context, buildId);
 
-        const partials = new Map();
+        partials = new Map();
 
         for (const { filepath, source } of files) {
             const name = filepath.replace(/^\/?partials\//, '');
@@ -633,9 +359,7 @@ export default class HyperviewService {
             partials.set(name, template);
         }
 
-        if (useCache) {
-            this.#cachedPartialTemplates = partials;
-        }
+        this.#cachedPartialTemplates.set(buildId, partials);
 
         return partials;
     }
