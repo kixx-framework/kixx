@@ -92,8 +92,8 @@ export default class PageDataStore {
         const resultMap = await kvStore.get(kvKeys, { type: 'text' });
 
         return resolved.map(({ logicalKey, kvKey }) => {
-            const source = resultMap.get(kvKey);
-            if (source) {
+            const source = resultMap.get(kvKey) ?? null;
+            if (source !== null) {
                 return { filepath: logicalKey, source };
             }
             return null;

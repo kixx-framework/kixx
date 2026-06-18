@@ -129,7 +129,7 @@ export function HyperviewStaticPageHandler(options) {
 
         const [ baseTemplate, pageTemplate ] = await Promise.all([
             service.getBaseTemplate(context, baseTemplateId, { useCache: false }),
-            service.getPageTemplate(context, pathname, pageTemplateId, { useCache: false }),
+            service.getPageTemplate(context, pageTemplateId, { useCache: false }),
         ]);
 
         if (!baseTemplate) {
@@ -263,7 +263,7 @@ export function HyperviewDynamicPageHandler(options) {
 
         const [ baseTemplate, pageTemplate ] = await Promise.all([
             service.getBaseTemplate(context, baseTemplateId, { useCache }),
-            service.getPageTemplate(context, pathname, pageTemplateId, { useCache }),
+            service.getPageTemplate(context, pageTemplateId, { useCache }),
         ]);
 
         if (!baseTemplate) {

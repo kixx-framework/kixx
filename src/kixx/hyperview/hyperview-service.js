@@ -126,7 +126,7 @@ export default class HyperviewService {
     async setCachedPage(context, pathname, version, page) {
         const buildId = context.runtime.build?.id || '';
         const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
-        await this.#kvStore.set(context, key, page, { type: 'text' });
+        await this.#kvStore.put(context, key, page, { type: 'text' });
     }
 
     mergePageMetadata(url, metadata) {
