@@ -4,15 +4,27 @@ import deepMerge from '../utils/deep-merge.js';
 
 
 const DISALLOWED_STATIC_PATH_CHARACTERS = /[^a-z0-9_.-]/i;
-const INDEX_FILE_PATTERN = /index\.(html|json|xml|md)$/;
+const INDEX_FILE_PATTERN = /(?:^|\/)index\.(html|json|xml|md)$/;
 // Strip format extensions used for content negotiation (e.g. /platform.json → /platform)
 const FORMAT_EXTENSION_PATTERN = /\.json$/;
+
+/**
+ * @typedef {import('../context/request-context.js').default} RequestContext
+ */
+
+/**
+ * @typedef {import('../http-router/server-request-interface.js').ServerRequestInterface} ServerRequestInterface
+ */
+
+/**
+ * @typedef {import('../http-router/server-response.js').default} ServerResponse
+ */
 
 
 /**
  * Creates a request handler that fetches and renders static pages.
  *
- * This is useful when an endpoint target will not by hydrated by dynamic data
+ * This is useful when an endpoint target will not be hydrated by dynamic data
  * and the full page response can be cached.
  *
  * Option values take precedence over environment variables. When an option is
@@ -20,7 +32,8 @@ const FORMAT_EXTENSION_PATTERN = /\.json$/;
  *
  * @param {Object} [options]
  * @param {string} [options.indexFilePattern] - Regex pattern string matching index filenames
- *   to strip from the URL pathname. Defaults to `index.(html|json|xml|md)`.
+ *   to strip from the URL pathname. Defaults to matching an `index.html`,
+ *   `index.json`, `index.xml`, or `index.md` path segment at the end of the path.
  * @param {string} [options.formatExtensionPattern] - Regex pattern string matching format
  *   extensions to strip from the URL pathname last segment for content negotiation.
  *   Defaults to `\.json$`, so `/platform.json` resolves page data from `/platform`.
@@ -33,12 +46,13 @@ const FORMAT_EXTENSION_PATTERN = /\.json$/;
  *   per-page via `metadata.baseTemplate`.
  * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`.
  *   Can be overridden per-page via `metadata.pageTemplate`.
- * @returns {Function} Async request handler `(context, request, response) => Promise<Response>`
+ * @returns {function(RequestContext, ServerRequestInterface, ServerResponse): Promise<ServerResponse>}
+ *   Async request handler for the router pipeline.
  */
 export function HyperviewStaticPageHandler(options) {
     options = options ?? {};
 
-    // Compile patterns and resolve option flags once at factory time.
+    // Compile caller-provided regex strings once at factory time.
     const indexFilePattern = isNonEmptyString(options.indexFilePattern)
         ? new RegExp(options.indexFilePattern)
         : INDEX_FILE_PATTERN;
@@ -69,9 +83,7 @@ export function HyperviewStaticPageHandler(options) {
         if (isNonEmptyString(options.pathname)) {
             pathname = options.pathname;
         } else {
-            // Remove index files like /foo/bar/index.html to /foo/bar/.
-            // This normalizes paths so /blog/index.html and /blog/ both map to the same page.
-            pathname = url.pathname.replace(indexFilePattern, '');
+            pathname = stripIndexFile(url.pathname, indexFilePattern);
             // Strip format extension from the last path segment so content negotiation
             // extensions like .json don't change which page data is loaded.
             // /platform.json and /platform both load from pages/platform/page.json.
@@ -138,12 +150,18 @@ export function HyperviewStaticPageHandler(options) {
             );
         }
 
+        if (!pageTemplate) {
+            throw new AssertionError(
+                `The page template was not found (pageTemplate:${ pageTemplateId }, pathname:${ pathname })`,
+            );
+        }
+
         if (metadata.includes && Object.keys(metadata.includes).length > 0) {
             metadata.includes = await service.getIncludes(
                 context,
                 pathname,
                 metadata.includes,
-                { useCache: false, version: pageContent.version },
+                { useCache: false, version: pageContent.version, metadata },
             );
         }
 
@@ -162,7 +180,7 @@ export function HyperviewStaticPageHandler(options) {
 /**
  * Creates a request handler that fetches and renders dynamic pages.
  *
- * Used when the response will by hydrated by dynamic data from the response
+ * Used when the response will be hydrated by dynamic data from the response
  * props from handlers which run before this.
  *
  * Option values take precedence over environment variables. When an option is
@@ -170,25 +188,28 @@ export function HyperviewStaticPageHandler(options) {
  *
  * @param {Object} [options]
  * @param {string} [options.indexFilePattern] - Regex pattern string matching index filenames
- *   to strip from the URL pathname. Defaults to `index.(html|json|xml|md)`.
+ *   to strip from the URL pathname. Defaults to matching an `index.html`,
+ *   `index.json`, `index.xml`, or `index.md` path segment at the end of the path.
  * @param {string} [options.formatExtensionPattern] - Regex pattern string matching format
  *   extensions to strip from the URL pathname last segment for content negotiation.
  *   Defaults to `\.json$`, so `/platform.json` resolves page data from `/platform`.
  * @param {boolean} [options.allowJSON] - Allow JSON responses when the client requests them.
  *   Falls back to the `HYPERVIEW_ALLOW_JSON_RESPONSE` env var.
- * @param {boolean} [options.useCache] - Enable full page caching.
+ * @param {boolean} [options.useCache] - Reuse compiled templates and includes. Dynamic
+ *   full-page responses are not cached.
  *   Falls back to the `HYPERVIEW_USE_CACHE` env var.
  * @param {string} [options.pathname] - Override the pathname derived from the request URL.
  * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
  *   per-page via `metadata.baseTemplate`.
  * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`.
  *   Can be overridden per-page via `metadata.pageTemplate`.
- * @returns {Function} Async request handler `(context, request, response) => Promise<Response>`
+ * @returns {function(RequestContext, ServerRequestInterface, ServerResponse): Promise<ServerResponse>}
+ *   Async request handler for the router pipeline.
  */
 export function HyperviewDynamicPageHandler(options) {
     options = options ?? {};
 
-    // Compile patterns and resolve option flags once at factory time.
+    // Compile caller-provided regex strings once at factory time.
     const indexFilePattern = isNonEmptyString(options.indexFilePattern)
         ? new RegExp(options.indexFilePattern)
         : INDEX_FILE_PATTERN;
@@ -213,9 +234,7 @@ export function HyperviewDynamicPageHandler(options) {
         if (isNonEmptyString(options.pathname)) {
             pathname = options.pathname;
         } else {
-            // Remove index files like /foo/bar/index.html to /foo/bar/.
-            // This normalizes paths so /blog/index.html and /blog/ both map to the same page.
-            pathname = url.pathname.replace(indexFilePattern, '');
+            pathname = stripIndexFile(url.pathname, indexFilePattern);
             // Strip format extension from the last path segment so content negotiation
             // extensions like .json don't change which page data is loaded.
             // /platform.json and /platform both load from pages/platform/page.json.
@@ -231,8 +250,8 @@ export function HyperviewDynamicPageHandler(options) {
             throw new NotFoundError(`No page found for pathname "${ pathname }"`);
         }
 
-        // If the full page was not cached, we do not use cached resources to build it. Instead
-        // we use fresh resources and then cache the resulting page.
+        // Dynamic pages are rendered per request; `useCache` only reuses
+        // compiled template resources, never the final HTML.
 
         const metadata = deepMerge(structuredClone(pageContent.metadata), response.props);
 
@@ -250,7 +269,7 @@ export function HyperviewDynamicPageHandler(options) {
         }
         if (!isNonEmptyString(baseTemplateId)) {
             throw new AssertionError(
-                `A baseTemplate ID must be provided by the HyperviewStaticPageHandler options, or page data (pathname:${ pathname })`,
+                `A baseTemplate ID must be provided by the HyperviewDynamicPageHandler options, or page data (pathname:${ pathname })`,
             );
         }
 
@@ -272,12 +291,18 @@ export function HyperviewDynamicPageHandler(options) {
             );
         }
 
+        if (!pageTemplate) {
+            throw new AssertionError(
+                `The page template was not found (pageTemplate:${ pageTemplateId }, pathname:${ pathname })`,
+            );
+        }
+
         if (metadata.includes && Object.keys(metadata.includes).length > 0) {
             metadata.includes = await service.getIncludes(
                 context,
                 pathname,
                 metadata.includes,
-                { useCache, version: pageContent.version },
+                { useCache, version: pageContent.version, metadata },
             );
         }
 
@@ -289,13 +314,13 @@ export function HyperviewDynamicPageHandler(options) {
 }
 
 
-/**
- * Validates a pathname against path traversal and disallowed characters.
- * @param {string} pathname
- * @returns {string} The validated pathname, unchanged
- * @throws {BadRequestError} When the pathname contains `..`, `//`, a leading dot on any
- *   path segment, or characters outside `[a-z0-9_.-]`.
- */
+function stripIndexFile(pathname, indexFilePattern) {
+    return pathname.replace(indexFilePattern, (match) => {
+        // Preserve the parent slash when the pattern consumes `/index.html`.
+        return match.startsWith('/') ? '/' : '';
+    });
+}
+
 function validatePathname(pathname) {
     // Two dots or two slashes are always invalid
     if (pathname.includes('..') || pathname.includes('//')) {

@@ -5,6 +5,7 @@ import {
     assert,
     isUndefined,
     isNonEmptyString,
+    isFunction,
 } from '../assertions/mod.js';
 
 import formatDate from './helpers/format-date.js';
@@ -14,6 +15,30 @@ import truncate from './helpers/truncate.js';
 
 /**
  * @typedef {import('../context/request-context.js').default} RequestContext
+ */
+
+/**
+ * @typedef {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} KeyValueStoreInterface
+ */
+
+/**
+ * @typedef {import('./page-data-store-interface.js').PageDataStoreInterface} PageDataStoreInterface
+ */
+
+/**
+ * @typedef {import('./template-file-store-interface.js').TemplateFileStoreInterface} TemplateFileStoreInterface
+ */
+
+/**
+ * @typedef {Object} HyperviewPageContent
+ * @property {string} version - Version string composed from the merged page data files.
+ * @property {Object} metadata - Page metadata merged from root to leaf page data.
+ */
+
+/**
+ * @typedef {Object} HyperviewIncludeSpec
+ * @property {string} filename - Page-relative file to load.
+ * @property {boolean} [template=false] - Compile and render the file as a template.
  */
 
 /**
@@ -50,13 +75,13 @@ export default class HyperviewService {
 
     /**
      * @param {Object} args
-     * @param {import('../key-value-store/key-value-store-interface').KeyValueStoreInterface} args.kvStore
-     * @param {import('./page-data-store-interface').PageDataStoreInterface} args.pageDataStore
-     * @param {import('./template-file-store-interface').TemplateFileStoreInterface} args.templateFileStore
+     * @param {KeyValueStoreInterface} [args.kvStore] - Optional key/value store for full-page caching.
+     * @param {PageDataStoreInterface} args.pageDataStore - Store for page metadata and include files.
+     * @param {TemplateFileStoreInterface} args.templateFileStore - Store for base, page, and partial templates.
+     * @throws {AssertionError} When a required store is missing.
      */
     initialize(args) {
         const { kvStore, pageDataStore, templateFileStore } = args ?? {};
-        assert(kvStore, 'HyperviewService requires a kvStore');
         assert(pageDataStore, 'HyperviewService requires a pageDataStore');
         assert(templateFileStore, 'HyperviewService requires a templateFileStore');
         this.#kvStore = kvStore;
@@ -64,6 +89,12 @@ export default class HyperviewService {
         this.#templateFileStore = templateFileStore;
     }
 
+    /**
+     * Loads and merges page metadata from the root page through `pathname`.
+     * @param {RequestContext} context - Request context passed through to the page data store.
+     * @param {string} pathname - Normalized page pathname, such as `/` or `/blog/post`.
+     * @returns {Promise<HyperviewPageContent|null>} Merged page content, or null when the leaf page is missing.
+     */
     async getPageMetadata(context, pathname) {
         const buildId = context.runtime.build?.id ?? null;
 
@@ -111,7 +142,16 @@ export default class HyperviewService {
         return { version, metadata };
     }
 
+    /**
+     * Retrieves a cached full-page HTML response.
+     * @param {RequestContext} context - Request context passed through to the key/value store.
+     * @param {string} pathname - Normalized page pathname.
+     * @param {string} version - Page content version used to isolate cache entries.
+     * @returns {Promise<string|null>} Cached HTML, or null when absent.
+     * @throws {AssertionError} When no key/value store was configured.
+     */
     async getCachedPage(context, pathname, version) {
+        assert(this.#kvStore, 'HyperviewService requires a kvStore to cache full pages');
         const buildId = context.runtime.build?.id || '';
         const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
         const page = await this.#kvStore.get(context, key, { type: 'text' });
@@ -123,12 +163,28 @@ export default class HyperviewService {
         return page;
     }
 
+    /**
+     * Stores a rendered full-page HTML response in the key/value cache.
+     * @param {RequestContext} context - Request context passed through to the key/value store.
+     * @param {string} pathname - Normalized page pathname.
+     * @param {string} version - Page content version used to isolate cache entries.
+     * @param {string} page - Rendered HTML page.
+     * @returns {Promise<void>}
+     * @throws {AssertionError} When no key/value store was configured.
+     */
     async setCachedPage(context, pathname, version, page) {
+        assert(this.#kvStore, 'HyperviewService requires a kvStore to cache full pages');
         const buildId = context.runtime.build?.id || '';
         const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
         await this.#kvStore.put(context, key, page, { type: 'text' });
     }
 
+    /**
+     * Adds canonical URL, current href, templated title/description, and Open Graph defaults.
+     * @param {URL} url - Request URL for the page being rendered.
+     * @param {Object} metadata - Merged page metadata. Its `page` object is mutated and returned.
+     * @returns {Object} The normalized `metadata.page` object.
+     */
     mergePageMetadata(url, metadata) {
         const page = metadata.page ?? {};
         // Set canonical URL from request URL if not already defined in page data
@@ -177,8 +233,19 @@ export default class HyperviewService {
         return page;
     }
 
+    /**
+     * Loads include files declared by page metadata and returns rendered include content.
+     * @param {RequestContext} context - Request context passed through to the page data and template stores.
+     * @param {string} pathname - Normalized page pathname.
+     * @param {Object<string, HyperviewIncludeSpec>} includes - Include declarations keyed by template name.
+     * @param {Object} [options] - Include loading options.
+     * @param {boolean} [options.useCache=false] - Reuse compiled include templates from this service instance.
+     * @param {string} [options.version] - Page content version used to isolate compiled include cache entries.
+     * @param {Object} [options.metadata] - Page metadata used when rendering templated includes.
+     * @returns {Promise<Object<string, string>>} Rendered include content keyed by include name.
+     */
     async getIncludes(context, pathname, includes, options) {
-        const { useCache = false, version } = options ?? {};
+        const { useCache = false, version, metadata = {} } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
 
         // Process included files. Example:
@@ -196,13 +263,13 @@ export default class HyperviewService {
             const cachedIncludes = this.#includesCache.get(cacheKey);
             if (cachedIncludes) {
                 this.#logger.debug('page includes cache hit', { pathname, key: cacheKey });
-                return cachedIncludes;
+                return renderIncludes(cachedIncludes, metadata);
             }
             this.#logger.debug('page includes cache miss', { pathname, key: cacheKey });
         }
 
-        // Build a flat list without mutating data.includes — the name is carried
-        // separately so missing files leave the original slot untouched.
+        // Build a flat list without mutating metadata.includes; the name is
+        // carried separately so each loaded file can be assigned to its public key.
         const includesList = Object.keys(includes)
             .map((name) => {
                 const item = includes[name];
@@ -224,10 +291,17 @@ export default class HyperviewService {
                 );
             }
             if (template) usesTemplate = true;
-            return `${ pathname }/${ filename }`;
+            return joinPageFilepath(pathname, filename);
         });
 
         const files = await this.#pageDataStore.getTextFiles(context, buildId, includedFilepaths);
+
+        let partials;
+        if (usesTemplate) {
+            partials = await this.loadPartials(context, { useCache });
+        }
+
+        const compiledIncludes = {};
 
         const includedContent = files
             .map((file, index) => {
@@ -239,28 +313,22 @@ export default class HyperviewService {
             })
             .filter((x) => x);
 
-        // Load the partials once for all includes templates.
-        let partials;
-        if (usesTemplate) {
-            partials = await this.loadPartials(context, { useCache });
-        }
-
-        const compiledIncludes = new Map();
-
         for (const item of includedContent) {
             if (item.template) {
                 const template = this.compileTemplate(item.filepath, item.source, this.#customHelpers, partials);
-                compiledIncludes.set(item.name, template);
+                compiledIncludes[item.name] = template;
             } else {
-                compiledIncludes.set(item.name, item.source);
+                compiledIncludes[item.name] = item.source;
             }
         }
 
         if (cacheKey) {
+            // Cache compiled include templates, not rendered strings, because
+            // dynamic pages may merge different response props into each request.
             this.#includesCache.set(cacheKey, compiledIncludes);
         }
 
-        return compiledIncludes;
+        return renderIncludes(compiledIncludes, metadata);
     }
 
     /**
@@ -368,7 +436,7 @@ export default class HyperviewService {
             partials.set(name, template);
         }
 
-        this.#partialsCache.set(buildId, partials);
+        this.#partialsCache.set(cacheKey, partials);
 
         return partials;
     }
@@ -416,4 +484,19 @@ export default class HyperviewService {
     #urlToCanonicalURLString(url) {
         return `${ url.protocol }//${ url.host }${ url.pathname }`;
     }
+}
+
+function renderIncludes(compiledIncludes, metadata) {
+    const includes = {};
+
+    for (const name of Object.keys(compiledIncludes)) {
+        const include = compiledIncludes[name];
+        includes[name] = isFunction(include) ? include(metadata) : include;
+    }
+
+    return includes;
+}
+
+function joinPageFilepath(pathname, filename) {
+    return `${ pathname.replace(/\/$/, '') }/${ filename }`;
 }
