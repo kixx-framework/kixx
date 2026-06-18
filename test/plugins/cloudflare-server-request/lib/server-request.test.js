@@ -421,6 +421,12 @@ describe('Cloudflare ServerRequest', ({ describe }) => {
 
             assertEqual('first', request.ifNoneMatch);
         });
+
+        it('preserves a comma inside a quoted strong ETag', () => {
+            const request = makeServerRequest({ headers: { 'if-none-match': '"first,still-first", "second"' } });
+
+            assertEqual('first,still-first', request.ifNoneMatch);
+        });
     });
 
     describe('json', ({ it }) => {

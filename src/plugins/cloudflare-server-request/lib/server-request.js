@@ -1,4 +1,7 @@
-import { isValidDate } from '../../../kixx/assertions/mod.js';
+import {
+    isObjectNotNull,
+    isValidDate,
+} from '../../../kixx/assertions/mod.js';
 import {
     BadRequestError,
     UnsupportedMediaTypeError,
@@ -14,7 +17,7 @@ const FORM_DATA_CONTENT_TYPES = Object.freeze([
 /**
  * Wraps a Cloudflare Workers `Request` with the Kixx HTTP router request contract.
  *
- * @implements {import('../../http-router/server-request-interface.js').ServerRequestInterface}
+ * @implements {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface}
  */
 export default class ServerRequest {
 
@@ -235,7 +238,7 @@ export default class ServerRequest {
             return null;
         }
 
-        const firstEtag = ifNoneMatch.split(',')[0].trim();
+        const firstEtag = getFirstHeaderListValue(ifNoneMatch);
 
         if (firstEtag.startsWith('"') && firstEtag.endsWith('"')) {
             return firstEtag.slice(1, -1);
@@ -300,7 +303,7 @@ export default class ServerRequest {
 // arrays — cannot be mutated by one middleware and observed by another. A
 // shallow Object.freeze would leave those nested arrays writable.
 function deepFreeze(value) {
-    if (value && typeof value === 'object') {
+    if (isObjectNotNull(value)) {
         for (const key of Object.keys(value)) {
             deepFreeze(value[ key ]);
         }
@@ -309,20 +312,29 @@ function deepFreeze(value) {
     return value;
 }
 
-/**
- * Extracts the lowercase media type from a Content-Type header.
- * @param {Headers} headers - Request headers.
- * @returns {string} Lowercase media type without parameters, or empty string when absent.
- */
 function getBaseContentType(headers) {
     const contentType = headers.get('content-type') ?? '';
     return contentType.split(';')[0].trim().toLowerCase();
 }
 
-/**
- * @param {Request} nativeRequest - Cloudflare Workers request to identify
- * @returns {string} Cloudflare Ray ID or local fallback request ID
- */
+function getFirstHeaderListValue(headerValue) {
+    let isQuoted = false;
+
+    for (let index = 0; index < headerValue.length; index += 1) {
+        const char = headerValue.charAt(index);
+
+        // If-None-Match is a comma-delimited list, but quoted ETag values may
+        // contain commas inside the opaque tag and must stay intact.
+        if (char === '"') {
+            isQuoted = !isQuoted;
+        } else if (char === ',' && !isQuoted) {
+            return headerValue.slice(0, index).trim();
+        }
+    }
+
+    return headerValue.trim();
+}
+
 function getRequestId(nativeRequest) {
     const cfRay = nativeRequest.headers.get('cf-ray');
     if (cfRay) {

@@ -1,5 +1,10 @@
 import { Readable } from 'node:stream';
-import { isValidDate } from '../../../kixx/assertions/mod.js';
+import {
+    isNonEmptyString,
+    isObjectNotNull,
+    isString,
+    isValidDate,
+} from '../../../kixx/assertions/mod.js';
 import {
     BadRequestError,
     UnsupportedMediaTypeError,
@@ -264,7 +269,7 @@ export default class ServerRequest {
             return null;
         }
 
-        const firstEtag = ifNoneMatch.split(',')[0].trim();
+        const firstEtag = getFirstHeaderListValue(ifNoneMatch);
 
         if (firstEtag.startsWith('"') && firstEtag.endsWith('"')) {
             return firstEtag.slice(1, -1);
@@ -329,7 +334,7 @@ export default class ServerRequest {
 // arrays — cannot be mutated by one middleware and observed by another. A
 // shallow Object.freeze would leave those nested arrays writable.
 function deepFreeze(value) {
-    if (value && typeof value === 'object') {
+    if (isObjectNotNull(value)) {
         for (const key of Object.keys(value)) {
             deepFreeze(value[ key ]);
         }
@@ -353,7 +358,7 @@ function buildHeaders(nativeRequest) {
             for (const item of value) {
                 headers.append(name, item);
             }
-        } else if (typeof value === 'string') {
+        } else if (isString(value)) {
             headers.set(name, value);
         }
     }
@@ -372,8 +377,12 @@ function resolveHost(nativeRequest) {
 // the header may accumulate a list across multiple proxy hops.
 function resolveProtocol(nativeRequest) {
     const forwarded = nativeRequest.headers['x-forwarded-proto'];
-    if (typeof forwarded === 'string' && forwarded.length > 0) {
-        return forwarded.split(',')[0].trim();
+    const firstForwarded = Array.isArray(forwarded)
+        ? forwarded.find(isNonEmptyString)
+        : forwarded;
+
+    if (isNonEmptyString(firstForwarded)) {
+        return firstForwarded.split(',')[0].trim();
     }
     return nativeRequest.socket?.encrypted ? 'https' : 'http';
 }
@@ -399,10 +408,33 @@ function getBaseContentType(headers) {
     return contentType.split(';')[0].trim().toLowerCase();
 }
 
+function getFirstHeaderListValue(headerValue) {
+    let isQuoted = false;
+
+    for (let index = 0; index < headerValue.length; index += 1) {
+        const char = headerValue.charAt(index);
+
+        // If-None-Match is a comma-delimited list, but quoted ETag values may
+        // contain commas inside the opaque tag and must stay intact.
+        if (char === '"') {
+            isQuoted = !isQuoted;
+        } else if (char === ',' && !isQuoted) {
+            return headerValue.slice(0, index).trim();
+        }
+    }
+
+    return headerValue.trim();
+}
+
 function getRequestId(nativeRequest) {
     const requestId = nativeRequest.headers['x-request-id'];
-    if (requestId) {
-        return Array.isArray(requestId) ? requestId[0] : requestId;
+    if (Array.isArray(requestId)) {
+        const firstRequestId = requestId.find(isNonEmptyString);
+        if (firstRequestId) {
+            return firstRequestId;
+        }
+    } else if (requestId) {
+        return requestId;
     }
 
     serverRequestSequence += 1;

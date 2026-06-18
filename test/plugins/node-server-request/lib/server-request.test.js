@@ -85,6 +85,12 @@ describe('Node ServerRequest', ({ describe }) => {
             assert(first.id !== second.id, 'expected fallback ids to differ');
         });
 
+        it('falls back to a generated id when repeated x-request-id values are empty', () => {
+            const request = makeServerRequest({ headers: { 'x-request-id': [ '', '' ] } });
+
+            assertMatches(/^kixx-node-/, request.id);
+        });
+
         it('is immutable after construction', () => {
             const request = makeServerRequest({ headers: { 'x-request-id': 'req-1' } });
 
@@ -115,6 +121,12 @@ describe('Node ServerRequest', ({ describe }) => {
 
         it('honors X-Forwarded-Proto for the scheme', () => {
             const request = makeServerRequest({ url: '/', headers: { 'x-forwarded-proto': 'https' } });
+
+            assertEqual('https:', request.url.protocol);
+        });
+
+        it('honors the first non-empty X-Forwarded-Proto value when repeated', () => {
+            const request = makeServerRequest({ url: '/', headers: { 'x-forwarded-proto': [ '', 'https' ] } });
 
             assertEqual('https:', request.url.protocol);
         });
@@ -465,6 +477,12 @@ describe('Node ServerRequest', ({ describe }) => {
             const request = makeServerRequest({ headers: { 'if-none-match': '"first", "second"' } });
 
             assertEqual('first', request.ifNoneMatch);
+        });
+
+        it('preserves a comma inside a quoted strong ETag', () => {
+            const request = makeServerRequest({ headers: { 'if-none-match': '"first,still-first", "second"' } });
+
+            assertEqual('first,still-first', request.ifNoneMatch);
         });
     });
 
