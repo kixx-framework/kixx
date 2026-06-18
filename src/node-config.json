@@ -1,18 +1,60 @@
 {
-    "env": {
-        "APP_NAME": "kixx-app",
+    "name": "kixx-app",
 
-        "DOCUMENT_STORE": {
-            "path": "../data/nodejs_app/document_store.sqlite"
+    "environments": {
+        "development": {
+            "LOG_LEVEL": "debug",
+            "HYPERVIEW_ALLOW_JSON_RESPONSE": true,
+            "HYPERVIEW_USE_CACHE": false,
+
+            "DOCUMENT_STORE": {
+                "path": "../data/nodejs_app/document_store.sqlite"
+            },
+            "KEY_VALUE_STORE": {
+                "path": "../data/nodejs_app/key_value_store.sqlite"
+            },
+            "PAGE_DATA_STORE": {
+                "directory": "./pages"
+            },
+            "TEMPLATE_FILE_STORE": {
+                "directory": "./templates"
+            }
         },
-        "KEY_VALUE_STORE": {
-            "path": "../data/nodejs_app/key_value_store.sqlite"
+        "staging": {
+            "LOG_LEVEL": "debug",
+            "HYPERVIEW_ALLOW_JSON_RESPONSE": false,
+            "HYPERVIEW_USE_CACHE": true,
+
+            "DOCUMENT_STORE": {
+                "path": "../data/nodejs_app/document_store.sqlite"
+            },
+            "KEY_VALUE_STORE": {
+                "path": "../data/nodejs_app/key_value_store.sqlite"
+            },
+            "PAGE_DATA_STORE": {
+                "directory": "./pages"
+            },
+            "TEMPLATE_FILE_STORE": {
+                "directory": "./templates"
+            }
         },
-        "PAGE_DATA_STORE": {
-            "directory": "./pages"
-        },
-        "TEMPLATE_FILE_STORE": {
-            "directory": "./templates"
+        "production": {
+            "LOG_LEVEL": "warn",
+            "HYPERVIEW_ALLOW_JSON_RESPONSE": false,
+            "HYPERVIEW_USE_CACHE": true,
+
+            "DOCUMENT_STORE": {
+                "path": "../data/nodejs_app/document_store.sqlite"
+            },
+            "KEY_VALUE_STORE": {
+                "path": "../data/nodejs_app/key_value_store.sqlite"
+            },
+            "PAGE_DATA_STORE": {
+                "directory": "./pages"
+            },
+            "TEMPLATE_FILE_STORE": {
+                "directory": "./templates"
+            }
         }
     }
 }

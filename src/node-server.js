@@ -23,6 +23,7 @@ const { values: cliOptions } = util.parseArgs({
     args: process.argv.slice(2),
     options: {
         config: { type: 'string', short: 'c' },
+        environment: { type: 'string' },
         port: { type: 'string', short: 'p' },
     },
     strict: false,
@@ -38,7 +39,12 @@ if (!isNonEmptyString(configFilePath)) {
     );
 }
 
-const config = readConfig(configFilePath);
+// The environment selects a section of the config file's `environments` map;
+// default to development when --environment is not provided.
+const environment = isNonEmptyString(cliOptions.environment)
+    ? cliOptions.environment
+    : 'development';
+const config = readConfig(configFilePath, environment);
 
 const env = Object.assign({}, process.env, config.env);
 
@@ -54,11 +60,11 @@ if (port === null) {
 
 const runtime = new AppRuntime({
     build: { id: env.BUILD_ID },
-    server: { name: env.APP_NAME },
+    server: { name: config.name },
 });
 
 const logger = new Logger({
-    name: env.APP_NAME,
+    name: config.name,
     level: env.LOG_LEVEL || 'debug',
     writer: new LoggerWriter(),
 });

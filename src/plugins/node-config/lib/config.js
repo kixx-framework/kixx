@@ -22,24 +22,44 @@ const STORE_LOCATION_MEMBERS = [
 /**
  * Reads and parses the JSON config file at the given location.
  *
- * The filesystem location on each known store config bundle under `env`
- * (DOCUMENT_STORE, KEY_VALUE_STORE, PAGE_DATA_STORE, TEMPLATE_FILE_STORE) is
- * resolved to an absolute path relative to the config file's directory, so the
- * returned config is ready to hand to filesystem-backed stores.
+ * The filesystem location on each known store config bundle under the selected
+ * environment (DOCUMENT_STORE, KEY_VALUE_STORE, PAGE_DATA_STORE,
+ * TEMPLATE_FILE_STORE) is resolved to an absolute path relative to the config
+ * file's own directory, so the returned config is ready to hand to
+ * filesystem-backed stores.
  *
  * @param {string} configFilePath - Path to the config file. A relative path is
  *   resolved against the current working directory.
- * @returns {Object} The parsed config object with `path`/`directory` members
- *   rewritten to absolute paths.
- * @throws {OperationalError} When the file cannot be read, is not valid JSON, or
- *   does not parse to a plain object.
+ * @param {string} environment - The environment name to select from the
+ *   `environments` object.
+ * @returns {Object} The parsed config object with `env` set to the selected
+ *   environment and `path`/`directory` members rewritten to absolute paths.
+ * @throws {OperationalError} When the file cannot be read, is not valid JSON,
+ *   does not parse to a plain object, or does not define the selected
+ *   environment.
  */
-export function readConfig(configFilePath) {
+export function readConfig(configFilePath, environment) {
     assertNonEmptyString(configFilePath, 'readConfig requires a config file path');
+    assertNonEmptyString(environment, 'readConfig requires an environment name');
 
+    // Resolve the config path once. Store locations are resolved relative to the
+    // config file's own directory, not the process working directory.
     const absoluteConfigPath = path.resolve(configFilePath);
     const baseDirectory = path.dirname(absoluteConfigPath);
 
+    const config = parseConfigFile(absoluteConfigPath);
+    const env = selectEnvironment(config, environment, absoluteConfigPath);
+
+    resolveStoreLocations(env, baseDirectory);
+
+    // Expose the selected environment as `env` so callers read a single resolved
+    // bundle regardless of which environment was requested.
+    config.env = env;
+
+    return config;
+}
+
+function parseConfigFile(absoluteConfigPath) {
     let source;
     try {
         source = fs.readFileSync(absoluteConfigPath, 'utf8');
@@ -70,17 +90,31 @@ export function readConfig(configFilePath) {
         );
     }
 
-    resolveStoreLocations(config, baseDirectory);
-
     return config;
 }
 
-function resolveStoreLocations(config, baseDirectory) {
-    const { env } = config;
-    if (!isPlainObject(env)) {
-        return;
+function selectEnvironment(config, environment, absoluteConfigPath) {
+    if (!isPlainObject(config.environments)) {
+        throw new OperationalError(
+            `Config file at ${ absoluteConfigPath } must contain an environments object`,
+            null,
+            readConfig,
+        );
     }
 
+    const env = config.environments[environment];
+    if (!isPlainObject(env)) {
+        throw new OperationalError(
+            `Config file at ${ absoluteConfigPath } does not define the ${ environment } environment`,
+            null,
+            readConfig,
+        );
+    }
+
+    return env;
+}
+
+function resolveStoreLocations(env, baseDirectory) {
     for (const [ bundleName, memberKey ] of STORE_LOCATION_MEMBERS) {
         const bundle = env[bundleName];
         if (isPlainObject(bundle) && isNonEmptyString(bundle[memberKey])) {
