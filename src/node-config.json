@@ -1,0 +1,18 @@
+{
+    "env": {
+        "APP_NAME": "kixx-app",
+
+        "DOCUMENT_STORE": {
+            "path": "../data/nodejs_app/document_store.sqlite"
+        },
+        "KEY_VALUE_STORE": {
+            "path": "../data/nodejs_app/key_value_store.sqlite"
+        },
+        "PAGE_DATA_STORE": {
+            "directory": "./pages"
+        },
+        "TEMPLATE_FILE_STORE": {
+            "directory": "./templates"
+        }
+    }
+}

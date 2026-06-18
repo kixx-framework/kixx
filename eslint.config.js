@@ -25,6 +25,7 @@ export default [
                 atob: 'readonly',
                 btoa: 'readonly',
                 setTimeout: 'readonly',
+                clearTimeout: 'readonly',
                 console: 'readonly',
                 structuredClone: 'readonly',
                 crypto: 'readonly',

@@ -1,0 +1,233 @@
+import process from 'node:process';
+import http from 'node:http';
+import util from 'node:util';
+import { Readable } from 'node:stream';
+import { isFunction, isNonEmptyString } from './kixx/assertions/mod.js';
+import { OperationalError } from './kixx/errors/mod.js';
+import Logger from './kixx/logger/logger.js';
+import ApplicationContext from './kixx/context/application-context.js';
+import AppRuntime from './kixx/context/app-runtime.js';
+import HttpRouter from './kixx/http-router/http-router.js';
+import LoggerWriter from './plugins/node-logger-writer/lib/logger-writer.js';
+import ServerRequest from './plugins/node-server-request/lib/server-request.js';
+import ServerResponse from './kixx/http-router/server-response.js';
+import * as app from './app/app.js';
+import { generalPlugins, nodePlugins } from './plugins/mod.js';
+import { readConfig } from './plugins/node-config/lib/config.js';
+import virtualHosts from './virtual-hosts.js';
+
+
+// Parse CLI options. The bootstrap may receive arguments we do not own, so
+// unknown options must not throw.
+const { values: cliOptions } = util.parseArgs({
+    args: process.argv.slice(2),
+    options: {
+        config: { type: 'string', short: 'c' },
+        port: { type: 'string', short: 'p' },
+    },
+    strict: false,
+    allowPositionals: true,
+});
+
+// The config file path comes from --config, falling back to the CONFIG_FILE env var.
+const configFilePath = isNonEmptyString(cliOptions.config) ? cliOptions.config : process.env.CONFIG_FILE;
+
+if (!isNonEmptyString(configFilePath)) {
+    throw new OperationalError(
+        'A config file path is required: pass --config or set the CONFIG_FILE environment variable',
+    );
+}
+
+const config = readConfig(configFilePath);
+
+const env = Object.assign({}, process.env, config.env);
+
+// The server port comes from the PORT env var, overridable by --port.
+const portValue = isNonEmptyString(cliOptions.port) ? cliOptions.port : env.PORT;
+const port = Number.parseInt(portValue, 10);
+
+if (Number.isNaN(port)) {
+    throw new OperationalError(
+        'A valid server port is required: pass --port or set the PORT environment variable',
+    );
+}
+
+const runtime = new AppRuntime({
+    build: { id: env.BUILD_ID },
+    server: { name: env.APP_NAME },
+});
+
+const logger = new Logger({
+    name: env.APP_NAME,
+    level: env.LOG_LEVEL || 'debug',
+    writer: new LoggerWriter(),
+});
+
+const appContext = new ApplicationContext({
+    env,
+    runtime,
+    logger,
+});
+
+// Merge plugin maps, allowing platform plugins to override general plugins.
+const plugins = new Map([ ...generalPlugins, ...nodePlugins ]);
+
+// Register all plugins before calling initialize() on each.
+for (const plugin of plugins.values()) {
+    if (isFunction(plugin?.register)) {
+        plugin.register(appContext);
+    }
+}
+
+for (const plugin of plugins.values()) {
+    if (isFunction(plugin?.initialize)) {
+        plugin.initialize(appContext);
+    }
+}
+
+if (isFunction(app.register)) {
+    app.register(appContext);
+}
+
+if (isFunction(app.initialize)) {
+    app.initialize(appContext);
+}
+
+// Finalize the logger to prevent creating infinite child loggers.
+// This must be done *after* the plugins have been registered and initialized.
+logger.finalize();
+
+const router = new HttpRouter(virtualHosts);
+
+router.on('error', ({ error, requestId }) => {
+    if (!error.httpError) {
+        if (error.expected) {
+            // Operational Error
+            logger.warn('operational error while routing request', { requestId }, error);
+        } else {
+            logger.error('unexpected error while routing request', { requestId }, error);
+        }
+    }
+});
+
+
+async function handleRequest(nodeRequest, nodeResponse) {
+    try {
+        const request = new ServerRequest(nodeRequest);
+        const requestContext = appContext.createRequestContext(env, request);
+        const response = await router.handleRequest(requestContext, request, new ServerResponse());
+        sendResponse(nodeResponse, response, request.isHeadRequest());
+    } catch (cause) {
+        // The router emits 'error' events for logging, but a rejection here still
+        // needs to terminate the socket or the client hangs until it times out.
+        logger.error('unhandled error while handling request', null, cause);
+        if (!nodeResponse.headersSent) {
+            nodeResponse.statusCode = 500;
+            nodeResponse.setHeader('content-type', 'text/plain; charset=utf-8');
+        }
+        nodeResponse.end('Internal Server Error\n');
+    }
+}
+
+// Translate the framework ServerResponse into the Node http.ServerResponse:
+// apply the status, headers, and body so the response is written to the socket.
+function sendResponse(nodeResponse, response, isHeadRequest) {
+    // Iterating a Web Headers instance folds repeated Set-Cookie values into a
+    // single comma-joined string, which is invalid for cookies. Apply every
+    // other header here and pull the cookies from getSetCookie() below so each
+    // Set-Cookie is emitted as its own header line.
+    for (const [ name, value ] of response.headers) {
+        if (name !== 'set-cookie') {
+            nodeResponse.setHeader(name, value);
+        }
+    }
+
+    const cookies = response.headers.getSetCookie();
+    if (cookies.length > 0) {
+        nodeResponse.setHeader('set-cookie', cookies);
+    }
+
+    nodeResponse.statusCode = response.status;
+
+    const { body } = response;
+
+    // A HEAD response carries the same headers (including Content-Length) as the
+    // equivalent GET, but never a body. Emit headers and end the response without
+    // writing or piping a body, even if middleware left one set.
+    if (isHeadRequest || body === null || body === undefined) {
+        nodeResponse.end();
+        return;
+    }
+
+    // A Web ReadableStream must be adapted to a Node stream before piping.
+    if (body instanceof ReadableStream) {
+        pipeStream(Readable.fromWeb(body), nodeResponse);
+        return;
+    }
+
+    // Any object exposing pipe() is treated as a Node Readable stream.
+    if (isFunction(body.pipe)) {
+        pipeStream(body, nodeResponse);
+        return;
+    }
+
+    // Strings and Buffers are written directly.
+    nodeResponse.end(body);
+}
+
+// pipe() does not forward source errors or tear down the destination, so a body
+// stream that fails mid-response would otherwise leak the socket. Destroy the
+// Node response on error to terminate the connection.
+function pipeStream(readStream, nodeResponse) {
+    readStream.on('error', (cause) => {
+        logger.error('error streaming response body', null, cause);
+        nodeResponse.destroy(cause);
+    });
+    readStream.pipe(nodeResponse);
+}
+
+const nodeServer = http.createServer(handleRequest);
+
+// Attach event handlers BEFORE listen() to catch port-in-use errors
+nodeServer.on('error', (cause) => {
+    logger.error('node.js server error event', null, cause);
+});
+
+nodeServer.on('listening', () => {
+    const addr = nodeServer.address();
+    logger.info('node.js server running', { address: addr.address, port: addr.port });
+});
+
+// State transitions to 'listening' (emits event above) or 'error' if port unavailable
+nodeServer.listen(port);
+
+// Milliseconds to wait for in-flight requests to drain before forcing exit.
+const SHUTDOWN_TIMEOUT_MS = 10000;
+
+// Gracefully shut down on termination signals: stop accepting new connections,
+// let in-flight requests finish, then exit. If draining stalls past the timeout,
+// force exit so a stuck request cannot block deployment forever.
+function shutdown(signal) {
+    logger.info('received shutdown signal; closing server', { signal });
+
+    const forceExit = setTimeout(() => {
+        logger.error('graceful shutdown timed out; forcing exit', null);
+        process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+
+    // Don't let the timer itself keep the event loop alive once draining is done.
+    forceExit.unref();
+
+    nodeServer.close((cause) => {
+        clearTimeout(forceExit);
+        if (cause) {
+            logger.error('error closing server during shutdown', null, cause);
+            process.exit(1);
+        }
+        logger.info('server closed; exiting', { signal });
+        process.exit(0);
+    });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
