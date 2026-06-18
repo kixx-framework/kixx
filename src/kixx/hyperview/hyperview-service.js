@@ -333,6 +333,55 @@ export default class HyperviewService {
     }
 
     /**
+     * Writes a page's metadata file (`page.json`) to a build, fully replacing any
+     * existing file at that path.
+     *
+     * Unlike the template writes, page data writes deliberately allow the current
+     * build id so content can be edited on the live build; the only build-id rule
+     * is that it must be a non-empty string (contrast with #assertWritableBuildId).
+     *
+     * Caller responsibilities, not enforced here: the metadata must reference every
+     * include it expects under its `includes` map, and — for a write to the current
+     * build — it must carry a changed `version`, because the full-page and includes
+     * caches key on `version`; an unchanged version serves stale cached content.
+     * @param {RequestContext} context - Request context passed through to the page data store
+     * @param {string} buildId - Target build id (write namespace); may be the current build id
+     * @param {string} pathname - Normalized page pathname, such as `/` or `/blog/post`
+     * @param {Object} metadata - The complete page metadata to store as `page.json`
+     * @returns {Promise<import('./page-data-store-interface.js').PageDataFileRef>} The logical filepath that was written
+     * @throws {AssertionError} When buildId or pathname is not a non-empty string
+     */
+    async putPageMetadata(context, buildId, pathname, metadata) {
+        assertNonEmptyString(buildId, 'HyperviewService page data writes require a buildId');
+        assertNonEmptyString(pathname, 'HyperviewService.putPageMetadata requires a pathname');
+        const filepath = joinPageFilepath(pathname, 'page.json');
+        return await this.#pageDataStore.putJSONFile(context, buildId, filepath, metadata);
+    }
+
+    /**
+     * Writes an include's text content file for a page to a build.
+     *
+     * Writes only the content file; it does not index the include. The caller is
+     * responsible for referencing the include in the page's `page.json` `includes`
+     * map (see putPageMetadata) — an unreferenced include is never loaded at render
+     * time.
+     * @param {RequestContext} context - Request context passed through to the page data store
+     * @param {string} buildId - Target build id (write namespace); may be the current build id
+     * @param {string} pathname - Normalized page pathname the include belongs to
+     * @param {string} filename - Include filename relative to the page pathname, such as `body.md`
+     * @param {string} source - Include source text to store
+     * @returns {Promise<import('./page-data-store-interface.js').PageDataFileRef>} The logical filepath that was written
+     * @throws {AssertionError} When buildId, pathname, or filename is not a non-empty string
+     */
+    async putIncludeContent(context, buildId, pathname, filename, source) {
+        assertNonEmptyString(buildId, 'HyperviewService page data writes require a buildId');
+        assertNonEmptyString(pathname, 'HyperviewService.putIncludeContent requires a pathname');
+        assertNonEmptyString(filename, 'HyperviewService.putIncludeContent requires a filename');
+        const filepath = joinPageFilepath(pathname, filename);
+        return await this.#pageDataStore.putTextFile(context, buildId, filepath, source);
+    }
+
+    /**
      * Loads and compiles a shared base template with all available partials.
      * @param {RequestContext} context - Request context passed through to the template file store
      * @param {string} templateId - Base template identifier understood by the template file store
