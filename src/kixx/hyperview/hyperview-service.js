@@ -3,6 +3,7 @@ import deepMerge from '../utils/deep-merge.js';
 import {
     AssertionError,
     assert,
+    assertNonEmptyString,
     isUndefined,
     isNonEmptyString,
     isFunction,
@@ -405,6 +406,58 @@ export default class HyperviewService {
     }
 
     /**
+     * Writes a base template source file to a target build's namespace.
+     *
+     * Stores the source verbatim — no compilation — so template syntax is
+     * validated at render time, not at write time.
+     * @param {RequestContext} context - Request context carrying the current build id
+     * @param {string} buildId - Target build id (write namespace); must differ from the current build id
+     * @param {string} templateId - Base template filename relative to `base/`
+     * @param {string} source - Template source text to store
+     * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
+     * @throws {AssertionError} When the current build id is unset, buildId is not a non-empty string, or buildId matches the current build id
+     */
+    async putBaseTemplate(context, buildId, templateId, source) {
+        this.#assertWritableBuildId(context, buildId);
+        return await this.#templateFileStore.putBaseTemplate(context, buildId, templateId, source);
+    }
+
+    /**
+     * Writes a page template source file to a target build's namespace.
+     *
+     * Stores the source verbatim — no compilation — so template syntax is
+     * validated at render time, not at write time. The templateId may be nested
+     * several segments deep, delimited by `/`.
+     * @param {RequestContext} context - Request context carrying the current build id
+     * @param {string} buildId - Target build id (write namespace); must differ from the current build id
+     * @param {string} templateId - Page template filepath relative to `pages/`
+     * @param {string} source - Template source text to store
+     * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
+     * @throws {AssertionError} When the current build id is unset, buildId is not a non-empty string, or buildId matches the current build id
+     */
+    async putPageTemplate(context, buildId, templateId, source) {
+        this.#assertWritableBuildId(context, buildId);
+        return await this.#templateFileStore.putPageTemplate(context, buildId, templateId, source);
+    }
+
+    /**
+     * Writes a partial template source file to a target build's namespace.
+     *
+     * Stores the source verbatim — no compilation — so template syntax and
+     * cross-partial references are resolved at render time, not at write time.
+     * @param {RequestContext} context - Request context carrying the current build id
+     * @param {string} buildId - Target build id (write namespace); must differ from the current build id
+     * @param {string} filepath - Partial filename relative to `partials/`
+     * @param {string} source - Partial source text to store
+     * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
+     * @throws {AssertionError} When the current build id is unset, buildId is not a non-empty string, or buildId matches the current build id
+     */
+    async putPartial(context, buildId, filepath, source) {
+        this.#assertWritableBuildId(context, buildId);
+        return await this.#templateFileStore.putPartial(context, buildId, filepath, source);
+    }
+
+    /**
      * Loads and compiles shared partial templates for use by base and page templates.
      * @param {RequestContext} context - Request context
      * @param {Object} [options] - Partial loading options
@@ -457,6 +510,36 @@ export default class HyperviewService {
         const tree = templating.buildSyntaxTree(null, tokens);
 
         return templating.createRenderFunction(null, helpers, partials, tree);
+    }
+
+    /**
+     * Asserts that the target build id is safe to write to. All template writes
+     * publish a *new* build under its own build id and must never mutate the
+     * build id the live site is currently reading from.
+     * @param {RequestContext} context - Request context carrying the current build id
+     * @param {string} buildId - Target build id (write namespace)
+     * @throws {AssertionError} When no current build id is set, when buildId is not
+     *   a non-empty string, or when buildId matches the current build id
+     */
+    #assertWritableBuildId(context, buildId) {
+        const currentBuildId = context.runtime.build?.id ?? null;
+
+        // Writes target a build *other* than the one being served, so without a
+        // current build there is no live namespace to protect and nothing to
+        // differ from; requiring one keeps the guard meaningful.
+        assert(
+            isNonEmptyString(currentBuildId),
+            'HyperviewService template writes require a current build id',
+        );
+
+        assertNonEmptyString(buildId, 'HyperviewService template writes require a buildId');
+
+        // The new build's namespace must differ from the live build's namespace
+        // so a deploy can never overwrite templates the running site is serving.
+        assert(
+            buildId !== currentBuildId,
+            'HyperviewService template write buildId must not match the current build id',
+        );
     }
 
     /**
