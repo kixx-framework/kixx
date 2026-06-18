@@ -33,7 +33,7 @@
  * Application conveniences (consumed by middleware, never by the router):
  * `headers`, `body`, `queryParams`, `ifModifiedSince`, `ifNoneMatch`,
  * `isHeadRequest`, `isJSONRequest`, `isFormURLEncodedRequest`, `getCookie`,
- * `getCookies`, `getAuthorizationBearer`, `json`, `formData`.
+ * `getCookies`, `getAuthorizationBearer`, `json`, `text`, `formData`.
  *
  * ## Invariants
  * - `id` MUST be immutable after construction; MUST be unique per request
@@ -61,6 +61,9 @@
  * - `json()` MUST reject with `BadRequestError` when the body is not valid
  *   JSON (rather than a raw `SyntaxError`) so the error handler pipeline
  *   surfaces a 400 response automatically
+ * - `text()` MUST resolve to the request body decoded as a UTF-8 string, and
+ *   MUST reject with `BadRequestError` when the body cannot be read, so the
+ *   error handler pipeline surfaces a 400 response automatically
  * - `formData()` MUST reject with `UnsupportedMediaTypeError` when
  *   `Content-Type` is missing or not supported, and MUST reject with
  *   `BadRequestError` when the body cannot be parsed as submitted form data
@@ -161,6 +164,11 @@
  *   Reads and parses the request body as JSON. MUST reject with
  *   `BadRequestError` on parse failure so the error handler pipeline
  *   surfaces a 400 response automatically.
+ *
+ * @property {function(): Promise<string>} text
+ *   Reads the request body as a UTF-8 string. MUST reject with
+ *   `BadRequestError` when the body cannot be read so the error handler
+ *   pipeline surfaces a 400 response automatically.
  *
  * @property {function(): Promise<FormData>} formData
  *   Reads and parses the request body as form data. Supports
