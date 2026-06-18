@@ -76,12 +76,19 @@
  * Runtime adapters are implemented separately by design, because their backing
  * stores and access models differ.
  * @see KeyValueStore in ../../plugins/cloudflare-key-value-store/lib/key-value-store.js for the Cloudflare KV implementation
+ * @see KeyValueStore in ../../plugins/node-key-value-store/lib/key-value-store.js for the Node.js SQLite implementation
  */
 
 /**
  * The declared encoding of a value on read or write.
  *
  * @typedef {('text'|'json'|'arrayBuffer')} KeyValueType
+ */
+
+/**
+ * A non-null JSON value accepted by the `'json'` encoding.
+ *
+ * @typedef {(string|number|boolean|Object|Array)} KeyValueJSONValue
  */
 
 /**
@@ -107,12 +114,12 @@
  *
  * @typedef {Object} KeyValueStoreInterface
  *
- * @property {function(Object, string, KeyValueGetOptions=): Promise<(string|Object|ArrayBuffer|null)>} get
+ * @property {function(Object, string, KeyValueGetOptions=): Promise<(string|KeyValueJSONValue|ArrayBuffer|null)>} get
  *   Retrieves a value by key, decoded per `options.type`. Resolves to the value,
  *   or `null` when the key is absent or expired. Returns a string for `'text'`,
  *   the parsed value for `'json'`, and an `ArrayBuffer` for `'arrayBuffer'`.
  *
- * @property {function(Object, string, (string|Object|ArrayBuffer|ArrayBufferView), KeyValuePutOptions=): Promise<void>} put
+ * @property {function(Object, string, (string|KeyValueJSONValue|ArrayBuffer|ArrayBufferView), KeyValuePutOptions=): Promise<void>} put
  *   Creates or overwrites a value, encoded per `options.type`, with optional
  *   expiration. The `value` MUST be non-null and MUST match the declared `type`.
  *   Resolves with no value.
