@@ -236,16 +236,20 @@ nodeServer.listen(port);
 // Milliseconds to wait for in-flight requests to drain before forcing exit.
 const SHUTDOWN_TIMEOUT_MS = 10000;
 
-// Gracefully shut down on termination signals: stop accepting new connections,
-// let in-flight requests finish, then exit. If draining stalls past the timeout,
-// force exit so a stuck request cannot block deployment forever.
-function shutdown(signal) {
+// Shut down on termination signals: stop accepting new connections, then exit.
+//
+// SIGTERM is the deploy/orchestrator path, so we drain — let in-flight requests
+// finish before exiting, with the force-exit timer as a backstop for a stuck
+// request. SIGINT is an interactive Ctrl-C, so we exit immediately and drop any
+// in-flight requests; a developer expects Ctrl-C to be instant, not to block on
+// a held-open connection.
+function shutdown(signal, { force }) {
     if (isShuttingDown) {
         return;
     }
 
     isShuttingDown = true;
-    logger.info('received shutdown signal; closing server', { signal });
+    logger.info('received shutdown signal; closing server', { signal, force });
 
     const forceExit = setTimeout(() => {
         logger.error('graceful shutdown timed out; forcing exit', null);
@@ -264,10 +268,24 @@ function shutdown(signal) {
         logger.info('server closed; exiting', { signal });
         process.exit(0);
     });
+
+    // close() only resolves once every connection has ended. Idle HTTP
+    // keep-alive sockets stay open until the client's keep-alive timeout fires,
+    // and active sockets stay open until their request finishes, so without
+    // intervention close() stalls until the force-exit timeout.
+    if (force) {
+        // Interactive Ctrl-C: destroy every connection, including in-flight
+        // requests, so close() resolves and we exit right away.
+        nodeServer.closeAllConnections();
+    } else {
+        // Graceful drain: release only idle keep-alive sockets. Sockets serving
+        // a request keep draining until their request finishes.
+        nodeServer.closeIdleConnections();
+    }
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM', { force: false }));
+process.on('SIGINT', () => shutdown('SIGINT', { force: true }));
 
 function parsePort(value) {
     if (!isNonEmptyString(value) || !/^\d+$/.test(value)) {
