@@ -123,8 +123,14 @@ export default class HyperviewService {
         return page;
     }
 
+    async setCachedPage(context, pathname, version, page) {
+        const buildId = context.runtime.build?.id || '';
+        const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
+        await this.#kvStore.set(context, key, page, { type: 'text' });
+    }
+
     mergePageMetadata(url, metadata) {
-        const { page } = metadata;
+        const page = metadata.page ?? {};
         // Set canonical URL from request URL if not already defined in page data
         // Canonical URL excludes query string and hash to provide a stable reference
         if (!page.canonical_url) {

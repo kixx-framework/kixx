@@ -57,7 +57,7 @@ export function HyperviewStaticPageHandler(options) {
             ? options.useCache
             : context.getEnvBoolean('HYPERVIEW_USE_CACHE');
 
-        if (useCache === true && request.isJSONRequest() && allowJSON) {
+        if (request.isJSONRequest() && allowJSON) {
             // If this is a JSON request, implicitly asking for the most recent page metadata,
             // then turn page caching off for this request.
             useCache = false;
@@ -81,12 +81,17 @@ export function HyperviewStaticPageHandler(options) {
         pathname = validatePathname(pathname);
 
         const service = context.getService('Hyperview');
-        const contentCacheKey = await service.getContentCacheKey(context);
+
+        const pageContent = await service.getPageMetadata(context, pathname);
+
+        if (!pageContent) {
+            throw new NotFoundError(`No page found for pathname "${ pathname }"`);
+        }
 
         let hypertext;
 
         if (useCache) {
-            hypertext = await service.getCachedPage(context, pathname, contentCacheKey);
+            hypertext = await service.getCachedPage(context, pathname, pageContent.version);
             if (hypertext) {
                 return response.respondWithUtf8(response.status, hypertext, { contentType: 'text/html' });
             }
@@ -95,17 +100,10 @@ export function HyperviewStaticPageHandler(options) {
         // If the full page was not cached, we do not use cached resources to build it. Instead
         // we use fresh resources and then cache the resulting page.
 
-        const contentData = await service.getPageMetadata(context, contentCacheKey, pathname);
+        const metadata = deepMerge(structuredClone(pageContent.metadata), response.props);
 
-        if (!contentData) {
-            throw new NotFoundError(`No page found for pathname "${ pathname }"`);
-        }
-
-        const metadata = deepMerge(structuredClone(contentData), response.props);
-
-        const page = metadata.page ?? {};
         // Merge in standard open graph metadata.
-        metadata.page = service.mergePageMetadata(url, page);
+        metadata.page = service.mergePageMetadata(url, metadata);
 
         // Return JSON representation of page data if client requested JSON and JSON is allowed
         if (allowJSON && request.isJSONRequest()) {
@@ -130,8 +128,8 @@ export function HyperviewStaticPageHandler(options) {
         }
 
         const [ baseTemplate, pageTemplate ] = await Promise.all([
-            service.getBaseTemplate(context, baseTemplateId, { useCache }),
-            service.getPageTemplate(context, pathname, pageTemplateId, { useCache }),
+            service.getBaseTemplate(context, baseTemplateId, { useCache: false }),
+            service.getPageTemplate(context, pathname, pageTemplateId, { useCache: false }),
         ]);
 
         if (!baseTemplate) {
@@ -141,14 +139,19 @@ export function HyperviewStaticPageHandler(options) {
         }
 
         if (metadata.includes && Object.keys(metadata.includes).length > 0) {
-            metadata.includes = await service.getIncludes(context, contentCacheKey, pathname, metadata.includes);
+            metadata.includes = await service.getIncludes(
+                context,
+                pathname,
+                metadata.includes,
+                { useCache: false, version: pageContent.version },
+            );
         }
 
         metadata.body = pageTemplate(metadata);
         hypertext = baseTemplate(metadata);
 
         if (useCache) {
-            await service.setCachedPage(context, pathname, contentCacheKey, hypertext);
+            await service.setCachedPage(context, pathname, pageContent.version, hypertext);
         }
 
         return response.respondWithUtf8(response.status, hypertext, { contentType: 'text/html' });
@@ -220,26 +223,21 @@ export function HyperviewDynamicPageHandler(options) {
         }
 
         pathname = validatePathname(pathname);
-
         const service = context.getService('Hyperview');
-        const contentCacheKey = await service.getContentCacheKey(context);
 
-        const contentData = await service.getPageMetadata(
-            context,
-            contentCacheKey,
-            pathname,
-            { useCache },
-        );
+        const pageContent = await service.getPageMetadata(context, pathname);
 
-        if (!contentData) {
+        if (!pageContent) {
             throw new NotFoundError(`No page found for pathname "${ pathname }"`);
         }
 
-        const metadata = deepMerge(structuredClone(contentData), response.props);
+        // If the full page was not cached, we do not use cached resources to build it. Instead
+        // we use fresh resources and then cache the resulting page.
 
-        const page = metadata.page ?? {};
+        const metadata = deepMerge(structuredClone(pageContent.metadata), response.props);
+
         // Merge in standard open graph metadata.
-        metadata.page = service.mergePageMetadata(url, page);
+        metadata.page = service.mergePageMetadata(url, metadata);
 
         // Return JSON representation of page data if client requested JSON and JSON is allowed
         if (allowJSON && request.isJSONRequest()) {
@@ -252,7 +250,7 @@ export function HyperviewDynamicPageHandler(options) {
         }
         if (!isNonEmptyString(baseTemplateId)) {
             throw new AssertionError(
-                `A baseTemplate ID must be provided by the HyperviewDynamicPageHandler options, or page data (pathname:${ pathname })`,
+                `A baseTemplate ID must be provided by the HyperviewStaticPageHandler options, or page data (pathname:${ pathname })`,
             );
         }
 
@@ -277,10 +275,9 @@ export function HyperviewDynamicPageHandler(options) {
         if (metadata.includes && Object.keys(metadata.includes).length > 0) {
             metadata.includes = await service.getIncludes(
                 context,
-                contentCacheKey,
                 pathname,
                 metadata.includes,
-                { useCache },
+                { useCache, version: pageContent.version },
             );
         }
 
