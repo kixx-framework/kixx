@@ -259,6 +259,19 @@ export default class ServerRequest {
     }
 
     /**
+     * Reads the request body as a UTF-8 string.
+     * @returns {Promise<string>} The request body decoded as text
+     * @throws {BadRequestError} When the body cannot be read
+     */
+    async text() {
+        try {
+            return await this.#nativeRequest.text();
+        } catch (cause) {
+            throw new BadRequestError('Request body could not be read as text', { cause }, this.text);
+        }
+    }
+
+    /**
      * Reads and parses the request body as form data.
      * @returns {Promise<FormData>} Parsed form data
      * @throws {UnsupportedMediaTypeError} When the content type is missing or unsupported.

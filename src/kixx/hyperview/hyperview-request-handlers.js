@@ -1,9 +1,10 @@
-import { NotFoundError, BadRequestError } from '../errors/mod.js';
+import { NotFoundError } from '../errors/mod.js';
 import { AssertionError, isNonEmptyString, isBoolean } from '../assertions/mod.js';
 import deepMerge from '../utils/deep-merge.js';
 
+import validatePathname from './validate-pathname.js';
 
-const DISALLOWED_STATIC_PATH_CHARACTERS = /[^a-z0-9_.-]/i;
+
 const INDEX_FILE_PATTERN = /(?:^|\/)index\.(html|json|xml|md)$/;
 // Strip format extensions used for content negotiation (e.g. /platform.json → /platform)
 const FORMAT_EXTENSION_PATTERN = /\.json$/;
@@ -319,23 +320,4 @@ function stripIndexFile(pathname, indexFilePattern) {
         // Preserve the parent slash when the pattern consumes `/index.html`.
         return match.startsWith('/') ? '/' : '';
     });
-}
-
-function validatePathname(pathname) {
-    // Two dots or two slashes are always invalid
-    if (pathname.includes('..') || pathname.includes('//')) {
-        throw new BadRequestError(`Invalid pathname: ${ pathname }`);
-    }
-
-    const parts = pathname.split('/');
-
-    for (const part of parts) {
-        // In addition to the pattern list, a single dot at the start of
-        // a path part is invalid.
-        if (part.startsWith('.') || DISALLOWED_STATIC_PATH_CHARACTERS.test(part)) {
-            throw new BadRequestError(`Invalid pathname: ${ pathname }`);
-        }
-    }
-
-    return pathname;
 }
