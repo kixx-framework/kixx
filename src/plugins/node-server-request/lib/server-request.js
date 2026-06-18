@@ -1,9 +1,9 @@
 import { Readable } from 'node:stream';
-import { isValidDate } from '../../assertions/mod.js';
+import { isValidDate } from '../../../kixx/assertions/mod.js';
 import {
     BadRequestError,
     UnsupportedMediaTypeError,
-} from '../../errors/mod.js';
+} from '../../../kixx/errors/mod.js';
 
 let serverRequestSequence = 0;
 
@@ -21,7 +21,7 @@ const FORM_DATA_CONTENT_TYPES = Object.freeze([
  * internal Web `Request` that bridges the Node body stream so `body`, `json()`,
  * and `formData()` delegate to the platform's spec-compliant parsing.
  *
- * @implements {import('../../http-router/server-request-interface.js').ServerRequestInterface}
+ * @implements {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface}
  */
 export default class ServerRequest {
 

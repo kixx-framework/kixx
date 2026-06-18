@@ -25,8 +25,8 @@ const CONTROL_CHAR_PATTERN = /[\x00-\x1F]/; // eslint-disable-line no-control-re
  * used.
  *
  * @see DocumentStoreEngineInterface in ./document-store-engine-interface.js for the engine contract
- * @see DocumentStoreEngine in ../cloudflare/document-store/document-store-engine.js for the Cloudflare D1 implementation
- * @see DocumentStoreEngine in ../node/document-store/document-store-engine.js for the Node.js SQLite implementation
+ * @see DocumentStoreEngine in ../../plugins/cloudflare-document-store-engine/lib/document-store-engine.js for the Cloudflare D1 implementation
+ * @see DocumentStoreEngine in ../../plugins/node-document-store-engine/lib/document-store-engine.js for the Node.js SQLite implementation
  * @see docs/document-store.md for the facade, engine, and runtime-adapter overview
  */
 export default class DocumentStore {

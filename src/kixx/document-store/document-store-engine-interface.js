@@ -40,8 +40,8 @@
  * ## Runtime adapters
  * Runtime adapters are implemented separately by design rather than sharing a
  * SQLite base class, because their connection models and SQL drivers differ.
- * @see DocumentStoreEngine in ../cloudflare/document-store/document-store-engine.js for the Cloudflare D1 implementation
- * @see DocumentStoreEngine in ../node/document-store/document-store-engine.js for the Node.js SQLite implementation
+ * @see DocumentStoreEngine in ../../plugins/cloudflare-document-store-engine/lib/document-store-engine.js for the Cloudflare D1 implementation
+ * @see DocumentStoreEngine in ../../plugins/node-document-store-engine/lib/document-store-engine.js for the Node.js SQLite implementation
  * @see docs/document-store.md for the facade, engine, and runtime-adapter overview
  */
 

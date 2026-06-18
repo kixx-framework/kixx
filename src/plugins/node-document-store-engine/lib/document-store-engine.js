@@ -1,8 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
-import DocumentAlreadyExistsError from '../../document-store/document-already-exists-error.js';
-import DocumentNotFoundError from '../../document-store/document-not-found-error.js';
-import DocumentUniqueIndexViolationError from '../../document-store/document-unique-index-violation-error.js';
-import VersionConflictError from '../../document-store/version-conflict-error.js';
+import DocumentAlreadyExistsError from '../../../kixx/document-store/document-already-exists-error.js';
+import DocumentNotFoundError from '../../../kixx/document-store/document-not-found-error.js';
+import DocumentUniqueIndexViolationError from '../../../kixx/document-store/document-unique-index-violation-error.js';
+import VersionConflictError from '../../../kixx/document-store/version-conflict-error.js';
 import {
     AssertionError,
     isBoolean,
@@ -12,7 +12,7 @@ import {
     assert,
     assertArray,
     assertNonEmptyString,
-} from '../../assertions/mod.js';
+} from '../../../kixx/assertions/mod.js';
 
 
 const CURSOR_TOKEN_VERSION = 1;
@@ -46,8 +46,8 @@ const CURSOR_RANGE_OPTION_KEYS = [
  * the `doc` column; queryable fields are exposed as VIRTUAL generated columns
  * backed by `json_extract()`.
  *
- * @see DocumentStoreEngineInterface in ../../document-store/document-store-engine-interface.js for the engine contract
- * @see DocumentStoreEngine in ../../cloudflare/document-store/document-store-engine.js for the Cloudflare D1 implementation
+ * @see DocumentStoreEngineInterface in ../../../kixx/document-store/document-store-engine-interface.js for the engine contract
+ * @see DocumentStoreEngine in ../../cloudflare-document-store-engine/lib/document-store-engine.js for the Cloudflare D1 implementation
  */
 export default class DocumentStoreEngine {
 
@@ -68,7 +68,7 @@ export default class DocumentStoreEngine {
 
     /**
      * @param {Object} options - Configuration options
-     * @param {import('../../logger/logger.js').default} options.logger - Root logger used to create a named child logger
+     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a named child logger
      * @param {string} [options.path] - File system path or `':memory:'` opened when no `database` is supplied
      * @param {Object} [options.sqliteOptions] - Options forwarded to the `DatabaseSync` constructor when opening `path`
      * @param {import('node:sqlite').DatabaseSync} [options.database] - Pre-opened SQLite connection to use instead of opening `path`

@@ -9,7 +9,7 @@ import {
     assertValidDate,
 } from 'kixx-assert';
 
-import ServerRequest from '../../../../src/kixx/node/http-router/server-request.js';
+import ServerRequest from '../../../../src/plugins/node-server-request/lib/server-request.js';
 
 
 // Build a stand-in for http.IncomingMessage: a Readable stream carrying the body

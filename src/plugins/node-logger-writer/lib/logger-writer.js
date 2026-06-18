@@ -7,7 +7,7 @@ import process from 'node:process';
 import {
     createJSONLogEntry,
     stringifyJSONLogEntry,
-} from '../../logger/json-log-entry-serializer.js';
+} from '../../../kixx/logger/json-log-entry-serializer.js';
 
 /**
  * Node-specific implementation of the Logger writer interface. Serializes each
@@ -17,7 +17,7 @@ import {
  * Node stream writes are invoked synchronously, but Node may buffer output after
  * `write()` returns; this adapter does not wait for drain events.
  *
- * @implements {import('../../logger/logger-writer-interface.js').LoggerWriterInterface}
+ * @implements {import('../../../kixx/logger/logger-writer-interface.js').LoggerWriterInterface}
  */
 export default class LoggerWriter {
 
