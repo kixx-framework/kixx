@@ -4,7 +4,6 @@ import {
     AssertionError,
     assert,
     isUndefined,
-    isObjectNotNull,
     isNonEmptyString,
 } from '../assertions/mod.js';
 
@@ -30,10 +29,13 @@ export default class HyperviewService {
         [ 'truncate', truncate ],
     ]);
 
+    #kvStore = null;
     #pageDataStore = null;
     #templateFileStore = null;
-    #pageDataCache = new Map();
+
     #templateCache = new Map();
+    #partialsCache = new Map();
+    #includesCache = new Map();
 
     /**
      * @param {Object} options - Service configuration
@@ -48,19 +50,21 @@ export default class HyperviewService {
 
     /**
      * @param {Object} args
-     * @param {Object} args.pageDataStore - Store for fetching page JSON and text file assets
-     * @param {Object} args.templateFileStore - Store for fetching base templates and partials
+     * @param {import('../key-value-store/key-value-store-interface').KeyValueStoreInterface} args.kvStore
+     * @param {import('./page-data-store-interface').PageDataStoreInterface} args.pageDataStore
+     * @param {import('./template-file-store-interface').TemplateFileStoreInterface} args.templateFileStore
      */
     initialize(args) {
-        const { pageDataStore, templateFileStore } = args ?? {};
+        const { kvStore, pageDataStore, templateFileStore } = args ?? {};
+        assert(kvStore, 'HyperviewService requires a kvStore');
         assert(pageDataStore, 'HyperviewService requires a pageDataStore');
         assert(templateFileStore, 'HyperviewService requires a templateFileStore');
+        this.#kvStore = kvStore;
         this.#pageDataStore = pageDataStore;
         this.#templateFileStore = templateFileStore;
     }
 
     async getPageMetadata(context, pathname) {
-        const { useCache = false } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
 
         // We need to get the page data for this page - the page at `pathname` - and
@@ -119,7 +123,8 @@ export default class HyperviewService {
         return page;
     }
 
-    mergePageMetadata(url, page) {
+    mergePageMetadata(url, metadata) {
+        const { page } = metadata;
         // Set canonical URL from request URL if not already defined in page data
         // Canonical URL excludes query string and hash to provide a stable reference
         if (!page.canonical_url) {
@@ -131,11 +136,11 @@ export default class HyperviewService {
 
         if (isNonEmptyString(page.title?.template)) {
             const template = this.#createMiniTemplate(`${ url.pathname }/page.title`, page.title.template);
-            page.title = template(data);
+            page.title = template(metadata);
         }
         if (isNonEmptyString(page.description?.template)) {
             const template = this.#createMiniTemplate(`${ url.pathname }/page.description`, page.description.template);
-            page.description = template(data);
+            page.description = template(metadata);
         }
 
         // Create the Open Graph object if it does not yet exist.
@@ -207,13 +212,13 @@ export default class HyperviewService {
         const includedFilepaths = includesList.map(({ name, filename, template }) => {
             if (!isNonEmptyString(filename)) {
                 throw new AssertionError(
-                    `Missing includes[${ name }].filename in metadata for ${ path }`,
+                    `Missing includes[${ name }].filename in metadata for ${ pathname }`,
                     null,
-                    this.getIncludes
+                    this.getIncludes,
                 );
             }
             if (template) usesTemplate = true;
-            return `${ path }/${ filename }`;
+            return `${ pathname }/${ filename }`;
         });
 
         const files = await this.#pageDataStore.getTextFiles(context, buildId, includedFilepaths);
@@ -266,14 +271,14 @@ export default class HyperviewService {
         const buildId = context.runtime.build?.id ?? null;
 
         let template;
-        const cacheKey = `${ buildId }:base:${ filepath }`;
+        const cacheKey = `${ buildId }:base:${ templateId }`;
         if (useCache) {
             template = this.#templateCache.get(cacheKey);
             if (template) {
-                this.#logger.debug('base template cache hit', { pathname, key: cacheKey });
+                this.#logger.debug('base template cache hit', { templateId, key: cacheKey });
                 return template;
             }
-            this.#logger.debug('base template cache miss', { pathname, key: cacheKey });
+            this.#logger.debug('base template cache miss', { templateId, key: cacheKey });
         }
 
         const file = await this.#templateFileStore.getBaseTemplate(context, buildId, templateId);
@@ -292,29 +297,27 @@ export default class HyperviewService {
     /**
      * Loads and compiles a page-specific template with all available partials.
      * @param {RequestContext} context - Request context
-     * @param {string} pathname - Page pathname used as the template directory
-     * @param {string} templateId - Template filename relative to the page pathname
+     * @param {string} templateId - Template identifier understood by the template file store
      * @param {Object} [options] - Template loading options
      * @param {boolean} [options.useCache=false] - Reuse compiled templates from this service instance
      * @returns {Promise<Function|null>} Render function, or null when the page template does not exist
      */
-    async getPageTemplate(context, pathname, templateId, options) {
+    async getPageTemplate(context, templateId, options) {
         const { useCache = false } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
-        const filepath = pathname === '/' ? `/${ templateId }` : `${ pathname }/${ templateId }`;
 
         let template;
-        const cacheKey = `${ buildId }:page:${ filepath }`;
+        const cacheKey = `${ buildId }:page:${ templateId }`;
         if (useCache) {
             template = this.#templateCache.get(cacheKey);
             if (template) {
-                this.#logger.debug('page template cache hit', { pathname, key: cacheKey });
+                this.#logger.debug('page template cache hit', { templateId, key: cacheKey });
                 return template;
             }
-            this.#logger.debug('page template cache miss', { pathname, key: cacheKey });
+            this.#logger.debug('page template cache miss', { templateId, key: cacheKey });
         }
 
-        const file = await this.#templateFileStore.getPageTemplate(context, buildId, filepath);
+        const file = await this.#templateFileStore.getPageTemplate(context, buildId, templateId);
         if (file) {
             const partials = await this.loadPartials(context, { useCache });
             template = this.compileTemplate(file.filepath, file.source, this.#customHelpers, partials);
@@ -341,7 +344,7 @@ export default class HyperviewService {
         let partials;
         const cacheKey = buildId || 'null';
         if (useCache) {
-            partials = this.#cachedPartialTemplates.get(cacheKey);
+            partials = this.#partialsCache.get(cacheKey);
             if (partials) {
                 this.#logger.debug('template partials cache hit', { key: cacheKey });
                 return partials;
@@ -359,7 +362,7 @@ export default class HyperviewService {
             partials.set(name, template);
         }
 
-        this.#cachedPartialTemplates.set(buildId, partials);
+        this.#partialsCache.set(buildId, partials);
 
         return partials;
     }
