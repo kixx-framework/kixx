@@ -75,16 +75,6 @@ export function readConfig(configFilePath) {
     return config;
 }
 
-/**
- * Rewrites the filesystem location on each known store config bundle under `env`
- * to an absolute path, resolved against the config file's directory. Bundles that
- * are absent or carry no location are left untouched; required-field validation
- * belongs to each store. Mutates the config in place.
- *
- * @param {Object} config - The parsed config object.
- * @param {string} baseDirectory - Directory the config file lives in.
- * @returns {void}
- */
 function resolveStoreLocations(config, baseDirectory) {
     const { env } = config;
     if (!isPlainObject(env)) {
@@ -94,6 +84,8 @@ function resolveStoreLocations(config, baseDirectory) {
     for (const [ bundleName, memberKey ] of STORE_LOCATION_MEMBERS) {
         const bundle = env[bundleName];
         if (isPlainObject(bundle) && isNonEmptyString(bundle[memberKey])) {
+            // Store plugins validate required fields; the config reader only
+            // normalizes filesystem locations relative to the config file.
             bundle[memberKey] = path.resolve(baseDirectory, bundle[memberKey]);
         }
     }

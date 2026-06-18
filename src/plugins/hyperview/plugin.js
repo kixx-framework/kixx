@@ -7,8 +7,9 @@ export function register(context) {
 }
 
 export function initialize(context) {
+    const kvStore = context.getService('KeyValueStore');
     const hyperviewService = context.getService('Hyperview');
     const pageDataStore = context.getService('HyperviewPageDataStore');
     const templateFileStore = context.getService('HyperviewTemplateFileStore');
-    hyperviewService.initialize({ pageDataStore, templateFileStore });
+    hyperviewService.initialize({ kvStore, pageDataStore, templateFileStore });
 }

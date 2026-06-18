@@ -44,9 +44,9 @@ const env = Object.assign({}, process.env, config.env);
 
 // The server port comes from the PORT env var, overridable by --port.
 const portValue = isNonEmptyString(cliOptions.port) ? cliOptions.port : env.PORT;
-const port = Number.parseInt(portValue, 10);
+const port = parsePort(portValue);
 
-if (Number.isNaN(port)) {
+if (port === null) {
     throw new OperationalError(
         'A valid server port is required: pass --port or set the PORT environment variable',
     );
@@ -112,20 +112,31 @@ router.on('error', ({ error, requestId }) => {
 
 
 async function handleRequest(nodeRequest, nodeResponse) {
+    let isHeadRequest = false;
+
     try {
         const request = new ServerRequest(nodeRequest);
+        isHeadRequest = request.isHeadRequest();
         const requestContext = appContext.createRequestContext(env, request);
         const response = await router.handleRequest(requestContext, request, new ServerResponse());
-        sendResponse(nodeResponse, response, request.isHeadRequest());
+        sendResponse(nodeResponse, response, isHeadRequest);
     } catch (cause) {
         // The router emits 'error' events for logging, but a rejection here still
         // needs to terminate the socket or the client hangs until it times out.
         logger.error('unhandled error while handling request', null, cause);
-        if (!nodeResponse.headersSent) {
-            nodeResponse.statusCode = 500;
-            nodeResponse.setHeader('content-type', 'text/plain; charset=utf-8');
+        if (nodeResponse.headersSent) {
+            nodeResponse.destroy(cause);
+            return;
         }
-        nodeResponse.end('Internal Server Error\n');
+
+        nodeResponse.statusCode = 500;
+        nodeResponse.setHeader('content-type', 'text/plain; charset=utf-8');
+
+        if (isHeadRequest) {
+            nodeResponse.end();
+        } else {
+            nodeResponse.end('Internal Server Error\n');
+        }
     }
 }
 
@@ -188,9 +199,16 @@ function pipeStream(readStream, nodeResponse) {
 
 const nodeServer = http.createServer(handleRequest);
 
-// Attach event handlers BEFORE listen() to catch port-in-use errors
+let isShuttingDown = false;
+
+// Attach event handlers before listen() so bind failures are logged by the app
+// logger. A startup bind failure must exit non-zero; otherwise supervisors see
+// a clean process exit even though no server is accepting traffic.
 nodeServer.on('error', (cause) => {
     logger.error('node.js server error event', null, cause);
+    if (!nodeServer.listening && !isShuttingDown) {
+        process.exit(1);
+    }
 });
 
 nodeServer.on('listening', () => {
@@ -208,6 +226,11 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
 // let in-flight requests finish, then exit. If draining stalls past the timeout,
 // force exit so a stuck request cannot block deployment forever.
 function shutdown(signal) {
+    if (isShuttingDown) {
+        return;
+    }
+
+    isShuttingDown = true;
     logger.info('received shutdown signal; closing server', { signal });
 
     const forceExit = setTimeout(() => {
@@ -231,3 +254,16 @@ function shutdown(signal) {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+function parsePort(value) {
+    if (!isNonEmptyString(value) || !/^\d+$/.test(value)) {
+        return null;
+    }
+
+    const parsedPort = Number.parseInt(value, 10);
+    if (parsedPort < 0 || parsedPort > 65535) {
+        return null;
+    }
+
+    return parsedPort;
+}

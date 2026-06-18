@@ -83,6 +83,7 @@ export default class HyperviewService {
      */
     initialize(args) {
         const { kvStore, pageDataStore, templateFileStore } = args ?? {};
+        assert(kvStore, 'HyperviewService requires a kvStore');
         assert(pageDataStore, 'HyperviewService requires a pageDataStore');
         assert(templateFileStore, 'HyperviewService requires a templateFileStore');
         this.#kvStore = kvStore;
