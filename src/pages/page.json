@@ -1,0 +1,11 @@
+{
+    "baseTemplate": "website-base.html",
+    "pageTemplate": "web-page.html",
+    "page": {
+        "title": "A Kixx App",
+        "description": "A new Kixx web application"
+    },
+    "includes": {
+        "message": { "filename": "message.md" }
+    }
+}

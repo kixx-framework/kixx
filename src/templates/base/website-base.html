@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-US">
+    <head>
+        <meta charset="utf-8">
+
+        <title>{{ page.title }}</title>
+
+        {{#if page.description }}
+            <meta name="description" content="{{ page.description }}">
+        {{/if}}
+
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        {{#if page.open_graph }}
+            {{#if page.open_graph.type }}
+                <meta property="og:type" content="{{ page.open_graph.type }}">
+            {{/if}}
+            {{#if page.open_graph.title }}
+                <meta property="og:title" content="{{ page.open_graph.title }}">
+            {{/if}}
+            {{#if page.open_graph.description }}
+                <meta property="og:description" content="{{ page.open_graph.description }}">
+            {{/if}}
+            {{#if page.open_graph.url }}
+                <meta property="og:url" content="{{ page.open_graph.url }}">
+            {{/if}}
+            {{#if page.open_graph.image }}
+                <meta property="og:image" content="{{ page.open_graph.image.url }}">
+                <meta property="og:image:url" content="{{ page.open_graph.image.url }}">
+            {{/if}}
+        {{/if}}
+
+        {{#if page.canonical_url }}
+            <link rel="canonical" href="{{ page.canonical_url }}" />
+        {{/if}}
+    </head>
+    <body>
+        <main>{{{ body }}}</main>
+    </body>
+</html>

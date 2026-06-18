@@ -48,13 +48,21 @@ const config = readConfig(configFilePath, environment);
 
 const env = Object.assign({}, process.env, config.env);
 
-// The server port comes from the PORT env var, overridable by --port.
-const portValue = isNonEmptyString(cliOptions.port) ? cliOptions.port : env.PORT;
+const DEFAULT_PORT = '2026';
+
+// The server port defaults to 2026, can be set with PORT, and is overridable by --port.
+let portValue = DEFAULT_PORT;
+if (isNonEmptyString(env.PORT)) {
+    portValue = env.PORT;
+}
+if (isNonEmptyString(cliOptions.port)) {
+    portValue = cliOptions.port;
+}
 const port = parsePort(portValue);
 
 if (port === null) {
     throw new OperationalError(
-        'A valid server port is required: pass --port or set the PORT environment variable',
+        'The server port must be a valid integer from 0 to 65535',
     );
 }
 

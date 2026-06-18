@@ -151,12 +151,6 @@ export function HyperviewStaticPageHandler(options) {
             );
         }
 
-        if (!pageTemplate) {
-            throw new AssertionError(
-                `The page template was not found (pageTemplate:${ pageTemplateId }, pathname:${ pathname })`,
-            );
-        }
-
         if (metadata.includes && Object.keys(metadata.includes).length > 0) {
             metadata.includes = await service.getIncludes(
                 context,
@@ -166,7 +160,10 @@ export function HyperviewStaticPageHandler(options) {
             );
         }
 
-        metadata.body = pageTemplate(metadata);
+        if (pageTemplate) {
+            metadata.body = pageTemplate(metadata);
+        }
+
         hypertext = baseTemplate(metadata);
 
         if (useCache) {
@@ -292,12 +289,6 @@ export function HyperviewDynamicPageHandler(options) {
             );
         }
 
-        if (!pageTemplate) {
-            throw new AssertionError(
-                `The page template was not found (pageTemplate:${ pageTemplateId }, pathname:${ pathname })`,
-            );
-        }
-
         if (metadata.includes && Object.keys(metadata.includes).length > 0) {
             metadata.includes = await service.getIncludes(
                 context,
@@ -307,7 +298,10 @@ export function HyperviewDynamicPageHandler(options) {
             );
         }
 
-        metadata.body = pageTemplate(metadata);
+        if (pageTemplate) {
+            metadata.body = pageTemplate(metadata);
+        }
+
         const hypertext = baseTemplate(metadata);
 
         return response.respondWithUtf8(response.status, hypertext, { contentType: 'text/html' });
