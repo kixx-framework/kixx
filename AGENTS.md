@@ -1,10 +1,60 @@
 Read the @README.md for the project overview, including what this project is and why it exists.
 
-Before starting any task, including planning, ALWAYS review the documentation index at @docs/index.md
+## Developer Documentation
+Before starting any task, including planning, ALWAYS review this documentation index.
 
-Use the @docs/index.md to identify which linked documents are relevant to your task, then read the full text of each relevant document — the index entries are summaries only. Keep the available documentation in mind as you work, so you can review additional documents that become relevant as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
+Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each relevant document — the index entries are summaries only. Keep the available documentation in mind as you work, so you can review additional documents that become relevant as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
 
-### Linting
+### Code Style Guide
+
+@src/docs/code-style-guide.md
+
+**When to use this document:** Apply this guide whenever you are writing or modifying any JavaScript source file in this project. This includes:
+
+- New functions, classes, modules, or any other JavaScript code you write from scratch.
+- Edits to existing source files — match the style of the surrounding code, and correct any violations you introduce.
+- Code review: flag style violations even when not explicitly asked to.
+
+**What this document provides:** The canonical JavaScript style conventions for this project — language standard, runtime boundaries, formatting rules, linting constraints, and project-specific patterns like destructuring, type detection, and private class members. Following this guide keeps code consistent with the linter and with the rest of the codebase.
+
+### Code Quality Guide
+
+@src/docs/code-quality.md
+
+**When to use this document:** Apply this guide whenever you are writing,
+reviewing, or refactoring code in this project. This includes:
+
+- Deciding whether behavior belongs in a class, module, helper function, or existing object.
+- Improving code structure while making a scoped feature or bug fix.
+- Reviewing abstractions for responsibility ownership, encapsulation, layering, naming, or accidental complexity.
+
+**What this document provides:** General maintainability guidance for agents working in this codebase — how to choose responsible owners for behavior, when to use object-oriented design, when not to add a class, how to keep abstractions inside the existing architecture, and how to avoid refactors that add complexity or drift outside the current task.
+
+### Code Documentation Guide
+
+@src/docs/code-documentation-guide.md
+
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or improving JSDoc block comments or inline comments in any JavaScript source file in this project. This includes:
+
+- Adding documentation to new functions, classes, methods, or modules you write.
+- Reviewing or updating existing documentation for accuracy and completeness.
+- Deciding whether a given symbol *needs* documentation at all.
+- Choosing the right JSDoc tags for a given situation.
+- Writing inline comments that explain non-obvious decisions.
+
+### Unit Testing Guide
+
+@src/docs/unit-testing-guide.md
+
+**When to use this document:** Apply this guide only when you have been explicitly asked to write new tests or update existing tests. Consult it whenever you are:
+
+- Creating a new `*.test.js` file under `test/`.
+- Adding or modifying test cases, hooks, or assertions in an existing test file.
+- Writing mocks with `MockTracker` or testing thrown errors and rejected promises.
+
+**What this document provides:** The complete test API for this project — the `kixx-test` runner, `kixx-assert` assertions, mock helpers, file and naming conventions, hook semantics, timeout configuration, and patterns for error/rejection testing.
+
+## Linting
 
 Linting is configured in `./eslint.config.js`.
 
@@ -34,7 +84,7 @@ Exit behavior:
 - Exits 1 when any lint error is present (or when CLI/config loading fails).
 - Exits 0 when results are warnings-only or fully clean.
 
-### Unit Testing
+## Unit Testing
 
 Run tests with:
 
@@ -76,11 +126,10 @@ FIRST: Have a conversation with the user so you both have a shared understanding
 **Make sure you are clear on these points:**
 
 1. **User Story** - What user or system behavior is changing? Define the observable behavior: URL, request/response shape, UI state, generated HTML, deployment effect, command behavior, or data mutation.
-2. **Acceptance Criteria** - How will we know when we have successfully made the changes described here?
+2. **Read the Documentation** - Which existing docs apply? Review [Developer Documentation](#developer-documentation) above, to find applicable documentation.
 3. **What** - What are the runtime constraints? For Worker code, consider Cloudflare Workers limitations: no Node filesystem, no native Node modules, request-scoped execution, bindings, caches, KV/R2/D1 behavior, and fetch semantics.
-4. **Where** - Where does the feature belong? Decide whether it is Worker application code in src/, developer tooling in commands/ or tools/, or test/runtime harness code. This decision is also a runtime decision: src/ runs in the Cloudflare Workers runtime and must never use native Node.js modules or filesystem access. commands/, tools/, and test/ run in Node.js and have no such restriction.
+4. **Where** - Where does the code belong? `collections/`, `transaction-scripts/`, `gateways/` `errors/`, `forms/`, `request-handlers/`, `middleware/`, `error-handlers/`, or somewhere else?
 5. **Dependencies** - What dependency stories will we need to implement first in order to achieve the subsequent user stories in the most maintainable way?
-6. **Read the Documentation** - Which existing docs apply? Review @docs/index.md to find applicable documentation.
 
 Ask the user if you should create an implementation plan or continue discussing the feature.
 
@@ -120,12 +169,10 @@ If you think you need a dependency that is not already vendored, stop working on
 
 ## Explanatory Output
 
-You should provide insightful explanations about how you are approaching a task and the tradeoffs you are making while remaining focused on the task. Balance insightful content with task completion. When providing insights, you may exceed typical length constraints, but remain focused and relevant.
-
-For non-trivial code changes, before and after writing code, provide brief insightful explanations about your implementation choices and your thinking supporting those choices using:
+You should provide insightful explanations about how you are approaching a task and the tradeoffs you are making while remaining focused on the task. For non-trivial code changes, before and after writing code, provide brief insightful explanations about your implementation choices and your thinking supporting those choices using:
 
 "★ Insight ─────────────────────────────────────
 [2-3 key insightful points]
 ─────────────────────────────────────────────────"
 
-These insights should be included in the conversation, not in the codebase. Focus on interesting insights that are specific to the codebase or the code you are writing, rather than general programming concepts. Do not wait until the end to provide insights. Provide them as you write code.
+These insights should be included in the conversation, not in the codebase. Focus on interesting insights that are specific to the codebase or the code you are writing, rather than general programming concepts. Do not wait until the end to provide insights. Provide them as you think about changes and write code.
