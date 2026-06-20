@@ -54,6 +54,14 @@ reviewing, or refactoring code in this project. This includes:
 
 **What this document provides:** The complete test API for this project — the `kixx-test` runner, `kixx-assert` assertions, mock helpers, file and naming conventions, hook semantics, timeout configuration, and patterns for error/rejection testing.
 
+### Transaction Scripts
+
+@src/app/transaction-scripts/README.md
+
+**When to use this document:** Apply this guide whenever you are writing, modifying, or reviewing Transaction Scripts — the procedures that enforce business rules, read or write data, translate storage errors, and return results to the presentation layer.
+
+**What this document provides:** The Transaction Script pattern used for domain logic — file and naming conventions, function signatures for read and write scripts, how middleware calls Transaction Scripts, how Forms feed write workflows, data access via Collections, calling external services through registered gateways, domain error rules, storage-error translation with `cause`, and complete annotated examples.
+
 ## Linting
 
 Linting is configured in `./eslint.config.js`.
