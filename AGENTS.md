@@ -54,6 +54,14 @@ reviewing, or refactoring code in this project. This includes:
 
 **What this document provides:** The complete test API for this project — the `kixx-test` runner, `kixx-assert` assertions, mock helpers, file and naming conventions, hook semantics, timeout configuration, and patterns for error/rejection testing.
 
+### Collections
+
+@src/app/collections/README.md
+
+**When to use this document:** Apply this guide whenever you are creating, modifying, or reviewing Collections, Records, document store access, secondary indexes, KV store backed collections, custom storage gateways, external service gateways (email, S3 or R2 object store, third-party APIs), or any code that reads from or writes to persistence or external resources.
+
+**What this document provides:** The data persistence and gateway API — how to define and register Collections, write methods (`create`, `put`, `update`, `updateWithRetry`) and when to use each, the two delete methods (`delete`, `deleteStrict`) and when to use each, reading with `get`/`scan`/`query`, optimistic concurrency via `version`, Record attribute accessors, how to subclass Collection and Record, secondary index configuration, Key Value Store collection conventions, custom gateway boundaries, how to author and register external service gateways, and the document store error types.
+
 ### Transaction Scripts
 
 @src/app/transaction-scripts/README.md
