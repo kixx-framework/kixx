@@ -1,4 +1,4 @@
-import deepMerge from '../utils/deep-merge.js';
+import deepMerge from '../../kixx/utils/deep-merge.js';
 import {
     AssertionError,
     isNonEmptyString,
@@ -6,7 +6,7 @@ import {
     isPlainObject,
     isValidDate,
     toFriendlyString,
-} from '../assertions/mod.js';
+} from '../../kixx/assertions/mod.js';
 
 
 /**

@@ -3,9 +3,9 @@
  * @see DocumentStore in ../document-store/document-store.js for the underlying store contract
  */
 
-import Record from './record.js';
+import Record from './document-store-record.js';
 import RetryLimitExceededError from './retry-limit-exceeded-error.js';
-import DocumentNotFoundError from '../document-store/document-not-found-error.js';
+import DocumentNotFoundError from '../../kixx/document-store/document-not-found-error.js';
 import {
     assert,
     assertFunction,
@@ -15,7 +15,7 @@ import {
     isNonEmptyString,
     isUndefined,
     isString,
-} from '../assertions/mod.js';
+} from '../../kixx/assertions/mod.js';
 
 
 /**

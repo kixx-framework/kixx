@@ -58,9 +58,9 @@ reviewing, or refactoring code in this project. This includes:
 
 @src/app/collections/README.md
 
-**When to use this document:** Apply this guide whenever you are creating, modifying, or reviewing Collections, Records, document store access, secondary indexes, KV store backed collections, custom storage gateways, external service gateways (email, S3 or R2 object store, third-party APIs), or any code that reads from or writes to persistence or external resources.
+**When to use this document:** Apply this guide whenever you are creating, modifying, or reviewing Collections, Records, document store access, secondary indexes, KV store access, custom storage gateways, or any code that reads from or writes to a persistence layer.
 
-**What this document provides:** The data persistence and gateway API — how to define and register Collections, write methods (`create`, `put`, `update`, `updateWithRetry`) and when to use each, the two delete methods (`delete`, `deleteStrict`) and when to use each, reading with `get`/`scan`/`query`, optimistic concurrency via `version`, Record attribute accessors, how to subclass Collection and Record, secondary index configuration, Key Value Store collection conventions, custom gateway boundaries, how to author and register external service gateways, and the document store error types.
+**What this document provides:** The data persistence and gateway API — how to define and register Collections, write methods (`create`, `put`, `update`, `updateWithRetry`) and when to use each, the two delete methods (`delete`, `deleteStrict`) and when to use each, reading with `get`/`scan`/`query`, optimistic concurrency via `version`, Record attribute accessors, how to subclass Collection and Record, secondary index configuration, custom gateway boundaries, and how to author and register custom data access gateways.
 
 ### Transaction Scripts
 

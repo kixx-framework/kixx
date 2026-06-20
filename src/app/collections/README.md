@@ -4,9 +4,9 @@ This application keeps data persistence behind a small Data Source Layer, using 
 
 ## Document Store
 
-This application primarily uses a Document Store for data persistence. The Document Store is registered as a service on the application and request context as "DocumentStore".
+This application primarily uses a Document Store and a separate Key Value Store for data persistence. Both the Document Store and Key Value Store are registered as a service on the application and request context as "DocumentStore" and "KeyValueStore".
 
-Application code should access document data through the Gateway pattern; using registered Collections from the RequestContext:
+Application code should access stored data through the Gateway pattern; using registered Collections from the RequestContext:
 
 ```js
 const users = context.getCollection('User');
@@ -15,14 +15,14 @@ const user = await users.get(context, userId);
 
 ## Gateways
 
-There are two Gateway patterns used on top of the Document Store:
+There are two Gateway patterns used on top of the s:
 
 - **Record** - app/data-source-layer/record.js - Implements the Row Data Gateway and Data Transfer Object (DTO) patterns.
 - **Collection** - app/data-source-layer/collection.js - Implements the Table Data Gateway and Table Module patterns.
 
 The `Collection` and `Record` classes are intended to be subclassed for specific application domains
 
-### Document Types
+### Document Store and Key Value Store Types
 
 Objects in the document store must have a `type`. By convention, types use PascalCase like `"Cat"`, `"User"`, or `"Account"`. Each Collection subclass must be bound to one application-defined type, and every application-defined type should have an associated Collection subclass.
 
@@ -30,14 +30,14 @@ The Collection API scopes all operations to its `TYPE`. When a document is creat
 
 ### Defining a Collection
 
-Collections are registered on the application context in `register()` and retrieved from request contexts with `context.getCollection(name)`. All application Collections should be registered from the app's `register(context)` lifecycle function in @application/src/app/app.js, after their backing store service has been created. Collections and their paired Record subclasses should be defined in `app/collections/`.
+Collections are registered on the application context in `register()` and retrieved from request contexts with `context.getCollection(name)`. All application Collections should be registered from the app's `register(context)` lifecycle function in app/app.js, after their backing store service has been created. Collections and their paired Record subclasses should be defined in `app/collections/`.
 
-Each Collection subclass should be paired with a Record subclass. The Record subclass holds the document schema (`static schema`), implements `validate()` to enforce invariants before writes, and exposes domain-specific attribute getters. A minimal pair looks like this:
+Each Collection subclass should be paired with a Record subclass. The Record subclass holds the document schema (`static schema`), implements `validate()` to enforce invariants before writes, and exposes domain-specific attribute getters. A minimal pair for the Document Store looks like this:
 
 In app/collections/user/user-record.js:
 
 ```js
-import Record from '../record.js';
+import Record from '../document-store-record.js';
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../kixx/errors/mod.js';
 
@@ -75,7 +75,7 @@ export default UserRecord;
 In app/collections/user/user-collection.js:
 
 ```js
-import Collection from '../collection.js';
+import Collection from '../document-store-collection.js';
 import UserRecord from './user-record.js';
 
 export const USER_EMAIL_ADDRESS_INDEX = 'user_email_address';
@@ -99,10 +99,14 @@ export default class UserCollection extends Collection {
 }
 ```
 
-Then, in @application/src/app/app.js:
+Then, in app/app.js:
 
 ```js
-context.registerCollection('User', new UserCollection({ db: documentStore }));
+export function register(context) {
+    const documentStore = new DocumentStore();
+    context.registerService('DocumentStore', documentStore);
+    context.registerCollection('User', new UserCollection({ db: documentStore }));
+}
 ```
 
 ### Custom Collection Helpers
@@ -116,9 +120,9 @@ const users = context.getCollection('User');
 const user = await users.findByEmailAddress(context, emailAddress);
 ```
 
-### Choosing a Write Method
+### Document Store Collections: Writing
 
-Each Collection exposes four ways to write a document. Choose based on your concurrency requirements:
+Document Store Collections expose four ways to write a document. Choose based on your concurrency requirements:
 
 - **`create(context, input)`** — Inserts a new document. Throws `DocumentAlreadyExistsError` if a document already exists for the same `id`. Use this when the document must not already exist (e.g. a sign-up flow where a duplicate email means an error).
 - **`put(context, input)`** — Creates or overwrites a document without optimistic concurrency control. Use this for seeding, importing, or any case where you hold the canonical state and don't need to guard against concurrent writes.
@@ -133,13 +137,7 @@ All write methods call `dto.validate()` before persisting. A `ValidationError` t
 
 `updateWithRetry()` defaults to three retry attempts after the first conflict; pass `{ retryLimit: 0 }` to disable refetch retries.
 
-### ID Generation and Sort Keys
-
-`Record.deriveId(attributes)` is the preferred hook for content-derived IDs (username, slug, content hash). Override it on the Record subclass — it returns `null` by default, causing the Collection to fall back to `generateUniqueId(attributes)`. Override `generateUniqueId` on the Collection subclass only when the gateway itself owns ID generation (e.g., a counter or an injected ID service). The default `generateUniqueId` returns `crypto.randomUUID()`.
-
-Override `generateSortKey(doc)` when the Collection needs a computed sort key. The default passes through `doc.sortKey` when present, or returns `undefined` to omit one. The sort key controls the ordering returned by `scan()` and must be a string that sorts lexicographically in the desired order. Range queries in `scan()` are only meaningful when all documents have sort keys.
-
-### Reading and Listing
+### Document Store Collections: Reading and Listing
 
 - **`get(context, id)`** — Retrieves one document by id. Returns `null` when absent.
 - **`scan(context, options)`** — Returns a keyset-paginated page of documents ordered by their primary sort key. Returns `{ items, cursor }`. Pass `cursor` back on subsequent calls to page through results. Options: `descending`, `limit` (default 100), `cursor`, `equalTo`, `greaterThan`, `greaterThanOrEqualTo`, `lessThan`, `lessThanOrEqualTo`. `equalTo` is mutually exclusive with range bounds and throws when combined with them.
@@ -149,18 +147,24 @@ Override `generateSortKey(doc)` when the Collection needs a computed sort key. T
 
 Pagination cursors are opaque. Reuse a cursor only with the same method, document type, index name when querying, sort direction, and range options that produced it. Without range bounds that exclude them, documents with missing or `null` sort or index values remain in the result set: they sort first in ascending order and last in descending order.
 
-### Deleting
+### Document Store Collections: ID Generation and Sort Keys
+
+`Record.deriveId(attributes)` is the preferred hook for content-derived IDs (username, slug, content hash). Override it on the Record subclass — it returns `null` by default, causing the Collection to fall back to `generateUniqueId(attributes)`. Override `generateUniqueId` on the Collection subclass only when the gateway itself owns ID generation (e.g., a counter or an injected ID service). The default `generateUniqueId` returns `crypto.randomUUID()`.
+
+Override `generateSortKey(doc)` when the Collection needs a computed sort key. The default passes through `doc.sortKey` when present, or returns `undefined` to omit one. The sort key controls the ordering returned by `scan()` and must be a string that sorts lexicographically in the desired order. Range queries in `scan()` are only meaningful when all documents have sort keys.
+
+### Document Store Collections: Deleting
 
 - **`delete(context, id)`** — Deletes one document by id without concurrency control. Returns `true` when a document was deleted, `false` when no document existed.
 - **`deleteStrict(context, dto)`** — Deletes a document only when the stored version matches `dto.version`. Throws `DocumentNotFoundError` when absent and `VersionConflictError` on a version mismatch.
 
-### Error Handling
+### Document Store Collections: Error Handling
 
 Generally, errors from the storage engines are considered operational errors. Most application logic in Transaction Scripts should catch these errors and react accordingly without crashing. There may be cases where these errors represent a failed assumption and should be rethrown as assertion errors to crash the system. See the `docs/error-handling.md` document for more details.
 
 **Important**: Use the error.name or error.code instead of `instanceof` to check for error types.
 
-## Record
+## Document Store Records
 
 Document Store Collection methods which return document data return one or more `Record` instances. A Record is a mutable DTO wrapping the raw store record. User-defined document fields are held in a private `#attributes` slot — they are **not** accessible as direct properties on the Record instance. Always read and write document fields through the accessor methods.
 
@@ -256,7 +260,7 @@ await users.updateWithRetry(context, user, (latestUser) => {
 });
 ```
 
-## Secondary Indexes
+## Document Store Secondary Indexes
 
 Secondary indexes are declared in `DOCUMENT_STORE_INDEXES` in `app/app.js` and passed to `documentStore.initialize()`. Each index definition requires two fields:
 
@@ -298,24 +302,6 @@ export default class UserCollection extends Collection {
 
 ## Custom Gateways
 
-The default `Record` and `Collection` base classes are designed specifically for the Document Store. For most Document Store use cases, subclassing them (as described above) is the right approach — add domain methods to a `Record` subclass and add query or mutation helpers to a `Collection` subclass.
+The Document Store Record and Document Store Collection base classes are designed specifically for the Document Store. For most Document Store use cases, subclassing them (as described above) is the right approach — add domain methods to a `Record` subclass and add query or mutation helpers to a `Collection` subclass.
 
 When the application needs to interact with a completely different storage system (not the Document Store), write a new gateway class from scratch rather than subclassing `Collection`. A custom gateway can use whatever constructor shape and method signatures fit the storage system, following the same general pattern: register the gateway as an application Collection, hide storage-specific details from callers, and wrap raw results in a DTO before returning them when that storage system has record-like results.
-
-### External Service Gateways
-
-**Non-storage external services** (Cloudflare email binding, R2 object store, third-party APIs) follow a related but distinct pattern: they live in `application/src/app/gateways/<resource>/` and are registered as application *services* rather than collections. Transaction Scripts retrieve them with `context.getService()` rather than `context.getCollection()`:
-
-```js
-const emailGateway = context.getService('EmailGateway');
-const { messageId } = await emailGateway.send(context, message);
-```
-
-**Do not put business rules inside a gateway.** A gateway's sole responsibility is to hide the shape of one external resource: its binding API, key formats, error codes, and wire protocol. Business rules, cross-field validation, and conditional branching based on domain state belong in the Transaction Script. See the "Calling External Services" section of @application/docs/domain-logic.md for how Transaction Scripts use gateways.
-
-When you need a new gateway for an external resource:
-
-1. Create `application/src/app/gateways/<resource>/<resource>-gateway.js` with a stateless class.
-2. Use the RequestContext on each call — not at construction time — so the same instance works across requests.
-3. Translate all recognizable platform error codes into Kixx/app error classes. Let unrecognized codes propagate unchanged so the router's 500 fallback fires with the original error preserved.
-4. Register it as a service in `app.js`: `context.registerService('MyGateway', new MyGateway())`.
