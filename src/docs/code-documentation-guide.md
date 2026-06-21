@@ -1,19 +1,12 @@
 # Code Documentation Guide
 
-Document JavaScript code using the two-layer convention in this project:
+JSDoc block comments are the formal API contract: types, parameters, return values, errors, and events. They are consumed by editors, documentation generators, and future readers of the public interface.
 
-- **JSDoc block comments** are the formal API contract: types, parameters, return values, errors, and events. They are consumed by editors, documentation generators, and future readers of the public interface.
-- **Inline comments** are the narrative layer explaining why a decision exists: constraints, workarounds, coordination points, side effects, and non-obvious tradeoffs.
-
-Use JSDoc to answer "what does this do and how do I call it?" Use inline comments to answer "why does it work this way?"
-
-**What this guide does NOT cover:** Code style conventions and linting (see `docs/code-style-guide.md`)
-
-## JSDoc Block Comments
+Use JSDoc to answer "what does this do and how do I call it?"
 
 Use JSDoc blocks to reduce cognitive load by answering three questions without requiring the reader to inspect the implementation: "What does this do?", "How do I use it?", and "What can go wrong?"
 
-### Supported JSDoc Tags
+## Supported JSDoc Tags
 
 Use these tags when they accurately describe the documented symbol:
 
@@ -36,7 +29,7 @@ Use these tags when they accurately describe the documented symbol:
 - **@type**: define the type of a symbol.
 - **@default**: define the default value for a variable, property, or field.
 
-### Add Value Beyond the Name
+## Add Value Beyond the Name
 
 Write concise descriptions that add information the symbol name does not already provide. Concision helps documentation remain accurate longer.
 
@@ -58,7 +51,7 @@ Bad:
 function getUserById() {}
 ```
 
-### Document the Contract
+## Document the Contract
 
 Document what the function does and how callers use it. Do not describe internal implementation details unless they are part of the public contract.
 
@@ -91,7 +84,7 @@ For chainable methods, mutating methods, and cascade-style handlers, make the re
 function handleError(error) {}
 ```
 
-### Specify Types Precisely
+## Specify Types Precisely
 
 Be specific about object shapes, array contents, and union types. Use `@typedef` blocks for complex data structures:
 
@@ -132,7 +125,7 @@ Use dotted `@param` notation for function and method arguments/options. Do not i
 createContext({ runtime, config, logger }) {}
 ```
 
-### Document Error Conditions and Edge Cases
+## Document Error Conditions and Edge Cases
 
 Use `@throws` for meaningful caller-visible failure modes.
 
@@ -150,7 +143,7 @@ Prefer the error class that callers can reasonably catch or that the framework
 will translate. Do not document every assertion in a deeply private helper
 unless it changes how the public API is used.
 
-### Do Not Use JSDoc for Module-Private Functions
+## Do Not Use JSDoc for Module-Private Functions
 
 JSDoc documents a module's public contract — the exported functions, classes, and types that other modules call. Functions that are private to a module (those that are not exported) must not have JSDoc block comments. They have no external callers, and a JSDoc block above an internal helper only adds ceremony that drifts out of sync with the code.
 
@@ -179,7 +172,7 @@ function isEven(n) {
 
 This rule is about module-private *functions*. Class members declared with `#private` syntax are covered separately under "Document Classes" below.
 
-### Document Async Behavior
+## Document Async Behavior
 
 Be explicit about what Promises resolve to. Use `Promise<void>`, not `Promise<undefined>`, for functions that do not resolve to a meaningful value.
 
@@ -203,7 +196,7 @@ function delay(milliseconds) {
 async function getUser(userId) {}
 ```
 
-### Document Events
+## Document Events
 
 Document events using the `@emits` tag. Use `@typedef` blocks to document event object structures:
 
@@ -223,7 +216,7 @@ Document events using the `@emits` tag. Use `@typedef` blocks to document event 
 export default class FileWatcher extends EventEmitter {}
 ```
 
-### Document Interfaces and Invariants
+## Document Interfaces and Invariants
 
 For interface modules or adapter contracts, use a short top-level block to
 state invariants that implementations must preserve. Keep this to stable
@@ -231,14 +224,14 @@ requirements such as immutability, platform-provided objects, body-consumption
 rules, error translation, or request/response lifecycle timing. Then use a
 `@typedef` or class JSDoc block for the concrete property and method types.
 
-### Document Classes
+## Document Classes
 
 - Use `@name` on members defined via `Object.defineProperties()` or `Object.defineProperty()` to give them an explicit name.
 - Do not add the `@private` tag to private members; JavaScript's `#private` syntax already communicates visibility.
 - Keep documentation sparse for private methods and members. A brief description is sufficient when documentation is useful.
 - Do not include a description for `constructor` JSDoc blocks. Only document `@param` tags and `@throws` when relevant.
 
-### Use @name with Object.defineProperties
+## Use @name with Object.defineProperties
 
 When properties are defined via `Object.defineProperties()` or `Object.defineProperty()`, add a JSDoc block with `@name` so the property is discoverable. Put the description first, then `@name`, then `@type`:
 
@@ -277,7 +270,7 @@ export default class Context {
 }
 ```
 
-### Use @see for Cross-References
+## Use @see for Cross-References
 
 Use `@see` when another symbol materially helps the reader understand the contract or expected usage.
 
@@ -290,155 +283,3 @@ Use `@see` when another symbol materially helps the reader understand the contra
  */
 function normalizeProfile(profile) {}
 ```
-
-## Inline Code Comments
-
-Use inline comments to explain intent, constraints, context, and decisions that
-the code cannot express clearly by itself. Be opportunistic: when you had to
-reason about why code belongs in its current shape, leave a short comment so
-the next reader does not have to rediscover that reasoning.
-
-### Explain Why, Not What
-
-Focus on why the code exists and why it does what it does, especially when it seems counterintuitive or requires domain knowledge:
-
-```javascript
-// Increment DB counter before processing to avoid getting stuck on
-// the same database if the current run hits the time limit.
-currentDb = (currentDb + 1) % totalDatabases;
-```
-
-Good inline comments often capture:
-
-- why this branch exists
-- why this order matters
-- why this default is safe or required
-- why a value is cloned, frozen, normalized, or rewrapped
-- why an error is caught, translated, hidden, or allowed to propagate
-- why a simpler-looking implementation would be wrong in this runtime
-
-Prefer one or two focused lines near the decision. A useful comment does not
-need to justify the whole function.
-
-### Avoid Trivial Comments
-
-Bad:
-
-```javascript
-user.name = 'John'; // Set the user name to John
-```
-
-Good:
-
-```javascript
-user.name = sanitizeInput(rawName); // Remove potential XSS vectors
-```
-
-Do not avoid comments just because the code is readable. Readable code shows
-what happens; a good comment preserves context that is not present in the
-syntax, tests, or local variable names.
-
-### Comment While the Context Is Fresh
-
-When adding or changing code, add inline comments at the same time you make the
-decision. This is especially important when the code depends on framework
-contracts, Cloudflare Worker limits, HTTP semantics, request lifecycle timing,
-storage consistency, security posture, or compatibility with existing callers.
-
-```javascript
-// Clone before storing so later caller-side mutation cannot change request
-// routing state after middleware has started.
-this.#routes = routes.slice();
-```
-
-### Use Guide Comments to Break Up Complex Logic
-
-Use short guide comments to separate phases in longer logic when the section boundaries help readers scan intent.
-
-```javascript
-async function processPayment(order, paymentMethod) {
-    // Validate payment details and customer eligibility.
-    await validatePaymentMethod(paymentMethod);
-    await checkCustomerCredit(order.customerId);
-
-    // Calculate final amounts including taxes and fees.
-    const taxAmount = calculateTax(order);
-    const finalAmount = order.total + taxAmount + calculateFee(paymentMethod, order.total);
-
-    // Process payment and update order status.
-    const transaction = await chargePayment(paymentMethod, finalAmount);
-    await updateOrderStatus(order.id, 'paid', transaction.id);
-
-    return transaction;
-}
-```
-
-### Document State Transitions and Side Effects
-
-```javascript
-// After this call, the connection state changes to 'authenticating'
-// and subsequent messages are queued until auth completes.
-await connection.startAuthentication(credentials);
-```
-
-### Use Teacher Comments for Domain Knowledge
-
-```javascript
-// JWT exp claim uses NumericDate format in seconds since epoch.
-// JavaScript Date.now() returns milliseconds, so divide by 1000.
-const expiry = Math.floor(Date.now() / 1000) + (60 * 60 * 24);
-```
-
-### Document Workarounds and Hacks
-
-```javascript
-// Workaround: Some legacy clients send timestamps as strings.
-// TODO: Remove this once all clients upgrade to v2.
-const timestamp = typeof data.timestamp === 'string'
-    ? parseInt(data.timestamp, 10)
-    : data.timestamp;
-```
-
-### Explain Performance or Memory Considerations
-
-```javascript
-// Pre-allocate the buffer to avoid repeated reallocations during
-// high-frequency writes.
-const buffer = Buffer.allocUnsafe(expectedSize);
-
-// Process in chunks to avoid blocking the event loop.
-for (let i = 0; i < items.length; i += CHUNK_SIZE) {
-    const chunk = items.slice(i, i + CHUNK_SIZE);
-    await processChunk(chunk);
-
-    // Yield control back to the event loop between chunks.
-    await setImmediate();
-}
-```
-
-### Explain Protocol, Security, and Compatibility Decisions
-
-Use inline comments for decisions that encode HTTP rules, browser behavior,
-platform limits, security posture, or compatibility with external clients.
-These comments should explain the consequence, not just restate the operation.
-
-```javascript
-// Content-Length is measured in bytes, not JavaScript characters; using
-// string length can truncate UTF-8 responses containing multi-byte characters.
-const contentLength = new Blob([ body ]).size;
-```
-
-### Flag Coordinated Change Points
-
-```javascript
-const EVENT_TYPES = {
-    USER_LOGIN: 'user:login',
-    USER_LOGOUT: 'user:logout',
-    // WARNING: When adding event types here, also update:
-    // - src/analytics/event-handlers.js
-    // - test/fixtures/events.json
-};
-```
-
-Prefer "why" comments over "what" comments. When both are obvious, do not comment.
-

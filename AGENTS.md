@@ -11,11 +11,11 @@ Use this documentation index to identify which linked documents are relevant to 
 
 **When to use this document:** Apply this guide whenever you are writing or modifying any JavaScript source file in this project. This includes:
 
-- New functions, classes, modules, or any other JavaScript code you write from scratch.
-- Edits to existing source files — match the style of the surrounding code, and correct any violations you introduce.
-- Code review: flag style violations even when not explicitly asked to.
+- New functions, classes, modules, inline code comments, or any other JavaScript code you write from scratch.
+- Edits to existing source files, including adding, updating, and improving inline code comments.
+- Code review: Fix code style violations and update and clarify inline code comments even when not explicitly asked to.
 
-**What this document provides:** The canonical JavaScript style conventions for this project — language standard, runtime boundaries, formatting rules, linting constraints, and project-specific patterns like destructuring, type detection, and private class members. Following this guide keeps code consistent with the linter and with the rest of the codebase.
+**What this document provides:** The canonical JavaScript style conventions for this project — language standard, runtime boundaries, formatting rules, linting constraints, inline code comments, and project-specific patterns like destructuring, type detection, and private class members. Following this guide keeps code consistent with the linter and with the rest of the codebase.
 
 ### Code Quality Guide
 
@@ -34,13 +34,12 @@ reviewing, or refactoring code in this project. This includes:
 
 @src/docs/code-documentation-guide.md
 
-**When to use this document:** Apply this guide whenever you are writing, reviewing, or improving JSDoc block comments or inline comments in any JavaScript source file in this project. This includes:
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or improving JSDoc block comments in any JavaScript source file in this project. This includes:
 
 - Adding documentation to new functions, classes, methods, or modules you write.
 - Reviewing or updating existing documentation for accuracy and completeness.
 - Deciding whether a given symbol *needs* documentation at all.
 - Choosing the right JSDoc tags for a given situation.
-- Writing inline comments that explain non-obvious decisions.
 
 ### Error Handling
 

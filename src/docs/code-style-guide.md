@@ -1,8 +1,6 @@
 # Code Style Guide
 
-**What this guide provides:** The canonical JavaScript style conventions for this project — language standard, runtime boundaries, formatting rules, linting constraints, and project-specific patterns like destructuring, type detection, and private class members. Following this guide keeps code consistent with the linter and with the rest of the codebase.
-
-**Linter is authoritative:** The ESLint config in `eslint.config.js` enforces many rules beyond what this guide explicitly lists. After every edit, run:
+**Linter is authoritative**: The ESLint config in `eslint.config.js` enforces the code style rules beyond what this guide explicitly includes. After every edit, run:
 
 ```shell
 node run-linter.js [filepath ...]
@@ -10,27 +8,20 @@ node run-linter.js [filepath ...]
 
 If the linter reports an error, fix it — even if it isn't covered by this document.
 
-**What this guide does NOT cover:** Detailed JSDoc conventions. For the full documentation and inline-comment guidance, see `docs/code-documentation-guide.md`.
-
 ---
 
 ## Language Standard
 
 This project uses JavaScript in the **ECMAScript 2022** standard using **ES modules** (no CommonJS, no `"use strict"`).
 
-## Runtimes
+The JavaScript code in `app/` must run on multiple platforms:
 
-### Node.js
+- Node.js
+- Deno
+- Cloudflare Workers
+- AWS Lambda
 
-Always use the `node:` prefix for built-in modules:
-
-```javascript
-import path from 'node:path';
-import fsp from 'node:fs/promises';
-import process from 'node:process';
-```
-
-Never use the `process` global. Import it explicitly.
+Therefore, it is critically important that the code in `app/` is cross platform, using modern Web Platform APIs. Never use Node, Deno, Cloudflare Worker, or AWS Lambda specific APIs for the JavaScript code in `app/`.
 
 ---
 
@@ -139,7 +130,7 @@ try {
 
 ## Private Class Members
 
-Use ES2022 `#` private fields and methods. Never use underscore prefixes:
+Use ES2022 `#` private fields and methods instead of underscore prefixes:
 
 ```javascript
 // Correct
@@ -159,7 +150,7 @@ class Foo {
 
 ## `no-undef` and Web Platform Globals
 
-Node.js exposes Web platform APIs (`URL`, `Response`, `ReadableStream`, `structuredClone`, etc.) as globals. If a file uses one of these and the linter reports `no-undef`, add the global to the `languageOptions.globals` block in `eslint.config.js`. Do not qualify it with `globalThis`:
+The target platforms for this web application expose Web platform APIs (`URL`, `Response`, `ReadableStream`, `structuredClone`, etc.) as globals. If a file uses one of these and the linter reports `no-undef`, add the global to the `languageOptions.globals` block in `eslint.config.js`. Do not qualify it with `globalThis`:
 
 ```javascript
 // eslint.config.js
@@ -195,7 +186,7 @@ Always trust the linter output. If it reports an error, fix it even if it is not
 
 ## Type Detection
 
-Use project assertion helpers instead of raw `typeof`. In Worker source code, import from `src/kixx/assertions/mod.js` using the correct relative path from the file you are editing. In Node-side test or tooling code, import the helpers from the `kixx-assert` module by its bare module name when the test/tooling file is not importing the Worker assertion module.
+In server-side code in `app/`, `plugins/`, and `kixx/`, use the Kixx assertion helpers instead of raw `typeof`. Import assertion helpers from `kixx/assertions/mod.js` using the correct relative path from the file you are editing.
 
 ```javascript
 import { isUndefined, isString } from '../../kixx/assertions/mod.js';
@@ -237,43 +228,71 @@ Choose the relative import path from the file you are editing. Do not add a new 
 
 ---
 
+
 ## Inline Code Comments
 
-This section summarizes inline comment style. For the complete guidance, see `docs/code-documentation-guide.md`.
+Use inline comments to explain intent, constraints, context, and decisions that the code cannot express clearly by itself. Be opportunistic: when you had to reason about why code belongs in its current shape, leave a short comment so the next reader does not have to rediscover that reasoning.
 
-Inline comments explain the *why* — intent, constraints, and context that the code itself cannot express.
-
-Add comments when the code seems counterintuitive or requires domain knowledge:
+Focus on why the code exists and why it does what it does, especially when it seems counterintuitive or requires domain knowledge:
 
 ```javascript
-// Increment DB counter BEFORE processing to ensure we don't
-// get stuck on the same database if we hit the time limit
+// Increment DB counter before processing to avoid getting stuck on
+// the same database if the current run hits the time limit.
 currentDb = (currentDb + 1) % totalDatabases;
 ```
 
-Do **not** add trivial comments:
+Good inline comments often capture:
+
+- why this branch exists
+- why this order matters
+- why this default is safe or required
+- why a value is cloned, frozen, normalized, or rewrapped
+- why an error is caught, translated, hidden, or allowed to propagate
+- why a simpler-looking implementation would be wrong in this runtime
+
+Prefer one or two focused lines near the decision. A useful comment does not need to justify the whole function.
+
+### Avoid Trivial Comments
+
+Bad:
 
 ```javascript
-// Bad
 user.name = 'John'; // Set the user name to John
+```
 
-// Good
+Good:
+
+```javascript
 user.name = sanitizeInput(rawName); // Remove potential XSS vectors
 ```
 
-Use guide comments to break up complex logic:
+Even when the code is readable inline comments can be useful. Readable code shows what happens; but a good comment preserves context that is not present in the syntax, tests, or local variable names.
+
+### Comment While the Context Is Fresh
+
+When adding or changing code, add inline comments at the same time you make the decision. This is especially important when the code depends on framework contracts, platform limits, HTTP semantics, request lifecycle timing, storage consistency, security posture, or compatibility with existing callers.
+
+```javascript
+// Clone before storing so later caller-side mutation cannot change request
+// routing state after middleware has started.
+this.#routes = routes.slice();
+```
+
+### Use Guide Comments to Break Up Complex Logic
+
+Use short guide comments to separate phases in longer logic when the section boundaries help readers scan intent.
 
 ```javascript
 async function processPayment(order, paymentMethod) {
-    // Validate payment details and customer eligibility
+    // Validate payment details and customer eligibility.
     await validatePaymentMethod(paymentMethod);
     await checkCustomerCredit(order.customerId);
 
-    // Calculate final amounts including taxes and fees
+    // Calculate final amounts including taxes and fees.
     const taxAmount = calculateTax(order);
     const finalAmount = order.total + taxAmount + calculateFee(paymentMethod, order.total);
 
-    // Process payment and update order status
+    // Process payment and update order status.
     const transaction = await chargePayment(paymentMethod, finalAmount);
     await updateOrderStatus(order.id, 'paid', transaction.id);
 
@@ -281,50 +300,60 @@ async function processPayment(order, paymentMethod) {
 }
 ```
 
-Document state transitions and side effects:
+### Document State Transitions and Side Effects
 
 ```javascript
 // After this call, the connection state changes to 'authenticating'
-// and subsequent messages will be queued until auth completes
+// and subsequent messages are queued until auth completes.
 await connection.startAuthentication(credentials);
 ```
 
-Use "teacher comments" for domain knowledge:
+### Use Teacher Comments for Domain Knowledge
 
 ```javascript
-// JWT exp claim uses NumericDate format (seconds since epoch)
-// JavaScript Date.now() returns milliseconds, so we divide by 1000
-const expiry = Math.floor(Date.now() / 1000) + (60 * 60 * 24); // 24 hours
+// JWT exp claim uses NumericDate format in seconds since epoch.
+// JavaScript Date.now() returns milliseconds, so divide by 1000.
+const expiry = Math.floor(Date.now() / 1000) + (60 * 60 * 24);
 ```
 
-Document workarounds and hacks:
+### Document Workarounds and Hacks
 
 ```javascript
-// Workaround: Some legacy clients send timestamps as strings
-// TODO: Remove this once all clients upgrade to v2.0+
+// Workaround: Some legacy clients send timestamps as strings.
+// TODO: Remove this once all clients upgrade to v2.
 const timestamp = typeof data.timestamp === 'string'
     ? parseInt(data.timestamp, 10)
     : data.timestamp;
 ```
 
-Explain performance or memory considerations:
+### Explain Performance or Memory Considerations
 
 ```javascript
-// Pre-allocate buffer to avoid multiple reallocations
-// during high-frequency writes (saves ~40% memory churn)
+// Pre-allocate the buffer to avoid repeated reallocations during
+// high-frequency writes.
 const buffer = Buffer.allocUnsafe(expectedSize);
 
-// Process in chunks to avoid blocking the event loop
+// Process in chunks to avoid blocking the event loop.
 for (let i = 0; i < items.length; i += CHUNK_SIZE) {
     const chunk = items.slice(i, i + CHUNK_SIZE);
     await processChunk(chunk);
 
-    // Yield control back to event loop between chunks
+    // Yield control back to the event loop between chunks.
     await setImmediate();
 }
 ```
 
-Flag coordinated change points for future readers:
+### Explain Protocol, Security, and Compatibility Decisions
+
+Use inline comments for decisions that encode HTTP rules, browser behavior, platform limits, security posture, or compatibility with external clients. These comments should explain the consequence, not just restate the operation.
+
+```javascript
+// Content-Length is measured in bytes, not JavaScript characters; using
+// string length can truncate UTF-8 responses containing multi-byte characters.
+const contentLength = new Blob([ body ]).size;
+```
+
+### Flag Coordinated Change Points
 
 ```javascript
 const EVENT_TYPES = {
@@ -332,6 +361,6 @@ const EVENT_TYPES = {
     USER_LOGOUT: 'user:logout',
     // WARNING: When adding event types here, also update:
     // - src/analytics/event-handlers.js
-    // - tests/fixtures/events.json
+    // - test/fixtures/events.json
 };
 ```
