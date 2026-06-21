@@ -42,6 +42,22 @@ reviewing, or refactoring code in this project. This includes:
 - Choosing the right JSDoc tags for a given situation.
 - Writing inline comments that explain non-obvious decisions.
 
+### Error Handling
+
+@src/docs/error-handling.md
+
+**When to use this document:** Apply this guide whenever you are writing,
+reviewing, or refactoring server-side JavaScript error handling. This includes
+throwing application errors, validating request input, asserting internal
+invariants, wrapping expected failures with `cause`, writing route error
+handlers, and deciding whether an error should propagate as unexpected.
+
+**What this document provides:** The project error-handling rules for Worker and
+Node-side server code — expected operational errors vs. unexpected programmer
+errors, which `src/kixx/errors/` class to throw, when to use assertions from
+`src/kixx/assertions/`, how `ValidationError` aggregates field errors, and how
+the HTTP router serializes expected errors.
+
 ### Unit Testing Guide
 
 @src/docs/unit-testing-guide.md
@@ -83,6 +99,19 @@ reviewing, or refactoring code in this project. This includes:
 - Choosing whether a workflow should use server-rendered HTML, links, forms, redirects, or page-specific browser JavaScript.
 
 **What this document provides:** The main presentation-layer guide for this Hypermedia Driven Application — where presentation files live, common recipes for static pages, dynamic pages, forms, and progressive enhancement, route matching behavior, middleware and request handler responsibilities, `HyperviewRequestHandler` options, form conventions, request and response object APIs, and HTML error handler guidance.
+
+### Kixx Hyperview Templating Guide
+
+@src/templates/README.md
+
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging Hyperview templates that use Kixx `{{ ... }}` syntax. This includes:
+
+- Editing page templates, base templates, partials, or templated include files.
+- Choosing interpolation, raw output, nested property access, bracket notation, sections, loops, conditionals, helpers, or partials.
+- Understanding HTML escaping, Markdown rendering, whitespace behavior, name resolution, delimiter changes, custom helpers, or template errors.
+- Working on the templating library implementation in `application/src/kixx/templating`.
+
+**What this document provides:** The Kixx template syntax and behavior reference used by Hyperview — compilation stages, supported Mustache-style features, expression resolution, section semantics, built-in helpers, Hyperview helpers, escaping rules, partial usage, helper authoring, public APIs, and error behavior.
 
 ## Linting
 
