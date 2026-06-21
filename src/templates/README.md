@@ -1,52 +1,16 @@
 # Kixx Hyperview Templating
 
-Hyperview renders server-side HTML with the Kixx templating engine in
-`application/src/kixx/templating`. Kixx uses Mustache-style `{{ ... }}` tags for
-interpolation, sections, helpers, partials, comments, and delimiter changes.
+The Kixx Hyperview plugin renders server-side HTML with the Kixx templating engine which uses Mustache-style `{{ ... }}` tags for interpolation, sections, helpers, partials, comments, and delimiter changes.
 
-The core templating engine is deliberately small. Hyperview adds three application
-helpers from `application/src/kixx/hyperview/helpers`: `formatDate`, `markup`, and
-`truncate`.
+The core templating engine is deliberately small.
 
-## Library Snapshot
+Kixx targets core Mustache behavior where it fits this project. The optional Mustache extensions `~lambdas`, `~dynamic-names`, and `~inheritance` are intentionally not supported. Values that happen to be functions are treated as values; they are not called.
 
-The templating library is a low-level dependency with two main principles:
-
-- No dependencies in the core templating engine.
-- Minimal behavior with explicit helper extensions for application logic.
-
-Environment support:
-
-| Env | Version |
-| --- | --- |
-| ECMA | `>= ES2022` |
-| Node.js | `>= 16.13.2` |
-| Deno | `>= 1.0.0` |
-
-Compilation has three public steps:
-
-1. `tokenize()` splits template source into tokens, handles dynamic delimiter changes,
-   and records standalone whitespace metadata.
-2. `buildSyntaxTree()` builds an AST for content, comments, interpolations, sections,
-   helpers, partials, delimiter changes, and raw output tags.
-3. `createRenderFunction()` compiles the AST into a render function which resolves names
-   against a context stack.
-
-Kixx targets core Mustache behavior where it fits this project. The optional Mustache
-extensions `~lambdas`, `~dynamic-names`, and `~inheritance` are intentionally not
-supported. Values that happen to be functions are treated as values; they are not called.
-
-One intentional difference from core Mustache: plain object sections iterate over the
-object's own enumerable property values. Core Mustache treats a plain object section as
-a single pushed context. Use `#with` when you want to push an object as the active
-context.
+One intentional difference from core Mustache: plain object sections iterate over the object's own enumerable property values. Core Mustache treats a plain object section as a single pushed context. Use `#with` (documented below) when you want to push an object as the active context.
 
 ## Hyperview Context
 
-Hyperview page data comes from merged `application/pages/**/page.json` files, optional
-page-local `includes`, and runtime props supplied by request handlers with
-`response.updateProps()`. The assembled data object is passed to the page template and
-then to the base template.
+Hyperview page data comes from merged `pages/**/page.json` files, optional page-local `includes` files for additional text content, and runtime props on the response object supplied by request handlers with `response.updateProps()`. The assembled data object is passed to the page template and then to the base template.
 
 Static page data:
 
@@ -138,9 +102,7 @@ Output:
 <p>by Eric B. &amp; Rakim</p>
 ```
 
-Double-mustache interpolation escapes HTML by default. A value of `null` or `undefined`
-renders as an empty string. Other non-string values are converted with `String()`, so
-rendering an object directly produces `[object Object]`. Prefer nested property access.
+Double-mustache interpolation escapes HTML by default. A value of `null` or `undefined` renders as an empty string. Other non-string values are converted with `String()`, so rendering an object directly produces `[object Object]`. Prefer nested property access.
 
 ### Nested Properties
 
@@ -168,8 +130,7 @@ const context = {
 <p>Track {{ song.stats.trackNumber }} runs {{ song.stats.duration }}.</p>
 ```
 
-If any part of a path is missing, the expression resolves to `undefined` and renders as
-an empty string.
+If any part of a path is missing, the expression resolves to `undefined` and renders as an empty string.
 
 ### Array Indexes
 
@@ -204,13 +165,11 @@ const context = {
 </figure>
 ```
 
-Direct array indexes are useful for fixed slots. Use `#each` for ordinary list
-rendering.
+Direct array indexes are useful for fixed slots. Use `#each` for ordinary list rendering.
 
 ### Bracket Notation
 
-Property names with dashes, spaces, or other characters that do not work in dot notation
-must use bracket notation.
+Property names with dashes, spaces, or other characters that do not work in dot notation must use bracket notation.
 
 ```javascript
 const context = {
@@ -235,8 +194,7 @@ const context = {
 </dl>
 ```
 
-Bracket contents are literal path segments, not JavaScript expressions. Use
-`[Content-Type]`, not `["Content-Type"]`; quotes would become part of the key.
+Bracket contents are literal path segments, not JavaScript expressions. Use `[Content-Type]`, not `["Content-Type"]`; quotes would become part of the key.
 
 ### Raw Output
 
@@ -254,9 +212,7 @@ Both forms are equivalent. Use them only for trusted or already-sanitized HTML.
 Comments render no output.
 
 ```html
-{{! A short Mustache comment }}
-
-{{!-- A single-line Kixx comment --}}
+{{!-- A single-line comment --}}
 
 {{!--
     A multi-line comment.
@@ -266,13 +222,11 @@ Comments render no output.
 
 ## Sections
 
-Data sections are Mustache sections that render from the shape of data, without
-registering a helper. A section opens with `{{#name}}` and closes with `{{/name}}`.
+Data sections are Mustache sections that render from the shape of data, without registering a helper. A section opens with `{{#name}}` and closes with `{{/name}}`.
 
 ### Array Sections
 
-An array section renders once per item. Each item is pushed onto the context stack, so
-item properties resolve first and parent values remain available.
+An array section renders once per item. Each item is pushed onto the context stack, so item properties resolve first and parent values remain available.
 
 ```javascript
 const context = {
@@ -331,9 +285,7 @@ const context = {
 
 ### Map, Set, and Object Sections
 
-Map and Set sections render once per value. Plain object sections render once per own
-enumerable property value in `Object.keys()` order. Keys are not exposed in data
-sections; use `#each` when you need keys.
+Map and Set sections render once per value. Plain object sections render once per own enumerable property value in `Object.keys()` order. Keys are not exposed in data sections; use `#each` when you need keys.
 
 ```javascript
 const context = {
@@ -363,8 +315,7 @@ Output:
 
 ### Scalar Sections
 
-A scalar value renders the section once, with the scalar pushed onto the stack. For data
-sections, `0` and `""` render once.
+A scalar value renders the section once, with the scalar pushed onto the stack. For data sections, `0` and `""` render once.
 
 ```javascript
 const context = {
@@ -407,13 +358,11 @@ const context = {
 {{/articles}}
 ```
 
-Data sections do not support `{{else}}`. Pair `{{#name}}` with `{{^name}}`, or use
-`#if`, `#unless`, or `#each` when an inline `{{else}}` branch is clearer.
+Data sections do not support `{{else}}`. Pair `{{#name}}` with `{{^name}}`, or use `#if`, `#unless`, or `#each` when an inline `{{else}}` branch is clearer.
 
 ## Falsiness and Empty Values
 
-Data sections and helpers each decide whether a value is present. The differences for
-`0`, `""`, and `{}` matter.
+Data sections and helpers each decide whether a value is present. The differences for `0`, `""`, and `{}` matter.
 
 | Value | `{{#x}}` section | `{{#if x}}` | `{{#unless x}}` | `{{#with x}}` |
 | --- | --- | --- | --- | --- |
@@ -431,15 +380,11 @@ Data sections and helpers each decide whether a value is present. The difference
 | `{}` | else | main | main | main |
 | non-empty object | main | main | else | main |
 
-For `#unless`, "main" means the helper body renders. Empty plain objects are a notable
-case: `#if {}` and `#with {}` render their main block, while data sections and
-`#unless` treat `{}` as empty.
+For `#unless`, "main" means the helper body renders. Empty plain objects are a notable case: `#if {}` and `#with {}` render their main block, while data sections and `#unless` treat `{}` as empty.
 
 ## Name Resolution
 
-Kixx resolves names against a context stack. For a dotted path, it walks up the stack to
-find the first frame with the first segment, then resolves the rest of the path directly
-on that value. If the rest of the chain breaks, the result is `undefined`.
+Kixx resolves names against a context stack. For a dotted path, it walks up the stack to find the first frame with the first segment, then resolves the rest of the path directly on that value. If the rest of the chain breaks, the result is `undefined`.
 
 ```javascript
 const context = {
@@ -473,13 +418,11 @@ Output:
 </article>
 ```
 
-Use `#with` here because a plain object data section would iterate the object's property
-values instead of pushing the object itself.
+Use `#with` here because a plain object data section would iterate the object's property values instead of pushing the object itself.
 
 ## Delimiters
 
-A set-delimiter tag changes the active delimiters from that point forward in the same
-template source.
+A set-delimiter tag changes the active delimiters from that point forward in the same template source.
 
 ```html
 {{=<% %>=}}
@@ -487,14 +430,11 @@ template source.
 <p><% page.description %></p>
 ```
 
-Delimiter changes are scoped to the source being parsed. Partials are parsed
-independently, so a parent's delimiter change does not affect a partial.
+Delimiter changes are scoped to the source being parsed. Partials are parsed independently, so a parent's delimiter change does not affect a partial.
 
 ## Whitespace
 
-Kixx follows the Mustache standalone tag rule. When a section, inverted section,
-comment, partial, or set-delimiter tag is the only non-whitespace content on its line,
-that whole line is removed from the output.
+Kixx follows the Mustache standalone tag rule. When a section, inverted section, comment, partial, or set-delimiter tag is the only non-whitespace content on its line, that whole line is removed from the output.
 
 ```html
 <ul>
@@ -506,9 +446,7 @@ that whole line is removed from the output.
 
 The `{{#items}}` and `{{/items}}` lines do not leave blank lines behind.
 
-Interpolation tags render in place and preserve surrounding whitespace. Helper
-`{{else}}` tags are not standalone-stripped; place them deliberately when exact output
-matters.
+Interpolation tags render in place and preserve surrounding whitespace. Helper `{{else}}` tags are not standalone-stripped; place them deliberately when exact output matters.
 
 ```html
 {{#ifEqual user.role "admin"}}
@@ -522,9 +460,7 @@ matters.
 
 ## Built-in Helpers
 
-Helpers are Kixx extensions. Prefer data sections for simple Mustache rendering. Use
-helpers when you need block parameters, indexes, keys, truthiness helpers, equality,
-scope changes, or custom formatting.
+Helpers are Kixx extensions. Prefer data sections for simple Mustache rendering. Use helpers when you need block parameters, indexes, keys, truthiness helpers, equality, scope changes, or custom formatting.
 
 | Helper | Type | Description |
 | --- | --- | --- |
@@ -538,10 +474,7 @@ scope changes, or custom formatting.
 
 `{{else}}` splits any block helper into primary and inverse branches.
 
-Helper calls can span multiple lines. Positional arguments are passed in order; named
-arguments such as `format="DATETIME_MED"` are collected into the helper's `options`
-object. Arguments can be paths, quoted strings, integers, booleans, `null`, or
-`undefined`.
+Helper calls can span multiple lines. Positional arguments are passed in order; named arguments such as `format="DATETIME_MED"` are collected into the helper's `options` object. Arguments can be paths, quoted strings, integers, booleans, `null`, or `undefined`.
 
 ```html
 <time datetime='{{ formatDate event.startsAt zone="America/New_York" format="ISO" }}'>
@@ -555,9 +488,7 @@ object. Arguments can be paths, quoted strings, integers, booleans, `null`, or
 
 ### each Helper
 
-`#each` iterates arrays, Maps, Sets, and plain objects with explicit block parameters.
-The first block parameter is required. Block parameter names are separated by
-whitespace, not commas.
+`#each` iterates arrays, Maps, Sets, and plain objects with explicit block parameters. The first block parameter is required. Block parameter names are separated by whitespace, not commas.
 
 ```javascript
 const context = {
@@ -804,8 +735,7 @@ const context = {
 {{/ifEqual}}{{/ifEqual}}
 ```
 
-Keep the nested `{{else}}{{#ifEqual ...}}` tags adjacent when you want switch-like
-branching without extra whitespace.
+Keep the nested `{{else}}{{#ifEqual ...}}` tags adjacent when you want switch-like branching without extra whitespace.
 
 ### with Helper
 
@@ -839,11 +769,9 @@ const context = {
 {{/with}}
 ```
 
-`#with` renders the `{{else}}` branch for falsey values, empty arrays, empty Maps, and
-empty Sets. An empty plain object renders the primary branch.
+`#with` renders the `{{else}}` branch for falsey values, empty arrays, empty Maps, and empty Sets. An empty plain object renders the primary branch.
 
-`#with` is useful before rendering a partial that expects the nested object's fields to
-be local names.
+`#with` is useful before rendering a partial that expects the nested object's fields to be local names.
 
 ```html
 {{#each cities as |city| }}
@@ -866,8 +794,7 @@ Partial `application/templates/partials/cards/city.html`:
 
 ### unescape Helper
 
-`unescape` emits a value without HTML escaping. It is equivalent to triple-mustache and
-ampersand tags, but reads as an explicit helper call.
+`unescape` emits a value without HTML escaping. It is equivalent to triple-mustache and ampersand tags, but reads as an explicit helper call.
 
 ```html
 <main>
@@ -879,8 +806,7 @@ Use it only for trusted or already-sanitized HTML.
 
 ### plusOne Helper
 
-`plusOne` adds 1 to a number or numeric string and returns a string. Non-numeric values
-return an empty string.
+`plusOne` adds 1 to a number or numeric string and returns a string. Non-numeric values return an empty string.
 
 ```javascript
 const context = {
@@ -911,9 +837,7 @@ Hyperview registers these helpers in addition to the core Kixx helpers:
 | `markup` | Inline | `helpers/markup.js` | Convert Markdown text to raw HTML with the vendored `marked` parser |
 | `truncate` | Inline | `helpers/truncate.js` | Shorten a string to a maximum character count |
 
-These helpers are available in Hyperview page templates, base templates, partials, page
-metadata mini templates, and templated `includes`. Metadata mini templates and templated
-`includes` compile without partials, so avoid `{{> partial }}` inside those fields.
+These helpers are available in Hyperview page templates, base templates, partials, page metadata mini templates, and templated `includes`. Metadata mini templates and templated `includes` compile without partials, so avoid `{{> partial }}` inside those fields.
 
 ### formatDate Helper
 
@@ -1056,8 +980,7 @@ Example output:
 </article>
 ```
 
-Empty string, `null`, and `undefined` render as empty strings. Invalid date values render
-an escaped `Invalid date ...` message.
+Empty string, `null`, and `undefined` render as empty strings. Invalid date values render an escaped `Invalid date ...` message.
 
 Format presets:
 
@@ -1141,11 +1064,9 @@ Output:
 </article>
 ```
 
-An empty string renders as an empty string. Non-string values are converted with
-`toFriendlyString()` instead of being parsed as Markdown.
+An empty string renders as an empty string. Non-string values are converted with `toFriendlyString()` instead of being parsed as Markdown.
 
-Warning: `markup` returns raw HTML, and helper return values are not escaped by Kixx.
-Only use `markup` with trusted Markdown or content that has already been sanitized.
+Warning: `markup` returns raw HTML, and helper return values are not escaped by Kixx. Only use `markup` with trusted Markdown or content that has already been sanitized.
 
 ### truncate Helper
 
@@ -1222,11 +1143,9 @@ Output:
 </article>
 ```
 
-If the string is shorter than or equal to `length`, it is returned unchanged. Falsey
-values return an empty string. Non-string values are converted with `toFriendlyString()`.
+If the string is shorter than or equal to `length`, it is returned unchanged. Falsey values return an empty string. Non-string values are converted with `toFriendlyString()`.
 
-Warning: `truncate` returns raw helper output. Do not use it directly on untrusted user
-input unless that value has already been escaped or sanitized.
+Warning: `truncate` returns raw helper output. Do not use it directly on untrusted user input unless that value has already been escaped or sanitized.
 
 ## HTML Escaping
 
@@ -1254,8 +1173,7 @@ Output:
 <div class="comment">&lt;script src=&quot;https://example.com/attack.js&quot;&gt;&lt;/script&gt;</div>
 ```
 
-Characters outside that set, including `'`, `` ` ``, and `=`, are not escaped by the
-default policy.
+Characters outside that set, including `'`, `` ` ``, and `=`, are not escaped by the default policy.
 
 Use raw output only for trusted content:
 
@@ -1265,8 +1183,7 @@ Use raw output only for trusted content:
 <div>{{ unescape trustedHtml }}</div>
 ```
 
-Helper return values are not escaped automatically, even when called with double
-mustaches. Custom helpers that emit untrusted content must escape it explicitly.
+Helper return values are not escaped automatically, even when called with double mustaches. Custom helpers that emit untrusted content must escape it explicitly.
 
 ```javascript
 import { escapeHTMLChars } from '../templating/mod.js';
@@ -1276,23 +1193,19 @@ export default function strongText(_context, _options, userInput) {
 }
 ```
 
-The `escapeHTMLChars()` utility converts `null` and `undefined` to an empty string and
-coerces other non-string values with `String()` before escaping.
+The `escapeHTMLChars()` utility converts `null` and `undefined` to an empty string and coerces other non-string values with `String()` before escaping.
 
 ## Partials
 
-Partials are reusable templates registered separately from the template that includes
-them. Include one with `{{> name }}`.
+Partials are reusable templates registered separately from the template that includes them. Include one with `{{> name }}`.
 
-In Hyperview, shared partials live under `application/templates/partials/`. A tag like
-`{{> website/styles.css }}` resolves to:
+In Hyperview, shared partials live under `application/templates/partials/`. A tag like `{{> website/styles.css }}` resolves to:
 
 ```text
 application/templates/partials/website/styles.css
 ```
 
-Base templates live under `application/templates/base-templates/`. Page templates live
-under the matching `application/pages/` directory.
+Base templates live under `application/templates/base-templates/`. Page templates live under the matching `application/pages/` directory.
 
 Base template:
 
@@ -1375,18 +1288,14 @@ Partial `application/templates/partials/cards/album.html`:
 </li>
 ```
 
-The partial inherits the current context stack. In the example above, `album` and
-`index` come from the surrounding `#each` helper, while root values like `page` and
-`site` remain reachable.
+The partial inherits the current context stack. In the example above, `album` and `index` come from the surrounding `#each` helper, while root values like `page` and `site` remain reachable.
 
 Additional partial rules:
 
 - Missing partials render as an empty string.
 - Partial names are literal. Dynamic partial names are not supported.
-- A standalone partial tag propagates its indentation to every line of the partial
-  output.
-- Partials are parsed independently, so delimiter changes in a parent do not affect
-  partial syntax.
+- A standalone partial tag propagates its indentation to every line of the partial output.
+- Partials are parsed independently, so delimiter changes in a parent do not affect partial syntax.
 
 ## Custom Helpers
 
@@ -1540,25 +1449,6 @@ API notes:
 - `helpers` is a `Map` of built-ins. Copy it with `new Map(helpers)` before adding
   custom helpers.
 - Partials are resolved at render time from the `partials` map.
-
-## Templating Library Development
-
-The standalone templating package README documents these package commands. This
-application checkout contains the templating source under `application/src/kixx/templating`;
-run these commands from a checkout that includes the templating package `package.json`.
-
-| Command | Description |
-| --- | --- |
-| `npm run benchmark` | Run the Phase 8 performance benchmark suite and write `tmp/phase8-benchmark-report.md` |
-| `npm run benchmark:quick` | Run a shorter benchmark smoke test |
-| `npm test` | Run the linter, unit/snapshot tests, and Mustache spec compliance gate |
-| `npm run spec` | Run only the Mustache spec compliance check against the checked-in baseline |
-| `npm run spec:report` | Run the spec check and regenerate `tmp/mustache-conformance-report.md` |
-| `npm run spec:update` | Re-run the spec suite and rewrite the baseline and report after intentional rendering changes |
-
-The Mustache spec suite is used as a conformance tracker. The baseline records expected
-pass, fail, or thrown outcomes for every vendored spec test so rendering behavior can be
-changed intentionally without hiding regressions.
 
 ## Errors
 

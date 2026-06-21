@@ -103,12 +103,11 @@ the HTTP router serializes expected errors.
 
 @src/templates/README.md
 
-**When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging Hyperview templates that use Kixx `{{ ... }}` syntax. This includes:
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging Hyperview templates. This includes:
 
-- Editing page templates, base templates, partials, or templated include files.
-- Choosing interpolation, raw output, nested property access, bracket notation, sections, loops, conditionals, helpers, or partials.
+- Editing any templates in `templates/` including page templates, base templates, partials, or templated include files.
+- Choosing interpolation, raw output, nested property access, bracket notation, sections, loops, conditionals, helpers, or partials in templates.
 - Understanding HTML escaping, Markdown rendering, whitespace behavior, name resolution, delimiter changes, custom helpers, or template errors.
-- Working on the templating library implementation in `application/src/kixx/templating`.
 
 **What this document provides:** The Kixx template syntax and behavior reference used by Hyperview — compilation stages, supported Mustache-style features, expression resolution, section semantics, built-in helpers, Hyperview helpers, escaping rules, partial usage, helper authoring, public APIs, and error behavior.
 
