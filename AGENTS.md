@@ -79,6 +79,7 @@ reviewing, or refactoring code in this project. This includes:
 - Adding or changing static Hyperview pages, dynamic routes, request handlers, middleware, forms, or HTML error handlers.
 - Deciding where presentation-layer changes belong in `pages/`, `templates/`, `virtual-hosts.js`, or `app/`.
 - Handling route parameters, request payloads, redirects, response props, or form-backed HTML workflows.
+- Understanding how root, ancestor, leaf, include, and runtime response props are merged into the template context.
 - Choosing whether a workflow should use server-rendered HTML, links, forms, redirects, or page-specific browser JavaScript.
 
 **What this document provides:** The main presentation-layer guide for this Hypermedia Driven Application — where presentation files live, common recipes for static pages, dynamic pages, forms, and progressive enhancement, route matching behavior, middleware and request handler responsibilities, `HyperviewRequestHandler` options, form conventions, request and response object APIs, and HTML error handler guidance.

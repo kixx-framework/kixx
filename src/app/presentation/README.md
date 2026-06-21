@@ -466,3 +466,354 @@ export default class CreateBugTicketForm {
 }
 ```
 
+## Hyperview
+
+Hyperview renders server-side HTML by combining page data from `application/pages/` with templates from `application/templates/`. This document defines the Hyperview file layout, page data contract, merge behavior, includes, metadata defaults, rendering pipeline, and optional page-data JSON response.
+
+For routing, middleware, forms, request handlers, and error handlers, see @application/docs/presentation-layer.md. For template syntax, escaping, helpers, loops, conditionals, partials, and Markdown rendering, see @application/docs/kixx-templating.md.
+
+### Hyperview File Layout
+
+Hyperview content is authored in two application directories:
+
+```text
+application/pages/
+├── page.json
+├── page.html
+└── blog/
+    ├── page.json
+    ├── page.html
+    └── hello-world/
+        ├── page.json
+        ├── page.html
+        └── intro.md
+
+application/templates/
+├── base-templates/
+│   └── website.html
+└── partials/
+    └── website/
+        └── styles.css
+```
+
+Use `application/pages/` for route-specific page assets:
+
+- `page.json` contains root or directory-level page data.
+- `page.html` is the default page template for that route.
+- Other files in the same page directory can be loaded with `includes`.
+
+Use `application/templates/` for shared template assets:
+
+- `application/templates/base-templates/` contains base templates. A `baseTemplate` value like `"website.html"` resolves to `application/templates/base-templates/website.html`.
+- `application/templates/partials/` contains shared partials. A partial include like `{{> website/styles.css }}` resolves to `application/templates/partials/website/styles.css`.
+
+Page templates are resolved from the requested page directory, not from `application/templates/`. For a request to `/blog/hello-world`, the default page template is `application/pages/blog/hello-world/page.html`. If the page data sets `"pageTemplate": "article.html"`, Hyperview loads `application/pages/blog/hello-world/article.html`.
+
+### Page Context Data
+
+When Hyperview renders a page, it loads root page data, page data for the
+requested pathname's ancestor directories, and leaf page data for the requested
+pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview
+attempts to load and merge:
+
+- `application/pages/page.json`
+- `application/pages/blog/page.json`
+- `application/pages/blog/reviews/page.json`
+- `application/pages/blog/reviews/music/page.json`
+- `application/pages/blog/reviews/music/led-zeppelin/page.json`
+
+Root and ancestor files are optional, but the final leaf `page.json` must exist or
+the request is treated as not found. More specific page data overrides earlier
+page data. Runtime response props, when present, are merged last and override
+all static page data.
+
+Use this shape as the starting point for new pages:
+
+```javascript
+const pageContextDataSchema = {
+    title: 'Hyperview Page Data Context',
+    description: 'Data object passed to page templates and then to the base template. Custom page-specific fields are allowed in addition to the defined Hyperview fields.',
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+        baseTemplate: {
+            type: 'string',
+            minLength: 1,
+            description: 'Optional base template override. This value is relative to application/templates/base-templates/. Defaults to the request handler configured base template.',
+        },
+        pageTemplate: {
+            type: 'string',
+            minLength: 1,
+            description: 'Optional page template override. This value is relative to the current page directory under application/pages/. Defaults to the request handler configured page template or "page.html".',
+        },
+        includes: {
+            type: 'object',
+            description: 'A mapping of custom page data attributes to source files in the current page directory. Included files can be used as raw text or rendered as mini templates against the assembled page data.',
+            additionalProperties: {
+                type: 'object',
+                required: [
+                    'filename',
+                ],
+                properties: {
+                    filename: {
+                        type: 'string',
+                        minLength: 1,
+                        description: 'Filename to load from the page directory.',
+                    },
+                    template: {
+                        type: 'boolean',
+                        description: 'When true, render the included file as a mini template against the assembled page data.',
+                    },
+                },
+            },
+        },
+        body: {
+            type: 'string',
+            description: 'Rendered page template HTML. This is added by the Hyperview handler and should not be set in the page data source.',
+        },
+        page: {
+            description: 'Nested page page-specific metadata, which can be extended with custom data from Response props.page',
+            type: 'object',
+            additionalProperties: true,
+            properties: {
+                title: {
+                    description: 'Human-readable page title. A plain string is used as-is. A template object is rendered against the assembled page data before the page template runs, and replaced with the resulting string.',
+                    oneOf: [
+                        {
+                            type: 'string',
+                        },
+                        {
+                            type: 'object',
+                            required: [
+                                'template',
+                            ],
+                            properties: {
+                                template: {
+                                    type: 'string',
+                                    description: 'Template string rendered against the assembled page data.',
+                                },
+                            },
+                        },
+                    ],
+                },
+                description: {
+                    description: 'Page description for metadata. A plain string is used as-is. A template object is rendered against the assembled page data before the page template runs, and replaced with the resulting string.',
+                    oneOf: [
+                        {
+                            type: 'string',
+                        },
+                        {
+                            type: 'object',
+                            required: [
+                                'template',
+                            ],
+                            properties: {
+                                template: {
+                                    type: 'string',
+                                    description: 'Template string rendered against the assembled page data.',
+                                },
+                            },
+                        },
+                    ],
+                },
+                canonical_url: {
+                    type: 'string',
+                    format: 'uri',
+                    description: 'Canonical page URL. If omitted, Hyperview hydrates this from the request URL without query string or hash.',
+                },
+                href: {
+                    type: 'string',
+                    format: 'uri',
+                    description: 'Full request URL. If omitted, Hyperview hydrates this from the request URL including query string and hash.',
+                },
+                locale: {
+                    type: 'string',
+                    description: 'BCP 47 locale string used by metadata such as Open Graph locale.',
+                    examples: [
+                        'en-US',
+                    ],
+                },
+                open_graph: {
+                    $ref: '#/$defs/openGraph',
+                },
+            },
+        }
+    },
+    $defs: {
+        openGraph: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Open Graph metadata. Missing defaults are hydrated from the page data when possible.',
+            properties: {
+                type: {
+                    type: 'string',
+                    default: 'website',
+                    examples: [
+                        'website',
+                        'article',
+                        'profile',
+                    ],
+                },
+                title: {
+                    type: 'string',
+                    description: 'Open Graph title. Defaults to the page title when omitted.',
+                },
+                description: {
+                    type: 'string',
+                    description: 'Open Graph description. Defaults to the page description when omitted.',
+                },
+                url: {
+                    type: 'string',
+                    format: 'uri',
+                    description: 'Open Graph URL. Normally the canonical page URL.',
+                },
+                locale: {
+                    type: 'string',
+                    description: 'Open Graph locale. Defaults to the page locale when omitted.',
+                    examples: [
+                        'en_US',
+                    ],
+                },
+                image: {
+                    $ref: '#/$defs/mediaObject',
+                },
+                twitterImage: {
+                    $ref: '#/$defs/mediaObject',
+                },
+            },
+        },
+        mediaObject: {
+            type: 'object',
+            additionalProperties: true,
+            required: [
+                'url',
+            ],
+            properties: {
+                url: {
+                    type: 'string',
+                    format: 'uri',
+                },
+                alt: {
+                    type: 'string',
+                },
+                width: {
+                    type: 'integer',
+                    minimum: 1,
+                },
+                height: {
+                    type: 'integer',
+                    minimum: 1,
+                },
+                type: {
+                    type: 'string',
+                    description: 'Media MIME type.',
+                    examples: [
+                        'image/jpeg',
+                        'image/png',
+                        'image/webp',
+                    ],
+                },
+            },
+        },
+    },
+};
+```
+
+Optional top-level page data fields include:
+
+- `baseTemplate`: Overrides the default base template for this page. This value is a filename relative to `application/templates/base-templates/`.
+- `pageTemplate`: Overrides the default page template filename. This value is a filename relative to the current page directory under `application/pages/`.
+- `includes`: Loads additional text files from the current page directory under `application/pages/`.
+
+Included files can be used as raw text or rendered as mini templates against the assembled page data:
+
+```json
+{
+    "includes": {
+        "intro": { "filename": "intro.md" },
+        "sidebar": { "filename": "sidebar.html", "template": true }
+    }
+}
+```
+
+When a `page` object exists, Hyperview fills several metadata defaults:
+
+- `page.canonical_url` defaults to the request URL without query string or hash.
+- `page.href` defaults to the full request URL.
+- `page.open_graph.url` defaults to `page.canonical_url`.
+- `page.open_graph.type` defaults to `website`.
+- `page.open_graph.title`, `description`, and `locale` default to the
+  corresponding `page` values.
+
+`page.title` and `page.description` each accept either a plain string or a template object. When the template object form is used, Hyperview renders the `template` string against the assembled page data and replaces the object with the resulting string before the page template runs:
+
+```json
+{
+    "page": {
+        "title": { "template": "{{ page.author }} — kixx.dev" },
+        "description": "A static description string."
+    }
+}
+```
+
+Only define the `page.open_graph.image` and `page.open_graph.twitterImage` if the specified images are present.
+
+### HTML Response Rendering
+
+The normal page response pipeline is:
+
+1. The route invokes `HyperviewRequestHandler`.
+2. Hyperview validates and normalizes the request pathname.
+3. Hyperview loads and merges page data.
+4. Hyperview renders the page template, defaulting to `page.html`.
+5. The rendered page template becomes `pageData.body`.
+6. Hyperview renders the base template with the final page data.
+7. The response is returned as `text/html; charset=utf-8`.
+
+HTML is rendered on the server with the Kixx templating system. See @application/docs/kixx-templating.md for template file structure, template syntax, partials, and helpers.
+
+A simple page template at `application/pages/blog/hello-world/page.html` might look like this:
+
+```html
+<article>
+    <h1>{{ page.title }}</h1>
+    <p class="article-description">{{ page.description }}</p>
+
+    <div class="article-content">
+        {{!-- The "post" variable could come from an includes file --}}
+        {{markup post }}
+    </div>
+</article>
+```
+
+A simple base template at `application/templates/base-templates/website.html` might look like this:
+
+```html
+<!doctype html>
+<html lang="en-US">
+    <head>
+        {{> html-header.html }}
+        <style type="text/css">
+            {{> styles.css }}
+        </style>
+    </head>
+    <body>
+        <!-- START Main Content Container -->
+        <div>{{unescape body }}</div>
+    </body>
+</html>
+```
+
+- The "html-header.html" partial maps to `application/templates/partials/html-header.html`
+- The "styles.css" partial maps to `application/templates/partials/styles.css`
+
+### Hyperview Page-Data JSON Response
+
+Hyperview can return the assembled page data as JSON when JSON responses are enabled for the route. A request is considered a JSON request when either:
+
+- the pathname ends in `.json`; or
+- the `Accept` header includes `application/json`.
+
+This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data, but it is not the contract for application API endpoints.
+
+
