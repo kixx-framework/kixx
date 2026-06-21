@@ -70,6 +70,19 @@ reviewing, or refactoring code in this project. This includes:
 
 **What this document provides:** The Transaction Script pattern used for domain logic — file and naming conventions, function signatures for read and write scripts, how middleware calls Transaction Scripts, how Forms feed write workflows, data access via Collections, calling external services through registered gateways, domain error rules, storage-error translation with `cause`, and complete annotated examples.
 
+### Presentation Layer Guide
+
+@src/app/presentation/README.md
+
+**When to use this document:** Apply this guide whenever you are adding, modifying, or reviewing application web presentation behavior. This includes:
+
+- Adding or changing static Hyperview pages, dynamic routes, request handlers, middleware, forms, or HTML error handlers.
+- Deciding where presentation-layer changes belong in `pages/`, `templates/`, `virtual-hosts.js`, or `app/`.
+- Handling route parameters, request payloads, redirects, response props, or form-backed HTML workflows.
+- Choosing whether a workflow should use server-rendered HTML, links, forms, redirects, or page-specific browser JavaScript.
+
+**What this document provides:** The main presentation-layer guide for this Hypermedia Driven Application — where presentation files live, common recipes for static pages, dynamic pages, forms, and progressive enhancement, route matching behavior, middleware and request handler responsibilities, `HyperviewRequestHandler` options, form conventions, request and response object APIs, and HTML error handler guidance.
+
 ## Linting
 
 Linting is configured in `./eslint.config.js`.
