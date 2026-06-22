@@ -7,6 +7,25 @@ export default [
         hostname: 'localhost',
         routes: [
             {
+                pattern: '/admin',
+                name: 'admin-panel',
+                routes: [
+                    {
+                        pattern: '/style-guide',
+                        name: 'style-guide',
+                        targets: [
+                            {
+                                name: 'render-style-guide-page',
+                                methods: [ 'GET', 'HEAD' ],
+                                requestHandlers: [
+                                    HyperviewStaticPageHandler(),
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
                 pattern: '*',
                 name: 'hyperview-static-catch-all',
                 targets: [

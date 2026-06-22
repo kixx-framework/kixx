@@ -6,8 +6,6 @@ import {
 } from 'kixx-assert';
 
 import HttpTarget from '../../../src/kixx/http-router/http-target.js';
-import { HTTP_METHODS } from '../../../src/kixx/utils/http.js';
-
 
 function makeTarget(overrides) {
     return new HttpTarget(Object.assign({
@@ -428,7 +426,8 @@ describe('HttpTarget', ({ describe }) => {
                 { name: 'all', methods: '*', requestHandlers: [ () => {} ] },
             );
 
-            assertEqual(HTTP_METHODS.join(','), target.allowedMethods.join(','));
+            const httpMethods = 'GET HEAD POST PUT PATCH DELETE'.split(' ');
+            assertEqual(httpMethods.join(','), target.allowedMethods.join(','));
         });
 
         it('assembles middleware as inbound, then handlers, then outbound', async () => {
