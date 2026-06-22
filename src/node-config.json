@@ -18,6 +18,9 @@
             },
             "TEMPLATE_FILE_STORE": {
                 "directory": "./templates"
+            },
+            "STATIC_FILE_STORE": {
+                "directory": "./public"
             }
         },
         "staging": {
@@ -36,6 +39,9 @@
             },
             "TEMPLATE_FILE_STORE": {
                 "directory": "./templates"
+            },
+            "STATIC_FILE_STORE": {
+                "directory": "./public"
             }
         },
         "production": {
@@ -54,6 +60,9 @@
             },
             "TEMPLATE_FILE_STORE": {
                 "directory": "./templates"
+            },
+            "STATIC_FILE_STORE": {
+                "directory": "./public"
             }
         }
     }
