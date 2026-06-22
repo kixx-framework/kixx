@@ -1,0 +1,123 @@
+<header class="content-section__header">
+    <h2>Design Aesthetic</h2>
+    <p>The design direction for the Kixx admin panel.</p>
+</header>
+
+<div class="doc-prose">
+    <p class="type-body-lg">This brief sets the design direction for the Kixx admin panel: <strong>Modern Humanist Minimalism</strong>. The goal is a digital environment that feels like a <strong>&ldquo;Global Digital Park&rdquo;</strong> &mdash; highly organised, open to everyone, and teeming with human expression. The design stays &ldquo;invisible&rdquo; enough to let the content shine, yet &ldquo;bold&rdquo; enough to signal quality and trust.</p>
+
+    <p>Everything below is intent, not implementation. The <a href="#colors">Colors</a>, <a href="#typography">Typography</a>, and component pages are where these principles harden into tokens and classes; this page is the why behind them.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Core design pillars</h3>
+<p class="doc-lede">Three commitments the whole system answers to. Every smaller decision &mdash; a radius, a weight, a margin &mdash; should trace back to one of them.</p>
+<div class="card-gallery grid-auto">
+    <div class="card card--accent-primary flow">
+        <h4 class="type-h4">Radical clarity</h4>
+        <p class="type-body-sm">Information is tiered with an aggressive hierarchy. A user should never wonder where to find a resource or its documentation.</p>
+    </div>
+    <div class="card card--accent-secondary flow">
+        <h4 class="type-h4">Open vitality</h4>
+        <p class="type-body-sm">Avoid the &ldquo;stuffy&rdquo; feel of traditional open-source tooling. High-energy colour and bold layout keep the surface alive without shouting.</p>
+    </div>
+    <div class="card flow">
+        <h4 class="type-h4">Structural integrity</h4>
+        <p class="type-body-sm">A clean, modular grid reflects the stability of the framework. It should feel dependable and orderly &mdash; softened corners and generous spacing keep it from turning rigid or cold.</p>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Visual language</h3>
+<p class="doc-lede">How the pillars show up on screen: type, colour, icons, and illustration.</p>
+<div class="doc-prose">
+    <h4 class="type-h4">Typography</h4>
+    <ul>
+        <li><strong>Primary typeface</strong> &mdash; a geometric or humanist sans-serif</li>
+        <li><strong>Styling</strong> &mdash; heavy weights for hero headers to create impact; generous line-height (1.5+) for body copy to keep it accessible and breathable.</li>
+        <li><strong>Direction</strong> &mdash; typography is the primary design element. Denote importance with scale, not decoration.</li>
+    </ul>
+
+    <h4 class="type-h4">Colour palette</h4>
+    <ul>
+        <li><strong>Anchor colours</strong> &mdash; professional black and white provide the foundation.</li>
+        <li><strong>Action palette</strong> &mdash; high-contrast accents (vibrant blue, magenta, and soft yellow).</li>
+        <li><strong>Application</strong> &mdash; large blocks of colour mark section breaks, giving long-form content a modular rhythm.</li>
+    </ul>
+
+    <h4 class="type-h4">Iconography</h4>
+    <p>Icons are plain, legible, and functional. A slight rounded quality is welcome, but never whimsical &mdash; use icons to clarify structure, not to decorate every line.</p>
+
+    <h4 class="type-h4">Illustration</h4>
+    <p>Illustration is small, simple, and diagrammatic. It should feel like it came from a thoughtful manual, not a brand-agency moodboard.</p>
+</div>
+<div class="guidelines grid-auto">
+    <div class="card card--accent-secondary guideline guideline--do">
+        <p class="type-label guideline__label">Good directions</p>
+        <ul>
+            <li>Simple line drawings.</li>
+            <li>Small object illustrations.</li>
+            <li>Browser-window sketches.</li>
+            <li>Tool-like icons.</li>
+            <li>Notebook-style diagrams.</li>
+            <li>Practical visual metaphors.</li>
+        </ul>
+    </div>
+    <div class="card card--accent-primary guideline guideline--dont">
+        <p class="type-label guideline__label">Avoid</p>
+        <ul>
+            <li>Glossy 3D artifacts.</li>
+            <li>AI-generated people.</li>
+            <li>Corporate character illustrations.</li>
+            <li>Fantasy landscapes.</li>
+            <li>Aggressive retro pixel art.</li>
+            <li>Overly cute cartoons.</li>
+        </ul>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">UI &amp; interaction</h3>
+<p class="doc-lede">The feel of the controls themselves &mdash; shapes, lines, and space.</p>
+<div class="doc-prose">
+    <ul>
+        <li><strong>Buttons</strong> &mdash; flat, fully-rounded &ldquo;pill&rdquo; shapes with bold labels. The rounded form is a signature of the system: friendly and approachable, never sharp. High-contrast hover states (e.g. magenta to black) give clear feedback.</li>
+        <li><strong>Corners &amp; radius</strong> &mdash; soften shapes with a consistent corner radius. Buttons and chips are full pills; cards, inputs, and surfaces carry a gentle, even radius. Rounding is a core part of the visual language, not an afterthought &mdash; define a small radius scale and apply it everywhere a corner meets, so nothing reads as hard-edged.</li>
+        <li><strong>Borders &amp; lines</strong> &mdash; thin, 1px lines separate grid modules. This keeps the surface clean and modular &mdash; structure you can read at a glance, without feeling severe.</li>
+        <li><strong>Space</strong> &mdash; embrace macro white space. Large margins between sections reduce cognitive load and make dense information feel manageable.</li>
+        <li><strong>Forms &amp; inputs</strong> &mdash; input areas feel plain and trustworthy: easy to read, easy to tap on mobile, and visually obvious.</li>
+    </ul>
+</div>
+<div class="callout">
+    <div class="callout__body">
+        <p class="type-label">The tone</p>
+        <p>UI elements should communicate that the user is interacting with a community project, not entering a conversion funnel.</p>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Functional requirements</h3>
+<p class="doc-lede">The non-negotiables every screen has to honour, regardless of styling.</p>
+<div class="doc-prose">
+    <ul>
+        <li><strong>Responsiveness</strong> &mdash; mobile-first design. The modular grid must be fluid; on mobile, collage elements stack into a clean, vertical stream of information.</li>
+        <li><strong>Dark theme</strong> &mdash; ship both a dark and a light theme. Follow the system default, but provide a sticky user switch.</li>
+        <li><strong>Accessibility</strong> &mdash; colour-contrast ratios should meet WCAG AA.</li>
+    </ul>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Inclusivity</h3>
+<p class="doc-lede">The admin panel should avoid the gendered defaults common in developer tooling, without overcorrecting into something that feels soft or infantilising.</p>
+<div class="doc-prose">
+    <p>Steer clear of:</p>
+    <ul>
+        <li>Aggressive hacker aesthetics.</li>
+        <li>Militarised language in visuals.</li>
+        <li>Dark-only terminal culture.</li>
+        <li>Hyper-competitive startup energy.</li>
+        <li>Overly masculine colour and imagery conventions.</li>
+    </ul>
+    <p>The design should feel equally appropriate for a hobbyist, teacher, small-business owner, scientist, artist, nonprofit operator, or programmer.</p>
+</div>
+<div class="callout">
+    <div class="callout__body">
+        <p class="type-label">The goal</p>
+        <p><strong>Welcoming competence.</strong> Present enough to feel capable and trustworthy, warm enough that nobody feels like they wandered into the wrong room.</p>
+    </div>
+</div>
