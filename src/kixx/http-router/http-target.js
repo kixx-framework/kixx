@@ -8,7 +8,8 @@ import {
     assertNonEmptyString,
 } from '../assertions/mod.js';
 
-import { HTTP_METHODS } from '../utils/http.js';
+
+const HTTP_METHODS = 'GET HEAD POST PUT PATCH DELETE'.split(' ');
 
 
 /**
