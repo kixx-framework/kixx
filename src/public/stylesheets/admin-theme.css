@@ -1,0 +1,971 @@
+/* -----------------------------------------------------------------------------
+    Design tokens
+----------------------------------------------------------------------------- */
+
+:root {
+    color-scheme: light dark;
+
+    /* =========================================================================
+       COLOR — a three-tier token system: reference -> semantic -> component.
+
+       References flow ONE direction only:
+           component  ->  semantic  ->  reference (palette)
+       A component RULE never names a raw --palette-* token or a literal colour;
+       it reads a semantic --color-* token (or a component token built from one).
+       Only the blocks below resolve the palette into roles. The Colors section
+       of the guide documents the full contract.
+       ========================================================================= */
+
+    /* --- Tier 1 · Reference palette ----------------------------------------
+       Raw, theme-agnostic values. The ONLY place literal colours may live;
+       nothing outside this block should write an hsl()/hex literal. */
+    --palette-white: hsl(0 0% 100%);
+    --palette-black: hsl(0 0% 0%);
+    --palette-cyan: hsl(186 100% 50%);
+    --palette-cyan-vivid: hsl(190 100% 50%);    /* light-mode secondary accent */
+    --palette-blue: hsl(208 100% 38%);          /* focus ring — light mode     */
+    --palette-magenta: hsl(330 100% 67%);
+    --palette-yellow: hsl(54 100% 50%);
+    --palette-highlight: hsl(60 100% 60%);      /* text selection              */
+    /* Status — a functional family, distinct from the brand accents above.
+       Each danger/warning role carries a light and a dark value so the mark
+       (bar, icon, text) keeps contrast on either ground. Warning is a deep
+       amber on light surfaces — brand yellow is too light to read there — and
+       the brand yellow itself on dark. Danger is a deep red on white, a
+       brighter red on black. */
+    --palette-red: hsl(353 74% 44%);            /* danger — light mode         */
+    --palette-red-bright: hsl(353 90% 68%);     /* danger — dark mode          */
+    --palette-amber: hsl(20 100% 50%);           /* warning — light mode        */
+    /* Neutral ramp — structural greys, light (100) to dark (900). */
+    --palette-gray-100: hsl(0 0% 96%);
+    --palette-gray-400: hsl(0 0% 64%);
+    --palette-gray-700: hsl(0 0% 38%);
+    --palette-gray-900: hsl(0 0% 10%);
+
+    /* --- Tier 2 · Semantic (system) ----------------------------------------
+       Role + theme aware, resolved FROM the palette. This is what component
+       rules consume; a rule should never reach past this layer to a palette
+       token or a literal. */
+    /* Brand accents — read as text / line / fill. */
+    --color-ink-primary: var(--palette-magenta);
+    --color-ink-secondary: light-dark(var(--palette-cyan-vivid), var(--palette-cyan));
+    /* Structure — black/white do the structural work. */
+    --color-ink: light-dark(var(--palette-black), var(--palette-white));
+    --color-ink-muted: light-dark(var(--palette-gray-700), var(--palette-gray-400));
+    --color-ink-on-accent: var(--palette-black);  /* ink/icon on a bright brand fill, any theme */
+    --color-bg: light-dark(var(--palette-white), var(--palette-black));
+    --color-surface-sunken: light-dark(var(--palette-gray-100), var(--palette-gray-900)); /* inset / recessed panels */
+    --color-rule: light-dark(var(--palette-black), var(--palette-white));
+    --color-ink-link: light-dark(var(--color-ink-primary), var(--color-ink-secondary));
+    --color-highlight: var(--palette-highlight);
+    --color-ink-highlight: var(--palette-black);  /* ink on the selection highlight */
+    /* Focus is its own system signal, not a brand accent: a cool blue, theme-
+       aware so it clears 3:1 (WCAG 1.4.11) on either ground — a deep blue on
+       light, the bright cyan on dark. Off magenta deliberately, so the ring
+       neither clashes with the red error border (adjacent warm hues) nor
+       vanishes against the magenta primary button. */
+    --color-focus-outline: light-dark(var(--palette-blue), var(--palette-cyan));
+    /* Status roles — kept off the brand accents so "wrong" never wears the same
+       colour as "primary action" or "focused". Both read as a foreground mark
+       (text / border / icon) and are theme-aware so they keep contrast on light
+       and dark surfaces alike. Warning resolves to amber on light, brand yellow
+       on dark; for a yellow FILL, reach for --palette-yellow directly (as the
+       tertiary button does) — that's decoration, not a status signal. */
+    --color-status-danger: light-dark(var(--palette-red), var(--palette-red-bright));
+    --color-status-warning: light-dark(var(--palette-amber), var(--palette-yellow));
+
+    /* --- Tier 3 · Component -------------------------------------------------
+       Scoped tokens, resolved here so component rules stay declarative. (More
+       component tokens live next to their component, e.g. --card-accent on
+       .card.) Brand fills resolve straight from the palette because the fill IS
+       that brand colour; everything else routes through Tier 2. */
+    --color-button-bg-primary: var(--palette-magenta);
+    --color-button-border-primary: light-dark(var(--palette-black), var(--color-button-bg-primary));
+    --color-button-bg-secondary: var(--palette-cyan);
+    --color-button-border-secondary: light-dark(var(--palette-black), var(--color-button-bg-secondary));
+    --color-button-bg-tertiary: var(--palette-yellow);
+    --color-button-border-tertiary: light-dark(var(--palette-black), var(--color-button-bg-tertiary));
+
+    /* fields */
+    --field-border-width: 2px;
+    --color-field-border: var(--color-ink-muted);
+    --color-field-border-active: var(--color-ink);
+    --color-field-border-error: var(--color-status-danger);
+    --color-field-bg: var(--color-surface-sunken);
+
+    /* borders */
+    --button-border-width: 2px;
+    --rule-width: 3px;
+    --hairline-width: 1px;
+    --accent-border-width: 2px; /* coloured accent border — cards & callouts */
+
+    /* Corner radius — the system is soft, not hard-edged. A small, even scale:
+       a gentle radius on surfaces and controls, full pills for buttons and
+       chips. Applied everywhere a corner meets so nothing reads as sharp. */
+    --radius-sm: 0.25rem;   /* inline marks: code, kbd, small chips         */
+    --radius-md: 0.5rem;    /* surfaces & controls: cards, inputs, callouts  */
+    --radius-pill: 999px;   /* fully-rounded: buttons, pills, icon controls  */
+
+    /* Spacing & layout — a clean, modular grid. */
+    --space-page-gutter: clamp(1.25rem, 4vw, 3rem);
+    --space-section-gap: clamp(2.5rem, 6vw, 4.5rem);
+    --sidebar-width: clamp(13rem, 22vw, 17rem);
+    /* Comfortable reading measure (~65 characters). Shared by section ledes and
+       body prose so a deck never wraps tighter than the copy beneath it. */
+    --measure-prose: 65ch;
+
+    /* Vertical spacing scale — fixed rem steps, consumed by the .flow primitive
+       (and anywhere a gap is needed). Keeps rhythm on a predictable ladder. */
+    --space-3xs: 0.25rem;
+    --space-2xs: 0.5rem;
+    --space-xs: 0.75rem;
+    --space-sm: 1rem;
+    --space-md: 1.5rem;
+    --space-lg: 2rem;
+    --space-xl: 3rem;
+    --space-2xl: 4.5rem;
+
+    /* Typography */
+    --font-display: "DM Sans", ui-sans-serif, Helvetica, Arial, Roboto, sans-serif;
+    --font-body: "Helvetica Neue", Helvetica, ui-sans-serif, Arial, Roboto, sans-serif;
+    --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+    --font-wordmark: "Lexend Deca", sans-serif;
+
+    /* -------------------------------------------------------------------------
+        Type scale — fixed rem steps. See the Typography section of the guide
+        for the full rationale. Short version: an admin panel has no hero
+        moments, headings sit inside a capped content column, and fixed rem
+        honors browser zoom (WCAG 1.4.4) where fluid `vw` units do not. So we
+        never use clamp() for type here — if a size is ever too big on mobile,
+        add a discrete breakpoint step, not continuous scaling.
+
+        Two registers carry the system:
+          - Expressive (DM Sans)    : structural headings h1-h4
+          - Functional (Helvetica)  : reading + UI text, body-lg ... caption
+        Plus Label (mono, uppercase) and Code (mono).
+    ------------------------------------------------------------------------- */
+    --text-h1: 2.25rem;       /* 36px - page title (one per screen)       */
+    --text-h2: 1.75rem;       /* 28px - section title                     */
+    --text-h3: 1.375rem;      /* 22px - subsection / card heading         */
+    --text-h4: 1.125rem;      /* 18px - minor heading / form field group  */
+    --text-body-lg: 1.125rem; /* 18px - long-form reading copy            */
+    --text-body: 1rem;        /* 16px - default UI text                   */
+    --text-body-sm: 0.9375rem; /* 15px - dense rows, helper text, cells   */
+    --text-caption: 0.8125rem; /* 13px - captions, metadata, timestamps  */
+    --text-label: 0.75rem;    /* 12px - uppercase mono labels / overlines */
+
+    /* Line-height is ROLE-DEPENDENT, never one global value: tight for big
+       headings, open for reading copy (the brief asks for 1.5+), compact for
+       dense UI where vertical space is precious. */
+    --leading-tight: 1.15;    /* large headings (h1, h2)        */
+    --leading-snug: 1.25;     /* smaller headings (h3, h4)      */
+    --leading-normal: 1.4;    /* dense UI text, labels, caption */
+    --leading-body: 1.45;     /* default body                   */
+    --leading-relaxed: 1.55;  /* long-form reading copy         */
+
+    /* Tracking. DM Sans tightens nicely at large display sizes; uppercased mono
+       labels open up for legibility. Everything else stays at 0 (the default). */
+    --tracking-tight: -0.01em; /* large headings   */
+    --tracking-label: 0.1em;   /* uppercase labels */
+
+    /* Weight ramp (DM Sans is variable; Helvetica maps to the nearest face). */
+    --weight-regular: 400;
+    --weight-medium: 500;   /* available; used sparingly */
+    --weight-semibold: 600;
+    --weight-bold: 700;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
+
+/* -----------------------------------------------------------------------------
+    Reset: Influenced by the Josh Comeau:
+        https://www.joshwcomeau.com/css/custom-css-reset/
+----------------------------------------------------------------------------- */
+
+html {
+    /* Sets the rm size for the rest of the styles */
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-body);
+    /* Fixed base, not fluid: the UI baseline is a known quantity. Reading-heavy
+       areas opt up to .type-body-lg; dense areas opt down to .type-body-sm. */
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    color: var(--color-ink);
+    background: var(--color-bg);
+}
+
+:root[data-theme="dark"] body {
+    /* Improve text rendering on dark backgrounds */
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Improve media defaults */
+img, picture, video, canvas, svg {
+    display: block;
+    max-width: 100%;
+}
+/* Inherit fonts for form controls */
+input, button, textarea, select {
+    font: inherit;
+}
+/* Avoid text overflows */
+p, h1, h2, h3, h4, h5, h6 {
+    overflow-wrap: break-word;
+    margin: 0;
+}
+/* Lists and block elements carry no default block margin; vertical rhythm comes
+   from .flow / owls. Reset at ELEMENT specificity so a .flow owl (class
+   specificity) always outranks it for flow children — a class-level `margin: 0`
+   would tie the owl and, loaded later, silently cancel the gap. */
+ul, ol, dl, pre {
+    margin-block: 0;
+}
+/* Improve line wrapping */
+p {
+    text-wrap: pretty;
+}
+h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+    font-family: var(--font-display);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+button {
+    cursor: pointer;
+    letter-spacing: 0;
+}
+
+a {
+    /* Ink text for max legibility; brand color carries in the underline only. */
+    color: var(--color-ink);
+    text-decoration-line: underline;
+    text-decoration-color: var(--color-ink-link);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.15em;
+    transition: color 200ms ease, text-decoration-color 200ms ease;
+}
+a:hover {
+    color: var(--color-ink-link);
+}
+
+::selection {
+    background: var(--color-highlight);
+    color: var(--color-ink-highlight);
+}
+
+/* -----------------------------------------------------------------------------
+    Typography roles
+
+    Semantic elements (h1-h4, p, code) already render at the right role, so plain
+    HTML is correct with no classes. The matching .type-* utility classes apply
+    the SAME role to ANY element - reach for them only when the visual size must
+    differ from the semantic level (e.g. a <p> that should read as a label, or an
+    <h2> that should look like an h3).
+
+    Golden rule: choose a heading level for document STRUCTURE, then, if the size
+    is wrong, restyle it with a .type-* class. Never pick a level for its size.
+----------------------------------------------------------------------------- */
+
+/* Expressive register - structural headings (DM Sans, heavy, tight). */
+h1, .type-h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-h1);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-tight);
+}
+h2, .type-h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-h2);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+}
+h3, .type-h3 {
+    font-family: var(--font-display);
+    font-size: var(--text-h3);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-snug);
+}
+h4, .type-h4 {
+    font-family: var(--font-display);
+    font-size: var(--text-h4);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-snug);
+}
+
+/* Functional register - reading & UI text (Helvetica Neue). */
+.type-body-lg {
+    font-family: var(--font-body);
+    font-size: var(--text-body-lg);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-relaxed); /* 1.55 - breathing room for paragraphs */
+}
+.type-body {
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-body);
+}
+.type-body-sm {
+    font-family: var(--font-body);
+    font-size: var(--text-body-sm);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-normal);
+}
+.type-caption {
+    font-family: var(--font-body);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-muted);
+}
+
+/* Label / overline - mono + uppercase. The theme's signature for small
+   functional text; .button and .site-nav__title follow the same convention. */
+.type-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-normal);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+}
+
+/* Inline code - mono, sized in em so it tracks whatever text it sits in. */
+code, .type-code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-sunken);
+}
+
+/* Keyboard key — mono, slightly bordered, surfaced. */
+kbd {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 0.1em 0.4em;
+    border: 1px solid var(--color-ink-muted);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-sunken);
+}
+
+/* -----------------------------------------------------------------------------
+    Flow — vertical rhythm primitive
+
+    The Stack / "flow" idea (Andy Bell / Every Layout / Piccalilli). Add .flow to
+    any container and its DIRECT children get consistent vertical spacing from a
+    single owl selector. Spacing is a relationship BETWEEN siblings, so it lives
+    on the container, not on per-element classes.
+
+    Tune a container's rhythm by setting --flow-space on it. An individual child
+    can ask for more (or less) room above itself by scoping its OWN --flow-space,
+    because the margin lands on the second sibling - that's how a heading earns
+    extra space above with no bespoke rule.
+
+    Caveat: don't nest .flow directly inside .flow. The inner container would
+    re-scope --flow-space and steal its own top margin from the outer flow. Give
+    the inner container a plain owl instead (see .doc-prose).
+----------------------------------------------------------------------------- */
+.flow {
+    --flow-space: var(--space-sm);
+}
+.flow > * + * {
+    margin-top: var(--flow-space);
+}
+/* Headings request more space above; :where() keeps specificity at zero so a
+   context can bump it further (see .doc-section-heading). */
+.flow > :where(h2, h3, h4) {
+    --flow-space: var(--space-lg);
+}
+
+/* -----------------------------------------------------------------------------
+    Layout primitives
+
+    Composable, single-purpose layout utilities in the Every Layout tradition
+    (Heydon Pickering / Andy Bell). Each is one class tuned by its own scoped
+    custom properties, which default to the design tokens — set a property on the
+    element (or an ancestor) to adjust a single axis without writing bespoke CSS.
+
+    The family:
+      .flow         vertical stack with rhythm between siblings (above)
+      .cluster      horizontal group that wraps; gap-driven
+      .grid-auto    auto-fit responsive grid, tracks never below --grid-min
+      .switcher     row that flips to a column below a width threshold
+      .with-sidebar fixed-ish sidebar beside fluid content; wraps when tight
+      .center       caps a column to a measure and centers it
+
+    Composition over bespoke layout: reach for these before writing a new
+    display:flex / display:grid rule. Most page structure is a nesting of the six.
+----------------------------------------------------------------------------- */
+
+/* Cluster — horizontal group that wraps; gap-driven. Toolbars, button rows,
+   tag/chip lists, the header controls. Tune alignment with --cluster-align /
+   --cluster-justify. */
+.cluster {
+    --cluster-space: var(--space-sm);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cluster-space);
+    align-items: var(--cluster-align, center);
+    justify-content: var(--cluster-justify, flex-start);
+}
+
+/* Grid — auto-fit responsive grid. Tracks never drop below --grid-min, and the
+   min() guard stops a single track from overflowing a viewport narrower than
+   --grid-min. */
+.grid-auto {
+    --grid-min: 14rem;
+    --grid-space: var(--space-md);
+    display: grid;
+    gap: var(--grid-space);
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--grid-min), 100%), 1fr));
+}
+
+/* Switcher — a row that flips to a single column once the container is narrower
+   than --switcher-threshold. No media query: below the threshold the flex-basis
+   calc goes negative, forcing each child onto its own row. */
+.switcher {
+    --switcher-threshold: 30rem;
+    --switcher-space: var(--space-sm);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--switcher-space);
+}
+.switcher > * {
+    flex-grow: 1;
+    flex-basis: calc((var(--switcher-threshold) - 100%) * 999);
+}
+
+/* Sidebar — a fixed-ish sidebar (--sidebar-width) beside fluid content. The
+   content holds at least --sidebar-content-min of the width; when it can't, the
+   pair wraps and both go full-width. The app shell (.site-layout) is built on
+   this. Gap defaults to 0 so a divider rule can do the visible separating. */
+.with-sidebar {
+    --sidebar-space: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sidebar-space);
+}
+.with-sidebar > :first-child {
+    flex-basis: var(--sidebar-width);
+    flex-grow: 1;
+}
+.with-sidebar > :last-child {
+    flex-basis: 0;
+    flex-grow: 999;
+    min-inline-size: var(--sidebar-content-min, 60%);
+}
+
+/* Center — caps a column to a measure and centers it horizontally. Defaults to
+   the shared prose measure; raise --center-max for wider columns. */
+.center {
+    --center-max: var(--measure-prose);
+    max-inline-size: var(--center-max);
+    margin-inline: auto;
+}
+
+/* -----------------------------------------------------------------------------
+    Specialized Components
+----------------------------------------------------------------------------- */
+
+.material-symbols-rounded {
+    direction: ltr;
+    display: inline-block;
+    flex: 0 0 auto;
+    font-family: "Material Symbols Rounded";
+    font-feature-settings: "liga";
+    font-size: 1.35em;
+    font-style: normal;
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    font-weight: 500;
+    letter-spacing: normal;
+    line-height: 1;
+    text-transform: none;
+    white-space: nowrap;
+    word-wrap: normal;
+}
+
+.kixx-wordmark {
+    font-family: var(--font-wordmark);
+    display: inline-flex;
+    font-size: 3em;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+}
+a.kixx-wordmark {
+    color: var(--color-ink);
+}
+.kixx-wordmark__slash-1 {
+    font-size: 0.88em;
+    font-weight: 900;
+    letter-spacing: -0.25em;
+    color: var(--color-ink-secondary);
+}
+.kixx-wordmark__slash-2 {
+    font-size: 0.88em;
+    font-weight: 900;
+    color: var(--color-ink-primary);
+}
+.kixx-wordmark__kixx {
+    margin-left: 0.2em;
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2em;
+    height: 2em;
+    border-width: 0;
+    border-radius: var(--radius-pill);
+    color: var(--color-ink);
+    background: transparent;
+    transition: background-color 200ms ease, color 200ms ease;
+    font-size: clamp(1em, 3vw, 1.25em);
+}
+.theme-toggle:hover {
+    background: var(--color-ink);
+    color: var(--color-bg);
+}
+.theme-toggle:focus-visible {
+    outline: 3px solid var(--color-ink-primary);
+    outline-offset: 3px;
+}
+
+/* -----------------------------------------------------------------------------
+    Buttons
+----------------------------------------------------------------------------- */
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+    padding-inline: 1.25rem;
+    border: var(--button-border-width) solid var(--color-ink);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-ink);
+    background: var(--color-bg);
+    text-decoration: none;
+    transition: background-color 200ms ease, color 200ms ease, transform 100ms ease;
+}
+.button:not(:disabled):hover {
+    /* Plain (outline) buttons invert to a solid ink fill. */
+    background: var(--color-ink);
+    color: var(--color-bg);
+    border-color: var(--color-ink);
+}
+.button:focus-visible {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: 2px;
+}
+/* Brand variants change only the resting fill; on hover they fall through to
+   the plain .button:hover above and invert to a solid ink fill, so every
+   button shares one hover treatment. */
+.button--primary {
+    background: var(--color-button-bg-primary);
+    border-color: var(--color-button-border-primary);
+    color: var(--color-ink-on-accent);
+}
+.button--secondary {
+    background: var(--color-button-bg-secondary);
+    border-color: var(--color-button-border-secondary);
+    color: var(--color-ink-on-accent);
+}
+.button--tertiary {
+    background: var(--color-button-bg-tertiary);
+    border-color: var(--color-button-border-tertiary);
+    color: var(--color-ink-on-accent);
+}
+.button:active {
+    /* Tactile press — a 1px nudge; theme-agnostic, works on every variant. */
+    transform: translateY(1px);
+}
+.button:disabled {
+    /* Neutralise all variants — brand fill and ink border both give way to grey
+       so a disabled button reads as inactive, not as a muted brand action. */
+    background: var(--color-surface-sunken);
+    border-color: var(--color-ink-muted);
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
+}
+
+/* -----------------------------------------------------------------------------
+    Cards
+
+    The bordered-surface primitive: flat, softly rounded, with a 1px hairline
+    rule — the structural building block for dashboards, settings groups, and
+    list modules. Compose with optional modifiers:
+      .card                    padded bordered surface (the default)
+      .card--flush             drop padding when inner strips pad themselves
+      .card--accent-primary    full border in the primary accent
+      .card--accent-secondary  full border in the secondary accent
+      .card--sunken            recessed fill (--color-surface-sunken)
+----------------------------------------------------------------------------- */
+
+.card {
+    --card-accent: var(--color-ink-primary);
+    padding: var(--card-padding, clamp(1.1rem, 3vw, 1.5rem));
+    border: var(--hairline-width) solid var(--color-rule);
+    border-radius: var(--radius-md);
+    /* Clip full-bleed inner strips (a flush card's sample/meta bands, a swatch
+       chip) to the rounded corners so nothing pokes past the radius. */
+    overflow: hidden;
+    background: var(--color-bg);
+}
+.card--flush {
+    padding: 0;
+}
+.card--accent-primary,
+.card--accent-secondary {
+    /* The accent recolours the whole border (all four sides) and steps it up
+       from the hairline to the heavier accent weight. */
+    border: var(--accent-border-width) solid var(--card-accent);
+}
+.card--accent-primary {
+    --card-accent: var(--color-ink-primary);
+}
+.card--accent-secondary {
+    --card-accent: var(--color-ink-secondary);
+}
+.card--sunken {
+    /* A recessed surface for nested or read-only panels — the component home
+       for the --color-surface-sunken semantic token. */
+    background: var(--color-surface-sunken);
+}
+
+/* -----------------------------------------------------------------------------
+    Callouts
+
+    A bordered notice — a coloured border, an optional icon, and a message on a
+    sunken surface. The default is a neutral emphasis note; three tone modifiers
+    recolour the border + icon from the status semantic tokens. A static surface,
+    like Cards — no interactive states.
+      .callout            neutral emphasis note (the default)
+      .callout--info      cyan   — calm, non-urgent information
+      .callout--warning   yellow — proceed with caution
+      .callout--error     red    — something failed or is blocked
+
+    Tone rides the border and the icon only — both are AA-safe ground for any
+    tone. The message stays --color-ink, so the yellow warning never lands as the
+    thin text where it would lose contrast (see the Colors status-colour note).
+----------------------------------------------------------------------------- */
+
+.callout {
+    --callout-accent: var(--color-ink-primary);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    padding: 1rem 1.25rem;
+    border: var(--accent-border-width) solid var(--callout-accent);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+}
+.callout__icon {
+    flex: none;
+    font-size: 1.5rem;
+    line-height: var(--leading-tight);
+    color: var(--callout-accent);
+}
+.callout__body {
+    min-width: 0; /* let long words wrap instead of stretching the flex item */
+}
+.callout__body > * + * {
+    margin-top: var(--space-2xs);
+}
+.callout--info    { --callout-accent: var(--color-ink-secondary); }
+.callout--warning { --callout-accent: var(--color-status-warning); }
+.callout--error   { --callout-accent: var(--color-status-danger); }
+
+/* -----------------------------------------------------------------------------
+    Text Fields (single-line inputs)
+
+    .field wraps a label, the <input>, and optional hint / error text in a
+    column stack. Gap-based spacing — no .flow nesting needed.
+
+    Modifier (applied to .field):
+      .field--error    — error-coloured border and hint text
+----------------------------------------------------------------------------- */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+}
+
+.field__label {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    cursor: default;
+}
+
+.field__input {
+    display: block;
+    width: 100%;
+    min-height: 2.75rem;
+    padding-block: var(--space-2xs);
+    padding-inline: var(--space-sm);
+    border: var(--field-border-width) solid var(--color-field-border);
+    border-radius: var(--radius-md);
+    font: inherit;
+    font-size: var(--text-body);
+    color: var(--color-ink);
+    background: var(--color-field-bg);
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 150ms ease;
+}
+
+.field__input::placeholder {
+    color: var(--color-ink-muted);
+    opacity: 1; /* Firefox reduces placeholder opacity by default */
+}
+
+.field__input:hover:not(:disabled):not([readonly]) {
+    border-color: var(--color-field-border-active);
+}
+
+.field__input:focus {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: 2px;
+    border-color: var(--color-field-border-active);
+}
+
+/* Number inputs: hide default spinners for a cleaner inline field. */
+.field__input[type="number"]::-webkit-inner-spin-button,
+.field__input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+}
+.field__input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+.field__input:disabled {
+    border-color: var(--color-ink-muted);
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.field__input[readonly] {
+    border-style: dashed;
+}
+
+.field__hint {
+    font-size: var(--text-caption);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-muted);
+}
+
+/* Error state — applied to the .field wrapper so all three parts respond. */
+.field--error .field__input {
+    border-color: var(--color-field-border-error);
+    border-style: solid; /* override readonly's dashed if both are set */
+}
+
+.field--error .field__hint {
+    color: var(--color-field-border-error);
+}
+
+/* -----------------------------------------------------------------------------
+    Text Area Fields (multi-line inputs)
+
+    A <textarea> reuses the .field wrapper and the .field__input class outright,
+    so label, hint, .field--error, and every hover / focus / disabled / readonly
+    state carry over untouched. These rules add only the multi-line specifics:
+    a taller default, a reading-comfortable line-height, and a vertical-only
+    resize grip (horizontal resize would break the column layout).
+----------------------------------------------------------------------------- */
+
+textarea.field__input {
+    min-height: 6.5rem; /* ~3 rows before the user grows it */
+    line-height: var(--leading-body);
+    resize: vertical;
+}
+
+/* -----------------------------------------------------------------------------
+    Site Header
+----------------------------------------------------------------------------- */
+
+.site-header {
+    padding-block: clamp(0.9rem, 3vw, 1.5rem);
+    padding-inline: var(--space-page-gutter);
+    border-bottom: var(--rule-width) solid var(--color-rule);
+}
+/* Built on .cluster in the markup; only the justify axis differs from default. */
+.site-header__inner {
+    --cluster-justify: space-between;
+}
+.site-header__wordmark {
+    font-size: clamp(2rem, 5vw, 3rem);
+}
+/* Also a .cluster; tighter gap for the icon controls. */
+.site-header__controls {
+    --cluster-space: 0.6rem;
+}
+
+/* -----------------------------------------------------------------------------
+    App layout — sidebar + main content
+
+    Built on the .with-sidebar primitive (see the markup): the nav is the
+    sidebar track, the main content the fluid one. Mobile-first — the content
+    demands the full width (--sidebar-content-min: 100%), so the pair wraps and
+    the nav stacks above the content as a clean vertical stream.
+
+    A single breakpoint flips everything together: past 52rem the content only
+    needs 60%, so the two tracks sit side by side, AND the divider swaps from a
+    bottom rule to a right rule with the nav pinned sticky. Driving the wrap and
+    its presentation off the same breakpoint keeps them in lockstep — the
+    primitive itself stays breakpoint-free; the shell simply opts into one.
+----------------------------------------------------------------------------- */
+
+.site-layout {
+    --sidebar-content-min: 100%;
+}
+
+@media (min-width: 52rem) {
+    .site-layout {
+        --sidebar-content-min: 60%;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+    Sidebar navigation
+----------------------------------------------------------------------------- */
+
+.site-nav {
+    border-bottom: var(--hairline-width) solid var(--color-rule);
+}
+
+.site-nav__inner {
+    padding-block: clamp(1rem, 3vw, 1.5rem);
+}
+
+@media (min-width: 52rem) {
+    .site-nav {
+        /* The cell stretches to the row height, so this thin rule reads as a
+           full-height column divider — structural, not decorative. */
+        border-bottom: 0;
+        border-right: var(--hairline-width) solid var(--color-rule);
+    }
+    .site-nav__inner {
+        position: sticky;
+        top: 0;
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+.site-nav__title {
+    margin-bottom: 0.5rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-muted);
+}
+
+.site-nav__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: nav;
+}
+
+.site-nav__link {
+    counter-increment: nav;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding-block: 0.7rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    border-left: 3px solid transparent;
+    font-family: var(--font-display);
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--color-ink);
+    text-decoration: none;
+    transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease;
+}
+
+/* A monospaced index number gives the nav a tiered, manual-like hierarchy. */
+.site-nav__link::before {
+    content: counter(nav, decimal-leading-zero);
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-ink-muted);
+    transition: color 200ms ease;
+}
+
+.site-nav__link:hover,
+.site-nav__link:focus-visible {
+    border-left-color: var(--color-ink-primary);
+    background: var(--color-surface-sunken);
+    color: var(--color-ink-link);
+    outline: none;
+}
+.site-nav__link:hover::before,
+.site-nav__link:focus-visible::before {
+    color: var(--color-ink-link);
+}
+.site-nav__link:focus-visible {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: -3px;
+}
+
+/* -----------------------------------------------------------------------------
+    Main content
+----------------------------------------------------------------------------- */
+
+.site-main {
+    padding: var(--space-page-gutter);
+}
+
+.content-section {
+    /* Section-level vertical rhythm (the section is marked .flow in the markup):
+       header, prose, sub-headings, and specimen groups all space off this. */
+    --flow-space: var(--space-lg);
+    /* Leaves breathing room when jumped to via the nav anchors. */
+    scroll-margin-top: 1.5rem;
+    max-width: 60rem;
+}
+
+.content-section + .content-section {
+    margin-top: var(--space-section-gap);
+    padding-top: var(--space-section-gap);
+    border-top: var(--hairline-width) solid var(--color-rule);
+}
+
+/* h2 size/weight come from the global h2 role. The grid places the title,
+   lede, and section-level theme toggle into named areas so no wrapper div
+   is needed in the markup. */
+.content-section__header p {
+    margin-top: 0.5rem;
+    max-width: var(--measure-prose);
+    color: var(--color-ink-muted);
+}

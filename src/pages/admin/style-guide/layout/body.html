@@ -1,0 +1,101 @@
+<header class="content-section__header">
+    <h2>Layout</h2>
+    <p>The composable primitives that arrange everything else in the Kixx Admin Panel theme.</p>
+</header>
+
+<div class="doc-prose">
+    <p class="type-body-lg">Layout is handled by six small, single-purpose primitives in the <a href="https://every-layout.dev/" rel="noreferrer">Every Layout</a> tradition. Each is one class, tuned by its own scoped custom properties &mdash; so you arrange a page by <strong>nesting primitives</strong>, not by writing a new <code>flex</code> or <code>grid</code> rule every time.</p>
+
+    <p>Every primitive defaults to a design token, so the untouched class already does the right thing. To adjust one axis, set its custom property on the element (or any ancestor):</p>
+    <ul>
+        <li><code>.flow</code> &mdash; vertical stack; rhythm between siblings via <code>--flow-space</code>.</li>
+        <li><code>.cluster</code> &mdash; horizontal group that wraps; <code>--cluster-space</code>, <code>--cluster-align</code>, <code>--cluster-justify</code>.</li>
+        <li><code>.grid-auto</code> &mdash; auto-fit grid; tracks never below <code>--grid-min</code>, gap via <code>--grid-space</code>.</li>
+        <li><code>.switcher</code> &mdash; row that flips to a column under <code>--switcher-threshold</code>.</li>
+        <li><code>.with-sidebar</code> &mdash; fixed-ish sidebar (<code>--sidebar-width</code>) beside fluid content (<code>--sidebar-content-min</code>).</li>
+        <li><code>.center</code> &mdash; caps a column to <code>--center-max</code> and centers it.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout__body">
+            <p class="type-label">Rule of thumb</p>
+            <p>This page is built from them: the header bar is a <code>.cluster</code>, and the whole app shell is a <code>.with-sidebar</code>. Reach for a primitive before a bespoke rule &mdash; and never nest <code>.flow</code> directly inside <code>.flow</code> (the inner one re-scopes <code>--flow-space</code> and steals its own top margin).</p>
+        </div>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">The primitives</h3>
+<p class="doc-lede">Live demos &mdash; each dashed frame <em>is</em> the primitive; the boxes are its direct children. Resize the window to watch the responsive ones reflow.</p>
+
+<div class="flow">
+    <h4 class="type-h4">Flow &mdash; vertical stack</h4>
+    <p class="type-body-sm">Consistent vertical rhythm between siblings. The workhorse: section bodies, form fields, prose.</p>
+    <div class="layout-demo flow" style="--flow-space: var(--space-xs)">
+        <div class="demo-box">First</div>
+        <div class="demo-box">Second</div>
+        <div class="demo-box">Third</div>
+    </div>
+
+    <h4 class="type-h4">Cluster &mdash; wrapping row</h4>
+    <p class="type-body-sm">A horizontal group that wraps with a shared gap. Toolbars, button rows, tag and chip lists, the header controls.</p>
+    <div class="layout-demo cluster">
+        <span class="button">Save</span>
+        <span class="button">Duplicate</span>
+        <span class="button">Archive</span>
+        <span class="button">Delete</span>
+    </div>
+
+    <h4 class="type-h4">Grid &mdash; auto-fit grid</h4>
+    <p class="type-body-sm">As many equal columns as fit, each at least <code>--grid-min</code> wide, wrapping to fewer as space shrinks. Dashboards, card galleries.</p>
+    <div class="layout-demo grid-auto" style="--grid-min: 8rem">
+        <div class="demo-box">1</div>
+        <div class="demo-box">2</div>
+        <div class="demo-box">3</div>
+        <div class="demo-box">4</div>
+        <div class="demo-box">5</div>
+        <div class="demo-box">6</div>
+    </div>
+
+    <h4 class="type-h4">Switcher &mdash; row or column</h4>
+    <p class="type-body-sm">Equal columns above <code>--switcher-threshold</code>; below it, every child drops onto its own row at once. No breakpoint &mdash; the switch is driven by the container's own width.</p>
+    <div class="layout-demo switcher" style="--switcher-threshold: 28rem">
+        <div class="demo-box demo-box--tall">A</div>
+        <div class="demo-box demo-box--tall">B</div>
+        <div class="demo-box demo-box--tall">C</div>
+    </div>
+
+    <h4 class="type-h4">Sidebar &mdash; aside + content</h4>
+    <p class="type-body-sm">A fixed-ish sidebar beside fluid content; when the content can't hold <code>--sidebar-content-min</code>, the pair wraps and both go full-width. The app shell is built on this.</p>
+    <div class="layout-demo with-sidebar" style="--sidebar-space: var(--space-sm); --sidebar-width: 10rem; --sidebar-content-min: 60%">
+        <div class="demo-box demo-box--tall">Sidebar</div>
+        <div class="demo-box demo-box--tall">Content</div>
+    </div>
+
+    <h4 class="type-h4">Center &mdash; capped measure</h4>
+    <p class="type-body-sm">Caps a column to a readable measure and centers it horizontally. Reading columns, narrow forms on wide screens.</p>
+    <div class="layout-demo">
+        <div class="demo-box center" style="--center-max: 22rem">Centered, capped to <code>--center-max</code></div>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Guidelines</h3>
+<div class="guidelines grid-auto">
+    <div class="card card--accent-secondary guideline guideline--do">
+        <p class="type-label guideline__label">Do</p>
+        <ul>
+            <li>Compose layout by nesting primitives &mdash; a <code>.cluster</code> inside a <code>.flow</code> inside a <code>.with-sidebar</code>.</li>
+            <li>Adjust one axis by setting its custom property, not by writing a new rule.</li>
+            <li>Let <code>.grid-auto</code> and <code>.switcher</code> reflow on their own; trust the content threshold.</li>
+            <li>Keep tuning values on the design tokens (<code>--space-*</code>, <code>--measure-prose</code>).</li>
+        </ul>
+    </div>
+    <div class="card card--accent-primary guideline guideline--dont">
+        <p class="type-label guideline__label">Don't</p>
+        <ul>
+            <li>Reach for a bespoke <code>display: flex</code> / <code>grid</code> rule before checking the six primitives.</li>
+            <li>Nest <code>.flow</code> directly inside <code>.flow</code> &mdash; use a plain owl for the inner stack.</li>
+            <li>Add media-query breakpoints where <code>.grid-auto</code> or <code>.switcher</code> already adapt.</li>
+            <li>Hard-code pixel gaps; the spacing ladder is the contract.</li>
+        </ul>
+    </div>
+</div>

@@ -1,0 +1,4 @@
+{
+    "baseTemplate": "admin.html",
+    "pageTemplate": "admin/style-guide/style-guide-wrapper.html"
+}

@@ -1,0 +1,8 @@
+{
+    "page": {
+        "title": "Text Areas : Style Guide"
+    },
+    "includes": {
+        "body": { "filename": "body.html" }
+    }
+}

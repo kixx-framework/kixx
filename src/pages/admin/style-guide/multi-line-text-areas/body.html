@@ -1,0 +1,145 @@
+<header class="content-section__header">
+    <h2>Multi-Line Text Area Fields</h2>
+    <p>Multi-line inputs for comments, descriptions, and other free-form prose.</p>
+</header>
+
+<div class="doc-prose">
+    <p class="type-body-lg">A text area is a <a href="#text-fields">text field</a> that has grown a second dimension. It reuses the same parts &mdash; the mono label above, the recessed input, the hint below &mdash; and every state and modifier carries over unchanged. The only thing it adds is room: a taller default, a reading-comfortable line height, and a resize grip the user can drag.</p>
+
+    <p>That reuse is deliberate. A <code>&lt;textarea&gt;</code> takes the same <code>.field</code> wrapper and <code>.field__input</code> class as a single-line input; the theme adds just three multi-line rules on top. There's no new vocabulary to learn &mdash; <code>.field--error</code>, <code>readonly</code>, and <code>disabled</code> all behave exactly as they do on a text field.</p>
+
+    <p><strong>When to use:</strong> for input that runs longer than a line and has no fixed structure &mdash; a comment, a bio, a description, an internal note. For a single short value, use a <a href="#text-fields">text field</a>. For rich formatting or code, reach for a purpose-built editor, not a bare text area.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Anatomy</h3>
+<p class="doc-lede">The same three parts as a text field &mdash; label, control, hint &mdash; with the control sized for several lines and draggable taller.</p>
+<div class="anatomy flow">
+    <div class="demo-stage">
+        <div class="field" style="width: min(100%, 26rem)">
+            <label class="field__label" for="anatomy-textarea">Project description</label>
+            <textarea class="field__input" id="anatomy-textarea" rows="4" placeholder="What does this project do?"></textarea>
+            <p class="field__hint">A sentence or two helps teammates find it later.</p>
+        </div>
+    </div>
+    <ol class="parts-list">
+        <li><strong>Label</strong> &mdash; identical to the text field: mono, uppercase, muted, tied to the control with a <code>for</code>/<code>id</code> pair.</li>
+        <li><strong>Text area</strong> &mdash; a <code>&lt;textarea&gt;</code> on <code>.field__input</code>; same border and fill, but a 6.5rem minimum height and body line-height for reading multiple lines.</li>
+        <li><strong>Resize grip</strong> &mdash; the corner handle, constrained to <code>resize: vertical</code> so the area grows downward and never breaks the column width.</li>
+        <li><strong>Hint</strong> &mdash; optional caption below; becomes the error message when the field is in error.</li>
+    </ol>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Variants</h3>
+<p class="doc-lede">No text-area-specific modifiers &mdash; it inherits the field's <code>.field--error</code> plus the <code>readonly</code> and <code>disabled</code> attributes. Set initial height with the <code>rows</code> attribute.</p>
+<div class="example-grid grid-auto" style="--grid-min: 18rem">
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field" style="width: 100%">
+                <label class="field__label" for="va-default">Bio</label>
+                <textarea class="field__input" id="va-default" rows="3" placeholder="Tell us about yourself…"></textarea>
+            </div>
+        </div>
+        <div class="example__label"><code>textarea.field__input</code><span class="example__note">Default, 3 rows</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field field--error" style="width: 100%">
+                <label class="field__label" for="va-error">Reason for refund</label>
+                <textarea class="field__input" id="va-error" rows="3" aria-describedby="va-error-hint" aria-invalid="true">no</textarea>
+                <p class="field__hint" id="va-error-hint">Please give at least a sentence of detail.</p>
+            </div>
+        </div>
+        <div class="example__label"><code>.field--error</code><span class="example__note">Validation failure</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field" style="width: 100%">
+                <label class="field__label" for="va-readonly">Original message</label>
+                <textarea class="field__input" id="va-readonly" rows="3" readonly>Imported from the legacy ticket — preserved verbatim for the audit trail.</textarea>
+            </div>
+        </div>
+        <div class="example__label"><code>readonly</code><span class="example__note">Visible, not editable</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field" style="width: 100%">
+                <label class="field__label" for="va-disabled">Internal notes</label>
+                <textarea class="field__input" id="va-disabled" rows="3" disabled placeholder="Available to admins only"></textarea>
+                <p class="field__hint">Requires an admin role.</p>
+            </div>
+        </div>
+        <div class="example__label"><code>disabled</code><span class="example__note">Unavailable in context</span></div>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">States</h3>
+<p class="doc-lede">Identical to the text field, plus one affordance: drag the corner grip to resize. Click in to see focus; hover to see the border activate.</p>
+<div class="states flow">
+    <div class="demo-stage">
+        <div class="field" style="width: min(100%, 26rem)">
+            <label class="field__label" for="states-textarea">Comment</label>
+            <textarea class="field__input" id="states-textarea" rows="4" placeholder="This is a live, resizable text area."></textarea>
+            <p class="field__hint">Drag the bottom-right corner to grow it.</p>
+        </div>
+    </div>
+    <dl class="state-list">
+        <div><dt>Default</dt><dd>Recessed fill, 2px muted border, sized to its <code>rows</code>. Quiet until engaged.</dd></div>
+        <div><dt>Hover</dt><dd>Border intensifies to full <code>--color-ink</code> — no movement, just a brighter edge.</dd></div>
+        <div><dt>Focus</dt><dd>Border stays active and a 3px <code>--color-focus-outline</code> ring appears, offset 2px.</dd></div>
+        <div><dt>Resize</dt><dd>A vertical-only grip in the corner; the area grows downward without disturbing the layout width.</dd></div>
+        <div><dt>Disabled</dt><dd>Muted border and text at half opacity, <code>not-allowed</code> cursor; hover, focus, and resize are suppressed.</dd></div>
+        <div><dt>Read-only</dt><dd>Border becomes dashed; the text stays selectable and the field focusable, but it can't be edited.</dd></div>
+        <div><dt>Error</dt><dd>Border and hint turn the danger red via <code>.field--error</code>, exactly as on a text field.</dd></div>
+    </dl>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Usage</h3>
+<p class="doc-lede">Same wrapper and label rules as a text field. Set <code>rows</code> for a predictable starting height; never self-close a <code>&lt;textarea&gt;</code> — its value is its text content.</p>
+<pre class="code-block"><code>&lt;!-- Standard text area --&gt;
+&lt;div class="field"&gt;
+&lt;label class="field__label" for="bio"&gt;Bio&lt;/label&gt;
+&lt;textarea class="field__input" id="bio" rows="4"
+placeholder="Tell us about yourself…"&gt;&lt;/textarea&gt;
+&lt;p class="field__hint"&gt;A sentence or two is plenty.&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;!-- Error state (same modifier as a text field) --&gt;
+&lt;div class="field field--error"&gt;
+&lt;label class="field__label" for="reason"&gt;Reason&lt;/label&gt;
+&lt;textarea class="field__input" id="reason" rows="3"
+aria-describedby="reason-hint" aria-invalid="true"&gt;&lt;/textarea&gt;
+&lt;p class="field__hint" id="reason-hint"&gt;Please add a little more detail.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+
+<h3 class="type-h3 doc-section-heading">Accessibility</h3>
+<div class="doc-prose">
+    <ul>
+        <li>Connect the <code>&lt;label&gt;</code> with a matching <code>for</code>/<code>id</code> pair, and link hint and error text with <code>aria-describedby</code> — same as a text field.</li>
+        <li>Mark an invalid area with <code>aria-invalid="true"</code> and remove it once corrected; the hint text, not the colour, is the accessible error message.</li>
+        <li>Set the <code>rows</code> attribute so the area opens at a predictable height instead of collapsing to a single line on load.</li>
+        <li>Keep <code>resize: vertical</code> available — pulling the area taller is an accessibility aid for anyone reviewing a long entry. Don't set <code>resize: none</code>.</li>
+        <li>If you cap length with <code>maxlength</code>, show the remaining count in the hint so the limit isn't a surprise at the last character.</li>
+    </ul>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Guidelines</h3>
+<div class="guidelines grid-auto">
+    <div class="card card--accent-secondary guideline guideline--do">
+        <p class="type-label guideline__label">Do</p>
+        <ul>
+            <li>Size the starting <code>rows</code> to the expected answer — a few lines for a comment, more for a description.</li>
+            <li>Reuse the field vocabulary: <code>.field--error</code>, the hint, the label register all apply unchanged.</li>
+            <li>Let users grow the area; a long entry is easier to review when it's all visible.</li>
+            <li>Use a text area only when the input genuinely runs to multiple lines.</li>
+        </ul>
+    </div>
+    <div class="card card--accent-primary guideline guideline--dont">
+        <p class="type-label guideline__label">Don't</p>
+        <ul>
+            <li>Disable resizing, or allow horizontal resize — it breaks the column and the line length.</li>
+            <li>Use a text area for a single short value; that's a <a href="#text-fields">text field</a>.</li>
+            <li>Self-close the tag (<code>&lt;textarea /&gt;</code>) — put any initial value between the tags.</li>
+            <li>Let it stretch to an unbounded width; long lines are tiring to read. Keep it within the form column.</li>
+        </ul>
+    </div>
+</div>

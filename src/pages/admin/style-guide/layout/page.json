@@ -1,0 +1,8 @@
+{
+    "page": {
+        "title": "Layout : Style Guide"
+    },
+    "includes": {
+        "body": { "filename": "body.html" }
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "page": {
+        "title": "Callouts : Style Guide"
+    },
+    "includes": {
+        "body": { "filename": "body.html" }
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "page": {
+        "title": "Typography : Style Guide"
+    },
+    "includes": {
+        "body": { "filename": "body.html" }
+    }
+}
