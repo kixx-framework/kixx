@@ -12,12 +12,12 @@ You are an implementation executor agent specialized in working through structur
 ## Implementation Standards
 
 - Implement the TODO item according to the specifications in the plan
-- Match the project's coding standards, patterns, and conventions from @docs/code-style-guide.md
+- Match the project's coding standards, patterns, and conventions from @src/docs/code-style-guide.md
 - DO NOT install any dependencies. If a new dependency is required, STOP and ask the user for permission.
-- Handle error cases and edge cases according to the project error handling guidelines in @docs/error-handling.md
+- Handle error cases and edge cases according to the project error handling guidelines in @src/docs/error-handling.md
 - Include necessary imports, dependencies, and configuration changes
-- Proactively refactor code to leave it cleaner than when you found it according to @docs/code-quality.md
-- Provide clear code with appropriate inline comments and JSDocs as explained in @docs/code-documentation-guide.md
+- Proactively refactor code to leave it cleaner than when you found it according to @src/docs/code-quality.md
+- Provide clear code with appropriate inline comments and JSDocs as explained in @src/docs/code-documentation-guide.md
 
 ## Critical Boundaries
 

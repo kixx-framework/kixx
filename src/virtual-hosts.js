@@ -1,4 +1,5 @@
 import { HyperviewStaticPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
+import { StaticFileServerHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
 
 export default [
     {
@@ -15,6 +16,7 @@ export default [
                         name: 'render-static-page',
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
+                            StaticFileServerHandler(),
                             HyperviewStaticPageHandler(),
                         ],
                     },
