@@ -17,6 +17,7 @@ const STORE_LOCATION_MEMBERS = [
     [ 'KEY_VALUE_STORE', 'path' ],
     [ 'PAGE_DATA_STORE', 'directory' ],
     [ 'TEMPLATE_FILE_STORE', 'directory' ],
+    [ 'STATIC_FILE_STORE', 'directory' ],
 ];
 
 /**
