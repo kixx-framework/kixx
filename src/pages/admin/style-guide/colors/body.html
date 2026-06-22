@@ -1,0 +1,153 @@
+<header class="content-section__header">
+    <h2>Colors</h2>
+    <p>Effective use of colors in the Kixx Admin Panel theme.</p>
+    <button class="theme-toggle" type="button" data-js-behavior="theme-toggle" aria-label="Switch color theme">
+        <span class="material-symbols-rounded theme-toggle__icon" aria-hidden="true">dark_mode</span>
+    </button>
+</header>
+
+<div class="doc-prose">
+    <p class="type-body-lg">Color is a <strong>three-tier token system</strong>. Each tier has one job, and references flow in a single direction &mdash; so a value changes in exactly one place, and theming is something the system does, not something a component worries about.</p>
+
+    <ul>
+        <li><strong>Reference palette</strong> (<code>--palette-*</code>) &mdash; the raw, theme-agnostic ingredients: five saturated hues, black, white, and a neutral grey ramp. The only place a literal color value lives.</li>
+        <li><strong>Semantic</strong> (<code>--color-*</code>) &mdash; role- and theme-aware tokens resolved from the palette: <code>--color-ink</code>, <code>--color-bg</code>, <code>--color-rule</code>, <code>--color-ink-primary</code>. This is the layer you build with.</li>
+        <li><strong>Component</strong> (e.g. <code>--color-button-bg-primary</code>, <code>--card-accent</code>) &mdash; scoped tokens built from the semantic layer for one component.</li>
+    </ul>
+
+    <p>The single direction is what makes it a contract rather than a convention: <code>component &rarr; semantic &rarr; reference</code>. The <code>light-dark()</code> theming all happens in the semantic tier, so a component written against <code>--color-rule</code> is correct in both themes for free.</p>
+
+    <div class="callout">
+        <div class="callout__body">
+            <p class="type-label">The rule</p>
+            <p>A component rule consumes a semantic <code>--color-*</code> token only. It never names a raw <code>--palette-*</code> token or writes an <code>hsl()</code> / hex literal. If you reach for the palette in a component, the role you actually want is a missing semantic token &mdash; add it.</p>
+        </div>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Reference palette</h3>
+<p class="doc-lede">The raw ingredients. Documented for completeness &mdash; <strong>don't consume these directly</strong> in component styles; they feed the semantic layer below.</p>
+<div class="swatch-list grid-auto" style="--grid-min: 11rem">
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-magenta)"></div>
+        <div class="swatch__body"><code>--palette-magenta</code><p class="type-caption">Primary brand hue</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-cyan)"></div>
+        <div class="swatch__body"><code>--palette-cyan</code><p class="type-caption">Secondary brand hue</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-blue)"></div>
+        <div class="swatch__body"><code>--palette-blue</code><p class="type-caption">Focus ring &mdash; light mode</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-yellow)"></div>
+        <div class="swatch__body"><code>--palette-yellow</code><p class="type-caption">Tertiary brand hue</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-highlight)"></div>
+        <div class="swatch__body"><code>--palette-highlight</code><p class="type-caption">Selection</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-red)"></div>
+        <div class="swatch__body"><code>--palette-red</code><p class="type-caption">Danger &mdash; light mode</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-red-bright)"></div>
+        <div class="swatch__body"><code>--palette-red-bright</code><p class="type-caption">Danger &mdash; dark mode</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-amber)"></div>
+        <div class="swatch__body"><code>--palette-amber</code><p class="type-caption">Warning &mdash; light mode</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-black)"></div>
+        <div class="swatch__body"><code>--palette-black</code><p class="type-caption">Neutral, darkest</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--palette-white)"></div>
+        <div class="swatch__body"><code>--palette-white</code><p class="type-caption">Neutral, lightest</p></div>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Semantic tokens</h3>
+<p class="doc-lede">The contract you build with. Each chip paints the live token, so it reflects the current theme &mdash; toggle dark mode and watch them resolve.</p>
+<div class="swatch-list grid-auto" style="--grid-min: 13rem">
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-ink)"></div>
+        <div class="swatch__body"><code>--color-ink</code><p class="type-caption">Primary text &amp; structural lines</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-ink-muted)"></div>
+        <div class="swatch__body"><code>--color-ink-muted</code><p class="type-caption">Secondary text, captions</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-bg)"></div>
+        <div class="swatch__body"><code>--color-bg</code><p class="type-caption">Page &amp; card surface</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-surface-sunken)"></div>
+        <div class="swatch__body"><code>--color-surface-sunken</code><p class="type-caption">Inset / recessed panels</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-rule)"></div>
+        <div class="swatch__body"><code>--color-rule</code><p class="type-caption">Borders &amp; dividers</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-ink-primary)"></div>
+        <div class="swatch__body"><code>--color-ink-primary</code><p class="type-caption">Primary accent</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-ink-secondary)"></div>
+        <div class="swatch__body"><code>--color-ink-secondary</code><p class="type-caption">Secondary accent</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-ink-link)"></div>
+        <div class="swatch__body"><code>--color-ink-link</code><p class="type-caption">Link underline</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-ink-on-accent)"></div>
+        <div class="swatch__body"><code>--color-ink-on-accent</code><p class="type-caption">Ink on a bright fill</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-focus-outline)"></div>
+        <div class="swatch__body"><code>--color-focus-outline</code><p class="type-caption">Focus ring &mdash; blue, its own signal</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-status-danger)"></div>
+        <div class="swatch__body"><code>--color-status-danger</code><p class="type-caption">Errors &mdash; text, border, icon</p></div>
+    </div>
+    <div class="card card--flush swatch">
+        <div class="swatch__chip" style="--swatch: var(--color-status-warning)"></div>
+        <div class="swatch__body"><code>--color-status-warning</code><p class="type-caption">Warnings &mdash; amber / yellow</p></div>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout__body">
+        <p class="type-label">Status colours</p>
+        <p>A functional family, not brand accents. They sit beside the accents in the semantic tier but carry a separate job &mdash; signalling state &mdash; so &ldquo;something is wrong&rdquo; never shares a colour with &ldquo;primary action.&rdquo; Two members &mdash; both read as a foreground mark (text, border, icon) and both theme-aware so they hold contrast on light and dark: <code>--color-status-danger</code> (deep red on white, brighter on black &mdash; as <code>.field--error</code> uses it) and <code>--color-status-warning</code> (a deep amber on light surfaces, the brand yellow on dark &mdash; brand yellow alone is too light to read on white). For a yellow <em>fill</em>, reach for <code>--palette-yellow</code> directly with text in <code>--color-ink-on-accent</code>, like the tertiary button &mdash; that's decoration, not a signal.</p>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Guidelines</h3>
+<div class="guidelines grid-auto">
+    <div class="card card--accent-secondary guideline guideline--do">
+        <p class="type-label guideline__label">Do</p>
+        <ul>
+            <li>Style components with semantic <code>--color-*</code> tokens &mdash; <code>--color-ink</code>, <code>--color-rule</code>, <code>--color-bg</code>.</li>
+            <li>When a role is missing, add a semantic token (as <code>--color-ink-on-accent</code> was) instead of hardcoding.</li>
+            <li>Let <code>light-dark()</code> in the semantic tier handle theming; keep components theme-agnostic.</li>
+            <li>Carry brand color in accents &mdash; link underline, the primary button &mdash; not in body text. (The focus ring is its own blue signal, not a brand accent.)</li>
+        </ul>
+    </div>
+    <div class="card card--accent-primary guideline guideline--dont">
+        <p class="type-label guideline__label">Don't</p>
+        <ul>
+            <li>Name a raw <code>--palette-*</code> token or write an <code>hsl()</code> / hex literal in a component rule.</li>
+            <li>Reach past the semantic layer &mdash; not even &ldquo;just this once.&rdquo;</li>
+            <li>Encode a state as a new literal; add a palette shade plus a component token.</li>
+            <li>Lean on color alone to carry meaning &mdash; pair it with weight, an icon, or text.</li>
+        </ul>
+    </div>
+</div>
