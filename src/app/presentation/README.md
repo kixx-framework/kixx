@@ -2,49 +2,123 @@
 
 This project is a Hypermedia Driven Application, which means the presentation layer is a web presentation, primarily following the Representational State Transfer (REST) and Hypermedia As The Engine Of Application State (HATEOAS) patterns.
 
-## Where Presentation Changes Belong
+For information about Kixx Hyperview templates, the template syntax, template partials, and template helpers see the Kixx Hyperview Templating guide at `templates/README.md`.
 
-- `pages/` contains route-specific page metadata, and included content files.
-- `templates/base/` contains shared HTML document frames.
-- `templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
-- `templates/pages/` contains templates for specific templates
-- `virtual-hosts.js` registers Worker routes and connects HTTP methods to middleware and request handlers.
-- `app/presentation/request-handlers/` contains application request handlers.
-- `app/presentation/middleware/` contains application inbound and outbound middleware.
-- `app/presentation/error-handlers/` contains application error handlers.
-- `app/presentation/forms/` contains form classes used to parse and validate inbound payloads.
+The Kixx Hyperview component and plugin is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `/templates/`.
 
-## Common Task Recipes
+### Hyperview File Layout
 
-### Static Hyperview Page
+Hyperview content is authored in two application directories. As an example:
 
-For a page whose content comes from files rather than request-specific data:
+```text
+pages/
+├── page.json
+├── page.html
+└── blog/
+    ├── page.json
+    ├── page.html
+    └── hello-world/
+        ├── page.json
+        └── intro.md
 
-1. Add or update `pages/<pathname>/page.json` for metadata and page context.
-2. Add or update `templates/pages/<pathname>/page.html` for route-specific markup.
-3. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-4. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
-5. Read app/presentation/docs/hyperview-rendering.md for page data structure and app/presentation/docs/kixx-templating.md for template syntax, helpers, escaping behavior, and partial inclusion.
+templates/
+├── base/
+│   └── website.html
+├── pages/
+│   ├── page.html
+│   └── blog/
+│       ├── page.html
+│       └── hello-world/
+│           └── page.html
+└── partials/
+    └── website/
+        └── styles.css
+```
 
-### Dynamic Hyperview Page
+Use `pages/` for route-specific page metadata and text based content:
 
-For a page that needs route parameters, records loaded through Transaction Scripts, session state, or other request-specific data:
+- `page.json` contains root or directory-level page data.
+- Other files in the same page directory can be loaded with `includes`.
 
-1. Add or update the route in `virtual-hosts.js`.
-2. Add a request handler in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
-3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
-4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewRequestHandler(...)` (see [HyperviewRequestHandler Options](#hyperviewrequesthandler-options) below).
-5. If the route pattern contains dynamic segments such as `/:id`, pass a stable Hyperview `pathname` option so the handler can load files from `pages/`. The pathname is a static page-file location such as `/profiles/id`, not the runtime value from the URL.
-6. Add the matching `pages/<stable-pathname>/page.json` and `pages/<stable-pathname>/page.html` files.
 
-### Form-Backed HTML Workflow
+Use `templates/` for page specific and shared templates.
 
-For a workflow that accepts user input:
+- `templates/base/` contains base templates.
+- `templates/partials/` contains shared partial templates.
+- `templates/pages/` contains specific page templates at defined pathnames.
 
-1. Define a form class in `app/forms/` with `method`, `target`, `schema`, a `from*()` constructor, and `validate()`. See [Forms](#forms) below.
-2. In the request handler, parse the payload into the form, validate it, and then call the appropriate Transaction Script.
-3. On success, prefer an HTTP redirect for browser form submissions.
-4. On validation failure, update response props with the form context and render the page with the validation error state.
+For a request to `/blog/hello-world`, the default page template is `templates/pages/blog/hello-world/page.html`. If the page data sets `"pageTemplate": "article.html"`, Hyperview loads `templates/pages/blog/hello-world/article.html`.
+
+### Page Context Data
+
+When Hyperview renders a page, it loads root page metadata, page metadata for the requested pathname's ancestor directories, and leaf page metadata for the requested pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview attempts to load and merge:
+
+- `pages/page.json`
+- `pages/blog/page.json`
+- `pages/blog/reviews/page.json`
+- `pages/blog/reviews/music/page.json`
+- `pages/blog/reviews/music/led-zeppelin/page.json`
+
+Root and ancestor files are optional, but the final leaf `page.json` must exist or the request is treated as not found. More specific page data overrides earlier page data. Runtime response props, when present, are merged last and override all static page data.
+
+Optional top-level page data fields include:
+
+- `baseTemplate`: Overrides the default base template for this page. This value is a filename relative to `templates/base/`.
+- `pageTemplate`: Overrides the default page template filename. This value is a filename relative to `templates/pages/`.
+- `includes`: Loads additional text files from the current page directory under `application/pages/`.
+
+Included files can be used as raw text or rendered as mini templates against the assembled page data:
+
+```json
+{
+    "includes": {
+        "intro": { "filename": "intro.md" },
+        "sidebar": { "filename": "sidebar.html", "template": true }
+    }
+}
+```
+
+When a `page` object exists, Hyperview fills several metadata defaults:
+
+- `page.canonical_url` defaults to the request URL without query string or hash.
+- `page.href` defaults to the full request URL.
+- `page.open_graph.url` defaults to `page.canonical_url`.
+- `page.open_graph.type` defaults to `website`.
+- `page.open_graph.title`, `description`, and `locale` default to the corresponding `page` values.
+
+`page.title` and `page.description` each accept either a plain string or a template object. When the template object form is used, Hyperview renders the `template` string against the assembled page data and replaces the object with the resulting string before the page template runs:
+
+```json
+{
+    "page": {
+        "title": { "template": "{{ page.author }} — kixx.dev" },
+        "description": "A static description string."
+    }
+}
+```
+
+### Hyperview Page-Data JSON Response
+
+Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request when either:
+
+- the pathname ends in `.json`; or
+- the `Accept` header includes `application/json`.
+
+This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data for development and debugging, but it is not the contract for application API endpoints.
+
+### HyperviewRequestHandler Options
+
+```js
+/*
+ * @param {string} [options.indexFilePattern] - Regex pattern string matching index filenames to strip from the URL pathname. Defaults to matching an `index.html`, `index.json`, `index.xml`, or `index.md` path segment at the end of the path.
+ * @param {string} [options.formatExtensionPattern] - Regex pattern string matching format extensions to strip from the URL pathname last segment for content negotiation. Defaults to `\.json$`, so `/platform.json` resolves page data from `/platform`.
+ * @param {boolean} [options.allowJSON] - Allow JSON responses when the client requests them. Falls back to the `HYPERVIEW_ALLOW_JSON_RESPONSE` env var.
+ * @param {boolean} [options.useCache] - Enable caching. Falls back to the `HYPERVIEW_USE_CACHE` env var.
+ * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden per-page via `metadata.baseTemplate`.
+ * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`. Can be overridden per-page via `metadata.pageTemplate`.
+ * @param {string} [options.pathname] - Override the pathname derived from the request URL.
+ */
+```
 
 ## Dynamic Routes
 
@@ -151,23 +225,11 @@ target.compilePathname({ path: [ 'releases', '2026', 'report.pdf' ] }).pathname;
 
 Pathname compilation encodes values for safe URL output, so non-ASCII text and reserved URL characters are escaped in the generated pathname.
 
-### Middleware vs. Request Handlers
+### Middleware vs. Request Handlers vs. Error Handlers
 
-- **Route middleware** (`inboundMiddleware`, `outboundMiddleware`, `errorHandlers`) applies to every target in a route subtree. Use it for authentication, session loading, request normalization, shared response headers, and route-wide HTML error preparation.
-- **Target `requestHandlers`** applies to one endpoint. Use them for loading data for a page, parsing a form submission, calling a Transaction Script, setting render props, or returning a redirect/JSON response.
-
-For auth, prefer route middleware when the whole subtree requires the same authentication or authorization rule:
-
-```js
-{
-    pattern: '/account',
-    inboundMiddleware: [ requireAuthentication ],
-    routes: [
-        { pattern: '/', targets: [ ... ] },
-        { pattern: '/settings', targets: [ ... ] },
-    ],
-}
-```
+- **Route middleware** (`inboundMiddleware`, `outboundMiddleware`) applies to every target in a route subtree. Use it for capabilities like authentication, session loading, request normalization, and shared response headers.
+- **Target `requestHandlers`** applies to one endpoint. Use them for loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect/JSON response.
+- **Route error handlers** (`errorHandlers`) when an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
 
 Execution order for a matched target:
 
@@ -188,7 +250,7 @@ export async function redirectAfterSuccess(context, request, response, skip) {
 
 ## Request Handlers
 
-A request handler's job is to interpret the incoming HTTP request and coordinate a response, but it should not contain domain logic. See `app/transaction-scripts/README.md` for how to write the Transaction Scripts that request handlers call.
+A request handler's job is to interpret the incoming HTTP request and coordinate a response, but it should not contain domain logic. See `app/transaction-scripts/README.md` for how to write the Transaction Scripts which contain the domain logic that request handlers call.
 
 Request handlers may:
 
@@ -206,7 +268,7 @@ Request handlers should not:
 - Build HTML strings when the response should be rendered by Hyperview templates.
 - Own browser application state that should instead be represented by links, forms, redirects, and server-rendered HTML.
 
-For GET and HEAD requests, prepare render data and let the next handler in the chain render the page:
+For GET and HEAD requests, request handlers should prepare render data and let the next handler in the chain, typically a HyperviewDynamicPageHandler, render the page:
 
 ```js
 export async function getBugTicket(context, request, response) {
@@ -246,7 +308,7 @@ export async function handleCreateBugTicket(context, request, response, skip) {
 }
 ```
 
-When validation failure should re-render a page, `HyperviewRequestHandler(...)` after this handler in the target chain will run automatically (since `skip()` was not called). When success returns a redirect, `skip()` prevents the Hyperview handler from running.
+When validation failure should re-render a page, `HyperviewDynamicPageHandler(...)` after this handler in the target chain will run automatically (since `skip()` was not called). When success returns a redirect, `skip()` prevents the Hyperview handler from running and needlessly rendering a page.
 
 ## Request and Response Objects
 
@@ -310,13 +372,13 @@ Pass `{ required: true }` to the string, integer, or float helpers when the appl
 - `response.body` — response body: string, Buffer, ReadableStream, or `null`
 - `response.headers` — Web API `Headers` instance; use `setHeader()`/`appendHeader()` instead of mutating directly
 
-**Passing data between middleware** — use `updateProps()` to accumulate render context without committing a response body. `HyperviewRequestHandler` reads these props to render the page template. Earlier middleware's props are readable via `response.props` if a later handler needs them.
+**Passing data between middleware** — use `updateProps()` to accumulate render context without committing a response body. The rendering handler (usually HyperviewDynamicPageHandler) reads these props to render the page template. Earlier middleware's props are readable via `response.props` if a later handler needs them.
 
 ```js
 response.updateProps({ page: { title: 'My Page' }, ticket });
 ```
 
-`updateProps()` deep-merges using `structuredClone`. Pass plain objects only — functions, class instances, and other non-cloneable values will cause it to throw. Nested objects merge rather than replace. See @application/docs/hyperview-rendering.md for the full `page` schema (`title`, `description`, `canonical_url`, Open Graph fields).
+`updateProps()` deep-merges using `structuredClone`. Pass plain objects only — functions, class instances, and other non-cloneable values will cause it to throw. Nested objects merge rather than replace.
 
 **Committing a response** — use the `respond*` methods to set status, headers, and body together:
 
@@ -466,354 +528,47 @@ export default class CreateBugTicketForm {
 }
 ```
 
-## Hyperview
+## Common Task Recipes
 
-Hyperview renders server-side HTML by combining page data from `application/pages/` with templates from `application/templates/`. This document defines the Hyperview file layout, page data contract, merge behavior, includes, metadata defaults, rendering pipeline, and optional page-data JSON response.
+### Static Hyperview Page
 
-For routing, middleware, forms, request handlers, and error handlers, see @application/docs/presentation-layer.md. For template syntax, escaping, helpers, loops, conditionals, partials, and Markdown rendering, see @application/docs/kixx-templating.md.
+For a page whose content comes from static files rather than request-specific data:
 
-### Hyperview File Layout
+1. Add or update `pages/<pathname>/page.json` for metadata and page context.
+2. Add or update `templates/pages/<pathname>/page.html` for route-specific markup.
+3. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
+4. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
 
-Hyperview content is authored in two application directories:
+Static Hyperview Pages use the HyperviewStaticPageHandler, which should already be configured for the catch-all route (`"*"`) in `virtual-hosts.js`.
 
-```text
-application/pages/
-├── page.json
-├── page.html
-└── blog/
-    ├── page.json
-    ├── page.html
-    └── hello-world/
-        ├── page.json
-        ├── page.html
-        └── intro.md
+### Dynamic Hyperview Page
 
-application/templates/
-├── base-templates/
-│   └── website.html
-└── partials/
-    └── website/
-        └── styles.css
-```
+For a page that needs route parameters, records loaded through Transaction Scripts, session state, or other request-specific data:
 
-Use `application/pages/` for route-specific page assets:
+1. Add or update the route in `virtual-hosts.js`.
+2. Add a request handler in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
+3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
+4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewDynamicPageHandler(...)` (see [HyperviewDynamicPageHandler Options](#hyperviewrequesthandler-options) above).
+5. If the route pattern contains dynamic segments such as `/:id`, pass a stable Hyperview `pathname` option to HyperviewDynamicPageHandler so the handler can locate the appropriate `pages/**` and `templates/pages/**` directories, even when the path contains dynamic path segments.
+6. Add the matching `pages/<stable-pathname>/page.json` and `templates/pages/<stable-pathname>/page.html` files.
 
-- `page.json` contains root or directory-level page data.
-- `page.html` is the default page template for that route.
-- Other files in the same page directory can be loaded with `includes`.
+### Form-Backed HTML Workflow
 
-Use `application/templates/` for shared template assets:
+For a workflow that accepts user input:
 
-- `application/templates/base-templates/` contains base templates. A `baseTemplate` value like `"website.html"` resolves to `application/templates/base-templates/website.html`.
-- `application/templates/partials/` contains shared partials. A partial include like `{{> website/styles.css }}` resolves to `application/templates/partials/website/styles.css`.
+1. Define a form class in `app/presentation/forms/` with `method`, `target`, `schema`, a `from*()` constructor, and `validate()`. See [Forms](#forms) above.
+2. In the request handler, parse the payload into the form, validate it, and then call the appropriate Transaction Script.
+3. On success, prefer an HTTP redirect for browser form submissions.
+4. On validation failure, update response props with the form context and render the page with the validation error state.
 
-Page templates are resolved from the requested page directory, not from `application/templates/`. For a request to `/blog/hello-world`, the default page template is `application/pages/blog/hello-world/page.html`. If the page data sets `"pageTemplate": "article.html"`, Hyperview loads `application/pages/blog/hello-world/article.html`.
+## Where Presentation Changes Belong
 
-### Page Context Data
-
-When Hyperview renders a page, it loads root page data, page data for the
-requested pathname's ancestor directories, and leaf page data for the requested
-pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview
-attempts to load and merge:
-
-- `application/pages/page.json`
-- `application/pages/blog/page.json`
-- `application/pages/blog/reviews/page.json`
-- `application/pages/blog/reviews/music/page.json`
-- `application/pages/blog/reviews/music/led-zeppelin/page.json`
-
-Root and ancestor files are optional, but the final leaf `page.json` must exist or
-the request is treated as not found. More specific page data overrides earlier
-page data. Runtime response props, when present, are merged last and override
-all static page data.
-
-Use this shape as the starting point for new pages:
-
-```javascript
-const pageContextDataSchema = {
-    title: 'Hyperview Page Data Context',
-    description: 'Data object passed to page templates and then to the base template. Custom page-specific fields are allowed in addition to the defined Hyperview fields.',
-    type: 'object',
-    additionalProperties: true,
-    properties: {
-        baseTemplate: {
-            type: 'string',
-            minLength: 1,
-            description: 'Optional base template override. This value is relative to application/templates/base-templates/. Defaults to the request handler configured base template.',
-        },
-        pageTemplate: {
-            type: 'string',
-            minLength: 1,
-            description: 'Optional page template override. This value is relative to the current page directory under application/pages/. Defaults to the request handler configured page template or "page.html".',
-        },
-        includes: {
-            type: 'object',
-            description: 'A mapping of custom page data attributes to source files in the current page directory. Included files can be used as raw text or rendered as mini templates against the assembled page data.',
-            additionalProperties: {
-                type: 'object',
-                required: [
-                    'filename',
-                ],
-                properties: {
-                    filename: {
-                        type: 'string',
-                        minLength: 1,
-                        description: 'Filename to load from the page directory.',
-                    },
-                    template: {
-                        type: 'boolean',
-                        description: 'When true, render the included file as a mini template against the assembled page data.',
-                    },
-                },
-            },
-        },
-        body: {
-            type: 'string',
-            description: 'Rendered page template HTML. This is added by the Hyperview handler and should not be set in the page data source.',
-        },
-        page: {
-            description: 'Nested page page-specific metadata, which can be extended with custom data from Response props.page',
-            type: 'object',
-            additionalProperties: true,
-            properties: {
-                title: {
-                    description: 'Human-readable page title. A plain string is used as-is. A template object is rendered against the assembled page data before the page template runs, and replaced with the resulting string.',
-                    oneOf: [
-                        {
-                            type: 'string',
-                        },
-                        {
-                            type: 'object',
-                            required: [
-                                'template',
-                            ],
-                            properties: {
-                                template: {
-                                    type: 'string',
-                                    description: 'Template string rendered against the assembled page data.',
-                                },
-                            },
-                        },
-                    ],
-                },
-                description: {
-                    description: 'Page description for metadata. A plain string is used as-is. A template object is rendered against the assembled page data before the page template runs, and replaced with the resulting string.',
-                    oneOf: [
-                        {
-                            type: 'string',
-                        },
-                        {
-                            type: 'object',
-                            required: [
-                                'template',
-                            ],
-                            properties: {
-                                template: {
-                                    type: 'string',
-                                    description: 'Template string rendered against the assembled page data.',
-                                },
-                            },
-                        },
-                    ],
-                },
-                canonical_url: {
-                    type: 'string',
-                    format: 'uri',
-                    description: 'Canonical page URL. If omitted, Hyperview hydrates this from the request URL without query string or hash.',
-                },
-                href: {
-                    type: 'string',
-                    format: 'uri',
-                    description: 'Full request URL. If omitted, Hyperview hydrates this from the request URL including query string and hash.',
-                },
-                locale: {
-                    type: 'string',
-                    description: 'BCP 47 locale string used by metadata such as Open Graph locale.',
-                    examples: [
-                        'en-US',
-                    ],
-                },
-                open_graph: {
-                    $ref: '#/$defs/openGraph',
-                },
-            },
-        }
-    },
-    $defs: {
-        openGraph: {
-            type: 'object',
-            additionalProperties: true,
-            description: 'Open Graph metadata. Missing defaults are hydrated from the page data when possible.',
-            properties: {
-                type: {
-                    type: 'string',
-                    default: 'website',
-                    examples: [
-                        'website',
-                        'article',
-                        'profile',
-                    ],
-                },
-                title: {
-                    type: 'string',
-                    description: 'Open Graph title. Defaults to the page title when omitted.',
-                },
-                description: {
-                    type: 'string',
-                    description: 'Open Graph description. Defaults to the page description when omitted.',
-                },
-                url: {
-                    type: 'string',
-                    format: 'uri',
-                    description: 'Open Graph URL. Normally the canonical page URL.',
-                },
-                locale: {
-                    type: 'string',
-                    description: 'Open Graph locale. Defaults to the page locale when omitted.',
-                    examples: [
-                        'en_US',
-                    ],
-                },
-                image: {
-                    $ref: '#/$defs/mediaObject',
-                },
-                twitterImage: {
-                    $ref: '#/$defs/mediaObject',
-                },
-            },
-        },
-        mediaObject: {
-            type: 'object',
-            additionalProperties: true,
-            required: [
-                'url',
-            ],
-            properties: {
-                url: {
-                    type: 'string',
-                    format: 'uri',
-                },
-                alt: {
-                    type: 'string',
-                },
-                width: {
-                    type: 'integer',
-                    minimum: 1,
-                },
-                height: {
-                    type: 'integer',
-                    minimum: 1,
-                },
-                type: {
-                    type: 'string',
-                    description: 'Media MIME type.',
-                    examples: [
-                        'image/jpeg',
-                        'image/png',
-                        'image/webp',
-                    ],
-                },
-            },
-        },
-    },
-};
-```
-
-Optional top-level page data fields include:
-
-- `baseTemplate`: Overrides the default base template for this page. This value is a filename relative to `application/templates/base-templates/`.
-- `pageTemplate`: Overrides the default page template filename. This value is a filename relative to the current page directory under `application/pages/`.
-- `includes`: Loads additional text files from the current page directory under `application/pages/`.
-
-Included files can be used as raw text or rendered as mini templates against the assembled page data:
-
-```json
-{
-    "includes": {
-        "intro": { "filename": "intro.md" },
-        "sidebar": { "filename": "sidebar.html", "template": true }
-    }
-}
-```
-
-When a `page` object exists, Hyperview fills several metadata defaults:
-
-- `page.canonical_url` defaults to the request URL without query string or hash.
-- `page.href` defaults to the full request URL.
-- `page.open_graph.url` defaults to `page.canonical_url`.
-- `page.open_graph.type` defaults to `website`.
-- `page.open_graph.title`, `description`, and `locale` default to the
-  corresponding `page` values.
-
-`page.title` and `page.description` each accept either a plain string or a template object. When the template object form is used, Hyperview renders the `template` string against the assembled page data and replaces the object with the resulting string before the page template runs:
-
-```json
-{
-    "page": {
-        "title": { "template": "{{ page.author }} — kixx.dev" },
-        "description": "A static description string."
-    }
-}
-```
-
-Only define the `page.open_graph.image` and `page.open_graph.twitterImage` if the specified images are present.
-
-### HTML Response Rendering
-
-The normal page response pipeline is:
-
-1. The route invokes `HyperviewRequestHandler`.
-2. Hyperview validates and normalizes the request pathname.
-3. Hyperview loads and merges page data.
-4. Hyperview renders the page template, defaulting to `page.html`.
-5. The rendered page template becomes `pageData.body`.
-6. Hyperview renders the base template with the final page data.
-7. The response is returned as `text/html; charset=utf-8`.
-
-HTML is rendered on the server with the Kixx templating system. See @application/docs/kixx-templating.md for template file structure, template syntax, partials, and helpers.
-
-A simple page template at `application/pages/blog/hello-world/page.html` might look like this:
-
-```html
-<article>
-    <h1>{{ page.title }}</h1>
-    <p class="article-description">{{ page.description }}</p>
-
-    <div class="article-content">
-        {{!-- The "post" variable could come from an includes file --}}
-        {{markup post }}
-    </div>
-</article>
-```
-
-A simple base template at `application/templates/base-templates/website.html` might look like this:
-
-```html
-<!doctype html>
-<html lang="en-US">
-    <head>
-        {{> html-header.html }}
-        <style type="text/css">
-            {{> styles.css }}
-        </style>
-    </head>
-    <body>
-        <!-- START Main Content Container -->
-        <div>{{unescape body }}</div>
-    </body>
-</html>
-```
-
-- The "html-header.html" partial maps to `application/templates/partials/html-header.html`
-- The "styles.css" partial maps to `application/templates/partials/styles.css`
-
-### Hyperview Page-Data JSON Response
-
-Hyperview can return the assembled page data as JSON when JSON responses are enabled for the route. A request is considered a JSON request when either:
-
-- the pathname ends in `.json`; or
-- the `Accept` header includes `application/json`.
-
-This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data, but it is not the contract for application API endpoints.
-
-
+- `pages/` contains route-specific page metadata, and included content files.
+- `templates/base/` contains shared HTML document frames.
+- `templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
+- `templates/pages/` contains templates for specific pages.
+- `virtual-hosts.js` registers Worker routes and connects HTTP methods to middleware and request handlers.
+- `app/presentation/request-handlers/` contains application request handlers.
+- `app/presentation/middleware/` contains application inbound and outbound middleware.
+- `app/presentation/error-handlers/` contains application error handlers.
+- `app/presentation/forms/` contains form classes used to parse and validate inbound payloads.
