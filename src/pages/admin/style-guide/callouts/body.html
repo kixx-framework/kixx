@@ -1,149 +1,102 @@
 <header class="content-section__header">
-    <h2>Typography</h2>
-    <p>How to effectively use typography in the Kixx Admin Panel theme.</p>
+    <h2>Callouts</h2>
+    <p>A bordered notice that flags a message without derailing the page.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">Typography is the primary design element in this theme. Hierarchy is carried by <strong>scale and weight</strong> &mdash; not color, underlines, or decoration &mdash; so the system stays small, predictable, and honest about being an admin panel rather than a landing page.</p>
+    <p class="type-body-lg">A callout lifts one message out of the surrounding copy &mdash; a rule of thumb, a caution, an error &mdash; onto a sunken surface inside a coloured border, with an optional icon. It's the calm way to raise your voice: present enough to catch the eye, quiet enough not to shout over the content.</p>
 
-    <h3 class="type-h3">Two registers, plus labels and code</h3>
-    <p>Every piece of text belongs to one of four groups:</p>
+    <p>It's the first real consumer of the <a href="#colors">status colours</a>. The tone rides the border and the icon &mdash; graphical marks, which clear WCAG's 3:1 non-text threshold &mdash; while the message stays <code>--color-ink</code>. That's deliberate: it's why the warning tone resolves to a deep amber on light surfaces rather than the brand yellow, which is too light to read as a thin mark on white.</p>
+
+    <p><strong>When to use:</strong> to surface a single, scannable message tied to its context. For a transient confirmation that auto-dismisses, reach for a toast instead; for page-blocking decisions, a dialog. A callout is a <em>note on the page</em>, not an interruption of it &mdash; and a page stacked with callouts has none.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Anatomy</h3>
+<p class="doc-lede">Four parts; the icon is optional, the tone is a modifier. The default callout is a border, a body, and a surface.</p>
+<div class="anatomy flow">
+    <div class="demo-stage">
+        <div class="callout callout--warning" style="max-width: 32rem">
+            <span class="material-symbols-rounded callout__icon" aria-hidden="true">warning</span>
+            <div class="callout__body">
+                <p class="type-label">Unsaved changes</p>
+                <p class="type-body-sm">Leaving now will discard edits to this record. Save first if you want to keep them.</p>
+            </div>
+        </div>
+    </div>
+    <ol class="parts-list">
+        <li><strong>Accent border</strong> &mdash; a 2px border on all sides (<code>--callout-accent</code>, <code>--accent-border-width</code>); the tone modifier recolours it.</li>
+        <li><strong>Icon</strong> &mdash; optional, inherits <code>--callout-accent</code>; reinforces the tone so meaning survives without colour (<code>.callout__icon</code>).</li>
+        <li><strong>Body</strong> &mdash; the message (<code>.callout__body</code>): an optional label plus copy, always in <code>--color-ink</code>.</li>
+        <li><strong>Surface</strong> &mdash; the recessed fill (<code>--color-surface-sunken</code>) that lifts the note off the page.</li>
+    </ol>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Variants</h3>
+<p class="doc-lede">A base class plus three tone modifiers. Each tone resolves from a semantic token &mdash; no raw colour anywhere.</p>
+<div class="doc-prose">
     <ul>
-        <li><strong>Expressive</strong> (<code>DM Sans</code>) &mdash; the structural headings <code>h1</code>&ndash;<code>h4</code>. Heavy weights and tight line-height, used sparingly for impact.</li>
-        <li><strong>Functional</strong> (<code>Helvetica Neue</code>) &mdash; reading and UI text, from <code>.type-body-lg</code> down to <code>.type-caption</code>.</li>
-        <li><strong>Label / overline</strong> (mono, uppercase) &mdash; the theme's signature for small functional text. The buttons and the sidebar title already use it.</li>
-        <li><strong>Code</strong> (mono) &mdash; inline tokens, values, and snippets like <code>--text-h1</code>.</li>
+        <li><code>.callout</code> &mdash; the neutral emphasis note; the border is the primary ink (<code>--color-ink-primary</code>). Reach for it for a plain &ldquo;rule of thumb.&rdquo;</li>
+        <li><code>.callout--info</code> &mdash; cyan (<code>--color-ink-secondary</code>); calm, non-urgent information.</li>
+        <li><code>.callout--warning</code> &mdash; amber on light, yellow on dark (<code>--color-status-warning</code>); proceed with caution.</li>
+        <li><code>.callout--error</code> &mdash; red (<code>--color-status-danger</code>); something failed or is blocked.</li>
     </ul>
-
-    <h3 class="type-h3">Why every size is a fixed <code>rem</code></h3>
-    <p>Marketing sites use fluid <code>clamp()</code> headings so a hero looks huge on desktop and still fits a phone. An admin panel has no heroes: headings are structural labels inside a capped content column, and the window stays roughly one size all day. So we use fixed <code>rem</code> steps instead:</p>
-    <ul>
-        <li><strong>Predictable density.</strong> A section title is the same size every time, so dense screens and data tables stay stable instead of breathing with the viewport.</li>
-        <li><strong>Zoom &amp; accessibility.</strong> Fixed <code>rem</code> scales cleanly with browser zoom; <code>vw</code>-based fluid type partially ignores it, working against WCAG 1.4.4 (Resize Text).</li>
-        <li><strong>Simplicity.</strong> If a heading is ever too large on mobile, add one discrete breakpoint step &mdash; never continuous scaling.</li>
-    </ul>
-
+</div>
+<div class="flow">
     <div class="callout">
         <div class="callout__body">
             <p class="type-label">Rule of thumb</p>
-            <p>Line-height is role-dependent, never one global value. Big headings run tight (1.15), reading copy opens to 1.55 for breathability, and dense UI text sits near 1.4 to save vertical space.</p>
+            <p class="type-body-sm">The default tone. One note per idea &mdash; if everything is highlighted, nothing is.</p>
+        </div>
+    </div>
+    <div class="callout callout--info">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">info</span>
+        <div class="callout__body">
+            <p class="type-label">Heads up</p>
+            <p class="type-body-sm">Scheduled maintenance runs Sunday 02:00&ndash;03:00 UTC. No action needed.</p>
+        </div>
+    </div>
+    <div class="callout callout--warning">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">warning</span>
+        <div class="callout__body">
+            <p class="type-label">Warning</p>
+            <p class="type-body-sm">This API key has read-write access. Rotate it if it's ever been shared.</p>
+        </div>
+    </div>
+    <div class="callout callout--error">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <div class="callout__body">
+            <p class="type-label">Couldn't save</p>
+            <p class="type-body-sm">The server rejected the request (HTTP 422). Check the highlighted fields and try again.</p>
         </div>
     </div>
 </div>
 
-<h3 class="type-h3 doc-section-heading">The scale</h3>
-<p class="doc-lede">Each specimen shows the live role with its class, size, weight, line-height, and intended use. Samples use the <code>.type-*</code> utility classes so they don't disturb the page's heading outline.</p>
+<h3 class="type-h3 doc-section-heading">Usage</h3>
+<p class="doc-lede">Wrap the message in <code>.callout__body</code> so the optional icon and the copy lay out side by side. The icon is decorative &mdash; the tone word in the body carries the meaning.</p>
+<pre class="code-block"><code>&lt;div class="callout callout--warning"&gt;
+&lt;span class="material-symbols-rounded callout__icon" aria-hidden="true"&gt;warning&lt;/span&gt;
+&lt;div class="callout__body"&gt;
+&lt;p class="type-label"&gt;Warning&lt;/p&gt;
+&lt;p&gt;Proceed-with-caution message goes here.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
 
-<div class="specimen-list">
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-h1">Account settings</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>h1 &middot; .type-h1</dd></div>
-            <div><dt>Size</dt><dd>2.25rem &middot; 36px</dd></div>
-            <div><dt>Weight</dt><dd>700 &middot; Bold</dd></div>
-            <div><dt>Line-height</dt><dd>1.15</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Page title &mdash; one per screen, at the top of the main content.</dd></div>
-        </dl>
-    </article>
+&lt;!-- Neutral note: no modifier, no icon needed --&gt;
+&lt;div class="callout"&gt;
+&lt;div class="callout__body"&gt;&lt;p&gt;A plain rule of thumb.&lt;/p&gt;&lt;/div&gt;
+&lt;/div&gt;
 
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-h2">Notification preferences</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>h2 &middot; .type-h2</dd></div>
-            <div><dt>Size</dt><dd>1.75rem &middot; 28px</dd></div>
-            <div><dt>Weight</dt><dd>700 &middot; Bold</dd></div>
-            <div><dt>Line-height</dt><dd>1.15</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Section titles within a page. The sidebar nav links to these.</dd></div>
-        </dl>
-    </article>
+&lt;!-- An error raised after an action — announce it to assistive tech --&gt;
+&lt;div class="callout callout--error" role="alert"&gt;…&lt;/div&gt;</code></pre>
 
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-h3">Email digests</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>h3 &middot; .type-h3</dd></div>
-            <div><dt>Size</dt><dd>1.375rem &middot; 22px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; Semibold</dd></div>
-            <div><dt>Line-height</dt><dd>1.25</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Subsections and card headings inside a section.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-h4">Delivery frequency</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>h4 &middot; .type-h4</dd></div>
-            <div><dt>Size</dt><dd>1.125rem &middot; 18px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; Semibold</dd></div>
-            <div><dt>Line-height</dt><dd>1.25</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Minor headings and form field-group labels.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body-lg">Choose how often you'd like a summary of account activity. Digests group quieter notifications into a single, readable email so your inbox stays calm.</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-body-lg</dd></div>
-            <div><dt>Size</dt><dd>1.125rem &middot; 18px</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.55</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Long-form reading copy: intros, explanations, help articles.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body">Notifications are sent to the email on your account. You can change the destination address at any time from the Account tab.</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-body &middot; body</dd></div>
-            <div><dt>Size</dt><dd>1rem &middot; 16px</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.45</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Default UI text and descriptions &mdash; the page baseline.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body-sm">Applies to this device only. Other signed-in devices keep their own settings.</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-body-sm</dd></div>
-            <div><dt>Size</dt><dd>0.9375rem &middot; 15px</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.4</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Dense rows, helper text, and data-table cells.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-caption">Last updated 3 minutes ago &middot; by kris</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-caption</dd></div>
-            <div><dt>Size</dt><dd>0.8125rem &middot; 13px</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; muted</dd></div>
-            <div><dt>Line-height</dt><dd>1.4</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Captions, metadata, and timestamps.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-label">Account status</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-label</dd></div>
-            <div><dt>Size</dt><dd>0.75rem &middot; 12px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; mono, caps</dd></div>
-            <div><dt>Tracking</dt><dd>+0.1em</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Overlines, field labels, and status chips. The theme's small-text signature.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body">Reference a token inline, like <code>--leading-relaxed</code>, with the code role.</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>code &middot; .type-code</dd></div>
-            <div><dt>Size</dt><dd>0.9em &middot; relative</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; mono</dd></div>
-            <div><dt>Line-height</dt><dd>inherits</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Inline tokens, values, and short code snippets.</dd></div>
-        </dl>
-    </article>
+<h3 class="type-h3 doc-section-heading">Accessibility</h3>
+<div class="doc-prose">
+    <ul>
+        <li>Never lean on the border colour alone &mdash; pair the tone with the icon and a word (&ldquo;Warning&rdquo;, &ldquo;Couldn't save&rdquo;) so it reads in greyscale and for colour-blind users.</li>
+        <li>The icon is decorative once the text says the same thing; mark it <code>aria-hidden="true"</code> so it isn't announced twice.</li>
+        <li>For a callout that appears <em>in response to an action</em> (a save error, say), add <code>role="alert"</code> &mdash; or <code>role="status"</code> for non-urgent info &mdash; so screen readers announce it. A note present on load needs neither.</li>
+        <li>Keep the message in <code>--color-ink</code>; it sits on <code>--color-surface-sunken</code> and clears AA. Don't recolour body text to the accent &mdash; the status hues are tuned for marks (3:1), not for text (4.5:1).</li>
+    </ul>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
@@ -151,19 +104,19 @@
     <div class="card card--accent-secondary guideline guideline--do">
         <p class="type-label guideline__label">Do</p>
         <ul>
-            <li>Reach for semantic elements first &mdash; <code>h1</code>&ndash;<code>h4</code> and <code>p</code> render correctly with no classes.</li>
-            <li>Signal importance with size and weight, not color, italics, or underlines.</li>
-            <li>Let paragraphs breathe: <code>.type-body-lg</code> at 1.55 for anything people actually read.</li>
-            <li>Keep a single <code>h1</code> per screen as the page title.</li>
+            <li>Match the tone to the stakes: info for FYIs, warning before risk, error for failure.</li>
+            <li>Keep it to one idea, and put the gist in the first few words.</li>
+            <li>Pair every tone with its icon and a label word, not colour alone.</li>
+            <li>Let warning and error ride the border and icon; leave the body text in <code>--color-ink</code>.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
         <p class="type-label guideline__label">Don't</p>
         <ul>
-            <li>Pick a heading level for its size &mdash; choose the level for structure, then restyle with a <code>.type-*</code> class.</li>
-            <li>Invent new font sizes; every size lives in a <code>--text-*</code> token.</li>
-            <li>Reintroduce fluid <code>clamp()</code> type &mdash; fixed <code>rem</code> only, with a breakpoint step if needed.</li>
-            <li>Drop reading copy below 1.5 line-height.</li>
+            <li>Stack callouts down the page &mdash; competing alarms read as none at all.</li>
+            <li>Paint the body text or the whole surface in the tone colour, especially yellow.</li>
+            <li>Use error tone for ordinary emphasis; reserve red for things that are actually broken.</li>
+            <li>Reach past the tone modifiers to a raw <code>--palette-*</code> or an <code>hsl()</code> literal.</li>
         </ul>
     </div>
 </div>

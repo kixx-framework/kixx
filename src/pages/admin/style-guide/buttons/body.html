@@ -1,149 +1,92 @@
 <header class="content-section__header">
-    <h2>Typography</h2>
-    <p>How to effectively use typography in the Kixx Admin Panel theme.</p>
+    <h2>Buttons</h2>
+    <p>The action control &mdash; a mono, uppercase label in a rounded, pill-shaped target.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">Typography is the primary design element in this theme. Hierarchy is carried by <strong>scale and weight</strong> &mdash; not color, underlines, or decoration &mdash; so the system stays small, predictable, and honest about being an admin panel rather than a landing page.</p>
+    <p class="type-body-lg">Buttons trigger actions. The label is set in the mono <a href="#typography">label register</a> &mdash; uppercase and tracked &mdash; inside a fully-rounded, 2px-bordered pill, so an action reads as a deliberate, approachable thing to press.</p>
 
-    <h3 class="type-h3">Two registers, plus labels and code</h3>
-    <p>Every piece of text belongs to one of four groups:</p>
-    <ul>
-        <li><strong>Expressive</strong> (<code>DM Sans</code>) &mdash; the structural headings <code>h1</code>&ndash;<code>h4</code>. Heavy weights and tight line-height, used sparingly for impact.</li>
-        <li><strong>Functional</strong> (<code>Helvetica Neue</code>) &mdash; reading and UI text, from <code>.type-body-lg</code> down to <code>.type-caption</code>.</li>
-        <li><strong>Label / overline</strong> (mono, uppercase) &mdash; the theme's signature for small functional text. The buttons and the sidebar title already use it.</li>
-        <li><strong>Code</strong> (mono) &mdash; inline tokens, values, and snippets like <code>--text-h1</code>.</li>
-    </ul>
+    <p><strong>When to use:</strong> a <code>&lt;button&gt;</code> performs an action (save, delete, open a dialog); a <em>link</em> navigates somewhere. If pressing it changes the URL, it's a link &mdash; you can style it <code>.button</code>, but keep the <code>&lt;a&gt;</code> element. Keep a single primary action per view.</p>
+</div>
 
-    <h3 class="type-h3">Why every size is a fixed <code>rem</code></h3>
-    <p>Marketing sites use fluid <code>clamp()</code> headings so a hero looks huge on desktop and still fits a phone. An admin panel has no heroes: headings are structural labels inside a capped content column, and the window stays roughly one size all day. So we use fixed <code>rem</code> steps instead:</p>
-    <ul>
-        <li><strong>Predictable density.</strong> A section title is the same size every time, so dense screens and data tables stay stable instead of breathing with the viewport.</li>
-        <li><strong>Zoom &amp; accessibility.</strong> Fixed <code>rem</code> scales cleanly with browser zoom; <code>vw</code>-based fluid type partially ignores it, working against WCAG 1.4.4 (Resize Text).</li>
-        <li><strong>Simplicity.</strong> If a heading is ever too large on mobile, add one discrete breakpoint step &mdash; never continuous scaling.</li>
-    </ul>
+<h3 class="type-h3 doc-section-heading">Anatomy</h3>
+<p class="doc-lede">Every button is the same shape; only the fill changes between variants.</p>
+<div class="anatomy flow">
+    <div class="demo-stage">
+        <button class="button button--primary" type="button">Save changes</button>
+    </div>
+    <ol class="parts-list">
+        <li><strong>Label</strong> &mdash; a verb in the mono label register: uppercase, <code>+0.04em</code> tracking.</li>
+        <li><strong>Border</strong> &mdash; a 2px solid edge (<code>--button-border-width</code>) on fully-rounded pill corners (<code>--radius-pill</code>).</li>
+        <li><strong>Fill</strong> &mdash; the page surface for plain buttons, a brand color for emphasis.</li>
+        <li><strong>Target</strong> &mdash; a <code>2.5rem</code> minimum height for a comfortable, consistent target.</li>
+        <li><strong>Focus ring</strong> &mdash; a 3px <code>--color-focus-outline</code> outline, offset 2px (keyboard only).</li>
+    </ol>
+</div>
 
-    <div class="callout">
-        <div class="callout__body">
-            <p class="type-label">Rule of thumb</p>
-            <p>Line-height is role-dependent, never one global value. Big headings run tight (1.15), reading copy opens to 1.55 for breathability, and dense UI text sits near 1.4 to save vertical space.</p>
-        </div>
+<h3 class="type-h3 doc-section-heading">Variants</h3>
+<p class="doc-lede">One plain button plus three brand fills. Emphasis comes from fill, not size.</p>
+<div class="example-grid grid-auto" style="--grid-min: 13rem">
+    <div class="card card--flush example">
+        <div class="example__preview"><button class="button" type="button">Cancel</button></div>
+        <div class="example__label"><code>.button</code><span class="example__note">Plain / neutral &mdash; inverts to ink on hover</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview"><button class="button button--primary" type="button">Save</button></div>
+        <div class="example__label"><code>.button--primary</code><span class="example__note">The one primary action</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview"><button class="button button--secondary" type="button">Invite</button></div>
+        <div class="example__label"><code>.button--secondary</code><span class="example__note">Secondary emphasis</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview"><button class="button button--tertiary" type="button">Export</button></div>
+        <div class="example__label"><code>.button--tertiary</code><span class="example__note">Tertiary emphasis</span></div>
     </div>
 </div>
 
-<h3 class="type-h3 doc-section-heading">The scale</h3>
-<p class="doc-lede">Each specimen shows the live role with its class, size, weight, line-height, and intended use. Samples use the <code>.type-*</code> utility classes so they don't disturb the page's heading outline.</p>
+<h3 class="type-h3 doc-section-heading">States</h3>
+<p class="doc-lede">Hover, focus (press <kbd>Tab</kbd>), and click the live buttons to see each state.</p>
+<div class="states flow">
+    <div class="demo-stage">
+        <button class="button button--primary" type="button">Primary</button>
+        <button class="button" type="button">Plain</button>
+        <button class="button button--primary" type="button" disabled>Disabled</button>
+        <p class="demo-stage__hint">These are real controls &mdash; hover, tab to them, and press.</p>
+    </div>
+    <dl class="state-list">
+        <div><dt>Default</dt><dd>Resting. Plain sits on the page surface with an ink border; brand variants carry their fill.</dd></div>
+        <div><dt>Hover</dt><dd>Every variant inverts to a solid ink fill &mdash; the brand fill drops away so all buttons share one hover treatment.</dd></div>
+        <div><dt>Focus</dt><dd>A 3px <code>--color-focus-outline</code> ring, offset 2px. Shows for keyboard focus (<code>:focus-visible</code>), not mouse clicks.</dd></div>
+        <div><dt>Active</dt><dd>Nudges down 1px on press &mdash; a tactile, theme-agnostic cue.</dd></div>
+        <div><dt>Disabled</dt><dd>Brand fill and border are replaced with <code>--color-surface-sunken</code> and <code>--color-ink-muted</code> &mdash; all variants go grey so none reads as a muted brand action. Hover and press are suppressed.</dd></div>
+    </dl>
+</div>
 
-<div class="specimen-list">
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-h1">Account settings</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>h1 &middot; .type-h1</dd></div>
-            <div><dt>Size</dt><dd>2.25rem &middot; 36px</dd></div>
-            <div><dt>Weight</dt><dd>700 &middot; Bold</dd></div>
-            <div><dt>Line-height</dt><dd>1.15</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Page title &mdash; one per screen, at the top of the main content.</dd></div>
-        </dl>
-    </article>
+<h3 class="type-h3 doc-section-heading">Usage</h3>
+<p class="doc-lede">Match the element to the job: <code>&lt;button&gt;</code> for actions, <code>&lt;a&gt;</code> for navigation.</p>
+<pre class="code-block"><code>&lt;!-- Primary action — one per view --&gt;
+&lt;button class="button button--primary" type="button"&gt;Save changes&lt;/button&gt;
 
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-h2">Notification preferences</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>h2 &middot; .type-h2</dd></div>
-            <div><dt>Size</dt><dd>1.75rem &middot; 28px</dd></div>
-            <div><dt>Weight</dt><dd>700 &middot; Bold</dd></div>
-            <div><dt>Line-height</dt><dd>1.15</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Section titles within a page. The sidebar nav links to these.</dd></div>
-        </dl>
-    </article>
+&lt;!-- Secondary / neutral action --&gt;
+&lt;button class="button" type="button"&gt;Cancel&lt;/button&gt;
 
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-h3">Email digests</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>h3 &middot; .type-h3</dd></div>
-            <div><dt>Size</dt><dd>1.375rem &middot; 22px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; Semibold</dd></div>
-            <div><dt>Line-height</dt><dd>1.25</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Subsections and card headings inside a section.</dd></div>
-        </dl>
-    </article>
+&lt;!-- Navigation that looks like a button: keep the &lt;a&gt; --&gt;
+&lt;a class="button button--secondary" href="/settings"&gt;Open settings&lt;/a&gt;
 
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-h4">Delivery frequency</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>h4 &middot; .type-h4</dd></div>
-            <div><dt>Size</dt><dd>1.125rem &middot; 18px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; Semibold</dd></div>
-            <div><dt>Line-height</dt><dd>1.25</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Minor headings and form field-group labels.</dd></div>
-        </dl>
-    </article>
+&lt;!-- Disabled --&gt;
+&lt;button class="button button--primary" type="button" disabled&gt;Saving…&lt;/button&gt;</code></pre>
 
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body-lg">Choose how often you'd like a summary of account activity. Digests group quieter notifications into a single, readable email so your inbox stays calm.</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-body-lg</dd></div>
-            <div><dt>Size</dt><dd>1.125rem &middot; 18px</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.55</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Long-form reading copy: intros, explanations, help articles.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body">Notifications are sent to the email on your account. You can change the destination address at any time from the Account tab.</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-body &middot; body</dd></div>
-            <div><dt>Size</dt><dd>1rem &middot; 16px</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.45</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Default UI text and descriptions &mdash; the page baseline.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body-sm">Applies to this device only. Other signed-in devices keep their own settings.</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-body-sm</dd></div>
-            <div><dt>Size</dt><dd>0.9375rem &middot; 15px</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.4</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Dense rows, helper text, and data-table cells.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-caption">Last updated 3 minutes ago &middot; by kris</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-caption</dd></div>
-            <div><dt>Size</dt><dd>0.8125rem &middot; 13px</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; muted</dd></div>
-            <div><dt>Line-height</dt><dd>1.4</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Captions, metadata, and timestamps.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-label">Account status</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-label</dd></div>
-            <div><dt>Size</dt><dd>0.75rem &middot; 12px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; mono, caps</dd></div>
-            <div><dt>Tracking</dt><dd>+0.1em</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Overlines, field labels, and status chips. The theme's small-text signature.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body">Reference a token inline, like <code>--leading-relaxed</code>, with the code role.</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>code &middot; .type-code</dd></div>
-            <div><dt>Size</dt><dd>0.9em &middot; relative</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; mono</dd></div>
-            <div><dt>Line-height</dt><dd>inherits</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Inline tokens, values, and short code snippets.</dd></div>
-        </dl>
-    </article>
+<h3 class="type-h3 doc-section-heading">Accessibility</h3>
+<div class="doc-prose">
+    <ul>
+        <li>Use <code>&lt;button&gt;</code> for actions and <code>&lt;a&gt;</code> for navigation &mdash; keyboards and screen readers treat them differently; don't swap them.</li>
+        <li>Always set <code>type</code> on a <code>&lt;button&gt;</code> (<code>button</code> or <code>submit</code>) so it can't submit a form by accident.</li>
+        <li>The visible label is the accessible name; keep it a clear verb. An icon-only button needs an <code>aria-label</code>.</li>
+        <li>Never remove the focus ring &mdash; <code>:focus-visible</code> shows it for keyboard users only, so it doesn't clutter mouse clicks.</li>
+        <li>Buttons hold a <code>2.5rem</code> minimum height for a comfortable, consistent target; keep interactive controls at least this size.</li>
+        <li>When a control is disabled but users still need to know it exists, prefer <code>aria-disabled="true"</code> (it stays focusable and announced) over the <code>disabled</code> attribute.</li>
+    </ul>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
@@ -151,19 +94,19 @@
     <div class="card card--accent-secondary guideline guideline--do">
         <p class="type-label guideline__label">Do</p>
         <ul>
-            <li>Reach for semantic elements first &mdash; <code>h1</code>&ndash;<code>h4</code> and <code>p</code> render correctly with no classes.</li>
-            <li>Signal importance with size and weight, not color, italics, or underlines.</li>
-            <li>Let paragraphs breathe: <code>.type-body-lg</code> at 1.55 for anything people actually read.</li>
-            <li>Keep a single <code>h1</code> per screen as the page title.</li>
+            <li>Keep one primary button per view; make everything else plain or secondary.</li>
+            <li>Lead the label with a verb &mdash; &ldquo;Save changes,&rdquo; &ldquo;Delete,&rdquo; &ldquo;Invite.&rdquo;</li>
+            <li>Let the variant carry emphasis and trust the fixed sizes.</li>
+            <li>Reach for <code>.button</code> (plain) for low-emphasis and cancel actions.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
         <p class="type-label guideline__label">Don't</p>
         <ul>
-            <li>Pick a heading level for its size &mdash; choose the level for structure, then restyle with a <code>.type-*</code> class.</li>
-            <li>Invent new font sizes; every size lives in a <code>--text-*</code> token.</li>
-            <li>Reintroduce fluid <code>clamp()</code> type &mdash; fixed <code>rem</code> only, with a breakpoint step if needed.</li>
-            <li>Drop reading copy below 1.5 line-height.</li>
+            <li>Stack several primary buttons competing for the same attention.</li>
+            <li>Use a button to navigate &mdash; that's a link's job.</li>
+            <li>Remove the focus ring or drop below the <code>2.5rem</code> target.</li>
+            <li>Invent new fills; the four variants map to the brand palette.</li>
         </ul>
     </div>
 </div>
