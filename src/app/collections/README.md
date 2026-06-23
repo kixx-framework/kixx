@@ -49,7 +49,7 @@ The Collection API scopes all operations to its `TYPE`. When a document is creat
 
 ### Defining a Collection
 
-Collections are registered on the application context in `register()` and retrieved from request contexts with `context.getCollection(name)`. All application Collections should be registered from the app's `register(context)` lifecycle function in app/app.js, after their backing store service has been created. Collections and their paired Record subclasses should be defined in `app/collections/`.
+All application Collections should be registered from the app's `register(context)` lifecycle function in app/app.js, after their backing store service has been created. Collections and their paired Record subclasses should be defined in `app/collections/`.
 
 Each Collection subclass should be paired with a Record subclass. The Record subclass holds the document schema (`static schema`), implements `validate()` to enforce invariants before writes, and exposes domain-specific attribute getters. A minimal pair for the Document Store looks like this:
 
@@ -101,7 +101,7 @@ export default class UserCollection extends Collection {
     static Record = UserRecord;
 
     generateUniqueId(attributes) {
-        return attributes.username || super.generateUniqueId(attributes);
+        return attributes.username;
     }
 
     generateSortKey(doc) {
