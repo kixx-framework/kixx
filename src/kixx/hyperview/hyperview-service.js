@@ -138,8 +138,19 @@ export default class HyperviewService {
             });
 
         // Merge the pages together, with the more specific page data objects overriding
-        // their parents.
-        const metadata = deepMerge(...jsonItems);
+        // their parents. Includes are page-relative, so only the leaf page can declare
+        // files that should be loaded for the requested pathname.
+        const mergeItems = jsonItems.map((json, index) => {
+            if (index === jsonItems.length - 1) {
+                return json;
+            }
+
+            const parentJson = Object.assign({}, json);
+            delete parentJson.includes;
+            return parentJson;
+        });
+
+        const metadata = deepMerge(...mergeItems);
 
         return { version, metadata };
     }
