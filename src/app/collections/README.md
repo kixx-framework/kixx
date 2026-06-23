@@ -147,7 +147,7 @@ Document Store Collections expose four ways to write a document. Choose based on
 - **`create(context, input)`** — Inserts a new document. Throws `DocumentAlreadyExistsError` if a document already exists for the same `id`. Use this when the document must not already exist (e.g. a sign-up flow where a duplicate email means an error).
 - **`put(context, input)`** — Creates or overwrites a document without optimistic concurrency control. Use this for seeding, importing, or any case where you hold the canonical state and don't need to guard against concurrent writes.
 - **`update(context, dto)`** — Replaces an existing document only when the stored version matches `dto.version`. Throws `DocumentNotFoundError` when the document is absent and `VersionConflictError` when the version doesn't match. Use this for all user-initiated edits where a concurrent write could corrupt data.
-- **`updateWithRetry(context, dto, callback, options)`** — Tries `update()` once, then handles `VersionConflictError` by refetching the latest record, passing it to `callback(latest, { attempt, conflict })`, and retrying the returned or mutated record. Use this for recomputable mutations where automatic merge semantics are safe, such as nonce rotation, counters, timestamps, or similar server-owned values. Do not use it when the caller needs to see and resolve a conflicting user edit.
+- **`updateWithRetry(context, dto, callback, options)`** — Tries `update()` once, then handles `VersionConflictError` by refetching the latest record, passing it to `callback(latest, { attempt, conflict })`, and retrying the returned or mutated record. Use this for recomputable mutations where automatic merge semantics are safe, such as nonce rotation, counters, timestamps, or similar server-owned values. Do not use it when the caller needs to see and resolve a conflicting user edit. Because `updateWithRetry()` absorbs `VersionConflictError` internally, callers do not catch it. Instead it throws `RetryLimitExceededError` when conflicts continue past `retryLimit`, and `DocumentNotFoundError` if the document is deleted between a conflict and the refetch. `RetryLimitExceededError` carries `name`/`code` of `'RetryLimitExceededError'` plus `type`, `id`, and `retryLimit` properties.
 
 All write methods call `dto.validate()` before persisting. A `ValidationError` thrown from `validate()` propagates to the caller without touching the store.
 
@@ -171,12 +171,12 @@ Pagination cursors are opaque. Reuse a cursor only with the same method, documen
 
 `BaseDocumentStoreCollection#generateUniqueId(attributes)` is the canonical hook for creating document ids, including derived IDs such as usernames, slugs, or content hashes. Override `generateUniqueId` on the Collection subclass when a document type needs a stable id derived from attributes, a counter-backed id, an injected id service, or any other non-default id strategy. The default `generateUniqueId` returns `crypto.randomUUID()`.
 
-Override `generateSortKey(doc)` when the Collection needs a computed sort key. The default passes through `doc.sortKey` when present, or returns `undefined` to omit one. The sort key controls the ordering returned by `scan()` and must be a string that sorts lexicographically in the desired order. Range queries in `scan()` are only meaningful when all documents have sort keys.
+Override `generateSortKey(doc)` when the Collection needs a computed sort key. The default passes through `doc.sortKey` when present, or returns `undefined` to omit one. The sort key controls the ordering returned by `scan()` and must be a string that sorts lexicographically in the desired order. `generateSortKey()` must return a string, `null`, or `undefined`; returning any other type throws an `AssertionError` during a write. Range queries in `scan()` are only meaningful when all documents have sort keys.
 
 ### Document Store Collections: Deleting
 
 - **`delete(context, id)`** — Deletes one document by id without concurrency control. Returns `true` when a document was deleted, `false` when no document existed.
-- **`deleteStrict(context, dto)`** — Deletes a document only when the stored version matches `dto.version`. Throws `DocumentNotFoundError` when absent and `VersionConflictError` on a version mismatch.
+- **`deleteStrict(context, dto)`** — Deletes a document only when the stored version matches `dto.version`. Requires a Record instance — passing a plain object throws an `AssertionError`. Throws `DocumentNotFoundError` when absent and `VersionConflictError` on a version mismatch.
 
 ## Document Store Records
 
@@ -313,6 +313,37 @@ export default class UserCollection extends Collection {
     }
 }
 ```
+
+## Key/Value Store Collections
+
+The Key/Value Store base classes (`base-key-value-store-collection.js` and `base-key-value-store-record.js`) wrap the eventually-consistent Key/Value Store. They are subclassed the same way as the Document Store base classes — set `static TYPE` and optionally `static Record` — but the API is smaller because the Key/Value Store is a flat keyspace with no concurrency control, no secondary indexes, and no sort-key ordering.
+
+The Key/Value Store Collection owns the typed key format and stores each record as a JSON value at the key `${type}_${id}`. Callers never construct keys themselves.
+
+### Key/Value Store Collections: Methods
+
+There are only three methods. There is no `create`, `update`, `updateWithRetry`, `scan`, `query`, or `deleteStrict` — those depend on document-store capabilities the Key/Value Store does not provide.
+
+- **`get(context, id)`** — Retrieves one JSON record by id. Returns `null` when the key is absent or expired. Throws `AssertionError` when `id` is not a non-empty string.
+- **`put(context, input, options)`** — Creates or overwrites one JSON record. Accepts a plain attributes object or a Record instance, normalized the same way as the Document Store (`type` and `id` stripped from stored attributes, `input.id` preserved when non-empty, otherwise `generateUniqueId(attributes)`). Calls `validate()` before persisting. `options` carries expiration settings for the underlying store (`ttlSeconds` or `expiresAt`, mutually exclusive); the stored `type` is always forced to `'json'`. Returns the Record DTO that was written — this is the pre-persistence DTO, **not** a refetched record, because the Key/Value Store assigns no version or timestamps.
+- **`delete(context, id)`** — Deletes one JSON record by id. Resolves to `undefined`. Throws `AssertionError` when `id` is not a non-empty string.
+
+```js
+const sessions = context.getCollection('UserSession');
+
+const session = await sessions.put(context, { id: sessionId, userId }, { ttlSeconds: 86400 });
+const loaded = await sessions.get(context, sessionId);
+await sessions.delete(context, sessionId);
+```
+
+### Key/Value Store Records
+
+A Key/Value Store Record is a mutable DTO with the same attribute accessors as a Document Store Record — `get()`, `set()`, `merge()`, `deepMerge()` — and the same `validate()`, `toDocument()`, and `toObject()` methods. It differs in its metadata:
+
+- The only read-only metadata properties are `type` and `id`. There is **no** `version`, `createdAt`, or `updatedAt`, because the Key/Value Store provides no optimistic concurrency control or store-assigned timestamps.
+- `toObject()` returns attributes plus `type` and `id` with no `meta` key.
+
+Subclass the Key/Value Store Record to add a `static schema`, a `validate()` implementation, and domain getters that delegate to `this.get()`, exactly as with the Document Store Record.
 
 ## Custom Gateways
 
