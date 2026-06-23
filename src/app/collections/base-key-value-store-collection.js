@@ -1,7 +1,6 @@
 import Record from './base-key-value-store-record.js';
 import {
     assert,
-    assertEqual,
     assertNotEqual,
     assertNonEmptyString,
     AssertionError,
@@ -81,23 +80,13 @@ export default class Collection {
      * @param {Object} context - Request or execution context passed through to the key/value store
      * @param {string} id - Record identifier within this collection's type
      * @returns {Promise<Record|null>} The stored value wrapped in the configured Record class, or null when absent or expired
-     * @throws {AssertionError} When arguments are invalid or the stored value is malformed
+     * @throws {AssertionError} When arguments are invalid
      */
     async get(context, id) {
-        const key = this.#toKey(id, 'Collection#get()');
+        assertNonEmptyString(id, `Collection#get() invalid id for Key Value Collection (type:${ this.type })`);
+        const key = this.#toKey(id);
         const record = await this.#db.get(context, key, { type: 'json' });
-        if (record === null) {
-            return null;
-        }
-
-        const dto = this.Record.fromRecord(record);
-        this.#assertRecordBelongsToCollection(dto, 'Collection#get()');
-        assertEqual(
-            String(id),
-            dto.id,
-            'Collection#get() stored record id must match requested id',
-        );
-        return dto;
+        return record ? this.Record.fromRecord(record) : null;
     }
 
     /**
@@ -117,11 +106,12 @@ export default class Collection {
     async put(context, input, options) {
         const dto = this.#coerceToRecord(input, 'Collection#put()');
         dto.validate();
-        const record = this.#toStoredRecord(dto);
-        const key = this.#toKey(dto.id, 'Collection#put()');
+        const record = dto.toDocument();
+        assertNonEmptyString(record.id, `Collection#put() invalid id for Key Value Collection (type:${ this.type })`);
+        const key = this.#toKey(record.id);
         const opts = Object.assign({}, options, { type: 'json' });
         await this.#db.put(context, key, record, opts);
-        return this.Record.fromRecord(record);
+        return dto;
     }
 
     /**
@@ -132,7 +122,8 @@ export default class Collection {
      * @throws {AssertionError} When arguments are invalid
      */
     async delete(context, id) {
-        const key = this.#toKey(id, 'Collection#delete()');
+        assertNonEmptyString(id, `Collection#delete() invalid id for Key Value Collection (type:${ this.type })`);
+        const key = this.#toKey(id);
         await this.#db.delete(context, key);
     }
 
@@ -150,14 +141,12 @@ export default class Collection {
         return crypto.randomUUID();
     }
 
-    #toKey(id, methodName) {
-        assertNonEmptyString(id, `${ methodName } invalid id for Key Value Collection (type:${ this.type })`);
+    #toKey(id) {
         return `${ this.type }_${ id }`;
     }
 
     #coerceToRecord(input, methodName) {
         if (input instanceof this.Record) {
-            this.#assertRecordBelongsToCollection(input, methodName);
             return input;
         }
 
@@ -167,7 +156,15 @@ export default class Collection {
             );
         }
 
-        const attributes = copyAttributes(input);
+        const attributes = {};
+
+        for (const key of Object.keys(input)) {
+            if (key === 'type' || key === 'id') {
+                continue;
+            }
+
+            attributes[key] = input[key];
+        }
 
         let id = isNonEmptyString(input?.id) ? input.id : null;
         if (!id) {
@@ -180,32 +177,4 @@ export default class Collection {
             attributes,
         });
     }
-
-    #toStoredRecord(dto) {
-        this.#assertRecordBelongsToCollection(dto, 'Collection write');
-        return dto.toDocument();
-    }
-
-    #assertRecordBelongsToCollection(dto, methodName) {
-        assertEqual(
-            this.type,
-            dto.type,
-            `${ methodName } record type must match Collection.type`,
-        );
-    }
-}
-
-function copyAttributes(input) {
-    const attributes = {};
-
-    for (const key of Object.keys(input)) {
-        // Metadata belongs to the gateway, and __proto__ can mutate the target prototype.
-        if (key === 'type' || key === 'id' || key === '__proto__') {
-            continue;
-        }
-
-        attributes[key] = input[key];
-    }
-
-    return attributes;
 }

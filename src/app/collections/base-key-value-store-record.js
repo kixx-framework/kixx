@@ -9,17 +9,9 @@ import {
 
 
 /**
- * @typedef {Object} RecordSpec
- * @property {string} type - Record type managed by the owning collection.
- * @property {string} id - Record identifier within the type.
- * @property {Object} attributes - Plain object containing user-defined record attributes.
- */
-
-/**
  * Mutable DTO wrapping a key/value-store JSON record for collection callers.
  *
- * User-defined attributes are held in a private `#attributes` slot. Callers
- * read and write attributes through `get`, `set`, `merge`, and `deepMerge`;
+ * Read and write attributes through `get`, `set`, `merge`, and `deepMerge`;
  * subclasses expose domain-specific getters by delegating to `this.get(name)`.
  */
 export default class Record {
@@ -27,7 +19,10 @@ export default class Record {
     #attributes;
 
     /**
-     * @param {RecordSpec} spec - Stored record data and user-defined attributes.
+     * @param {Object} spec - Stored record data and user-defined attributes.
+     * @param {string} spec.type - Record type managed by the owning collection.
+     * @param {string} spec.id - Record identifier within the type.
+     * @param {Object} spec.attributes - Plain object containing user-defined record attributes.
      * @throws {AssertionError} When the spec shape is invalid.
      */
     constructor(spec) {
@@ -111,15 +106,12 @@ export default class Record {
     /**
      * Shallowly merges own enumerable attributes into this record.
      *
-     * A `__proto__` key is ignored so untrusted JSON cannot mutate the
-     * attributes object's prototype.
-     *
      * @param {Object} patch - Attribute values to assign.
      * @returns {Record} This record for chaining.
      * @throws {TypeError} When patch is null or undefined.
      */
     merge(patch) {
-        copyAttributes(this.#attributes, patch);
+        Object.assign(this.#attributes, patch);
         return this;
     }
 
@@ -141,7 +133,11 @@ export default class Record {
      * @throws {AssertionError} When name is not a non-empty string.
      */
     get(name) {
-        assertAttributeName(name, 'Record#get() attribute name');
+        if (!isNonEmptyString(name)) {
+            throw new AssertionError(
+                `Record#get() attribute name must be a non-empty string (got ${ toFriendlyString(name) })`,
+            );
+        }
         return this.#attributes[name];
     }
 
@@ -153,7 +149,11 @@ export default class Record {
      * @throws {AssertionError} When name is not a non-empty string.
      */
     set(name, value) {
-        assertAttributeName(name, 'Record#set() attribute name');
+        if (!isNonEmptyString(name)) {
+            throw new AssertionError(
+                `Record#set() attribute name must be a non-empty string (got ${ toFriendlyString(name) })`,
+            );
+        }
         this.#attributes[name] = value;
         return this;
     }
@@ -163,10 +163,10 @@ export default class Record {
      * @returns {Object} Record attributes plus `type` and `id`.
      */
     toDocument() {
-        const record = copyAttributes({}, this.#attributes);
-        record.type = this.type;
-        record.id = this.id;
-        return record;
+        return Object.assign({}, this.#attributes, {
+            type: this.type,
+            id: this.id,
+        });
     }
 
     /**
@@ -174,10 +174,10 @@ export default class Record {
      * @returns {Object} Record attributes plus `type` and `id`.
      */
     toObject() {
-        const object = copyAttributes({}, this.#attributes);
-        object.type = this.type;
-        object.id = this.id;
-        return object;
+        return Object.assign({}, this.#attributes, {
+            type: this.type,
+            id: this.id,
+        });
     }
 
     /**
@@ -195,49 +195,20 @@ export default class Record {
     static fromRecord(record) {
         const RecordClass = this;
 
+        const attributes = {};
+
+        for (const key of Object.keys(record)) {
+            if (key === 'type' || key === 'id') {
+                continue;
+            }
+
+            attributes[key] = record[key];
+        }
+
         return new RecordClass({
             type: record?.type,
             id: record?.id,
-            attributes: normalizeStoredAttributes(record),
+            attributes,
         });
-    }
-}
-
-function copyAttributes(target, source) {
-    for (const key of Object.keys(source)) {
-        // JSON payloads can carry this key; assigning it mutates the target prototype.
-        if (key === '__proto__') {
-            continue;
-        }
-
-        target[key] = source[key];
-    }
-
-    return target;
-}
-
-function normalizeStoredAttributes(record) {
-    if (!isPlainObject(record)) {
-        return record;
-    }
-
-    const attributes = {};
-
-    for (const key of Object.keys(record)) {
-        if (key === 'type' || key === 'id' || key === '__proto__') {
-            continue;
-        }
-
-        attributes[key] = record[key];
-    }
-
-    return attributes;
-}
-
-function assertAttributeName(name, label) {
-    if (!isNonEmptyString(name)) {
-        throw new AssertionError(
-            `${ label } must be a non-empty string (got ${ toFriendlyString(name) })`,
-        );
     }
 }

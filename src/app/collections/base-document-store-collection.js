@@ -3,7 +3,6 @@ import RetryLimitExceededError from './retry-limit-exceeded-error.js';
 import DocumentNotFoundError from '../../kixx/document-store/document-not-found-error.js';
 import {
     assert,
-    assertEqual,
     assertFunction,
     assertNotEqual,
     assertNonEmptyString,
@@ -33,8 +32,6 @@ import {
  * All reads and writes are automatically scoped to that type, and raw store
  * records are converted to and from the configured `Record` DTO class on
  * every call.
- *
- * @see DocumentStore in ../../kixx/document-store/document-store.js
  */
 export default class Collection {
 
@@ -132,7 +129,6 @@ export default class Collection {
             dto instanceof this.Record,
             'Collection#update() requires an instance of this.Record',
         );
-        this.#assertRecordBelongsToCollection(dto, 'Collection#update()');
         dto.validate();
         const record = await this.#db.update(context, this.#toDocument(dto), dto.version);
         return this.Record.fromRecord(record);
@@ -256,7 +252,6 @@ export default class Collection {
             dto instanceof this.Record,
             'Collection#deleteStrict() requires an instance of this.Record',
         );
-        this.#assertRecordBelongsToCollection(dto, 'Collection#deleteStrict()');
         return await this.#db.delete(context, this.type, dto.id, dto.version);
     }
 
@@ -336,7 +331,6 @@ export default class Collection {
 
     #coerceToRecord(input, methodName) {
         if (input instanceof this.Record) {
-            this.#assertRecordBelongsToCollection(input, methodName);
             return input;
         }
 
@@ -346,7 +340,15 @@ export default class Collection {
             );
         }
 
-        const attributes = copyAttributes(input);
+        const attributes = {};
+
+        for (const key of Object.keys(input)) {
+            if (key === 'type' || key === 'id') {
+                continue;
+            }
+
+            attributes[key] = input[key];
+        }
 
         let id = isNonEmptyString(input?.id) ? input.id : null;
         if (!id) {
@@ -361,8 +363,6 @@ export default class Collection {
     }
 
     #toDocument(dto) {
-        this.#assertRecordBelongsToCollection(dto, 'Collection write');
-
         const doc = dto.toDocument();
         const sortKey = this.generateSortKey(doc);
 
@@ -380,27 +380,4 @@ export default class Collection {
             `Collection#generateSortKey() must return a string, null, or undefined (got ${ toFriendlyString(sortKey) })`,
         );
     }
-
-    #assertRecordBelongsToCollection(dto, methodName) {
-        assertEqual(
-            this.type,
-            dto.type,
-            `${ methodName } record type must match Collection.type`,
-        );
-    }
-}
-
-function copyAttributes(input) {
-    const attributes = {};
-
-    for (const key of Object.keys(input)) {
-        // Metadata belongs to the gateway, and __proto__ can mutate the target prototype.
-        if (key === 'type' || key === 'id' || key === '__proto__') {
-            continue;
-        }
-
-        attributes[key] = input[key];
-    }
-
-    return attributes;
 }

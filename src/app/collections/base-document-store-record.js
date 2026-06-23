@@ -10,16 +10,6 @@ import {
 
 
 /**
- * @typedef {Object} RecordSpec
- * @property {string} type - Document type managed by the owning collection.
- * @property {string} id - Document identifier within the type.
- * @property {number} version - Optimistic concurrency version returned by the document store.
- * @property {Date|string} createdAt - Creation timestamp from the document store.
- * @property {Date|string} updatedAt - Last-write timestamp from the document store.
- * @property {Object} attributes - Plain object containing user-defined document attributes.
- */
-
-/**
  * Mutable DTO wrapping a document-store record for collection callers.
  *
  * User-defined attributes are held in a private `#attributes` slot. Callers
@@ -31,7 +21,13 @@ export default class Record {
     #attributes;
 
     /**
-     * @param {RecordSpec} spec - Stored record data and user-defined attributes.
+     * @param {Object} spec - Stored record data and user-defined attributes.
+     * @param {string} spec.type - Document type managed by the owning collection.
+     * @param {string} spec.id - Document identifier within the type.
+     * @param {number} spec.version - Optimistic concurrency version returned by the document store.
+     * @param {Date|string} spec.createdAt - Creation timestamp from the document store.
+     * @param {Date|string} spec.updatedAt - Last-write timestamp from the document store.
+     * @param {Object} spec.attributes - Plain object containing user-defined document attributes.
      * @throws {AssertionError} When the spec shape or timestamp fields are invalid.
      */
     constructor(spec) {
@@ -174,15 +170,12 @@ export default class Record {
     /**
      * Shallowly merges own enumerable attributes into this record.
      *
-     * A `__proto__` key is ignored so untrusted JSON cannot mutate the
-     * attributes object's prototype.
-     *
      * @param {Object} patch - Attribute values to assign.
      * @returns {Record} This record for chaining.
      * @throws {TypeError} When patch is null or undefined.
      */
     merge(patch) {
-        copyAttributes(this.#attributes, patch);
+        Object.assign(this.#attributes, patch);
         return this;
     }
 
@@ -204,7 +197,11 @@ export default class Record {
      * @throws {AssertionError} When name is not a non-empty string.
      */
     get(name) {
-        assertAttributeName(name, 'Record#get() attribute name');
+        if (!isNonEmptyString(name)) {
+            throw new AssertionError(
+                `Record#get() attribute name must be a non-empty string (got ${ toFriendlyString(name) })`,
+            );
+        }
         return this.#attributes[name];
     }
 
@@ -216,7 +213,11 @@ export default class Record {
      * @throws {AssertionError} When name is not a non-empty string.
      */
     set(name, value) {
-        assertAttributeName(name, 'Record#set() attribute name');
+        if (!isNonEmptyString(name)) {
+            throw new AssertionError(
+                `Record#set() attribute name must be a non-empty string (got ${ toFriendlyString(name) })`,
+            );
+        }
         this.#attributes[name] = value;
         return this;
     }
@@ -226,10 +227,10 @@ export default class Record {
      * @returns {Object} Document attributes plus `type` and `id`.
      */
     toDocument() {
-        const doc = copyAttributes({}, this.#attributes);
-        doc.type = this.type;
-        doc.id = this.id;
-        return doc;
+        return Object.assign({}, this.#attributes, {
+            type: this.type,
+            id: this.id,
+        });
     }
 
     /**
@@ -238,15 +239,15 @@ export default class Record {
      * @returns {Object} Document attributes plus `type`, `id`, and `meta`.
      */
     toObject() {
-        const object = copyAttributes({}, this.#attributes);
-        object.type = this.type;
-        object.id = this.id;
-        object.meta = {
-            version: this.version,
-            createdAt: this.createdAt,
-            updatedAt: this.updatedAt,
-        };
-        return object;
+        return Object.assign({}, this.#attributes, {
+            type: this.type,
+            id: this.id,
+            meta: {
+                version: this.version,
+                createdAt: this.createdAt,
+                updatedAt: this.updatedAt,
+            },
+        });
     }
 
     /**
@@ -268,52 +269,24 @@ export default class Record {
     static fromRecord(record) {
         const RecordClass = this;
 
+        const { doc } = record;
+        const attributes = {};
+
+        for (const key of Object.keys(doc)) {
+            if (key === 'type' || key === 'id') {
+                continue;
+            }
+
+            attributes[key] = doc[key];
+        }
+
         return new RecordClass({
             type: record.type,
             id: record.id,
             version: record.version,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt,
-            attributes: normalizeStoredAttributes(record.doc),
+            attributes,
         });
-    }
-}
-
-function copyAttributes(target, source) {
-    for (const key of Object.keys(source)) {
-        // JSON payloads can carry this key; assigning it mutates the target prototype.
-        if (key === '__proto__') {
-            continue;
-        }
-
-        target[key] = source[key];
-    }
-
-    return target;
-}
-
-function normalizeStoredAttributes(doc) {
-    if (!isPlainObject(doc)) {
-        return doc;
-    }
-
-    const attributes = {};
-
-    for (const key of Object.keys(doc)) {
-        if (key === 'type' || key === 'id' || key === '__proto__') {
-            continue;
-        }
-
-        attributes[key] = doc[key];
-    }
-
-    return attributes;
-}
-
-function assertAttributeName(name, label) {
-    if (!isNonEmptyString(name)) {
-        throw new AssertionError(
-            `${ label } must be a non-empty string (got ${ toFriendlyString(name) })`,
-        );
     }
 }
