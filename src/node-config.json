@@ -6,6 +6,7 @@
             "LOG_LEVEL": "debug",
             "HYPERVIEW_ALLOW_JSON_RESPONSE": true,
             "HYPERVIEW_USE_CACHE": false,
+            "PBKDF2_ITERATIONS": 50000,
 
             "DOCUMENT_STORE": {
                 "path": "../data/nodejs_app/document_store.sqlite"
@@ -27,6 +28,7 @@
             "LOG_LEVEL": "debug",
             "HYPERVIEW_ALLOW_JSON_RESPONSE": false,
             "HYPERVIEW_USE_CACHE": true,
+            "PBKDF2_ITERATIONS": 50000,
 
             "DOCUMENT_STORE": {
                 "path": "../data/nodejs_app/document_store.sqlite"
@@ -48,6 +50,7 @@
             "LOG_LEVEL": "warn",
             "HYPERVIEW_ALLOW_JSON_RESPONSE": false,
             "HYPERVIEW_USE_CACHE": true,
+            "PBKDF2_ITERATIONS": 50000,
 
             "DOCUMENT_STORE": {
                 "path": "../data/nodejs_app/document_store.sqlite"

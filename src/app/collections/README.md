@@ -158,12 +158,6 @@ Override `generateSortKey(doc)` when the Collection needs a computed sort key. T
 - **`delete(context, id)`** — Deletes one document by id without concurrency control. Returns `true` when a document was deleted, `false` when no document existed.
 - **`deleteStrict(context, dto)`** — Deletes a document only when the stored version matches `dto.version`. Throws `DocumentNotFoundError` when absent and `VersionConflictError` on a version mismatch.
 
-### Document Store Collections: Error Handling
-
-Generally, errors from the storage engines are considered operational errors. Most application logic in Transaction Scripts should catch these errors and react accordingly without crashing. There may be cases where these errors represent a failed assumption and should be rethrown as assertion errors to crash the system. See the `docs/error-handling.md` document for more details.
-
-**Important**: Use the error.name or error.code instead of `instanceof` to check for error types.
-
 ## Document Store Records
 
 Document Store Collection methods which return document data return one or more `Record` instances. A Record is a mutable DTO wrapping the raw store record. User-defined document fields are held in a private `#attributes` slot — they are **not** accessible as direct properties on the Record instance. Always read and write document fields through the accessor methods.
