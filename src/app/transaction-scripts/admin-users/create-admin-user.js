@@ -1,5 +1,5 @@
 import { AssertionError, ConflictError, OperationalError } from '../../../kixx/errors/mod.js';
-import { hashPassword } from '../password-hashing.js';
+import { pbkdf2HashPassword } from '../../lib/crypto.js';
 
 
 export async function createAdminUser(context, form) {
@@ -9,7 +9,7 @@ export async function createAdminUser(context, form) {
     // without a code change. Required here so a misconfigured deployment
     // fails loudly before writing a User or Session.
     const iterations = context.getEnvInteger('PBKDF2_ITERATIONS', { required: true });
-    const passwordHash = await hashPassword(password, iterations);
+    const passwordHash = await pbkdf2HashPassword(password, iterations);
 
     const adminUsers = context.getCollection('AdminUser');
     const sessions = context.getCollection('UserSession');

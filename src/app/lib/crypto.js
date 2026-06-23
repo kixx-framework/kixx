@@ -1,15 +1,60 @@
 import {
+    AssertionError,
     assert,
     assertNonEmptyString,
-} from '../../../kixx/assertions/mod.js';
+    isString,
+    isUndefined,
+} from '../../kixx/assertions/mod.js';
+
+
+const SECRET_TOKEN_BYTE_LENGTH = 32;
 
 // PBKDF2-HMAC-SHA-512 parameters. SALT_BYTES and HASH_BYTES are fixed for all
 // new hashes. ALGORITHM is embedded in the PHC string so the verifier can
 // reject unknown algorithms without attempting derivation.
-const SALT_BYTES = 16;
-const HASH_BYTES = 32;
-const HASH_BITS = HASH_BYTES * 8;
-const ALGORITHM = 'pbkdf2-sha512';
+const PBKDF2_SALT_BYTES = 16;
+const PBKDF2_HASH_BYTES = 32;
+const PBKDF2_HASH_BITS = PBKDF2_HASH_BYTES * 8;
+const PBKDF2_ALGORITHM = 'pbkdf2-sha512';
+
+
+/**
+ * Generates a 256-bit secret token encoded as lowercase hexadecimal text.
+ * @param {string} [prefix] - Optional literal prefix prepended to the random token body.
+ * @returns {string} Secret token suitable for login links, sessions, or API credentials.
+ * @throws {AssertionError} When prefix is present and is not a string.
+ */
+export function generateSecretToken(prefix) {
+    const tokenPrefix = isUndefined(prefix) ? '' : prefix;
+
+    if (!isString(tokenPrefix)) {
+        throw new AssertionError('generateSecretToken() prefix must be a string when present');
+    }
+
+    const bytes = new Uint8Array(SECRET_TOKEN_BYTE_LENGTH);
+    crypto.getRandomValues(bytes);
+
+    return `${ tokenPrefix }${ bytesToHex(bytes) }`;
+}
+
+/**
+ * Hashes a non-empty string with SHA-256 and returns a lowercase hex digest.
+ * @param {string} value - Non-empty value to hash.
+ * @returns {Promise<string>} Hex-encoded SHA-256 digest.
+ * @throws {AssertionError} When value is not a non-empty string.
+ */
+export async function sha256Hex(value) {
+    assertNonEmptyString(value, 'sha256Hex() value');
+
+    const bytes = new TextEncoder().encode(value);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+
+    return bytesToHex(new Uint8Array(digest));
+}
+
+function bytesToHex(bytes) {
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
 
 
 /**
@@ -27,22 +72,22 @@ const ALGORITHM = 'pbkdf2-sha512';
  * @throws {AssertionError} When password is not a non-empty string or iterations
  *   is not a positive integer.
  */
-export async function hashPassword(password, iterations) {
-    assertNonEmptyString(password, 'hashPassword: password must be a non-empty string');
+export async function pbkdf2HashPassword(password, iterations) {
+    assertNonEmptyString(password, 'pbkdf2HashPassword: password must be a non-empty string');
     assert(
         Number.isInteger(iterations) && iterations > 0,
         'hashPassword: iterations must be a positive integer',
     );
 
-    const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-    const hash = await deriveKey(password, salt, iterations);
+    const salt = crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_BYTES));
+    const hash = await pbkdf2DeriveKey(password, salt, iterations);
 
-    return `$${ALGORITHM}$i=${iterations}$${bytesToBase64(salt)}$${bytesToBase64(hash)}`;
+    return `$${ PBKDF2_ALGORITHM }$i=${ iterations }$${bytesToBase64(salt)}$${bytesToBase64(hash)}`;
 }
 
 /**
  * Verifies a plaintext password against a PHC-encoded credential string
- * produced by `hashPassword`.
+ * produced by `pbkdf2HashPassword()`.
  *
  * The comparison is constant-time with respect to the position of the first
  * differing byte, so timing differences do not leak information about the
@@ -59,7 +104,7 @@ export async function verifyPassword(password, phcString) {
     assertNonEmptyString(phcString, 'verifyPassword: phcString must be a non-empty string');
 
     const { iterations, salt, hash } = parsePHCString(phcString);
-    const derived = await deriveKey(password, salt, iterations);
+    const derived = await pbkdf2DeriveKey(password, salt, iterations);
 
     return timingSafeEqual(derived, hash);
 }
@@ -72,7 +117,7 @@ export async function verifyPassword(password, phcString) {
  * @param {number} iterations - PBKDF2 iteration count.
  * @returns {Promise<Uint8Array>} Derived key bytes.
  */
-async function deriveKey(password, salt, iterations) {
+async function pbkdf2DeriveKey(password, salt, iterations) {
     const keyMaterial = await crypto.subtle.importKey(
         'raw',
         new TextEncoder().encode(password),
@@ -89,7 +134,7 @@ async function deriveKey(password, salt, iterations) {
             hash: 'SHA-512',
         },
         keyMaterial,
-        HASH_BITS,
+        PBKDF2_HASH_BITS,
     );
 
     return new Uint8Array(derivedBits);
@@ -109,7 +154,7 @@ function parsePHCString(phcString) {
     const parts = phcString.split('$');
 
     assert(parts.length === 5, 'verifyPassword: malformed PHC string — wrong number of segments');
-    assert(parts[1] === ALGORITHM, `verifyPassword: unsupported algorithm "${ parts[1] }" in PHC string`);
+    assert(parts[1] === PBKDF2_ALGORITHM, `verifyPassword: unsupported algorithm "${ parts[1] }" in PHC string`);
 
     const iterMatch = /^i=(\d+)$/.exec(parts[2]);
     assert(iterMatch !== null, 'verifyPassword: malformed iterations param in PHC string');
