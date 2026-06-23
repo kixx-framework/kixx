@@ -21,13 +21,13 @@ export default class AdminUserRecord extends Record {
     validate() {
         const error = new ValidationError('Invalid admin user record');
 
-        if (isNonEmptyString(this.get('emailAddress'))) {
+        if (!isNonEmptyString(this.get('emailAddress'))) {
             error.push('AdminUser emailAddress is required', 'emailAddress');
         }
-        if (isNonEmptyString(this.get('passwordHash'))) {
+        if (!isNonEmptyString(this.get('passwordHash'))) {
             error.push('AdminUser passwordHash is required', 'passwordHash');
         }
-        if (isNonEmptyString(this.get('userCreationDate'))) {
+        if (!isNonEmptyString(this.get('userCreationDate'))) {
             error.push('AdminUser userCreationDate is required', 'userCreationDate');
         }
 

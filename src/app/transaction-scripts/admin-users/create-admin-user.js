@@ -2,6 +2,9 @@ import { AssertionError, ConflictError, OperationalError } from '../../../kixx/e
 import { pbkdf2HashPassword } from '../../lib/crypto.js';
 
 
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 3;
+
+
 export async function createAdminUser(context, form) {
     const { email_address, username, password } = form;
 
@@ -46,7 +49,7 @@ export async function createAdminUser(context, form) {
 
     let session;
     try {
-        session = await sessions.createForUser(context, user.id);
+        session = await sessions.createForUser(context, user.id, SESSION_TTL_SECONDS);
     } catch (cause) {
         context.logger.error('failed to create session after signup', { username }, cause);
         // Session creation is best-effort: failure here does not roll back
