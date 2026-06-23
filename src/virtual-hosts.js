@@ -13,7 +13,7 @@ export default [
                 name: 'admin-panel',
                 routes: [
                     {
-                        pattern: '/style-guide',
+                        pattern: '/style-guide{.:suffix}',
                         name: 'style-guide',
                         targets: [
                             {
@@ -28,7 +28,7 @@ export default [
                 ],
             },
             {
-                pattern: '/users/admin/new',
+                pattern: '/users/admin/new{.:suffix}',
                 name: 'new-admin-user-form',
                 targets: [
                     {
@@ -49,7 +49,7 @@ export default [
                 ],
             },
             {
-                pattern: '/login/admin/new',
+                pattern: '/login/admin/new{.:suffix}',
                 name: 'admin-login-form',
                 targets: [
                     {
