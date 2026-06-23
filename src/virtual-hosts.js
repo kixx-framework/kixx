@@ -1,5 +1,7 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
 import { StaticFileServerHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+import { getNewAdminUserForm, getAdminUserLoginForm } from './app/presentation/request-handlers/admin-users.js';
+
 
 export default [
     {
@@ -26,12 +28,20 @@ export default [
                 ],
             },
             {
-                pattern: '/accounts/admin/new',
-                name: 'new-admin-account-form',
+                pattern: '/users/admin/new',
+                name: 'new-admin-user-form',
                 targets: [
                     {
                         name: 'render-form',
                         methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            getNewAdminUserForm,
+                            HyperviewDynamicPageHandler(),
+                        ],
+                    },
+                    {
+                        name: 'post-form',
+                        methods: [ 'POST' ],
                         requestHandlers: [
                             HyperviewDynamicPageHandler(),
                         ],
@@ -45,6 +55,14 @@ export default [
                     {
                         name: 'render-form',
                         methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            getAdminUserLoginForm,
+                            HyperviewDynamicPageHandler(),
+                        ],
+                    },
+                    {
+                        name: 'post-form',
+                        methods: [ 'POST' ],
                         requestHandlers: [
                             HyperviewDynamicPageHandler(),
                         ],

@@ -1,6 +1,6 @@
 import {
     isNonEmptyString,
-} from '../../kixx/assertions/mod.js';
+} from '../../../kixx/assertions/mod.js';
 
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 

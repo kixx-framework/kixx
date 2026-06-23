@@ -1,4 +1,4 @@
-import { assert, isString } from '../../kixx/assertions/mod.js';
+import { isString } from '../../../kixx/assertions/mod.js';
 
 /**
  * @typedef {Object} FormRenderContext
@@ -56,8 +56,6 @@ export default class BaseForm {
         }
 
         const target = context.getHttpTarget(this.constructor.target);
-
-        assert(target, `missing HTTP target "${ this.constructor.target }"`);
 
         return {
             name: this.constructor.name,

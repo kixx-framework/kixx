@@ -20,7 +20,7 @@ export default class NewAdminUserForm extends BaseForm {
      * @static
      * @readonly
      */
-    static target = 'new-admin-account-form/post-form';
+    static target = 'new-admin-user-form/post-form';
 
     /**
      * HTTP method used for browser form submissions.
