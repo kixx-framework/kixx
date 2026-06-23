@@ -9,7 +9,7 @@ export async function createAdminUser(context, form) {
     // without a code change. Required here so a misconfigured deployment
     // fails loudly before writing a User or Session.
     const iterations = context.getEnvInteger('PBKDF2_ITERATIONS', { required: true });
-    const password_hash = await hashPassword(password, iterations);
+    const passwordHash = await hashPassword(password, iterations);
 
     const adminUsers = context.getCollection('AdminUser');
     const sessions = context.getCollection('UserSession');
@@ -25,9 +25,9 @@ export async function createAdminUser(context, form) {
 
     let user;
     try {
-        user = await adminUsers.createNewUser(context, {
-            email_address,
-            password_hash,
+        user = await adminUsers.createNewAdminUser(context, {
+            emailAddress: email_address,
+            passwordHash,
         });
     } catch (cause) {
         if (cause.name === 'DocumentUniqueIndexViolationError') {

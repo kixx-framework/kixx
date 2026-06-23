@@ -14,8 +14,8 @@ import {
  * @property {string} type - Document type managed by the owning collection.
  * @property {string} id - Document identifier within the type.
  * @property {number} version - Optimistic concurrency version returned by the document store.
- * @property {Date} createdAt - Date from the document store.
- * @property {Date} updatedAt - Date from the document store.
+ * @property {Date|string} createdAt - Creation timestamp from the document store.
+ * @property {Date|string} updatedAt - Last-write timestamp from the document store.
  * @property {Object} attributes - Plain object containing user-defined document attributes.
  */
 
@@ -132,29 +132,15 @@ export default class Record {
     }
 
     /**
-     * Subclasses should override validate() and throw a ValidationError
-     * when appropriate.
+     * Validates this record before persistence.
+     *
+     * Subclasses override this method and throw a ValidationError when the
+     * current attributes violate document invariants.
+     *
+     * @returns {void}
+     * @throws {ValidationError} When the record is not valid for persistence.
      */
     validate() { }
-
-    /**
-     * Returns a content-derived id for a new record, or null when this record
-     * type uses an opaque id assigned by the gateway.
-     *
-     * Subclasses override this when identity is a domain fact (e.g., username,
-     * slug, content hash). The default returns null so the owning Collection
-     * falls back to its own `generateUniqueId()`.
-     *
-     * Runs against a plain attributes object before any Record instance exists,
-     * so it must be implemented as a static method and must not depend on
-     * Record instance state.
-     *
-     * @param {Object} _attributes - Attributes the new record is being built from.
-     * @returns {string|null}
-     */
-    static deriveId(_attributes) {
-        return null;
-    }
 
     /**
      * Builds a Record instance for the write path, before the document store
@@ -186,12 +172,17 @@ export default class Record {
     }
 
     /**
-     * Shallowly merges attributes into this record.
+     * Shallowly merges own enumerable attributes into this record.
+     *
+     * A `__proto__` key is ignored so untrusted JSON cannot mutate the
+     * attributes object's prototype.
+     *
      * @param {Object} patch - Attribute values to assign.
      * @returns {Record} This record for chaining.
+     * @throws {TypeError} When patch is null or undefined.
      */
     merge(patch) {
-        Object.assign(this.#attributes, patch);
+        copyAttributes(this.#attributes, patch);
         return this;
     }
 
@@ -235,10 +226,10 @@ export default class Record {
      * @returns {Object} Document attributes plus `type` and `id`.
      */
     toDocument() {
-        return Object.assign({}, this.#attributes, {
-            type: this.type,
-            id: this.id,
-        });
+        const doc = copyAttributes({}, this.#attributes);
+        doc.type = this.type;
+        doc.id = this.id;
+        return doc;
     }
 
     /**
@@ -247,19 +238,23 @@ export default class Record {
      * @returns {Object} Document attributes plus `type`, `id`, and `meta`.
      */
     toObject() {
-        return Object.assign({}, this.#attributes, {
-            type: this.type,
-            id: this.id,
-            meta: {
-                version: this.version,
-                createdAt: this.createdAt,
-                updatedAt: this.updatedAt,
-            },
-        });
+        const object = copyAttributes({}, this.#attributes);
+        object.type = this.type;
+        object.id = this.id;
+        object.meta = {
+            version: this.version,
+            createdAt: this.createdAt,
+            updatedAt: this.updatedAt,
+        };
+        return object;
     }
 
     /**
      * Wraps a raw document-store record in the receiving Record class.
+     *
+     * Stored `type` and `id` fields are metadata and are not copied into the
+     * mutable user-defined attributes object.
+     *
      * @param {Object} record - Raw record returned by DocumentStore.
      * @param {string} record.type - Document type.
      * @param {string} record.id - Document identifier.
@@ -279,9 +274,40 @@ export default class Record {
             version: record.version,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt,
-            attributes: record.doc,
+            attributes: normalizeStoredAttributes(record.doc),
         });
     }
+}
+
+function copyAttributes(target, source) {
+    for (const key of Object.keys(source)) {
+        // JSON payloads can carry this key; assigning it mutates the target prototype.
+        if (key === '__proto__') {
+            continue;
+        }
+
+        target[key] = source[key];
+    }
+
+    return target;
+}
+
+function normalizeStoredAttributes(doc) {
+    if (!isPlainObject(doc)) {
+        return doc;
+    }
+
+    const attributes = {};
+
+    for (const key of Object.keys(doc)) {
+        if (key === 'type' || key === 'id' || key === '__proto__') {
+            continue;
+        }
+
+        attributes[key] = doc[key];
+    }
+
+    return attributes;
 }
 
 function assertAttributeName(name, label) {

@@ -1,12 +1,22 @@
 # Collections
 
-This application keeps data persistence behind a small Data Source Layer, using Collections and Records, separate from presentation and domain logic. For application feature code, agents should always work through registered Collections instead of talking directly to storage infrastructure. This applies to both durable Document Store data and Key Value Store backed data.
+This application keeps data persistence behind a small Data Source Layer, using Collections and Records, separate from presentation and domain logic.
 
-## Document Store
+- **Collections** - Table and Type data source gateway
+- **Records** - Row and Document data source gateway
 
-This application primarily uses a Document Store and a separate Key Value Store for data persistence. Both the Document Store and Key Value Store are registered as a service on the application and request context as "DocumentStore" and "KeyValueStore".
+For application feature code, agents should always work through registered Collections instead of talking directly to storage infrastructure.
 
-Application code should access stored data through the Gateway pattern; using registered Collections from the RequestContext:
+## Backing Stores
+
+This application primarily uses:
+
+- **Document Store** - A JSON Document persistence engine with scan, query, and concurrency control capabilities.
+- **Key Value Store** - A simple key/value persistence engine which can store JSON, text blobs, and ArrayBuffers. The key/value store is eventually consistent and has no concurrency control.
+
+An application may also implement custom storage engines with custom Collection and Record gateways.
+
+In any case, application code should access stored data through the Gateway pattern; using registered Collections from the RequestContext:
 
 ```js
 const users = context.getCollection('User');
@@ -15,12 +25,21 @@ const user = await users.get(context, userId);
 
 ## Gateways
 
-There are two Gateway patterns used on top of the s:
+By default, there are two Gateway patterns used in Kixx applications:
 
-- **Record** - app/data-source-layer/record.js - Implements the Row Data Gateway and Data Transfer Object (DTO) patterns.
-- **Collection** - app/data-source-layer/collection.js - Implements the Table Data Gateway and Table Module patterns.
+### Record
 
-The `Collection` and `Record` classes are intended to be subclassed for specific application domains
+- **Document Store Record** - app/collections/base-document-store-record.js - Implements the Row Data Gateway and Data Transfer Object (DTO) patterns for the Document Store
+- **Key/Value Store Record** - app/collections/base-key-value-store-record.js - Implements the Data Transfer Object (DTO) patterns for the Key/Value Store
+
+### Collection
+
+- **Document Store Collection** - app/collections/base-document-store-collection.js - Implements the Table Data Gateway and Table Module patterns for the Document Store.
+- **Key/Value Store Collection** - app/collections/base-key-value-store-collection.js - Implements the Table Data Gateway and Table Module patterns for the Key Value Store.
+
+The base collection and record classes are intended to be subclassed for specific application domains.
+
+An application may also implement custom custom Collection and Record gateways for custom storage engines with do not subclass these base classes.
 
 ### Document Store and Key Value Store Types
 
@@ -34,10 +53,10 @@ Collections are registered on the application context in `register()` and retrie
 
 Each Collection subclass should be paired with a Record subclass. The Record subclass holds the document schema (`static schema`), implements `validate()` to enforce invariants before writes, and exposes domain-specific attribute getters. A minimal pair for the Document Store looks like this:
 
-In app/collections/user/user-record.js:
+In app/collections/user-record.js:
 
 ```js
-import Record from '../document-store-record.js';
+import Record from './base-document-store-record.js';
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../kixx/errors/mod.js';
 
@@ -64,18 +83,15 @@ class UserRecord extends Record {
         }
     }
 
-    static deriveId(attributes) {
-        return attributes.username ?? null;
-    }
 }
 
 export default UserRecord;
 ```
 
-In app/collections/user/user-collection.js:
+In app/collections/user-collection.js:
 
 ```js
-import Collection from '../document-store-collection.js';
+import Collection from './base-document-store-collection.js';
 import UserRecord from './user-record.js';
 
 export const USER_EMAIL_ADDRESS_INDEX = 'user_email_address';
@@ -83,6 +99,10 @@ export const USER_EMAIL_ADDRESS_INDEX = 'user_email_address';
 export default class UserCollection extends Collection {
     static TYPE = 'User';
     static Record = UserRecord;
+
+    generateUniqueId(attributes) {
+        return attributes.username || super.generateUniqueId(attributes);
+    }
 
     generateSortKey(doc) {
         return doc?.email_address;
@@ -131,7 +151,7 @@ Document Store Collections expose four ways to write a document. Choose based on
 
 All write methods call `dto.validate()` before persisting. A `ValidationError` thrown from `validate()` propagates to the caller without touching the store.
 
-`create()` and `put()` accept either a plain attributes object or a Record instance. When given a plain object, the Collection normalizes it: strips `type` from stored attributes, preserves a non-empty `input.id` when provided, otherwise consults `Record.deriveId(attributes)` for a content-derived id, falls back to `generateUniqueId(attributes)` when `deriveId` returns null, strips `id` from stored attributes, and wraps the result in the configured Record class via `Record.forWrite()`.
+`create()` and `put()` accept either a plain attributes object or a Record instance. When given a plain object, the Collection normalizes it: strips `type` from stored attributes, preserves a non-empty `input.id` when provided, otherwise calls `generateUniqueId(attributes)` to create the document id, strips `id` from stored attributes, and wraps the result in the configured Record class via `Record.forWrite()`.
 
 `update()` and `updateWithRetry()` require a Record instance — they use the instance's `version` for optimistic concurrency and run the subclass `validate()`. Passing a plain object to `update()` throws an `AssertionError`.
 
@@ -149,7 +169,7 @@ Pagination cursors are opaque. Reuse a cursor only with the same method, documen
 
 ### Document Store Collections: ID Generation and Sort Keys
 
-`Record.deriveId(attributes)` is the preferred hook for content-derived IDs (username, slug, content hash). Override it on the Record subclass — it returns `null` by default, causing the Collection to fall back to `generateUniqueId(attributes)`. Override `generateUniqueId` on the Collection subclass only when the gateway itself owns ID generation (e.g., a counter or an injected ID service). The default `generateUniqueId` returns `crypto.randomUUID()`.
+`BaseDocumentStoreCollection#generateUniqueId(attributes)` is the canonical hook for creating document ids, including derived IDs such as usernames, slugs, or content hashes. Override `generateUniqueId` on the Collection subclass when a document type needs a stable id derived from attributes, a counter-backed id, an injected id service, or any other non-default id strategy. The default `generateUniqueId` returns `crypto.randomUUID()`.
 
 Override `generateSortKey(doc)` when the Collection needs a computed sort key. The default passes through `doc.sortKey` when present, or returns `undefined` to omit one. The sort key controls the ordering returned by `scan()` and must be a string that sorts lexicographically in the desired order. Range queries in `scan()` are only meaningful when all documents have sort keys.
 

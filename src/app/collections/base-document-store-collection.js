@@ -1,20 +1,18 @@
-/**
- * @module Collection
- * @see DocumentStore in ../document-store/document-store.js for the underlying store contract
- */
-
-import Record from './document-store-record.js';
+import Record from './base-document-store-record.js';
 import RetryLimitExceededError from './retry-limit-exceeded-error.js';
 import DocumentNotFoundError from '../../kixx/document-store/document-not-found-error.js';
 import {
     assert,
+    assertEqual,
     assertFunction,
     assertNotEqual,
     assertNonEmptyString,
     AssertionError,
     isNonEmptyString,
+    isPlainObject,
     isUndefined,
     isString,
+    toFriendlyString,
 } from '../../kixx/assertions/mod.js';
 
 
@@ -36,7 +34,7 @@ import {
  * records are converted to and from the configured `Record` DTO class on
  * every call.
  *
- * @see DocumentStore in ../document-store/document-store.js
+ * @see DocumentStore in ../../kixx/document-store/document-store.js
  */
 export default class Collection {
 
@@ -98,8 +96,8 @@ export default class Collection {
      * Creates a document only when none exists for the same id.
      *
      * Plain-object input is coerced to an instance of the configured Record
-     * class via `Record.forWrite()` so the subclass `validate()` and the
-     * `Record.deriveId()` hook both run before the store call.
+     * class via `Record.forWrite()` so the subclass `validate()` runs before
+     * the store call.
      *
      * @param {Object} context - Request or execution context passed through to the store engine
      * @param {Object|Record} input - Plain attributes object, or Record instance to persist
@@ -109,9 +107,9 @@ export default class Collection {
      * @throws {DocumentAlreadyExistsError} When a document already exists for the same id
      */
     async create(context, input) {
-        const dto = this.#coerceToRecord(input);
+        const dto = this.#coerceToRecord(input, 'Collection#create()');
         dto.validate();
-        const record = await this.#db.create(context, dto.toDocument());
+        const record = await this.#db.create(context, this.#toDocument(dto));
         return this.Record.fromRecord(record);
     }
 
@@ -134,8 +132,9 @@ export default class Collection {
             dto instanceof this.Record,
             'Collection#update() requires an instance of this.Record',
         );
+        this.#assertRecordBelongsToCollection(dto, 'Collection#update()');
         dto.validate();
-        const record = await this.#db.update(context, dto.toDocument(), dto.version);
+        const record = await this.#db.update(context, this.#toDocument(dto), dto.version);
         return this.Record.fromRecord(record);
     }
 
@@ -204,8 +203,8 @@ export default class Collection {
      * Creates or overwrites a document without optimistic concurrency control.
      *
      * Plain-object input is coerced to an instance of the configured Record
-     * class via `Record.forWrite()` so the subclass `validate()` and the
-     * `Record.deriveId()` hook both run before the store call.
+     * class via `Record.forWrite()` so the subclass `validate()` runs before
+     * the store call.
      *
      * @param {Object} context - Request or execution context passed through to the store engine
      * @param {Object|Record} input - Plain attributes object, or Record instance to persist
@@ -214,9 +213,9 @@ export default class Collection {
      * @throws {ValidationError} When the Record subclass `validate()` rejects the input
      */
     async put(context, input) {
-        const dto = this.#coerceToRecord(input);
+        const dto = this.#coerceToRecord(input, 'Collection#put()');
         dto.validate();
-        const record = await this.#db.put(context, dto.toDocument());
+        const record = await this.#db.put(context, this.#toDocument(dto));
         return this.Record.fromRecord(record);
     }
 
@@ -253,6 +252,11 @@ export default class Collection {
      * @throws {VersionConflictError} When the stored version does not match `dto.version`
      */
     async deleteStrict(context, dto) {
+        assert(
+            dto instanceof this.Record,
+            'Collection#deleteStrict() requires an instance of this.Record',
+        );
+        this.#assertRecordBelongsToCollection(dto, 'Collection#deleteStrict()');
         return await this.#db.delete(context, this.type, dto.id, dto.version);
     }
 
@@ -309,13 +313,10 @@ export default class Collection {
      * Returns a unique identifier string for a new document of this type.
      *
      * The default returns a random UUID. Override on a Collection subclass
-     * only when the gateway itself owns id generation (e.g., a counter, an
-     * injected id service). For ids that are *domain facts* (username, slug,
-     * content hash), override `static deriveId(attributes)` on the Record
-     * subclass instead — `#coerceToRecord` consults `Record.deriveId` first
-     * and falls back to this method when it returns null.
+     * when the gateway owns id generation, including derived ids, counters,
+     * or generated id services.
      *
-     * @param {Object} _attributes - The prepared attributes; available for content-derived ids
+     * @param {Object} _attributes - The prepared attributes; available to custom id generators
      * @returns {string}
      */
     generateUniqueId(_attributes) {
@@ -323,47 +324,33 @@ export default class Collection {
     }
 
     /**
-     * Returns the sort key for a document of this type, or `undefined` to omit one.
+     * Returns the sort key for a document of this type, or null/undefined to omit one.
      * Override to compute a sort key from document fields.
      * The default passes through `doc.sortKey` when present, or returns `undefined`.
      * @param {Object} doc - The prepared document
-     * @returns {string|undefined}
+     * @returns {string|null|undefined}
      */
     generateSortKey(doc) {
         return doc?.sortKey;
     }
 
-    /**
-     * Normalizes a write-path input to an instance of `this.Record`.
-     *
-     * Records are returned as-is so the caller's already-derived id and any
-     * domain-specific setup are preserved. Plain attribute objects are
-     * stripped of `type`/`id` fields, run through id derivation
-     * (`Record.deriveId` first, then `generateUniqueId` as fallback), passed
-     * through `generateSortKey`, and wrapped via `Record.forWrite()` so
-     * `validate()` can run on a typed instance.
-     *
-     * @param {Object|Record} input
-     * @returns {Record} Instance of the configured Record subclass.
-     */
-    #coerceToRecord(input) {
+    #coerceToRecord(input, methodName) {
         if (input instanceof this.Record) {
+            this.#assertRecordBelongsToCollection(input, methodName);
             return input;
         }
 
-        const attributes = Object.assign({}, input);
-        delete attributes.type;
-        delete attributes.id;
+        if (!isPlainObject(input)) {
+            throw new AssertionError(
+                `${ methodName } input must be a plain object or an instance of this.Record (got ${ toFriendlyString(input) })`,
+            );
+        }
+
+        const attributes = copyAttributes(input);
 
         let id = isNonEmptyString(input?.id) ? input.id : null;
         if (!id) {
-            const derived = this.Record.deriveId(attributes);
-            id = isNonEmptyString(derived) ? derived : this.generateUniqueId(attributes);
-        }
-
-        const sortKey = this.generateSortKey(Object.assign({ id }, attributes));
-        if (isString(sortKey)) {
-            attributes.sortKey = sortKey;
+            id = this.generateUniqueId(attributes) || null;
         }
 
         return this.Record.forWrite({
@@ -372,4 +359,48 @@ export default class Collection {
             attributes,
         });
     }
+
+    #toDocument(dto) {
+        this.#assertRecordBelongsToCollection(dto, 'Collection write');
+
+        const doc = dto.toDocument();
+        const sortKey = this.generateSortKey(doc);
+
+        if (isUndefined(sortKey) || sortKey === null) {
+            delete doc.sortKey;
+            return doc;
+        }
+
+        if (isString(sortKey)) {
+            doc.sortKey = sortKey;
+            return doc;
+        }
+
+        throw new AssertionError(
+            `Collection#generateSortKey() must return a string, null, or undefined (got ${ toFriendlyString(sortKey) })`,
+        );
+    }
+
+    #assertRecordBelongsToCollection(dto, methodName) {
+        assertEqual(
+            this.type,
+            dto.type,
+            `${ methodName } record type must match Collection.type`,
+        );
+    }
+}
+
+function copyAttributes(input) {
+    const attributes = {};
+
+    for (const key of Object.keys(input)) {
+        // Metadata belongs to the gateway, and __proto__ can mutate the target prototype.
+        if (key === 'type' || key === 'id' || key === '__proto__') {
+            continue;
+        }
+
+        attributes[key] = input[key];
+    }
+
+    return attributes;
 }
