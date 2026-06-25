@@ -39,6 +39,10 @@
         validation runs before submission.
     --}}
     <form class="flow" method="{{ form.method }}" action="{{ form.url }}" novalidate>
+        {{#if form.csrf}}
+        <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+        {{/if}}
+
         <div class="field{{#if form.fields.email_address.error}} field--error{{/if}}">
             <label class="field__label" for="email_address">{{ form.fields.email_address.label }}</label>
             <input

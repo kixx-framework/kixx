@@ -3,6 +3,11 @@ import AdminUserLoginForm from '../forms/admin-users/admin-user-login-form.js';
 import { createAdminUser } from '../../transaction-scripts/admin-users/create-admin-user.js';
 import { authenticateAdminCredentials } from '../../transaction-scripts/admin-users/authenticate-admin-credentials.js';
 import { setAdminSessionCookie } from '../../lib/user-sessions.js';
+import {
+    clearCsrfToken,
+    getCsrfFormContext,
+    validateCsrfFormData,
+} from '../csrf.js';
 
 
 const SESSION_CREATE_FAILED = 'session_create_failed';
@@ -24,16 +29,17 @@ function getNewAdminUserFormLink(context) {
     return target.compilePathname().pathname;
 }
 
-export function getNewAdminUserForm(context, _request, response) {
+export async function getNewAdminUserForm(context, request, response) {
     const form = new NewAdminUserForm();
     return response.updateProps({
-        form: form.getFormContext(context),
+        form: await getCsrfFormContext(context, request, response, form),
         links: { loginForm: getAdminLoginFormLink(context) },
     });
 }
 
 export async function postNewAdminUserForm(context, request, response, skip) {
-    const form = NewAdminUserForm.fromFormData(await request.formData());
+    const formData = await validateCsrfFormData(context, request);
+    const form = NewAdminUserForm.fromFormData(formData);
 
     // Server-side validation. On failure, fall through to the page renderer with
     // field-level error state (skip() is intentionally not called).
@@ -42,7 +48,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     } catch (error) {
         if (error.name === 'ValidationError') {
             return response.updateProps({
-                form: form.getFormContext(context, error),
+                form: await getCsrfFormContext(context, request, response, form, error),
                 links: { loginForm: getAdminLoginFormLink(context) },
             });
         }
@@ -57,7 +63,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         // re-render the form with a form-level message rather than a 409 page.
         if (error.code === 'NewUserConflictError') {
             return response.updateProps({
-                form: form.getFormContext(context, error.code),
+                form: await getCsrfFormContext(context, request, response, form, error.code),
                 links: { loginForm: getAdminLoginFormLink(context) },
                 formError: 'An admin account with that email address already exists.',
             });
@@ -77,13 +83,14 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     // Signup and session both succeeded: establish the session cookie and send the
     // now-authenticated admin into the admin panel.
     setAdminSessionCookie(request, response, result.sessionId);
+    await clearCsrfToken(context, request, response);
 
     const adminTarget = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
     skip();
     return response.respondWithRedirect(303, adminTarget.compilePathname().pathname);
 }
 
-export function getAdminUserLoginForm(context, request, response) {
+export async function getAdminUserLoginForm(context, request, response) {
     const form = new AdminUserLoginForm();
     const links = { newUserForm: getNewAdminUserFormLink(context) };
 
@@ -93,11 +100,15 @@ export function getAdminUserLoginForm(context, request, response) {
     const raw = request.queryParams.notice;
     const noticeCode = ALLOWED_LOGIN_NOTICES.has(raw) ? raw : null;
 
-    return response.updateProps({ form: form.getFormContext(context, noticeCode), links });
+    return response.updateProps({
+        form: await getCsrfFormContext(context, request, response, form, noticeCode),
+        links,
+    });
 }
 
 export async function postAdminUserLoginForm(context, request, response, skip) {
-    const form = AdminUserLoginForm.fromFormData(await request.formData());
+    const formData = await validateCsrfFormData(context, request);
+    const form = AdminUserLoginForm.fromFormData(formData);
     const links = { newUserForm: getNewAdminUserFormLink(context) };
 
     // Server-side validation. On failure, fall through to the page renderer with
@@ -106,7 +117,10 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
         form.validate();
     } catch (error) {
         if (error.name === 'ValidationError') {
-            return response.updateProps({ form: form.getFormContext(context, error), links });
+            return response.updateProps({
+                form: await getCsrfFormContext(context, request, response, form, error),
+                links,
+            });
         }
         throw error;
     }
@@ -119,7 +133,7 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
         // with a single generic, non-enumerating message rather than a 401 page.
         if (error.code === 'InvalidCredentials') {
             return response.updateProps({
-                form: form.getFormContext(context),
+                form: await getCsrfFormContext(context, request, response, form),
                 links,
                 formError: INVALID_CREDENTIALS_MESSAGE,
             });
@@ -130,6 +144,7 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
     // Credentials verified: establish the session cookie and send the
     // now-authenticated admin into the admin panel.
     setAdminSessionCookie(request, response, result.sessionId);
+    await clearCsrfToken(context, request, response);
 
     const adminTarget = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
     skip();
