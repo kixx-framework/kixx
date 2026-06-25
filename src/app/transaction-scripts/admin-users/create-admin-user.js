@@ -17,7 +17,13 @@ export async function createAdminUser(context, form) {
     const sessions = context.getCollection('UserSession');
 
     // Fast-fail if the user already exists (races are handled atomically in the create steps below).
-    const existingUser = await adminUsers.getByEmailAddress(context, email_address);
+    let existingUser;
+    try {
+        existingUser = await adminUsers.getByEmailAddress(context, email_address);
+    } catch (cause) {
+        throw new AssertionError('Unexpected error while checking for an existing admin user', { cause });
+    }
+
     if (existingUser) {
         throw new ConflictError(
             'Admin user already exists by email address.',

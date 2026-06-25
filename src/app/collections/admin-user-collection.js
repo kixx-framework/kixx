@@ -21,7 +21,7 @@ export default class AdminUserCollection extends Collection {
     // these into DOCUMENT_STORE_INDEXES so the index name and the jsonPath stay
     // co-located with the query (getByEmailAddress) that depends on them.
     static INDEXES = [
-        { name: ADMIN_USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.emailAddress' },
+        { name: ADMIN_USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.emailAddress', unique: true },
     ];
 
     generateUniqueId() {
