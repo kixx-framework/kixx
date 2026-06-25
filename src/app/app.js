@@ -13,15 +13,11 @@ const DOCUMENT_STORE_INDEXES = [
 
 export function register(context) {
     const documentStore = new DocumentStore();
+    const keyValueStore = context.getService('KeyValueStore');
 
     context.registerService('DocumentStore', documentStore);
 
-    // Admin users live in the document store; sessions live in the
-    // eventually-consistent key/value store, which plugins register before this
-    // hook runs.
     context.registerCollection('AdminUser', new AdminUserCollection({ db: documentStore }));
-
-    const keyValueStore = context.getService('KeyValueStore');
     context.registerCollection('UserSession', new UserSessionCollection({ db: keyValueStore }));
 }
 

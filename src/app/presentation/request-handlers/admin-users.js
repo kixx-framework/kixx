@@ -40,17 +40,7 @@ export function getNewAdminUserForm(context, _request, response) {
     });
 }
 
-/**
- * Handles the new-admin-user form submission: validates the payload, creates the
- * account and an authenticated session, then redirects into the admin area. On a
- * validation or duplicate-email failure it re-renders the form with error state.
- * @param {import('../../../kixx/context/request-context.js').default} context
- * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request
- * @param {import('../../../kixx/http-router/server-response.js').default} response
- * @param {function(): void} skip - Stops later middleware (the page renderer) from running.
- * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>}
- */
-export async function handleCreateAdminUser(context, request, response, skip) {
+export async function postNewAdminUserForm(context, request, response, skip) {
     const form = NewAdminUserForm.fromFormData(await request.formData());
 
     // Server-side validation. On failure, fall through to the page renderer with
