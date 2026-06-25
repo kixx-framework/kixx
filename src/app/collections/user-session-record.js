@@ -12,11 +12,11 @@ export default class UserSessionRecord extends Record {
             sessionCreationDate: { type: 'string', format: 'date-time' },
             sessionExpirationDate: { type: 'string', format: 'date-time' },
         },
-        required: [ 'userId', 'sessionCreationDate' ],
+        required: [ 'userId', 'sessionCreationDate', 'sessionExpirationDate' ],
     };
 
     validate() {
-        const error = new ValidationError('Invalid admin user record');
+        const error = new ValidationError('Invalid user session record');
 
         if (!isNonEmptyString(this.get('userId'))) {
             error.push('UserSessionRecord userId is required', 'userId');
