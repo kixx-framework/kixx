@@ -248,6 +248,94 @@ export async function redirectAfterSuccess(context, request, response, skip) {
 }
 ```
 
+## Reverse Routing
+
+The routing layer is also a source of truth for URLs. Instead of hardcoding pathname strings in handlers, forms, and templates, look up the `HttpTarget` that owns an endpoint and compile its pathname from parameters. This keeps every internal link, redirect `Location`, and form `action` correct when a route `pattern` changes — you edit the pattern in `virtual-hosts.js` and every caller that compiles through the target follows automatically.
+
+The `RequestContext` exposes three lookup methods, and each `HttpTarget` can reverse-compile its own pathname.
+
+### Target Names
+
+Targets are addressed by a **fully-qualified name** of the form `routeName/targetName`. Nested routes compose their names parent-first, so a target named `render-form` under a route named `admin-login-form` is addressed as `admin-login-form/render-form`, and a target `render-style-guide-page` under the nested `admin-panel` → `style-guide` routes is `admin-panel/style-guide/render-style-guide-page`. A route with no explicit `name` falls back to its `pattern`.
+
+Give every target you intend to reference a stable `name`. Renaming a route or target changes its fully-qualified name and breaks lookups, so target names are part of your application's internal contract.
+
+### Looking Up Targets
+
+| Method | Returns | Behavior |
+|---|---|---|
+| `context.getHttpTarget(name)` | `HttpTarget` | Returns the first target whose fully-qualified name matches `name`. Throws `AssertionError` when `name` is not a non-empty string or no target matches. Returns the first match if names collide. |
+| `context.getAllHttpTargets()` | `Array<HttpTarget>` | Every target in the matched virtual host's flattened route set, in route iteration order. |
+| `context.getHttpTargetsByTag(tag)` | `Array<HttpTarget>` | Only targets that declare `tag`, in route order. Returns an empty array when none match. Throws `AssertionError` when `tag` is not a non-empty string. |
+
+All three resolve against the route set of the virtual host that matched the current request, which the router injects before handlers run. They are request-scoped accessors: call them inside a middleware or request handler, not at module load time.
+
+Tags are declared per target in `virtual-hosts.js` and are useful for grouping endpoints that a single piece of UI needs to enumerate — a primary navigation menu, a sitemap, an admin tool index:
+
+```js
+{
+    name: 'dashboard',
+    methods: [ 'GET', 'HEAD' ],
+    tags: [ 'admin-nav' ],
+    requestHandlers: [ getDashboard, HyperviewDynamicPageHandler() ],
+}
+```
+
+### Compiling Pathnames
+
+`HttpTarget#compilePathname(params)` reverse-compiles the target's route pattern into a concrete URL.
+
+```js
+const target = context.getHttpTarget('bugs/show');
+const { method, pathname } = target.compilePathname({ id: 'BUG-123' });
+// For pattern '/bugs/:id' -> method: 'GET', pathname: '/bugs/BUG-123'
+```
+
+- Returns `{ method, pathname }`. The `pathname` is the compiled path; the `method` is the target's **preferred** HTTP method, chosen by the priority order `GET > POST > PUT > PATCH > DELETE > HEAD` (falling back to the target's first declared method). Use `method` to fill a form's `method` attribute or to decide between a link and a form.
+- Provide a string for each `:name` parameter and an array of segments for each `*name` wildcard parameter. See [Route Pattern Matching](#route-pattern-matching) for the parameter syntax. Passing an object that already carries the needed keys is fine — extra keys are ignored — which is why forms pass `this` (see [Forms](#forms)).
+- Values are URL-encoded for safe output, so non-ASCII text and reserved characters are escaped.
+- Throws when the target's pattern is the catch-all `*`, because a wildcard pattern carries no information to rebuild a concrete pathname. Compile against a named target instead.
+
+Query strings and fragments are not part of route patterns, so append them yourself after compiling:
+
+```js
+const loginTarget = context.getHttpTarget('admin-login-form/render-form');
+const { pathname } = loginTarget.compilePathname();
+const location = `${ pathname }?notice=session_create_failed`;
+```
+
+### Use Cases
+
+- **Form action URLs.** `BaseForm#getFormContext()` resolves `static target` through `getHttpTarget()` and compiles the form's `action` pathname, so a form never hardcodes where it posts. See [Forms](#forms).
+- **Redirect targets after a write.** After a successful form submission, compile the destination target's pathname for the `303` `Location` rather than writing a literal string:
+
+  ```js
+  const ticketTarget = context.getHttpTarget('bugs/show');
+  skip();
+  return response.respondWithRedirect(303, ticketTarget.compilePathname({ id: ticket.id }).pathname);
+  ```
+
+- **Cross-links between pages.** A handler that renders a page can compile links to related endpoints and pass them as render props, keeping URL construction out of templates:
+
+  ```js
+  const newUserTarget = context.getHttpTarget('new-admin-user-form/render-form');
+  return response.updateProps({
+      links: { newUserForm: newUserTarget.compilePathname().pathname },
+  });
+  ```
+
+- **Tag-driven navigation and sitemaps.** Enumerate targets by tag to build a menu or index without listing routes by hand. Compile each target and pass the list to the template:
+
+  ```js
+  const navTargets = context.getHttpTargetsByTag('admin-nav');
+  const nav = navTargets.map((target) => {
+      return { name: target.name, href: target.compilePathname().pathname };
+  });
+  return response.updateProps({ nav });
+  ```
+
+- **Introspection and debugging.** `getAllHttpTargets()` returns the full target set for the current virtual host, useful for building a route index page or asserting routing expectations in development.
+
 ## Request Handlers
 
 A request handler's job is to interpret the incoming HTTP request and coordinate a response, but it should not contain domain logic. See `app/transaction-scripts/README.md` for how to write the Transaction Scripts which contain the domain logic that request handlers call.
@@ -339,6 +427,8 @@ Service and collection access:
 | `getHttpTarget(name)` | HttpTarget instance | Looks up a registered route target by name for reverse pathname compilation; throws if not found |
 | `getAllHttpTargets()` | Array<HttpTarget> | Returns every target in the current virtual host's route set |
 | `getHttpTargetsByTag(tag)` | Array<HttpTarget> | Returns targets that declare the given tag, in route order |
+
+See [Reverse Routing](#reverse-routing) for how to use these target lookups with `HttpTarget#compilePathname()` to build form actions, redirect locations, and navigation links without hardcoding URLs.
 
 Accessing environment vars:
 
