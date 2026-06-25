@@ -15,7 +15,7 @@ import {
 export default class AdminUserLoginForm extends BaseForm {
 
     /**
-     * HttpTarget name used to compile the registration form action path.
+     * HttpTarget name used to compile the login form action path.
      * @type {string}
      * @static
      * @readonly
@@ -31,7 +31,7 @@ export default class AdminUserLoginForm extends BaseForm {
     static method = 'POST';
 
     /**
-     * JSON Schema for accepted registration fields.
+     * JSON Schema for accepted login fields, extended with HTML render metadata.
      * @type {Object}
      * @static
      * @readonly
@@ -39,14 +39,36 @@ export default class AdminUserLoginForm extends BaseForm {
     static schema = {
         type: 'object',
         properties: {
-            email_address: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 16, maxLength: 256, writeOnly: true },
+            email_address: {
+                type: 'string',
+                format: 'email',
+                label: 'Email address',
+                // `inputType` drives the rendered <input type>; kept distinct from
+                // `fieldType` so the template can choose a control independently.
+                inputType: 'email',
+                autocomplete: 'email',
+                hint: 'The email address for your admin account.',
+            },
+            password: {
+                type: 'string',
+                minLength: 16,
+                maxLength: 256,
+                // writeOnly keeps the submitted password from being echoed back into
+                // the re-rendered form on a validation error (see BaseForm#getFormContext).
+                writeOnly: true,
+                label: 'Password',
+                inputType: 'password',
+                // current-password (not new-password) so password managers offer the
+                // saved credential for this account rather than generating a new one.
+                autocomplete: 'current-password',
+                hint: 'Enter your account password.',
+            },
         },
         required: [ 'email_address', 'password' ],
     };
 
     /**
-     * @param {Object} [attributes] - Raw submitted registration attributes.
+     * @param {Object} [attributes] - Raw submitted login attributes.
      * @param {*} [attributes.email_address] - Email address input value.
      * @param {*} [attributes.password] - Password input value.
      */
@@ -63,12 +85,12 @@ export default class AdminUserLoginForm extends BaseForm {
     }
 
     /**
-     * Validates the normalized registration fields.
+     * Validates the normalized login fields.
      * @returns {void}
-     * @throws {ValidationError} When the email address, or password is missing or invalid.
+     * @throws {ValidationError} When the email address or password is missing or invalid.
      */
     validate() {
-        const error = new ValidationError('The new user form contains invalid fields');
+        const error = new ValidationError('The login form contains invalid fields');
         const {
             minLength: passwordMinLength,
             maxLength: passwordMaxLength,

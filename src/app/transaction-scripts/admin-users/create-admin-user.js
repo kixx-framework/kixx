@@ -1,5 +1,5 @@
 import { AssertionError, ConflictError, OperationalError } from '../../../kixx/errors/mod.js';
-import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/admin-session.js';
+import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/user-sessions.js';
 import { pbkdf2HashPassword } from '../../lib/crypto.js';
 
 

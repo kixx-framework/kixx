@@ -6,6 +6,7 @@ import {
     getNewAdminUserForm,
     postNewAdminUserForm,
     getAdminUserLoginForm,
+    postAdminUserLoginForm,
 } from './app/presentation/request-handlers/admin-users.js';
 
 
@@ -77,6 +78,7 @@ export default [
                         name: 'post-form',
                         methods: [ 'POST' ],
                         requestHandlers: [
+                            postAdminUserLoginForm,
                             HyperviewDynamicPageHandler(),
                         ],
                     },
