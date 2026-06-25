@@ -127,6 +127,14 @@ Add `.json` to the end of any URL to get the template context object as JSON (ec
 `http://localhost:2026/index.json` -> context object for `http://localhost:2026/`
 `http://localhost:2026/users/admin/new.json` -> context object for `http://localhost:2026/users/admin/new`
 
+## Frontend Development
+
+When working on frontend features, be sure to follow the style guide and examples in `src/pages/admin/style-guide/`, starting with `src/pages/admin/style-guide/aesthetic/`. You can access the full style guide through the development server at `http://localhost:2026/admin/style-guide`.
+
+Also, remember that the template context for any page can be inspected by adding the `.json` suffix:
+
+`http://localhost:2026/admin/style-guide/aesthetic.json` -> context object for `http://localhost:2026/admin/style-guide/aesthetic`
+
 ## Linting
 
 Linting is configured in `./eslint.config.js`.
