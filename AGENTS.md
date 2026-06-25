@@ -110,6 +110,23 @@ the HTTP router serializes expected errors.
 
 **What this document provides:** The Kixx template syntax and behavior reference used by Hyperview — compilation stages, supported Mustache-style features, expression resolution, section semantics, built-in helpers, Hyperview helpers, escaping rules, partial usage, helper authoring, public APIs, and error behavior.
 
+## Development Server
+
+Run the development server with:
+
+```bash
+node src/node-server.js --config src/node-config.json --port 2026
+```
+
+Change the --port option to avoid port conflicts if needed.
+
+Restart the server to observe any changes in the JavaScript source code. Server restarts are not needed for changes to `templates/` and `pages/` data.
+
+Add `.json` to the end of any URL to get the template context object as JSON (ecluding includes content):
+
+`http://localhost:2026/index.json` -> context object for `http://localhost:2026/`
+`http://localhost:2026/users/admin/new.json` -> context object for `http://localhost:2026/users/admin/new`
+
 ## Linting
 
 Linting is configured in `./eslint.config.js`.
