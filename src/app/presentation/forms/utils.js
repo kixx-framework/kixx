@@ -1,5 +1,6 @@
 import {
     isNonEmptyString,
+    isString,
 } from '../../../kixx/assertions/mod.js';
 
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
@@ -12,6 +13,18 @@ const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 export function normalizeStringAttribute(value) {
     if (isNonEmptyString(value)) {
         return value.trim();
+    }
+    return value;
+}
+
+/**
+ * Preserves a submitted secret string exactly as entered.
+ * @param {*} value - Submitted field value.
+ * @returns {*} Primitive string when value is string-like, otherwise the original value.
+ */
+export function normalizeSecretStringAttribute(value) {
+    if (isString(value)) {
+        return String(value);
     }
     return value;
 }

@@ -2,7 +2,7 @@ import { isString } from '../../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import BaseForm from '../base-form.js';
 import {
-    normalizeStringAttribute,
+    normalizeSecretStringAttribute,
     normalizeLowerCaseStringAttribute,
     validateEmailAddressField,
 } from '../utils.js';
@@ -79,7 +79,7 @@ export default class NewAdminUserForm extends BaseForm {
         } = attributes ?? {};
 
         this.email_address = normalizeLowerCaseStringAttribute(email_address);
-        this.password = normalizeStringAttribute(password);
+        this.password = normalizeSecretStringAttribute(password);
     }
 
     /**
