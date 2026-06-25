@@ -39,8 +39,28 @@ export default class NewAdminUserForm extends BaseForm {
     static schema = {
         type: 'object',
         properties: {
-            email_address: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 16, maxLength: 256, writeOnly: true },
+            email_address: {
+                type: 'string',
+                format: 'email',
+                label: 'Email address',
+                // `inputType` drives the rendered <input type>; kept distinct from
+                // `fieldType` so the template can choose a control independently.
+                inputType: 'email',
+                autocomplete: 'email',
+                hint: 'Used to sign in to the admin panel.',
+            },
+            password: {
+                type: 'string',
+                minLength: 16,
+                maxLength: 256,
+                // writeOnly keeps the submitted password from being echoed back into
+                // the re-rendered form on a validation error (see BaseForm#getFormContext).
+                writeOnly: true,
+                label: 'Password',
+                inputType: 'password',
+                autocomplete: 'new-password',
+                hint: 'At least 16 characters.',
+            },
         },
         required: [ 'email_address', 'password' ],
     };

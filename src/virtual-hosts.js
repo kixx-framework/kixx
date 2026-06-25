@@ -1,6 +1,6 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
 import { StaticFileServerHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
-import { getNewAdminUserForm, getAdminUserLoginForm } from './app/presentation/request-handlers/admin-users.js';
+import { getNewAdminUserForm, handleCreateAdminUser, getAdminUserLoginForm } from './app/presentation/request-handlers/admin-users.js';
 
 
 export default [
@@ -43,6 +43,7 @@ export default [
                         name: 'post-form',
                         methods: [ 'POST' ],
                         requestHandlers: [
+                            handleCreateAdminUser,
                             HyperviewDynamicPageHandler(),
                         ],
                     },

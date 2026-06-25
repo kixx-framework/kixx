@@ -1,4 +1,4 @@
-import Record from './base-key-value-store-record';
+import Record from './base-key-value-store-record.js';
 import { ValidationError } from '../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../kixx/assertions/mod.js';
 

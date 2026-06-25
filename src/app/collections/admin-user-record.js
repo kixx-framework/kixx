@@ -35,4 +35,19 @@ export default class AdminUserRecord extends Record {
             throw error;
         }
     }
+
+    /**
+     * Projects the record into a safe authenticated-user object for the request
+     * context and session. Deliberately omits the password hash so the credential
+     * never leaves the data source layer.
+     * @returns {{ id: string, type: string, emailAddress: string, userCreationDate: string }}
+     */
+    toAuthenticatedUser() {
+        return {
+            id: this.id,
+            type: this.type,
+            emailAddress: this.get('emailAddress'),
+            userCreationDate: this.get('userCreationDate'),
+        };
+    }
 }
