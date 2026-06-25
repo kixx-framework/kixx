@@ -1,8 +1,25 @@
 import { AssertionError, ConflictError, OperationalError } from '../../../kixx/errors/mod.js';
 import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/user-sessions.js';
 import { pbkdf2HashPassword } from '../../lib/crypto.js';
+import { consumeAdminInvite } from '../admin-invites/consume-admin-invite.js';
 
 
+/**
+ * Creates an admin account from a validated signup form, spending the invite that
+ * authorized it and establishing a session.
+ *
+ * The invite is consumed only after the duplicate-email fast-fail, so an email
+ * that already exists is correctable without burning the invitee's one-time token;
+ * consumption happens before the user is written, so a single token never yields
+ * two admins.
+ *
+ * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../presentation/forms/admin-users/new-admin-user-form.js').default} form - Validated signup form carrying `email_address`, `password`, and `invite_token`.
+ * @returns {Promise<{ user: Object, sessionId: string }>} The authenticated-user view and new session id.
+ * @throws {ConflictError} With code `NewUserConflictError` when an admin already exists for the email.
+ * @throws {ForbiddenError} With code `InvalidInvite` when the invite token is missing, expired, revoked, or already used.
+ * @throws {OperationalError} With code `SignupSessionFailed` when the account is created but session creation fails.
+ */
 export async function createAdminUser(context, form) {
     const { requestId } = context;
     const { email_address, password } = form;
@@ -30,6 +47,11 @@ export async function createAdminUser(context, form) {
             { code: 'NewUserConflictError' },
         );
     }
+
+    // Spend the invite after the duplicate-email check but before writing the
+    // user: a recoverable email conflict must not consume the token, and a
+    // successful consume must gate the account so one token creates one admin.
+    await consumeAdminInvite(context, form.invite_token);
 
     let user;
     try {

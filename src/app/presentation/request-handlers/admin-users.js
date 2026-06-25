@@ -1,6 +1,7 @@
 import NewAdminUserForm from '../forms/admin-users/new-admin-user-form.js';
 import AdminUserLoginForm from '../forms/admin-users/admin-user-login-form.js';
 import { createAdminUser } from '../../transaction-scripts/admin-users/create-admin-user.js';
+import { resolveAdminInvite } from '../../transaction-scripts/admin-invites/resolve-admin-invite.js';
 import { authenticateAdminCredentials } from '../../transaction-scripts/admin-users/authenticate-admin-credentials.js';
 import { setAdminSessionCookie } from '../../lib/user-sessions.js';
 import {
@@ -29,9 +30,30 @@ function getNewAdminUserFormLink(context) {
     return target.compilePathname().pathname;
 }
 
-export async function getNewAdminUserForm(context, request, response) {
-    const form = new NewAdminUserForm();
+// Renders the signup page in its "invalid invite" state: no form, just a notice
+// and a link back to login. Used when the URL carries no redeemable invite, and
+// when a token valid at GET time is spent, revoked, or expired before POST.
+function renderInvalidInvite(context, response) {
     return response.updateProps({
+        inviteValid: false,
+        links: { loginForm: getAdminLoginFormLink(context) },
+    });
+}
+
+export async function getNewAdminUserForm(context, request, response) {
+    // Signup is invite-only: without a redeemable invite (or matching bootstrap
+    // token) there is no form to show. resolveAdminInvite is read-only — the token
+    // is not spent until the POST succeeds.
+    const inviteToken = request.queryParams.invite;
+    const resolution = await resolveAdminInvite(context, inviteToken);
+
+    if (!resolution.redeemable) {
+        return renderInvalidInvite(context, response);
+    }
+
+    const form = new NewAdminUserForm({ invite_token: inviteToken });
+    return response.updateProps({
+        inviteValid: true,
         form: await getCsrfFormContext(context, request, response, form),
         links: { loginForm: getAdminLoginFormLink(context) },
     });
@@ -42,12 +64,14 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     const form = NewAdminUserForm.fromFormData(formData);
 
     // Server-side validation. On failure, fall through to the page renderer with
-    // field-level error state (skip() is intentionally not called).
+    // field-level error state (skip() is intentionally not called). The form
+    // carries the hidden invite_token, so the re-rendered form keeps the invite.
     try {
         form.validate();
     } catch (error) {
         if (error.name === 'ValidationError') {
             return response.updateProps({
+                inviteValid: true,
                 form: await getCsrfFormContext(context, request, response, form, error),
                 links: { loginForm: getAdminLoginFormLink(context) },
             });
@@ -60,13 +84,20 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         result = await createAdminUser(context, form);
     } catch (error) {
         // A duplicate email address is an expected outcome the user can correct;
-        // re-render the form with a form-level message rather than a 409 page.
+        // the invite is not consumed on this path, so re-render the form to retry.
         if (error.code === 'NewUserConflictError') {
             return response.updateProps({
+                inviteValid: true,
                 form: await getCsrfFormContext(context, request, response, form, error.code),
                 links: { loginForm: getAdminLoginFormLink(context) },
                 formError: 'An admin account with that email address already exists.',
             });
+        }
+
+        // The invite was redeemable when the page loaded but was spent, revoked, or
+        // expired before this submission. Show the invalid-invite state.
+        if (error.code === 'InvalidInvite') {
+            return renderInvalidInvite(context, response);
         }
 
         // The account was created but the session could not be established. Send

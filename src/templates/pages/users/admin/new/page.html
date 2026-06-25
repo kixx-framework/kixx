@@ -1,4 +1,5 @@
 <div class="center center--form flow">
+{{#if inviteValid}}
     <header class="content-section__header">
         <h2>Create an admin account</h2>
         <p>Set up an administrator login for this site.</p>
@@ -22,6 +23,10 @@
         {{#if form.csrf}}
         <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
         {{/if}}
+
+        {{!-- Bearer invite token carried from the signup URL and re-posted so the
+              server can re-verify and consume it. --}}
+        <input type="hidden" name="invite_token" value="{{ form.fields.invite_token.value }}">
 
         <div class="field{{#if form.fields.email_address.error}} field--error{{/if}}">
             <label class="field__label" for="email_address">{{ form.fields.email_address.label }}</label>
@@ -69,4 +74,27 @@
         Already have an account? <a href="{{ links.loginForm }}">Log in</a>.
     </p>
     {{/if}}
+{{else}}
+    {{!-- Invite-only signup: rendered when the URL carries no redeemable invite,
+          or when a previously valid invite was spent, revoked, or expired. The
+          message is intentionally non-specific so it cannot be used to probe
+          token state. --}}
+    <header class="content-section__header">
+        <h2>Invite required</h2>
+        <p>Admin accounts are created by invitation only.</p>
+    </header>
+
+    <div class="callout callout--error" role="alert">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <div class="callout__body">
+            <p class="type-body-sm">This invite link is invalid, expired, or has already been used. Ask an administrator for a new invitation.</p>
+        </div>
+    </div>
+
+    {{#if links.loginForm}}
+    <p class="type-body-sm">
+        Already have an account? <a href="{{ links.loginForm }}">Log in</a>.
+    </p>
+    {{/if}}
+{{/if}}
 </div>

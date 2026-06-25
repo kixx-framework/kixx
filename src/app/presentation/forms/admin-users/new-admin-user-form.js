@@ -3,6 +3,7 @@ import { ValidationError } from '../../../../kixx/errors/mod.js';
 import BaseForm from '../base-form.js';
 import {
     normalizeSecretStringAttribute,
+    normalizeStringAttribute,
     normalizeLowerCaseStringAttribute,
     validateEmailAddressField,
 } from '../utils.js';
@@ -61,6 +62,13 @@ export default class NewAdminUserForm extends BaseForm {
                 autocomplete: 'new-password',
                 hint: 'At least 16 characters.',
             },
+            // Passthrough bearer token authorizing this signup. Carried from the
+            // signup URL into a hidden field and re-posted; redeemability is
+            // enforced by the consumeAdminInvite Transaction Script, not here.
+            invite_token: {
+                type: 'string',
+                fieldType: 'hidden',
+            },
         },
         required: [ 'email_address', 'password' ],
     };
@@ -69,6 +77,7 @@ export default class NewAdminUserForm extends BaseForm {
      * @param {Object} [attributes] - Raw submitted registration attributes.
      * @param {*} [attributes.email_address] - Email address input value.
      * @param {*} [attributes.password] - Password input value.
+     * @param {*} [attributes.invite_token] - Bearer invite token carried from the signup URL.
      */
     constructor(attributes) {
         super();
@@ -76,10 +85,12 @@ export default class NewAdminUserForm extends BaseForm {
         const {
             email_address,
             password,
+            invite_token,
         } = attributes ?? {};
 
         this.email_address = normalizeLowerCaseStringAttribute(email_address);
         this.password = normalizeSecretStringAttribute(password);
+        this.invite_token = normalizeStringAttribute(invite_token);
     }
 
     /**

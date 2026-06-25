@@ -1,0 +1,59 @@
+<main class="site-main">
+    <article class="content-section flow">
+        <header class="content-section__header">
+            <h1>Admin invites</h1>
+            <p>Create single-use invite links for new administrators. Each link expires 72 hours after it is created.</p>
+        </header>
+
+        {{!--
+            newInviteUrl is present only on the response that just minted an invite.
+            The raw token lives only in this URL and is never stored, so it is shown
+            once here and cannot be retrieved again.
+        --}}
+        {{#if newInviteUrl}}
+        <div class="callout callout--info" role="status">
+            <span class="material-symbols-rounded callout__icon" aria-hidden="true">link</span>
+            <div class="callout__body flow">
+                <p class="type-body-sm">New invite link created. Copy it now — it is shown only once and cannot be retrieved later.</p>
+                <div class="code-block"><code>{{ newInviteUrl }}</code></div>
+            </div>
+        </div>
+        {{/if}}
+
+        <form class="cluster" method="{{ form.method }}" action="{{ form.url }}">
+            {{#if form.csrf}}
+            <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+            {{/if}}
+            <button class="button button--primary" type="submit">Create invite link</button>
+        </form>
+
+        {{#if invites}}
+        <ul class="flow">
+        {{#each invites as |invite| }}
+            <li class="card flow">
+                <p class="type-label">{{ invite.status }}</p>
+                <p class="type-body-sm">
+                    Created {{ formatDate invite.createdAt format="DATETIME_MED" }} by {{ invite.createdBy }}
+                </p>
+                <p class="type-body-sm">
+                    Expires {{ formatDate invite.expiresAt format="DATETIME_MED" }}
+                </p>
+                {{#ifEqual invite.status "pending"}}
+                {{!-- Revoke posts to its own route with the invite id as a hidden field;
+                      the CSRF token is shared across every form on this page. --}}
+                <form class="cluster" method="POST" action="{{ links.revokeInvite }}">
+                    {{#if form.csrf}}
+                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                    {{/if}}
+                    <input type="hidden" name="invite_id" value="{{ invite.id }}">
+                    <button class="button button--secondary" type="submit">Revoke</button>
+                </form>
+                {{/ifEqual}}
+            </li>
+        {{/each}}
+        </ul>
+        {{else}}
+        <p class="type-body-sm">No invites yet. Create one to invite a new administrator.</p>
+        {{/if}}
+    </article>
+</main>

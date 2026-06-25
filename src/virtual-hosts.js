@@ -8,6 +8,11 @@ import {
     getAdminUserLoginForm,
     postAdminUserLoginForm,
 } from './app/presentation/request-handlers/admin-users.js';
+import {
+    getAdminInvites,
+    postCreateAdminInvite,
+    postRevokeAdminInvite,
+} from './app/presentation/request-handlers/admin-invites.js';
 
 
 export default [
@@ -34,6 +39,43 @@ export default [
                                 methods: [ 'GET', 'HEAD' ],
                                 requestHandlers: [
                                     HyperviewStaticPageHandler(),
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        // Revoke is its own route because it shares the POST method
+                        // with create-invite; one route cannot host two POST targets.
+                        pattern: '/invites/revoke',
+                        name: 'invites-revoke',
+                        targets: [
+                            {
+                                name: 'revoke',
+                                methods: [ 'POST' ],
+                                requestHandlers: [
+                                    postRevokeAdminInvite,
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        pattern: '/invites',
+                        name: 'invites',
+                        targets: [
+                            {
+                                name: 'render-invite-list',
+                                methods: [ 'GET', 'HEAD' ],
+                                requestHandlers: [
+                                    getAdminInvites,
+                                    HyperviewDynamicPageHandler(),
+                                ],
+                            },
+                            {
+                                name: 'create-invite',
+                                methods: [ 'POST' ],
+                                requestHandlers: [
+                                    postCreateAdminInvite,
+                                    HyperviewDynamicPageHandler(),
                                 ],
                             },
                         ],
