@@ -1,8 +1,6 @@
 import { AssertionError, ConflictError, OperationalError } from '../../../kixx/errors/mod.js';
+import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/admin-session.js';
 import { pbkdf2HashPassword } from '../../lib/crypto.js';
-
-
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 3;
 
 
 export async function createAdminUser(context, form) {
@@ -49,7 +47,7 @@ export async function createAdminUser(context, form) {
 
     let session;
     try {
-        session = await sessions.createForUser(context, user.id, SESSION_TTL_SECONDS);
+        session = await sessions.createForUser(context, user.id, ADMIN_SESSION_TTL_SECONDS);
     } catch (cause) {
         context.logger.error('failed to create session after signup', { requestId }, cause);
         // Session creation is best-effort: failure here does not roll back

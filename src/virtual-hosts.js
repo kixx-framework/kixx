@@ -1,5 +1,7 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
 import { StaticFileServerHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+import { adminErrorHandler } from './app/presentation/error-handlers/admin-error-handler.js';
+import { authenticateAdminUser } from './app/presentation/middleware/admin-authentication.js';
 import {
     getNewAdminUserForm,
     postNewAdminUserForm,
@@ -15,6 +17,12 @@ export default [
             {
                 pattern: '/admin',
                 name: 'admin-panel',
+                inboundMiddleware: [
+                    authenticateAdminUser,
+                ],
+                errorHandlers: [
+                    adminErrorHandler,
+                ],
                 routes: [
                     {
                         pattern: '/style-guide{.:suffix}',
