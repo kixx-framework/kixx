@@ -6,7 +6,8 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 3;
 
 
 export async function createAdminUser(context, form) {
-    const { email_address, username, password } = form;
+    const { requestId } = context;
+    const { email_address, password } = form;
 
     // PBKDF2 iteration count is configured per environment so it can be tuned
     // without a code change. Required here so a misconfigured deployment
@@ -36,14 +37,13 @@ export async function createAdminUser(context, form) {
         if (cause.name === 'DocumentUniqueIndexViolationError') {
             // Another signup claimed this email address between the fast-fail
             // check above and this write.
-            context.logger.warn('race condition while creating a new admin user', null, cause);
+            context.logger.warn('race condition while creating a new admin user', { requestId }, cause);
             throw new ConflictError(
                 'Admin user already exists by email address.',
                 { code: 'NewUserConflictError' },
             );
         }
 
-        context.logger.error('unexpected error while creating a new admin user', null, cause);
         throw new AssertionError('Unexpected error while creating a new user', { cause });
     }
 
@@ -51,7 +51,7 @@ export async function createAdminUser(context, form) {
     try {
         session = await sessions.createForUser(context, user.id, SESSION_TTL_SECONDS);
     } catch (cause) {
-        context.logger.error('failed to create session after signup', { username }, cause);
+        context.logger.error('failed to create session after signup', { requestId }, cause);
         // Session creation is best-effort: failure here does not roll back
         // the user signup, and the caller redirects the user to the
         // login page to recover.

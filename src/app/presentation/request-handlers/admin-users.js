@@ -3,7 +3,8 @@ import AdminUserLoginForm from '../forms/admin-users/admin-user-login-form.js';
 import { createAdminUser } from '../../transaction-scripts/admin-users/create-admin-user.js';
 
 
-const ALLOWED_LOGIN_NOTICES = new Set([ 'session_create_failed' ]);
+const SESSION_CREATE_FAILED = 'session_create_failed';
+const ALLOWED_LOGIN_NOTICES = new Set([ SESSION_CREATE_FAILED ]);
 
 // Session cookie shared with the (future) admin auth middleware. Changing this
 // name requires updating wherever the session cookie is read on inbound requests.
@@ -14,9 +15,14 @@ const SESSION_COOKIE_NAME = 'kixx_admin_session';
 const SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 3;
 
 
-function buildNewUserLinks(context) {
-    const loginTarget = context.getHttpTarget('admin-login-form/render-form');
-    return { loginForm: loginTarget.compilePathname().pathname };
+function getNewAdminUserFormLink(context) {
+    const target = context.getHttpTarget('admin-login-form/render-form');
+    return target.compilePathname().pathname;
+}
+
+function getAdminUserLoginFormLink(context) {
+    const target = context.getHttpTarget('new-admin-user-form/render-form');
+    return target.compilePathname().pathname;
 }
 
 function setSessionCookie(request, response, sessionId) {
@@ -36,7 +42,7 @@ export function getNewAdminUserForm(context, _request, response) {
     const form = new NewAdminUserForm();
     return response.updateProps({
         form: form.getFormContext(context),
-        links: buildNewUserLinks(context),
+        links: { loginForm: getNewAdminUserFormLink(context) },
     });
 }
 
@@ -51,7 +57,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         if (error.name === 'ValidationError') {
             return response.updateProps({
                 form: form.getFormContext(context, error),
-                links: buildNewUserLinks(context),
+                links: { loginForm: getNewAdminUserFormLink(context) },
             });
         }
         throw error;
@@ -66,7 +72,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         if (error.code === 'NewUserConflictError') {
             return response.updateProps({
                 form: form.getFormContext(context, error.code),
-                links: buildNewUserLinks(context),
+                links: { loginForm: getNewAdminUserFormLink(context) },
                 formError: 'An admin account with that email address already exists.',
             });
         }
@@ -74,10 +80,9 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         // The account was created but the session could not be established. Send
         // the user to the login page; that handler surfaces the notice code.
         if (error.code === 'SignupSessionFailed') {
-            const loginTarget = context.getHttpTarget('admin-login-form/render-form');
-            const { pathname } = loginTarget.compilePathname();
+            const newLocation = getAdminUserLoginFormLink(context);
             skip();
-            return response.respondWithRedirect(303, `${ pathname }?notice=session_create_failed`);
+            return response.respondWithRedirect(303, `${ newLocation }?notice=${ SESSION_CREATE_FAILED }`);
         }
 
         throw error;
