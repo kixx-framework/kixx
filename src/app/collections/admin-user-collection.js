@@ -17,6 +17,13 @@ export default class AdminUserCollection extends Collection {
 
     static Record = AdminUserRecord;
 
+    // Secondary index definitions owned by this collection. app/app.js collects
+    // these into DOCUMENT_STORE_INDEXES so the index name and the jsonPath stay
+    // co-located with the query (getByEmailAddress) that depends on them.
+    static INDEXES = [
+        { name: ADMIN_USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.emailAddress' },
+    ];
+
     generateUniqueId() {
         return generateShortId();
     }

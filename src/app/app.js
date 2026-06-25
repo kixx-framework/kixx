@@ -1,11 +1,13 @@
 import DocumentStore from '../kixx/document-store/document-store.js';
-import AdminUserCollection, { ADMIN_USER_EMAIL_ADDRESS_INDEX } from './collections/admin-user-collection.js';
+import AdminUserCollection from './collections/admin-user-collection.js';
 import UserSessionCollection from './collections/user-session-collection.js';
 
 
+// Each document store collection owns its own secondary index definitions
+// (name + jsonPath). Collect them here so registration stays pure wiring and
+// the index details live next to the queries that use them.
 const DOCUMENT_STORE_INDEXES = [
-    // Backs AdminUserCollection#getByEmailAddress for the duplicate-email check.
-    { name: ADMIN_USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.emailAddress' },
+    ...AdminUserCollection.INDEXES,
 ];
 
 

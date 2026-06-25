@@ -100,6 +100,12 @@ export default class UserCollection extends Collection {
     static TYPE = 'User';
     static Record = UserRecord;
 
+    // Secondary index definitions owned by this collection (see "Document Store
+    // Secondary Indexes" below). app/app.js collects these for registration.
+    static INDEXES = [
+        { name: USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.email_address' },
+    ];
+
     generateUniqueId(attributes) {
         return attributes.username;
     }
@@ -276,42 +282,60 @@ await users.updateWithRetry(context, user, (latestUser) => {
 
 ## Document Store Secondary Indexes
 
-Secondary indexes are declared in `DOCUMENT_STORE_INDEXES` in `app/app.js` and passed to `documentStore.initialize()`. Each index definition requires two fields:
+A secondary index lets `query()` look up documents by a non-primary field. Each index definition requires two fields:
 
 - **`name`** — A lowercase identifier (letters, digits, and underscores only, starting with a letter). Used as the `options.index` value in `query()`.
 - **`jsonPath`** — A JSON path beginning with `$.` that points to the field in the stored document to index (e.g. `$.email_address`, `$.profile.role`).
 
-```js
-const DOCUMENT_STORE_INDEXES = [
-    { name: 'user_email_address', jsonPath: '$.email_address' },
-];
-```
+### A Collection Owns Its Index Definitions
 
-Add the index definition before calling `collection.query()` with that `options.index` value.
+The Collection that queries an index also owns that index's definition. Declare a `static INDEXES` array on the Collection subclass, holding the full `{ name, jsonPath }` definition for every index the Collection queries. Export the index name as a named constant so the Collection's own query helpers and any tests can reference it by name.
 
 ```js
-const result = await users.query(context, {
-    index: 'user_email_address',
-    equalTo: emailAddress,
-    limit: 1,
-});
+export const USER_EMAIL_ADDRESS_INDEX = 'user_email_address';
 
-const user = result.items[0] || null;
-```
-
-Prefer wrapping queries in custom Collection helpers so callers do not need to know index names or equality-query range patterns.
-
-```js
 export default class UserCollection extends Collection {
+    static TYPE = 'User';
+    static Record = UserRecord;
+
+    static INDEXES = [
+        { name: USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.email_address' },
+    ];
+
     async getByEmail(context, emailAddress) {
         const { items } = await this.query(context, {
-            index: EMAIL_ADDRESS_INDEX,
+            index: USER_EMAIL_ADDRESS_INDEX,
             equalTo: emailAddress,
             limit: 1,
         });
         return items[0] ?? null;
     }
 }
+```
+
+Co-locating the definition keeps the three coupled facts together — the index `name`, the `jsonPath` field it indexes, and the query helper that uses it. When a record's field is renamed, the `jsonPath` is updated in the same file as the query, not in a separate registration list.
+
+### Registering Indexes
+
+Indexes are registered in `DOCUMENT_STORE_INDEXES` in `app/app.js` and passed to `documentStore.initialize()`. `app/app.js` collects each Collection's `static INDEXES` rather than hand-maintaining a parallel list of definitions, so adding an index to a Collection automatically registers it.
+
+```js
+import UserCollection from './collections/user-collection.js';
+
+const DOCUMENT_STORE_INDEXES = [
+    ...UserCollection.INDEXES,
+];
+```
+
+An index must be registered before `collection.query()` is called with that `options.index` value. Because a Collection declares `static INDEXES` and `app/app.js` spreads it into `DOCUMENT_STORE_INDEXES`, registration follows automatically.
+
+### Prefer Helpers Over Raw Index Names
+
+Wrap queries in custom Collection helpers so callers do not need to know index names or equality-query range patterns. Callers depend on the business-shaped helper:
+
+```js
+const users = context.getCollection('User');
+const user = await users.getByEmail(context, emailAddress);
 ```
 
 ## Key/Value Store Collections
