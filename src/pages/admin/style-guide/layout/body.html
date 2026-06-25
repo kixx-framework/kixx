@@ -30,7 +30,7 @@
 <div class="flow">
     <h4 class="type-h4">Flow &mdash; vertical stack</h4>
     <p class="type-body-sm">Consistent vertical rhythm between siblings. The workhorse: section bodies, form fields, prose.</p>
-    <div class="layout-demo flow" style="--flow-space: var(--space-xs)">
+    <div class="layout-demo flow">
         <div class="demo-box">First</div>
         <div class="demo-box">Second</div>
         <div class="demo-box">Third</div>
@@ -47,7 +47,7 @@
 
     <h4 class="type-h4">Grid &mdash; auto-fit grid</h4>
     <p class="type-body-sm">As many equal columns as fit, each at least <code>--grid-min</code> wide, wrapping to fewer as space shrinks. Dashboards, card galleries.</p>
-    <div class="layout-demo grid-auto" style="--grid-min: 8rem">
+    <div class="layout-demo grid-auto">
         <div class="demo-box">1</div>
         <div class="demo-box">2</div>
         <div class="demo-box">3</div>
@@ -58,7 +58,7 @@
 
     <h4 class="type-h4">Switcher &mdash; row or column</h4>
     <p class="type-body-sm">Equal columns above <code>--switcher-threshold</code>; below it, every child drops onto its own row at once. No breakpoint &mdash; the switch is driven by the container's own width.</p>
-    <div class="layout-demo switcher" style="--switcher-threshold: 28rem">
+    <div class="layout-demo switcher">
         <div class="demo-box demo-box--tall">A</div>
         <div class="demo-box demo-box--tall">B</div>
         <div class="demo-box demo-box--tall">C</div>
@@ -66,7 +66,7 @@
 
     <h4 class="type-h4">Sidebar &mdash; aside + content</h4>
     <p class="type-body-sm">A fixed-ish sidebar beside fluid content; when the content can't hold <code>--sidebar-content-min</code>, the pair wraps and both go full-width. The app shell is built on this.</p>
-    <div class="layout-demo with-sidebar" style="--sidebar-space: var(--space-sm); --sidebar-width: 10rem; --sidebar-content-min: 60%">
+    <div class="layout-demo with-sidebar">
         <div class="demo-box demo-box--tall">Sidebar</div>
         <div class="demo-box demo-box--tall">Content</div>
     </div>
@@ -74,7 +74,7 @@
     <h4 class="type-h4">Center &mdash; capped measure</h4>
     <p class="type-body-sm">Caps a column to a readable measure and centers it horizontally. Reading columns, narrow forms on wide screens.</p>
     <div class="layout-demo">
-        <div class="demo-box center" style="--center-max: 22rem">Centered, capped to <code>--center-max</code></div>
+        <div class="demo-box center">Centered, capped to <code>--center-max</code></div>
     </div>
 </div>
 

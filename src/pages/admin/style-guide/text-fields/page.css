@@ -1,0 +1,18 @@
+/* Page-local styles for the Text Fields style-guide page. */
+
+/* Variant tiles — tune the auto-fit track floor for the field examples. */
+.example-grid {
+    --grid-min: 16rem;
+}
+
+/* Anatomy and States demos: cap the live field so it reads as a real form
+   control rather than stretching the full stage width. */
+.demo-stage .field {
+    width: min(100%, 22rem);
+}
+
+/* Variant previews: fill the tile but cap the field at a realistic measure. */
+.example__preview .field {
+    width: 100%;
+    max-width: 18rem;
+}

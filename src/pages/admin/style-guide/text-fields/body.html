@@ -13,7 +13,7 @@
 <p class="doc-lede">Label above, input in the middle, hint below — three parts in a gap-based column stack.</p>
 <div class="anatomy flow">
     <div class="demo-stage">
-        <div class="field" style="width: min(100%, 22rem)">
+        <div class="field">
             <label class="field__label" for="anatomy-field">Display name</label>
             <input class="field__input" id="anatomy-field" type="text" placeholder="e.g. Jane Smith">
             <p class="field__hint">This is how your name appears to other users.</p>
@@ -28,10 +28,10 @@
 
 <h3 class="type-h3 doc-section-heading">Variants</h3>
 <p class="doc-lede">The field wrapper has one class modifier, <code>.field--error</code>. Read-only and disabled are HTML attributes, not class modifiers.</p>
-<div class="example-grid grid-auto" style="--grid-min: 16rem">
+<div class="example-grid grid-auto">
     <div class="card card--flush example">
         <div class="example__preview">
-            <div class="field" style="width: 100%; max-width: 18rem">
+            <div class="field">
                 <label class="field__label" for="v-default">Username</label>
                 <input class="field__input" id="v-default" type="text" placeholder="e.g. jane_smith">
             </div>
@@ -40,7 +40,7 @@
     </div>
     <div class="card card--flush example">
         <div class="example__preview">
-            <div class="field" style="width: 100%; max-width: 18rem">
+            <div class="field">
                 <label class="field__label" for="v-hint">Email address</label>
                 <input class="field__input" id="v-hint" type="email" value="me@example.com">
                 <p class="field__hint">Used for account notifications.</p>
@@ -50,7 +50,7 @@
     </div>
     <div class="card card--flush example">
         <div class="example__preview">
-            <div class="field field--error" style="width: 100%; max-width: 18rem">
+            <div class="field field--error">
                 <label class="field__label" for="v-error">Email address</label>
                 <input class="field__input" id="v-error" type="email" value="not-an-email" aria-describedby="v-error-hint" aria-invalid="true">
                 <p class="field__hint" id="v-error-hint">Enter a valid email address.</p>
@@ -60,7 +60,7 @@
     </div>
     <div class="card card--flush example">
         <div class="example__preview">
-            <div class="field" style="width: 100%; max-width: 18rem">
+            <div class="field">
                 <label class="field__label" for="v-readonly">Account ID</label>
                 <input class="field__input" id="v-readonly" type="text" value="usr_01HZ3F9JK7" readonly>
                 <p class="field__hint">Assigned at account creation.</p>
@@ -70,7 +70,7 @@
     </div>
     <div class="card card--flush example">
         <div class="example__preview">
-            <div class="field" style="width: 100%; max-width: 18rem">
+            <div class="field">
                 <label class="field__label" for="v-disabled">API key</label>
                 <input class="field__input" id="v-disabled" type="text" value="sk_live_••••••••" disabled>
                 <p class="field__hint">Upgrade to enable API access.</p>
@@ -84,7 +84,7 @@
 <p class="doc-lede">Click into the live field, or press <kbd>Tab</kbd>, to see focus; hover to see the border activate.</p>
 <div class="states flow">
     <div class="demo-stage">
-        <div class="field" style="width: min(100%, 22rem)">
+        <div class="field">
             <label class="field__label" for="states-demo">Email address</label>
             <input class="field__input" id="states-demo" type="email" placeholder="you@example.com">
             <p class="field__hint">This is a live, interactive field.</p>

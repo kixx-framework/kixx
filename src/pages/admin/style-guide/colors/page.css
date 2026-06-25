@@ -1,0 +1,38 @@
+/* Page-local styles for the Colors style-guide page. */
+
+/* Reference palette grid — narrower tracks for the raw-ingredient chips. */
+.swatch-list--palette {
+    --grid-min: 11rem;
+}
+
+/* Semantic token grid — wider tracks to fit the longer token names. */
+.swatch-list--semantic {
+    --grid-min: 13rem;
+}
+
+/* Each chip paints the live token it documents through the .swatch__chip
+   --swatch hook, so the colour shown is always what the theme currently
+   resolves to. One modifier per token keeps the value out of the markup. */
+.swatch__chip--palette-magenta { --swatch: var(--palette-magenta); }
+.swatch__chip--palette-cyan { --swatch: var(--palette-cyan); }
+.swatch__chip--palette-blue { --swatch: var(--palette-blue); }
+.swatch__chip--palette-yellow { --swatch: var(--palette-yellow); }
+.swatch__chip--palette-highlight { --swatch: var(--palette-highlight); }
+.swatch__chip--palette-red { --swatch: var(--palette-red); }
+.swatch__chip--palette-red-bright { --swatch: var(--palette-red-bright); }
+.swatch__chip--palette-amber { --swatch: var(--palette-amber); }
+.swatch__chip--palette-black { --swatch: var(--palette-black); }
+.swatch__chip--palette-white { --swatch: var(--palette-white); }
+
+.swatch__chip--color-ink { --swatch: var(--color-ink); }
+.swatch__chip--color-ink-muted { --swatch: var(--color-ink-muted); }
+.swatch__chip--color-bg { --swatch: var(--color-bg); }
+.swatch__chip--color-surface-sunken { --swatch: var(--color-surface-sunken); }
+.swatch__chip--color-rule { --swatch: var(--color-rule); }
+.swatch__chip--color-ink-primary { --swatch: var(--color-ink-primary); }
+.swatch__chip--color-ink-secondary { --swatch: var(--color-ink-secondary); }
+.swatch__chip--color-ink-link { --swatch: var(--color-ink-link); }
+.swatch__chip--color-ink-on-accent { --swatch: var(--color-ink-on-accent); }
+.swatch__chip--color-focus-outline { --swatch: var(--color-focus-outline); }
+.swatch__chip--color-status-danger { --swatch: var(--color-status-danger); }
+.swatch__chip--color-status-warning { --swatch: var(--color-status-warning); }

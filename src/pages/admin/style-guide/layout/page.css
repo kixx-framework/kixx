@@ -1,0 +1,34 @@
+/* Page-local styles for the Layout style-guide page.
+
+   Each demo tunes the scoped custom properties of the one primitive it
+   illustrates, so the dashed frame shows that primitive's behaviour at a
+   representative setting. */
+
+/* Flow demo — a tight rhythm so the three stacked boxes sit close together. */
+.layout-demo.flow {
+    --flow-space: var(--space-xs);
+}
+
+/* Grid demo — a small track floor so several columns fit inside the frame. */
+.layout-demo.grid-auto {
+    --grid-min: 8rem;
+}
+
+/* Switcher demo — flip to a column below a width that the frame can cross as the
+   window resizes. */
+.layout-demo.switcher {
+    --switcher-threshold: 28rem;
+}
+
+/* Sidebar demo — a narrow fixed-ish aside beside fluid content that wraps when
+   the content can no longer hold 60% of the row. */
+.layout-demo.with-sidebar {
+    --sidebar-space: var(--space-sm);
+    --sidebar-width: 10rem;
+    --sidebar-content-min: 60%;
+}
+
+/* Center demo — cap the centered box to a readable measure. */
+.demo-box.center {
+    --center-max: 22rem;
+}

@@ -113,6 +113,9 @@
     /* Comfortable reading measure (~65 characters). Shared by section ledes and
        body prose so a deck never wraps tighter than the copy beneath it. */
     --measure-prose: 65ch;
+    /* Narrow measure for standalone forms (login, sign-up, settings). Keeps a
+       form column comfortably readable rather than stretching to the prose measure. */
+    --measure-form: 28rem;
 
     /* Vertical spacing scale — fixed rem steps, consumed by the .flow primitive
        (and anywhere a gap is needed). Keeps rhythm on a predictable ladder. */
@@ -475,6 +478,12 @@ kbd {
     --center-max: var(--measure-prose);
     max-inline-size: var(--center-max);
     margin-inline: auto;
+}
+
+/* Caps a centered column to the narrower form measure. Compose with .center on
+   standalone form pages (login, sign-up, settings). */
+.center--form {
+    --center-max: var(--measure-form);
 }
 
 /* -----------------------------------------------------------------------------

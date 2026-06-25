@@ -31,7 +31,7 @@
         <link href="/stylesheets/admin-components.css" rel="stylesheet">
 
         {{#if includes.page_stylesheet }}
-        <style>{{ includes.page_stylesheet }}</style>
+        <style>{{{ includes.page_stylesheet }}}</style>
         {{/if}}
     </head>
     <body>
@@ -49,7 +49,7 @@
                 </div>
             </div>
         </header>
-        <div class="site-layout with-sidebar">{{{ body }}}</div>
+        <main class="site-main center">{{{ body }}}</main>
 
         <script>
             const themeToggles = document.querySelectorAll('[data-js-behavior="theme-toggle"]');

@@ -1,0 +1,17 @@
+/* Page-local styles for the Multi-Line Text Areas style-guide page. */
+
+/* Variant tiles — tune the auto-fit track floor for the text-area examples. */
+.example-grid {
+    --grid-min: 18rem;
+}
+
+/* Anatomy and States demos: cap the live text area so it reads as a real form
+   control rather than stretching the full stage width. */
+.demo-stage .field {
+    width: min(100%, 26rem);
+}
+
+/* Variant previews: let the text area fill its tile. */
+.example__preview .field {
+    width: 100%;
+}
