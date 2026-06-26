@@ -9,10 +9,14 @@ export function register(context) {
 
     assertNonEmptyString(path, 'The Node.js DOCUMENT_STORE.path config is required');
 
+    // Pass in the absolute filepath for this OS
+    const absoluteFilepath = config.resolveFilepath(path);
+
+    logger.info('DocumentStoreEngine configured with filepath', { absoluteFilepath });
+
     context.registerService('DocumentStoreEngine', new DocumentStoreEngine({
         logger,
-        // Pass in the absolute filepath for this OS
-        path: config.resolveFilepath(path),
+        path: absoluteFilepath,
         sqliteOptions,
     }));
 }

@@ -10,10 +10,14 @@ export function register(context) {
 
     assertNonEmptyString(path, 'The Node.js KEY_VALUE_STORE.path config is required');
 
+    // Pass in the absolute filepath for this OS
+    const absoluteFilepath = config.resolveFilepath(path);
+
+    logger.info('KeyValueStore configured with filepath', { absoluteFilepath });
+
     context.registerService('KeyValueStore', new KeyValueStore({
         logger,
-        // Pass in the absolute filepath for this OS
-        path: config.resolveFilepath(path),
+        path: absoluteFilepath,
         sqliteOptions,
     }));
 }

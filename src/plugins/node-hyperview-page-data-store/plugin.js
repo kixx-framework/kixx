@@ -9,9 +9,13 @@ export function register(context) {
 
     assertNonEmptyString(directory, 'The Node.js PAGE_DATA_STORE.directory config is required');
 
+    // Pass in the absolute filepath for this OS
+    const absolutePath = config.resolveFilepath(directory);
+
+    logger.info('HyperviewPageDataStore configured with directory', { absolutePath });
+
     context.registerService('HyperviewPageDataStore', new PageDataStore({
         logger,
-        // Pass in the absolute filepath for this OS
-        directory: config.resolveFilepath(directory),
+        directory: absolutePath,
     }));
 }
