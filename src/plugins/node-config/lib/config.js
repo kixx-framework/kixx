@@ -33,8 +33,17 @@ export function readConfig(absoluteConfigPath, environment) {
     // Expose the selected environment as `env` so callers read a single resolved
     // bundle regardless of which environment was requested.
     config.env = env;
-    config.baseDirectory = baseDirectory;
     delete config.environments;
+
+    config.resolveFilepath = function resolveFilepath(relativeFilepath) {
+        assertNonEmptyString(relativeFilepath, 'resolveFilepath requires a relative filepath');
+
+        // The incoming path is always POSIX (forward slashes), but the config
+        // may run on a platform that uses a different separator. Split on the
+        // POSIX separator and rejoin with path.join() so the returned absolute
+        // path is formatted for the current OS.
+        return path.join(baseDirectory, ...relativeFilepath.split('/'));
+    };
 
     return config;
 }
