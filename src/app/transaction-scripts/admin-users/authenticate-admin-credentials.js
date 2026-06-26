@@ -1,5 +1,5 @@
 import { AssertionError, UnauthorizedError } from '../../../kixx/errors/mod.js';
-import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/user-sessions.js';
+import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/admin-session.js';
 import { pbkdf2HashPassword, verifyPassword } from '../../lib/crypto.js';
 
 

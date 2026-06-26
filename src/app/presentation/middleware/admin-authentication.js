@@ -1,6 +1,6 @@
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { UnauthenticatedError } from '../../../kixx/errors/mod.js';
-import { ADMIN_SESSION_COOKIE_NAME } from '../../lib/user-sessions.js';
+import { ADMIN_SESSION_COOKIE_NAME } from '../lib/admin-session-cookie.js';
 import { authenticateAdminSession } from '../../transaction-scripts/admin-users/authenticate-admin-session.js';
 
 

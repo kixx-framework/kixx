@@ -2,7 +2,7 @@ import AdminInviteCreateForm, { AdminInviteRevokeForm } from '../forms/admin-inv
 import { createAdminInvite } from '../../transaction-scripts/admin-invites/create-admin-invite.js';
 import { listAdminInvites } from '../../transaction-scripts/admin-invites/list-admin-invites.js';
 import { revokeAdminInvite } from '../../transaction-scripts/admin-invites/revoke-admin-invite.js';
-import { getCsrfFormContext, validateCsrfFormData } from '../csrf.js';
+import { getCsrfFormContext, validateCsrfFormData } from '../lib/csrf.js';
 
 
 function getRevokeInviteLink(context) {

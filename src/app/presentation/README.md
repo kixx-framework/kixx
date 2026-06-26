@@ -620,12 +620,12 @@ export default class CreateBugTicketForm {
 
 ## CSRF-Protected HTML Forms
 
-Use `app/presentation/csrf.js` for browser HTML forms that mutate state or establish authentication. CSRF validation belongs in request handlers before constructing a Form and before calling any Transaction Script. Transaction Scripts should continue to receive already-validated Forms and should not be concerned with CSRF cookies or hidden fields.
+Use `app/presentation/lib/csrf.js` for browser HTML forms that mutate state or establish authentication. CSRF validation belongs in request handlers before constructing a Form and before calling any Transaction Script. Transaction Scripts should continue to receive already-validated Forms and should not be concerned with CSRF cookies or hidden fields.
 
 On GET handlers, render the form through `getCsrfFormContext()`. The helper calls `form.getFormContext(context, error)`, creates a fresh server-side CSRF token record, sets the browser CSRF pre-session cookie, and returns the usual form context with `form.csrf.fieldName` and `form.csrf.token` added:
 
 ```js
-import { getCsrfFormContext } from '../csrf.js';
+import { getCsrfFormContext } from '../lib/csrf.js';
 
 export async function getCreateBugForm(context, request, response) {
     const form = new CreateBugForm();
@@ -639,7 +639,7 @@ export async function getCreateBugForm(context, request, response) {
 On POST handlers, call `validateCsrfFormData()` before constructing the Form. That helper owns `request.formData()` because request bodies are one-shot; do not call `request.formData()` again after it returns. Missing, expired, or mismatched CSRF data throws an expected HTTP error before domain logic runs.
 
 ```js
-import { validateCsrfFormData } from '../csrf.js';
+import { validateCsrfFormData } from '../lib/csrf.js';
 
 export async function postCreateBugForm(context, request, response, skip) {
     const formData = await validateCsrfFormData(context, request);

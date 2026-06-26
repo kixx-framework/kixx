@@ -1,4 +1,4 @@
-import { clearAdminSessionCookie } from '../../lib/user-sessions.js';
+import { clearAdminSessionCookie } from '../lib/admin-session-cookie.js';
 
 
 export function adminErrorHandler(context, request, response, error) {

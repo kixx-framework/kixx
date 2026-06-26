@@ -1,9 +1,7 @@
-import { isNonEmptyString } from '../../kixx/assertions/mod.js';
+import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
+import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/admin-session.js';
 
-// Shared by admin signup, login, and authentication middleware. Keep the cookie
-// lifetime aligned with the stored UserSession expiration.
 export const ADMIN_SESSION_COOKIE_NAME = 'kixx_admin_session';
-export const ADMIN_SESSION_TTL_SECONDS = 60 * 60 * 24 * 3;
 
 
 export function setAdminSessionCookie(request, response, sessionId) {
@@ -14,6 +12,7 @@ export function setAdminSessionCookie(request, response, sessionId) {
 
     response.setCookie(ADMIN_SESSION_COOKIE_NAME, sessionId, {
         path: '/',
+        // Keep the cookie lifetime aligned with the stored UserSession expiration.
         maxAge: ADMIN_SESSION_TTL_SECONDS,
         secure: isHttps,
     });

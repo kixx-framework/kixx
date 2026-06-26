@@ -3,12 +3,12 @@ import AdminUserLoginForm from '../forms/admin-users/admin-user-login-form.js';
 import { createAdminUser } from '../../transaction-scripts/admin-users/create-admin-user.js';
 import { resolveAdminInvite } from '../../transaction-scripts/admin-invites/resolve-admin-invite.js';
 import { authenticateAdminCredentials } from '../../transaction-scripts/admin-users/authenticate-admin-credentials.js';
-import { setAdminSessionCookie } from '../../lib/user-sessions.js';
+import { setAdminSessionCookie } from '../lib/admin-session-cookie.js';
 import {
     clearCsrfToken,
     getCsrfFormContext,
     validateCsrfFormData,
-} from '../csrf.js';
+} from '../lib/csrf.js';
 
 
 const SESSION_CREATE_FAILED = 'session_create_failed';

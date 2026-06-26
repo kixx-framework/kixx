@@ -1,5 +1,5 @@
-import { ForbiddenError } from '../../kixx/errors/mod.js';
-import { isNonEmptyString } from '../../kixx/assertions/mod.js';
+import { ForbiddenError } from '../../../kixx/errors/mod.js';
+import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 
 
 export const CSRF_COOKIE_NAME = 'kixx_csrf_session';
@@ -9,11 +9,11 @@ export const CSRF_TOKEN_TTL_SECONDS = 60 * 30;
 
 /**
  * Builds a form render context with a fresh synchronizer CSRF token.
- * @param {import('../../kixx/context/request-context.js').default} context - Current request context.
- * @param {import('../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
- * @param {import('../../kixx/http-router/server-response.js').default} response - Response being built.
- * @param {import('./forms/base-form.js').default} form - Form instance to render.
- * @param {import('../../kixx/errors/lib/validation-error.js').default|string|null} [error] - Optional validation or domain error.
+ * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
+ * @param {import('../../../kixx/http-router/server-response.js').default} response - Response being built.
+ * @param {import('../forms/base-form.js').default} form - Form instance to render.
+ * @param {import('../../../kixx/errors/lib/validation-error.js').default|string|null} [error] - Optional validation or domain error.
  * @returns {Promise<Object>} Form context including `csrf.fieldName` and `csrf.token`.
  */
 export async function getCsrfFormContext(context, request, response, form, error) {
@@ -45,8 +45,8 @@ export async function getCsrfFormContext(context, request, response, form, error
 
 /**
  * Reads submitted form data and validates its CSRF token before callers construct a Form.
- * @param {import('../../kixx/context/request-context.js').default} context - Current request context.
- * @param {import('../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
+ * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
  * @returns {Promise<FormData>} Parsed form data after CSRF validation succeeds.
  * @throws {ForbiddenError} When the CSRF cookie or submitted token is missing, expired, or mismatched.
  */
@@ -74,9 +74,9 @@ export async function validateCsrfFormData(context, request) {
 
 /**
  * Deletes the current CSRF pre-session and clears its browser cookie.
- * @param {import('../../kixx/context/request-context.js').default} context - Current request context.
- * @param {import('../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
- * @param {import('../../kixx/http-router/server-response.js').default} response - Response being built.
+ * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
+ * @param {import('../../../kixx/http-router/server-response.js').default} response - Response being built.
  * @returns {Promise<void>}
  */
 export async function clearCsrfToken(context, request, response) {
