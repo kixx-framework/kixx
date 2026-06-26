@@ -7,14 +7,58 @@ import {
 
 
 /**
- * Shared environment-accessor methods for context classes.
+ * @typedef {import('../logger/logger.js').default} Logger
+ */
+
+/**
+ * @typedef {import('./app-runtime.js').default} AppRuntime
+ */
+
+
+/**
+ * Shared context properties and environment-accessor methods.
  *
- * Subclasses must expose `this.env` — the raw environment object — before any
- * accessor is called. The accessors themselves are runtime-agnostic: `env` may
- * be a plain object, a Cloudflare Workers binding bag, or any other key/value
- * store that supports bracket-notation reads.
+ * The environment accessors are runtime-agnostic: `env` may be a plain object,
+ * a Cloudflare Workers binding bag, or any other key/value store that supports
+ * bracket-notation reads.
  */
 export default class BaseContext {
+
+    /**
+     * @param {Object} options
+     * @param {Object} options.env - Environment variables, secrets, and platform bindings.
+     * @param {Logger} options.logger - Root application logger.
+     * @param {AppRuntime} options.runtime - Runtime metadata shared by contexts.
+     */
+    constructor(options) {
+        const {
+            env,
+            logger,
+            runtime,
+        } = options ?? {};
+
+        Object.defineProperties(this, {
+            /**
+             * Accessor for environment variables, secrets, and bindings.
+             * @name env
+             * @type {Object}
+             */
+            env: { value: env, enumerable: true },
+            /**
+             * Root application logger.
+             * @name logger
+             * @type {Logger}
+             */
+            logger: { value: logger, enumerable: true },
+            /**
+             * Runtime metadata indicating whether the application is serving HTTP
+             * requests or executing a CLI command.
+             * @name runtime
+             * @type {AppRuntime}
+             */
+            runtime: { value: runtime, enumerable: true },
+        });
+    }
 
     /**
      * Returns the raw string value of an environment variable.

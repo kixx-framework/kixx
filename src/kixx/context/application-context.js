@@ -40,35 +40,7 @@ export default class ApplicationContext extends BaseContext {
      * @param {AppRuntime} options.runtime - Runtime metadata shared with every request context.
      */
     constructor(options) {
-        super();
-
-        const {
-            logger,
-            env,
-            runtime,
-        } = options ?? {};
-
-        Object.defineProperties(this, {
-            /**
-             * Accessor for environment variables, secrets, and bindings.
-             * @name env
-             * @type {Object}
-             */
-            env: { value: env, enumerable: true },
-            /**
-             * Root application logger.
-             * @name logger
-             * @type {Logger}
-             */
-            logger: { value: logger, enumerable: true },
-            /**
-             * Runtime metadata indicating whether the application is serving HTTP
-             * requests or executing a CLI command.
-             * @name runtime
-             * @type {AppRuntime}
-             */
-            runtime: { value: runtime, enumerable: true },
-        });
+        super(options);
     }
 
     /**

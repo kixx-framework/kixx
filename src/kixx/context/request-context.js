@@ -50,14 +50,11 @@ export default class RequestContext extends BaseContext {
      * @param {string} [config.requestId] - Identifier for the request being handled, when available.
      */
     constructor(config) {
-        super();
+        super(config);
 
         const {
-            env,
-            runtime,
             services,
             collections,
-            logger,
             requestId,
         } = config;
 
@@ -66,31 +63,12 @@ export default class RequestContext extends BaseContext {
 
         Object.defineProperties(this, {
             /**
-             * Accessor for environment variables, secrets, and bindings.
-             * @name env
-             * @type {Object}
-             */
-            env: { value: env, enumerable: true },
-            /**
-             * Root application logger.
-             * @name logger
-             * @type {Logger}
-             */
-            logger: { value: logger, enumerable: true },
-            /**
              * Identifier for the current request, or undefined when no request
              * object was available while creating this context.
              * @name requestId
              * @type {string|undefined}
              */
             requestId: { value: requestId, enumerable: true },
-            /**
-             * Runtime metadata indicating whether the application is serving HTTP
-             * requests or executing a CLI command.
-             * @name runtime
-             * @type {AppRuntime}
-             */
-            runtime: { value: runtime, enumerable: true },
         });
     }
 
