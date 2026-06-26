@@ -550,7 +550,12 @@ export default class HyperviewService {
             partials.set(name, template);
         }
 
-        this.#partialsCache.set(cacheKey, partials);
+        // Only retain the compiled partials when caching is enabled; otherwise the
+        // map would grow even though no reader ever consults it (the read above is
+        // guarded by useCache), matching getBaseTemplate/getPageTemplate.
+        if (useCache) {
+            this.#partialsCache.set(cacheKey, partials);
+        }
 
         return partials;
     }

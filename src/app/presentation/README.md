@@ -112,8 +112,9 @@ This response exposes the same page data object that would otherwise be rendered
 /*
  * @param {string} [options.indexFilePattern] - Regex pattern string matching index filenames to strip from the URL pathname. Defaults to matching an `index.html`, `index.json`, `index.xml`, or `index.md` path segment at the end of the path.
  * @param {string} [options.formatExtensionPattern] - Regex pattern string matching format extensions to strip from the URL pathname last segment for content negotiation. Defaults to `\.json$`, so `/platform.json` resolves page data from `/platform`.
- * @param {boolean} [options.allowJSON] - Allow JSON responses when the client requests them. Falls back to the `HYPERVIEW_ALLOW_JSON_RESPONSE` env var.
- * @param {boolean} [options.useCache] - Enable caching. Falls back to the `HYPERVIEW_USE_CACHE` env var.
+ * @param {boolean} [options.allowJSON] - Allow JSON responses when the client requests them. Falls back to `config.env.HYPERVIEW.ALLOW_JSON_RESPONSE`.
+ * @param {boolean} [options.usePageCache] - Enable full page (rendered HTML) caching. Static pages only. Falls back to `config.env.HYPERVIEW.USE_PAGE_CACHE`.
+ * @param {boolean} [options.useTemplateCache] - Reuse compiled templates, partials, and includes. Falls back to `config.env.HYPERVIEW.USE_TEMPLATE_CACHE`.
  * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden per-page via `metadata.baseTemplate`.
  * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`. Can be overridden per-page via `metadata.pageTemplate`.
  * @param {string} [options.pathname] - Override the pathname derived from the request URL.

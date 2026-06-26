@@ -12,12 +12,13 @@ import RequestContext from '../../../src/kixx/context/request-context.js';
 
 function makeApplicationContext(options) {
     const {
+        config = { name: 'test-app' },
         logger = { name: 'test-logger' },
         env = {},
         runtime = { mode: 'server' },
     } = options ?? {};
 
-    return new ApplicationContext({ logger, env, runtime });
+    return new ApplicationContext({ config, logger, env, runtime });
 }
 
 function catchError(fn) {
@@ -33,25 +34,28 @@ function catchError(fn) {
 describe('ApplicationContext', ({ describe }) => {
 
     describe('constructor', ({ it }) => {
-        it('assigns env, logger, and runtime as enumerable read-only properties', () => {
+        it('assigns config, env, logger, and runtime as enumerable read-only properties', () => {
+            const config = { name: 'app' };
             const logger = { name: 'app' };
             const env = { NODE_ENV: 'test' };
             const runtime = { mode: 'server' };
-            const context = new ApplicationContext({ logger, env, runtime });
+            const context = new ApplicationContext({ config, logger, env, runtime });
 
+            assertEqual(config, context.config);
             assertEqual(env, context.env);
             assertEqual(logger, context.logger);
             assertEqual(runtime, context.runtime);
+            assert(Object.keys(context).includes('config'), 'expected config to be enumerable');
         });
 
         it('exposes the properties as non-writable', () => {
             const context = makeApplicationContext();
 
             const caught = catchError(() => {
-                context.logger = { name: 'other' };
+                context.config = { name: 'other' };
             });
 
-            assert(caught, 'expected reassigning logger to throw');
+            assert(caught, 'expected reassigning config to throw');
             assertEqual('TypeError', caught.name);
         });
     });
@@ -142,12 +146,13 @@ describe('ApplicationContext', ({ describe }) => {
     });
 
     describe('createRequestContext', ({ it }) => {
-        it('returns a RequestContext sharing the logger and runtime', () => {
+        it('returns a RequestContext sharing the config, logger, and runtime', () => {
             const context = makeApplicationContext();
 
             const requestContext = context.createRequestContext({});
 
             assert(requestContext instanceof RequestContext, 'expected a RequestContext');
+            assertEqual(context.config, requestContext.config);
             assertEqual(context.logger, requestContext.logger);
             assertEqual(context.runtime, requestContext.runtime);
         });

@@ -1,5 +1,10 @@
 import { NotFoundError } from '../errors/mod.js';
-import { AssertionError, isNonEmptyString, isBoolean } from '../assertions/mod.js';
+import {
+    AssertionError,
+    isNonEmptyString,
+    isBoolean,
+    isPlainObject,
+} from '../assertions/mod.js';
 import deepMerge from '../utils/deep-merge.js';
 
 import validatePathname from './validate-pathname.js';
@@ -28,8 +33,12 @@ const FORMAT_EXTENSION_PATTERN = /\.json$/;
  * This is useful when an endpoint target will not be hydrated by dynamic data
  * and the full page response can be cached.
  *
- * Option values take precedence over environment variables. When an option is
- * omitted, the handler falls back to the corresponding env var.
+ * Option values take precedence over configuration. When a boolean option is
+ * omitted, the handler falls back to the corresponding `config.env.HYPERVIEW`
+ * setting.
+ *
+ * The page cache (rendered HTML) and the template cache (compiled base, page,
+ * partial, and include render functions) are controlled independently.
  *
  * @param {Object} [options]
  * @param {string} [options.indexFilePattern] - Regex pattern string matching index filenames
@@ -39,9 +48,11 @@ const FORMAT_EXTENSION_PATTERN = /\.json$/;
  *   extensions to strip from the URL pathname last segment for content negotiation.
  *   Defaults to `\.json$`, so `/platform.json` resolves page data from `/platform`.
  * @param {boolean} [options.allowJSON] - Allow JSON responses when the client requests them.
- *   Falls back to the `HYPERVIEW_ALLOW_JSON_RESPONSE` env var.
- * @param {boolean} [options.useCache] - Enable full page caching.
- *   Falls back to the `HYPERVIEW_USE_CACHE` env var.
+ *   Falls back to `config.env.HYPERVIEW.ALLOW_JSON_RESPONSE`.
+ * @param {boolean} [options.usePageCache] - Enable full page (rendered HTML) caching.
+ *   Falls back to `config.env.HYPERVIEW.USE_PAGE_CACHE`.
+ * @param {boolean} [options.useTemplateCache] - Reuse compiled templates, partials, and includes.
+ *   Falls back to `config.env.HYPERVIEW.USE_TEMPLATE_CACHE`.
  * @param {string} [options.pathname] - Override the pathname derived from the request URL.
  * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
  *   per-page via `metadata.baseTemplate`.
@@ -63,19 +74,23 @@ export function HyperviewStaticPageHandler(options) {
         : FORMAT_EXTENSION_PATTERN;
 
     return async function hyperviewStaticPageHandler(context, request, response) {
-        // Fall back to env vars when options did not provide explicit booleans.
+        // Fall back to config when options did not provide explicit booleans.
         const allowJSON = isBoolean(options.allowJSON)
             ? options.allowJSON
-            : context.getEnvBoolean('HYPERVIEW_ALLOW_JSON_RESPONSE');
+            : getHyperviewConfigBoolean(context, 'ALLOW_JSON_RESPONSE');
 
-        let useCache = isBoolean(options.useCache)
-            ? options.useCache
-            : context.getEnvBoolean('HYPERVIEW_USE_CACHE');
+        let usePageCache = isBoolean(options.usePageCache)
+            ? options.usePageCache
+            : getHyperviewConfigBoolean(context, 'USE_PAGE_CACHE');
+
+        const useTemplateCache = isBoolean(options.useTemplateCache)
+            ? options.useTemplateCache
+            : getHyperviewConfigBoolean(context, 'USE_TEMPLATE_CACHE');
 
         if (request.isJSONRequest() && allowJSON) {
-            // If this is a JSON request, implicitly asking for the most recent page metadata,
-            // then turn page caching off for this request.
-            useCache = false;
+            // A JSON request implicitly asks for the most recent page metadata,
+            // so never serve or store a cached full page for it.
+            usePageCache = false;
         }
 
         const { url } = request;
@@ -103,15 +118,16 @@ export function HyperviewStaticPageHandler(options) {
 
         let hypertext;
 
-        if (useCache) {
+        if (usePageCache) {
             hypertext = await service.getCachedPage(context, pathname, pageContent.version);
             if (hypertext) {
                 return response.respondWithUtf8(response.status, hypertext, { contentType: 'text/html' });
             }
         }
 
-        // If the full page was not cached, we do not use cached resources to build it. Instead
-        // we use fresh resources and then cache the resulting page.
+        // On a page-cache miss we build the page from compiled resources. Template
+        // caching is independent of page caching, so reuse compiled templates only
+        // when useTemplateCache is enabled, then cache the resulting page.
 
         const metadata = deepMerge(structuredClone(pageContent.metadata), response.props);
 
@@ -141,8 +157,8 @@ export function HyperviewStaticPageHandler(options) {
         }
 
         const [ baseTemplate, pageTemplate ] = await Promise.all([
-            service.getBaseTemplate(context, baseTemplateId, { useCache: false }),
-            service.getPageTemplate(context, pageTemplateId, { useCache: false }),
+            service.getBaseTemplate(context, baseTemplateId, { useCache: useTemplateCache }),
+            service.getPageTemplate(context, pageTemplateId, { useCache: useTemplateCache }),
         ]);
 
         if (!baseTemplate) {
@@ -156,7 +172,7 @@ export function HyperviewStaticPageHandler(options) {
                 context,
                 pathname,
                 metadata.includes,
-                { useCache: false, version: pageContent.version, metadata },
+                { useCache: useTemplateCache, version: pageContent.version, metadata },
             );
         }
 
@@ -166,7 +182,7 @@ export function HyperviewStaticPageHandler(options) {
 
         hypertext = baseTemplate(metadata);
 
-        if (useCache) {
+        if (usePageCache) {
             await service.setCachedPage(context, pathname, pageContent.version, hypertext);
         }
 
@@ -181,8 +197,13 @@ export function HyperviewStaticPageHandler(options) {
  * Used when the response will be hydrated by dynamic data from the response
  * props from handlers which run before this.
  *
- * Option values take precedence over environment variables. When an option is
- * omitted, the handler falls back to the corresponding env var.
+ * Option values take precedence over configuration. When a boolean option is
+ * omitted, the handler falls back to the corresponding `config.env.HYPERVIEW`
+ * setting.
+ *
+ * Dynamic full-page responses are never cached because they are rendered per
+ * request from response props, so this handler has no page cache — only the
+ * template cache (compiled base, page, partial, and include render functions).
  *
  * @param {Object} [options]
  * @param {string} [options.indexFilePattern] - Regex pattern string matching index filenames
@@ -192,10 +213,9 @@ export function HyperviewStaticPageHandler(options) {
  *   extensions to strip from the URL pathname last segment for content negotiation.
  *   Defaults to `\.json$`, so `/platform.json` resolves page data from `/platform`.
  * @param {boolean} [options.allowJSON] - Allow JSON responses when the client requests them.
- *   Falls back to the `HYPERVIEW_ALLOW_JSON_RESPONSE` env var.
- * @param {boolean} [options.useCache] - Reuse compiled templates and includes. Dynamic
- *   full-page responses are not cached.
- *   Falls back to the `HYPERVIEW_USE_CACHE` env var.
+ *   Falls back to `config.env.HYPERVIEW.ALLOW_JSON_RESPONSE`.
+ * @param {boolean} [options.useTemplateCache] - Reuse compiled templates, partials, and includes.
+ *   Falls back to `config.env.HYPERVIEW.USE_TEMPLATE_CACHE`.
  * @param {string} [options.pathname] - Override the pathname derived from the request URL.
  * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
  *   per-page via `metadata.baseTemplate`.
@@ -217,14 +237,14 @@ export function HyperviewDynamicPageHandler(options) {
         : FORMAT_EXTENSION_PATTERN;
 
     return async function hyperviewDynamicPageHandler(context, request, response) {
-        // Fall back to env vars when options did not provide explicit booleans.
+        // Fall back to config when options did not provide explicit booleans.
         const allowJSON = isBoolean(options.allowJSON)
             ? options.allowJSON
-            : context.getEnvBoolean('HYPERVIEW_ALLOW_JSON_RESPONSE');
+            : getHyperviewConfigBoolean(context, 'ALLOW_JSON_RESPONSE');
 
-        const useCache = isBoolean(options.useCache)
-            ? options.useCache
-            : context.getEnvBoolean('HYPERVIEW_USE_CACHE');
+        const useTemplateCache = isBoolean(options.useTemplateCache)
+            ? options.useTemplateCache
+            : getHyperviewConfigBoolean(context, 'USE_TEMPLATE_CACHE');
 
         const { url } = request;
 
@@ -248,7 +268,7 @@ export function HyperviewDynamicPageHandler(options) {
             throw new NotFoundError(`No page found for pathname "${ pathname }"`);
         }
 
-        // Dynamic pages are rendered per request; `useCache` only reuses
+        // Dynamic pages are rendered per request; the template cache only reuses
         // compiled template resources, never the final HTML.
 
         const metadata = deepMerge(structuredClone(pageContent.metadata), response.props);
@@ -279,8 +299,8 @@ export function HyperviewDynamicPageHandler(options) {
         }
 
         const [ baseTemplate, pageTemplate ] = await Promise.all([
-            service.getBaseTemplate(context, baseTemplateId, { useCache }),
-            service.getPageTemplate(context, pageTemplateId, { useCache }),
+            service.getBaseTemplate(context, baseTemplateId, { useCache: useTemplateCache }),
+            service.getPageTemplate(context, pageTemplateId, { useCache: useTemplateCache }),
         ]);
 
         if (!baseTemplate) {
@@ -294,7 +314,7 @@ export function HyperviewDynamicPageHandler(options) {
                 context,
                 pathname,
                 metadata.includes,
-                { useCache, version: pageContent.version, metadata },
+                { useCache: useTemplateCache, version: pageContent.version, metadata },
             );
         }
 
@@ -314,4 +334,27 @@ function stripIndexFile(pathname, indexFilePattern) {
         // Preserve the parent slash when the pattern consumes `/index.html`.
         return match.startsWith('/') ? '/' : '';
     });
+}
+
+// Hyperview settings live under the HYPERVIEW section of the resolved
+// environment bundle, which readConfig exposes as config.env. Values are
+// normally authored as JSON booleans, but also accept the string/number
+// vocabulary used elsewhere for environment values so hand-edited configs
+// behave consistently. A missing section or key resolves to false.
+function getHyperviewConfigBoolean(context, key) {
+    const hyperviewConfig = context.config?.env?.HYPERVIEW;
+
+    if (!isPlainObject(hyperviewConfig)) {
+        return false;
+    }
+
+    switch (hyperviewConfig[key]) {
+        case true:
+        case 1:
+        case 'true':
+        case '1':
+            return true;
+        default:
+            return false;
+    }
 }
