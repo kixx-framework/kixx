@@ -5,14 +5,14 @@ import os from 'node:os';
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { register } from '../../../src/plugins/node-hyperview-page-data-store/plugin.js';
+import { register } from '../../../src/plugins/node-hyperview-template-file-store/plugin.js';
 import Logger from '../../../src/kixx/logger/logger.js';
 
 
 const tempDirs = [];
 
 async function makeTempDir() {
-    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-pds-plugin-'));
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-tfs-plugin-'));
     tempDirs.push(dir);
     return dir;
 }
@@ -35,7 +35,7 @@ async function readBackingFile(directory, relativePath) {
 }
 
 
-describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
+describe('node-hyperview-template-file-store plugin', ({ after, it }) => {
 
     after(async () => {
         for (const dir of tempDirs) {
@@ -43,7 +43,7 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
         }
     });
 
-    it('registers the page data store using the OS-resolved directory', async () => {
+    it('registers the template file store using the OS-resolved directory', async () => {
         const directory = await makeTempDir();
         const registered = {};
         const tracker = new MockTracker();
@@ -55,7 +55,7 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
         const context = {
             logger: makeLogger(),
             config: {
-                env: { PAGE_DATA_STORE: { directory: './pages' } },
+                env: { TEMPLATE_FILE_STORE: { directory: './templates' } },
                 resolveFilepath,
             },
             registerService(name, service) {
@@ -66,13 +66,14 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
 
         register(context);
 
-        assertEqual('HyperviewPageDataStore', registered.name);
+        assertEqual('HyperviewTemplateFileStore', registered.name);
         // The configured (POSIX) directory is what gets resolved.
-        assertEqual('./pages', resolveFilepath.mock.getCall(0).arguments[0]);
+        assertEqual('./templates', resolveFilepath.mock.getCall(0).arguments[0]);
 
-        // The registered service writes to the resolved directory.
-        await registered.service.putTextFile(null, null, '/body.md', '# Body');
-        assertEqual('# Body', await readBackingFile(directory, 'body.md'));
+        // The registered service writes to the resolved directory; base templates
+        // land under the `base/` prefix.
+        await registered.service.putBaseTemplate(null, null, 'website.html', '<html></html>');
+        assertEqual('<html></html>', await readBackingFile(directory, 'base/website.html'));
     });
 
     it('throws when the configured directory is missing', () => {
@@ -91,6 +92,6 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
 
         assert(error, 'expected register to throw');
         assertEqual('AssertionError', error.name);
-        assertMatches('PAGE_DATA_STORE.directory', error.message);
+        assertMatches('TEMPLATE_FILE_STORE.directory', error.message);
     });
 });

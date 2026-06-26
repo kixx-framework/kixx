@@ -78,6 +78,7 @@ const logger = new Logger({
 });
 
 const appContext = new ApplicationContext({
+    config,
     env,
     runtime,
     logger,

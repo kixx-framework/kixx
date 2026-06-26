@@ -1,7 +1,17 @@
+import { assertNonEmptyString } from '../../kixx/assertions/mod.js';
 import PageDataStore from './lib/page-data-store.js';
 
 export function register(context) {
-    const { logger } = context;
-    const { directory } = context.env.PAGE_DATA_STORE ?? {};
-    context.registerService('HyperviewPageDataStore', new PageDataStore({ logger, directory }));
+    const { logger, config } = context;
+    // Store settings live inside the selected environment, which readConfig
+    // exposes as config.env.
+    const { directory } = config.env.PAGE_DATA_STORE ?? {};
+
+    assertNonEmptyString(directory, 'The Node.js PAGE_DATA_STORE.directory config is required');
+
+    context.registerService('HyperviewPageDataStore', new PageDataStore({
+        logger,
+        // Pass in the absolute filepath for this OS
+        directory: config.resolveFilepath(directory),
+    }));
 }
