@@ -1,6 +1,7 @@
 import { AssertionError, UnauthorizedError } from '../../../kixx/errors/mod.js';
 import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/admin-session.js';
 import { pbkdf2HashPassword, verifyPassword } from '../../lib/crypto.js';
+import { getPbkdf2Iterations } from '../../lib/secret-encryption-config.js';
 
 
 // A single generic outcome is surfaced for both an unknown email address and a
@@ -26,7 +27,7 @@ export async function authenticateAdminCredentials(context, form) {
 
     // Required so a misconfigured deployment fails loudly rather than silently
     // weakening the no-user timing-equalization hash below.
-    const iterations = context.getEnvInteger('PBKDF2_ITERATIONS', { required: true });
+    const iterations = getPbkdf2Iterations(context);
 
     const adminUsers = context.getCollection('AdminUser');
     const sessions = context.getCollection('UserSession');

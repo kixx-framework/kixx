@@ -1,6 +1,7 @@
 import { AssertionError, ConflictError, OperationalError } from '../../../kixx/errors/mod.js';
 import { ADMIN_SESSION_TTL_SECONDS } from '../../lib/admin-session.js';
 import { pbkdf2HashPassword } from '../../lib/crypto.js';
+import { getPbkdf2Iterations } from '../../lib/secret-encryption-config.js';
 import { consumeAdminInvite } from '../admin-invites/consume-admin-invite.js';
 
 
@@ -27,7 +28,7 @@ export async function createAdminUser(context, form) {
     // PBKDF2 iteration count is configured per environment so it can be tuned
     // without a code change. Required here so a misconfigured deployment
     // fails loudly before writing a User or Session.
-    const iterations = context.getEnvInteger('PBKDF2_ITERATIONS', { required: true });
+    const iterations = getPbkdf2Iterations(context);
     const passwordHash = await pbkdf2HashPassword(password, iterations);
 
     const adminUsers = context.getCollection('AdminUser');
