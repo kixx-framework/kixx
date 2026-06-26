@@ -50,7 +50,18 @@ const dotenvFile = isNonEmptyString(cliOptions.dotenv)
     ? path.resolve(cliOptions.dotenv)
     : path.join(THIS_DIRECTORY, `.env.${ environment }`);
 
-const env = parseDotEnvFile(dotenvFile);
+let env;
+
+try {
+    env = parseDotEnvFile(dotenvFile);
+} catch (error) {
+    if (error.code === 'ENOENT') {
+        // If the dotenv file does not exist, use the env vars read at startup.
+        env = process.env;
+    } else {
+        throw error;
+    }
+}
 
 // The config file path comes from --config, falling back to the CONFIG_FILE env var.
 let configFilePath = isNonEmptyString(cliOptions.config) ? cliOptions.config : process.env.CONFIG_FILE;
