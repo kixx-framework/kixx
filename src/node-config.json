@@ -3,12 +3,14 @@
 
     "environments": {
         "development": {
-            "LOG_LEVEL": "debug",
-            "HYPERVIEW_ALLOW_JSON_RESPONSE": true,
-            "HYPERVIEW_USE_CACHE": false,
-            "PBKDF2_ITERATIONS": 50000,
-            "ADMIN_BOOTSTRAP_TOKEN": "dev_admin_bootstrap_token_change_me_0a1b2c3d4e5f60718293a4b5c6d7e8f9",
-
+            "HYPERVIEW": {
+                "ALLOW_JSON_RESPONSE": true,
+                "USE_PAGE_CACHE": false,
+                "USE_TEMPLATE_CACHE": false
+            },
+            "SECRET_ENCRYPTION": {
+                "PBKDF2_ITERATIONS": 50000
+            },
             "DOCUMENT_STORE": {
                 "path": "../data/nodejs_app/document_store.sqlite"
             },
@@ -26,11 +28,14 @@
             }
         },
         "staging": {
-            "LOG_LEVEL": "debug",
-            "HYPERVIEW_ALLOW_JSON_RESPONSE": false,
-            "HYPERVIEW_USE_CACHE": true,
-            "PBKDF2_ITERATIONS": 50000,
-
+            "HYPERVIEW": {
+                "ALLOW_JSON_RESPONSE": false,
+                "USE_PAGE_CACHE": true,
+                "USE_TEMPLATE_CACHE": true
+            },
+            "SECRET_ENCRYPTION": {
+                "PBKDF2_ITERATIONS": 50000
+            },
             "DOCUMENT_STORE": {
                 "path": "../data/nodejs_app/document_store.sqlite"
             },
@@ -48,11 +53,14 @@
             }
         },
         "production": {
-            "LOG_LEVEL": "warn",
-            "HYPERVIEW_ALLOW_JSON_RESPONSE": false,
-            "HYPERVIEW_USE_CACHE": true,
-            "PBKDF2_ITERATIONS": 50000,
-
+            "HYPERVIEW": {
+                "ALLOW_JSON_RESPONSE": false,
+                "USE_PAGE_CACHE": true,
+                "USE_TEMPLATE_CACHE": true
+            },
+            "SECRET_ENCRYPTION": {
+                "PBKDF2_ITERATIONS": 50000
+            },
             "DOCUMENT_STORE": {
                 "path": "../data/nodejs_app/document_store.sqlite"
             },

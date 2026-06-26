@@ -1,6 +1,9 @@
 import process from 'node:process';
+import fs from 'node:fs';
+import path from 'node:path';
 import http from 'node:http';
 import util from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
 import { isFunction, isNonEmptyString } from './kixx/assertions/mod.js';
 import { OperationalError } from './kixx/errors/mod.js';
@@ -17,36 +20,48 @@ import { readConfig } from './plugins/node-config/lib/config.js';
 import virtualHosts from './virtual-hosts.js';
 
 
-// Parse CLI options. The bootstrap may receive arguments we do not own, so
-// unknown options must not throw.
+const THIS_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+
+
+// Parse CLI options.
 const { values: cliOptions } = util.parseArgs({
     args: process.argv.slice(2),
     options: {
         config: { type: 'string', short: 'c' },
-        environment: { type: 'string' },
+        environment: { type: 'string', short: 'e' },
         port: { type: 'string', short: 'p' },
+        dotenv: { type: 'string' },
     },
     strict: false,
     allowPositionals: true,
 });
 
-// The config file path comes from --config, falling back to the CONFIG_FILE env var.
-const configFilePath = isNonEmptyString(cliOptions.config) ? cliOptions.config : process.env.CONFIG_FILE;
+// The environment selects a section of the config file's `environments` map;
+// default to development when --environment or NODE_ENV is not provided.
+let environment = isNonEmptyString(cliOptions.environment)
+    ? cliOptions.environment
+    : process.env.NODE_ENV;
 
-if (!isNonEmptyString(configFilePath)) {
-    throw new OperationalError(
-        'A config file path is required: pass --config or set the CONFIG_FILE environment variable',
-    );
+if (!environment) {
+    environment = 'development';
 }
 
-// The environment selects a section of the config file's `environments` map;
-// default to development when --environment is not provided.
-const environment = isNonEmptyString(cliOptions.environment)
-    ? cliOptions.environment
-    : 'development';
-const config = readConfig(configFilePath, environment);
+const dotenvFile = isNonEmptyString(cliOptions.dotenv)
+    ? path.resolve(cliOptions.dotenv)
+    : path.join(THIS_DIRECTORY, `.env.${ environment }`);
 
-const env = Object.assign({}, process.env, config.env);
+const env = parseDotEnvFile(dotenvFile);
+
+// The config file path comes from --config, falling back to the CONFIG_FILE env var.
+let configFilePath = isNonEmptyString(cliOptions.config) ? cliOptions.config : process.env.CONFIG_FILE;
+
+if (isNonEmptyString(configFilePath)) {
+    configFilePath = path.resolve(configFilePath);
+} else {
+    configFilePath = path.join(THIS_DIRECTORY, 'node-config.json');
+}
+
+const config = readConfig(configFilePath, environment);
 
 const DEFAULT_PORT = '2026';
 
@@ -299,4 +314,19 @@ function parsePort(value) {
     }
 
     return parsedPort;
+}
+
+function parseDotEnvFile(filepath) {
+    let source;
+    try {
+        source = fs.readFileSync(filepath, 'utf8');
+    } catch (cause) {
+        throw new OperationalError(`Unable to read dotenv file from ${ filepath }`, { cause });
+    }
+
+    try {
+        return util.parseEnv(source);
+    } catch (cause) {
+        throw new OperationalError(`Unable to parse dotenv file from ${ filepath }`, { cause });
+    }
 }
