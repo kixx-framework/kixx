@@ -32,12 +32,35 @@ export default class AdminInviteRecord extends Record {
     static schema = {
         type: 'object',
         properties: {
-            kind: { type: 'string', enum: [ ADMIN_INVITE_KIND, ADMIN_INVITE_BOOTSTRAP_KIND ] },
-            createdBy: { type: 'string' },
-            inviteCreationDate: { type: 'string', format: 'date-time' },
-            inviteExpirationDate: { type: 'string', format: 'date-time' },
-            consumedAt: { type: [ 'string', 'null' ], format: 'date-time' },
-            revokedAt: { type: [ 'string', 'null' ], format: 'date-time' },
+            kind: {
+                type: 'string',
+                enum: [ ADMIN_INVITE_KIND, ADMIN_INVITE_BOOTSTRAP_KIND ],
+                description: 'Invite type: redeemable admin invite or consumed bootstrap marker',
+            },
+            createdBy: {
+                type: 'string',
+                description: 'Admin user id that created the invite, or bootstrap for env-token markers',
+            },
+            inviteCreationDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'ISO timestamp when the invite record was created',
+            },
+            inviteExpirationDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'ISO timestamp after which a pending invite is no longer redeemable',
+            },
+            consumedAt: {
+                type: [ 'string', 'null' ],
+                format: 'date-time',
+                description: 'ISO timestamp when the invite was redeemed, or null while unused',
+            },
+            revokedAt: {
+                type: [ 'string', 'null' ],
+                format: 'date-time',
+                description: 'ISO timestamp when the invite was revoked, or null while not revoked',
+            },
         },
         required: [ 'kind', 'createdBy', 'inviteCreationDate', 'inviteExpirationDate' ],
     };

@@ -8,9 +8,20 @@ export default class UserSessionRecord extends Record {
     static schema = {
         type: 'object',
         properties: {
-            userId: { type: 'string' },
-            sessionCreationDate: { type: 'string', format: 'date-time' },
-            sessionExpirationDate: { type: 'string', format: 'date-time' },
+            userId: {
+                type: 'string',
+                description: 'AdminUser record id authenticated by this session',
+            },
+            sessionCreationDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'ISO timestamp when the user session record was created',
+            },
+            sessionExpirationDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'ISO timestamp after which the user session is no longer valid',
+            },
         },
         required: [ 'userId', 'sessionCreationDate', 'sessionExpirationDate' ],
     };

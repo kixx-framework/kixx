@@ -8,9 +8,20 @@ export default class CsrfTokenRecord extends Record {
     static schema = {
         type: 'object',
         properties: {
-            tokenHash: { type: 'string' },
-            tokenCreationDate: { type: 'string', format: 'date-time' },
-            tokenExpirationDate: { type: 'string', format: 'date-time' },
+            tokenHash: {
+                type: 'string',
+                description: 'SHA-256 hex digest of the one-time plaintext CSRF token',
+            },
+            tokenCreationDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'ISO timestamp when the CSRF token record was created',
+            },
+            tokenExpirationDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'ISO timestamp after which the CSRF token is no longer valid',
+            },
         },
         required: [ 'tokenHash', 'tokenCreationDate', 'tokenExpirationDate' ],
     };

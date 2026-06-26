@@ -64,8 +64,15 @@ class UserRecord extends Record {
     static schema = {
         type: 'object',
         properties: {
-            username: { type: 'string' },
-            email_address: { type: 'string', format: 'email' },
+            username: {
+                type: 'string',
+                description: 'Unique username used as the document id',
+            },
+            email_address: {
+                type: 'string',
+                format: 'email',
+                description: 'Email address used to contact the user',
+            },
         },
         required: [ 'username', 'email_address' ],
     };
@@ -237,8 +244,15 @@ class UserRecord extends Record {
     static schema = {
         type: 'object',
         properties: {
-            username: { type: 'string' },
-            email_address: { type: 'string', format: 'email' },
+            username: {
+                type: 'string',
+                description: 'Unique username used as the document id',
+            },
+            email_address: {
+                type: 'string',
+                format: 'email',
+                description: 'Email address used to contact the user',
+            },
         },
         required: [ 'username', 'email_address' ],
     };

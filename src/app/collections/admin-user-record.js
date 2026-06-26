@@ -8,12 +8,19 @@ export default class AdminUserRecord extends Record {
     static schema = {
         type: 'object',
         properties: {
-            emailAddress: { type: 'string' },
+            emailAddress: {
+                type: 'string',
+                description: 'Normalized email address used to sign in to the admin panel',
+            },
             passwordHash: {
                 type: 'string',
                 description: 'PHC-encoded PBKDF2-HMAC-SHA-512 credential string',
             },
-            userCreationDate: { type: 'string', format: 'date-time' },
+            userCreationDate: {
+                type: 'string',
+                format: 'date-time',
+                description: 'ISO timestamp when the admin user record was created',
+            },
         },
         required: [ 'emailAddress', 'passwordHash', 'userCreationDate' ],
     };
