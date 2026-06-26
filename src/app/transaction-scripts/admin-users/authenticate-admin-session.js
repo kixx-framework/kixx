@@ -38,6 +38,9 @@ export async function authenticateAdminSession(context, sessionId) {
     }
 
     if (!session || isSessionExpired(session)) {
+        // Missing and expired sessions collapse to the same expected auth
+        // failure so callers do not learn whether a presented session id ever
+        // existed.
         throw createUnauthenticatedError();
     }
 
@@ -54,6 +57,8 @@ export async function authenticateAdminSession(context, sessionId) {
     }
 
     if (!user) {
+        // Treat orphaned sessions as unauthenticated rather than leaking that a
+        // previously valid session now points at a deleted admin user.
         throw createUnauthenticatedError();
     }
 

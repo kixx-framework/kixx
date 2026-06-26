@@ -63,6 +63,15 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     const formData = await validateCsrfFormData(context, request);
     const form = NewAdminUserForm.fromFormData(formData);
 
+    // Check invite redeemability before field validation so a missing, expired,
+    // revoked, or already-spent invite cannot re-render the account form just
+    // because another submitted field is invalid. This read is intentionally
+    // non-mutating; createAdminUser still consumes the invite after validation.
+    const resolution = await resolveAdminInvite(context, form.invite_token);
+    if (!resolution.redeemable) {
+        return renderInvalidInvite(context, response);
+    }
+
     // Server-side validation. On failure, fall through to the page renderer with
     // field-level error state (skip() is intentionally not called). The form
     // carries the hidden invite_token, so the re-rendered form keeps the invite.

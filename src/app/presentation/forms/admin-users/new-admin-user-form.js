@@ -1,4 +1,4 @@
-import { isString } from '../../../../kixx/assertions/mod.js';
+import { isNonEmptyString, isString } from '../../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import BaseForm from '../base-form.js';
 import {
@@ -70,7 +70,7 @@ export default class NewAdminUserForm extends BaseForm {
                 fieldType: 'hidden',
             },
         },
-        required: [ 'email_address', 'password' ],
+        required: [ 'email_address', 'password', 'invite_token' ],
     };
 
     /**
@@ -96,7 +96,7 @@ export default class NewAdminUserForm extends BaseForm {
     /**
      * Validates the normalized registration fields.
      * @returns {void}
-     * @throws {ValidationError} When the email address, or password is missing or invalid.
+     * @throws {ValidationError} When the email address, password, or invite token is missing or invalid.
      */
     validate() {
         const error = new ValidationError('The new user form contains invalid fields');
@@ -113,6 +113,10 @@ export default class NewAdminUserForm extends BaseForm {
             error.push(`Password must be at least ${ passwordMinLength } characters`, 'password');
         } else if (this.password.length > passwordMaxLength) {
             error.push(`Password must be no more than ${ passwordMaxLength } characters`, 'password');
+        }
+
+        if (!isNonEmptyString(this.invite_token)) {
+            error.push('Invite token is required', 'invite_token');
         }
 
         if (error.length) {
