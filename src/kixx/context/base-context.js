@@ -26,18 +26,26 @@ export default class BaseContext {
 
     /**
      * @param {Object} options
+     * @param {Object} options.config - Resolved application configuration.
      * @param {Object} options.env - Environment variables, secrets, and platform bindings.
      * @param {Logger} options.logger - Root application logger.
      * @param {AppRuntime} options.runtime - Runtime metadata shared by contexts.
      */
     constructor(options) {
         const {
+            config,
             env,
             logger,
             runtime,
         } = options ?? {};
 
         Object.defineProperties(this, {
+            /**
+             * Resolved application configuration.
+             * @name config
+             * @type {Object}
+             */
+            config: { value: config, enumerable: true },
             /**
              * Accessor for environment variables, secrets, and bindings.
              * @name env

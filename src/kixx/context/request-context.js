@@ -41,22 +41,23 @@ export default class RequestContext extends BaseContext {
     #user = null;
 
     /**
-     * @param {Object} config
-     * @param {Object} config.env - Request-scoped environment variables, secrets, and platform bindings.
-     * @param {Logger} config.logger - Root application logger.
-     * @param {AppRuntime} config.runtime - Runtime metadata shared by all request contexts.
-     * @param {Map<string, Object>} config.services - Application service registry shared with ApplicationContext.
-     * @param {Map<string, Object>} config.collections - Application collection registry shared with ApplicationContext.
-     * @param {string} [config.requestId] - Identifier for the request being handled, when available.
+     * @param {Object} options
+     * @param {Object} options.config - Resolved application configuration.
+     * @param {Object} options.env - Request-scoped environment variables, secrets, and platform bindings.
+     * @param {Logger} options.logger - Root application logger.
+     * @param {AppRuntime} options.runtime - Runtime metadata shared by all request contexts.
+     * @param {Map<string, Object>} options.services - Application service registry shared with ApplicationContext.
+     * @param {Map<string, Object>} options.collections - Application collection registry shared with ApplicationContext.
+     * @param {string} [options.requestId] - Identifier for the request being handled, when available.
      */
-    constructor(config) {
-        super(config);
+    constructor(options) {
+        super(options);
 
         const {
             services,
             collections,
             requestId,
-        } = config;
+        } = options;
 
         this.#services = services;
         this.#collections = collections;

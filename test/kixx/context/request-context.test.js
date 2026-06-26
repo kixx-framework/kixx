@@ -11,6 +11,7 @@ import RequestContext from '../../../src/kixx/context/request-context.js';
 
 function makeRequestContext(options) {
     const {
+        config = { name: 'test-app' },
         env = {},
         runtime = { mode: 'server' },
         services = new Map(),
@@ -19,7 +20,7 @@ function makeRequestContext(options) {
         requestId,
     } = options ?? {};
 
-    return new RequestContext({ env, runtime, services, collections, logger, requestId });
+    return new RequestContext({ config, env, runtime, services, collections, logger, requestId });
 }
 
 function makeTarget(name, tags) {
@@ -49,16 +50,19 @@ function catchError(fn) {
 describe('RequestContext', ({ describe }) => {
 
     describe('constructor', ({ it }) => {
-        it('assigns env, logger, runtime, and requestId as enumerable properties', () => {
+        it('assigns config, env, logger, runtime, and requestId as enumerable properties', () => {
+            const config = { name: 'req-app' };
             const env = { REQUEST_ID: 'abc' };
             const logger = { name: 'req' };
             const runtime = { mode: 'server' };
-            const context = makeRequestContext({ env, logger, runtime, requestId: 'req-1' });
+            const context = makeRequestContext({ config, env, logger, runtime, requestId: 'req-1' });
 
+            assertEqual(config, context.config);
             assertEqual(env, context.env);
             assertEqual(logger, context.logger);
             assertEqual(runtime, context.runtime);
             assertEqual('req-1', context.requestId);
+            assert(Object.keys(context).includes('config'), 'expected config to be enumerable');
         });
 
         it('leaves requestId undefined when omitted', () => {
@@ -71,10 +75,10 @@ describe('RequestContext', ({ describe }) => {
             const context = makeRequestContext();
 
             const caught = catchError(() => {
-                context.env = {};
+                context.config = {};
             });
 
-            assert(caught, 'expected reassigning env to throw');
+            assert(caught, 'expected reassigning config to throw');
             assertEqual('TypeError', caught.name);
         });
     });

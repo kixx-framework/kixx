@@ -35,6 +35,7 @@ export default class ApplicationContext extends BaseContext {
 
     /**
      * @param {Object} options
+     * @param {Object} options.config - Resolved application configuration.
      * @param {Logger} options.logger - Root application logger shared with every request context.
      * @param {Object} options.env - Environment variables, secrets, and platform bindings.
      * @param {AppRuntime} options.runtime - Runtime metadata shared with every request context.
@@ -114,6 +115,7 @@ export default class ApplicationContext extends BaseContext {
     createRequestContext(env, request) {
         return new RequestContext({
             env,
+            config: this.config,
             requestId: request?.id,
             runtime: this.runtime,
             services: this.#services,
