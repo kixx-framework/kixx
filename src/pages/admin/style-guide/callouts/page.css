@@ -1,0 +1,7 @@
+/* Page-local styles for the Callouts style-guide page. */
+
+/* Anatomy demo: cap the live callout so it reads at a realistic notice width
+   instead of stretching the full stage. */
+.demo-stage .callout {
+    max-width: 32rem;
+}

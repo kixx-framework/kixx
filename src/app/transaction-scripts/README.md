@@ -99,7 +99,7 @@ To author and register a new gateway for an external resource, see the "External
 
 ## Error Handling
 
-Follow @application/docs/error-handling.md for the project-wide error taxonomy, assertion rules, wrapping rules, and HTTP serialization behavior. This section only covers how those rules apply at the Transaction Script boundary.
+Follow `app/docs/error-handling.md` for the project-wide error taxonomy, assertion rules, wrapping rules, and HTTP serialization behavior. This section only covers how those rules apply at the Transaction Script boundary.
 
 ### Expected vs. Unexpected Errors
 

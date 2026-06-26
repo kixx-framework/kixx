@@ -1,0 +1,7 @@
+/* Page-local styles for the Buttons style-guide page. */
+
+/* Variant tiles — tune the auto-fit track floor so the four pill buttons sit in
+   comfortable columns without growing over-wide. */
+.example-grid {
+    --grid-min: 13rem;
+}

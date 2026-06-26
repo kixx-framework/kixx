@@ -10,16 +10,6 @@ import {
 
 
 /**
- * @typedef {Object} RecordSpec
- * @property {string} type - Document type managed by the owning collection.
- * @property {string} id - Document identifier within the type.
- * @property {number} version - Optimistic concurrency version returned by the document store.
- * @property {Date} createdAt - Date from the document store.
- * @property {Date} updatedAt - Date from the document store.
- * @property {Object} attributes - Plain object containing user-defined document attributes.
- */
-
-/**
  * Mutable DTO wrapping a document-store record for collection callers.
  *
  * User-defined attributes are held in a private `#attributes` slot. Callers
@@ -31,7 +21,13 @@ export default class Record {
     #attributes;
 
     /**
-     * @param {RecordSpec} spec - Stored record data and user-defined attributes.
+     * @param {Object} spec - Stored record data and user-defined attributes.
+     * @param {string} spec.type - Document type managed by the owning collection.
+     * @param {string} spec.id - Document identifier within the type.
+     * @param {number} spec.version - Optimistic concurrency version returned by the document store.
+     * @param {Date|string} spec.createdAt - Creation timestamp from the document store.
+     * @param {Date|string} spec.updatedAt - Last-write timestamp from the document store.
+     * @param {Object} spec.attributes - Plain object containing user-defined document attributes.
      * @throws {AssertionError} When the spec shape or timestamp fields are invalid.
      */
     constructor(spec) {
@@ -132,29 +128,15 @@ export default class Record {
     }
 
     /**
-     * Subclasses should override validate() and throw a ValidationError
-     * when appropriate.
+     * Validates this record before persistence.
+     *
+     * Subclasses override this method and throw a ValidationError when the
+     * current attributes violate document invariants.
+     *
+     * @returns {void}
+     * @throws {ValidationError} When the record is not valid for persistence.
      */
     validate() { }
-
-    /**
-     * Returns a content-derived id for a new record, or null when this record
-     * type uses an opaque id assigned by the gateway.
-     *
-     * Subclasses override this when identity is a domain fact (e.g., username,
-     * slug, content hash). The default returns null so the owning Collection
-     * falls back to its own `generateUniqueId()`.
-     *
-     * Runs against a plain attributes object before any Record instance exists,
-     * so it must be implemented as a static method and must not depend on
-     * Record instance state.
-     *
-     * @param {Object} _attributes - Attributes the new record is being built from.
-     * @returns {string|null}
-     */
-    static deriveId(_attributes) {
-        return null;
-    }
 
     /**
      * Builds a Record instance for the write path, before the document store
@@ -186,9 +168,11 @@ export default class Record {
     }
 
     /**
-     * Shallowly merges attributes into this record.
+     * Shallowly merges own enumerable attributes into this record.
+     *
      * @param {Object} patch - Attribute values to assign.
      * @returns {Record} This record for chaining.
+     * @throws {TypeError} When patch is null or undefined.
      */
     merge(patch) {
         Object.assign(this.#attributes, patch);
@@ -213,7 +197,11 @@ export default class Record {
      * @throws {AssertionError} When name is not a non-empty string.
      */
     get(name) {
-        assertAttributeName(name, 'Record#get() attribute name');
+        if (!isNonEmptyString(name)) {
+            throw new AssertionError(
+                `Record#get() attribute name must be a non-empty string (got ${ toFriendlyString(name) })`,
+            );
+        }
         return this.#attributes[name];
     }
 
@@ -225,7 +213,11 @@ export default class Record {
      * @throws {AssertionError} When name is not a non-empty string.
      */
     set(name, value) {
-        assertAttributeName(name, 'Record#set() attribute name');
+        if (!isNonEmptyString(name)) {
+            throw new AssertionError(
+                `Record#set() attribute name must be a non-empty string (got ${ toFriendlyString(name) })`,
+            );
+        }
         this.#attributes[name] = value;
         return this;
     }
@@ -260,6 +252,10 @@ export default class Record {
 
     /**
      * Wraps a raw document-store record in the receiving Record class.
+     *
+     * Stored `type` and `id` fields are metadata and are not copied into the
+     * mutable user-defined attributes object.
+     *
      * @param {Object} record - Raw record returned by DocumentStore.
      * @param {string} record.type - Document type.
      * @param {string} record.id - Document identifier.
@@ -273,21 +269,24 @@ export default class Record {
     static fromRecord(record) {
         const RecordClass = this;
 
+        const { doc } = record;
+        const attributes = {};
+
+        for (const key of Object.keys(doc)) {
+            if (key === 'type' || key === 'id') {
+                continue;
+            }
+
+            attributes[key] = doc[key];
+        }
+
         return new RecordClass({
             type: record.type,
             id: record.id,
             version: record.version,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt,
-            attributes: record.doc,
+            attributes,
         });
-    }
-}
-
-function assertAttributeName(name, label) {
-    if (!isNonEmptyString(name)) {
-        throw new AssertionError(
-            `${ label } must be a non-empty string (got ${ toFriendlyString(name) })`,
-        );
     }
 }

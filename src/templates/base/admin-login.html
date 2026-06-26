@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en-US">
+    <head>
+        <meta charset="utf-8">
+
+        <title>{{ page.title }}</title>
+
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="color-scheme" content="light dark">
+        {{!-- Apply a saved theme before paint to avoid a flash of the wrong theme. --}}
+        <script>
+            try {
+                const storedTheme = localStorage.getItem('kixx-theme');
+                if (storedTheme === 'light' || storedTheme === 'dark') {
+                    document.documentElement.dataset.theme = storedTheme;
+                }
+            } catch (error) {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        </script>
+
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&amp;family=Lexend+Deca:wght@100..900&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0&amp;display=swap" rel="stylesheet">
+
+        {{!-- The theme: tokens, reset, primitives, components, app shell. --}}
+        <link href="/stylesheets/admin-theme.css" rel="stylesheet">
+        {{!-- The admin styles, loaded after the theme. --}}
+        <link href="/stylesheets/admin-components.css" rel="stylesheet">
+
+        {{#if includes.page_stylesheet }}
+        <style>{{{ includes.page_stylesheet }}}</style>
+        {{/if}}
+    </head>
+    <body>
+        <header class="site-header">
+            <div class="site-header__inner cluster">
+                <a class="kixx-wordmark site-header__wordmark" href="/" aria-label="Kixx — home">
+                    <span class="kixx-wordmark__slash-1">/</span>
+                    <span class="kixx-wordmark__slash-2">/</span>
+                    <span class="kixx-wordmark__kixx">kixx</span>
+                </a>
+                <div class="site-header__controls cluster">
+                    <button class="theme-toggle" type="button" data-js-behavior="theme-toggle" aria-label="Switch color theme">
+                        <span class="material-symbols-rounded theme-toggle__icon" aria-hidden="true">dark_mode</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+        <main class="site-main center">{{{ body }}}</main>
+
+        <script>
+            const themeToggles = document.querySelectorAll('[data-js-behavior="theme-toggle"]');
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+
+            function currentTheme() {
+                return document.documentElement.dataset.theme || (systemTheme.matches ? 'dark' : 'light');
+            }
+
+            function syncThemeControl() {
+                const theme = currentTheme();
+                themeToggles.forEach(toggle => {
+                    toggle.setAttribute('aria-pressed', String(theme === 'dark'));
+                    toggle.querySelector('.theme-toggle__icon').textContent = theme === 'dark' ? 'light_mode' : 'dark_mode';
+                });
+            }
+
+            themeToggles.forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    const nextTheme = currentTheme() === 'dark' ? 'light' : 'dark';
+                    document.documentElement.dataset.theme = nextTheme;
+                    try {
+                        localStorage.setItem('kixx-theme', nextTheme);
+                    } catch (error) {
+                        document.documentElement.dataset.theme = nextTheme;
+                    }
+                    syncThemeControl();
+                });
+            });
+
+            systemTheme.addEventListener('change', () => {
+                if (!document.documentElement.dataset.theme) {
+                    syncThemeControl();
+                }
+            });
+
+            syncThemeControl();
+        </script>
+    </body>
+</html>

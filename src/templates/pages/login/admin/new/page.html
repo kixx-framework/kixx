@@ -1,0 +1,90 @@
+<div class="center center--form flow">
+    <header class="content-section__header">
+        <h2>Log in</h2>
+        <p>Sign in to the admin panel.</p>
+    </header>
+
+    {{!--
+        A non-urgent notice surfaced after a redirect. `session_create_failed`
+        means signup succeeded but the auto-login session could not be created,
+        so the user finishes by logging in here. role="status" announces it
+        without the urgency of an alert.
+    --}}
+    {{#ifEqual form.errorCode "session_create_failed"}}
+    <div class="callout callout--info" role="status">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">info</span>
+        <div class="callout__body">
+            <p class="type-body-sm">Your account was created, but we couldn&rsquo;t sign you in automatically. Please log in below.</p>
+        </div>
+    </div>
+    {{/ifEqual}}
+
+    {{!--
+        formError carries a form-level failure (e.g. rejected credentials) that
+        is not tied to a single field. Field-level messages render inside each
+        .field below.
+    --}}
+    {{#if formError}}
+    <div class="callout callout--error" role="alert">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <div class="callout__body">
+            <p class="type-body-sm">{{ formError }}</p>
+        </div>
+    </div>
+    {{/if}}
+
+    {{!--
+        Login validation is server-side only: the form carries novalidate and the
+        inputs omit required/HTML5 constraint attributes so no client-side
+        validation runs before submission.
+    --}}
+    <form class="flow" method="{{ form.method }}" action="{{ form.url }}" novalidate>
+        {{#if form.csrf}}
+        <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+        {{/if}}
+
+        <div class="field{{#if form.fields.email_address.error}} field--error{{/if}}">
+            <label class="field__label" for="email_address">{{ form.fields.email_address.label }}</label>
+            <input
+                class="field__input"
+                id="email_address"
+                name="email_address"
+                type="{{ form.fields.email_address.inputType }}"
+                autocomplete="{{ form.fields.email_address.autocomplete }}"
+                value="{{ form.fields.email_address.value }}"
+                aria-describedby="email_address-hint"
+                {{#if form.fields.email_address.error}}aria-invalid="true"{{/if}}
+            >
+            <p class="field__hint" id="email_address-hint">
+                {{#if form.fields.email_address.error}}{{ form.fields.email_address.error }}{{else}}{{ form.fields.email_address.hint }}{{/if}}
+            </p>
+        </div>
+
+        <div class="field{{#if form.fields.password.error}} field--error{{/if}}">
+            <label class="field__label" for="password">{{ form.fields.password.label }}</label>
+            {{!-- Never echo a submitted password back: the field is always rendered empty. --}}
+            <input
+                class="field__input"
+                id="password"
+                name="password"
+                type="{{ form.fields.password.inputType }}"
+                autocomplete="{{ form.fields.password.autocomplete }}"
+                aria-describedby="password-hint"
+                {{#if form.fields.password.error}}aria-invalid="true"{{/if}}
+            >
+            <p class="field__hint" id="password-hint">
+                {{#if form.fields.password.error}}{{ form.fields.password.error }}{{else}}{{ form.fields.password.hint }}{{/if}}
+            </p>
+        </div>
+
+        <div class="cluster">
+            <button class="button button--primary" type="submit">Log in</button>
+        </div>
+    </form>
+
+    {{#if links.newUserForm}}
+    <p class="type-body-sm">
+        Need an account? <a href="{{ links.newUserForm }}">Create one</a>.
+    </p>
+    {{/if}}
+</div>

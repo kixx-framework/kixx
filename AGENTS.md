@@ -110,6 +110,63 @@ the HTTP router serializes expected errors.
 
 **What this document provides:** The Kixx template syntax and behavior reference used by Hyperview — compilation stages, supported Mustache-style features, expression resolution, section semantics, built-in helpers, Hyperview helpers, escaping rules, partial usage, helper authoring, public APIs, and error behavior.
 
+## Development Server
+
+Run the development server with:
+
+```bash
+node src/node-server.js --config src/node-config.json --port 2026
+```
+
+Change the --port option to avoid port conflicts if needed.
+
+Restart the server to observe any changes in the JavaScript source code. Server restarts are not needed for changes to `templates/` and `pages/` data.
+
+Add `.json` to the end of any URL to get the template context object as JSON (ecluding includes content):
+
+`http://localhost:2026/index.json` -> context object for `http://localhost:2026/`
+`http://localhost:2026/users/admin/new.json` -> context object for `http://localhost:2026/users/admin/new`
+
+## Frontend Development
+
+When working on frontend features, be sure to follow the style guide and examples in `src/pages/admin/style-guide/`, starting with `src/pages/admin/style-guide/aesthetic/`. You can access the full style guide through the development server at `http://localhost:2026/admin/style-guide`.
+
+Also, remember that the template context for any page can be inspected by adding the `.json` suffix:
+
+`http://localhost:2026/admin/style-guide/aesthetic.json` -> context object for `http://localhost:2026/admin/style-guide/aesthetic`
+
+### Use General Styles
+
+NEVER use inline `style="..."` attributes in HTML templates. Inline styles bypass the design system, can't be reused, and scatter presentation decisions across templates instead of keeping them in the stylesheets.
+
+When you need styling, resolve it in this order:
+
+1. **Reuse an existing component or utility.** Prefer the layout primitives, components, and tokens already defined in the associated stylesheets in `src/public/stylesheets/`. Most page structure is a composition of existing primitives — reach for one before writing any new CSS.
+2. **Propose a new generic utility or component.** If nothing fits, add a reusable, multi-use class to the appropriate stylesheet rather than a one-off rule. Name it for the concept it represents, and define it so other pages can use it too. Avoid single-use classes that only exist to dodge an inline style.
+3. **Use a page-local `page_stylesheet` include for genuinely localized styles.** When a style truly belongs to one page and is not reusable, supply it through the `page_stylesheet` include instead of an inline `style` attribute (see below).
+
+### Page-Local Styles via `page_stylesheet`
+
+Most base templates conditionally render a `page_stylesheet` include into a `<style>` element in the document `<head>`:
+
+```html
+{{#if includes.page_stylesheet }}
+<style>{{ includes.page_stylesheet }}</style>
+{{/if}}
+```
+
+To supply page-local CSS, add a `page_stylesheet` entry to the page's `includes` in its `page.json`, pointing at a CSS file in the same page directory:
+
+```json
+{
+    "includes": {
+        "page_stylesheet": { "filename": "page.css" }
+    }
+}
+```
+
+This is the supported pattern for localized styles. Still prefer shared utilities and components first; reach for `page_stylesheet` only when the styling is specific to one page and not worth generalizing.
+
 ## Linting
 
 Linting is configured in `./eslint.config.js`.
