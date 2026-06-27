@@ -417,6 +417,12 @@ Every middleware function and request handler receives `(context, request, respo
 | `runtime` | `AppRuntime` | Metadata indicating whether the app is serving HTTP or running a CLI command |
 | `user` | `Object\|null` | Authenticated user set by auth middleware; `null` when not authenticated |
 
+**Authenticated Principals:**
+
+Authentication middleware should store the current authenticated principal on `context.user` with `context.setUser(principal)`. The principal is often a human user, but it may also represent an API token, service account, webhook sender, or another non-user credential. In those cases, use the same `context.user` property and include enough stable fields for downstream handlers to authorize and audit the request, such as `id`, `type`, `permissions`, `createdBy`, `scopes`, or credential timestamps.
+
+Use `type` to make the principal kind explicit (`'AdminUser'`, `'PublishingApiToken'`, etc.) and avoid assuming every authenticated request is backed by a browser user. Middleware should keep secrets out of the principal: store token ids, hashes, grants, owner ids, and expiry metadata, but never store plaintext bearer tokens or passwords on `context.user`.
+
 **Methods:**
 
 Service and collection access:
@@ -619,6 +625,56 @@ export default class CreateBugTicketForm {
 }
 ```
 
+## API-Only Forms
+
+Forms used only by JSON:API endpoints do not need `method`, `target`, or `getFormContext()` because they are never rendered as HTML and do not compile a browser form action. They should still define `schema`, normalize input in the constructor, validate field-level errors with `ValidationError`, expose a `fromJsonApi()` constructor, and return server-consumable data from `toJSON()`.
+
+```js
+import { isNonEmptyString } from '../../kixx/assertions/mod.js';
+import { ValidationError } from '../../kixx/errors/mod.js';
+
+export default class CreateApiTokenForm {
+
+    static schema = {
+        type: 'object',
+        properties: {
+            description: {
+                type: 'string',
+                description: 'Operator-facing token description',
+            },
+        },
+        required: [ 'description' ],
+    };
+
+    constructor(attributes) {
+        const { description } = attributes ?? {};
+        this.description = isNonEmptyString(description) ? description.trim() : description;
+    }
+
+    validate() {
+        const error = new ValidationError('The API token form contains invalid fields');
+
+        if (!isNonEmptyString(this.description)) {
+            error.push('Description is required', 'description');
+        }
+
+        if (error.length) {
+            throw error;
+        }
+    }
+
+    toJSON() {
+        return {
+            description: this.description,
+        };
+    }
+
+    static fromJsonApi(attributes) {
+        return new CreateApiTokenForm(attributes);
+    }
+}
+```
+
 ## CSRF-Protected HTML Forms
 
 Use `app/presentation/lib/csrf.js` for browser HTML forms that mutate state or establish authentication. CSRF validation belongs in request handlers before constructing a Form and before calling any Transaction Script. Transaction Scripts should continue to receive already-validated Forms and should not be concerned with CSRF cookies or hidden fields.
@@ -696,6 +752,50 @@ For a workflow that accepts user input:
 2. In the request handler, parse the payload into the form, validate it, and then call the appropriate Transaction Script.
 3. On success, prefer an HTTP redirect for browser form submissions.
 4. On validation failure, update response props with the form context and render the page with the validation error state.
+
+### JSON:API Endpoint
+
+For an application API endpoint that accepts or returns JSON:API documents:
+
+1. Add a route subtree or leaf route in `virtual-hosts.js` and attach `jsonApiErrorHandler` from `app/presentation/error-handlers/json-api-error-handler.js` at the route level. This keeps expected HTTP errors serialized as JSON:API `errors` documents for the whole API surface while unexpected errors continue to propagate to the router fallback.
+2. In the request handler, call `assertJsonApiContentType(request)` before parsing a JSON:API request body. JSON:API requests must use `Content-Type: application/vnd.api+json`; optional media-type parameters are ignored by the helper.
+3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the returned `attributes` into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script.
+4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
+5. Do not add a Hyperview request handler after an API handler that commits a JSON response. Call `skip()` before responding so no later handler attempts to render HTML.
+
+```js
+import {
+    JSON_API_CONTENT_TYPE,
+    assertJsonApiContentType,
+    jsonApiResource,
+    parseJsonApiResource,
+} from '../lib/json-api.js';
+import ExampleApiForm from '../forms/example-api-form.js';
+import { createExample } from '../../transaction-scripts/examples/create-example.js';
+
+export async function exampleJsonApiHandler(context, request, response, skip) {
+    assertJsonApiContentType(request);
+
+    const { attributes } = await parseJsonApiResource(request, 'Example');
+    const form = ExampleApiForm.fromJsonApi(attributes);
+    form.validate();
+
+    const example = await createExample(context, form);
+
+    skip();
+    return response.respondWithJSON(
+        201,
+        jsonApiResource({
+            type: 'Example',
+            id: example.id,
+            attributes: {
+                title: example.title,
+            },
+        }),
+        { contentType: JSON_API_CONTENT_TYPE },
+    );
+}
+```
 
 ## Where Presentation Changes Belong
 
