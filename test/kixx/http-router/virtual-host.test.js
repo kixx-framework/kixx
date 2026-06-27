@@ -268,6 +268,50 @@ describe('VirtualHost', ({ describe }) => {
             assertEqual('parentIn,childIn,handler,childOut,parentOut', order.join(','));
         });
 
+        it('runs composed outbound middleware even when a handler calls skip', async () => {
+            const order = [];
+            const mark = (label) => (_ctx, _req, res) => {
+                order.push(label);
+                return res;
+            };
+            const skippingHandler = (_ctx, _req, res, skip) => {
+                order.push('handler');
+                skip();
+                return res;
+            };
+
+            const vhost = VirtualHost.fromSpecification({
+                hostname: 'example.com',
+                routes: [
+                    {
+                        pattern: '/api',
+                        inboundMiddleware: [ mark('parentIn') ],
+                        outboundMiddleware: [ mark('parentOut') ],
+                        routes: [
+                            {
+                                pattern: '/users',
+                                inboundMiddleware: [ mark('childIn') ],
+                                outboundMiddleware: [ mark('childOut') ],
+                                targets: [
+                                    {
+                                        name: 'get',
+                                        methods: [ 'GET' ],
+                                        requestHandlers: [ skippingHandler, mark('unreached') ],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            });
+
+            await vhost.routes[0].targets[0].invokeMiddleware({}, {}, { label: 'res' });
+
+            // skip() stops the second handler, but the full composed outbound
+            // chain (inside-out: childOut then parentOut) still runs.
+            assertEqual('parentIn,childIn,handler,childOut,parentOut', order.join(','));
+        });
+
         it('validates nested target specifications', () => {
             const caught = catchError(() => {
                 VirtualHost.fromSpecification({

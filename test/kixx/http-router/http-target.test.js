@@ -85,6 +85,13 @@ describe('HttpTarget', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
         });
+
+        it('throws an AssertionError when outboundMiddleware is not an Array', () => {
+            const caught = catchError(() => makeTarget({ outboundMiddleware: 'nope' }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
     });
 
     describe('hasTag', ({ it }) => {
@@ -212,6 +219,102 @@ describe('HttpTarget', ({ describe }) => {
             const result = await target.invokeMiddleware({}, {}, responseA);
 
             assertEqual(responseB, result);
+        });
+
+        it('runs outbound middleware after the request phase', async () => {
+            const order = [];
+            const target = makeTarget({
+                middleware: [
+                    (_ctx, _req, res) => {
+                        order.push('request');
+                        return res;
+                    },
+                ],
+                outboundMiddleware: [
+                    (_ctx, _req, res) => {
+                        order.push('outbound');
+                        return res;
+                    },
+                ],
+            });
+
+            await target.invokeMiddleware({}, {}, { label: 'res' });
+
+            assertEqual('request,outbound', order.join(','));
+        });
+
+        it('still runs outbound middleware when a request-phase middleware calls skip', async () => {
+            const order = [];
+            const target = makeTarget({
+                middleware: [
+                    (_ctx, _req, res, skip) => {
+                        order.push('first');
+                        skip();
+                        return res;
+                    },
+                    (_ctx, _req, res) => {
+                        order.push('second');
+                        return res;
+                    },
+                ],
+                outboundMiddleware: [
+                    (_ctx, _req, res) => {
+                        order.push('outbound');
+                        return res;
+                    },
+                ],
+            });
+
+            await target.invokeMiddleware({}, {}, { label: 'res' });
+
+            // skip() ends the request phase (so 'second' never runs) but the
+            // outbound phase still runs to completion.
+            assertEqual('first,outbound', order.join(','));
+        });
+
+        it('threads the response through outbound middleware', async () => {
+            const responseA = { label: 'A' };
+            const responseB = { label: 'B' };
+            let seenByOutbound = null;
+            const target = makeTarget({
+                middleware: [
+                    (_ctx, _req, _res, skip) => {
+                        skip();
+                        return responseA;
+                    },
+                ],
+                outboundMiddleware: [
+                    (_ctx, _req, res) => {
+                        seenByOutbound = res;
+                        return responseB;
+                    },
+                ],
+            });
+
+            const result = await target.invokeMiddleware({}, {}, { label: 'initial' });
+
+            assertEqual(responseA, seenByOutbound);
+            assertEqual(responseB, result);
+        });
+
+        it('does not pass skip to outbound middleware', async () => {
+            let argCount = null;
+            let fourthArg = 'sentinel';
+            const target = makeTarget({
+                middleware: [],
+                outboundMiddleware: [
+                    (...args) => {
+                        argCount = args.length;
+                        [ , , , fourthArg ] = args;
+                        return args[2];
+                    },
+                ],
+            });
+
+            await target.invokeMiddleware({}, {}, { label: 'res' });
+
+            assertEqual(3, argCount);
+            assertEqual(undefined, fourthArg);
         });
 
         it('awaits asynchronous middleware', async () => {
@@ -444,6 +547,38 @@ describe('HttpTarget', ({ describe }) => {
 
             await target.invokeMiddleware({}, {}, { label: 'res' });
 
+            assertEqual('in,handler,out', order.join(','));
+        });
+
+        it('runs outbound middleware after a request handler calls skip', async () => {
+            const order = [];
+            const make = (label) => (_ctx, _req, res) => {
+                order.push(label);
+                return res;
+            };
+
+            const skippingHandler = (_ctx, _req, res, skip) => {
+                order.push('handler');
+                skip();
+                return res;
+            };
+
+            const target = HttpTarget.fromSpecification(
+                makeRouteSpec({
+                    inboundMiddleware: [ make('in') ],
+                    outboundMiddleware: [ make('out') ],
+                }),
+                {
+                    name: 'handler',
+                    methods: [ 'GET' ],
+                    requestHandlers: [ skippingHandler, make('unreached') ],
+                },
+            );
+
+            await target.invokeMiddleware({}, {}, { label: 'res' });
+
+            // The skip() in the first handler stops the second handler, but the
+            // route's outbound middleware still runs.
             assertEqual('in,handler,out', order.join(','));
         });
 

@@ -232,18 +232,20 @@ Pathname compilation encodes values for safe URL output, so non-ASCII text and r
 - **Target `requestHandlers`** applies to one endpoint. Use them for loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect/JSON response.
 - **Route error handlers** (`errorHandlers`) when an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
 
-Execution order for a matched target:
+Execution order for a matched target runs in two phases — a **request phase** followed by an **outbound (response) phase**:
 
-1. Route inbound middleware (parent-first)
-2. Target `requestHandlers` (in order)
-3. Route outbound middleware (child-first)
+1. Route inbound middleware (parent-first) — request phase
+2. Target `requestHandlers` (in order) — request phase
+3. Route outbound middleware (child-first) — outbound phase
 
-When middleware throws, the router tries error handlers at three levels in order — target, route, router — stopping when one returns a response. Unexpected errors are emitted for logging and then rethrown so the platform-level server can apply its fatal-error policy.
+When middleware throws, the router tries error handlers at three levels in order — target, route, router — stopping when one returns a response. Unexpected errors are emitted for logging and then rethrown so the platform-level server can apply its fatal-error policy. A throw skips the outbound phase for that request.
 
-**The `skip()` callback** stops the router from invoking later middleware in the chain.
+**The `skip()` callback** ends the **request phase** early: when called, no further inbound middleware or request handlers run. The **outbound phase still runs to completion**, so response post-processing such as formatting, shared headers, and logging is never bypassed by `skip()`. Use `skip()` when a request handler has committed a terminal response (a redirect or JSON document) and you want to stop a later request handler — such as a Hyperview render handler — from running. Do not reach for `skip()` merely because you committed a response; if no later request handler needs to be bypassed, just return the response. Outbound middleware is not passed `skip()` and cannot short-circuit the chain.
 
 ```js
 export async function redirectAfterSuccess(context, request, response, skip) {
+    // Stops a later Hyperview render handler in this target from running, while
+    // still letting route outbound middleware post-process the redirect response.
     skip();
     return response.respondWithRedirect(303, '/account');
 }
@@ -761,7 +763,7 @@ For an application API endpoint that accepts or returns JSON:API documents:
 2. In the request handler, call `assertJsonApiContentType(request)` before parsing a JSON:API request body. JSON:API requests must use `Content-Type: application/vnd.api+json`; optional media-type parameters are ignored by the helper.
 3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the returned `attributes` into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script.
 4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
-5. Do not add a Hyperview request handler after an API handler that commits a JSON response, so the committed JSON response is terminal for the target. Do not call `skip()` just because the handler commits JSON: `skip()` halts the whole remaining chain, including route outbound middleware such as response formatting. Reserve `skip()` for handlers that must bypass a later request handler that is actually configured after them (for example, a form success path that redirects instead of letting a Hyperview handler re-render).
+5. Do not add a Hyperview request handler after an API handler that commits a JSON response, so the committed JSON response is terminal for the target. Just return the JSON response — the outbound phase still runs either way.
 
 ```js
 import {

@@ -40,6 +40,7 @@ export default class HttpTarget {
 
     #pattern = null;
     #middleware = [];
+    #outboundMiddleware = [];
     #errorHandlers = [];
 
     /**
@@ -48,7 +49,8 @@ export default class HttpTarget {
      * @param {string} options.pattern - URL pathname pattern from the parent route (e.g., '/users/:id')
      * @param {Array<string>} options.allowedMethods - HTTP methods this target handles (e.g., ['GET', 'POST'])
      * @param {Array<string>} [options.tags=[]] - Tags for categorizing and filtering targets
-     * @param {Array<MiddlewareFunction>} [options.middleware=[]] - Middleware functions executed in order
+     * @param {Array<MiddlewareFunction>} [options.middleware=[]] - Request-phase middleware (inbound middleware and request handlers) executed in order; may end the phase early via skip()
+     * @param {Array<MiddlewareFunction>} [options.outboundMiddleware=[]] - Outbound (response-phase) middleware executed in order after the request phase; always runs even when the request phase was skipped, and does not receive skip()
      * @param {Array<ErrorHandlerFunction>} [options.errorHandlers=[]] - Error handlers tried in order until one succeeds
      * @throws {AssertionError} When name or pattern is not a non-empty string, or required arrays are invalid
      */
@@ -59,6 +61,7 @@ export default class HttpTarget {
             pattern,
             allowedMethods,
             middleware,
+            outboundMiddleware,
             errorHandlers,
         } = optionBag;
 
@@ -68,14 +71,17 @@ export default class HttpTarget {
         assertGreaterThan(0, allowedMethods.length, 'options.allowedMethods must not be empty');
 
         const middlewareList = middleware ?? [];
+        const outboundMiddlewareList = outboundMiddleware ?? [];
         const errorHandlerList = errorHandlers ?? [];
         const tags = Array.isArray(optionBag.tags) ? optionBag.tags.slice() : [];
 
         assertArray(middlewareList, 'options.middleware must be an Array');
+        assertArray(outboundMiddlewareList, 'options.outboundMiddleware must be an Array');
         assertArray(errorHandlerList, 'options.errorHandlers must be an Array');
 
         this.#pattern = pattern;
         this.#middleware = middlewareList;
+        this.#outboundMiddleware = outboundMiddlewareList;
         this.#errorHandlers = errorHandlerList;
 
         Object.defineProperties(this, {
@@ -128,15 +134,24 @@ export default class HttpTarget {
     }
 
     /**
-     * Executes the middleware chain for this target.
+     * Executes the middleware chain for this target in two phases.
      *
-     * Middleware are invoked sequentially, and each one's return value is
-     * threaded in as the `response` argument to the next. A middleware that
-     * returns a nullish value leaves the current response in place, so handlers
-     * that mutate the shared response without returning it still work. Each
-     * receives a `skip` callback that, when called, halts the chain after the
-     * current middleware. With no middleware, the passed-in response is
-     * returned unchanged.
+     * The request phase (inbound middleware and request handlers) runs first.
+     * Each middleware's return value is threaded in as the `response` argument
+     * to the next; a nullish return leaves the current response in place, so
+     * handlers that mutate the shared response without returning it still work.
+     * Request-phase middleware receive a `skip` callback that ends the request
+     * phase early — typically after a handler has committed a terminal response
+     * such as a redirect or JSON document — so no further inbound middleware or
+     * request handlers run.
+     *
+     * The outbound phase always runs to completion afterward, even when the
+     * request phase was skipped, so response post-processing (formatting,
+     * headers, logging) is never bypassed by skip(). Outbound middleware are
+     * deliberately not passed `skip`: the response phase cannot be short-circuited.
+     *
+     * A thrown error is not caught here; it propagates to the error-handler
+     * cascade, and the outbound phase does not run for that request.
      *
      * @param {Object} context - Application context with services and configuration
      * @param {ServerRequestInterface} request - Incoming HTTP request with resolved route parameters
@@ -144,21 +159,29 @@ export default class HttpTarget {
      * @returns {Promise<ServerResponse>} The response after the last middleware to run
      */
     async invokeMiddleware(context, request, response) {
-        let done = false;
+        let skipped = false;
 
         function skip() {
-            done = true;
+            skipped = true;
         }
 
+        // Request phase: inbound middleware then request handlers. skip() ends
+        // this phase early but still falls through to the outbound phase below.
         for (const func of this.#middleware) {
             // Thread each middleware's result into the next invocation. A nullish
             // return keeps the current response, so handlers that mutate the
             // shared response in place without returning it still work.
             response = (await func(context, request, response, skip)) ?? response;
 
-            if (done) {
-                return response;
+            if (skipped) {
+                break;
             }
+        }
+
+        // Outbound phase: always runs, regardless of skip(). skip is intentionally
+        // not forwarded, so outbound middleware cannot terminate the chain.
+        for (const func of this.#outboundMiddleware) {
+            response = (await func(context, request, response)) ?? response;
         }
 
         return response;
@@ -325,15 +348,19 @@ export default class HttpTarget {
 
         const methods = targetSpec.methods === '*' ? HTTP_METHODS : targetSpec.methods;
 
-        // Execution order: inbound → target handlers → outbound
-        const middleware = routeSpec.inboundMiddleware.concat(targetSpec.requestHandlers).concat(routeSpec.outboundMiddleware);
+        // Execution order: inbound → target handlers → outbound. Inbound
+        // middleware and request handlers form the skippable request phase;
+        // outbound middleware is kept separate so it always runs (see
+        // invokeMiddleware).
+        const requestPhaseMiddleware = routeSpec.inboundMiddleware.concat(targetSpec.requestHandlers);
 
         return new HttpTarget({
             name,
             pattern: routeSpec.pattern,
             allowedMethods: methods,
             tags: targetSpec.tags,
-            middleware,
+            middleware: requestPhaseMiddleware,
+            outboundMiddleware: routeSpec.outboundMiddleware,
             errorHandlers,
         });
     }
