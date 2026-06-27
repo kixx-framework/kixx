@@ -110,6 +110,11 @@ const appContext = new ApplicationContext({
     logger,
 });
 
+// Whether to trust the X-Forwarded-For header when resolving a request's client
+// IP. Enable only when running behind a trusted reverse proxy that sets it;
+// otherwise a directly-connected client could spoof its own IP address.
+const trustProxy = appContext.getEnvBoolean('TRUST_PROXY');
+
 // Merge plugin maps, allowing platform plugins to override general plugins.
 const plugins = new Map([ ...generalPlugins, ...nodePlugins ]);
 
@@ -156,7 +161,7 @@ async function handleRequest(nodeRequest, nodeResponse) {
     let isHeadRequest = false;
 
     try {
-        const request = new ServerRequest(nodeRequest);
+        const request = new ServerRequest(nodeRequest, { trustProxy });
         isHeadRequest = request.isHeadRequest();
         const requestContext = appContext.createRequestContext(env, request);
         const response = await router.handleRequest(requestContext, request, new ServerResponse());

@@ -37,8 +37,13 @@ export default class ServerRequest {
 
     /**
      * @param {import('node:http').IncomingMessage} nativeRequest - Node request to adapt
+     * @param {Object} [options]
+     * @param {boolean} [options.trustProxy=false] - Trust the `X-Forwarded-For`
+     *   header when resolving `ip`. Enable only when a trusted reverse proxy
+     *   sets it; otherwise a direct client could spoof its own IP address.
      */
-    constructor(nativeRequest) {
+    constructor(nativeRequest, options) {
+        const { trustProxy = false } = options ?? {};
         const method = nativeRequest.method.toUpperCase();
         const headers = buildHeaders(nativeRequest);
         const url = new URL(
@@ -72,6 +77,17 @@ export default class ServerRequest {
             id: {
                 enumerable: true,
                 value: getRequestId(nativeRequest),
+            },
+            /**
+             * Originating client IP address, or null when it cannot be determined.
+             * @name ip
+             * @type {string|null}
+             */
+            ip: {
+                enumerable: true,
+                // Resolved now because the IncomingMessage and its socket are not
+                // retained once the Web Request below is derived.
+                value: resolveClientIp(nativeRequest, headers, trustProxy),
             },
             /**
              * HTTP method normalized for router comparisons.
@@ -394,6 +410,24 @@ function resolveProtocol(nativeRequest) {
         return firstForwarded.split(',')[0].trim();
     }
     return nativeRequest.socket?.encrypted ? 'https' : 'http';
+}
+
+// Trust the client-settable X-Forwarded-For header only when trustProxy is set,
+// because a directly-exposed server would otherwise let a client spoof its own
+// IP and defeat IP-based abuse controls. When trusted, the leftmost entry is the
+// original client; the header is read from the built Web Headers, which already
+// joins repeated header lines into one comma-separated list. Without that trust,
+// or when no forwarded value is present, fall back to the transport peer address.
+function resolveClientIp(nativeRequest, headers, trustProxy) {
+    if (trustProxy) {
+        const forwardedFor = (headers.get('x-forwarded-for') ?? '').split(',')[0].trim();
+        if (forwardedFor) {
+            return forwardedFor;
+        }
+    }
+
+    const remoteAddress = nativeRequest.socket?.remoteAddress;
+    return isNonEmptyString(remoteAddress) ? remoteAddress : null;
 }
 
 // GET and HEAD never carry a body (the Request constructor rejects one); for
