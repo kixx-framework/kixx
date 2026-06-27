@@ -23,7 +23,7 @@ export const BUILD_ID_HEADER = 'kixx-build-id';
  * @throws {UnsupportedMediaTypeError} When the request payload is not JSON:API.
  */
 export function assertJsonApiContentType(request) {
-    const contentType = getMediaType(request.headers.get('content-type'));
+    const contentType = request.getContentMediaType();
 
     if (contentType !== JSON_API_CONTENT_TYPE) {
         throw new UnsupportedMediaTypeError(
@@ -133,14 +133,6 @@ export function parseBasicAuthCredentials(request) {
         username: decoded.slice(0, separatorIndex),
         password: decoded.slice(separatorIndex + 1),
     };
-}
-
-function getMediaType(contentType) {
-    if (!isNonEmptyString(contentType)) {
-        return '';
-    }
-
-    return contentType.split(';', 1)[0].trim().toLowerCase();
 }
 
 function decodeBasicCredentials(encodedCredentials) {

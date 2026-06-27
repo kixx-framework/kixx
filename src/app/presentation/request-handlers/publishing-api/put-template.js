@@ -1,4 +1,3 @@
-import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
 import {
     BadRequestError,
     UnsupportedMediaTypeError,
@@ -62,7 +61,7 @@ function createPutTemplateHandler(kind) {
 }
 
 function assertTemplateContentType(request) {
-    const contentType = getMediaType(request.headers.get('content-type'));
+    const contentType = request.getContentMediaType();
 
     if (!TEXT_TEMPLATE_CONTENT_TYPES.has(contentType)) {
         throw new UnsupportedMediaTypeError(
@@ -70,14 +69,6 @@ function assertTemplateContentType(request) {
             { accept: Array.from(TEXT_TEMPLATE_CONTENT_TYPES) },
         );
     }
-}
-
-function getMediaType(contentType) {
-    if (!isNonEmptyString(contentType)) {
-        return '';
-    }
-
-    return contentType.split(';', 1)[0].trim().toLowerCase();
 }
 
 function getWildcardFilepath(request, name) {

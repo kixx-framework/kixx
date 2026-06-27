@@ -1,4 +1,3 @@
-import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
 import {
     BadRequestError,
     UnsupportedMediaTypeError,
@@ -49,7 +48,7 @@ export async function putPageInclude(context, request, response, skip) {
 }
 
 function assertTextContentType(request) {
-    const contentType = getMediaType(request.headers.get('content-type'));
+    const contentType = request.getContentMediaType();
 
     if (!contentType.startsWith('text/')) {
         throw new UnsupportedMediaTypeError(
@@ -57,14 +56,6 @@ function assertTextContentType(request) {
             { accept: [ 'text/*' ] },
         );
     }
-}
-
-function getMediaType(contentType) {
-    if (!isNonEmptyString(contentType)) {
-        return '';
-    }
-
-    return contentType.split(';', 1)[0].trim().toLowerCase();
 }
 
 function splitIncludeFilepath(request, name) {
