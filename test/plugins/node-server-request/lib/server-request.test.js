@@ -35,13 +35,18 @@ function makeIncoming(options) {
     incoming.method = opts.method ?? 'GET';
     incoming.url = opts.url ?? '/';
     incoming.headers = headers;
-    incoming.socket = { encrypted: Boolean(opts.encrypted) };
+    // remoteAddress mirrors the TCP peer address Node exposes on the socket; the
+    // adapter falls back to it when no X-Forwarded-For header is present.
+    incoming.socket = { encrypted: Boolean(opts.encrypted), remoteAddress: opts.remoteAddress };
 
     return incoming;
 }
 
 function makeServerRequest(options) {
-    return new ServerRequest(makeIncoming(options));
+    const opts = options ?? {};
+    // trustProxy rides on the same options bag for convenience but is a
+    // constructor option, not part of the IncomingMessage built by makeIncoming.
+    return new ServerRequest(makeIncoming(opts), { trustProxy: opts.trustProxy });
 }
 
 function catchError(fn) {
@@ -157,6 +162,107 @@ describe('Node ServerRequest', ({ describe }) => {
             // confirming no stamped header name carries the pseudo-header colon.
             const names = Array.from(request.headers.keys());
             assertFalsy(names.some((name) => name.startsWith(':')));
+        });
+    });
+
+    describe('ip', ({ describe, it }) => {
+
+        describe('when trustProxy is disabled (the default)', ({ it }) => {
+            it('uses the socket remote address', () => {
+                const request = makeServerRequest({ remoteAddress: '203.0.113.7' });
+
+                assertEqual('203.0.113.7', request.ip);
+            });
+
+            it('ignores X-Forwarded-For and uses the socket remote address', () => {
+                const request = makeServerRequest({
+                    remoteAddress: '10.0.0.1',
+                    headers: { 'x-forwarded-for': '203.0.113.7' },
+                });
+
+                assertEqual('10.0.0.1', request.ip);
+            });
+
+            it('ignores X-Forwarded-For and returns null when there is no socket address', () => {
+                const request = makeServerRequest({
+                    headers: { 'x-forwarded-for': '203.0.113.7' },
+                });
+
+                assertEqual(null, request.ip);
+            });
+
+            it('returns null when neither X-Forwarded-For nor a socket address is available', () => {
+                const request = makeServerRequest();
+
+                assertEqual(null, request.ip);
+            });
+
+            it('treats an explicit trustProxy: false the same as unset', () => {
+                const request = makeServerRequest({
+                    trustProxy: false,
+                    remoteAddress: '10.0.0.1',
+                    headers: { 'x-forwarded-for': '203.0.113.7' },
+                });
+
+                assertEqual('10.0.0.1', request.ip);
+            });
+        });
+
+        describe('when trustProxy is enabled', ({ it }) => {
+            it('prefers the leftmost X-Forwarded-For entry over the socket address', () => {
+                const request = makeServerRequest({
+                    trustProxy: true,
+                    remoteAddress: '10.0.0.1',
+                    headers: { 'x-forwarded-for': '203.0.113.7' },
+                });
+
+                assertEqual('203.0.113.7', request.ip);
+            });
+
+            it('returns the original client (leftmost) from a multi-hop X-Forwarded-For list', () => {
+                const request = makeServerRequest({
+                    trustProxy: true,
+                    remoteAddress: '10.0.0.1',
+                    headers: { 'x-forwarded-for': '203.0.113.7, 198.51.100.101, 198.51.100.102' },
+                });
+
+                assertEqual('203.0.113.7', request.ip);
+            });
+
+            it('trims surrounding whitespace from the X-Forwarded-For value', () => {
+                const request = makeServerRequest({
+                    trustProxy: true,
+                    headers: { 'x-forwarded-for': '  203.0.113.7  , 198.51.100.101' },
+                });
+
+                assertEqual('203.0.113.7', request.ip);
+            });
+
+            it('falls back to the socket remote address when X-Forwarded-For is absent', () => {
+                const request = makeServerRequest({
+                    trustProxy: true,
+                    remoteAddress: '10.0.0.1',
+                });
+
+                assertEqual('10.0.0.1', request.ip);
+            });
+
+            it('returns null when there is neither an X-Forwarded-For nor a socket address', () => {
+                const request = makeServerRequest({ trustProxy: true });
+
+                assertEqual(null, request.ip);
+            });
+        });
+
+        it('is immutable after construction', () => {
+            const request = makeServerRequest({ remoteAddress: '203.0.113.7' });
+
+            const caught = catchError(() => {
+                request.ip = '10.0.0.9';
+            });
+
+            assertEqual('TypeError', caught.name);
+            assertEqual('203.0.113.7', request.ip);
         });
     });
 

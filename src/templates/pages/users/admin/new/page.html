@@ -5,6 +5,15 @@
         <p>Set up an administrator login for this site.</p>
     </header>
 
+    {{#if throttled}}
+    <div class="callout callout--error" role="alert">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <div class="callout__body">
+            <p class="type-body-sm">{{ throttleMessage }}</p>
+        </div>
+    </div>
+    {{/if}}
+
     {{!--
         formError carries a form-level failure (e.g. a duplicate email conflict)
         that is not tied to a single field. Field-level messages render inside
@@ -75,6 +84,21 @@
     </p>
     {{/if}}
 {{else}}
+    {{#if throttled}}
+    {{!-- Temporary rate-limit lockout (too many invalid invites or submissions).
+          Non-specific so it cannot be used to probe invite-token state. --}}
+    <header class="content-section__header">
+        <h2>Too many attempts</h2>
+        <p>Please wait before trying again.</p>
+    </header>
+
+    <div class="callout callout--error" role="alert">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <div class="callout__body">
+            <p class="type-body-sm">{{ throttleMessage }}</p>
+        </div>
+    </div>
+    {{else}}
     {{!-- Invite-only signup: rendered when the URL carries no redeemable invite,
           or when a previously valid invite was spent, revoked, or expired. The
           message is intentionally non-specific so it cannot be used to probe
@@ -90,6 +114,7 @@
             <p class="type-body-sm">This invite link is invalid, expired, or has already been used. Ask an administrator for a new invitation.</p>
         </div>
     </div>
+    {{/if}}
 
     {{#if links.loginForm}}
     <p class="type-body-sm">

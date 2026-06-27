@@ -31,7 +31,7 @@
  *   middleware chain runs, so each MUST return `this`
  *
  * Application conveniences (consumed by middleware, never by the router):
- * `headers`, `body`, `queryParams`, `ifModifiedSince`, `ifNoneMatch`,
+ * `headers`, `body`, `ip`, `queryParams`, `ifModifiedSince`, `ifNoneMatch`,
  * `isHeadRequest`, `isJSONRequest`, `isFormURLEncodedRequest`,
  * `getContentMediaType`, `getCookie`, `getCookies`,
  * `getAuthorizationBearer`, `json`, `text`, `formData`.
@@ -39,6 +39,19 @@
  * ## Invariants
  * - `id` MUST be immutable after construction; MUST be unique per request
  *   within a server lifetime
+ * - `ip` MUST be immutable after construction, and MUST be the originating
+ *   client's IP address as a string, or `null` when no address can be
+ *   determined. Because middleware uses `ip` for abuse controls such as rate
+ *   limiting, an adapter MUST derive it only from sources its deployment
+ *   trusts. An edge platform that always injects a trustworthy client-IP
+ *   header (e.g. `CF-Connecting-IP` on Cloudflare) uses that header. An
+ *   adapter that can be directly exposed to clients (e.g. Node) MUST treat
+ *   client-settable forwarding headers as untrusted by default and fall back
+ *   to the transport peer address (e.g. the socket remote address); it MUST
+ *   trust the leftmost `X-Forwarded-For` entry only when the operator opts in
+ *   to a trusted-reverse-proxy mode (e.g. a `TRUST_PROXY` setting), because a
+ *   spoofed forwarding header would otherwise defeat the controls that read
+ *   `ip`
  * - `method` MUST be the HTTP method in UPPERCASE (e.g., 'GET', 'POST')
  * - `url` MUST be a fully parsed `URL` instance with `hostname`, `pathname`,
  *   and `searchParams` available
@@ -119,6 +132,12 @@
  * @property {Object<string, string|string[]>} queryParams
  *   Query parameters parsed from `url.searchParams`. Keys with multiple values
  *   are returned as arrays; single-value keys are returned as strings.
+ *
+ * @property {string|null} ip
+ *   The originating client's IP address as a string, or `null` when no address
+ *   can be determined. Immutable after construction. Intended for logging and
+ *   abuse controls such as rate limiting; see the invariants above for the
+ *   trust rules an adapter MUST follow when deriving it.
  *
  * @property {Date|null} ifModifiedSince
  *   Parsed `If-Modified-Since` header for conditional GET cache validation.

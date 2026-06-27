@@ -43,6 +43,15 @@ export default class ServerRequest {
                 value: getRequestId(nativeRequest),
             },
             /**
+             * Originating client IP address, or null when it cannot be determined.
+             * @name ip
+             * @type {string|null}
+             */
+            ip: {
+                enumerable: true,
+                value: resolveClientIp(nativeRequest),
+            },
+            /**
              * HTTP method normalized for router comparisons.
              * @name method
              * @type {string}
@@ -337,6 +346,25 @@ function getFirstHeaderListValue(headerValue) {
     }
 
     return headerValue.trim();
+}
+
+// Cloudflare injects the client IP via CF-Connecting-IP on all proxied traffic;
+// True-Client-IP is the Enterprise-only equivalent and serves as a fallback.
+// X-Forwarded-For is intentionally ignored: Cloudflare's own guidance directs
+// origins to read CF-Connecting-IP / True-Client-IP instead, since XFF can
+// carry client-supplied hops.
+function resolveClientIp(nativeRequest) {
+    const cfConnectingIp = (nativeRequest.headers.get('cf-connecting-ip') ?? '').trim();
+    if (cfConnectingIp) {
+        return cfConnectingIp;
+    }
+
+    const trueClientIp = (nativeRequest.headers.get('true-client-ip') ?? '').trim();
+    if (trueClientIp) {
+        return trueClientIp;
+    }
+
+    return null;
 }
 
 function getRequestId(nativeRequest) {

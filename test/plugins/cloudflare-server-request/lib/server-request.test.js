@@ -103,6 +103,45 @@ describe('Cloudflare ServerRequest', ({ describe }) => {
         });
     });
 
+    describe('ip', ({ it }) => {
+        it('uses the CF-Connecting-IP header', () => {
+            const request = makeServerRequest({ headers: { 'cf-connecting-ip': '203.0.113.7' } });
+
+            assertEqual('203.0.113.7', request.ip);
+        });
+
+        it('falls back to True-Client-IP when CF-Connecting-IP is absent', () => {
+            const request = makeServerRequest({ headers: { 'true-client-ip': '203.0.113.8' } });
+
+            assertEqual('203.0.113.8', request.ip);
+        });
+
+        it('prefers CF-Connecting-IP over True-Client-IP when both are present', () => {
+            const request = makeServerRequest({
+                headers: { 'cf-connecting-ip': '203.0.113.7', 'true-client-ip': '203.0.113.8' },
+            });
+
+            assertEqual('203.0.113.7', request.ip);
+        });
+
+        it('returns null and ignores X-Forwarded-For when no Cloudflare header is present', () => {
+            const request = makeServerRequest({ headers: { 'x-forwarded-for': '203.0.113.7' } });
+
+            assertEqual(null, request.ip);
+        });
+
+        it('is immutable after construction', () => {
+            const request = makeServerRequest({ headers: { 'cf-connecting-ip': '203.0.113.7' } });
+
+            const caught = catchError(() => {
+                request.ip = '10.0.0.9';
+            });
+
+            assertEqual('TypeError', caught.name);
+            assertEqual('203.0.113.7', request.ip);
+        });
+    });
+
     describe('body', ({ it }) => {
         it('returns a ReadableStream for a request with a body', () => {
             const request = makeServerRequest({
