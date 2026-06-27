@@ -136,7 +136,16 @@ export default class ServerRequest {
      * @returns {boolean} `true` when the request body is URL-encoded form data
      */
     isFormURLEncodedRequest() {
-        return getBaseContentType(this.headers) === 'application/x-www-form-urlencoded';
+        return this.getContentMediaType() === 'application/x-www-form-urlencoded';
+    }
+
+    /**
+     * Returns the request Content-Type media type without parameters.
+     * @returns {string} Normalized media type, or an empty string when absent
+     */
+    getContentMediaType() {
+        const contentType = this.headers.get('content-type') ?? '';
+        return contentType.split(';')[0].trim().toLowerCase();
     }
 
     /**
@@ -281,7 +290,7 @@ export default class ServerRequest {
      * @throws {BadRequestError} When the body cannot be parsed as form data.
      */
     async formData() {
-        const contentType = getBaseContentType(this.headers);
+        const contentType = this.getContentMediaType();
 
         if (!FORM_DATA_CONTENT_TYPES.includes(contentType)) {
             throw new UnsupportedMediaTypeError(
@@ -310,11 +319,6 @@ function deepFreeze(value) {
         Object.freeze(value);
     }
     return value;
-}
-
-function getBaseContentType(headers) {
-    const contentType = headers.get('content-type') ?? '';
-    return contentType.split(';')[0].trim().toLowerCase();
 }
 
 function getFirstHeaderListValue(headerValue) {

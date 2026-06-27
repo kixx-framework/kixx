@@ -1,0 +1,86 @@
+import {
+    BadRequestError,
+    UnsupportedMediaTypeError,
+} from '../../../../kixx/errors/mod.js';
+import {
+    BUILD_ID_HEADER,
+    JSON_API_CONTENT_TYPE,
+    jsonApiResource,
+} from '../../lib/json-api.js';
+import { assertPublishingPermission } from '../../middleware/publishing-authentication.js';
+import { putTemplate } from '../../../transaction-scripts/publishing/put-template.js';
+import validatePathname from '../../../../kixx/utils/validate-pathname.js';
+
+
+const TEXT_TEMPLATE_CONTENT_TYPES = new Set([ 'text/plain', 'text/html' ]);
+
+
+export const putBaseTemplate = createPutTemplateHandler('base');
+export const putPageTemplate = createPutTemplateHandler('page');
+export const putPartialTemplate = createPutTemplateHandler('partial');
+
+
+function createPutTemplateHandler(kind) {
+    return async (context, request, response, skip) => {
+        assertTemplateContentType(request);
+
+        // buildId is read here to form the authorization resource URN and is
+        // passed through to putTemplate(), which is the single authority that
+        // validates it (required, and must differ from the current build).
+        const buildId = request.headers.get(BUILD_ID_HEADER);
+        const filepath = getWildcardFilepath(request, 'filepath');
+
+        assertPublishingPermission(context, {
+            action: 'urn:kixx:publishing:template:put',
+            resource: `urn:kixx:publishing:template:${ kind }:${ buildId }:${ filepath }`,
+        });
+
+        const source = await request.text();
+        const written = await putTemplate(context, {
+            kind,
+            filepath,
+            source,
+            buildId,
+        });
+
+        skip();
+        return response.respondWithJSON(
+            200,
+            jsonApiResource({
+                type: 'Template',
+                id: written.filepath,
+                attributes: {
+                    kind,
+                    filepath: written.filepath,
+                    buildId,
+                },
+            }),
+            { contentType: JSON_API_CONTENT_TYPE },
+        );
+    };
+}
+
+function assertTemplateContentType(request) {
+    const contentType = request.getContentMediaType();
+
+    if (!TEXT_TEMPLATE_CONTENT_TYPES.has(contentType)) {
+        throw new UnsupportedMediaTypeError(
+            'Template writes require a text/plain or text/html Content-Type.',
+            { accept: Array.from(TEXT_TEMPLATE_CONTENT_TYPES) },
+        );
+    }
+}
+
+function getWildcardFilepath(request, name) {
+    const segments = request.pathnameParams[name];
+
+    if (!Array.isArray(segments) || segments.length === 0) {
+        throw new BadRequestError('Template filepath is required.', {
+            code: 'TemplateFilepathRequired',
+        });
+    }
+
+    // Reject path traversal and out-of-whitelist characters at the edge (400)
+    // rather than relying on a downstream store assertion (500).
+    return validatePathname(segments.join('/'));
+}

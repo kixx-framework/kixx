@@ -1,18 +1,13 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
 import { StaticFileServerHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
 import { adminErrorHandler } from './app/presentation/error-handlers/admin-error-handler.js';
+import { jsonApiErrorHandler } from './app/presentation/error-handlers/json-api-error-handler.js';
 import { authenticateAdminUser } from './app/presentation/middleware/admin-authentication.js';
-import {
-    getNewAdminUserForm,
-    postNewAdminUserForm,
-    getAdminUserLoginForm,
-    postAdminUserLoginForm,
-} from './app/presentation/request-handlers/admin-users.js';
-import {
-    getAdminInvites,
-    postCreateAdminInvite,
-    postRevokeAdminInvite,
-} from './app/presentation/request-handlers/admin-invites.js';
+import { authenticatePublishingToken } from './app/presentation/middleware/publishing-authentication.js';
+import * as AdminUsers from './app/presentation/request-handlers/admin-users.js';
+import * as AdminInvites from './app/presentation/request-handlers/admin-invites.js';
+import * as AdminAPI from './app/presentation/request-handlers/admin-api/mod.js';
+import * as PublishingAPI from './app/presentation/request-handlers/publishing-api/mod.js';
 
 
 export default [
@@ -53,7 +48,7 @@ export default [
                                 name: 'revoke',
                                 methods: [ 'POST' ],
                                 requestHandlers: [
-                                    postRevokeAdminInvite,
+                                    AdminInvites.postRevokeAdminInvite,
                                 ],
                             },
                         ],
@@ -66,7 +61,7 @@ export default [
                                 name: 'render-invite-list',
                                 methods: [ 'GET', 'HEAD' ],
                                 requestHandlers: [
-                                    getAdminInvites,
+                                    AdminInvites.getAdminInvites,
                                     HyperviewDynamicPageHandler(),
                                 ],
                             },
@@ -74,7 +69,7 @@ export default [
                                 name: 'create-invite',
                                 methods: [ 'POST' ],
                                 requestHandlers: [
-                                    postCreateAdminInvite,
+                                    AdminInvites.postCreateAdminInvite,
                                     HyperviewDynamicPageHandler(),
                                 ],
                             },
@@ -90,7 +85,7 @@ export default [
                         name: 'render-form',
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
-                            getNewAdminUserForm,
+                            AdminUsers.getNewAdminUserForm,
                             HyperviewDynamicPageHandler(),
                         ],
                     },
@@ -98,7 +93,7 @@ export default [
                         name: 'post-form',
                         methods: [ 'POST' ],
                         requestHandlers: [
-                            postNewAdminUserForm,
+                            AdminUsers.postNewAdminUserForm,
                             HyperviewDynamicPageHandler(),
                         ],
                     },
@@ -112,7 +107,7 @@ export default [
                         name: 'render-form',
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
-                            getAdminUserLoginForm,
+                            AdminUsers.getAdminUserLoginForm,
                             HyperviewDynamicPageHandler(),
                         ],
                     },
@@ -120,8 +115,120 @@ export default [
                         name: 'post-form',
                         methods: [ 'POST' ],
                         requestHandlers: [
-                            postAdminUserLoginForm,
+                            AdminUsers.postAdminUserLoginForm,
                             HyperviewDynamicPageHandler(),
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/admin-api/v1',
+                name: 'admin-api',
+                errorHandlers: [
+                    jsonApiErrorHandler,
+                ],
+                routes: [
+                    {
+                        pattern: '/users/invite{/}',
+                        name: 'accept-invite',
+                        targets: [
+                            {
+                                name: 'post',
+                                methods: [ 'POST' ],
+                                requestHandlers: [
+                                    AdminAPI.acceptAdminInvite,
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        pattern: '/publishing-api-tokens{/}',
+                        name: 'publishing-api-tokens',
+                        targets: [
+                            {
+                                name: 'create',
+                                methods: [ 'POST' ],
+                                requestHandlers: [
+                                    AdminAPI.createPublishingApiToken,
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/publishing-api/v1',
+                name: 'publishing-api',
+                inboundMiddleware: [
+                    authenticatePublishingToken,
+                ],
+                errorHandlers: [
+                    jsonApiErrorHandler,
+                ],
+                routes: [
+                    {
+                        pattern: '/templates/base/*filepath',
+                        name: 'base-templates',
+                        targets: [
+                            {
+                                name: 'put',
+                                methods: [ 'PUT' ],
+                                requestHandlers: [
+                                    PublishingAPI.putBaseTemplate,
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        pattern: '/templates/pages/*filepath',
+                        name: 'page-templates',
+                        targets: [
+                            {
+                                name: 'put',
+                                methods: [ 'PUT' ],
+                                requestHandlers: [
+                                    PublishingAPI.putPageTemplate,
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        pattern: '/templates/partials/*filepath',
+                        name: 'partial-templates',
+                        targets: [
+                            {
+                                name: 'put',
+                                methods: [ 'PUT' ],
+                                requestHandlers: [
+                                    PublishingAPI.putPartialTemplate,
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        pattern: '/pages/*pathname',
+                        name: 'pages',
+                        targets: [
+                            {
+                                name: 'put-metadata',
+                                methods: [ 'PUT' ],
+                                requestHandlers: [
+                                    PublishingAPI.putPageMetadata,
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        pattern: '/includes/*filepath',
+                        name: 'includes',
+                        targets: [
+                            {
+                                name: 'put',
+                                methods: [ 'PUT' ],
+                                requestHandlers: [
+                                    PublishingAPI.putPageInclude,
+                                ],
+                            },
                         ],
                     },
                 ],

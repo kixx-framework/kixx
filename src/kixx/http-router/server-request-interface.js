@@ -32,8 +32,9 @@
  *
  * Application conveniences (consumed by middleware, never by the router):
  * `headers`, `body`, `queryParams`, `ifModifiedSince`, `ifNoneMatch`,
- * `isHeadRequest`, `isJSONRequest`, `isFormURLEncodedRequest`, `getCookie`,
- * `getCookies`, `getAuthorizationBearer`, `json`, `text`, `formData`.
+ * `isHeadRequest`, `isJSONRequest`, `isFormURLEncodedRequest`,
+ * `getContentMediaType`, `getCookie`, `getCookies`,
+ * `getAuthorizationBearer`, `json`, `text`, `formData`.
  *
  * ## Invariants
  * - `id` MUST be immutable after construction; MUST be unique per request
@@ -147,6 +148,11 @@
  * @property {function(): boolean} isFormURLEncodedRequest
  *   Returns `true` when the `Content-Type` header includes
  *   `application/x-www-form-urlencoded`.
+ *
+ * @property {function(): string} getContentMediaType
+ *   Returns the normalized media type from the `Content-Type` header, without
+ *   parameters. The returned value is trimmed and lowercased. Returns an empty
+ *   string when the header is absent.
  *
  * @property {function(string): string|null} getCookie
  *   Returns the value of the named cookie, or `null` if not present.

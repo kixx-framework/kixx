@@ -1,6 +1,6 @@
 import { isNonEmptyString } from '../assertions/mod.js';
 
-import validatePathname from './validate-pathname.js';
+import validatePathname from '../utils/validate-pathname.js';
 
 
 /**

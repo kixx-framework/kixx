@@ -357,6 +357,34 @@ describe('Node ServerRequest', ({ describe }) => {
         });
     });
 
+    describe('getContentMediaType', ({ it }) => {
+        it('returns the content media type without parameters', () => {
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'text/html; charset=utf-8' },
+                body: '<h1>Hello</h1>',
+            });
+
+            assertEqual('text/html', request.getContentMediaType());
+        });
+
+        it('trims and lowercases the content media type', () => {
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': ' Text/Plain ; charset=utf-8' },
+                body: 'hello',
+            });
+
+            assertEqual('text/plain', request.getContentMediaType());
+        });
+
+        it('returns an empty string when the Content-Type header is absent', () => {
+            const request = makeServerRequest();
+
+            assertEqual('', request.getContentMediaType());
+        });
+    });
+
     describe('getCookies', ({ it }) => {
         it('returns null when the Cookie header is absent', () => {
             const request = makeServerRequest();
