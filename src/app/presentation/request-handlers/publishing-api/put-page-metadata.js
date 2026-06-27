@@ -12,7 +12,7 @@ import { putPageMetadata as putPageMetadataScript } from '../../../transaction-s
 import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
-export async function putPageMetadata(context, request, response, skip) {
+export async function putPageMetadata(context, request, response) {
     assertJsonApiContentType(request);
 
     const buildId = request.headers.get(BUILD_ID_HEADER);
@@ -34,7 +34,9 @@ export async function putPageMetadata(context, request, response, skip) {
         buildId,
     });
 
-    skip();
+    // This target's chain has no Hyperview handler after it, so the committed
+    // JSON response is terminal without skip(). Returning normally lets any
+    // route outbound middleware (e.g. response formatting) still run.
     return response.respondWithJSON(
         200,
         jsonApiResource({

@@ -21,7 +21,7 @@ export const putPartialTemplate = createPutTemplateHandler('partial');
 
 
 function createPutTemplateHandler(kind) {
-    return async (context, request, response, skip) => {
+    return async (context, request, response) => {
         assertTemplateContentType(request);
 
         // buildId is read here to form the authorization resource URN and is
@@ -43,7 +43,9 @@ function createPutTemplateHandler(kind) {
             buildId,
         });
 
-        skip();
+        // This target's chain has no Hyperview handler after it, so the committed
+        // JSON response is terminal without skip(). Returning normally lets any
+        // route outbound middleware (e.g. response formatting) still run.
         return response.respondWithJSON(
             200,
             jsonApiResource({

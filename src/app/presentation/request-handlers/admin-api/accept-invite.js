@@ -15,7 +15,7 @@ const INVALID_INVITE_MESSAGE = 'This invite link is invalid, expired, or already
 const INVALID_INVITE_CODE = 'InvalidInvite';
 
 
-export async function acceptAdminInvite(context, request, response, skip) {
+export async function acceptAdminInvite(context, request, response) {
     assertJsonApiContentType(request);
 
     const inviteToken = request.getAuthorizationBearer();
@@ -38,7 +38,9 @@ export async function acceptAdminInvite(context, request, response, skip) {
 
     const { user } = await createAdminUserAccount(context, form);
 
-    skip();
+    // This target's chain has no Hyperview handler after it, so the committed
+    // JSON response is terminal without skip(). Returning normally lets any
+    // route outbound middleware (e.g. response formatting) still run.
     return response.respondWithJSON(
         201,
         jsonApiResource({

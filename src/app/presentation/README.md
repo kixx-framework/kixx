@@ -761,7 +761,7 @@ For an application API endpoint that accepts or returns JSON:API documents:
 2. In the request handler, call `assertJsonApiContentType(request)` before parsing a JSON:API request body. JSON:API requests must use `Content-Type: application/vnd.api+json`; optional media-type parameters are ignored by the helper.
 3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the returned `attributes` into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script.
 4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
-5. Do not add a Hyperview request handler after an API handler that commits a JSON response. Call `skip()` before responding so no later handler attempts to render HTML.
+5. Do not add a Hyperview request handler after an API handler that commits a JSON response, so the committed JSON response is terminal for the target. Do not call `skip()` just because the handler commits JSON: `skip()` halts the whole remaining chain, including route outbound middleware such as response formatting. Reserve `skip()` for handlers that must bypass a later request handler that is actually configured after them (for example, a form success path that redirects instead of letting a Hyperview handler re-render).
 
 ```js
 import {
@@ -773,7 +773,7 @@ import {
 import ExampleApiForm from '../forms/example-api-form.js';
 import { createExample } from '../../transaction-scripts/examples/create-example.js';
 
-export async function exampleJsonApiHandler(context, request, response, skip) {
+export async function exampleJsonApiHandler(context, request, response) {
     assertJsonApiContentType(request);
 
     const { attributes } = await parseJsonApiResource(request, 'Example');
@@ -782,7 +782,9 @@ export async function exampleJsonApiHandler(context, request, response, skip) {
 
     const example = await createExample(context, form);
 
-    skip();
+    // No Hyperview handler follows this target, so the committed JSON response
+    // is terminal. Returning normally (without skip()) lets route outbound
+    // middleware still run.
     return response.respondWithJSON(
         201,
         jsonApiResource({

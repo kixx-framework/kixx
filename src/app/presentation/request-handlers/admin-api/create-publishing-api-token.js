@@ -10,7 +10,7 @@ import { verifyAdminCredentials } from '../../../transaction-scripts/admin-users
 import { createPublishingApiToken as createToken } from '../../../transaction-scripts/publishing-api-tokens/create-publishing-api-token.js';
 
 
-export async function createPublishingApiToken(context, request, response, skip) {
+export async function createPublishingApiToken(context, request, response) {
     assertJsonApiContentType(request);
 
     const { username, password } = parseBasicAuthCredentials(request);
@@ -27,7 +27,9 @@ export async function createPublishingApiToken(context, request, response, skip)
 
     const token = await createToken(context, form, admin.id);
 
-    skip();
+    // This target's chain has no Hyperview handler after it, so the committed
+    // JSON response is terminal without skip(). Returning normally lets any
+    // route outbound middleware (e.g. response formatting) still run.
     return response.respondWithJSON(
         201,
         jsonApiResource({
