@@ -9,7 +9,7 @@ import {
 } from '../../lib/json-api.js';
 import { assertPublishingPermission } from '../../middleware/publishing-authentication.js';
 import { putTemplate } from '../../../transaction-scripts/publishing/put-template.js';
-import validatePathname from '../../../../kixx/hyperview/validate-pathname.js';
+import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
 const TEXT_TEMPLATE_CONTENT_TYPES = new Set([ 'text/plain', 'text/html' ]);

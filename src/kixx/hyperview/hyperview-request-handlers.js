@@ -7,7 +7,7 @@ import {
 } from '../assertions/mod.js';
 import deepMerge from '../utils/deep-merge.js';
 
-import validatePathname from './validate-pathname.js';
+import validatePathname from '../utils/validate-pathname.js';
 
 
 const INDEX_FILE_PATTERN = /(?:^|\/)index\.(html|json|xml|md)$/;

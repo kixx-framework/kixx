@@ -9,7 +9,7 @@ import {
 } from '../../lib/json-api.js';
 import { assertPublishingPermission } from '../../middleware/publishing-authentication.js';
 import { putPageMetadata as putPageMetadataScript } from '../../../transaction-scripts/publishing/put-page-metadata.js';
-import validatePathname from '../../../../kixx/hyperview/validate-pathname.js';
+import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
 export async function putPageMetadata(context, request, response, skip) {

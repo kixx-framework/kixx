@@ -9,7 +9,7 @@ import {
 } from '../../lib/json-api.js';
 import { assertPublishingPermission } from '../../middleware/publishing-authentication.js';
 import { putInclude as putIncludeScript } from '../../../transaction-scripts/publishing/put-include.js';
-import validatePathname from '../../../../kixx/hyperview/validate-pathname.js';
+import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
 export async function putPageInclude(context, request, response, skip) {
