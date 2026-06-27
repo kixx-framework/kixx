@@ -3,6 +3,7 @@ import AdminInviteCollection from './collections/admin-invite-collection.js';
 import AdminUserCollection from './collections/admin-user-collection.js';
 import CsrfTokenCollection from './collections/csrf-token-collection.js';
 import PublishingApiTokenCollection from './collections/publishing-api-token-collection.js';
+import RateLimitCollection from './collections/rate-limit-collection.js';
 import UserSessionCollection from './collections/user-session-collection.js';
 
 
@@ -24,6 +25,7 @@ export function register(context) {
     context.registerCollection('AdminInvite', new AdminInviteCollection({ db: documentStore }));
     context.registerCollection('PublishingApiToken', new PublishingApiTokenCollection({ db: documentStore }));
     context.registerCollection('CsrfToken', new CsrfTokenCollection({ db: keyValueStore }));
+    context.registerCollection('RateLimit', new RateLimitCollection({ db: keyValueStore }));
     context.registerCollection('UserSession', new UserSessionCollection({ db: keyValueStore }));
 }
 

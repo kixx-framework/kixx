@@ -9,6 +9,18 @@ import {
     getCsrfFormContext,
     validateCsrfFormData,
 } from '../lib/csrf.js';
+import {
+    checkInviteThrottle,
+    checkLoginThrottle,
+    checkSignupThrottle,
+    clearLoginThrottle,
+    clearSignupThrottle,
+    recordInviteGuess,
+    recordLoginFailure,
+    recordSignupFailure,
+    throttleMessage,
+} from '../lib/rate-limit.js';
+import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 
 
 const SESSION_CREATE_FAILED = 'session_create_failed';
@@ -40,7 +52,26 @@ function renderInvalidInvite(context, response) {
     });
 }
 
+// Renders the signup page in its throttled state: the no-form branch plus a
+// "try again later" callout and a link back to login. Shared by the signup POST
+// and the invite-bearing signup GET so both surfaces look identical when locked.
+function renderSignupThrottled(context, response, retryAfterSeconds) {
+    return response.updateProps({
+        inviteValid: false,
+        throttled: true,
+        throttleMessage: throttleMessage(retryAfterSeconds),
+        links: { loginForm: getAdminLoginFormLink(context) },
+    });
+}
+
 export async function getNewAdminUserForm(context, request, response) {
+    // Reject while this IP is locked out for invite guessing, before resolving
+    // any token, so a guesser cannot keep probing the invite namespace.
+    const throttle = await checkInviteThrottle(context, request);
+    if (throttle.throttled) {
+        return renderSignupThrottled(context, response, throttle.retryAfterSeconds);
+    }
+
     // Signup is invite-only: without a redeemable invite (or matching bootstrap
     // token) there is no form to show. resolveAdminInvite is read-only — the token
     // is not spent until the POST succeeds.
@@ -48,6 +79,13 @@ export async function getNewAdminUserForm(context, request, response) {
     const resolution = await resolveAdminInvite(context, inviteToken);
 
     if (!resolution.redeemable) {
+        // Count only a token that matched no known invite — the brute-force
+        // signal. A tokenless visit, or an expired/spent/revoked real invite
+        // (which still resolves to a stored record), is not a guess and must not
+        // advance the counter, so legitimate users and aged links aren't punished.
+        if (isNonEmptyString(inviteToken) && resolution.record === null) {
+            await recordInviteGuess(context, request);
+        }
         return renderInvalidInvite(context, response);
     }
 
@@ -60,6 +98,13 @@ export async function getNewAdminUserForm(context, request, response) {
 }
 
 export async function postNewAdminUserForm(context, request, response, skip) {
+    // Reject before parsing the body or touching the invite when this IP is
+    // already locked out, so abusive submissions cost nothing past the IP read.
+    const throttle = await checkSignupThrottle(context, request);
+    if (throttle.throttled) {
+        return renderSignupThrottled(context, response, throttle.retryAfterSeconds);
+    }
+
     const formData = await validateCsrfFormData(context, request);
     const form = NewAdminUserForm.fromFormData(formData);
 
@@ -69,6 +114,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     // non-mutating; createAdminUser still consumes the invite after validation.
     const resolution = await resolveAdminInvite(context, form.invite_token);
     if (!resolution.redeemable) {
+        await recordSignupFailure(context, request);
         return renderInvalidInvite(context, response);
     }
 
@@ -79,6 +125,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         form.validate();
     } catch (error) {
         if (error.name === 'ValidationError') {
+            await recordSignupFailure(context, request);
             return response.updateProps({
                 inviteValid: true,
                 form: await getCsrfFormContext(context, request, response, form, error),
@@ -95,6 +142,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         // A duplicate email address is an expected outcome the user can correct;
         // the invite is not consumed on this path, so re-render the form to retry.
         if (error.code === 'NewUserConflictError') {
+            await recordSignupFailure(context, request);
             return response.updateProps({
                 inviteValid: true,
                 form: await getCsrfFormContext(context, request, response, form, error.code),
@@ -106,11 +154,13 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         // The invite was redeemable when the page loaded but was spent, revoked, or
         // expired before this submission. Show the invalid-invite state.
         if (error.code === 'InvalidInvite') {
+            await recordSignupFailure(context, request);
             return renderInvalidInvite(context, response);
         }
 
         // The account was created but the session could not be established. Send
-        // the user to the login page; that handler surfaces the notice code.
+        // the user to the login page; that handler surfaces the notice code. This
+        // is not a signup-abuse failure (the account exists), so it is not counted.
         if (error.code === 'SignupSessionFailed') {
             const newLocation = getAdminLoginFormLink(context);
             skip();
@@ -123,6 +173,9 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     // Signup and session both succeeded: establish the session cookie and send the
     // now-authenticated admin into the admin panel.
     setAdminSessionCookie(request, response, result.sessionId);
+    // A completed signup clears the per-IP counter so a legitimate user isn't
+    // penalized by their own earlier validation stumbles.
+    await clearSignupThrottle(context, request);
     await clearCsrfToken(context, request, response);
 
     const adminTarget = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
@@ -146,10 +199,29 @@ export async function getAdminUserLoginForm(context, request, response) {
     });
 }
 
+// Re-renders the login form in its throttled state: a fresh CSRF token plus a
+// non-enumerating "try again later" callout. Used both for the pre-auth check
+// and when a failed attempt is the one that trips the lock.
+async function renderLoginThrottled(context, request, response, form, links, retryAfterSeconds) {
+    return response.updateProps({
+        form: await getCsrfFormContext(context, request, response, form),
+        links,
+        throttled: true,
+        throttleMessage: throttleMessage(retryAfterSeconds),
+    });
+}
+
 export async function postAdminUserLoginForm(context, request, response, skip) {
     const formData = await validateCsrfFormData(context, request);
     const form = AdminUserLoginForm.fromFormData(formData);
     const links = { newUserForm: getNewAdminUserFormLink(context) };
+
+    // Reject before attempting authentication when this IP or this (IP, email)
+    // pair is already locked out, so a throttled attacker cannot keep probing.
+    const throttle = await checkLoginThrottle(context, request, form.email_address);
+    if (throttle.throttled) {
+        return renderLoginThrottled(context, request, response, form, links, throttle.retryAfterSeconds);
+    }
 
     // Server-side validation. On failure, fall through to the page renderer with
     // field-level error state (skip() is intentionally not called).
@@ -172,6 +244,13 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
         // Invalid credentials are an expected outcome the user can correct; re-render
         // with a single generic, non-enumerating message rather than a 401 page.
         if (error.code === 'InvalidCredentials') {
+            // Count this failure first; if it tripped the lock, show the throttle
+            // message instead of the credential message so neither response leaks
+            // which input was wrong.
+            const state = await recordLoginFailure(context, request, form.email_address);
+            if (state.throttled) {
+                return renderLoginThrottled(context, request, response, form, links, state.retryAfterSeconds);
+            }
             return response.updateProps({
                 form: await getCsrfFormContext(context, request, response, form),
                 links,
@@ -184,6 +263,8 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
     // Credentials verified: establish the session cookie and send the
     // now-authenticated admin into the admin panel.
     setAdminSessionCookie(request, response, result.sessionId);
+    // A clean login clears the throttle so earlier failures don't haunt the user.
+    await clearLoginThrottle(context, request, form.email_address);
     await clearCsrfToken(context, request, response);
 
     const adminTarget = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');

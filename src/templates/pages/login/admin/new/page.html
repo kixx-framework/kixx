@@ -20,6 +20,19 @@
     {{/ifEqual}}
 
     {{!--
+        throttled marks a temporary rate-limit lockout. The message is
+        intentionally non-specific so it cannot reveal whether the email exists.
+    --}}
+    {{#if throttled}}
+    <div class="callout callout--error" role="alert">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <div class="callout__body">
+            <p class="type-body-sm">{{ throttleMessage }}</p>
+        </div>
+    </div>
+    {{/if}}
+
+    {{!--
         formError carries a form-level failure (e.g. rejected credentials) that
         is not tied to a single field. Field-level messages render inside each
         .field below.
