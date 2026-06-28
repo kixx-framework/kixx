@@ -110,12 +110,13 @@ export default class ApplicationContext extends BaseContext {
      * @param {Object} env - Request-scoped environment variables, secrets, and bindings
      * @param {import('../http-router/server-request-interface.js').ServerRequestInterface} [request]
      *   Request being handled by the context
+     * @param {Object} [config=this.config] - Request-scoped application configuration.
      * @returns {RequestContext} Context for handling one request
      */
-    createRequestContext(env, request) {
+    createRequestContext(env, request, config = this.config) {
         return new RequestContext({
             env,
-            config: this.config,
+            config,
             requestId: request?.id,
             runtime: this.runtime,
             services: this.#services,

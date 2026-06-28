@@ -157,6 +157,16 @@ describe('ApplicationContext', ({ describe }) => {
             assertEqual(context.runtime, requestContext.runtime);
         });
 
+        it('uses the request config when one is provided', () => {
+            const context = makeApplicationContext({ config: { name: 'startup-app' } });
+            const requestConfig = { name: 'fresh-app' };
+
+            const requestContext = context.createRequestContext({}, { id: 'req-123' }, requestConfig);
+
+            assertEqual(requestConfig, requestContext.config);
+            assertEqual('startup-app', context.config.name);
+        });
+
         it('gives the request context its own request-scoped env', () => {
             const context = makeApplicationContext({ env: { APP_ONLY: 'yes' } });
 

@@ -163,7 +163,8 @@ async function handleRequest(nodeRequest, nodeResponse) {
     try {
         const request = new ServerRequest(nodeRequest, { trustProxy });
         isHeadRequest = request.isHeadRequest();
-        const requestContext = appContext.createRequestContext(env, request);
+        const requestConfig = readConfig(configFilePath, environment);
+        const requestContext = appContext.createRequestContext(env, request, requestConfig);
         const response = await router.handleRequest(requestContext, request, new ServerResponse());
         sendResponse(nodeResponse, response, isHeadRequest);
     } catch (cause) {

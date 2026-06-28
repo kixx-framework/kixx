@@ -71,6 +71,28 @@ describe('RequestContext', ({ describe }) => {
             assertUndefined(context.requestId);
         });
 
+        it('keeps each request context on its own config object', () => {
+            const sharedOptions = {
+                env: {},
+                runtime: { mode: 'server' },
+                services: new Map(),
+                collections: new Map(),
+                logger: { name: 'test-logger' },
+            };
+
+            const firstContext = makeRequestContext({
+                ...sharedOptions,
+                config: { name: 'first-app' },
+            });
+            const secondContext = makeRequestContext({
+                ...sharedOptions,
+                config: { name: 'second-app' },
+            });
+
+            assertEqual('first-app', firstContext.config.name);
+            assertEqual('second-app', secondContext.config.name);
+        });
+
         it('exposes the properties as non-writable', () => {
             const context = makeRequestContext();
 
