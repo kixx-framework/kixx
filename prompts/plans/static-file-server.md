@@ -1,185 +1,193 @@
-# Static File Server — Implementation Plan
+# Static File Server v2 — Implementation Plan
 
 ## Implementation Approach
 
-Add a cross-platform `StaticFileServerStore` following the same port/adapter shape
-as the Logger, Key/Value, and Document stores: a JSDoc-only interface contract in
-`src/kixx/static-file-server/`, plus a Node.js filesystem adapter and a Cloudflare
-Workers Static Assets adapter under `src/plugins/`. The store's single read method
-returns a standard Web `Response` (the portable floor: Cloudflare's
-`env.ASSETS.fetch()` returns one directly, and Node builds one trivially) or `null`
-when the file is absent; the store never depends on the router's `ServerResponse`.
-A framework-level request handler in `src/kixx/static-file-server/` (mirroring
-`src/kixx/hyperview/hyperview-request-handlers.js`) derives the relative file path
-from a route wildcard param, calls the store, and maps the `Response` onto the
-application `ServerResponse` via `respondWithStream`. The handler is wired into the
-app through a new `/static/*filepath` route placed before the existing Hyperview
-catch-all in `virtual-hosts.js`.
-
-Cross-cutting decisions and scope:
-- **Read-only.** No write methods on either adapter (writes are descoped; static
-  files are deployed out-of-band).
-- **v1 HTTP features:** full-body read with correct `Content-Type` and
-  byte-accurate `Content-Length` only. No Range, conditional (`If-None-Match` /
-  `If-Modified-Since`), or cache-control handling yet.
-- **`null` on absence**, so the handler raises `NotFoundError` and the framework's
-  normal 404 path renders — rather than leaking Cloudflare's asset-404 response.
-- **URL prefix `/static/*filepath`** (configurable on the handler). Root-serving is
-  not viable because the Hyperview catch-all matches first and routing does not fall
-  through between routes on a handler 404.
-- **Out of scope:** index/directory resolution (deferred to the routing layer),
-  the Cloudflare Worker entry point and `wrangler` `assets` binding config (no
-  Cloudflare entry exists in the repo yet — the adapter and plugin are still created
-  for parity), and automated tests (can be written on request).
+This plan reworks the existing static file capability so it matches the documented
+contract: a `StaticFileRequestHandler` that owns HTTP concerns (Content-Type,
+Cache-Control, ETag/`If-None-Match` → 304, HEAD, not-found behavior) delegating to
+a renamed `StaticFileStore` that returns a plain parts object
+(`{ body, contentType, contentLength, etag }` or `null`) rather than a Web
+`Response`. Files are addressed by `key` (the request pathname minus query/hash)
+within a `namespace` (the deployment Build ID, `context.runtime.build?.id`) to
+support Atomic Deployments. The Node adapter serves from `/public`, namespacing by
+Build ID only when one is present, reading pre-computed etags/content-types from a
+per-build `manifest.json` and falling back to on-the-fly SHA-256 hashing (cached)
+when no manifest entry exists. The Cloudflare adapter is rebuilt on a dedicated KV
+binding (not the shared `KeyValueStore` service), storing raw file bytes as the
+value with `etag` and `contentType` in KV metadata written by build tooling, so the
+Worker never hashes. Cross-cutting: a new `kixx/`-level SHA-256 helper, precedence
+rules (`options.contentType` > store contentType > extension-derived;
+`options.cacheControl` > default), and a doc/interface rewrite so the supplied
+documentation becomes the source of truth.
 
 ## TODO
 
-- [x] **Define the StaticFileServerStore interface contract**
+- [x] **Add a cross-platform SHA-256 hex helper in `kixx/`**
+  - **Story**: Node.js on-the-fly ETag computation
+  - **What**: A small module exporting an async function that hashes an
+    `ArrayBuffer`/`Uint8Array` (and/or a string) to a lowercase hex SHA-256 digest
+    using the Web `crypto.subtle` API so it runs on every target runtime. Mirror the
+    existing `app/lib/crypto.js` implementation but place it in the framework layer
+    so `kixx/static-file-server` code can depend on it without reaching into `app/`.
+  - **Where**: `src/kixx/utils/crypto.js` (added `sha256Hex` alongside the existing `generateShortId`)
+  - **Documentation**: `src/app/lib/crypto.js`, `src/docs/code-style-guide.md`, `src/docs/code-quality.md`
+  - **Acceptance criteria**: Hashing known bytes returns the expected lowercase hex SHA-256 digest; the module uses only Web Platform APIs (no `node:crypto`).
+  - **Depends on**: none
+
+- [x] **Redesign the StaticFileStore interface contract**
   - **Story**: Portable static file serving
-  - **What**: Create a JSDoc-only interface module documenting the contract: a single
-    `read(context, pathname): Promise<Response|null>` method that resolves to a Web
-    `Response` (status, headers, body stream) or `null` when the file is absent.
-    Document invariants: no write methods exist; `context` pass-through (Cloudflare
-    resolves `context.env.ASSETS` per call, Node owns a long-lived root directory and
-    ignores `context`); the returned `Response` carries `Content-Type` and a
-    byte-accurate `Content-Length`; `pathname` is relative to the public root and
-    must already be path-safety validated by the caller; adapters must still guard
-    against traversal independently.
+  - **What**: Rewrite the JSDoc-only interface to describe `StaticFileStore` with a
+    single method `read(context, options): Promise<StaticFileResult|null>` where
+    `options` carries `{ key, namespace, computeEtag }`. Define a
+    `StaticFileResult` typedef: `{ body: ReadableStream|null, contentType: string,
+    contentLength: number, etag: string|null }`. Document the keyed/namespaced lookup
+    model (key = request pathname minus query/hash; namespace = Build ID), the
+    `null`-on-absence rule, the read-only rule, that the store no longer returns or
+    depends on a Web `Response`, that `etag` may be `null` (when `computeEtag` is
+    false or no precomputed value exists and the adapter does not compute one), and
+    the per-platform `context` usage. Remove the stale "returns Response" and
+    "no conditional/cache-control" language.
   - **Where**: `src/kixx/static-file-server/static-file-server-store-interface.js`
-  - **Documentation**: `src/kixx/key-value-store/key-value-store-interface.js`, `src/kixx/document-store/document-store-engine-interface.js`, `src/docs/code-documentation-guide.md`
-  - **Acceptance criteria**: Interface file exists, exports only typedefs/JSDoc (no runtime code), and fully states the read contract, the null-on-absence rule, the no-writes rule, and the context pass-through behavior.
+  - **Documentation**: `src/kixx/key-value-store/key-value-store-interface.js`, `src/docs/code-documentation-guide.md`, the supplied feature documentation
+  - **Acceptance criteria**: Interface file exports only typedefs/JSDoc; fully states the parts-object return shape, the keyed/namespaced lookup, the null-on-absence rule, the no-writes rule, the nullable-etag rule, and per-adapter `context` behavior.
   - **Depends on**: none
 
-- [x] **Add a MIME type lookup for the Node adapter**
+- [x] **Rebuild the Node.js StaticFileStore adapter**
   - **Story**: Node.js static file serving
-  - **What**: A small module mapping common file extensions to MIME types
-    (`html`, `css`, `js`, `mjs`, `json`, `svg`, `png`, `jpg`/`jpeg`, `gif`, `webp`,
-    `ico`, `woff2`, `txt`, `pdf`, `map`, …) with a `getContentType(pathname)` helper
-    defaulting to `application/octet-stream`. Hand-rolled, no new dependency.
-  - **Where**: `src/kixx/static-file-server/mime-types.js`
-  - **Documentation**: `src/docs/code-style-guide.md`, `src/docs/code-quality.md`
-  - **Acceptance criteria**: `getContentType()` returns the correct type for known extensions and `application/octet-stream` for unknown/extensionless paths.
-  - **Depends on**: none
-
-- [x] **Add static-file pathname validation**
-  - **Story**: Static file read endpoint
-  - **What**: A path-safety validator for static file requests that rejects `..`,
-    `//`, leading-dot path segments, and characters outside a safe set, throwing
-    `BadRequestError`. Own copy for the static-file-server to avoid coupling to the
-    Hyperview module; note the conscious duplication in a comment and that a future
-    task may hoist a shared path-safety utility.
-  - **Where**: `src/kixx/static-file-server/validate-pathname.js`
-  - **Documentation**: `src/kixx/hyperview/validate-pathname.js`, `src/docs/error-handling.md`
-  - **Acceptance criteria**: Valid nested paths (e.g. `css/main.css`) pass through unchanged; traversal and disallowed-character inputs throw `BadRequestError`.
-  - **Depends on**: none
-
-- [x] **Implement the Node.js StaticFileServerStore adapter**
-  - **Story**: Node.js static file serving
-  - **What**: Filesystem-backed adapter implementing the interface. `read()` resolves
-    the requested pathname against the configured public root using
-    `path.resolve` and verifies the resolved absolute path stays within the root
-    (authoritative traversal guard, independent of any string validator); returns
-    `null` when the target is missing, is a directory, or escapes the root. For a
-    real file, `stat()` for byte size, detect `Content-Type` via the MIME helper,
-    and return `new Response(Readable.toWeb(fs.createReadStream(absPath)), { status: 200, headers })`
-    with `content-type` and byte-accurate `content-length` set. Constructor takes
-    `{ logger, directory }` and creates a child logger; ignores `context`.
+  - **What**: Replace the current adapter so `read(context, { key, namespace,
+    computeEtag })` returns a `StaticFileResult` or `null`. Resolve the on-disk path
+    as `join(root, namespace, key)` when `namespace` is a non-empty string, else
+    `join(root, key)`; keep the authoritative resolve-within-root traversal guard.
+    Return `null` for missing paths (`ENOENT`/`ENOTDIR`), directories, and
+    non-files. Content-Type precedence within the store: manifest `contentType` when
+    present, else `getContentType(key)`. ETag: when a per-build manifest entry exists
+    use its `etag`; else when `computeEtag` is true, read the file bytes, hash with
+    the SHA-256 helper, and cache the result keyed by `namespace+key+mtimeMs+size`
+    (immutable within a build); else leave `etag` null. Stream the body with
+    `Readable.toWeb(createReadStream(...))`; set `contentLength` from `stat().size`.
+    Rename the exported class to `StaticFileStore`.
   - **Where**: `src/plugins/node-static-file-server/lib/static-file-server-store.js`
-  - **Documentation**: `src/kixx/static-file-server/static-file-server-store-interface.js`, `src/plugins/node-hyperview-template-file-store/lib/template-file-store.js`, `src/plugins/node-key-value-store/lib/key-value-store.js`
-  - **Acceptance criteria**: Reading an existing file resolves to a 200 `Response` with correct `Content-Type` and byte-accurate `Content-Length`; missing files, directories, and traversal attempts resolve to `null`.
-  - **Depends on**: Define the StaticFileServerStore interface contract, Add a MIME type lookup for the Node adapter
+  - **Documentation**: `src/kixx/static-file-server/static-file-server-store-interface.js`, `src/plugins/node-hyperview-template-file-store/lib/template-file-store.js`
+  - **Acceptance criteria**: A flat (no-namespace) read returns a parts object with correct stream, content-type, and byte-accurate content-length; a namespaced read resolves under `<root>/<buildId>/`; manifest-backed reads return the precomputed etag without hashing; no-manifest reads compute and cache the etag once; `computeEtag:false` returns `etag:null` and never hashes; missing files, directories, and traversal attempts return `null`.
+  - **Depends on**: Add a cross-platform SHA-256 hex helper in `kixx/`, Redesign the StaticFileStore interface contract, Add the Node per-build manifest reader
 
-- [x] **Implement the Cloudflare StaticFileServerStore adapter**
+- [x] **Add the Node per-build manifest reader**
+  - **Story**: Node.js static file serving
+  - **What**: A helper the Node adapter uses to read and cache `manifest.json` for a
+    namespace. The manifest maps `key → { etag, contentType }` and is written by
+    Kixx build tooling at `<root>/<buildId>/manifest.json`. Read once per namespace,
+    cache in memory (manifests are immutable within a build), and tolerate a missing
+    manifest by returning an empty lookup (out-of-band deploys have none). Expose a
+    `lookup(namespace, key)` returning `{ etag, contentType } | null`.
+  - **Where**: `src/plugins/node-static-file-server/lib/manifest.js`
+  - **Documentation**: `src/plugins/node-static-file-server/lib/static-file-server-store.js`, the supplied feature documentation (Atomic Deployments section)
+  - **Acceptance criteria**: With a manifest present, `lookup()` returns the entry; with no manifest, `lookup()` returns `null` without throwing; the manifest file is read at most once per namespace.
+  - **Depends on**: none
+
+- [x] **Rebuild the Cloudflare StaticFileStore adapter**
   - **Story**: Portable static file serving
-  - **What**: Static Assets adapter implementing the interface. `read()` builds a
-    synthetic `Request` whose URL pathname is the leading-slash relative pathname
-    (e.g. `/css/main.css`), calls `context.env.ASSETS.fetch(request)`, returns `null`
-    when the response status is `404`, and otherwise returns the `Response` as-is
-    (Cloudflare already sets `Content-Type`/`Content-Length`). No write methods.
-    Constructor takes `{ logger }` and creates a child logger; resolves the `ASSETS`
-    binding from `context` per call.
+  - **What**: Replace the ASSETS-based adapter with one backed by a dedicated KV
+    binding (resolved from `context.env` by a configured binding name, NOT the shared
+    `KeyValueStore` service). `read(context, { key, namespace })` computes the KV key
+    from `namespace` + `key`, calls `getWithMetadata(kvKey, { type: 'stream' /
+    'arrayBuffer' })`, returns `null` when the value is absent, else returns a
+    `StaticFileResult` whose `contentType` and `etag` come from KV metadata (written
+    by build tooling) and whose `contentLength` comes from metadata or the byte
+    length. No write methods; no request-time hashing; ignores `computeEtag` (etags
+    are always precomputed here). Rename the exported class to `StaticFileStore`.
   - **Where**: `src/plugins/cloudflare-static-file-server/lib/static-file-server-store.js`
-  - **Documentation**: `src/kixx/static-file-server/static-file-server-store-interface.js`, `src/plugins/cloudflare-key-value-store/lib/key-value-store.js`
-  - **Acceptance criteria**: A present asset resolves to the Cloudflare `Response` unchanged; a missing asset (status 404 from `env.ASSETS`) resolves to `null`.
-  - **Depends on**: Define the StaticFileServerStore interface contract
+  - **Documentation**: `src/kixx/static-file-server/static-file-server-store-interface.js`, `src/plugins/cloudflare-key-value-store/lib/key-value-store.js`, the supplied feature documentation (Cloudflare section)
+  - **Acceptance criteria**: A present asset returns a parts object with metadata-sourced content-type and etag; a missing KV key returns `null`; the adapter reads from a dedicated binding name and never calls the shared `KeyValueStore` service.
+  - **Depends on**: Redesign the StaticFileStore interface contract
 
-- [x] **Add the Node static-file-server plugin**
-  - **Story**: Node.js static file serving
-  - **What**: A `plugin.js` whose `register(context)` reads the public directory from
-    `context.env.STATIC_FILE_STORE?.directory`, constructs the Node adapter with the
-    root logger and directory, and registers it as the `'StaticFileServerStore'`
-    service.
-  - **Where**: `src/plugins/node-static-file-server/plugin.js`
-  - **Documentation**: `src/plugins/node-hyperview-template-file-store/plugin.js`
-  - **Acceptance criteria**: After registration, `context.getService('StaticFileServerStore')` returns the configured Node adapter.
-  - **Depends on**: Implement the Node.js StaticFileServerStore adapter
-
-- [x] **Add the Cloudflare static-file-server plugin**
-  - **Story**: Portable static file serving
-  - **What**: A `plugin.js` whose `register(context)` constructs the Cloudflare
-    adapter with the root logger (no directory; the `ASSETS` binding is resolved per
-    request) and registers it as the `'StaticFileServerStore'` service.
-  - **Where**: `src/plugins/cloudflare-static-file-server/plugin.js`
-  - **Documentation**: `src/plugins/cloudflare-key-value-store/plugin.js`, `src/plugins/hyperview/plugin.js`
-  - **Acceptance criteria**: After registration, `context.getService('StaticFileServerStore')` returns the Cloudflare adapter.
-  - **Depends on**: Implement the Cloudflare StaticFileServerStore adapter
-
-- [x] **Register the new plugins in the plugin aggregator**
-  - **Story**: Portable static file serving
-  - **What**: Import and add `nodeStaticFileServer` to `nodePlugins` and
-    `cloudflareStaticFileServer` to `cloudflarePlugins` so the Node bootstrap (and a
-    future Cloudflare bootstrap) register the service.
-  - **Where**: `src/plugins/mod.js`
-  - **Documentation**: `src/plugins/mod.js`, `src/node-server.js`
-  - **Acceptance criteria**: Starting the Node server registers `'StaticFileServerStore'` with no errors.
-  - **Depends on**: Add the Node static-file-server plugin, Add the Cloudflare static-file-server plugin
-
-- [x] **Implement the static file read request handler factory**
+- [x] **Rebuild the static file request handler factory**
   - **Story**: Static file read endpoint
-  - **What**: A `StaticFileServerHandler(options)` factory (mirroring the Hyperview
-    handler factories) returning an async `(context, request, response, skip)`
-    handler. Read the route wildcard param (`options.pathnameParam`, default
-    `'filepath'`) from `request.pathnameParams`, join its segments into a relative
-    pathname, run `validatePathname`, then call
-    `context.getService('StaticFileServerStore').read(context, pathname)`. On `null`,
-    throw `NotFoundError`. Otherwise map the `Response` onto the `ServerResponse`:
-    for GET, `response.respondWithStream(status, fileResponse.body, { contentType, contentLength })`
-    using the `Response` headers; for HEAD, cancel the body stream and pass `null` as
-    the body (headers only) to avoid leaking an open file handle. Call `skip()` so
-    the Hyperview catch-all does not also run.
+  - **What**: Rename the factory to `StaticFileRequestHandler(options)` and implement
+    the documented options: `contentType`, `cacheControl` (default
+    `"public, max-age=0, must-revalidate"`), `computeEtag` (default `true`),
+    `throwNotFound` (default `true`), `skipWhenFound` (default `false`), and
+    `pathname` (override the URL pathname for every request). Derive `key` from the
+    (possibly overridden) URL pathname minus leading slash, query, and hash;
+    validate it; resolve `namespace = context.runtime.build?.id ?? null`; call
+    `store.read(context, { key, namespace, computeEtag })`. On `null`: throw
+    `NotFoundError` when `throwNotFound`, else return `response` to defer. On a hit:
+    apply content-type precedence (`options.contentType` > result.contentType >
+    already-resolved), set `Cache-Control` (`options.cacheControl` > default), set
+    `ETag` when present; handle `If-None-Match` → 304 (no body; cancel the stream);
+    handle HEAD (headers only; cancel the stream); otherwise stream the body with
+    `respondWithStream`. Call `skip()` only when `skipWhenFound` is true.
   - **Where**: `src/kixx/static-file-server/static-file-server-request-handlers.js`
-  - **Documentation**: `src/kixx/hyperview/hyperview-request-handlers.js`, `src/kixx/http-router/server-response.js`, `src/app/presentation/README.md`, `src/docs/error-handling.md`
-  - **Acceptance criteria**: A GET for an existing file streams it with correct `Content-Type`/`Content-Length`; a HEAD returns the same headers with no body; a missing file yields a `NotFoundError`; later middleware is skipped after a file is served.
-  - **Depends on**: Define the StaticFileServerStore interface contract, Add static-file pathname validation
+  - **Documentation**: `src/kixx/static-file-server/static-file-server-store-interface.js`, `src/kixx/http-router/server-response.js`, `src/app/presentation/README.md`, `src/docs/error-handling.md`, the supplied feature documentation
+  - **Acceptance criteria**: A GET for an existing file streams it with correct Content-Type/Content-Length/Cache-Control/ETag; a matching `If-None-Match` yields 304 with no body and no leaked stream; a HEAD returns headers only; a miss throws `NotFoundError` by default and defers when `throwNotFound:false`; `skipWhenFound:true` stops later handlers while the default leaves them to run; `options.pathname` and `options.contentType` overrides take effect.
+  - **Depends on**: Redesign the StaticFileStore interface contract
 
-- [x] **Wire the static file route into virtual-hosts.js**
+- [x] **Update the Node and Cloudflare plugins for the rename and dedicated binding**
+  - **Story**: Portable static file serving
+  - **What**: Register both adapters under the renamed service key `'StaticFileStore'`.
+    Node plugin: continue reading the public directory from config and constructing
+    the Node `StaticFileStore`. Cloudflare plugin: construct the Cloudflare
+    `StaticFileStore` with the configured dedicated KV binding name (and logger);
+    resolve the binding from `context.env` per request inside the adapter.
+  - **Where**: `src/plugins/node-static-file-server/plugin.js`, `src/plugins/cloudflare-static-file-server/plugin.js`
+  - **Documentation**: `src/plugins/node-hyperview-template-file-store/plugin.js`, `src/plugins/cloudflare-key-value-store/plugin.js`
+  - **Acceptance criteria**: After registration, `context.getService('StaticFileStore')` returns the correct adapter on each platform; the Cloudflare plugin wires the dedicated binding name.
+  - **Depends on**: Rebuild the Node.js StaticFileStore adapter, Rebuild the Cloudflare StaticFileStore adapter
+
+- [x] **Rewire virtual-hosts.js for the renamed handler and catch-all options**
   - **Story**: Static file read endpoint
-  - **What**: Add a `/static/*filepath` route (methods `GET`, `HEAD`) whose target
-    uses `StaticFileServerHandler({ pathnameParam: 'filepath' })`, placed BEFORE the
-    existing `*` Hyperview catch-all so it is matched first. Name the route and target
-    consistently with existing entries (e.g. route `static-files`, target
-    `serve-static-file`).
+  - **What**: Update the import to `StaticFileRequestHandler`. In the catch-all `*`
+    target, call `StaticFileRequestHandler({ throwNotFound: false, skipWhenFound:
+    true })` before `HyperviewStaticPageHandler()` so misses fall through to Hyperview
+    and hits stop the chain. Confirm any dedicated static routes (if added) rely on
+    the default `throwNotFound: true` and have an HTML error handler available in the
+    cascade to render the 404.
   - **Where**: `src/virtual-hosts.js`
-  - **Documentation**: `src/virtual-hosts.js`, `src/app/presentation/README.md` (route matching order and wildcard params)
-  - **Acceptance criteria**: `GET /static/favicon.svg` serves `src/public/favicon.svg`; unknown `/static/...` paths return 404; non-`/static` paths still route to Hyperview.
-  - **Depends on**: Implement the static file read request handler factory
+  - **Documentation**: `src/app/presentation/README.md` (route matching order, error handler cascade), the supplied feature documentation
+  - **Acceptance criteria**: Requests for existing public files are served and skip Hyperview; missing-file requests render the Hyperview 404 path; non-file paths still route to Hyperview.
+  - **Depends on**: Rebuild the static file request handler factory, Update the Node and Cloudflare plugins for the rename and dedicated binding
 
-- [x] **Add STATIC_FILE_STORE config for Node environments**
-  - **Story**: Node.js static file serving
-  - **What**: Add `"STATIC_FILE_STORE": { "directory": "./public" }` to each
-    environment block (`development`, `staging`, `production`), mirroring the existing
-    `TEMPLATE_FILE_STORE`/`PAGE_DATA_STORE` relative-directory convention.
-  - **Where**: `src/node-config.json`
-  - **Documentation**: `src/node-config.json`, `src/plugins/node-config/lib/config.js`
-  - **Acceptance criteria**: The Node plugin reads a valid public directory in every environment and the server boots without a missing-config error.
-  - **Depends on**: Add the Node static-file-server plugin
+- [x] **Add Cloudflare static-file KV binding config**
+  - **Story**: Portable static file serving
+  - **What**: Add the dedicated KV binding name to the Cloudflare configuration
+    surface the plugin reads, keeping it distinct from the general-purpose
+    `KeyValueStore` binding. (No Node config change beyond the existing
+    `STATIC_FILE_STORE.directory`.)
+  - **Where**: Cloudflare config source consumed by `src/plugins/cloudflare-static-file-server/plugin.js`
+  - **Documentation**: `src/plugins/cloudflare-key-value-store/plugin.js`, `src/node-config.json`
+  - **Acceptance criteria**: The Cloudflare plugin resolves the dedicated binding name from config without colliding with the shared KV binding.
+  - **Depends on**: Update the Node and Cloudflare plugins for the rename and dedicated binding
+  - **Note**: No Cloudflare config/wrangler file exists in the repo yet, so there is
+    no runtime config file to seed a value into. The criterion is met in code: the
+    adapter's `DEFAULT_BINDING_NAME` is `STATIC_FILE_STORE` (distinct from the shared
+    `KEY_VALUE_STORE`), and the plugin reads an optional `config.env.STATIC_FILE_STORE.bindingName`
+    override. Seeding an actual binding value belongs with the (out-of-scope)
+    Cloudflare bootstrap/wrangler config.
 
 - [x] **Add required Web globals to the linter config (if flagged)**
   - **Story**: Portable static file serving
-  - **What**: If `node run-linter.js` reports `no-undef` for `Response`, `Request`,
-    `Headers`, `ReadableStream`, or `URL` in the new adapters/handler, add them to
+  - **What**: If `node run-linter.js` reports `no-undef` for `Request`, `Response`,
+    `Headers`, `ReadableStream`, `URL`, or `crypto` in the new modules, add them to
     `languageOptions.globals` in `eslint.config.js` per the code style guide.
   - **Where**: `eslint.config.js`
   - **Documentation**: `src/docs/code-style-guide.md` (no-undef and Web Platform Globals)
-  - **Acceptance criteria**: `node run-linter.js src/kixx/static-file-server src/plugins/node-static-file-server src/plugins/cloudflare-static-file-server` passes clean.
-  - **Depends on**: Implement the Node.js StaticFileServerStore adapter, Implement the Cloudflare StaticFileServerStore adapter, Implement the static file read request handler factory
+  - **Acceptance criteria**: `node run-linter.js src/kixx/static-file-server src/plugins/node-static-file-server src/plugins/cloudflare-static-file-server src/kixx/utils` passes clean.
+  - **Depends on**: Rebuild the Node.js StaticFileStore adapter, Rebuild the Cloudflare StaticFileStore adapter, Rebuild the static file request handler factory
+
+- [x] **Refresh the feature documentation and interface JSDoc**
+  - **Story**: Portable static file serving
+  - **What**: Ensure the interface JSDoc and any in-repo references reflect the new
+    parts-object contract, keyed/namespaced lookup, ETag/304/Cache-Control behavior,
+    KV-backed Cloudflare store, and the `StaticFileRequestHandler` option set. Make
+    the supplied "Serving Static Files" documentation the canonical reference.
+  - **Where**: `src/kixx/static-file-server/static-file-server-store-interface.js`, relevant README/doc location for the feature
+  - **Documentation**: the supplied feature documentation, `src/docs/code-documentation-guide.md`
+  - **Acceptance criteria**: No remaining references to `StaticFileServerHandler`/`StaticFileServerStore`, the ASSETS binding, or the "returns Response / no conditional handling" contract; docs match the shipped behavior.
+  - **Depends on**: Rewire virtual-hosts.js for the renamed handler and catch-all options
+
+## Out of Scope
+
+- Kixx build/deploy tooling that writes the Node `manifest.json` and uploads
+  Cloudflare KV values with `etag`/`contentType` metadata (separate effort; this
+  plan defines the read-side contract the tooling must satisfy).
+- Range requests and large-asset handling beyond the KV 25 MiB per-value limit.
+- Automated tests (written on request, per project policy).

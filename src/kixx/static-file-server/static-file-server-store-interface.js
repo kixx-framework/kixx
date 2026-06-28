@@ -1,78 +1,118 @@
 /**
- * StaticFileServerStoreInterface — the contract for the static file server store.
- * The implementation changes based on the platform (Node.js filesystem, Cloudflare
- * Workers Static Assets, etc.) but the interface stays consistent so application
- * code and the framework request handler remain runtime-agnostic.
+ * StaticFileStoreInterface — the contract for the static file store. The
+ * implementation changes based on the platform (Node.js filesystem, Cloudflare
+ * Workers KV, etc.) but the interface stays consistent so the framework request
+ * handler remains runtime-agnostic.
  *
- * The store reads files that ship with a deployment and serves them over HTTP. It
- * is the static-asset analogue of the key/value and document stores, but it speaks
- * HTTP rather than returning data: a static file server inherently owns
- * Content-Type detection, byte counting, and (on platforms that provide it)
- * conditional and range handling, so the natural return value is a Web `Response`.
+ * The store reads files that ship with a deployment and returns their bytes plus
+ * the metadata the request handler needs to build an HTTP response. It is the
+ * static-asset analogue of the key/value and document stores: a keyed lookup that
+ * resolves to data or to `null` when the file is absent.
+ *
+ * ## Keyed, namespaced lookup
+ * Files are addressed by a `key` within a `namespace`. The request handler derives
+ * the `key` from the request URL pathname (query string and hash excluded) and the
+ * `namespace` from the deployment Build ID (`context.runtime.build?.id`). The
+ * namespace is what makes Atomic Deployments possible: each build's files live
+ * under their own Build ID, so a new deployment swaps the whole asset set at once
+ * without overwriting the previous build's files in place. When no Build ID is
+ * present (for example, a Node.js deployment that copies files out-of-band with
+ * rsync or git), `namespace` is `null` and the store reads from its un-namespaced
+ * root.
+ *
+ * ## Return value: a parts object, not a Web `Response`
+ * `read()` resolves to a {@link StaticFileResult} — the file body stream plus the
+ * `contentType`, `contentLength`, and `etag` the handler needs — or to `null`. The
+ * store deliberately does not build a Web `Response`: HTTP concerns (Cache-Control,
+ * `If-None-Match` → 304 handling, HEAD, Content-Type overrides) belong to the
+ * request handler, which assembles the application `ServerResponse` from these
+ * parts. Keeping the store free of router types lets each platform adapter focus
+ * only on locating bytes and metadata.
+ *
+ * ## ETag
+ * `etag` MAY be `null`. Adapters whose backing store carries a precomputed etag
+ * (the Cloudflare KV adapter reads one from KV metadata written by build tooling;
+ * the Node.js adapter reads one from a per-build `manifest.json`) return it
+ * directly and never hash at request time. When no precomputed etag exists and the
+ * caller requests one via `options.computeEtag`, an adapter that can read the file
+ * bytes (Node.js) computes a SHA-256 hash; otherwise `etag` is `null`. When
+ * `options.computeEtag` is `false`, adapters MUST NOT compute an etag.
+ *
+ * ## Last-Modified
+ * `lastModified` MAY be `null`. It is the second validator the request handler uses
+ * for conditional requests: it populates the `Last-Modified` header and answers
+ * `If-Modified-Since`. The Cloudflare adapter reads it from KV metadata; the Node.js
+ * adapter prefers the per-build `manifest.json` value and falls back to the file
+ * mtime. Preferring a build-tool-provided timestamp keeps `Last-Modified` identical
+ * across replicas, since raw file mtimes diverge between servers after a checkout or
+ * copy. Adapters return a `Date`, or `null` when no timestamp is available.
+ *
+ * ## Absence is `null`
+ * When no file exists for `key` in `namespace`, `read()` resolves to `null`
+ * (mirroring `KeyValueStore.get()` and `DocumentStore.get()`). The request handler
+ * decides how to render the miss — throwing `NotFoundError` or deferring to the
+ * next handler — rather than the store forwarding a platform-specific 404 body.
  *
  * ## Read-only
  * This store has no write methods. Static files are published by an out-of-band
- * deployment mechanism, not at runtime. On Cloudflare the backing Static Assets are
- * immutable for the lifetime of a deployment, so a write method could never be
- * implemented there; rather than expose a method that throws on one platform, the
- * contract omits writes entirely.
+ * deployment mechanism (Kixx build tooling or a manual copy), not at runtime. On
+ * Cloudflare the backing KV values for a build are immutable for that build's
+ * lifetime, so a runtime write method could not be implemented coherently; rather
+ * than expose a method that throws on one platform, the contract omits writes.
  *
- * ## Return value: a Web `Response`
- * `read()` resolves to a standard Web `Response` (status, headers, and a body
- * stream) or to `null`. `Response` is the portable floor: Cloudflare's
- * `env.ASSETS.fetch()` returns one directly, and a Node.js adapter constructs one
- * from a file stream. Returning the platform-standard type keeps the store free of
- * any dependency on the application's router `ServerResponse`; mapping the
- * `Response` onto a `ServerResponse` is the presentation layer's responsibility.
- *
- * A returned `Response` MUST carry a `Content-Type` header and a byte-accurate
- * `Content-Length` header so callers can serve it without re-measuring the body.
- *
- * ## Absence is `null`, not a 404 Response
- * When no file exists at `pathname`, `read()` resolves to `null` (mirroring
- * `KeyValueStore.get()` and `DocumentStore.get()`). The caller decides how to
- * render the miss — typically by throwing `NotFoundError` so the framework's normal
- * 404 path runs — rather than forwarding a platform-specific 404 body.
- *
- * ## Pathname and path safety
- * `pathname` is the file path relative to the store's public root (for example
- * `css/main.css` or `favicon.svg`), without a leading prefix. Callers MUST run
- * path-safety validation before calling `read()`. Adapters MUST additionally guard
- * against traversal on their own — the resolve-within-root check on Node and the
- * binding's own path handling on Cloudflare — so the store never serves a file
- * outside its public root even if a caller forgets to validate.
- *
- * ## Scope (v1)
- * Full-body reads only: a correct `Content-Type` and byte-accurate
- * `Content-Length`. Range requests, conditional requests (`If-None-Match` /
- * `If-Modified-Since`), and cache-control negotiation are not part of this
- * contract yet. A platform that performs them internally (Cloudflare) MAY still do
- * so; the contract neither requires nor forbids it.
+ * ## Path safety
+ * `key` is the file path relative to the namespace root (for example
+ * `css/main.css` or `favicon.svg`), without a leading prefix. The request handler
+ * MUST run path-safety validation before calling `read()`. Adapters MUST
+ * additionally guard against traversal on their own — the resolve-within-root check
+ * on Node.js — so the store never serves a file outside its root even if a caller
+ * forgets to validate.
  *
  * ## Context pass-through
  * `read()` receives a request or execution `context` as its first argument. The
  * contract does not dictate how an implementation uses it: the Cloudflare adapter
- * resolves its Static Assets binding from `context.env.ASSETS` (a request-scoped
- * binding), while the Node.js adapter owns a long-lived root directory supplied at
- * construction and ignores `context` entirely. Implementations MUST accept the
- * argument regardless so callers can stay runtime-agnostic.
+ * resolves its KV binding from `context.env` (a request-scoped binding), while the
+ * Node.js adapter owns a long-lived root directory supplied at construction and
+ * ignores `context` entirely. Implementations MUST accept the argument regardless
+ * so callers can stay runtime-agnostic.
  *
  * ## Runtime adapters
  * Runtime adapters are implemented separately by design, because their backing
  * stores and access models differ.
- * @see StaticFileServerStore in ../../plugins/node-static-file-server/lib/static-file-server-store.js for the Node.js filesystem implementation
- * @see StaticFileServerStore in ../../plugins/cloudflare-static-file-server/lib/static-file-server-store.js for the Cloudflare Workers Static Assets implementation
+ * @see StaticFileStore in ../../plugins/node-static-file-server/lib/static-file-server-store.js for the Node.js filesystem implementation
+ * @see StaticFileStore in ../../plugins/cloudflare-static-file-server/lib/static-file-server-store.js for the Cloudflare Workers KV implementation
  */
 
 /**
- * Static file server store.
+ * The result of a successful static file read.
  *
- * @typedef {Object} StaticFileServerStoreInterface
+ * @typedef {Object} StaticFileResult
+ * @property {ReadableStream|null} body - Web `ReadableStream` of the file bytes, or
+ *   `null` when only headers are needed. The body is single-use; a caller that does
+ *   not stream it (a HEAD request or a 304 response) MUST cancel it to avoid
+ *   leaking the underlying file handle or binding stream.
+ * @property {string} contentType - The file's media type, used for the
+ *   `Content-Type` header.
+ * @property {number} contentLength - The file's exact byte length, used for the
+ *   `Content-Length` header.
+ * @property {string|null} etag - A strong validator for the file contents, used for
+ *   the `ETag` header and `If-None-Match` revalidation, or `null` when no etag was
+ *   computed or stored.
+ * @property {Date|null} lastModified - The file's last-modified time, used for the
+ *   `Last-Modified` header and `If-Modified-Since` revalidation, or `null` when
+ *   unknown. The Node.js adapter takes it from the build manifest, falling back to
+ *   the file mtime; the Cloudflare adapter takes it from KV metadata.
+ */
+
+/**
+ * Static file store.
  *
- * @property {function(Object, string): Promise<(Response|null)>} read
- *   Reads one file by its public-root-relative `pathname`. Resolves to a Web
- *   `Response` carrying the file body, a `Content-Type` header, and a byte-accurate
- *   `Content-Length` header; resolves to `null` when no file exists at `pathname`.
- *   The `pathname` MUST be path-safety validated by the caller, and adapters MUST
- *   independently refuse to serve files outside their public root.
+ * @typedef {Object} StaticFileStoreInterface
+ *
+ * @property {function(Object, Object): Promise<(StaticFileResult|null)>} read
+ *   Reads one file by `options.key` within `options.namespace`. The options object
+ *   carries `{ key: string, namespace: (string|null), computeEtag: boolean }`.
+ *   Resolves to a {@link StaticFileResult} when the file exists, or `null` when it
+ *   does not. The `key` MUST be path-safety validated by the caller, and adapters
+ *   MUST independently refuse to serve files outside their namespace root.
  */

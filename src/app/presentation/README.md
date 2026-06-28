@@ -724,16 +724,16 @@ Templates render the hidden field directly inside the protected `<form>`:
 
 ## Common Task Recipes
 
-### Static Hyperview Page
+### Content-Only Hyperview Page
 
-For a page whose content comes from static files rather than request-specific data:
+For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
 
 1. Add or update `pages/<pathname>/page.json` for metadata and page context.
 2. Add or update `templates/pages/<pathname>/page.html` for route-specific markup.
 3. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
 4. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
 
-Static Hyperview Pages use the HyperviewStaticPageHandler, which should already be configured for the catch-all route (`"*"`) in `virtual-hosts.js`.
+Content-only Hyperview pages use the HyperviewStaticPageHandler, which should already be configured for the catch-all route (`"*"`) in `virtual-hosts.js`.
 
 ### Dynamic Hyperview Page
 
@@ -800,6 +800,49 @@ export async function exampleJsonApiHandler(context, request, response) {
     );
 }
 ```
+
+### Serving Static Files
+
+For files that ship with the deployment (favicons, images, fonts), wire the framework `StaticFileRequestHandler` into a route in `virtual-hosts.js`. The handler reads the request pathname (query string and hash excluded) as the file key, looks the file up through the registered `StaticFileStore` service, and maps the result onto the response — setting `Content-Type`, `Cache-Control`, `ETag`, and `Last-Modified`, answering conditional requests (`If-None-Match`, then `If-Modified-Since`) with `304`, and serving HEAD as headers only.
+
+```js
+// Wired in virtual-hosts.js, alongside the other route handler imports.
+import { StaticFileRequestHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+
+{
+    pattern: '/css/images/*pathname',
+    name: 'css-images',
+    targets: [
+        {
+            name: 'serve',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [
+                StaticFileRequestHandler({ cacheControl: 'public, max-age=86400' }),
+            ],
+        },
+    ],
+}
+```
+
+`StaticFileRequestHandler(options)` accepts:
+
+- `contentType` — force the `Content-Type` instead of deriving it from the file extension. Takes precedence over the store's value.
+- `cacheControl` — force the `Cache-Control` header. Defaults to `public, max-age=0, must-revalidate` (cacheable, but revalidate every time).
+- `computeEtag` — compute the `ETag` as a hash of the file contents when the store has no precomputed one. `true` by default; set `false` to skip ETag work.
+- `throwNotFound` — throw `NotFoundError` (→ 404) when the file is absent. `true` by default; set `false` to defer to the next request handler instead.
+- `skipWhenFound` — skip the remaining request handlers on the route when a file is served. `false` by default.
+- `pathname` — override the URL pathname for every request, rewriting which file key is read.
+
+The default options (`throwNotFound: true`, `skipWhenFound: false`) suit a dedicated route that owns its path, such as `/favicon.ico`. For a root-served catch-all, set `throwNotFound: false` and `skipWhenFound: true` and place the handler before the Hyperview renderer so a static file is served when one matches and the request otherwise falls through to page rendering:
+
+```js
+requestHandlers: [
+    StaticFileRequestHandler({ throwNotFound: false, skipWhenFound: true }),
+    HyperviewStaticPageHandler(),
+]
+```
+
+For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments, and the Node.js (filesystem + `manifest.json`) and Cloudflare (dedicated KV binding) adapters, see `src/kixx/static-file-server/README.md`.
 
 ## Where Presentation Changes Belong
 

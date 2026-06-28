@@ -1,3 +1,5 @@
+import { AssertionError, isString } from '../assertions/mod.js';
+
 
 const SHORT_ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
@@ -39,4 +41,34 @@ export function generateShortId() {
     }
 
     return out.padStart(SHORT_ID_LENGTH, '0');
+}
+
+/**
+ * Hashes bytes or a UTF-8 string with SHA-256 and returns a lowercase hex digest.
+ *
+ * Uses the Web Crypto `crypto.subtle.digest` API, a global available in both
+ * Node.js and the Cloudflare Workers runtime, so the same helper produces ETag
+ * values and content hashes on every target platform.
+ *
+ * @param {ArrayBuffer|ArrayBufferView|string} data - Raw bytes (such as a file
+ *   body) or a string, which is encoded as UTF-8 before hashing.
+ * @returns {Promise<string>} Hex-encoded SHA-256 digest.
+ * @throws {AssertionError} When data is not a string, ArrayBuffer, or ArrayBufferView.
+ */
+export async function sha256Hex(data) {
+    // crypto.subtle.digest accepts a BufferSource; a string must be encoded to
+    // bytes first. Reject anything else loudly so a wrong-typed caller crashes
+    // here rather than producing a digest of coerced garbage.
+    let bytes;
+    if (isString(data)) {
+        bytes = new TextEncoder().encode(data);
+    } else if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+        bytes = data;
+    } else {
+        throw new AssertionError('sha256Hex() data must be a string, ArrayBuffer, or ArrayBufferView');
+    }
+
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }

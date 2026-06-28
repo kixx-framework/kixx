@@ -1,5 +1,5 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
-import { StaticFileServerHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+import { StaticFileRequestHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
 import { adminErrorHandler } from './app/presentation/error-handlers/admin-error-handler.js';
 import { jsonApiErrorHandler } from './app/presentation/error-handlers/json-api-error-handler.js';
 import { authenticateAdminUser } from './app/presentation/middleware/admin-authentication.js';
@@ -243,7 +243,12 @@ export default [
                         name: 'render-static-page',
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
-                            StaticFileServerHandler(),
+                            // Serve a public file when one matches; otherwise fall
+                            // through to the Hyperview page renderer rather than 404.
+                            StaticFileRequestHandler({
+                                throwNotFound: false,
+                                skipWhenFound: true,
+                            }),
                             HyperviewStaticPageHandler(),
                         ],
                     },

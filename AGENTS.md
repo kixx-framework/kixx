@@ -110,6 +110,19 @@ the HTTP router serializes expected errors.
 
 **What this document provides:** The Kixx template syntax and behavior reference used by Hyperview — compilation stages, supported Mustache-style features, expression resolution, section semantics, built-in helpers, Hyperview helpers, escaping rules, partial usage, helper authoring, public APIs, and error behavior.
 
+### Static File Server Guide
+
+@src/kixx/static-file-server/README.md
+
+**When to use this document:** Apply this guide whenever you are serving, configuring, or reviewing static file delivery (favicons, images, fonts). This includes:
+
+- Wiring `StaticFileRequestHandler` into routes in `virtual-hosts.js`, including the root-served catch-all pattern.
+- Choosing handler options for `Content-Type`, `Cache-Control`, ETag computation, not-found behavior, handler skipping, or pathname rewriting.
+- Working on the `StaticFileStore` contract or its Node.js (filesystem + `manifest.json`) and Cloudflare (dedicated KV binding) adapters.
+- Understanding Build ID namespacing for Atomic Deployments and how ETags are computed.
+
+**What this document provides:** The static file serving reference — `StaticFileRequestHandler` usage and options, the `StaticFileStore` keyed/namespaced lookup contract, the parts-object return shape, per-runtime adapter behavior, ETag and conditional-request handling, and the Atomic Deployment / Build ID model. For request-handler wiring in the application presentation layer, see the Presentation Layer Guide above.
+
 ## Development Server
 
 Run the development server with:

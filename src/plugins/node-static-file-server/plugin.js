@@ -1,5 +1,5 @@
 import { assertNonEmptyString } from '../../kixx/assertions/mod.js';
-import StaticFileServerStore from './lib/static-file-server-store.js';
+import StaticFileStore from './lib/static-file-server-store.js';
 
 export function register(context) {
     const { logger, config } = context;
@@ -10,9 +10,9 @@ export function register(context) {
     // Pass in the absolute filepath for this OS
     const absoluteFilepath = config.resolveFilepath(directory);
 
-    logger.info('StaticFileServerStore configured with filepath', { absoluteFilepath });
+    logger.info('StaticFileStore configured with filepath', { absoluteFilepath });
 
-    context.registerService('StaticFileServerStore', new StaticFileServerStore({
+    context.registerService('StaticFileStore', new StaticFileStore({
         logger,
         directory: absoluteFilepath,
     }));
