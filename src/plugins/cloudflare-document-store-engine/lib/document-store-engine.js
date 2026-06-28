@@ -45,13 +45,15 @@ The D1ExecResult Object:
 }
 */
 
+const DEFAULT_BINDING_NAME = 'DOCUMENT_STORE';
+
 /**
  * Cloudflare D1 engine adapter for the document store abstraction.
  *
  * Manages idempotent schema migration (documents table plus VIRTUAL generated-column
  * indexes) and provides typed CRUD and keyset-paginated query operations. Every
  * method receives a RequestContext `context` object and resolves the D1 binding
- * from `context.env.DOCUMENT_STORE`.
+ * from the configured `config.env` binding.
  *
  * Secondary indexes are configured through `setIndexDefinitions()` before the
  * database is first used. This allows callers to construct the engine before all
@@ -145,15 +147,13 @@ export default class DocumentStoreEngine {
      * every startup — DDL uses IF NOT EXISTS or is guarded by the PRAGMA pre-check.
      *
      * @param {Object} context - Cloudflare Workers execution context
-     * @param {Object} context.env - Worker environment bindings
-     * @param {import('@cloudflare/workers-types').D1Database} context.env.DOCUMENT_STORE - D1 binding
      * @returns {Promise<void>}
      * @throws {Error} When table creation or the PRAGMA introspection query fails
      */
     async prepareDatabase(context) {
         assertArray(this.#indexDefinitions, 'DocumentStoreEngine#setIndexDefinitions() must be called before the database can be used');
 
-        const db = context.env.DOCUMENT_STORE;
+        const db = this.#getDatabase(context);
 
         const createTableSQL = `
             CREATE TABLE IF NOT EXISTS documents (
@@ -304,7 +304,7 @@ export default class DocumentStoreEngine {
             await this.#ensurePrepared(context);
         }
 
-        const db = context.env.DOCUMENT_STORE;
+        const db = this.#getDatabase(context);
         const stmt = db.prepare(sql).bind(...params);
         const { success, results } = await stmt.run();
 
@@ -373,7 +373,7 @@ export default class DocumentStoreEngine {
             await this.#ensurePrepared(context);
         }
 
-        const db = context.env.DOCUMENT_STORE;
+        const db = this.#getDatabase(context);
         const stmt = db.prepare(sql).bind(...params);
         const { success, results } = await stmt.run();
 
@@ -419,7 +419,7 @@ export default class DocumentStoreEngine {
             await this.#ensurePrepared(context);
         }
 
-        const db = context.env.DOCUMENT_STORE;
+        const db = this.#getDatabase(context);
 
         const row = await db
             .prepare('SELECT doc, version, created_at, updated_at FROM documents WHERE type = ? AND id = ?')
@@ -468,7 +468,7 @@ export default class DocumentStoreEngine {
             await this.#ensurePrepared(context);
         }
 
-        const db = context.env.DOCUMENT_STORE;
+        const db = this.#getDatabase(context);
 
         const sql = `
             INSERT INTO documents (type, id, sort_key, version, created_at, updated_at, doc)
@@ -546,7 +546,7 @@ export default class DocumentStoreEngine {
         // avoiding a separate SELECT after the UPDATE. SQLite 3.35+ (2021-03-15).
         // See https://sqlite.org/releaselog/3_35_1.html
 
-        const db = context.env.DOCUMENT_STORE;
+        const db = this.#getDatabase(context);
 
         let row;
         try {
@@ -615,7 +615,7 @@ export default class DocumentStoreEngine {
             RETURNING version, created_at, updated_at
         `;
 
-        const db = context.env.DOCUMENT_STORE;
+        const db = this.#getDatabase(context);
         let row;
         try {
             row = await db.prepare(sql).bind(type, id, sortKey, now, now, json).first();
@@ -665,7 +665,7 @@ export default class DocumentStoreEngine {
             await this.#ensurePrepared(context);
         }
 
-        const db = context.env.DOCUMENT_STORE;
+        const db = this.#getDatabase(context);
 
         if (!isUndefined(version) && (!Number.isInteger(version) || version <= 0)) {
             throw new AssertionError('DocumentStoreEngine#delete() requires a positive integer version number when present');
@@ -722,6 +722,16 @@ export default class DocumentStoreEngine {
 
     keyToIndexName(keyName) {
         return `idx_type_custom_key_${ keyName }`;
+    }
+
+    #getDatabase(context) {
+        const { config, env } = context;
+        let { bindingName } = config?.env?.DOCUMENT_STORE ?? {};
+        bindingName = bindingName || DEFAULT_BINDING_NAME;
+
+        const db = env[bindingName];
+        assert(db, `DocumentStoreEngine D1 binding "${ bindingName }" is not bound on context.env`);
+        return db;
     }
 
     /**

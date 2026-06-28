@@ -18,12 +18,13 @@ const VALID_TYPES = [ 'text', 'json', 'arrayBuffer' ];
 // at least 60 seconds in the future.
 const MAX_KEY_BYTES = 512;
 const MIN_TTL_SECONDS = 60;
+const DEFAULT_BINDING_NAME = 'KEY_VALUE_STORE';
 
 /**
  * Cloudflare KV-backed key/value cache store.
  *
  * Implements the runtime-neutral key/value cache contract over a single
- * Cloudflare KV namespace resolved from `context.env.KEY_VALUE_STORE`. The store
+ * Cloudflare KV namespace resolved from the configured `context.env` binding. The store
  * is a flat keyspace with no namespace concept, no versioning, and optional
  * expiration. Callers declare each value's encoding explicitly through
  * `options.type` on every read and write; the store records no type metadata.
@@ -54,7 +55,7 @@ export default class KeyValueStore {
     /**
      * Retrieves a value by key, decoded per `options.type`.
      *
-     * @param {RequestContext} context - Request context with the KEY_VALUE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string} key - Cache key
      * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
      * @returns {Promise<string|Object|ArrayBuffer|null>} The decoded value, or null when absent or expired
@@ -65,7 +66,7 @@ export default class KeyValueStore {
         const type = this.#resolveType(options);
         this.#logger.debug('get() loading key', { key, type });
 
-        const kvStore = context.env.KEY_VALUE_STORE;
+        const kvStore = this.#getKVStore(context);
         const value = await kvStore.get(key, { type });
 
         return isUndefined(value) ? null : value;
@@ -75,7 +76,7 @@ export default class KeyValueStore {
      * Creates or overwrites a value, encoded per `options.type`, with optional
      * expiration.
      *
-     * @param {RequestContext} context - Request context with the KEY_VALUE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string} key - Cache key
      * @param {string|Object|ArrayBuffer|ArrayBufferView} value - Value to store; must match the declared type and be non-null
      * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
@@ -89,7 +90,7 @@ export default class KeyValueStore {
         const putOptions = this.#resolveExpiration(options);
         this.#logger.debug('put() writing key', { key, type });
 
-        const kvStore = context.env.KEY_VALUE_STORE;
+        const kvStore = this.#getKVStore(context);
         await kvStore.put(key, storedValue, putOptions);
     }
 
@@ -97,7 +98,7 @@ export default class KeyValueStore {
      * Deletes a value by key. Resolves with no value, and does not report whether
      * the key previously existed.
      *
-     * @param {RequestContext} context - Request context with the KEY_VALUE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string} key - Cache key
      * @returns {Promise<void>}
      * @throws {AssertionError} When the key is invalid
@@ -106,8 +107,17 @@ export default class KeyValueStore {
         this.#assertValidKey(key);
         this.#logger.debug('delete() removing key', { key });
 
-        const kvStore = context.env.KEY_VALUE_STORE;
+        const kvStore = this.#getKVStore(context);
         await kvStore.delete(key);
+    }
+
+    #getKVStore(context) {
+        const { config, env } = context;
+        let { bindingName } = config?.env?.KEY_VALUE_STORE ?? {};
+        bindingName = bindingName || DEFAULT_BINDING_NAME;
+        const kvStore = env[bindingName];
+        assert(kvStore, `KeyValueStore KV binding "${ bindingName }" is not bound on context.env`);
+        return kvStore;
     }
 
     /**

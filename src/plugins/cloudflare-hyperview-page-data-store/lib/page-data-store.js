@@ -4,9 +4,11 @@ import { assert, assertNonEmptyString, isObjectNotNull } from '../../../kixx/ass
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
  */
 
+const DEFAULT_BINDING_NAME = 'PAGE_DATA_STORE';
+
 /**
  * Cloudflare KV-backed store for Hyperview page assets.
- * Reads page.json and include files from the PAGE_DATA_STORE KV binding.
+ * Reads page.json and include files from the configured KV binding.
  *
  * Every read and write method accepts an optional `namespace`. When provided, KV
  * keys are namespaced as `{namespace}/{filepath}` so that multiple versions of a
@@ -50,7 +52,7 @@ export default class PageDataStore {
             return [];
         }
 
-        const kvStore = context.env.PAGE_DATA_STORE;
+        const kvStore = this.#getKVStore(context);
         const resolved = filepaths.map((fp) => this.#resolveKey(namespace, fp));
         const kvKeys = resolved.map((r) => r.kvKey);
 
@@ -83,7 +85,7 @@ export default class PageDataStore {
             return [];
         }
 
-        const kvStore = context.env.PAGE_DATA_STORE;
+        const kvStore = this.#getKVStore(context);
         const resolved = filepaths.map((fp) => this.#resolveKey(namespace, fp));
         const kvKeys = resolved.map((r) => r.kvKey);
 
@@ -111,7 +113,7 @@ export default class PageDataStore {
         this.#logger.debug('getTextFile() loading filepath', { filepath });
         const { kvKey } = this.#resolveKey(namespace, filepath);
         this.#logger.debug('getTextFile() loading key', { key: kvKey });
-        const kvStore = context.env.PAGE_DATA_STORE;
+        const kvStore = this.#getKVStore(context);
         const text = await kvStore.get(kvKey, { type: 'text' });
         return text ?? null;
     }
@@ -154,10 +156,19 @@ export default class PageDataStore {
 
         const { logicalKey, kvKey } = this.#resolveKey(namespace, filepath);
         this.#logger.debug('putFile() writing key', { key: kvKey });
-        const kvStore = context.env.PAGE_DATA_STORE;
+        const kvStore = this.#getKVStore(context);
         await kvStore.put(kvKey, value);
 
         return { filepath: logicalKey };
+    }
+
+    #getKVStore(context) {
+        const { config, env } = context;
+        let { bindingName } = config?.env?.PAGE_DATA_STORE ?? {};
+        bindingName = bindingName || DEFAULT_BINDING_NAME;
+        const kvStore = env[bindingName];
+        assert(kvStore, `PageDataStore KV binding "${ bindingName }" is not bound on context.env`);
+        return kvStore;
     }
 
     /**

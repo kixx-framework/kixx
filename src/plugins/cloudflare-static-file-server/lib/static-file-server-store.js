@@ -33,19 +33,16 @@ const DEFAULT_BINDING_NAME = 'STATIC_FILE_STORE';
 export default class StaticFileStore {
 
     #logger = null;
-    #bindingName = null;
 
     /**
      * @param {Object} options - Store configuration
      * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a StaticFileStore child logger
-     * @param {string} [options.bindingName] - Name of the dedicated KV binding on `context.env`; defaults to `STATIC_FILE_STORE`
      * @throws {AssertionError} When logger is not provided
      */
     constructor(options) {
-        const { logger, bindingName } = options ?? {};
+        const { logger } = options ?? {};
         assert(logger, 'StaticFileStore requires a logger');
         this.#logger = logger.createChild('StaticFileStore');
-        this.#bindingName = isNonEmptyString(bindingName) ? bindingName : DEFAULT_BINDING_NAME;
     }
 
     /**
@@ -61,8 +58,7 @@ export default class StaticFileStore {
         const { key, namespace } = options ?? {};
         assertNonEmptyString(key, 'StaticFileStore read requires a key');
 
-        const binding = context.env[this.#bindingName];
-        assert(binding, `StaticFileStore KV binding "${ this.#bindingName }" is not bound on context.env`);
+        const kvStore = this.#getKvStore(context);
 
         // Files are stored under their Build ID namespace so a deployment swaps the
         // whole asset set atomically. A null namespace (no Build ID) reads the bare
@@ -72,7 +68,7 @@ export default class StaticFileStore {
         // Read the bytes as an ArrayBuffer (bounded by KV's 25 MiB value cap) so the
         // exact Content-Length is known even when build tooling omitted it from
         // metadata. Metadata carries the precomputed etag and content type.
-        const { value, metadata } = await binding.getWithMetadata(kvKey, { type: 'arrayBuffer' });
+        const { value, metadata } = await kvStore.getWithMetadata(kvKey, { type: 'arrayBuffer' });
 
         if (value === null || value === undefined) {
             this.#logger.debug('read() file not found', { key, namespace });
@@ -91,6 +87,15 @@ export default class StaticFileStore {
             etag: isNonEmptyString(meta.etag) ? meta.etag : null,
             lastModified: parseLastModified(meta.lastModified),
         };
+    }
+
+    #getKvStore(context) {
+        const { env, config } = context;
+        let { bindingName } = config?.env?.STATIC_FILE_STORE ?? {};
+        bindingName = bindingName || DEFAULT_BINDING_NAME;
+        const kvStore = env[bindingName];
+        assert(kvStore, `StaticFileStore KV binding "${ bindingName }" is not bound on context.env`);
+        return kvStore;
     }
 }
 

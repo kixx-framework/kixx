@@ -7,6 +7,7 @@ import { assert, assertNonEmptyString } from '../../../kixx/assertions/mod.js';
 const BASE_TEMPLATE_PREFIX = 'base/';
 const PAGE_TEMPLATE_PREFIX = 'pages/';
 const PARTIALS_PREFIX = 'partials/';
+const DEFAULT_BINDING_NAME = 'TEMPLATE_FILE_STORE';
 
 /**
  * Cloudflare KV-backed store for shared Hyperview templates.
@@ -43,7 +44,7 @@ export default class TemplateFileStore {
 
     /**
      * Retrieves a base template source file from the shared template KV store.
-     * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
      * @param {string} filepath - Base template filename relative to `base/`
      * @returns {Promise<{filepath: string, source: string}|null>} Resolves to template source with logical filepath, or null when missing
@@ -55,7 +56,7 @@ export default class TemplateFileStore {
     /**
      * Writes (creates or updates) a base template source file in the shared
      * template KV store under the optional namespace.
-     * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
      * @param {string} filepath - Base template filename relative to `base/`
      * @param {string} source - Template source text to store
@@ -68,7 +69,7 @@ export default class TemplateFileStore {
     /**
      * Retrieves a page template source file from the shared template KV store.
      * The filepath may be nested several segments deep, delimited by `/`.
-     * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
      * @param {string} filepath - Page template filepath relative to `pages/`
      * @returns {Promise<{filepath: string, source: string}|null>} Resolves to template source with logical filepath, or null when missing
@@ -81,7 +82,7 @@ export default class TemplateFileStore {
      * Writes (creates or updates) a page template source file in the shared
      * template KV store under the optional namespace. The filepath may be nested
      * several segments deep, delimited by `/`.
-     * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
      * @param {string} filepath - Page template filepath relative to `pages/`
      * @param {string} source - Template source text to store
@@ -94,7 +95,7 @@ export default class TemplateFileStore {
     /**
      * Writes (creates or updates) a partial template source file in the shared
      * template KV store under the optional namespace.
-     * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
      * @param {string} filepath - Partial filename relative to `partials/`
      * @param {string} source - Partial source text to store
@@ -106,7 +107,7 @@ export default class TemplateFileStore {
 
     /**
      * Retrieves all available partial templates from the shared template KV store.
-     * @param {RequestContext} context - Request context with the TEMPLATE_FILE_STORE binding
+     * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string|null} [namespace] - Optional namespace used to prefix the KV listing
      * @returns {Promise<{filepath: string, source: string}[]>} Resolves to existing partial source files with logical filepaths in KV listing order
      */
@@ -117,7 +118,7 @@ export default class TemplateFileStore {
     async #getFile(context, namespace, barePrefix, filepath) {
         const { logicalKey, kvKey } = this.#resolveKey(namespace, barePrefix, filepath);
         this.#logger.debug('getFile() loading key', { key: kvKey });
-        const kvStore = context.env.TEMPLATE_FILE_STORE;
+        const kvStore = this.#getKVStore(context);
         const source = await kvStore.get(kvKey, { type: 'text' }) ?? null;
 
         if (source !== null) {
@@ -138,7 +139,7 @@ export default class TemplateFileStore {
 
         const { logicalKey, kvKey } = this.#resolveKey(namespace, barePrefix, filepath);
         this.#logger.debug('putFile() writing key', { key: kvKey });
-        const kvStore = context.env.TEMPLATE_FILE_STORE;
+        const kvStore = this.#getKVStore(context);
         await kvStore.put(kvKey, source);
 
         return { filepath: logicalKey };
@@ -181,8 +182,17 @@ export default class TemplateFileStore {
         return namespace;
     }
 
+    #getKVStore(context) {
+        const { config, env } = context;
+        let { bindingName } = config?.env?.TEMPLATE_FILE_STORE ?? {};
+        bindingName = bindingName || DEFAULT_BINDING_NAME;
+        const kvStore = env[bindingName];
+        assert(kvStore, `TemplateFileStore KV binding "${ bindingName }" is not bound on context.env`);
+        return kvStore;
+    }
+
     async #loadPrefixedFiles(context, namespace, barePrefix) {
-        const kvStore = context.env.TEMPLATE_FILE_STORE;
+        const kvStore = this.#getKVStore(context);
         const safeNamespace = this.#resolveNamespace(namespace);
         const prefix = safeNamespace ? `${safeNamespace}/${barePrefix}` : barePrefix;
         this.#logger.debug('load prefixed files', { prefix });
