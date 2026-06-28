@@ -26,9 +26,9 @@ export default class BaseContext {
 
     /**
      * @param {Object} options
-     * @param {Object} options.config - Resolved application configuration.
      * @param {Object} options.env - Environment variables, secrets, and platform bindings.
      * @param {Logger} options.logger - Root application logger.
+     * @param {Object} [options.config] - Resolved request configuration.
      * @param {AppRuntime} options.runtime - Runtime metadata shared by contexts.
      */
     constructor(options) {
@@ -39,13 +39,7 @@ export default class BaseContext {
             runtime,
         } = options ?? {};
 
-        Object.defineProperties(this, {
-            /**
-             * Resolved application configuration.
-             * @name config
-             * @type {Object}
-             */
-            config: { value: config, enumerable: true },
+        const properties = {
             /**
              * Accessor for environment variables, secrets, and bindings.
              * @name env
@@ -65,7 +59,16 @@ export default class BaseContext {
              * @type {AppRuntime}
              */
             runtime: { value: runtime, enumerable: true },
-        });
+        };
+
+        if (Object.hasOwn(options ?? {}, 'config')) {
+            properties.config = {
+                value: config,
+                enumerable: true,
+            };
+        }
+
+        Object.defineProperties(this, properties);
     }
 
     /**

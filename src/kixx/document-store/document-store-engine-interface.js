@@ -31,11 +31,16 @@
  *
  * ## Context pass-through
  * Every read, write, scan, and query method receives a request or execution
- * `context` as its first argument. The contract does not dictate how an engine
- * uses it: the Cloudflare D1 adapter resolves its database binding from
- * `context.env.DOCUMENT_STORE`, while the Node.js SQLite adapter owns a
- * long-lived connection and ignores `context` entirely. Implementations MUST
- * accept the argument regardless so callers can stay runtime-agnostic.
+ * `context` as its first argument. Runtime adapters use that context according
+ * to their platform:
+ * - Cloudflare adapters resolve their request-scoped D1 binding from
+ *   `context.env` on every call.
+ * - Node.js adapters resolve the local database file location from
+ *   `context.config.env.DOCUMENT_STORE` via `context.config.resolveFilepath()`
+ *   on first use, unless an explicit constructor override was supplied, then
+ *   hold it fixed for the engine's lifetime.
+ *
+ * Implementations MUST accept the argument so callers can stay runtime-agnostic.
  *
  * ## Runtime adapters
  * Runtime adapters are implemented separately by design rather than sharing a

@@ -67,12 +67,15 @@
  *
  * ## Context pass-through
  * Every read and write method receives a request or execution `context` as its
- * first argument. The contract does not dictate how an implementation uses it:
- * the Cloudflare adapter resolves its KV binding from
- * `context.env.TEMPLATE_FILE_STORE` (a request-scoped binding), while a Node.js
- * or Deno adapter owns a long-lived filesystem handle and ignores `context`
- * entirely. Implementations MUST accept the argument regardless so callers can
- * stay runtime-agnostic.
+ * first argument. Runtime adapters use that context according to their platform:
+ * - Cloudflare adapters resolve their request-scoped KV binding from
+ *   `context.env` on every call.
+ * - Node.js adapters resolve the local filesystem root from
+ *   `context.config.env.TEMPLATE_FILE_STORE` via `context.config.resolveFilepath()`
+ *   on first use, unless an explicit constructor override was supplied, then
+ *   hold it fixed for the store's lifetime.
+ *
+ * Implementations MUST accept the argument so callers can stay runtime-agnostic.
  *
  * ## Runtime adapters
  * Runtime adapters are implemented separately by design, because their backing

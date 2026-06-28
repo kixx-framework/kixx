@@ -5,7 +5,15 @@ import { Readable } from 'node:stream';
 
 import { getContentType } from '../../../kixx/static-file-server/mime-types.js';
 import { sha256Hex } from '../../../kixx/utils/crypto.js';
-import { assert, assertNonEmptyString, isNonEmptyString, isValidDate } from '../../../kixx/assertions/mod.js';
+import {
+    AssertionError,
+    assert,
+    assertFunction,
+    assertNonEmptyString,
+    isNonEmptyString,
+    isUndefined,
+    isValidDate,
+} from '../../../kixx/assertions/mod.js';
 import ManifestStore from './manifest.js';
 
 /**
@@ -20,10 +28,13 @@ import ManifestStore from './manifest.js';
  * Node.js filesystem-backed static file store.
  *
  * The Node.js port of the static file store contract. Where the Cloudflare adapter
- * resolves a KV binding from each request `context`, this adapter owns a long-lived
- * public root `directory` supplied at construction, maps a `key` (and optional
- * Build ID `namespace`) onto a real filesystem path, and ignores the `context`
- * argument entirely.
+ * resolves a KV binding from each request `context`, this adapter resolves its
+ * public root directory from `context.config.env.STATIC_FILE_STORE.directory`
+ * and `context.config.resolveFilepath()` on first `read()` unless an explicit
+ * constructor `directory` was supplied. The resolved root directory is fixed for
+ * the lifetime of the store: a later request that resolves a different root is a
+ * programmer error and throws an `AssertionError`. It maps a `key` (and optional
+ * Build ID `namespace`) onto a real filesystem path.
  *
  * `read()` returns a {@link StaticFileResult} whose body streams the file from
  * disk. Content-Type and ETag come from the per-build `manifest.json` when present;
@@ -37,58 +48,69 @@ import ManifestStore from './manifest.js';
 export default class StaticFileStore {
 
     #logger = null;
+
+    // An explicit constructor root (already path.resolve'd), or null when the
+    // root comes from request config. Fixed for the lifetime of the store.
     #rootDirectory = null;
+
+    // The root directory resolved from request config, locked on first read.
+    // Only used when no explicit constructor `directory` was supplied.
+    #resolvedRootDirectory = null;
+
+    // The single manifest store for this store's (fixed) root, created lazily.
     #manifest = null;
 
-    // `${namespace}\n${key}\n${mtimeMs}\n${size}` -> etag. Keyed by file version so
-    // a redeploy (new mtime/size, or new Build ID namespace) never serves a stale
-    // hash, while repeat reads of an unchanged file avoid re-hashing.
+    // `${namespace}\n${key}\n${mtimeMs}\n${size}` -> etag. Keyed by file version
+    // so a redeploy never serves a stale hash, while repeat reads of an unchanged
+    // file avoid re-hashing. The root directory is fixed, so it is not part of the key.
     #etagCache = new Map();
 
     /**
      * @param {Object} options - Store configuration
      * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a StaticFileStore child logger
-     * @param {string} options.directory - Filesystem directory that roots the public files
-     * @throws {AssertionError} When logger or directory is not provided
+     * @param {string} [options.directory] - Filesystem directory override that roots the public files
+     * @throws {AssertionError} When logger is not provided, or when `directory` is supplied but empty
      */
     constructor(options) {
         const { logger, directory } = options ?? {};
         assert(logger, 'StaticFileStore requires a logger');
-        assertNonEmptyString(directory, 'StaticFileStore requires a directory');
+        if (!isUndefined(directory)) {
+            assertNonEmptyString(directory, 'StaticFileStore directory must be a non-empty string when provided');
+        }
         this.#logger = logger.createChild('StaticFileStore');
-        // Resolve the root to an absolute path once so the per-request traversal
-        // guard can compare resolved paths against a stable boundary.
-        this.#rootDirectory = path.resolve(directory);
-        this.#manifest = new ManifestStore({ logger: this.#logger, directory: this.#rootDirectory });
+        // Resolve explicit constructor roots once; request-config roots are
+        // resolved in read() because the request context owns that configuration.
+        this.#rootDirectory = isUndefined(directory) ? null : path.resolve(directory);
     }
 
     /**
      * Reads one file by its key within an optional Build ID namespace.
      *
-     * @param {RequestContext} _context - Ignored; present for StaticFileStoreInterface compatibility
+     * @param {RequestContext} context - Request context used to resolve Node request config
      * @param {Object} options - Lookup options
      * @param {string} options.key - File key relative to the namespace root, such as `css/main.css`
      * @param {string|null} options.namespace - Build ID namespace, or null for the flat root
      * @param {boolean} options.computeEtag - Whether to hash the file for an ETag when the manifest has none
      * @returns {Promise<StaticFileResult|null>} The file parts, or `null` when no file exists
      */
-    async read(_context, options) {
+    async read(context, options) {
         const { key, namespace, computeEtag } = options ?? {};
         assertNonEmptyString(key, 'StaticFileStore read requires a key');
+        const rootDirectory = this.#resolveRootDirectory(context);
 
         // Namespace (Build ID) selects a subtree; an absent namespace serves from
         // the flat root, supporting out-of-band deploys with no Build ID.
         const namespaceRoot = isNonEmptyString(namespace)
-            ? path.join(this.#rootDirectory, namespace)
-            : this.#rootDirectory;
+            ? path.join(rootDirectory, namespace)
+            : rootDirectory;
 
         const resolvedPath = path.resolve(namespaceRoot, key);
 
         // Defense in depth: even though callers validate the key, refuse to serve
         // anything that resolves outside the public root. A path is in-root only if
         // it equals the root or sits beneath it past a separator.
-        if (resolvedPath !== this.#rootDirectory
-            && !resolvedPath.startsWith(this.#rootDirectory + path.sep)) {
+        if (resolvedPath !== rootDirectory
+            && !resolvedPath.startsWith(rootDirectory + path.sep)) {
             this.#logger.debug('read() rejected path outside public root', { key, namespace });
             return null;
         }
@@ -113,7 +135,7 @@ export default class StaticFileStore {
             return null;
         }
 
-        const manifestEntry = await this.#manifest.lookup(namespace, key);
+        const manifestEntry = await this.#getManifest(rootDirectory).lookup(namespace, key);
 
         // Manifest Content-Type wins (it was chosen at build time); fall back to
         // extension-based detection for out-of-band deploys.
@@ -139,8 +161,70 @@ export default class StaticFileStore {
         };
     }
 
+    #resolveRootDirectory(context) {
+        // An explicit constructor root is fixed and never read from config.
+        if (this.#rootDirectory) {
+            return this.#rootDirectory;
+        }
+
+        const rootDirectory = this.#resolveRootDirectoryFromConfig(context);
+
+        if (this.#resolvedRootDirectory === null) {
+            // First read locks the root directory for the lifetime of the store.
+            this.#resolvedRootDirectory = rootDirectory;
+        } else if (rootDirectory !== this.#resolvedRootDirectory) {
+            // The configured root is expected to be constant; a change means the
+            // application is misconfigured, which is a programmer error.
+            throw new AssertionError(
+                `StaticFileStore root directory must not change after it is set (was "${ this.#resolvedRootDirectory }", got "${ rootDirectory }")`,
+            );
+        }
+
+        return this.#resolvedRootDirectory;
+    }
+
+    #resolveRootDirectoryFromConfig(context) {
+        const config = context?.config;
+        const storeConfig = config?.env?.STATIC_FILE_STORE;
+        assertNonEmptyString(
+            storeConfig?.directory,
+            'StaticFileStore requires context.config.env.STATIC_FILE_STORE.directory',
+        );
+        assertFunction(
+            config?.resolveFilepath,
+            'StaticFileStore requires context.config.resolveFilepath',
+        );
+
+        const rootDirectory = config.resolveFilepath(storeConfig.directory);
+        assertNonEmptyString(
+            rootDirectory,
+            'StaticFileStore context.config.resolveFilepath() must return a non-empty string',
+        );
+
+        return path.resolve(rootDirectory);
+    }
+
+    #getManifest(rootDirectory) {
+        // The root directory is fixed for the store's lifetime, so a single
+        // manifest store is created lazily on first use and reused thereafter.
+        if (!this.#manifest) {
+            this.#manifest = new ManifestStore({
+                logger: this.#logger,
+                directory: rootDirectory,
+            });
+        }
+        return this.#manifest;
+    }
+
     async #resolveEtagAndBody(args) {
-        const { resolvedPath, key, namespace, stats, manifestEtag, computeEtag } = args;
+        const {
+            resolvedPath,
+            key,
+            namespace,
+            stats,
+            manifestEtag,
+            computeEtag,
+        } = args;
 
         // A build-tool-provided ETag is authoritative and needs no file read.
         if (manifestEtag) {

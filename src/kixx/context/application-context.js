@@ -35,13 +35,13 @@ export default class ApplicationContext extends BaseContext {
 
     /**
      * @param {Object} options
-     * @param {Object} options.config - Resolved application configuration.
      * @param {Logger} options.logger - Root application logger shared with every request context.
      * @param {Object} options.env - Environment variables, secrets, and platform bindings.
      * @param {AppRuntime} options.runtime - Runtime metadata shared with every request context.
      */
     constructor(options) {
-        super(options);
+        const { env, logger, runtime } = options ?? {};
+        super({ env, logger, runtime });
     }
 
     /**
@@ -110,10 +110,10 @@ export default class ApplicationContext extends BaseContext {
      * @param {Object} env - Request-scoped environment variables, secrets, and bindings
      * @param {import('../http-router/server-request-interface.js').ServerRequestInterface} [request]
      *   Request being handled by the context
-     * @param {Object} [config=this.config] - Request-scoped application configuration.
+     * @param {Object} [config] - Request-scoped application configuration.
      * @returns {RequestContext} Context for handling one request
      */
-    createRequestContext(env, request, config = this.config) {
+    createRequestContext(env, request, config) {
         return new RequestContext({
             env,
             config,

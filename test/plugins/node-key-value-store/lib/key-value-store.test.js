@@ -1,4 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
 
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
@@ -6,6 +9,14 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import KeyValueStore from '../../../../src/plugins/node-key-value-store/lib/key-value-store.js';
 import Logger from '../../../../src/kixx/logger/logger.js';
 
+
+const tempDirs = [];
+
+async function makeTempDir() {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-kv-'));
+    tempDirs.push(dir);
+    return dir;
+}
 
 function makeLogger() {
     return new Logger({ name: 'Test', level: 'NONE' });
@@ -18,7 +29,8 @@ function makeStore() {
     return new KeyValueStore({ logger: makeLogger(), path: ':memory:' });
 }
 
-// The context argument is ignored by this adapter; an empty object is enough.
+// Constructor-supplied path/database stores bypass request-config resolution, so
+// most low-level behavior tests can pass an empty context.
 function makeContext() {
     return {};
 }
@@ -48,7 +60,13 @@ async function catchAsyncError(fn) {
 }
 
 
-describe('Node KeyValueStore', ({ describe }) => {
+describe('Node KeyValueStore', ({ after, describe }) => {
+
+    after(async () => {
+        for (const dir of tempDirs) {
+            await fsp.rm(dir, { recursive: true, force: true });
+        }
+    });
 
     describe('constructor', ({ it }) => {
         it('throws when logger is not provided', () => {
@@ -59,12 +77,10 @@ describe('Node KeyValueStore', ({ describe }) => {
             assertMatches('KeyValueStore requires a logger', caught.message);
         });
 
-        it('throws when neither database nor path is provided', () => {
-            const caught = catchError(() => new KeyValueStore({ logger: makeLogger() }));
+        it('allows logger-only construction for request-config-backed stores', () => {
+            const store = new KeyValueStore({ logger: makeLogger() });
 
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('requires a "path"', caught.message);
+            store.close();
         });
 
         it('throws when options are not provided', () => {
@@ -72,6 +88,94 @@ describe('Node KeyValueStore', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
+        });
+    });
+
+    describe('request config', ({ it }) => {
+        it('resolves KEY_VALUE_STORE.path from the method context', async () => {
+            const directory = await makeTempDir();
+            const sqlitePath = path.join(directory, 'key_value_store.sqlite');
+            const tracker = new MockTracker();
+            const resolveFilepath = tracker.fn(() => sqlitePath);
+            const context = {
+                config: {
+                    env: { KEY_VALUE_STORE: { path: '../data/key_value_store.sqlite' } },
+                    resolveFilepath,
+                },
+            };
+            const store = new KeyValueStore({ logger: makeLogger() });
+
+            await store.put(context, 'greeting', 'hello');
+            const result = await store.get(context, 'greeting');
+
+            assertEqual('../data/key_value_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
+            assertEqual('hello', result);
+            store.close();
+        });
+
+        it('throws when KEY_VALUE_STORE.path is missing', async () => {
+            const store = new KeyValueStore({ logger: makeLogger() });
+
+            const caught = await catchAsyncError(() => store.get({ config: { env: {} } }, 'missing'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('KEY_VALUE_STORE.path', caught.message);
+            store.close();
+        });
+
+        it('reuses the same database across requests with a stable resolved path', async () => {
+            const directory = await makeTempDir();
+            const sqlitePath = path.join(directory, 'key_value_store.sqlite');
+            const resolveFilepath = () => sqlitePath;
+            const makeConfigContext = () => {
+                return {
+                    config: {
+                        env: { KEY_VALUE_STORE: { path: '../data/key_value_store.sqlite' } },
+                        resolveFilepath,
+                    },
+                };
+            };
+            const store = new KeyValueStore({ logger: makeLogger() });
+
+            // A fresh context object each request still resolves the same path, so
+            // a value written on one request is visible on the next.
+            await store.put(makeConfigContext(), 'shared', 'first');
+            await store.put(makeConfigContext(), 'shared', 'second');
+
+            assertEqual('second', await store.get(makeConfigContext(), 'shared'));
+            store.close();
+        });
+
+        it('throws when the resolved path changes after the database is opened', async () => {
+            const directory = await makeTempDir();
+            const firstPath = path.join(directory, 'first.sqlite');
+            const secondPath = path.join(directory, 'second.sqlite');
+            const resolveFilepath = (configuredPath) => {
+                return configuredPath === './first.sqlite' ? firstPath : secondPath;
+            };
+            const firstContext = {
+                config: {
+                    env: { KEY_VALUE_STORE: { path: './first.sqlite' } },
+                    resolveFilepath,
+                },
+            };
+            const secondContext = {
+                config: {
+                    env: { KEY_VALUE_STORE: { path: './second.sqlite' } },
+                    resolveFilepath,
+                },
+            };
+            const store = new KeyValueStore({ logger: makeLogger() });
+
+            await store.put(firstContext, 'shared', 'first');
+
+            const caught = await catchAsyncError(() => store.put(secondContext, 'shared', 'second'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('must not change', caught.message);
+            store.close();
         });
     });
 

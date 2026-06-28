@@ -72,8 +72,6 @@ if (isNonEmptyString(configFilePath)) {
     configFilePath = path.join(THIS_DIRECTORY, 'node-config.json');
 }
 
-const config = readConfig(configFilePath, environment);
-
 const DEFAULT_PORT = '2026';
 
 // The server port defaults to 2026, can be set with PORT, and is overridable by --port.
@@ -92,19 +90,20 @@ if (port === null) {
     );
 }
 
+const name = env.APP_NAME || 'kixx-app';
+
 const runtime = new AppRuntime({
     build: { id: env.BUILD_ID },
-    server: { name: config.name },
+    server: { name },
 });
 
 const logger = new Logger({
-    name: config.name,
+    name,
     level: env.LOG_LEVEL || 'debug',
     writer: new LoggerWriter(),
 });
 
 const appContext = new ApplicationContext({
-    config,
     env,
     runtime,
     logger,

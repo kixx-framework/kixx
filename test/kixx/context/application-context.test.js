@@ -12,13 +12,12 @@ import RequestContext from '../../../src/kixx/context/request-context.js';
 
 function makeApplicationContext(options) {
     const {
-        config = { name: 'test-app' },
         logger = { name: 'test-logger' },
         env = {},
         runtime = { mode: 'server' },
     } = options ?? {};
 
-    return new ApplicationContext({ config, logger, env, runtime });
+    return new ApplicationContext({ logger, env, runtime });
 }
 
 function catchError(fn) {
@@ -34,29 +33,30 @@ function catchError(fn) {
 describe('ApplicationContext', ({ describe }) => {
 
     describe('constructor', ({ it }) => {
-        it('assigns config, env, logger, and runtime as enumerable read-only properties', () => {
-            const config = { name: 'app' };
+        it('assigns env, logger, and runtime as enumerable read-only properties', () => {
             const logger = { name: 'app' };
             const env = { NODE_ENV: 'test' };
             const runtime = { mode: 'server' };
-            const context = new ApplicationContext({ config, logger, env, runtime });
+            const context = new ApplicationContext({ logger, env, runtime });
 
-            assertEqual(config, context.config);
             assertEqual(env, context.env);
             assertEqual(logger, context.logger);
             assertEqual(runtime, context.runtime);
-            assert(Object.keys(context).includes('config'), 'expected config to be enumerable');
+            assert(Object.keys(context).includes('env'), 'expected env to be enumerable');
+            assert(Object.keys(context).includes('logger'), 'expected logger to be enumerable');
+            assert(Object.keys(context).includes('runtime'), 'expected runtime to be enumerable');
         });
 
-        it('exposes the properties as non-writable', () => {
-            const context = makeApplicationContext();
-
-            const caught = catchError(() => {
-                context.config = { name: 'other' };
+        it('does not expose config even when provided', () => {
+            const context = new ApplicationContext({
+                config: { name: 'app' },
+                logger: { name: 'app' },
+                env: {},
+                runtime: { mode: 'server' },
             });
 
-            assert(caught, 'expected reassigning config to throw');
-            assertEqual('TypeError', caught.name);
+            assertUndefined(context.config);
+            assert(!Object.keys(context).includes('config'), 'expected config not to be enumerable');
         });
     });
 
@@ -146,25 +146,25 @@ describe('ApplicationContext', ({ describe }) => {
     });
 
     describe('createRequestContext', ({ it }) => {
-        it('returns a RequestContext sharing the config, logger, and runtime', () => {
+        it('returns a RequestContext sharing the logger and runtime', () => {
             const context = makeApplicationContext();
+            const requestConfig = { name: 'request-app' };
 
-            const requestContext = context.createRequestContext({});
+            const requestContext = context.createRequestContext({}, null, requestConfig);
 
             assert(requestContext instanceof RequestContext, 'expected a RequestContext');
-            assertEqual(context.config, requestContext.config);
+            assertEqual(requestConfig, requestContext.config);
             assertEqual(context.logger, requestContext.logger);
             assertEqual(context.runtime, requestContext.runtime);
         });
 
         it('uses the request config when one is provided', () => {
-            const context = makeApplicationContext({ config: { name: 'startup-app' } });
+            const context = makeApplicationContext();
             const requestConfig = { name: 'fresh-app' };
 
             const requestContext = context.createRequestContext({}, { id: 'req-123' }, requestConfig);
 
             assertEqual(requestConfig, requestContext.config);
-            assertEqual('startup-app', context.config.name);
         });
 
         it('gives the request context its own request-scoped env', () => {

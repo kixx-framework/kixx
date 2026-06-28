@@ -5,14 +5,15 @@ import os from 'node:os';
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { register } from '../../../src/plugins/node-hyperview-page-data-store/plugin.js';
+import { register } from '../../../src/plugins/node-document-store-engine/plugin.js';
 import Logger from '../../../src/kixx/logger/logger.js';
 
 
 const tempDirs = [];
+const engines = [];
 
 async function makeTempDir() {
-    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-pds-plugin-'));
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dse-plugin-'));
     tempDirs.push(dir);
     return dir;
 }
@@ -21,24 +22,33 @@ function makeLogger() {
     return new Logger({ name: 'Test', level: 'NONE' });
 }
 
-async function readBackingFile(directory, relativePath) {
-    return fsp.readFile(path.join(directory, relativePath), 'utf8');
+async function catchAsyncError(fn) {
+    try {
+        await fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
 }
 
 
-describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
+describe('node-document-store-engine plugin', ({ after, it }) => {
 
     after(async () => {
+        for (const engine of engines) {
+            engine.close();
+        }
         for (const dir of tempDirs) {
             await fsp.rm(dir, { recursive: true, force: true });
         }
     });
 
-    it('registers the page data store without application config', async () => {
+    it('registers the document store engine without application config', async () => {
         const directory = await makeTempDir();
+        const sqlitePath = path.join(directory, 'document_store.sqlite');
         const registered = {};
         const tracker = new MockTracker();
-        const resolveFilepath = tracker.fn(() => directory);
+        const resolveFilepath = tracker.fn(() => sqlitePath);
 
         const context = {
             logger: makeLogger(),
@@ -49,22 +59,26 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
         };
         const requestContext = {
             config: {
-                env: { PAGE_DATA_STORE: { directory: './pages' } },
+                env: { DOCUMENT_STORE: { path: '../data/document_store.sqlite' } },
                 resolveFilepath,
             },
         };
 
         register(context);
+        engines.push(registered.service);
+        registered.service.setIndexDefinitions([]);
 
-        assertEqual('HyperviewPageDataStore', registered.name);
+        assertEqual('DocumentStoreEngine', registered.name);
         assertEqual(0, resolveFilepath.mock.callCount());
 
-        await registered.service.putTextFile(requestContext, null, '/body.md', '# Body');
-        assertEqual('./pages', resolveFilepath.mock.getCall(0).arguments[0]);
-        assertEqual('# Body', await readBackingFile(directory, 'body.md'));
+        await registered.service.put(requestContext, { type: 'Note', id: 'n1', title: 'Hello' });
+        const record = await registered.service.get(requestContext, 'Note', 'n1');
+
+        assertEqual('../data/document_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
+        assertEqual('Hello', record.doc.title);
     });
 
-    it('throws from the registered service when the request config directory is missing', async () => {
+    it('throws from the registered service when the request config path is missing', async () => {
         const registered = {};
         const context = {
             logger: makeLogger(),
@@ -75,22 +89,15 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
         };
 
         register(context);
+        engines.push(registered.service);
+        registered.service.setIndexDefinitions([]);
 
         const error = await catchAsyncError(() => {
-            return registered.service.getTextFile({ config: { env: {} } }, null, '/missing.md');
+            return registered.service.get({ config: { env: {} } }, 'Note', 'missing');
         });
 
         assert(error, 'expected service operation to throw');
         assertEqual('AssertionError', error.name);
-        assertMatches('PAGE_DATA_STORE.directory', error.message);
+        assertMatches('DOCUMENT_STORE.path', error.message);
     });
 });
-
-async function catchAsyncError(fn) {
-    try {
-        await fn();
-    } catch (error) {
-        return error;
-    }
-    return null;
-}

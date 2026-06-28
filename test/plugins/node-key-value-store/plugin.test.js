@@ -22,16 +22,6 @@ function makeLogger() {
     return new Logger({ name: 'Test', level: 'NONE' });
 }
 
-function catchError(fn) {
-    try {
-        fn();
-    } catch (error) {
-        return error;
-    }
-    return null;
-}
-
-
 describe('node-key-value-store plugin', ({ after, it }) => {
 
     after(async () => {
@@ -44,22 +34,42 @@ describe('node-key-value-store plugin', ({ after, it }) => {
         }
     });
 
-    it('registers the key value store using the OS-resolved path', async () => {
+    it('registers the key value store without application config', async () => {
         const directory = await makeTempDir();
         const sqlitePath = path.join(directory, 'key_value_store.sqlite');
         const registered = {};
         const tracker = new MockTracker();
-        // The store config is read from config.env, and the relative path is
-        // mapped to an absolute OS path through config.resolveFilepath. The stub
-        // returns the temp sqlite path to stand in for that resolution.
         const resolveFilepath = tracker.fn(() => sqlitePath);
 
         const context = {
             logger: makeLogger(),
+            registerService(name, service) {
+                registered.name = name;
+                registered.service = service;
+            },
+        };
+        const requestContext = {
             config: {
                 env: { KEY_VALUE_STORE: { path: '../data/key_value_store.sqlite' } },
                 resolveFilepath,
             },
+        };
+
+        register(context);
+        stores.push(registered.service);
+
+        assertEqual('KeyValueStore', registered.name);
+        assertEqual(0, resolveFilepath.mock.callCount());
+
+        await registered.service.put(requestContext, 'greeting', 'hello');
+        assertEqual('../data/key_value_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
+        assertEqual('hello', await registered.service.get(requestContext, 'greeting'));
+    });
+
+    it('throws from the registered service when the request config path is missing', async () => {
+        const registered = {};
+        const context = {
+            logger: makeLogger(),
             registerService(name, service) {
                 registered.name = name;
                 registered.service = service;
@@ -69,31 +79,19 @@ describe('node-key-value-store plugin', ({ after, it }) => {
         register(context);
         stores.push(registered.service);
 
-        assertEqual('KeyValueStore', registered.name);
-        // The configured (POSIX) path is what gets resolved.
-        assertEqual('../data/key_value_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
+        const error = await catchAsyncError(() => registered.service.get({ config: { env: {} } }, 'missing'));
 
-        // The registered service reads and writes against the resolved sqlite file.
-        await registered.service.put(null, 'greeting', 'hello');
-        assertEqual('hello', await registered.service.get(null, 'greeting'));
-    });
-
-    it('throws when the configured path is missing', () => {
-        const context = {
-            logger: makeLogger(),
-            config: {
-                env: {},
-                resolveFilepath() {
-                    return '/unused';
-                },
-            },
-            registerService() {},
-        };
-
-        const error = catchError(() => register(context));
-
-        assert(error, 'expected register to throw');
+        assert(error, 'expected service operation to throw');
         assertEqual('AssertionError', error.name);
         assertMatches('KEY_VALUE_STORE.path', error.message);
     });
 });
+
+async function catchAsyncError(fn) {
+    try {
+        await fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}

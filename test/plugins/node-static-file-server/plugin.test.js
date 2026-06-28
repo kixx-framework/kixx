@@ -5,14 +5,14 @@ import os from 'node:os';
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { register } from '../../../src/plugins/node-hyperview-page-data-store/plugin.js';
+import { register } from '../../../src/plugins/node-static-file-server/plugin.js';
 import Logger from '../../../src/kixx/logger/logger.js';
 
 
 const tempDirs = [];
 
 async function makeTempDir() {
-    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-pds-plugin-'));
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-sfs-plugin-'));
     tempDirs.push(dir);
     return dir;
 }
@@ -21,12 +21,17 @@ function makeLogger() {
     return new Logger({ name: 'Test', level: 'NONE' });
 }
 
-async function readBackingFile(directory, relativePath) {
-    return fsp.readFile(path.join(directory, relativePath), 'utf8');
+async function catchAsyncError(fn) {
+    try {
+        await fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
 }
 
 
-describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
+describe('node-static-file-server plugin', ({ after, it }) => {
 
     after(async () => {
         for (const dir of tempDirs) {
@@ -34,8 +39,9 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
         }
     });
 
-    it('registers the page data store without application config', async () => {
+    it('registers the static file store without application config', async () => {
         const directory = await makeTempDir();
+        await fsp.writeFile(path.join(directory, 'site.css'), 'body{}', 'utf8');
         const registered = {};
         const tracker = new MockTracker();
         const resolveFilepath = tracker.fn(() => directory);
@@ -49,19 +55,27 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
         };
         const requestContext = {
             config: {
-                env: { PAGE_DATA_STORE: { directory: './pages' } },
+                env: { STATIC_FILE_STORE: { directory: './public' } },
                 resolveFilepath,
             },
         };
 
         register(context);
 
-        assertEqual('HyperviewPageDataStore', registered.name);
+        assertEqual('StaticFileStore', registered.name);
         assertEqual(0, resolveFilepath.mock.callCount());
 
-        await registered.service.putTextFile(requestContext, null, '/body.md', '# Body');
-        assertEqual('./pages', resolveFilepath.mock.getCall(0).arguments[0]);
-        assertEqual('# Body', await readBackingFile(directory, 'body.md'));
+        const result = await registered.service.read(requestContext, {
+            key: 'site.css',
+            namespace: null,
+            computeEtag: false,
+        });
+
+        assert(result, 'expected static file result');
+        assertEqual('./public', resolveFilepath.mock.getCall(0).arguments[0]);
+        assertEqual('text/css; charset=utf-8', result.contentType);
+        assertEqual(6, result.contentLength);
+        await result.body.cancel();
     });
 
     it('throws from the registered service when the request config directory is missing', async () => {
@@ -77,20 +91,15 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
         register(context);
 
         const error = await catchAsyncError(() => {
-            return registered.service.getTextFile({ config: { env: {} } }, null, '/missing.md');
+            return registered.service.read({ config: { env: {} } }, {
+                key: 'missing.css',
+                namespace: null,
+                computeEtag: false,
+            });
         });
 
         assert(error, 'expected service operation to throw');
         assertEqual('AssertionError', error.name);
-        assertMatches('PAGE_DATA_STORE.directory', error.message);
+        assertMatches('STATIC_FILE_STORE.directory', error.message);
     });
 });
-
-async function catchAsyncError(fn) {
-    try {
-        await fn();
-    } catch (error) {
-        return error;
-    }
-    return null;
-}
