@@ -1,4 +1,4 @@
-import { AssertionError, isString } from '../assertions/mod.js';
+import { AssertionError, isString, isUndefined } from '../assertions/mod.js';
 
 
 const SHORT_ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -6,6 +6,7 @@ const SHORT_ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq
 // 16 random bytes (128 bits) encode to at most 22 Base62 chars.
 const SHORT_ID_BYTE_LENGTH = 16;
 const SHORT_ID_LENGTH = 22;
+const SECRET_TOKEN_BYTE_LENGTH = 32;
 
 /**
  * Generates a cryptographically random, URL-safe Base62 ID.
@@ -44,6 +45,25 @@ export function generateShortId() {
 }
 
 /**
+ * Generates a 256-bit secret token encoded as lowercase hexadecimal text.
+ * @param {string} [prefix] - Optional literal prefix prepended to the random token body.
+ * @returns {string} Secret token suitable for login links, sessions, or API credentials.
+ * @throws {AssertionError} When prefix is present and is not a string.
+ */
+export function generateSecretToken(prefix) {
+    const tokenPrefix = isUndefined(prefix) ? '' : prefix;
+
+    if (!isString(tokenPrefix)) {
+        throw new AssertionError('generateSecretToken() prefix must be a string when present');
+    }
+
+    const bytes = new Uint8Array(SECRET_TOKEN_BYTE_LENGTH);
+    crypto.getRandomValues(bytes);
+
+    return `${ tokenPrefix }${ bytesToHex(bytes) }`;
+}
+
+/**
  * Hashes bytes or a UTF-8 string with SHA-256 and returns a lowercase hex digest.
  *
  * Uses the Web Crypto `crypto.subtle.digest` API, a global available in both
@@ -70,5 +90,9 @@ export async function sha256Hex(data) {
 
     const digest = await crypto.subtle.digest('SHA-256', bytes);
 
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return bytesToHex(new Uint8Array(digest));
+}
+
+function bytesToHex(bytes) {
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }

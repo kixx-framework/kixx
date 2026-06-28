@@ -1,6 +1,6 @@
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { AssertionError, UnauthorizedError } from '../../../kixx/errors/mod.js';
-import { pbkdf2HashPassword, verifyPassword } from '../../lib/crypto.js';
+import { pbkdf2HashPassword, verifyPassword } from '../../lib/password-hashing.js';
 import { getPbkdf2Iterations } from '../../lib/secret-encryption-config.js';
 
 

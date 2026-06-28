@@ -1,5 +1,5 @@
 import { AssertionError, ConflictError } from '../../../kixx/errors/mod.js';
-import { pbkdf2HashPassword } from '../../lib/crypto.js';
+import { pbkdf2HashPassword } from '../../lib/password-hashing.js';
 import { getPbkdf2Iterations } from '../../lib/secret-encryption-config.js';
 import { consumeAdminInvite } from '../admin-invites/consume-admin-invite.js';
 

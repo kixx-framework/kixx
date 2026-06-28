@@ -1,4 +1,4 @@
-import { generateSecretToken, sha256Hex } from '../lib/crypto.js';
+import { generateSecretToken, sha256Hex } from '../../kixx/utils/crypto.js';
 import Collection from './base-key-value-store-collection.js';
 import CsrfTokenRecord from './csrf-token-record.js';
 import { assert, assertNonEmptyString, isNonEmptyString } from '../../kixx/assertions/mod.js';

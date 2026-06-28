@@ -1,4 +1,4 @@
-import { sha256Hex } from '../../lib/crypto.js';
+import { sha256Hex } from '../../../kixx/utils/crypto.js';
 import { resolveAdminInvite } from './resolve-admin-invite.js';
 import { AssertionError, ForbiddenError } from '../../../kixx/errors/mod.js';
 

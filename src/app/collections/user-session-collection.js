@@ -1,4 +1,4 @@
-import { generateSecretToken } from '../lib/crypto.js';
+import { generateSecretToken } from '../../kixx/utils/crypto.js';
 import Collection from './base-key-value-store-collection.js';
 import UserSessionRecord from './user-session-record.js';
 

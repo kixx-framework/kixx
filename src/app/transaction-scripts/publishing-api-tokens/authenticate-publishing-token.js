@@ -4,7 +4,7 @@ import {
     ForbiddenError,
     UnauthenticatedError,
 } from '../../../kixx/errors/mod.js';
-import { sha256Hex } from '../../lib/crypto.js';
+import { sha256Hex } from '../../../kixx/utils/crypto.js';
 
 
 const UNAUTHENTICATED_MESSAGE = 'Publishing API authentication is required.';

@@ -1,13 +1,5 @@
-import {
-    AssertionError,
-    assert,
-    assertNonEmptyString,
-    isString,
-    isUndefined,
-} from '../../kixx/assertions/mod.js';
+import { assert, assertNonEmptyString } from '../../kixx/assertions/mod.js';
 
-
-const SECRET_TOKEN_BYTE_LENGTH = 32;
 
 // PBKDF2-HMAC-SHA-512 parameters. SALT_BYTES and HASH_BYTES are fixed for all
 // new hashes. ALGORITHM is embedded in the PHC string so the verifier can
@@ -16,45 +8,6 @@ const PBKDF2_SALT_BYTES = 16;
 const PBKDF2_HASH_BYTES = 32;
 const PBKDF2_HASH_BITS = PBKDF2_HASH_BYTES * 8;
 const PBKDF2_ALGORITHM = 'pbkdf2-sha512';
-
-
-/**
- * Generates a 256-bit secret token encoded as lowercase hexadecimal text.
- * @param {string} [prefix] - Optional literal prefix prepended to the random token body.
- * @returns {string} Secret token suitable for login links, sessions, or API credentials.
- * @throws {AssertionError} When prefix is present and is not a string.
- */
-export function generateSecretToken(prefix) {
-    const tokenPrefix = isUndefined(prefix) ? '' : prefix;
-
-    if (!isString(tokenPrefix)) {
-        throw new AssertionError('generateSecretToken() prefix must be a string when present');
-    }
-
-    const bytes = new Uint8Array(SECRET_TOKEN_BYTE_LENGTH);
-    crypto.getRandomValues(bytes);
-
-    return `${ tokenPrefix }${ bytesToHex(bytes) }`;
-}
-
-/**
- * Hashes a non-empty string with SHA-256 and returns a lowercase hex digest.
- * @param {string} value - Non-empty value to hash.
- * @returns {Promise<string>} Hex-encoded SHA-256 digest.
- * @throws {AssertionError} When value is not a non-empty string.
- */
-export async function sha256Hex(value) {
-    assertNonEmptyString(value, 'sha256Hex() value');
-
-    const bytes = new TextEncoder().encode(value);
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-
-    return bytesToHex(new Uint8Array(digest));
-}
-
-function bytesToHex(bytes) {
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
 
 
 /**
@@ -109,14 +62,6 @@ export async function verifyPassword(password, phcString) {
     return timingSafeEqual(derived, hash);
 }
 
-/**
- * Runs PBKDF2-HMAC-SHA-512 key derivation over `password` using the given
- * salt and iteration count. Always produces exactly `HASH_BYTES` bytes.
- * @param {string} password - Plaintext password.
- * @param {Uint8Array} salt - Random salt bytes.
- * @param {number} iterations - PBKDF2 iteration count.
- * @returns {Promise<Uint8Array>} Derived key bytes.
- */
 async function pbkdf2DeriveKey(password, salt, iterations) {
     const keyMaterial = await crypto.subtle.importKey(
         'raw',
@@ -140,15 +85,6 @@ async function pbkdf2DeriveKey(password, salt, iterations) {
     return new Uint8Array(derivedBits);
 }
 
-/**
- * Parses a PHC credential string into its component parts.
- *
- * Expected format: `$pbkdf2-sha512$i=<n>$<salt-b64>$<hash-b64>`
- *
- * @param {string} phcString
- * @returns {{ iterations: number, salt: Uint8Array, hash: Uint8Array }}
- * @throws {AssertionError} When the string is malformed or names an unsupported algorithm.
- */
 function parsePHCString(phcString) {
     // Splitting on '$' yields ['', algorithm, params, saltB64, hashB64].
     const parts = phcString.split('$');
@@ -166,19 +102,6 @@ function parsePHCString(phcString) {
     };
 }
 
-/**
- * Compares two byte arrays in constant time. Returns `true` only when every
- * byte matches. XORs corresponding bytes and ORs all differences so that no
- * early exit leaks the position of the first mismatch.
- *
- * Both arrays are produced by `deriveKey` with the same `HASH_BYTES` output
- * size, so the length check is a safety guard rather than a runtime branch
- * that varies with the input.
- *
- * @param {Uint8Array} a
- * @param {Uint8Array} b
- * @returns {boolean}
- */
 function timingSafeEqual(a, b) {
     if (a.length !== b.length) {
         return false;
@@ -192,11 +115,6 @@ function timingSafeEqual(a, b) {
     return diff === 0;
 }
 
-/**
- * Encodes a byte array as standard base64 using `btoa`.
- * @param {Uint8Array} bytes
- * @returns {string}
- */
 function bytesToBase64(bytes) {
     let binary = '';
     for (const byte of bytes) {
@@ -205,11 +123,6 @@ function bytesToBase64(bytes) {
     return btoa(binary);
 }
 
-/**
- * Decodes a standard base64 string into a byte array using `atob`.
- * @param {string} b64
- * @returns {Uint8Array}
- */
 function base64ToBytes(b64) {
     const binary = atob(b64);
     const bytes = new Uint8Array(binary.length);

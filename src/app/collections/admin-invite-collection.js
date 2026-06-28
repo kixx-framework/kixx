@@ -1,4 +1,4 @@
-import { generateSecretToken, sha256Hex } from '../lib/crypto.js';
+import { generateSecretToken, sha256Hex } from '../../kixx/utils/crypto.js';
 import Collection from './base-document-store-collection.js';
 import AdminInviteRecord, {
     ADMIN_INVITE_KIND,

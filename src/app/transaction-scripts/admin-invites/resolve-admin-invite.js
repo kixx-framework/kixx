@@ -1,4 +1,4 @@
-import { sha256Hex } from '../../lib/crypto.js';
+import { sha256Hex } from '../../../kixx/utils/crypto.js';
 import { AssertionError } from '../../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 
