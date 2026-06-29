@@ -3,6 +3,7 @@ import DocumentAlreadyExistsError from '../../../kixx/document-store/document-al
 import DocumentNotFoundError from '../../../kixx/document-store/document-not-found-error.js';
 import DocumentUniqueIndexViolationError from '../../../kixx/document-store/document-unique-index-violation-error.js';
 import VersionConflictError from '../../../kixx/document-store/version-conflict-error.js';
+import { OperationalError } from '../../../kixx/errors/mod.js';
 import {
     AssertionError,
     isBoolean,
@@ -832,7 +833,11 @@ export default class DocumentStoreEngine {
         if (this.#databaseSpecKey === null) {
             // First use opens the connection and locks the database spec for the
             // lifetime of the engine.
-            this.#database = new DatabaseSync(databaseSpec.path, databaseSpec.sqliteOptions);
+            try {
+                this.#database = new DatabaseSync(databaseSpec.path, databaseSpec.sqliteOptions);
+            } catch (cause) {
+                throw new OperationalError(`Unable to open SQLite database from ${ databaseSpec.path }`, { cause });
+            }
             this.#databaseSpecKey = databaseSpec.key;
         } else if (this.#databaseSpecKey !== databaseSpec.key) {
             // The resolved path and options are expected to be constant; a change
