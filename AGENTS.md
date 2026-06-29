@@ -215,15 +215,13 @@ Exit behavior:
 Run tests with:
 
 ```bash
-# Run all non-integration test files (*.test.js) in the ./test/ directory
+# Run all test files (*.test.js) in the ./test/ directory
 node run-tests.js
 
 # Run all test files (*.test.js) in the files and directories passed into run-tests.js
 node run-tests.js [pathname ...]
-
-# Include tests from ./test/integration/
-node run-tests.js --integration
 ```
+
 Pathname arguments are optional. If omitted, the CLI uses `./test/`.
 
 When a target pathname is a directory, the test script walks it recursively and only runs `*.test.js` files. Other file extensions are ignored during directory traversal.
