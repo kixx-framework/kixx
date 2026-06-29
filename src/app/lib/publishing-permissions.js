@@ -10,9 +10,12 @@ const ALLOW = 'allow';
 const DENY = 'deny';
 const VALID_EFFECTS = new Set([ ALLOW, DENY ]);
 
-// Future scoped grants should use stable URNs for both sides of the decision:
-// actions as `urn:kixx:publishing:<capability>:<verb>` and resources as
-// `urn:kixx:publishing:<resource-kind>:<build-id>:<logical-path>`.
+// Scoped grants use stable URNs for both sides of the decision: actions as
+// `urn:kixx:publishing:<capability>:<verb>` and resources as
+// `urn:kixx:publishing:<resource-kind>:<scope>`, where the trailing scope is a
+// concrete value or a '*' wildcard (see doesPatternMatch). Resource URNs do not
+// encode the target build id — template and page-metadata authorization is
+// independent of which build the write targets.
 
 
 /**
@@ -110,5 +113,19 @@ function doesActionMatch(grantAction, requestedAction) {
 }
 
 function doesPatternMatch(pattern, value) {
-    return pattern === WILDCARD || pattern === value;
+    if (pattern === WILDCARD || pattern === value) {
+        return true;
+    }
+
+    // A trailing ':*' is a scoped wildcard: it matches any value sharing the
+    // pattern's prefix up to and including that final colon, with a non-empty
+    // remainder. For example, 'urn:kixx:publishing:page-metadata:*' matches
+    // 'urn:kixx:publishing:page-metadata:/blog/hello'. slice(0, -1) drops only the
+    // '*', keeping the ':' so a bare prefix (without the colon) cannot match.
+    if (pattern.endsWith(`:${ WILDCARD }`)) {
+        const prefix = pattern.slice(0, -1);
+        return value.startsWith(prefix) && value.length > prefix.length;
+    }
+
+    return false;
 }

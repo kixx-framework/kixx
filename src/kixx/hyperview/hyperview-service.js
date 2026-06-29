@@ -476,7 +476,7 @@ export default class HyperviewService {
      * @param {string} templateId - Base template filename relative to `base/`
      * @param {string} source - Template source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When the current build id is unset, buildId is not a non-empty string, or buildId matches the current build id
+     * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
      */
     async putBaseTemplate(context, buildId, templateId, source) {
         this.#assertWritableBuildId(context, buildId);
@@ -494,7 +494,7 @@ export default class HyperviewService {
      * @param {string} templateId - Page template filepath relative to `pages/`
      * @param {string} source - Template source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When the current build id is unset, buildId is not a non-empty string, or buildId matches the current build id
+     * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
      */
     async putPageTemplate(context, buildId, templateId, source) {
         this.#assertWritableBuildId(context, buildId);
@@ -511,7 +511,7 @@ export default class HyperviewService {
      * @param {string} filepath - Partial filename relative to `partials/`
      * @param {string} source - Partial source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When the current build id is unset, buildId is not a non-empty string, or buildId matches the current build id
+     * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
      */
     async putPartial(context, buildId, filepath, source) {
         this.#assertWritableBuildId(context, buildId);
@@ -584,24 +584,19 @@ export default class HyperviewService {
      * build id the live site is currently reading from.
      * @param {RequestContext} context - Request context carrying the current build id
      * @param {string} buildId - Target build id (write namespace)
-     * @throws {AssertionError} When no current build id is set, when buildId is not
-     *   a non-empty string, or when buildId matches the current build id
+     * @throws {AssertionError} When buildId is not a non-empty string, or when
+     *   buildId matches the current build id
      */
     #assertWritableBuildId(context, buildId) {
         const currentBuildId = context.runtime.build?.id ?? null;
-
-        // Writes target a build *other* than the one being served, so without a
-        // current build there is no live namespace to protect and nothing to
-        // differ from; requiring one keeps the guard meaningful.
-        assert(
-            isNonEmptyString(currentBuildId),
-            'HyperviewService template writes require a current build id',
-        );
 
         assertNonEmptyString(buildId, 'HyperviewService template writes require a buildId');
 
         // The new build's namespace must differ from the live build's namespace
         // so a deploy can never overwrite templates the running site is serving.
+        // When there is no current build (a never-deployed site), there is no live
+        // namespace to protect; a non-empty buildId can never equal null, so the
+        // first deploy is allowed to stage its templates.
         assert(
             buildId !== currentBuildId,
             'HyperviewService template write buildId must not match the current build id',

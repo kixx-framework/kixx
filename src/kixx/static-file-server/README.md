@@ -113,14 +113,31 @@ There is an implementation of the `StaticFileStore` interface for each supported
 
 When using the Node.js platform the StaticFileStore simply serves files from the project `/public` directory. If your project is using Atomic Deployments with a Build ID, then static files will be namespaced by the Build ID under the `/public` directory on your remote server when the Kixx deployment tooling uploads them.
 
-When the Kixx build tooling is used, it writes a `manifest.json` alongside each build's files mapping each file key to its precomputed `{ etag, contentType, lastModified }`, so the Node.js store serves a strong ETag, exact Content-Type, and a stable Last-Modified without reading or hashing the file at request time. The manifest's `lastModified` is preferred over the file mtime so every replica reports the same value — file mtimes diverge across servers after a `git checkout` or an untimed `rsync`, which would thrash conditional-request caches. When files are deployed out-of-band (for example, with rsync or git) there is no manifest and no Build ID namespace: the store reads from the flat `/public` root, derives the Content-Type from the file extension, falls back to the file mtime for Last-Modified, and computes the ETag on the fly (caching it per file version) when `computeEtag` is enabled.
-
 ### Under the Hood: Cloudflare Workers StaticFileStore
 
 For Cloudflare Workers the StaticFileStore is backed by the KV Store. Files are cached in the KV Store indefinitely. When a new build is deployed the application will begin using the newly deployed static files from the KV Store under the latest Build ID value as a namespace.
 
 The Cloudflare store reads from a dedicated KV binding (separate from the application's general-purpose key/value cache). Each file's raw bytes are stored as the KV value, with `{ etag, contentType, contentLength, lastModified }` stored as KV metadata by the deployment tooling, so the Worker never reads or hashes a file to produce a validator (`lastModified` is an ISO date string). Cloudflare KV values are capped at 25 MiB, which bounds the per-asset size this store can serve.
 
-The Kixx deployment tooling uploads static files from your project `public/` directory to your remote application using the Kixx Publishing API.
-
 When deploying to Cloudflare, Kixx will always use Atomic Deployments with a Build ID.
+
+## Deploy-Time Write Path (Publishing API)
+
+In addition to the read path above, the `StaticFileStore` has a single deploy-time write method, `write()`, which allows writing binary static assets (favicons, images, fonts, CSS) to a build.
+
+### Staged-build-only writes
+
+Asset writes must target a **staged** build: the request's `Kixx-Build-Id` is required and must differ from the current (live) build. This keeps the live asset set immutable until an atomic promotion, and it means the running server never serves a written namespace's assets until a later deploy promotes that build and restarts the process — which is why the Node read-time metadata cache (each asset's sidecar read once and held for the process lifetime) stays correct alongside the write path. Hot-patching a single live asset is intentionally not supported.
+
+### Server-computed validators
+
+The store is the source of truth for cache validators. Given the buffered bytes plus an optional content type, `write()` computes a strong `ETag`, the exact `Content-Length`, a write-time `Last-Modified`, and resolves the `Content-Type` (the supplied value, else extension detection). The ETag is always computed server-side rather than trusted from the client, guaranteeing it matches the stored bytes.
+
+### Per-runtime metadata behavior
+
+- **Cloudflare:** writes the bytes plus `{ etag, contentType, contentLength, lastModified }` as KV metadata under `{buildId}/{key}` in the dedicated static-file KV binding, in a single `put`. The 25 MiB KV value cap bounds asset size; the request handler rejects an oversized upload with `413 PayloadTooLargeError` before buffering the whole body.
+- **Node.js:** writes the bytes to the Build-ID-namespaced filesystem path, then writes a per-asset metadata sidecar (`{ etag, contentType, lastModified }`) under a reserved `.meta/` subtree that mirrors the asset key, so reads serve replica-stable validators without re-hashing. The bytes are written before the sidecar, so a metadata failure degrades to the read-time fallback (on-the-fly hashing, extension content type, file mtime) rather than losing the asset.
+
+### Per-asset metadata sidecars (Node.js)
+
+The Node store records each asset's validators in its own JSON sidecar under a reserved `.meta/` subtree that mirrors the asset key (`<buildId>/.meta/css/main.css.json` for asset `css/main.css`). Because every asset owns a separate file, there is no shared index to serialize: concurrent asset PUTs to the same staged build write disjoint sidecars, and two writers of the same asset write byte-identical validators (the ETag is derived from the content), so a last-writer-wins atomic rename is safe. Each sidecar is written atomically (temp file + `rename`), and the `.meta/` subtree is kept out of the servable key space so sidecars are never served as assets.

@@ -18,9 +18,12 @@ export async function putPageInclude(context, request, response) {
     const buildId = request.headers.get(BUILD_ID_HEADER);
     const { filepath, pathname, filename } = splitIncludeFilepath(request, 'filepath');
 
+    // Authorization is scoped per include filepath and is independent of the
+    // target build, so it runs before the request body is read. A grant may use a
+    // '*' filepath (urn:kixx:publishing:include:*) to authorize writes to any include.
     assertPublishingPermission(context, {
         action: 'urn:kixx:publishing:include:put',
-        resource: `urn:kixx:publishing:include:${ buildId ?? 'current' }:${ filepath }`,
+        resource: `urn:kixx:publishing:include:${ filepath }`,
     });
 
     const source = await request.text();

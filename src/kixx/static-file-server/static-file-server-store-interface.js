@@ -32,7 +32,7 @@
  * ## ETag
  * `etag` MAY be `null`. Adapters whose backing store carries a precomputed etag
  * (the Cloudflare KV adapter reads one from KV metadata written by build tooling;
- * the Node.js adapter reads one from a per-build `manifest.json`) return it
+ * the Node.js adapter reads one from a per-asset metadata sidecar) return it
  * directly and never hash at request time. When no precomputed etag exists and the
  * caller requests one via `options.computeEtag`, an adapter that can read the file
  * bytes (Node.js) computes a SHA-256 hash; otherwise `etag` is `null`. When
@@ -42,8 +42,8 @@
  * `lastModified` MAY be `null`. It is the second validator the request handler uses
  * for conditional requests: it populates the `Last-Modified` header and answers
  * `If-Modified-Since`. The Cloudflare adapter reads it from KV metadata; the Node.js
- * adapter prefers the per-build `manifest.json` value and falls back to the file
- * mtime. Preferring a build-tool-provided timestamp keeps `Last-Modified` identical
+ * adapter prefers the per-asset metadata sidecar value and falls back to the file
+ * mtime. Preferring a stored write-time timestamp keeps `Last-Modified` identical
  * across replicas, since raw file mtimes diverge between servers after a checkout or
  * copy. Adapters return a `Date`, or `null` when no timestamp is available.
  *
@@ -53,20 +53,37 @@
  * decides how to render the miss — throwing `NotFoundError` or deferring to the
  * next handler — rather than the store forwarding a platform-specific 404 body.
  *
- * ## Read-only
- * This store has no write methods. Static files are published by an out-of-band
- * deployment mechanism (Kixx build tooling or a manual copy), not at runtime. On
- * Cloudflare the backing KV values for a build are immutable for that build's
- * lifetime, so a runtime write method could not be implemented coherently; rather
- * than expose a method that throws on one platform, the contract omits writes.
+ * ## Write path
+ * The store has a single deploy-time write path, `write()`, used by the Publishing
+ * API to upload a build's static assets to a staged (non-current) Build ID
+ * namespace — the static-asset analogue of how the Hyperview service accepts
+ * template/page/include writes. Static files are still primarily published by the
+ * out-of-band Kixx build tooling; `write()` is the in-application alternative.
+ *
+ * `write()` is the store's source of truth for cache validators: given the
+ * already-buffered bytes plus an optional content type, the store computes a strong
+ * `etag` (SHA-256, the same scheme as the build tooling) and the exact
+ * `contentLength` from the bytes, sets `lastModified` to write time, resolves the
+ * `contentType` (the argument, else extension detection via the same content-type
+ * lookup the read path uses), persists the bytes together with those validators
+ * (Cloudflare: KV metadata; Node.js: a per-asset metadata sidecar), and returns the
+ * written parts so the caller can echo them back to the publishing client.
+ *
+ * Enforcing that `namespace` is a staged, non-current Build ID is the *caller's*
+ * concern (the transaction script), not the store's: the store writes wherever it
+ * is told. The size cap that keeps a value within the platform's limits
+ * (Cloudflare KV's 25 MiB) is likewise enforced upstream, before the body is
+ * buffered and handed to `write()`.
  *
  * ## Path safety
  * `key` is the file path relative to the namespace root (for example
  * `css/main.css` or `favicon.svg`), without a leading prefix. The request handler
- * MUST run path-safety validation before calling `read()`. Adapters MUST
- * additionally guard against traversal on their own — the resolve-within-root check
- * on Node.js — so the store never serves a file outside its root even if a caller
- * forgets to validate.
+ * MUST run path-safety validation before calling `read()` or `write()`. Adapters
+ * MUST additionally guard against traversal on their own — the resolve-within-root
+ * check on Node.js — so the store never serves or writes a file outside its
+ * namespace root even if a caller forgets to validate. On `read()` a traversal
+ * attempt resolves to `null`; on `write()` it MUST throw rather than write outside
+ * the root.
  *
  * ## Context pass-through
  * `read()` receives a request or execution `context` as its first argument.
@@ -104,8 +121,23 @@
  *   computed or stored.
  * @property {Date|null} lastModified - The file's last-modified time, used for the
  *   `Last-Modified` header and `If-Modified-Since` revalidation, or `null` when
- *   unknown. The Node.js adapter takes it from the build manifest, falling back to
- *   the file mtime; the Cloudflare adapter takes it from KV metadata.
+ *   unknown. The Node.js adapter takes it from the asset's metadata sidecar, falling
+ *   back to the file mtime; the Cloudflare adapter takes it from KV metadata.
+ */
+
+/**
+ * The result of a successful static file write.
+ *
+ * @typedef {Object} StaticFileWriteResult
+ * @property {string} key - The file path that was written, relative to the
+ *   namespace root.
+ * @property {string} contentType - The resolved media type stored for the file
+ *   (the `write()` argument, or extension detection when it was empty).
+ * @property {number} contentLength - The exact byte length of the written bytes.
+ * @property {string} etag - The strong validator (SHA-256) computed from the
+ *   written bytes.
+ * @property {Date} lastModified - The write time, persisted as the file's
+ *   last-modified validator.
  */
 
 /**
@@ -119,4 +151,18 @@
  *   Resolves to a {@link StaticFileResult} when the file exists, or `null` when it
  *   does not. The `key` MUST be path-safety validated by the caller, and adapters
  *   MUST independently refuse to serve files outside their namespace root.
+ *
+ * @property {function(Object, Object): Promise<StaticFileWriteResult>} write
+ *   Writes one file's `options.body` bytes under `options.key` within
+ *   `options.namespace`. The options object carries
+ *   `{ key: string, namespace: (string|null), body: (ArrayBuffer|Uint8Array), contentType: (string|null) }`,
+ *   where `body` is the already-buffered file bytes and `contentType` MAY be empty
+ *   or null. The store computes the strong `etag` (SHA-256) and exact
+ *   `contentLength` from the bytes, sets `lastModified` to write time, resolves the
+ *   `contentType` (the argument, else extension detection), persists the bytes
+ *   together with those validators (Cloudflare: KV metadata; Node.js: per-asset
+ *   metadata sidecar), and resolves to a {@link StaticFileWriteResult}. The
+ *   `key` MUST be path-safety validated by the caller; adapters MUST independently
+ *   refuse to write outside their namespace root, throwing rather than writing.
+ *   Enforcing a staged, non-current `namespace` is the caller's concern.
  */

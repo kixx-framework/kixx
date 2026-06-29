@@ -1,4 +1,5 @@
 import { getContentType } from '../../../kixx/static-file-server/mime-types.js';
+import { sha256Hex } from '../../../kixx/utils/crypto.js';
 import { assert, assertNonEmptyString, isNonEmptyString, isNumberNotNaN, isValidDate } from '../../../kixx/assertions/mod.js';
 
 /**
@@ -86,6 +87,63 @@ export default class StaticFileStore {
             contentLength,
             etag: isNonEmptyString(meta.etag) ? meta.etag : null,
             lastModified: parseLastModified(meta.lastModified),
+        };
+    }
+
+    /**
+     * Writes one file's bytes and cache validators to the KV binding under a
+     * Build ID namespace, in a single `put`.
+     *
+     * @param {RequestContext} context - Request context exposing the dedicated KV binding on `context.env`
+     * @param {Object} options - Write options
+     * @param {string} options.key - File key relative to the namespace root, such as `css/main.css`
+     * @param {string|null} options.namespace - Build ID namespace to write the file under
+     * @param {ArrayBuffer|Uint8Array} options.body - The buffered file bytes to write
+     * @param {string|null} options.contentType - Media type to store, or null to derive from the extension
+     * @returns {Promise<import('../../../kixx/static-file-server/static-file-server-store-interface.js').StaticFileWriteResult>} The written file's parts
+     */
+    async write(context, options) {
+        const {
+            key,
+            namespace,
+            body,
+            contentType,
+        } = options ?? {};
+        assertNonEmptyString(key, 'StaticFileStore write requires a key');
+
+        const kvStore = this.#getKvStore(context);
+
+        // Mirror read()'s namespaced key so the asset is found once its build is
+        // current. A null namespace writes the bare key, but Cloudflare deployments
+        // always namespace by Build ID.
+        const kvKey = isNonEmptyString(namespace) ? `${ namespace }/${ key }` : key;
+
+        // The store owns the validators: a strong (quoted) SHA-256 ETag that always
+        // matches the stored bytes — byte-identical to what read() returns — plus
+        // the exact length and the resolved content type (extension fallback).
+        const etag = `"${ await sha256Hex(body) }"`;
+        const contentLength = body.byteLength;
+        const resolvedContentType = isNonEmptyString(contentType) ? contentType : getContentType(key);
+        const lastModified = new Date();
+
+        // The 25 MiB KV value cap is enforced upstream by the request handler before
+        // the body is buffered, so the put below stays within KV's limit. Validators
+        // are stored as KV metadata alongside the bytes so read() never re-hashes.
+        await kvStore.put(kvKey, body, {
+            metadata: {
+                etag,
+                contentType: resolvedContentType,
+                contentLength,
+                lastModified: lastModified.toISOString(),
+            },
+        });
+
+        return {
+            key,
+            contentType: resolvedContentType,
+            contentLength,
+            etag,
+            lastModified,
         };
     }
 
