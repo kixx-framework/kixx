@@ -151,6 +151,7 @@ router.on('error', ({ error, requestId }) => {
             logger.warn('operational error while routing request', { requestId }, error);
         } else {
             logger.error('unexpected error while routing request', { requestId }, error);
+            shutdown('fatal router error', { force: false, exitCode: 1 });
         }
     }
 });
@@ -170,8 +171,10 @@ async function handleRequest(nodeRequest, nodeResponse) {
         // The router emits 'error' events for logging, but a rejection here still
         // needs to terminate the socket or the client hangs until it times out.
         logger.error('unhandled error while handling request', null, cause);
+
         if (nodeResponse.headersSent) {
             nodeResponse.destroy(cause);
+            shutdown('fatal request error', { force: false, exitCode: 1 });
             return;
         }
 
@@ -183,6 +186,8 @@ async function handleRequest(nodeRequest, nodeResponse) {
         } else {
             nodeResponse.end('Internal Server Error\n');
         }
+
+        shutdown('fatal request error', { force: false, exitCode: 1 });
     }
 }
 
@@ -268,20 +273,22 @@ nodeServer.listen(port);
 // Milliseconds to wait for in-flight requests to drain before forcing exit.
 const SHUTDOWN_TIMEOUT_MS = 10000;
 
-// Shut down on termination signals: stop accepting new connections, then exit.
+// Shut down the process: stop accepting new connections, then exit.
 //
 // SIGTERM is the deploy/orchestrator path, so we drain — let in-flight requests
 // finish before exiting, with the force-exit timer as a backstop for a stuck
 // request. SIGINT is an interactive Ctrl-C, so we exit immediately and drop any
 // in-flight requests; a developer expects Ctrl-C to be instant, not to block on
 // a held-open connection.
-function shutdown(signal, { force }) {
+function shutdown(reason, options) {
+    const { force, exitCode = 0 } = options ?? {};
+
     if (isShuttingDown) {
         return;
     }
 
     isShuttingDown = true;
-    logger.info('received shutdown signal; closing server', { signal, force });
+    logger.info('closing server', { reason, force, exitCode });
 
     const forceExit = setTimeout(() => {
         logger.error('graceful shutdown timed out; forcing exit', null);
@@ -297,8 +304,8 @@ function shutdown(signal, { force }) {
             logger.error('error closing server during shutdown', null, cause);
             process.exit(1);
         }
-        logger.info('server closed; exiting', { signal });
-        process.exit(0);
+        logger.info('server closed; exiting', { reason, exitCode });
+        process.exit(exitCode);
     });
 
     // close() only resolves once every connection has ended. Idle HTTP
