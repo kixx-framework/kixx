@@ -7,6 +7,7 @@ export { default as NotAcceptableError } from './lib/not-acceptable-error.js';
 export { default as NotFoundError } from './lib/not-found-error.js';
 export { default as NotImplementedError } from './lib/not-implemented-error.js';
 export { default as OperationalError } from './lib/operational-error.js';
+export { default as PayloadTooLargeError } from './lib/payload-too-large-error.js';
 export { default as PreconditionFailedError } from './lib/precondition-failed-error.js';
 export { default as UnauthenticatedError } from './lib/unauthenticated-error.js';
 export { default as UnauthorizedError } from './lib/unauthorized-error.js';

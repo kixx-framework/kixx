@@ -231,6 +231,19 @@ export default [
                             },
                         ],
                     },
+                    {
+                        pattern: '/assets/*filepath',
+                        name: 'assets',
+                        targets: [
+                            {
+                                name: 'put',
+                                methods: [ 'PUT' ],
+                                requestHandlers: [
+                                    PublishingAPI.putStaticAsset,
+                                ],
+                            },
+                        ],
+                    },
                 ],
             },
             {

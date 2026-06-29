@@ -14,7 +14,7 @@ import {
     isUndefined,
     isValidDate,
 } from '../../../kixx/assertions/mod.js';
-import ManifestStore from './manifest.js';
+import AssetMetadataStore, { METADATA_DIRNAME } from './asset-metadata-store.js';
 
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
@@ -37,10 +37,11 @@ import ManifestStore from './manifest.js';
  * Build ID `namespace`) onto a real filesystem path.
  *
  * `read()` returns a {@link StaticFileResult} whose body streams the file from
- * disk. Content-Type and ETag come from the per-build `manifest.json` when present;
- * otherwise Content-Type is derived from the file extension and the ETag is hashed
- * on the fly (cached per file version) when the caller requests one. Missing files,
- * directories, and any path that resolves outside the public root resolve to `null`.
+ * disk. Content-Type and ETag come from the asset's `.meta/` metadata sidecar when
+ * present; otherwise Content-Type is derived from the file extension and the ETag is
+ * hashed on the fly (cached per file version) when the caller requests one. Missing
+ * files, directories, and any path that resolves outside the public root resolve to
+ * `null`.
  *
  * @implements {import('../../../kixx/static-file-server/static-file-server-store-interface.js').StaticFileStoreInterface}
  * @see StaticFileStore in ../../cloudflare-static-file-server/lib/static-file-server-store.js for the Cloudflare Workers implementation
@@ -57,8 +58,8 @@ export default class StaticFileStore {
     // Only used when no explicit constructor `directory` was supplied.
     #resolvedRootDirectory = null;
 
-    // The single manifest store for this store's (fixed) root, created lazily.
-    #manifest = null;
+    // The per-asset metadata store for this store's (fixed) root, created lazily.
+    #metadataStore = null;
 
     // `${namespace}\n${key}\n${mtimeMs}\n${size}` -> etag. Keyed by file version
     // so a redeploy never serves a stale hash, while repeat reads of an unchanged
@@ -90,12 +91,20 @@ export default class StaticFileStore {
      * @param {Object} options - Lookup options
      * @param {string} options.key - File key relative to the namespace root, such as `css/main.css`
      * @param {string|null} options.namespace - Build ID namespace, or null for the flat root
-     * @param {boolean} options.computeEtag - Whether to hash the file for an ETag when the manifest has none
+     * @param {boolean} options.computeEtag - Whether to hash the file for an ETag when the metadata sidecar has none
      * @returns {Promise<StaticFileResult|null>} The file parts, or `null` when no file exists
      */
     async read(context, options) {
         const { key, namespace, computeEtag } = options ?? {};
         assertNonEmptyString(key, 'StaticFileStore read requires a key');
+
+        // The reserved .meta subtree holds per-asset metadata sidecars and must
+        // never be served as an asset itself.
+        if (key === METADATA_DIRNAME || key.startsWith(METADATA_DIRNAME + '/')) {
+            this.#logger.debug('read() rejected reserved metadata key', { key, namespace });
+            return null;
+        }
+
         const rootDirectory = this.#resolveRootDirectory(context);
 
         // Namespace (Build ID) selects a subtree; an absent namespace serves from
@@ -135,18 +144,18 @@ export default class StaticFileStore {
             return null;
         }
 
-        const manifestEntry = await this.#getManifest(rootDirectory).lookup(namespace, key);
+        const metadataEntry = await this.#getMetadataStore(rootDirectory).lookup(namespace, key);
 
-        // Manifest Content-Type wins (it was chosen at build time); fall back to
+        // A stored Content-Type wins (it was resolved at write time); fall back to
         // extension-based detection for out-of-band deploys.
-        const contentType = manifestEntry?.contentType ?? getContentType(key);
+        const contentType = metadataEntry?.contentType ?? getContentType(key);
 
         const { etag, body } = await this.#resolveEtagAndBody({
             resolvedPath,
             key,
             namespace,
             stats,
-            manifestEtag: manifestEntry?.etag ?? null,
+            metadataEtag: metadataEntry?.etag ?? null,
             computeEtag: computeEtag === true,
         });
 
@@ -157,7 +166,93 @@ export default class StaticFileStore {
             // exact even for multi-byte file contents.
             contentLength: stats.size,
             etag,
-            lastModified: resolveLastModified(manifestEntry?.lastModified, stats.mtime),
+            lastModified: resolveLastModified(metadataEntry?.lastModified, stats.mtime),
+        };
+    }
+
+    /**
+     * Writes one file's bytes within an optional Build ID namespace and records
+     * its precomputed validators in a per-asset metadata sidecar.
+     *
+     * The bytes are written before the metadata sidecar, so a metadata failure
+     * degrades to the read-time fallback (on-the-fly hashing, extension content
+     * type, file mtime) rather than losing the asset.
+     *
+     * @param {RequestContext} context - Request context used to resolve Node request config
+     * @param {Object} options - Write options
+     * @param {string} options.key - File key relative to the namespace root, such as `css/main.css`
+     * @param {string|null} options.namespace - Build ID namespace, or null for the flat root
+     * @param {ArrayBuffer|Uint8Array} options.body - The buffered file bytes to write
+     * @param {string|null} options.contentType - Media type to store, or null to derive from the extension
+     * @returns {Promise<import('../../../kixx/static-file-server/static-file-server-store-interface.js').StaticFileWriteResult>} The written file's parts
+     * @throws {AssertionError} When `key` is missing or resolves outside the namespace root
+     */
+    async write(context, options) {
+        const {
+            key,
+            namespace,
+            body,
+            contentType,
+        } = options ?? {};
+        assertNonEmptyString(key, 'StaticFileStore write requires a key');
+
+        // The reserved .meta subtree is owned by the metadata sidecars; refuse to
+        // write an asset key that would collide with it.
+        if (key === METADATA_DIRNAME || key.startsWith(METADATA_DIRNAME + '/')) {
+            throw new AssertionError(
+                'StaticFileStore write rejected a key under the reserved .meta subtree',
+            );
+        }
+
+        const rootDirectory = this.#resolveRootDirectory(context);
+
+        // Namespace (Build ID) selects a subtree; an absent namespace writes to the
+        // flat root, matching how read() resolves a missing Build ID.
+        const namespaceRoot = isNonEmptyString(namespace)
+            ? path.join(rootDirectory, namespace)
+            : rootDirectory;
+
+        const resolvedPath = path.resolve(namespaceRoot, key);
+
+        // Defense in depth: refuse to write anything that resolves outside the
+        // public root. Unlike read() (which returns null on a miss), a traversal on
+        // write is an attempt to escape the root and must crash loudly.
+        if (resolvedPath !== rootDirectory
+            && !resolvedPath.startsWith(rootDirectory + path.sep)) {
+            throw new AssertionError(
+                'StaticFileStore write rejected a path outside the public root',
+            );
+        }
+
+        const bytes = body instanceof Uint8Array ? body : new Uint8Array(body);
+
+        // The store owns the validators: a strong (quoted) SHA-256 ETag that always
+        // matches the stored bytes — byte-identical to what read() returns — plus
+        // the exact length and the resolved content type (extension fallback).
+        const etag = `"${ await sha256Hex(bytes) }"`;
+        const contentLength = bytes.byteLength;
+        const resolvedContentType = isNonEmptyString(contentType) ? contentType : getContentType(key);
+        const lastModified = new Date();
+
+        // Ensure the parent tree exists, then write the bytes.
+        await fsp.mkdir(path.dirname(resolvedPath), { recursive: true });
+        await fsp.writeFile(resolvedPath, bytes);
+
+        // Record the validators so reads serve a replica-stable ETag/Content-Type/
+        // Last-Modified without re-hashing. Done after the byte write so a metadata
+        // failure leaves a servable file rather than losing the asset.
+        await this.#getMetadataStore(rootDirectory).write(namespace, key, {
+            etag,
+            contentType: resolvedContentType,
+            lastModified: lastModified.toISOString(),
+        });
+
+        return {
+            key,
+            contentType: resolvedContentType,
+            contentLength,
+            etag,
+            lastModified,
         };
     }
 
@@ -204,16 +299,16 @@ export default class StaticFileStore {
         return path.resolve(rootDirectory);
     }
 
-    #getManifest(rootDirectory) {
+    #getMetadataStore(rootDirectory) {
         // The root directory is fixed for the store's lifetime, so a single
-        // manifest store is created lazily on first use and reused thereafter.
-        if (!this.#manifest) {
-            this.#manifest = new ManifestStore({
+        // metadata store is created lazily on first use and reused thereafter.
+        if (!this.#metadataStore) {
+            this.#metadataStore = new AssetMetadataStore({
                 logger: this.#logger,
                 directory: rootDirectory,
             });
         }
-        return this.#manifest;
+        return this.#metadataStore;
     }
 
     async #resolveEtagAndBody(args) {
@@ -222,13 +317,13 @@ export default class StaticFileStore {
             key,
             namespace,
             stats,
-            manifestEtag,
+            metadataEtag,
             computeEtag,
         } = args;
 
-        // A build-tool-provided ETag is authoritative and needs no file read.
-        if (manifestEtag) {
-            return { etag: manifestEtag, body: streamFromDisk(resolvedPath) };
+        // A stored (write-time) ETag is authoritative and needs no file read.
+        if (metadataEtag) {
+            return { etag: metadataEtag, body: streamFromDisk(resolvedPath) };
         }
 
         if (!computeEtag) {
@@ -254,13 +349,13 @@ export default class StaticFileStore {
     }
 }
 
-function resolveLastModified(manifestLastModified, mtime) {
-    // Prefer the build tool's canonical timestamp so every replica reports the
-    // same Last-Modified; file mtimes diverge across servers (git checkout and
+function resolveLastModified(metadataLastModified, mtime) {
+    // Prefer the stored (write-time) canonical timestamp so every replica reports
+    // the same Last-Modified; file mtimes diverge across servers (git checkout and
     // untimed rsync rewrite them), which would thrash conditional-request caches.
     // Fall back to the file mtime for out-of-band deploys and a malformed value.
-    if (manifestLastModified) {
-        const parsed = new Date(manifestLastModified);
+    if (metadataLastModified) {
+        const parsed = new Date(metadataLastModified);
         if (isValidDate(parsed)) {
             return parsed;
         }
