@@ -298,14 +298,24 @@ function shutdown(reason, options) {
     // Don't let the timer itself keep the event loop alive once draining is done.
     forceExit.unref();
 
-    nodeServer.close((cause) => {
-        clearTimeout(forceExit);
+    nodeServer.close(async (cause) => {
         if (cause) {
             logger.error('error closing server during shutdown', null, cause);
-            process.exit(1);
         }
-        logger.info('server closed; exiting', { reason, exitCode });
-        process.exit(exitCode);
+
+        // In-flight requests have drained, so it is now safe to close store
+        // connections (SQLite databases) without interrupting a request
+        // mid-query. appContext.close() isolates its own failures, so this
+        // await resolves even if a service close throws.
+        await appContext.close();
+
+        // Clear the backstop only after store close finishes, so a stuck close
+        // is still force-exited by the timer rather than hanging the process.
+        clearTimeout(forceExit);
+
+        const finalExitCode = cause ? 1 : exitCode;
+        logger.info('server closed; exiting', { reason, exitCode: finalExitCode });
+        process.exit(finalExitCode);
     });
 
     // close() only resolves once every connection has ended. Idle HTTP

@@ -2,6 +2,7 @@ import RequestContext from './request-context.js';
 import BaseContext from './base-context.js';
 import {
     assert,
+    isFunction,
     assertNonEmptyString,
     assertDefined,
 } from '../assertions/mod.js';
@@ -32,6 +33,7 @@ export default class ApplicationContext extends BaseContext {
 
     #services = new Map();
     #collections = new Map();
+    #closed = false;
 
     /**
      * @param {Object} options
@@ -123,5 +125,49 @@ export default class ApplicationContext extends BaseContext {
             collections: this.#collections,
             logger: this.logger,
         });
+    }
+
+    /**
+     * Closes registered services that expose a `close()` method, releasing
+     * resources such as open database connections during process shutdown.
+     *
+     * Services are closed in reverse registration order (LIFO) so a service is
+     * torn down before the services it was built on top of. Each close is
+     * awaited and isolated: a failure is logged and the sweep continues, so one
+     * throwing or stuck service cannot strand the others. Calling more than once
+     * is a no-op.
+     *
+     * Only services are swept. Connection-owning stores register as services,
+     * and each store's own `close()` is idempotent, so closing a wrapper service
+     * and its underlying engine service in turn is safe.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
+    async close() {
+        if (this.#closed) {
+            return;
+        }
+        this.#closed = true;
+
+        // Reverse registration order so a service is torn down before the
+        // services it depends on (e.g. a store wrapper before its engine).
+        const entries = [ ...this.#services ].reverse();
+
+        for (const [ name, service ] of entries) {
+            if (!isFunction(service?.close)) {
+                continue;
+            }
+
+            try {
+                // Await each close so an async teardown (network flush, final
+                // checkpoint) completes before the process exits.
+                await service.close();
+            } catch (cause) {
+                // Isolate failures: one service that throws must not prevent the
+                // remaining services from closing.
+                this.logger.error('error closing service during shutdown', { name }, cause);
+            }
+        }
     }
 }

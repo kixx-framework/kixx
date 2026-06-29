@@ -29,6 +29,15 @@ function catchError(fn) {
     return null;
 }
 
+async function catchAsyncError(fn) {
+    try {
+        await fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}
+
 
 describe('ApplicationContext', ({ describe }) => {
 
@@ -210,6 +219,115 @@ describe('ApplicationContext', ({ describe }) => {
             context.registerCollection('app.User', { name: 'User' });
 
             assertEqual('User', requestContext.getCollection('app.User').name);
+        });
+    });
+
+    describe('close', ({ it }) => {
+        it('calls close() on each registered service that exposes one', async () => {
+            const context = makeApplicationContext();
+            let closedA = false;
+            let closedB = false;
+            context.registerService('A', { close() {
+                closedA = true;
+            } });
+            context.registerService('B', { close() {
+                closedB = true;
+            } });
+
+            await context.close();
+
+            assert(closedA, 'expected service A to be closed');
+            assert(closedB, 'expected service B to be closed');
+        });
+
+        it('skips services that do not expose a close method', async () => {
+            const context = makeApplicationContext();
+            // A service with no close() must be passed over without throwing.
+            context.registerService('plain', { id: 1 });
+
+            const caught = await catchAsyncError(() => context.close());
+
+            assert(!caught, 'expected close() not to throw');
+        });
+
+        it('closes services in reverse registration order', async () => {
+            const context = makeApplicationContext();
+            const order = [];
+            context.registerService('first', { close() {
+                order.push('first');
+            } });
+            context.registerService('second', { close() {
+                order.push('second');
+            } });
+            context.registerService('third', { close() {
+                order.push('third');
+            } });
+
+            await context.close();
+
+            assertEqual('third', order[0]);
+            assertEqual('second', order[1]);
+            assertEqual('first', order[2]);
+        });
+
+        it('awaits an async close before resolving', async () => {
+            const context = makeApplicationContext();
+            let resolved = false;
+            context.registerService('async', {
+                close() {
+                    return new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolved = true;
+                            resolve();
+                        }, 10);
+                    });
+                },
+            });
+
+            await context.close();
+
+            assert(resolved, 'expected the async close to complete before close() resolved');
+        });
+
+        it('isolates a failing close and continues closing the rest', async () => {
+            const errors = [];
+            const logger = {
+                name: 'test',
+                error(message) {
+                    errors.push(message);
+                },
+            };
+            const context = makeApplicationContext({ logger });
+            const order = [];
+            // Registered first, so closed last: proves the sweep continued past
+            // the throwing service registered after it.
+            context.registerService('survivor', { close() {
+                order.push('survivor');
+            } });
+            context.registerService('broken', {
+                close() {
+                    throw new Error('boom');
+                },
+            });
+
+            const caught = await catchAsyncError(() => context.close());
+
+            assert(!caught, 'expected close() to swallow the service error');
+            assert(order.includes('survivor'), 'expected the remaining service to still close');
+            assertEqual(1, errors.length);
+        });
+
+        it('is a no-op when called more than once', async () => {
+            const context = makeApplicationContext();
+            let closeCount = 0;
+            context.registerService('counter', { close() {
+                closeCount += 1;
+            } });
+
+            await context.close();
+            await context.close();
+
+            assertEqual(1, closeCount);
         });
     });
 
