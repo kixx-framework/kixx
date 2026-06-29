@@ -12,7 +12,7 @@ import { putTemplate } from '../../../transaction-scripts/publishing/put-templat
 import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
-const TEXT_TEMPLATE_CONTENT_TYPES = new Set([ 'text/plain', 'text/html' ]);
+const TEMPLATE_CONTENT_TYPE = 'text/plain';
 
 
 export const putBaseTemplate = createPutTemplateHandler('base');
@@ -65,10 +65,10 @@ function createPutTemplateHandler(kind) {
 function assertTemplateContentType(request) {
     const contentType = request.getContentMediaType();
 
-    if (!TEXT_TEMPLATE_CONTENT_TYPES.has(contentType)) {
+    if (contentType !== TEMPLATE_CONTENT_TYPE) {
         throw new UnsupportedMediaTypeError(
-            'Template writes require a text/plain or text/html Content-Type.',
-            { accept: Array.from(TEXT_TEMPLATE_CONTENT_TYPES) },
+            'Template writes require a text/plain Content-Type.',
+            { accept: [ TEMPLATE_CONTENT_TYPE ] },
         );
     }
 }
