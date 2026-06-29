@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import DocumentAlreadyExistsError from '../../../kixx/document-store/document-already-exists-error.js';
 import DocumentNotFoundError from '../../../kixx/document-store/document-not-found-error.js';
@@ -833,6 +835,7 @@ export default class DocumentStoreEngine {
         if (this.#databaseSpecKey === null) {
             // First use opens the connection and locks the database spec for the
             // lifetime of the engine.
+            ensureDatabaseDirectory(databaseSpec.path);
             try {
                 this.#database = new DatabaseSync(databaseSpec.path, databaseSpec.sqliteOptions);
             } catch (cause) {
@@ -882,6 +885,22 @@ export default class DocumentStoreEngine {
             sqliteOptions,
             key: createDatabaseSpecKey(resolvedPath, sqliteOptions),
         };
+    }
+}
+
+function ensureDatabaseDirectory(filePath) {
+    // An in-memory database has no filesystem directory to create.
+    if (filePath === ':memory:') {
+        return;
+    }
+
+    // SQLite creates the database file but never its parent directory, so a
+    // first run against a fresh data path fails to open unless we create it.
+    const directory = path.dirname(filePath);
+    try {
+        fs.mkdirSync(directory, { recursive: true });
+    } catch (cause) {
+        throw new OperationalError(`Unable to create SQLite database directory ${ directory }`, { cause });
     }
 }
 

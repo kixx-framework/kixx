@@ -1,5 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
+import { OperationalError } from '../../../kixx/errors/mod.js';
 import {
     AssertionError,
     isUndefined,
@@ -401,6 +404,7 @@ export default class KeyValueStore {
         if (!this.#database || this.#databaseSpecKey) {
             const databaseSpec = this.#resolveDatabaseSpec(context);
             if (this.#databaseSpecKey === null) {
+                ensureDatabaseDirectory(databaseSpec.path);
                 this.#database = new DatabaseSync(databaseSpec.path, databaseSpec.sqliteOptions);
                 this.#databaseSpecKey = databaseSpec.key;
             } else if (this.#databaseSpecKey !== databaseSpec.key) {
@@ -472,6 +476,22 @@ export default class KeyValueStore {
             )
         `);
         this.#logger.debug('prepared key/value cache database');
+    }
+}
+
+function ensureDatabaseDirectory(filePath) {
+    // An in-memory database has no filesystem directory to create.
+    if (filePath === ':memory:') {
+        return;
+    }
+
+    // SQLite creates the database file but never its parent directory, so a
+    // first run against a fresh data path fails to open unless we create it.
+    const directory = path.dirname(filePath);
+    try {
+        fs.mkdirSync(directory, { recursive: true });
+    } catch (cause) {
+        throw new OperationalError(`Unable to create SQLite database directory ${ directory }`, { cause });
     }
 }
 
