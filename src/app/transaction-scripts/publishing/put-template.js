@@ -47,13 +47,11 @@ export async function putTemplate(context, args) {
         });
     }
 
+    // A missing current build id means the site has never been deployed; the
+    // first deploy must be able to stage its templates. The equality check below
+    // still protects a live build once one exists, and is vacuously safe when
+    // currentBuildId is null because a non-empty buildId can never equal null.
     const currentBuildId = context.runtime.build?.id ?? null;
-
-    if (!isNonEmptyString(currentBuildId)) {
-        throw new ConflictError('A current build id is required before templates can be published.', {
-            code: 'CurrentBuildIdRequired',
-        });
-    }
 
     if (buildId === currentBuildId) {
         throw new ConflictError('Template writes must target a build other than the current build.', {

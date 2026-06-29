@@ -24,16 +24,19 @@ function createPutTemplateHandler(kind) {
     return async (context, request, response) => {
         assertTemplateContentType(request);
 
-        // buildId is read here to form the authorization resource URN and is
-        // passed through to putTemplate(), which is the single authority that
-        // validates it (required, and must differ from the current build).
-        const buildId = request.headers.get(BUILD_ID_HEADER);
-        const filepath = getWildcardFilepath(request, 'filepath');
-
+        // Template writes are gated by a single coarse-grained capability: a token
+        // either may write templates or it may not. The decision does not depend on
+        // the kind, build, or filepath, so it runs before those are read — an
+        // unauthorized token gets a 403 rather than filepath-validation feedback.
         assertPublishingPermission(context, {
             action: 'urn:kixx:publishing:template:put',
-            resource: `urn:kixx:publishing:template:${ kind }:${ buildId }:${ filepath }`,
+            resource: 'urn:kixx:publishing:template',
         });
+
+        // buildId is validated downstream by putTemplate(), which is the single
+        // authority that enforces it (required, and must differ from the current build).
+        const buildId = request.headers.get(BUILD_ID_HEADER);
+        const filepath = getWildcardFilepath(request, 'filepath');
 
         const source = await request.text();
         const written = await putTemplate(context, {

@@ -17,15 +17,21 @@ export async function putPageMetadata(context, request, response) {
 
     const buildId = request.headers.get(BUILD_ID_HEADER);
     const pathname = getWildcardPathname(request, 'pathname');
+
+    // Authorization is scoped per page pathname and is independent of the target
+    // build, so it runs before the request body is parsed and validated — an
+    // unauthorized token gets a 403 rather than body-parsing or validation errors.
+    // A grant may use a '*' pathname (urn:kixx:publishing:page-metadata:*) to
+    // authorize writes to any page.
+    assertPublishingPermission(context, {
+        action: 'urn:kixx:publishing:page-metadata:put',
+        resource: `urn:kixx:publishing:page-metadata:${ pathname }`,
+    });
+
     const resource = await parseJsonApiResource(request, 'PageMetadata');
     const form = PutPageMetadataForm.fromJsonApi(resource);
 
     form.validate();
-
-    assertPublishingPermission(context, {
-        action: 'urn:kixx:publishing:page-metadata:put',
-        resource: `urn:kixx:publishing:page-metadata:${ buildId ?? 'current' }:${ pathname }`,
-    });
 
     const metadata = form.toJSON();
     const written = await putPageMetadataScript(context, {
