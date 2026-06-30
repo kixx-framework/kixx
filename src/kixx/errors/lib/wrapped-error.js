@@ -18,7 +18,7 @@ export default class WrappedError extends Error {
      * @param {Object} [options] - Additional error options.
      * @param {Error} [options.cause] - Underlying cause.
      * @param {number} [options.httpStatusCode] - HTTP status code associated with the error.
-     * @param {string} [options.code] - Custom error code override.
+     * @param {string|number} [options.code] - Custom error code override. A non-empty string or any number (including `0`) replaces the class default; an empty string is ignored.
      * @param {string} [options.name] - Custom error name override.
      * @param {boolean} [options.expected=false] - Marks this as an operational/expected error.
      * @param {Function} [sourceFunction] - Function excluded from captured stack frames.
@@ -28,8 +28,10 @@ export default class WrappedError extends Error {
         super(message, options);
 
         const name = options.name || this.constructor.name;
-        const causeCode = options.cause && options.cause.code;
-        const code = options.code || causeCode || this.constructor.CODE;
+        let code = this.constructor.CODE;
+        if (typeof options.code === 'number' || (options.code && typeof options.code === 'string')) {
+            code = options.code;
+        }
         const httpStatusCode = options.httpStatusCode || this.constructor.HTTP_STATUS_CODE;
 
         // Define public, enumerable, and unwritable properties if they exist.

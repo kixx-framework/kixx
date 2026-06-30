@@ -29,7 +29,7 @@ Kixx Server Errors exists to meet 3 goals for better error handling in server-si
 It’s helpful to divide all errors into two broad categories:
 
 #### Expected Operational Errors
-Expected errors epresent run-time problems experienced by correctly-written programs. These are not bugs in the program. In fact, these are usually problems with something else: the system itself (e.g., out of memory or too many open files), the system’s configuration (e.g., no route to a remote host), the network (e.g., socket hang-up), or a remote service (e.g., a 500 error, failure to connect, or the like):
+Expected errors represent run-time problems experienced by correctly-written programs. These are not bugs in the program. In fact, these are usually problems with something else: the system itself (e.g., out of memory or too many open files), the system’s configuration (e.g., no route to a remote host), the network (e.g., socket hang-up), or a remote service (e.g., a 500 error, failure to connect, or the like):
 
 - failed to connect to server
 - failed to resolve hostname
