@@ -1,0 +1,143 @@
+
+/* -----------------------------------------------------------------------------
+    App layout — sidebar + main content
+
+    Built on the .with-sidebar primitive (see the markup): the nav is the
+    sidebar track, the main content the fluid one. Mobile-first — the content
+    demands the full width (--sidebar-content-min: 100%), so the pair wraps and
+    the nav stacks above the content as a clean vertical stream.
+
+    A single breakpoint flips everything together: past 52rem the content only
+    needs 60%, so the two tracks sit side by side, AND the divider swaps from a
+    bottom rule to a right rule with the nav pinned sticky. Driving the wrap and
+    its presentation off the same breakpoint keeps them in lockstep — the
+    primitive itself stays breakpoint-free; the shell simply opts into one.
+----------------------------------------------------------------------------- */
+
+.site-layout {
+    --sidebar-content-min: 100%;
+}
+
+@media (min-width: 52rem) {
+    .site-layout {
+        --sidebar-content-min: 60%;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+    Sidebar navigation
+----------------------------------------------------------------------------- */
+
+.site-nav {
+    border-bottom: var(--hairline-width) solid var(--color-rule);
+}
+
+.site-nav__inner {
+    padding-block: clamp(1rem, 3vw, 1.5rem);
+}
+
+@media (min-width: 52rem) {
+    .site-nav {
+        /* The cell stretches to the row height, so this thin rule reads as a
+           full-height column divider — structural, not decorative. */
+        border-bottom: 0;
+        border-right: var(--hairline-width) solid var(--color-rule);
+    }
+    .site-nav__inner {
+        position: sticky;
+        top: 0;
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+.site-nav__title {
+    margin-bottom: 0.5rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-muted);
+}
+
+.site-nav__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: nav;
+}
+
+.site-nav__link {
+    counter-increment: nav;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding-block: 0.7rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    border-left: 3px solid transparent;
+    font-family: var(--font-display);
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--color-ink);
+    text-decoration: none;
+    transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease;
+}
+
+/* A monospaced index number gives the nav a tiered, manual-like hierarchy. */
+.site-nav__link::before {
+    content: counter(nav, decimal-leading-zero);
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-ink-muted);
+    transition: color 200ms ease;
+}
+
+.site-nav__link:hover,
+.site-nav__link:focus-visible {
+    border-left-color: var(--color-ink-primary);
+    background: var(--color-surface-sunken);
+    color: var(--color-ink-link);
+    outline: none;
+}
+.site-nav__link:hover::before,
+.site-nav__link:focus-visible::before {
+    color: var(--color-ink-link);
+}
+.site-nav__link:focus-visible {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: -3px;
+}
+
+/* -----------------------------------------------------------------------------
+    Main content
+----------------------------------------------------------------------------- */
+
+.site-main {
+    padding: var(--space-page-gutter);
+}
+
+.content-section {
+    /* Section-level vertical rhythm (the section is marked .flow in the markup):
+       header, prose, sub-headings, and specimen groups all space off this. */
+    --flow-space: var(--space-lg);
+    /* Leaves breathing room when jumped to via the nav anchors. */
+    scroll-margin-top: 1.5rem;
+    max-width: 60rem;
+}
+
+.content-section + .content-section {
+    margin-top: var(--space-section-gap);
+    padding-top: var(--space-section-gap);
+    border-top: var(--hairline-width) solid var(--color-rule);
+}
+
+/* h2 size/weight come from the global h2 role. The grid places the title,
+   lede, and section-level theme toggle into named areas so no wrapper div
+   is needed in the markup. */
+.content-section__header p {
+    margin-top: 0.5rem;
+    max-width: var(--measure-prose);
+    color: var(--color-ink-muted);
+}
