@@ -206,7 +206,12 @@ export default [
                         ],
                     },
                     {
-                        pattern: '/pages/*pathname',
+                        // Optional wildcard group so the site root page ('/') can be
+                        // published via `PUT /publishing-api/v1/pages` (or with a
+                        // trailing slash). A bare `/pages/*pathname` requires at least
+                        // one segment, so the root request would fall through to the
+                        // catch-all GET/HEAD route and return 405.
+                        pattern: '/pages{/*pathname}',
                         name: 'pages',
                         targets: [
                             {

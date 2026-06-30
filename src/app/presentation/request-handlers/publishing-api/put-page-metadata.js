@@ -1,4 +1,3 @@
-import { BadRequestError } from '../../../../kixx/errors/mod.js';
 import PutPageMetadataForm from '../../forms/pages/put-page-metadata-form.js';
 import {
     BUILD_ID_HEADER,
@@ -58,10 +57,11 @@ export async function putPageMetadata(context, request, response) {
 function getWildcardPathname(request, name) {
     const segments = request.pathnameParams[name];
 
+    // The optional `{/*pathname}` route group omits the param entirely for the
+    // site root, so an absent or empty wildcard means the root page ('/') rather
+    // than a malformed request.
     if (!Array.isArray(segments) || segments.length === 0) {
-        throw new BadRequestError('Page pathname is required.', {
-            code: 'PagePathnameRequired',
-        });
+        return '/';
     }
 
     // Reject path traversal and out-of-whitelist characters at the edge (400)
