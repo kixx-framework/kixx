@@ -152,6 +152,8 @@ export default class HyperviewService {
 
         const metadata = deepMerge(...mergeItems);
 
+        metadata.build_id = buildId;
+
         return { version, metadata };
     }
 
