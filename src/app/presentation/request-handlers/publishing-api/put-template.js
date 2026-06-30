@@ -39,12 +39,19 @@ function createPutTemplateHandler(kind) {
         const filepath = getWildcardFilepath(request, 'filepath');
 
         const source = await request.text();
-        const written = await putTemplate(context, {
+        await putTemplate(context, {
             kind,
             filepath,
             source,
             buildId,
         });
+
+        // Report the kind-relative filepath the client supplied via the URL
+        // wildcard, not the store's logical key. The template file store returns
+        // a prefix-included key (e.g. `base/website.html`) because that is how
+        // Hyperview resolves template names internally, but the publishing API
+        // contract already encodes the kind in the URL path, so the response
+        // filepath must stay prefix-less (e.g. `website.html`).
 
         // This target's chain has no Hyperview handler after it, so the committed
         // JSON response is terminal without skip(). Returning normally lets any
@@ -53,10 +60,10 @@ function createPutTemplateHandler(kind) {
             200,
             jsonApiResource({
                 type: 'Template',
-                id: written.filepath,
+                id: filepath,
                 attributes: {
                     kind,
-                    filepath: written.filepath,
+                    filepath,
                     buildId,
                 },
             }),
