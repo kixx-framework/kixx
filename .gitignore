@@ -33,3 +33,6 @@ package-lock.json
 # Scratch pad
 tmp/
 
+# Databases
+src/data/
+
