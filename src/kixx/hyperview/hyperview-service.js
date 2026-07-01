@@ -195,13 +195,15 @@ export default class HyperviewService {
     }
 
     /**
-     * Adds canonical URL, current href, templated title/description, and Open Graph defaults.
+     * Adds request path, canonical URL, current href, templated title/description, and Open Graph defaults.
      * @param {URL} url - Request URL for the page being rendered.
      * @param {Object} metadata - Merged page metadata. Its `page` object is mutated and returned.
      * @returns {Object} The normalized `metadata.page` object.
      */
     mergePageMetadata(url, metadata) {
         const page = metadata.page ?? {};
+        page.pathname = url.pathname;
+
         // Set canonical URL from request URL if not already defined in page data
         // Canonical URL excludes query string and hash to provide a stable reference
         if (!page.canonical_url) {
