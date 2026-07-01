@@ -75,6 +75,19 @@ export default [
                             },
                         ],
                     },
+                    {
+                        pattern: '*',
+                        name: 'static-pages',
+                        targets: [
+                            {
+                                name: 'render-static-page',
+                                methods: [ 'GET', 'HEAD' ],
+                                requestHandlers: [
+                                    HyperviewStaticPageHandler(),
+                                ],
+                            },
+                        ],
+                    },
                 ],
             },
             {
