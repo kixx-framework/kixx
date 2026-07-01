@@ -1,4 +1,17 @@
 <div class="center center--form flow">
+{{#if alreadyLoggedIn}}
+    <header class="content-section__header">
+        <h2>Already logged in</h2>
+    </header>
+
+    <div class="callout callout--warning" role="alert">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">warning</span>
+        <div class="callout__body">
+            <p class="type-label">Admin session active</p>
+            <p class="type-body-sm">You are already logged in as an admin user. Delete your cookies for this site and try again.</p>
+        </div>
+    </div>
+{{else}}
 {{#if inviteValid}}
     <header class="content-section__header">
         <h2>Create an admin account</h2>
@@ -126,5 +139,6 @@
         Already have an account? <a href="{{ links.loginForm }}">Log in</a>.
     </p>
     {{/if}}
+{{/if}}
 {{/if}}
 </div>

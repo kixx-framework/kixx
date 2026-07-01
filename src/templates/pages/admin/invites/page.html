@@ -52,9 +52,14 @@
             </li>
         {{/each}}
         </ul>
-        {{#if nextCursor}}
-        <p>
+        {{#if showPagination}}
+        <p class="cluster">
+            {{#if links.previousPage}}
+            <a class="button button--secondary" href="{{ links.previousPage }}">Previous page</a>
+            {{/if}}
+            {{#if links.nextPage}}
             <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
+            {{/if}}
         </p>
         {{/if}}
         {{else}}

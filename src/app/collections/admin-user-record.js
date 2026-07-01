@@ -44,6 +44,18 @@ export default class AdminUserRecord extends Record {
     }
 
     /**
+     * Reformats this record into a plain JavaScript Object, same as the base
+     * implementation, but omitting `passwordHash` so the credential hash never
+     * leaves the data source layer through a generic projection.
+     * @returns {Object} Document attributes plus `type`, `id`, and `meta`, excluding `passwordHash`.
+     */
+    toObject() {
+        const object = super.toObject();
+        delete object.passwordHash;
+        return object;
+    }
+
+    /**
      * Projects the record into a safe authenticated-user object for the request
      * context and session. Deliberately omits the password hash so the credential
      * never leaves the data source layer.

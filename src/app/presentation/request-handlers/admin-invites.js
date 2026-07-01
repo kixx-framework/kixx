@@ -9,15 +9,29 @@ function getRevokeInviteLink(context) {
     return context.getHttpTarget('admin-panel/invites-revoke/revoke').compilePathname().pathname;
 }
 
-function getInviteListLink(context, cursor) {
-    const pathname = context.getHttpTarget('admin-panel/invites/render-invite-list').compilePathname().pathname;
+// The document store's scan cursor only ever points forward, so a "previous page"
+// link has no server-side equivalent to ask for. Instead the chain of ancestor
+// cursors is carried in the URL itself (oldest first) as repeated `history` params,
+// letting each page link back to the one before it without any session state.
+function parseInviteListHistory(historyParam) {
+    if (historyParam === undefined) {
+        return [];
+    }
+    return Array.isArray(historyParam) ? historyParam : [ historyParam ];
+}
 
-    if (!cursor) {
-        return pathname;
+function getInviteListLink(context, cursor, history) {
+    const pathname = context.getHttpTarget('admin-panel/invites/render-invite-list').compilePathname().pathname;
+    const url = new URL(pathname, 'http://localhost');
+
+    if (cursor) {
+        url.searchParams.set('cursor', cursor);
     }
 
-    const url = new URL(pathname, 'http://localhost');
-    url.searchParams.set('cursor', cursor);
+    for (const ancestorCursor of history ?? []) {
+        url.searchParams.append('history', ancestorCursor);
+    }
+
     return `${ url.pathname }${ url.search }`;
 }
 
@@ -30,17 +44,33 @@ function buildSignupInviteUrl(context, request, token) {
 }
 
 export async function getAdminInvites(context, request, response) {
-    const { items, cursor } = await listAdminInvites(context, { cursor: request.queryParams.cursor });
+    const { cursor: requestCursor } = request.queryParams;
+    const history = parseInviteListHistory(request.queryParams.history);
+
+    const { items, cursor: nextCursor } = await listAdminInvites(context, { cursor: requestCursor });
     const form = new AdminInviteCreateForm();
+
+    const links = {
+        revokeInvite: getRevokeInviteLink(context),
+    };
+
+    if (nextCursor) {
+        // The current page's own cursor (possibly empty, for page one) becomes the
+        // newest entry in the next page's ancestor history.
+        links.nextPage = getInviteListLink(context, nextCursor, [ ...history, requestCursor ?? '' ]);
+    }
+
+    if (history.length) {
+        const previousCursor = history[history.length - 1];
+        const previousHistory = history.slice(0, -1);
+        links.previousPage = getInviteListLink(context, previousCursor || undefined, previousHistory);
+    }
 
     return response.updateProps({
         invites: items,
-        nextCursor: cursor,
+        showPagination: Boolean(links.nextPage || links.previousPage),
         form: await getCsrfFormContext(context, request, response, form),
-        links: {
-            nextPage: getInviteListLink(context, cursor),
-            revokeInvite: getRevokeInviteLink(context),
-        },
+        links,
     });
 }
 
@@ -54,18 +84,25 @@ export async function postCreateAdminInvite(context, request, response) {
     // Render the list directly instead of redirecting (a deliberate exception to
     // post-redirect-get): the plaintext token exists only on this response, so the
     // freshly minted link must be shown now and can never be retrieved again.
-    const { items, cursor } = await listAdminInvites(context, {});
+    const { items, cursor: nextCursor } = await listAdminInvites(context, {});
     const form = new AdminInviteCreateForm();
+
+    const links = {
+        revokeInvite: getRevokeInviteLink(context),
+    };
+
+    // Freshly created invites are always shown starting from page one, so there is
+    // no ancestor history yet and no previous-page link to offer.
+    if (nextCursor) {
+        links.nextPage = getInviteListLink(context, nextCursor, [ '' ]);
+    }
 
     return response.updateProps({
         invites: items,
-        nextCursor: cursor,
         newInviteUrl: inviteUrl,
+        showPagination: Boolean(links.nextPage),
         form: await getCsrfFormContext(context, request, response, form),
-        links: {
-            nextPage: getInviteListLink(context, cursor),
-            revokeInvite: getRevokeInviteLink(context),
-        },
+        links,
     });
 }
 

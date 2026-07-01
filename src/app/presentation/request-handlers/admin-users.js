@@ -3,7 +3,11 @@ import AdminUserLoginForm from '../forms/admin-users/admin-user-login-form.js';
 import { createAdminUser } from '../../transaction-scripts/admin-users/create-admin-user.js';
 import { resolveAdminInvite } from '../../transaction-scripts/admin-invites/resolve-admin-invite.js';
 import { authenticateAdminCredentials } from '../../transaction-scripts/admin-users/authenticate-admin-credentials.js';
-import { setAdminSessionCookie } from '../lib/admin-session-cookie.js';
+import { authenticateAdminSession } from '../../transaction-scripts/admin-users/authenticate-admin-session.js';
+import {
+    ADMIN_SESSION_COOKIE_NAME,
+    setAdminSessionCookie,
+} from '../lib/admin-session-cookie.js';
 import {
     clearCsrfToken,
     getCsrfFormContext,
@@ -37,6 +41,31 @@ function getAdminLoginFormLink(context) {
     return target.compilePathname().pathname;
 }
 
+async function hasValidAdminSession(context, request) {
+    const sessionId = request.getCookie(ADMIN_SESSION_COOKIE_NAME);
+
+    if (!isNonEmptyString(sessionId)) {
+        return false;
+    }
+
+    try {
+        await authenticateAdminSession(context, sessionId);
+        return true;
+    } catch (error) {
+        if (error.name === 'UnauthenticatedError') {
+            return false;
+        }
+        throw error;
+    }
+}
+
+function renderAlreadyLoggedIn(response) {
+    return response.updateProps({
+        alreadyLoggedIn: true,
+        inviteValid: false,
+    });
+}
+
 // Renders the signup page in its "invalid invite" state: no form, just a notice
 // and a link back to login. Used when the URL carries no redeemable invite, and
 // when a token valid at GET time is spent, revoked, or expired before POST.
@@ -60,6 +89,12 @@ function renderSignupThrottled(context, response, retryAfterSeconds) {
 }
 
 export async function getNewAdminUserForm(context, request, response) {
+    // A valid admin session makes invite signup ambiguous, so stop before token
+    // lookup or throttle accounting and show the operator-facing remediation.
+    if (await hasValidAdminSession(context, request)) {
+        return renderAlreadyLoggedIn(response);
+    }
+
     // Reject while this IP is locked out for invite guessing, before resolving
     // any token, so a guesser cannot keep probing the invite namespace.
     const throttle = await checkInviteThrottle(context, request);
@@ -93,6 +128,12 @@ export async function getNewAdminUserForm(context, request, response) {
 }
 
 export async function postNewAdminUserForm(context, request, response, skip) {
+    // Do not parse, validate, or consume invite data from a browser that already
+    // has a valid admin session.
+    if (await hasValidAdminSession(context, request)) {
+        return renderAlreadyLoggedIn(response);
+    }
+
     // Reject before parsing the body or touching the invite when this IP is
     // already locked out, so abusive submissions cost nothing past the IP read.
     const throttle = await checkSignupThrottle(context, request);
