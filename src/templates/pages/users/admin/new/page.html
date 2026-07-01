@@ -9,6 +9,7 @@
     <div class="callout callout--error" role="alert">
         <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
         <div class="callout__body">
+            <p class="type-label">Too many attempts</p>
             <p class="type-body-sm">{{ throttleMessage }}</p>
         </div>
     </div>
@@ -23,6 +24,7 @@
     <div class="callout callout--error" role="alert">
         <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
         <div class="callout__body">
+            <p class="type-label">Account already exists</p>
             <p class="type-body-sm">{{ formError }}</p>
         </div>
     </div>
@@ -95,6 +97,8 @@
     <div class="callout callout--error" role="alert">
         <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
         <div class="callout__body">
+            {{!-- No type-label here: the header above already reads "Too many
+                  attempts", so a matching label would just repeat it. --}}
             <p class="type-body-sm">{{ throttleMessage }}</p>
         </div>
     </div>
@@ -111,6 +115,7 @@
     <div class="callout callout--error" role="alert">
         <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
         <div class="callout__body">
+            <p class="type-label">Invalid invite</p>
             <p class="type-body-sm">This invite link is invalid, expired, or has already been used. Ask an administrator for a new invitation.</p>
         </div>
     </div>
