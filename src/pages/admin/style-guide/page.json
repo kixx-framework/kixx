@@ -1,4 +1,10 @@
 {
     "baseTemplate": "admin.html",
-    "pageTemplate": "admin/style-guide/style-guide-wrapper.html"
+    "pageTemplate": "admin/style-guide/style-guide-wrapper.html",
+    "page": {
+        "title": "Introduction : Style Guide"
+    },
+    "includes": {
+        "body": { "filename": "body.html" }
+    }
 }
