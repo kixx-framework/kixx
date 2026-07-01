@@ -539,6 +539,85 @@ textarea.field__input {
 }
 
 /* -----------------------------------------------------------------------------
+    Copy Field
+
+    A labeled, read-only value paired with a copy-to-clipboard button — the
+    display primitive for any value someone might want to copy verbatim (a
+    one-time secret, a URL, an id). The value reuses .field__input outright so
+    its border, padding, font, and readonly dashed-border state stay in sync
+    with ordinary form fields; only the row layout, button, and status text
+    are specific to this component. Progressive: without JavaScript the value
+    is a plain read-only input, selectable and copyable by hand. With
+    JavaScript, the delegated script in the admin base template
+    (data-js-behavior="copy-field") adds click-to-select and one-click
+    clipboard writes plus status feedback.
+----------------------------------------------------------------------------- */
+
+.copy-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+}
+
+.copy-field__label {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    cursor: default;
+}
+
+.copy-field__row {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-2xs);
+}
+
+.copy-field__value {
+    /* min-width: 0 lets the input shrink below its content length inside the
+       flex row; the input itself scrolls long values natively on overflow, so
+       no extra overflow handling is needed here. */
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.copy-field__button {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    min-height: 2.75rem; /* matches .field__input so the row's two edges align */
+    border: var(--field-border-width) solid var(--color-field-border);
+    border-radius: var(--radius-md);
+    color: var(--color-ink);
+    background: var(--color-bg);
+    transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+.copy-field__button:hover {
+    background: var(--color-ink);
+    color: var(--color-bg);
+    border-color: var(--color-ink);
+}
+.copy-field__button:focus-visible {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: 2px;
+}
+
+.copy-field__icon {
+    font-size: 1.15em;
+}
+
+.copy-field__status {
+    min-height: 1em; /* reserve space so status text appearing/clearing does not shift layout */
+    font-size: var(--text-caption);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-muted);
+}
+
+/* -----------------------------------------------------------------------------
     Site Header
 ----------------------------------------------------------------------------- */
 

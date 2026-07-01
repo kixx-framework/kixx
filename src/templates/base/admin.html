@@ -86,5 +86,71 @@
 
             syncThemeControl();
         </script>
+
+        <script>
+            const copyFieldButtons = document.querySelectorAll('[data-js-behavior="copy-field"]');
+
+            copyFieldButtons.forEach(button => {
+                const field = document.getElementById(button.dataset.copyTarget);
+
+                // A copy button with no resolvable target field is a markup bug in
+                // whichever page rendered it; skip it instead of throwing so one
+                // broken control cannot stop every other copy-field on the page.
+                if (!field) {
+                    return;
+                }
+
+                const icon = button.querySelector('.copy-field__icon');
+                const status = field.closest('.copy-field')?.querySelector('.copy-field__status');
+                const defaultIconName = icon ? icon.textContent : null;
+
+                let resetTimeoutId = null;
+
+                function setStatus(message) {
+                    if (status) {
+                        status.textContent = message;
+                    }
+                }
+
+                function resetIcon() {
+                    if (icon && defaultIconName) {
+                        icon.textContent = defaultIconName;
+                    }
+                }
+
+                field.addEventListener('click', () => {
+                    field.select();
+                });
+
+                button.addEventListener('click', async () => {
+                    field.select();
+                    clearTimeout(resetTimeoutId);
+
+                    // Clipboard writes require a secure context and user permission;
+                    // fall back to "select and let the user copy manually" whenever
+                    // the API is missing or the browser denies the write.
+                    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                        setStatus('Press Ctrl+C or Cmd+C to copy.');
+                        return;
+                    }
+
+                    try {
+                        await navigator.clipboard.writeText(field.value);
+                        setStatus('Copied.');
+
+                        if (icon) {
+                            icon.textContent = 'check';
+                        }
+
+                        resetTimeoutId = setTimeout(() => {
+                            setStatus('');
+                            resetIcon();
+                        }, 2000);
+                    } catch {
+                        setStatus('Press Ctrl+C or Cmd+C to copy.');
+                    }
+                });
+            });
+        </script>
     </body>
 </html>

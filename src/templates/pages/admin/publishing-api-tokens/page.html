@@ -15,7 +15,16 @@
             <span class="material-symbols-rounded callout__icon" aria-hidden="true">key</span>
             <div class="callout__body">
                 <p class="type-body-sm">New token created. Copy it now — it is shown only once and cannot be retrieved later.</p>
-                <div class="code-block"><code>{{ newToken }}</code></div>
+                <div class="copy-field">
+                    <label class="copy-field__label" for="new-token">Token</label>
+                    <div class="copy-field__row">
+                        <input class="field__input copy-field__value" id="new-token" type="text" value="{{ newToken }}" readonly>
+                        <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="new-token" aria-label="Copy token">
+                            <span class="material-symbols-rounded copy-field__icon" aria-hidden="true">content_copy</span>
+                        </button>
+                    </div>
+                    <p class="copy-field__status" role="status" aria-live="polite"></p>
+                </div>
             </div>
         </div>
         {{/if}}
