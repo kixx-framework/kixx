@@ -85,6 +85,10 @@ body:has(> .site-layout) {
     counter-reset: nav;
 }
 
+.site-nav__list + .site-nav__title {
+    margin-top: var(--space-md);
+}
+
 .site-nav__link {
     counter-increment: nav;
     display: flex;
