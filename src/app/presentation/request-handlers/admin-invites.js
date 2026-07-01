@@ -9,8 +9,16 @@ function getRevokeInviteLink(context) {
     return context.getHttpTarget('admin-panel/invites-revoke/revoke').compilePathname().pathname;
 }
 
-function getInviteListLink(context) {
-    return context.getHttpTarget('admin-panel/invites/render-invite-list').compilePathname().pathname;
+function getInviteListLink(context, cursor) {
+    const pathname = context.getHttpTarget('admin-panel/invites/render-invite-list').compilePathname().pathname;
+
+    if (!cursor) {
+        return pathname;
+    }
+
+    const url = new URL(pathname, 'http://localhost');
+    url.searchParams.set('cursor', cursor);
+    return `${ url.pathname }${ url.search }`;
 }
 
 // Builds the absolute signup link an invitee follows. The raw token is only
@@ -29,7 +37,10 @@ export async function getAdminInvites(context, request, response) {
         invites: items,
         nextCursor: cursor,
         form: await getCsrfFormContext(context, request, response, form),
-        links: { revokeInvite: getRevokeInviteLink(context) },
+        links: {
+            nextPage: getInviteListLink(context, cursor),
+            revokeInvite: getRevokeInviteLink(context),
+        },
     });
 }
 
@@ -51,7 +62,10 @@ export async function postCreateAdminInvite(context, request, response) {
         nextCursor: cursor,
         newInviteUrl: inviteUrl,
         form: await getCsrfFormContext(context, request, response, form),
-        links: { revokeInvite: getRevokeInviteLink(context) },
+        links: {
+            nextPage: getInviteListLink(context, cursor),
+            revokeInvite: getRevokeInviteLink(context),
+        },
     });
 }
 

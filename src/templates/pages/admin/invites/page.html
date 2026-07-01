@@ -52,6 +52,11 @@
             </li>
         {{/each}}
         </ul>
+        {{#if nextCursor}}
+        <p>
+            <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
+        </p>
+        {{/if}}
         {{else}}
         <p class="type-body-sm">No invites yet. Create one to invite a new administrator.</p>
         {{/if}}
