@@ -6,6 +6,7 @@ import { authenticateAdminUser } from './app/presentation/middleware/admin-authe
 import { authenticatePublishingToken } from './app/presentation/middleware/publishing-authentication.js';
 import * as AdminUsers from './app/presentation/request-handlers/admin-users.js';
 import * as AdminInvites from './app/presentation/request-handlers/admin-invites.js';
+import * as AdminPublishingApiTokens from './app/presentation/request-handlers/admin-publishing-api-tokens.js';
 import * as AdminAPI from './app/presentation/request-handlers/admin-api/mod.js';
 import * as PublishingAPI from './app/presentation/request-handlers/publishing-api/mod.js';
 
@@ -70,6 +71,43 @@ export default [
                                 methods: [ 'POST' ],
                                 requestHandlers: [
                                     AdminInvites.postCreateAdminInvite,
+                                    HyperviewDynamicPageHandler(),
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        // Revoke is its own route because it shares the POST method
+                        // with create-token; one route cannot host two POST targets.
+                        pattern: '/publishing-api-tokens/revoke',
+                        name: 'publishing-api-tokens-revoke',
+                        targets: [
+                            {
+                                name: 'revoke',
+                                methods: [ 'POST' ],
+                                requestHandlers: [
+                                    AdminPublishingApiTokens.postRevokePublishingApiToken,
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        pattern: '/publishing-api-tokens',
+                        name: 'publishing-api-tokens',
+                        targets: [
+                            {
+                                name: 'render-token-list',
+                                methods: [ 'GET', 'HEAD' ],
+                                requestHandlers: [
+                                    AdminPublishingApiTokens.getPublishingApiTokens,
+                                    HyperviewDynamicPageHandler(),
+                                ],
+                            },
+                            {
+                                name: 'create-token',
+                                methods: [ 'POST' ],
+                                requestHandlers: [
+                                    AdminPublishingApiTokens.postCreatePublishingApiToken,
                                     HyperviewDynamicPageHandler(),
                                 ],
                             },

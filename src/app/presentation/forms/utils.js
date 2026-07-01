@@ -42,6 +42,24 @@ export function normalizeLowerCaseStringAttribute(value) {
 }
 
 /**
+ * Trims a submitted optional string field, collapsing absence and blank input to null.
+ * @param {*} value - Submitted field value.
+ * @returns {*} Trimmed non-empty string, null when value is missing or blank, otherwise the original value.
+ */
+export function normalizeOptionalStringAttribute(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (!isString(value)) {
+        return value;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
  * Adds a field error when an email address value is missing or malformed.
  * @param {import('../../kixx/errors/lib/validation-error.js').default} error - Validation error collector.
  * @param {*} value - Normalized field value.

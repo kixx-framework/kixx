@@ -1,6 +1,7 @@
 import { isString } from '../../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import { validatePermissions } from '../../../lib/publishing-permissions.js';
+import { normalizeOptionalStringAttribute } from '../utils.js';
 
 
 export const DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -59,7 +60,7 @@ export default class CreatePublishingApiTokenForm {
 
         this.permissions = permissions;
         this.timeToLiveSeconds = normalizeTimeToLiveSeconds(timeToLiveSeconds);
-        this.description = normalizeOptionalDescription(description);
+        this.description = normalizeOptionalStringAttribute(description);
     }
 
     /**
@@ -131,17 +132,4 @@ function normalizeTimeToLiveSeconds(value) {
     }
 
     return value;
-}
-
-function normalizeOptionalDescription(value) {
-    if (value === null || value === undefined) {
-        return null;
-    }
-
-    if (!isString(value)) {
-        return value;
-    }
-
-    const description = value.trim();
-    return description.length > 0 ? description : null;
 }

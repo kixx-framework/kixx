@@ -82,4 +82,30 @@ export default class PublishingApiTokenCollection extends Collection {
         assertNonEmptyString(tokenHash, 'PublishingApiTokenCollection#getByTokenHash() tokenHash');
         return await this.get(context, tokenHash);
     }
+
+    /**
+     * Returns a keyset-paginated page of tokens ordered newest-first.
+     * @param {Object} context - Request or execution context passed through to the document store.
+     * @param {Object} [options] - Pagination options.
+     * @param {string} [options.cursor] - Opaque cursor from a previous page.
+     * @param {number} [options.limit] - Maximum tokens per page.
+     * @returns {Promise<{ items: PublishingApiTokenRecord[], cursor: string|null }>} Page of tokens and the next cursor.
+     */
+    async listPage(context, options) {
+        const { cursor, limit } = options ?? {};
+        return await this.scan(context, { descending: true, cursor, limit });
+    }
+
+    /**
+     * Revokes a token using optimistic concurrency, making it permanently unusable.
+     * @param {Object} context - Request or execution context passed through to the document store.
+     * @param {PublishingApiTokenRecord} record - Token record previously loaded from this collection.
+     * @returns {Promise<PublishingApiTokenRecord>} The updated record.
+     * @throws {VersionConflictError} When the token was modified concurrently.
+     * @throws {DocumentNotFoundError} When the token no longer exists.
+     */
+    async revoke(context, record) {
+        record.set('revokedAt', new Date().toISOString());
+        return await this.update(context, record);
+    }
 }

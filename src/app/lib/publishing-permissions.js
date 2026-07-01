@@ -10,6 +10,21 @@ const ALLOW = 'allow';
 const DENY = 'deny';
 const VALID_EFFECTS = new Set([ ALLOW, DENY ]);
 
+/**
+ * The canonical allow-all permission grant shape accepted by
+ * {@link validatePermissions}. Callers that need to mint a new allow-all
+ * grant (rather than validate one) should reference this constant instead of
+ * re-writing the literal grant shape.
+ * @type {ReadonlyArray<Object>}
+ */
+export const ALLOW_ALL_PUBLISHING_PERMISSIONS = Object.freeze([
+    Object.freeze({
+        effect: ALLOW,
+        action: Object.freeze([ WILDCARD ]),
+        resource: WILDCARD,
+    }),
+]);
+
 // Scoped grants use stable URNs for both sides of the decision: actions as
 // `urn:kixx:publishing:<capability>:<verb>` and resources as
 // `urn:kixx:publishing:<resource-kind>:<scope>`, where the trailing scope is a

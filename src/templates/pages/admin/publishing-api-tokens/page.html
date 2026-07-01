@@ -1,0 +1,100 @@
+<main class="site-main">
+    <article class="content-section flow">
+        <header class="content-section__header">
+            <h1>Publishing API tokens</h1>
+            <p>Create and revoke bearer tokens used by external tools to call the Publishing API.</p>
+        </header>
+
+        {{!--
+            newToken is present only on the response that just minted a token. The
+            raw token is never stored, so it is shown once here and cannot be
+            retrieved again.
+        --}}
+        {{#if newToken}}
+        <div class="callout callout--info" role="status">
+            <span class="material-symbols-rounded callout__icon" aria-hidden="true">key</span>
+            <div class="callout__body flow">
+                <p class="type-body-sm">New token created. Copy it now — it is shown only once and cannot be retrieved later.</p>
+                <div class="code-block"><code>{{ newToken }}</code></div>
+            </div>
+        </div>
+        {{/if}}
+
+        <form class="flow" method="{{ form.method }}" action="{{ form.url }}">
+            {{#if form.csrf}}
+            <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+            {{/if}}
+
+            <div class="field{{#if form.fields.description.error}} field--error{{/if}}">
+                <label class="field__label" for="description">{{ form.fields.description.label }}</label>
+                <input
+                    class="field__input"
+                    id="description"
+                    name="description"
+                    type="text"
+                    value="{{ form.fields.description.value }}"
+                    aria-describedby="description-hint"
+                    {{#if form.fields.description.error}}aria-invalid="true"{{/if}}
+                >
+                <p class="field__hint" id="description-hint">
+                    {{#if form.fields.description.error}}{{ form.fields.description.error }}{{else}}{{ form.fields.description.hint }}{{/if}}
+                </p>
+            </div>
+
+            <div class="field{{#if form.fields.time_to_live_seconds.error}} field--error{{/if}}">
+                <label class="field__label" for="time_to_live_seconds">{{ form.fields.time_to_live_seconds.label }}</label>
+                <select class="field__input" id="time_to_live_seconds" name="time_to_live_seconds">
+                {{#each form.fields.time_to_live_seconds.options as |option| }}
+                    <option value="{{ option.value }}" {{#ifEqual option.value form.fields.time_to_live_seconds.value}}selected{{/ifEqual}}>{{ option.label }}</option>
+                {{/each}}
+                </select>
+                {{#if form.fields.time_to_live_seconds.error}}
+                <p class="field__hint" id="time_to_live_seconds-hint">{{ form.fields.time_to_live_seconds.error }}</p>
+                {{/if}}
+            </div>
+
+            <div class="cluster">
+                <button class="button button--primary" type="submit">Create token</button>
+            </div>
+        </form>
+
+        {{#if tokens}}
+        <ul class="flow">
+        {{#each tokens as |token| }}
+            <li class="card flow">
+                <p class="type-label">{{ token.status }}</p>
+                {{#if token.description}}
+                <p class="type-body-sm">{{ token.description }}</p>
+                {{else}}
+                <p class="type-body-sm">No description provided.</p>
+                {{/if}}
+                <p class="type-body-sm">
+                    Created {{ formatDate token.createdAt format="DATETIME_MED" }} by {{ token.createdBy }}
+                </p>
+                <p class="type-body-sm">
+                    Expires {{ formatDate token.expiresAt format="DATETIME_MED" }}
+                </p>
+                {{#ifEqual token.status "active"}}
+                {{!-- Revoke posts to its own route with the token id as a hidden field;
+                      the CSRF token is shared across every form on this page. --}}
+                <form class="cluster" method="POST" action="{{ links.revokeToken }}">
+                    {{#if form.csrf}}
+                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                    {{/if}}
+                    <input type="hidden" name="token_id" value="{{ token.id }}">
+                    <button class="button button--secondary" type="submit">Revoke</button>
+                </form>
+                {{/ifEqual}}
+            </li>
+        {{/each}}
+        </ul>
+        {{#if nextCursor}}
+        <p>
+            <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
+        </p>
+        {{/if}}
+        {{else}}
+        <p class="type-body-sm">No tokens yet. Create one to authorize an external tool.</p>
+        {{/if}}
+    </article>
+</main>
