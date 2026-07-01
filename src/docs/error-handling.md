@@ -80,12 +80,11 @@ Cases the author did not think about. These cannot be "handled" because, by defi
 - Calling a method on a value that should have been a Date.
 - An invariant that the surrounding code depends on is violated.
 
-**Rule:** *Crash immediately.* Do not try to recover. A restarter, Worker
-isolate restart, or platform-level fatal-error policy is the correct response.
-Continuing to serve requests from a broken state risks corrupting shared state
-and returning wrong answers.
+**Rule:** *Crash the process, not just the response.* Do not try to recover, retry, or let the application keep accepting *new* work as though the bug did not happen. A restarter, Worker isolate restart, or platform-level fatal-error policy must run. Continuing to serve requests from a broken state risks corrupting shared state and returning wrong answers.
 
-Do not catch-and-swallow. Do not convert a programmer error into an operational error. Let it propagate until the process crashes (or is logged and crashed at the top level).
+Do not catch-and-swallow. Do not convert a programmer error into an operational error. Let it propagate out of your code so the router can log it and trigger the platform's fatal-error policy.
+
+This does **not** mean the one in-flight request that hit the bug must receive a bare or unstyled response. The fatal-error/shutdown decision is driven by an `error` event the router emits for every failure, independently of whatever response is eventually produced for that request — see [Router Error Propagation and the Platform Fatal-Error Policy](#router-error-propagation-and-the-platform-fatal-error-policy) below. A route or target error handler may still catch an unexpected error and render a normal-looking error page for the person who hit it; the process shuts down behind the scenes regardless.
 
 There may also be times when the right thing to do is to convert an operational error into an unexpected assertion error. This happens when you believe the system is in a bad state or unexpected state which leads to the operational error. One common example of this is a record concurrency error from the data store when you believe that it should not be possible to visit the code path which caused it.
 
@@ -246,22 +245,19 @@ try {
 }
 ```
 
-## At the Top of the Stack
+## Router Error Propagation and the Platform Fatal-Error Policy
 
-The top-level caller (HTTP handler, command entry point) is the one place that decides:
+Two separate mechanisms run whenever a middleware or request handler throws. Keeping them separate in your head is the key to understanding this section: one produces the **response**, the other decides whether the **process** crashes. They share the same error object, but neither one waits on the other.
 
-- If `error.httpError === true`: render an HTTP response using `error.httpStatusCode`, `error.code`, and a safe message.
-- If `error.expected === true` without `httpError`: return a generic 500 response while preserving internal context for logs.
-- If the error is unexpected: log the full chain, including `cause`, and let the error escape. Do not try to keep serving from the same broken execution path.
+### 1. The error-handler cascade decides the response
 
-The HTTP router's fallback error handler serializes expected HTTP errors as
-JSON:API error responses. Browser-facing routes that need HTML error pages
-should use route or target `errorHandlers`; those handlers should return `false`
-for errors they do not specifically handle.
+`HttpRouter` (`kixx/http-router/http-router.js`) catches every error thrown during a request and runs it through a cascade, from most specific to least:
 
-Target error handlers run first, then route error handlers, then the router
-fallback. An error handler should either return a populated `ServerResponse` or
-return `false` to keep the cascade moving:
+1. The matched **target**'s `errorHandlers`, in order.
+2. The matched **route**'s `errorHandlers` (and its ancestor routes'), in order.
+3. The router's own built-in fallback handler.
+
+Each handler either returns a populated `ServerResponse` (the cascade stops there) or returns `false` (the next level gets a turn):
 
 ```js
 export function handleNotFoundHtml(context, request, response, error) {
@@ -271,3 +267,43 @@ export function handleNotFoundHtml(context, request, response, error) {
     return response.respondWithHTML(404, '<h1>Not found</h1>');
 }
 ```
+
+The router's built-in fallback only recognizes `error.httpError` and `error.expected` — it serializes those as a JSON:API error response and declines (`return false`) anything else. That means:
+
+- `error.httpError === true` (a `NotFoundError`, `ValidationError`, etc.): the router's fallback can render it as JSON:API on its own, but a target/route handler earlier in the cascade may still render something more specific, such as an HTML page.
+- `error.expected === true` without `httpError` (e.g. `OperationalError`): the router's fallback renders a generic 500 JSON:API response.
+- Truly unexpected errors (`expected` is falsey and there is no `httpStatusCode`): the router's fallback always declines. **A target or route `errorHandlers` entry is the only way to render anything other than the platform's last-resort fallback (below) for these.** There is nothing wrong with doing so — see the next section.
+
+Browser-facing routes that want styled HTML instead of JSON:API bodies attach their own `errorHandlers` at the route or target level (see the Presentation Layer Guide's "Middleware vs. Request Handlers vs. Error Handlers" section). A handler for HTML routes commonly wants to catch *everything* the more specific handlers upstream didn't — including unexpected errors — rather than declining and falling through to the platform's plain-text fallback:
+
+```js
+export function handleUnexpectedHtml(context, request, response, error) {
+    if (error.httpError) {
+        return false; // Let a more specific handler, or the JSON fallback, take it.
+    }
+    return response.respondWithHTML(500, '<h1>Something went wrong</h1>');
+}
+```
+
+### 2. The router's `error` event decides whether the process crashes
+
+Independent of the cascade above, `HttpRouter` emits an `error` event (`{ error, requestId }`) for **every** failure, before the cascade runs and regardless of whether any handler in it produces a response. The platform server (e.g. `node-server.js`) subscribes to this event and applies the fatal-error policy from `error.expected` / `error.httpError` alone:
+
+```js
+router.on('error', ({ error, requestId }) => {
+    if (!error.httpError) {
+        if (error.expected) {
+            logger.warn('operational error while routing request', { requestId }, error);
+        } else {
+            logger.error('unexpected error while routing request', { requestId }, error);
+            shutdown('fatal router error', { force: false, exitCode: 1 });
+        }
+    }
+});
+```
+
+Because this listener fires before — and independently of — the cascade's outcome, **a target or route error handler rendering a friendly page for an unexpected error does not prevent or delay the shutdown.** The process still begins draining and exiting; the one in-flight request just gets a better response on its way out than the platform default would give it.
+
+### 3. The platform-level last resort
+
+If every cascade level returns `false` for a given error, `HttpRouter` re-throws it out of the request (see the `ErrorHandlerFunction` contract in `kixx/http-router/error-handler-interface.js`). This is a true last resort, not the normal path for unexpected errors — routes that care about their error presentation should add their own `errorHandlers` per the previous section. When nothing catches it, the platform server sends a minimal, unstyled response before shutting down. In `node-server.js`, that means a plain-text `500 Internal Server Error` body if headers were not yet sent, or destroying the connection outright if they were — followed by the same graceful shutdown described above.
