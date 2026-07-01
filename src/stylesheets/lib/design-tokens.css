@@ -10,14 +10,14 @@
 
        References flow ONE direction only:
            component  ->  semantic  ->  reference (palette)
-       A component RULE never names a raw --palette-* token or a literal colour;
+       A component RULE never names a raw --palette-* token or a literal color;
        it reads a semantic --color-* token (or a component token built from one).
        Only the blocks below resolve the palette into roles. The Colors section
        of the guide documents the full contract.
        ========================================================================= */
 
     /* --- Tier 1 · Reference palette ----------------------------------------
-       Raw, theme-agnostic values. The ONLY place literal colours may live;
+       Raw, theme-agnostic values. The ONLY place literal colors may live;
        nothing outside this block should write an hsl()/hex literal. */
     --palette-white: hsl(0 0% 100%);
     --palette-black: hsl(0 0% 0%);
@@ -66,7 +66,7 @@
        vanishes against the magenta primary button. */
     --color-focus-outline: light-dark(var(--palette-blue), var(--palette-cyan));
     /* Status roles — kept off the brand accents so "wrong" never wears the same
-       colour as "primary action" or "focused". Both read as a foreground mark
+       color as "primary action" or "focused". Both read as a foreground mark
        (text / border / icon) and are theme-aware so they keep contrast on light
        and dark surfaces alike. Warning resolves to amber on light, brand yellow
        on dark; for a yellow FILL, reach for --palette-yellow directly (as the
@@ -78,7 +78,7 @@
        Scoped tokens, resolved here so component rules stay declarative. (More
        component tokens live next to their component, e.g. --card-accent on
        .card.) Brand fills resolve straight from the palette because the fill IS
-       that brand colour; everything else routes through Tier 2. */
+       that brand color; everything else routes through Tier 2. */
     --color-button-bg-primary: var(--palette-magenta);
     --color-button-border-primary: light-dark(var(--palette-black), var(--color-button-bg-primary));
     --color-button-bg-secondary: var(--palette-cyan);
@@ -97,7 +97,7 @@
     --button-border-width: 2px;
     --rule-width: 3px;
     --hairline-width: 1px;
-    --accent-border-width: 2px; /* coloured accent border — cards & callouts */
+    --accent-border-width: 2px; /* colored accent border — cards & callouts */
 
     /* Corner radius — the system is soft, not hard-edged. A small, even scale:
        a gentle radius on surfaces and controls, full pills for buttons and

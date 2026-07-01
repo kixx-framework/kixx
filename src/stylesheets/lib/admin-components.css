@@ -118,7 +118,7 @@
 }
 
 /* Do / Don't guidance cards — cyan = do, magenta = don't. A .grid-auto in the
-   markup; card accent modifiers provide the top edge colour. */
+   markup; card accent modifiers provide the top edge color. */
 .guidelines {
     --grid-min: 18rem;
     --grid-space: var(--space-sm);
@@ -142,7 +142,7 @@
 }
 
 /* -----------------------------------------------------------------------------
-    Colour swatches — a token reference. Each swatch is a flush card: a chip
+    Color swatches — a token reference. Each swatch is a flush card: a chip
     painted with the live token over a name + usage strip, so the value shown is
     always what the theme currently resolves to.
 ----------------------------------------------------------------------------- */

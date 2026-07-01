@@ -376,7 +376,7 @@ a.kixx-wordmark {
 }
 .card--accent-primary,
 .card--accent-secondary {
-    /* The accent recolours the whole border (all four sides) and steps it up
+    /* The accent recolors the whole border (all four sides) and steps it up
        from the hairline to the heavier accent weight. */
     border: var(--accent-border-width) solid var(--card-accent);
 }
@@ -395,9 +395,9 @@ a.kixx-wordmark {
 /* -----------------------------------------------------------------------------
     Callouts
 
-    A bordered notice — a coloured border, an optional icon, and a message on a
+    A bordered notice — a colored border, an optional icon, and a message on a
     sunken surface. The default is a neutral emphasis note; three tone modifiers
-    recolour the border + icon from the status semantic tokens. A static surface,
+    recolor the border + icon from the status semantic tokens. A static surface,
     like Cards — no interactive states.
       .callout            neutral emphasis note (the default)
       .callout--info      cyan   — calm, non-urgent information
@@ -406,7 +406,7 @@ a.kixx-wordmark {
 
     Tone rides the border and the icon only — both are AA-safe ground for any
     tone. The message stays --color-ink, so the yellow warning never lands as the
-    thin text where it would lose contrast (see the Colors status-colour note).
+    thin text where it would lose contrast (see the Colors status-color note).
 ----------------------------------------------------------------------------- */
 
 .callout {
@@ -442,7 +442,7 @@ a.kixx-wordmark {
     column stack. Gap-based spacing — no .flow nesting needed.
 
     Modifier (applied to .field):
-      .field--error    — error-coloured border and hint text
+      .field--error    — error-colored border and hint text
 ----------------------------------------------------------------------------- */
 
 .field {

@@ -4,9 +4,9 @@
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">A callout lifts one message out of the surrounding copy &mdash; a rule of thumb, a caution, an error &mdash; onto a sunken surface inside a coloured border, with an optional icon. It's the calm way to raise your voice: present enough to catch the eye, quiet enough not to shout over the content.</p>
+    <p class="type-body-lg">A callout lifts one message out of the surrounding copy &mdash; a rule of thumb, a caution, an error &mdash; onto a sunken surface inside a colored border, with an optional icon. It's the calm way to raise your voice: present enough to catch the eye, quiet enough not to shout over the content.</p>
 
-    <p>It's the first real consumer of the <a href="#colors">status colours</a>. The tone rides the border and the icon &mdash; graphical marks, which clear WCAG's 3:1 non-text threshold &mdash; while the message stays <code>--color-ink</code>. That's deliberate: it's why the warning tone resolves to a deep amber on light surfaces rather than the brand yellow, which is too light to read as a thin mark on white.</p>
+    <p>It's the first real consumer of the <a href="#colors">status colors</a>. The tone rides the border and the icon &mdash; graphical marks, which clear WCAG's 3:1 non-text threshold &mdash; while the message stays <code>--color-ink</code>. That's deliberate: it's why the warning tone resolves to a deep amber on light surfaces rather than the brand yellow, which is too light to read as a thin mark on white.</p>
 
     <p><strong>When to use:</strong> to surface a single, scannable message tied to its context. For a transient confirmation that auto-dismisses, reach for a toast instead; for page-blocking decisions, a dialog. A callout is a <em>note on the page</em>, not an interruption of it &mdash; and a page stacked with callouts has none.</p>
 </div>
@@ -24,15 +24,15 @@
         </div>
     </div>
     <ol class="parts-list">
-        <li><strong>Accent border</strong> &mdash; a 2px border on all sides (<code>--callout-accent</code>, <code>--accent-border-width</code>); the tone modifier recolours it.</li>
-        <li><strong>Icon</strong> &mdash; optional, inherits <code>--callout-accent</code>; reinforces the tone so meaning survives without colour (<code>.callout__icon</code>).</li>
+        <li><strong>Accent border</strong> &mdash; a 2px border on all sides (<code>--callout-accent</code>, <code>--accent-border-width</code>); the tone modifier recolors it.</li>
+        <li><strong>Icon</strong> &mdash; optional, inherits <code>--callout-accent</code>; reinforces the tone so meaning survives without color (<code>.callout__icon</code>).</li>
         <li><strong>Body</strong> &mdash; the message (<code>.callout__body</code>): an optional label plus copy, always in <code>--color-ink</code>.</li>
         <li><strong>Surface</strong> &mdash; the recessed fill (<code>--color-surface-sunken</code>) that lifts the note off the page.</li>
     </ol>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Variants</h3>
-<p class="doc-lede">A base class plus three tone modifiers. Each tone resolves from a semantic token &mdash; no raw colour anywhere.</p>
+<p class="doc-lede">A base class plus three tone modifiers. Each tone resolves from a semantic token &mdash; no raw color anywhere.</p>
 <div class="doc-prose">
     <ul>
         <li><code>.callout</code> &mdash; the neutral emphasis note; the border is the primary ink (<code>--color-ink-primary</code>). Reach for it for a plain &ldquo;rule of thumb.&rdquo;</li>
@@ -92,10 +92,10 @@
 <h3 class="type-h3 doc-section-heading">Accessibility</h3>
 <div class="doc-prose">
     <ul>
-        <li>Never lean on the border colour alone &mdash; pair the tone with the icon and a word (&ldquo;Warning&rdquo;, &ldquo;Couldn't save&rdquo;) so it reads in greyscale and for colour-blind users.</li>
+        <li>Never lean on the border color alone &mdash; pair the tone with the icon and a word (&ldquo;Warning&rdquo;, &ldquo;Couldn't save&rdquo;) so it reads in greyscale and for color-blind users.</li>
         <li>The icon is decorative once the text says the same thing; mark it <code>aria-hidden="true"</code> so it isn't announced twice.</li>
         <li>For a callout that appears <em>in response to an action</em> (a save error, say), add <code>role="alert"</code> &mdash; or <code>role="status"</code> for non-urgent info &mdash; so screen readers announce it. A note present on load needs neither.</li>
-        <li>Keep the message in <code>--color-ink</code>; it sits on <code>--color-surface-sunken</code> and clears AA. Don't recolour body text to the accent &mdash; the status hues are tuned for marks (3:1), not for text (4.5:1).</li>
+        <li>Keep the message in <code>--color-ink</code>; it sits on <code>--color-surface-sunken</code> and clears AA. Don't recolor body text to the accent &mdash; the status hues are tuned for marks (3:1), not for text (4.5:1).</li>
     </ul>
 </div>
 
@@ -106,7 +106,7 @@
         <ul>
             <li>Match the tone to the stakes: info for FYIs, warning before risk, error for failure.</li>
             <li>Keep it to one idea, and put the gist in the first few words.</li>
-            <li>Pair every tone with its icon and a label word, not colour alone.</li>
+            <li>Pair every tone with its icon and a label word, not color alone.</li>
             <li>Let warning and error ride the border and icon; leave the body text in <code>--color-ink</code>.</li>
         </ul>
     </div>
@@ -114,7 +114,7 @@
         <p class="type-label guideline__label">Don't</p>
         <ul>
             <li>Stack callouts down the page &mdash; competing alarms read as none at all.</li>
-            <li>Paint the body text or the whole surface in the tone colour, especially yellow.</li>
+            <li>Paint the body text or the whole surface in the tone color, especially yellow.</li>
             <li>Use error tone for ordinary emphasis; reserve red for things that are actually broken.</li>
             <li>Reach past the tone modifiers to a raw <code>--palette-*</code> or an <code>hsl()</code> literal.</li>
         </ul>

@@ -11,7 +11,7 @@
 }
 
 /* Each chip paints the live token it documents through the .swatch__chip
-   --swatch hook, so the colour shown is always what the theme currently
+   --swatch hook, so the color shown is always what the theme currently
    resolves to. One modifier per token keeps the value out of the markup. */
 .swatch__chip--palette-magenta { --swatch: var(--palette-magenta); }
 .swatch__chip--palette-cyan { --swatch: var(--palette-cyan); }
