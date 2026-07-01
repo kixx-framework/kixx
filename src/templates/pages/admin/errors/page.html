@@ -1,0 +1,19 @@
+<main class="site-main">
+    <article class="content-section flow">
+        <header class="content-section__header">
+            <h1>{{ error.heading }}</h1>
+        </header>
+
+        <div class="{{ error.calloutClass }}">
+            <span class="material-symbols-rounded callout__icon" aria-hidden="true">{{ error.calloutIcon }}</span>
+            <div class="callout__body">
+                <p class="type-label">{{ error.statusCode }}</p>
+                <p class="type-body-sm">{{ error.message }}</p>
+            </div>
+        </div>
+
+        <p class="cluster">
+            <a class="button button--primary" href="/admin">Back to admin</a>
+        </p>
+    </article>
+</main>

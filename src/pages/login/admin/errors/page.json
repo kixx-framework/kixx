@@ -1,0 +1,6 @@
+{
+    "baseTemplate": "admin-login.html",
+    "page": {
+        "title": "Error : Admin"
+    }
+}

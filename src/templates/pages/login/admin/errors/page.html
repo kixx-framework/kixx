@@ -1,0 +1,17 @@
+<div class="center center--form flow">
+    <header class="content-section__header">
+        <h2>{{ error.heading }}</h2>
+    </header>
+
+    <div class="{{ error.calloutClass }}">
+        <span class="material-symbols-rounded callout__icon" aria-hidden="true">{{ error.calloutIcon }}</span>
+        <div class="callout__body">
+            <p class="type-label">{{ error.statusCode }}</p>
+            <p class="type-body-sm">{{ error.message }}</p>
+        </div>
+    </div>
+
+    <p class="cluster">
+        <a class="button button--primary" href="/login/admin/new">Back to login</a>
+    </p>
+</div>
