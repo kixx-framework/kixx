@@ -100,29 +100,21 @@ kbd {
     Flow — vertical rhythm primitive
 
     The Stack / "flow" idea (Andy Bell / Every Layout / Piccalilli). Add .flow to
-    any container and its DIRECT children get consistent vertical spacing from a
-    single owl selector. Spacing is a relationship BETWEEN siblings, so it lives
-    on the container, not on per-element classes.
+    any container and its DIRECT children get consistent vertical spacing from
+    the container's row gap. Spacing is a relationship BETWEEN siblings, so it
+    lives on the parent flow, not on per-element classes.
 
-    Tune a container's rhythm by setting --flow-space on it. An individual child
-    can ask for more (or less) room above itself by scoping its OWN --flow-space,
-    because the margin lands on the second sibling - that's how a heading earns
-    extra space above with no bespoke rule.
-
-    Caveat: don't nest .flow directly inside .flow. The inner container would
-    re-scope --flow-space and steal its own top margin from the outer flow. Give
-    the inner container a plain owl instead (see .doc-prose).
+    Tune a container's rhythm by setting --flow-space on that container. Nested
+    flow elements are safe: the outer flow owns the nested element's outside gap,
+    and the inner flow owns the rhythm between its own children. If one child
+    needs exceptional outside spacing, make that exception explicit with a
+    component rule or utility margin instead of overloading --flow-space.
 ----------------------------------------------------------------------------- */
 .flow {
     --flow-space: var(--space-sm);
-}
-.flow > * + * {
-    margin-top: var(--flow-space);
-}
-/* Headings request more space above; :where() keeps specificity at zero so a
-   context can bump it further (see .doc-section-heading). */
-.flow > :where(h2, h3, h4) {
-    --flow-space: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--flow-space);
 }
 
 /* -----------------------------------------------------------------------------
@@ -134,7 +126,7 @@ kbd {
     element (or an ancestor) to adjust a single axis without writing bespoke CSS.
 
     The family:
-      .flow         vertical stack with rhythm between siblings (above)
+      .flow         vertical stack with parent-owned gap between siblings
       .cluster      horizontal group that wraps; gap-driven
       .grid-auto    auto-fit responsive grid, tracks never below --grid-min
       .switcher     row that flips to a column below a width threshold
@@ -426,10 +418,10 @@ a.kixx-wordmark {
     color: var(--callout-accent);
 }
 .callout__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
     min-width: 0; /* let long words wrap instead of stretching the flex item */
-}
-.callout__body > * + * {
-    margin-top: var(--space-2xs);
 }
 .callout--info    { --callout-accent: var(--color-ink-secondary); }
 .callout--warning { --callout-accent: var(--color-status-warning); }

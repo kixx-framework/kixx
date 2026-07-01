@@ -7,17 +7,16 @@
     Anything reusable belongs in theme.css, not here.
 ----------------------------------------------------------------------------- */
 
-/* Prose blocks of explanatory copy. Runs its own internal owl rather than
-   nesting .flow (which would re-scope --flow-space and steal doc-prose's own top
-   margin from the section flow). Same idea, tokenized. */
+/* Prose blocks of explanatory copy. It owns its internal rhythm directly because
+   guide prose has list and heading rules beyond the generic .flow primitive. */
 .doc-prose {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
     max-width: var(--measure-prose);
 }
-.doc-prose > * + * {
-    margin-top: var(--space-sm);
-}
 .doc-prose > :where(h2, h3, h4) {
-    margin-top: var(--space-lg);
+    margin-block-start: var(--space-lg);
 }
 .doc-prose ul {
     padding-left: 1.2rem;
@@ -27,12 +26,13 @@
 }
 
 /* A standalone section heading + its lede, sitting in the section flow. The
-   heading asks for extra space above; the lede hugs it tightly from below. */
+   section flow owns the base gap; these component margins encode the exception:
+   more separation before a new guide section, then a tight heading/lede pair. */
 .doc-section-heading {
-    --flow-space: var(--space-xl);
+    margin-block-start: calc(var(--space-xl) - var(--space-lg));
 }
 .doc-lede {
-    --flow-space: var(--space-2xs);
+    margin-block-start: calc(var(--space-2xs) - var(--space-lg));
     max-width: 60ch;
     color: var(--color-ink-muted);
 }

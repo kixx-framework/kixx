@@ -45,9 +45,8 @@ p, h1, h2, h3, h4, h5, h6 {
     margin: 0;
 }
 /* Lists and block elements carry no default block margin; vertical rhythm comes
-   from .flow / owls. Reset at ELEMENT specificity so a .flow owl (class
-   specificity) always outranks it for flow children — a class-level `margin: 0`
-   would tie the owl and, loaded later, silently cancel the gap. */
+   from parent-owned gaps and component rules. Keep this at ELEMENT specificity
+   so component classes can still opt into their own margins when needed. */
 ul, ol, dl, pre {
     margin-block: 0;
 }

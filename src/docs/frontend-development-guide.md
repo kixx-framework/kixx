@@ -109,14 +109,14 @@ The same tiered approach applies to spacing (`--space-*` scale, consumed by `.fl
 
 | Class | Purpose |
 | --- | --- |
-| `.flow` | Vertical stack with rhythm between siblings, tuned by `--flow-space` |
+| `.flow` | Vertical stack with parent-owned gap between siblings, tuned by `--flow-space` |
 | `.cluster` | Horizontal group that wraps; gap-driven, tuned by `--cluster-space` |
 | `.grid-auto` | Auto-fit responsive grid, tracks never below `--grid-min` |
 | `.switcher` | Row that flips to a column below `--switcher-threshold`, no media query |
 | `.with-sidebar` | Fixed-ish sidebar beside fluid content; wraps when tight, tuned by `--sidebar-width` |
 | `.center` | Caps a column to `--center-max` and centers it |
 
-Compose these before writing a new `display: flex` or `display: grid` rule — most page structure in this project is a nesting of the six. Read the comment block above each primitive in `standard-include.css` for the specific reasoning (why a breakpoint is or isn't used, what each custom property controls), and see the Layout section of the style guide (`src/pages/admin/style-guide/layout/`) for live, annotated examples.
+Compose these before writing a new `display: flex` or `display: grid` rule — most page structure in this project is a nesting of the six. Because `.flow` uses `gap`, nested `.flow` elements are safe: the outer flow controls the nested element's outside spacing, and the inner flow controls spacing between its own children. Read the comment block above each primitive in `standard-include.css` for the specific reasoning (why a breakpoint is or isn't used, what each custom property controls), and see the Layout section of the style guide (`src/pages/admin/style-guide/layout/`) for live, annotated examples.
 
 When a primitive needs shell-specific defaults — for example, `.site-layout` sets `--sidebar-content-min` for the admin app shell built on `.with-sidebar` — scope those defaults to the specific class in `admin-layout.css` rather than changing the primitive's own defaults in `standard-include.css`. The primitive itself should stay generically reusable; per-shell opinions belong in the file that owns that shell.
 

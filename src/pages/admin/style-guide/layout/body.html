@@ -8,7 +8,7 @@
 
     <p>Every primitive defaults to a design token, so the untouched class already does the right thing. To adjust one axis, set its custom property on the element (or any ancestor):</p>
     <ul>
-        <li><code>.flow</code> &mdash; vertical stack; rhythm between siblings via <code>--flow-space</code>.</li>
+        <li><code>.flow</code> &mdash; vertical stack; parent-owned gap between siblings via <code>--flow-space</code>.</li>
         <li><code>.cluster</code> &mdash; horizontal group that wraps; <code>--cluster-space</code>, <code>--cluster-align</code>, <code>--cluster-justify</code>.</li>
         <li><code>.grid-auto</code> &mdash; auto-fit grid; tracks never below <code>--grid-min</code>, gap via <code>--grid-space</code>.</li>
         <li><code>.switcher</code> &mdash; row that flips to a column under <code>--switcher-threshold</code>.</li>
@@ -19,7 +19,7 @@
     <div class="callout">
         <div class="callout__body">
             <p class="type-label">Rule of thumb</p>
-            <p>This page is built from them: the header bar is a <code>.cluster</code>, and the whole app shell is a <code>.with-sidebar</code>. Reach for a primitive before a bespoke rule &mdash; and never nest <code>.flow</code> directly inside <code>.flow</code> (the inner one re-scopes <code>--flow-space</code> and steals its own top margin).</p>
+            <p>This page is built from them: the header bar is a <code>.cluster</code>, and the whole app shell is a <code>.with-sidebar</code>. Reach for a primitive before a bespoke rule. Nested <code>.flow</code> elements are safe: the outer flow controls the nested element's outside gap, and the inner flow controls its own children.</p>
         </div>
     </div>
 </div>
@@ -93,7 +93,7 @@
         <p class="type-label guideline__label">Don't</p>
         <ul>
             <li>Reach for a bespoke <code>display: flex</code> / <code>grid</code> rule before checking the six primitives.</li>
-            <li>Nest <code>.flow</code> directly inside <code>.flow</code> &mdash; use a plain owl for the inner stack.</li>
+            <li>Use child-scoped <code>--flow-space</code> overrides to create one-off outside margins; put exceptional spacing in an explicit component rule.</li>
             <li>Add media-query breakpoints where <code>.grid-auto</code> or <code>.switcher</code> already adapt.</li>
             <li>Hard-code pixel gaps; the spacing ladder is the contract.</li>
         </ul>
