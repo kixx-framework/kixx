@@ -35,7 +35,7 @@ Add a reusable admin "copy field" component — a labeled read-only value with a
   - **Acceptance criteria**: After creating a Publishing API token, the page still shows the exact `newToken` once, inside the existing one-time warning callout; clicking the field selects the entire token; clicking the copy icon copies the token when browser permissions allow it and otherwise leaves the selected field ready for manual copy; existing create, list, revoke, and pagination markup remains behaviorally unchanged.
   - **Depends on**: Add delegated copy behavior to the admin base template
 
-- [ ] **Verify copy controls in the browser**
+- [ ] **Verify copy controls in the browser** — *deferred to user: the Chrome automation extension was unavailable, and the dev SQLite store already had existing admin accounts with the bootstrap invite token already consumed, so an agent session could not reach an authenticated `/admin/invites` or `/admin/publishing-api-tokens` page without either credentials or mutating dev data. Kris will verify manually.*
   - **Story**: Copy-to-clipboard field component
   - **What**: Start the dev server, create an invite and a Publishing API token through the admin UI, and confirm both one-time callouts render correctly across desktop and narrow mobile widths using the new `.copy-field` component. Inspect the controls manually or with browser automation to confirm field selection, copy-button feedback, no layout overflow, no JavaScript errors, and no regressions to create/revoke/list workflows.
   - **Where**: `/admin/invites`; `/admin/publishing-api-tokens`; `node tools/devserver.js --config src/node-config.json --port 2026`
@@ -43,7 +43,7 @@ Add a reusable admin "copy field" component — a labeled read-only value with a
   - **Acceptance criteria**: Both pages allow copying from the button and selecting from the field; the control remains usable without layout overlap on mobile and desktop; the browser console is clean for this behavior; no tests are run unless explicitly requested.
   - **Depends on**: Update the admin invite reveal-once callout; Update the Publishing API token reveal-once callout
 
-- [ ] **Run linting for changed source files**
+- [x] **Run linting for changed source files**
   - **Story**: Copy-to-clipboard field component
   - **What**: Run the project linter against changed JavaScript-bearing source files after implementation, especially `src/templates/base/admin.html` if template scripts are linted by the workflow, or otherwise run `node run-linter.js` on applicable JavaScript sources changed during the implementation. Do not run unit tests unless explicitly asked.
   - **Where**: `node run-linter.js [pathname ...]`
