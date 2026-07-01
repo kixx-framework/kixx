@@ -128,12 +128,16 @@ the HTTP router serializes expected errors.
 Run the development server with:
 
 ```bash
-node src/node-server.js --config src/node-config.json --port 2026
+node tools/devserver.js --config src/node-config.json --port 2026
 ```
+
+Use this wrapper for normal development instead of running `src/node-server.js` directly. It keeps `--port` as the public browser-facing port, starts the app server child on a temporary internal port, and forwards `--config`, `--environment`, and `--dotenv` to the child process.
 
 Change the --port option to avoid port conflicts if needed.
 
-Restart the server to observe any changes in the JavaScript source code. Server restarts are not needed for changes to `templates/` and `pages/` data.
+The wrapper restarts the child app server after the site has been idle for a few seconds, so JavaScript source changes are picked up on the next request without manually restarting the command. Server restarts are not needed for changes to `templates/`, `pages/` data, or source stylesheets under `src/stylesheets/`.
+
+The dev server also serves CSS files directly from `src/stylesheets/`, allowing you to skip a build process for CSS bundles.
 
 Add `.json` to the end of any URL to get the template context object as JSON (ecluding includes content):
 
