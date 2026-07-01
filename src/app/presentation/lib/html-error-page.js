@@ -5,9 +5,8 @@ import { assertNonEmptyString, isNonEmptyString, isNumberNotNaN } from '../../..
 const UNEXPECTED_ERROR_PAGE = {
     statusCode: 500,
     heading: 'Something went wrong',
-    message: 'Something went wrong while loading this admin page.',
-    calloutClass: 'callout callout--error',
-    calloutIcon: 'error',
+    message: 'Something went wrong while loading this page.',
+    classification: 'error',
 };
 
 const STATUS_HEADINGS = {
@@ -28,16 +27,17 @@ const STATUS_HEADINGS = {
 
 
 /**
- * Renders a fixed admin-scope Hyperview error page for HTML requests.
+ * Renders a fixed-pathname Hyperview error page for HTML requests.
  * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
  * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current server request.
  * @param {import('../../../kixx/http-router/server-response.js').default} response - Mutable server response.
  * @param {Error} error - Error being handled by the router cascade.
- * @param {string} pathname - Fixed Hyperview pathname for the visual scope.
+ * @param {string} pathname - Fixed Hyperview pathname for the error page template.
+ * @param {string} [scope] - Optional scope label appended to the page title, e.g. `'Admin'`.
  * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>|false} Rendered response, or false for JSON requests.
  */
-export function renderAdminErrorPage(context, request, response, error, pathname) {
-    assertNonEmptyString(pathname, 'renderAdminErrorPage: pathname');
+export function renderHtmlErrorPage(context, request, response, error, pathname, scope) {
+    assertNonEmptyString(pathname, 'renderHtmlErrorPage: pathname');
 
     if (request.isJSONRequest()) {
         return false;
@@ -47,22 +47,20 @@ export function renderAdminErrorPage(context, request, response, error, pathname
         statusCode,
         heading,
         message,
-        calloutClass,
-        calloutIcon,
+        classification,
     } = classifyError(error);
 
     response.status = statusCode;
     setErrorHeaders(response, error, statusCode);
     response.updateProps({
         page: {
-            title: `${ heading } : Admin`,
+            title: isNonEmptyString(scope) ? `${ heading } : ${ scope }` : heading,
         },
         error: {
             statusCode,
             heading,
             message,
-            calloutClass,
-            calloutIcon,
+            classification,
         },
     });
 
@@ -71,7 +69,7 @@ export function renderAdminErrorPage(context, request, response, error, pathname
 
 
 function classifyError(error) {
-    if (error?.httpError && isHttpStatusCode(error.httpStatusCode)) {
+    if (error?.httpError && isNumberNotNaN(error.httpStatusCode)) {
         const statusCode = Number(error.httpStatusCode);
         const isClientError = statusCode >= 100 && statusCode <= 499;
 
@@ -81,22 +79,11 @@ function classifyError(error) {
             message: isClientError && isNonEmptyString(error.message)
                 ? error.message
                 : UNEXPECTED_ERROR_PAGE.message,
-            calloutClass: statusCode >= 500
-                ? 'callout callout--error'
-                : 'callout callout--warning',
-            calloutIcon: statusCode >= 500 ? 'error' : 'warning',
+            classification: statusCode >= 500 ? 'error' : 'warning',
         };
     }
 
     return UNEXPECTED_ERROR_PAGE;
-}
-
-function isHttpStatusCode(statusCode) {
-    const value = Number(statusCode);
-    return isNumberNotNaN(value) &&
-        Number.isInteger(value) &&
-        value >= 100 &&
-        value <= 599;
 }
 
 function getHeading(statusCode, error) {
