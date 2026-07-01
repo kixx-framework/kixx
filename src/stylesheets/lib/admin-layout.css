@@ -12,10 +12,27 @@
     bottom rule to a right rule with the nav pinned sticky. Driving the wrap and
     its presentation off the same breakpoint keeps them in lockstep — the
     primitive itself stays breakpoint-free; the shell simply opts into one.
+
+    Full-height fix: .with-sidebar stretches its own children to match each
+    other (the flex default align-items: stretch), but that only reaches as
+    tall as the row itself. When main content is short, the row is short, so
+    the nav's divider rule stops well above the viewport bottom. Scoping the
+    fix to `body:has(> .site-layout)` — rather than editing `body` directly —
+    keeps admin-login.html (same admin.css bundle, no .site-layout child)
+    unaffected, and leaves the reusable .with-sidebar primitive itself
+    breakpoint- and height-opinion-free for non-shell uses like the style
+    guide demo.
 ----------------------------------------------------------------------------- */
+
+body:has(> .site-layout) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
 
 .site-layout {
     --sidebar-content-min: 100%;
+    flex: 1 1 auto;
 }
 
 @media (min-width: 52rem) {
