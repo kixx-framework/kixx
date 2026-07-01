@@ -126,6 +126,14 @@ body:has(> .site-layout) {
 .site-nav__link:focus-visible::before {
     color: var(--color-ink-link);
 }
+.site-nav__link[aria-current="page"] {
+    border-left-color: var(--color-ink-primary);
+    background: var(--color-surface-sunken);
+    color: var(--color-ink-link);
+}
+.site-nav__link[aria-current="page"]::before {
+    color: var(--color-ink-link);
+}
 .site-nav__link:focus-visible {
     outline: 3px solid var(--color-focus-outline);
     outline-offset: -3px;
