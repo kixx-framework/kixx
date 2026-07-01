@@ -37,11 +37,6 @@ function getAdminLoginFormLink(context) {
     return target.compilePathname().pathname;
 }
 
-function getNewAdminUserFormLink(context) {
-    const target = context.getHttpTarget('new-admin-user-form/render-form');
-    return target.compilePathname().pathname;
-}
-
 // Renders the signup page in its "invalid invite" state: no form, just a notice
 // and a link back to login. Used when the URL carries no redeemable invite, and
 // when a token valid at GET time is spent, revoked, or expired before POST.
@@ -185,7 +180,6 @@ export async function postNewAdminUserForm(context, request, response, skip) {
 
 export async function getAdminUserLoginForm(context, request, response) {
     const form = new AdminUserLoginForm();
-    const links = { newUserForm: getNewAdminUserFormLink(context) };
 
     // Reads an optional `notice` query parameter to surface post-redirect notices
     // (e.g. when signup completed but auto-login failed). Unknown notice codes are
@@ -195,17 +189,15 @@ export async function getAdminUserLoginForm(context, request, response) {
 
     return response.updateProps({
         form: await getCsrfFormContext(context, request, response, form, noticeCode),
-        links,
     });
 }
 
 // Re-renders the login form in its throttled state: a fresh CSRF token plus a
 // non-enumerating "try again later" callout. Used both for the pre-auth check
 // and when a failed attempt is the one that trips the lock.
-async function renderLoginThrottled(context, request, response, form, links, retryAfterSeconds) {
+async function renderLoginThrottled(context, request, response, form, retryAfterSeconds) {
     return response.updateProps({
         form: await getCsrfFormContext(context, request, response, form),
-        links,
         throttled: true,
         throttleMessage: throttleMessage(retryAfterSeconds),
     });
@@ -214,13 +206,12 @@ async function renderLoginThrottled(context, request, response, form, links, ret
 export async function postAdminUserLoginForm(context, request, response, skip) {
     const formData = await validateCsrfFormData(context, request);
     const form = AdminUserLoginForm.fromFormData(formData);
-    const links = { newUserForm: getNewAdminUserFormLink(context) };
 
     // Reject before attempting authentication when this IP or this (IP, email)
     // pair is already locked out, so a throttled attacker cannot keep probing.
     const throttle = await checkLoginThrottle(context, request, form.email_address);
     if (throttle.throttled) {
-        return renderLoginThrottled(context, request, response, form, links, throttle.retryAfterSeconds);
+        return renderLoginThrottled(context, request, response, form, throttle.retryAfterSeconds);
     }
 
     // Server-side validation. On failure, fall through to the page renderer with
@@ -231,7 +222,6 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
         if (error.name === 'ValidationError') {
             return response.updateProps({
                 form: await getCsrfFormContext(context, request, response, form, error),
-                links,
             });
         }
         throw error;
@@ -249,11 +239,10 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
             // which input was wrong.
             const state = await recordLoginFailure(context, request, form.email_address);
             if (state.throttled) {
-                return renderLoginThrottled(context, request, response, form, links, state.retryAfterSeconds);
+                return renderLoginThrottled(context, request, response, form, state.retryAfterSeconds);
             }
             return response.updateProps({
                 form: await getCsrfFormContext(context, request, response, form),
-                links,
                 formError: INVALID_CREDENTIALS_MESSAGE,
             });
         }
