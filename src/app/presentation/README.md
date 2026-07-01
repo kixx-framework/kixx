@@ -80,6 +80,7 @@ Included files can be used as raw text or rendered as mini templates against the
 
 When a `page` object exists, Hyperview fills several metadata defaults:
 
+- `page.pathname` is the request URL pathname.
 - `page.canonical_url` defaults to the request URL without query string or hash.
 - `page.href` defaults to the full request URL.
 - `page.open_graph.url` defaults to `page.canonical_url`.

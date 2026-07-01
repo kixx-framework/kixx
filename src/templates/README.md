@@ -79,6 +79,8 @@ Page template:
 </article>
 ```
 
+Every page's assembled template context can be inspected by adding `.json` to its URL, e.g. `http://localhost:2026/admin/style-guide/aesthetic.json`. This is useful for confirming what data a page template actually receives.
+
 ## Basic Expressions
 
 A double-mustache tag interpolates a value from the current context.
