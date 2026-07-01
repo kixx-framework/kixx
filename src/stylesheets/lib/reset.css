@@ -1,0 +1,87 @@
+
+/* -----------------------------------------------------------------------------
+    Reset: Influenced by the Josh Comeau:
+        https://www.joshwcomeau.com/css/custom-css-reset/
+----------------------------------------------------------------------------- */
+
+html {
+    /* Sets the rm size for the rest of the styles */
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-body);
+    /* Fixed base, not fluid: the UI baseline is a known quantity. Reading-heavy
+       areas opt up to .type-body-lg; dense areas opt down to .type-body-sm. */
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    color: var(--color-ink);
+    background: var(--color-bg);
+}
+
+:root[data-theme="dark"] body {
+    /* Improve text rendering on dark backgrounds */
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Improve media defaults */
+img, picture, video, canvas, svg {
+    display: block;
+    max-width: 100%;
+}
+/* Inherit fonts for form controls */
+input, button, textarea, select {
+    font: inherit;
+}
+/* Avoid text overflows */
+p, h1, h2, h3, h4, h5, h6 {
+    overflow-wrap: break-word;
+    margin: 0;
+}
+/* Lists and block elements carry no default block margin; vertical rhythm comes
+   from .flow / owls. Reset at ELEMENT specificity so a .flow owl (class
+   specificity) always outranks it for flow children — a class-level `margin: 0`
+   would tie the owl and, loaded later, silently cancel the gap. */
+ul, ol, dl, pre {
+    margin-block: 0;
+}
+/* Improve line wrapping */
+p {
+    text-wrap: pretty;
+}
+h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+    font-family: var(--font-display);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+button {
+    cursor: pointer;
+    letter-spacing: 0;
+}
+
+a {
+    /* Ink text for max legibility; brand color carries in the underline only. */
+    color: var(--color-ink);
+    text-decoration-line: underline;
+    text-decoration-color: var(--color-ink-link);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.15em;
+    transition: color 200ms ease, text-decoration-color 200ms ease;
+}
+a:hover {
+    color: var(--color-ink-link);
+}
+
+::selection {
+    background: var(--color-highlight);
+    color: var(--color-ink-highlight);
+}
