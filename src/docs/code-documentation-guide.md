@@ -4,7 +4,7 @@ JSDoc block comments are the formal API contract: types, parameters, return valu
 
 Use JSDoc to answer "what does this do and how do I call it?"
 
-Use JSDoc blocks to reduce cognitive load by answering three questions without requiring the reader to inspect the implementation: "What does this do?", "How do I use it?", and "What can go wrong?"
+Use JSDoc blocks to reduce cognitive load by answering two questions without requiring the reader to inspect the implementation: "What does this do?" and "How do I use it?"
 
 ## Supported JSDoc Tags
 
@@ -218,17 +218,13 @@ export default class FileWatcher extends EventEmitter {}
 
 ## Document Interfaces and Invariants
 
-For interface modules or adapter contracts, use a short top-level block to
-state invariants that implementations must preserve. Keep this to stable
-requirements such as immutability, platform-provided objects, body-consumption
-rules, error translation, or request/response lifecycle timing. Then use a
-`@typedef` or class JSDoc block for the concrete property and method types.
+For interface modules or adapter contracts, use a short top-level block to state invariants that implementations must preserve. Keep this to stable requirements such as immutability, platform-provided objects, body-consumption rules, error translation, or request/response lifecycle timing. Then use a `@typedef` or class JSDoc block for the concrete property and method types.
 
 ## Document Classes
 
 - Use `@name` on members defined via `Object.defineProperties()` or `Object.defineProperty()` to give them an explicit name.
 - Do not add the `@private` tag to private members; JavaScript's `#private` syntax already communicates visibility.
-- Keep documentation sparse for private methods and members. A brief description is sufficient when documentation is useful.
+- Keep documentation sparse for private methods and members. A brief description is sufficient when documentation is needed.
 - Do not include a description for `constructor` JSDoc blocks. Only document `@param` tags and `@throws` when relevant.
 
 ## Use @name with Object.defineProperties
@@ -279,7 +275,7 @@ Use `@see` when another symbol materially helps the reader understand the contra
  * Validates and normalizes user input before persisting.
  * @param {UserProfile} profile - Raw user profile data
  * @returns {UserProfile} Normalized profile ready for storage
- * @see Context#registerCollection for how collections are registered
+ * @see import('../context/application-context.js').default#registerCollection for how collections are registered
  */
 function normalizeProfile(profile) {}
 ```

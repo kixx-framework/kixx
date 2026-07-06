@@ -9,26 +9,16 @@ Use this documentation index to identify which linked documents are relevant to 
 
 @src/docs/code-style-guide.md
 
-**When to use this document:** Apply this guide whenever you are writing or modifying any JavaScript source file in this project. This includes:
+**When to use this document:** Apply this guide whenever you are writing or modifying any server-side JavaScript source file in this project. This includes:
 
 - New functions, classes, modules, inline code comments, or any other JavaScript code you write from scratch.
 - Edits to existing source files, including adding, updating, and improving inline code comments.
 - Code review: Fix code style violations and update and clarify inline code comments even when not explicitly asked to.
-
-**What this document provides:** The canonical JavaScript style conventions for this project — language standard, runtime boundaries, formatting rules, linting constraints, inline code comments, and project-specific patterns like destructuring, type detection, and private class members. Following this guide keeps code consistent with the linter and with the rest of the codebase.
-
-### Code Quality Guide
-
-@src/docs/code-quality.md
-
-**When to use this document:** Apply this guide whenever you are writing,
-reviewing, or refactoring code in this project. This includes:
-
 - Deciding whether behavior belongs in a class, module, helper function, or existing object.
 - Improving code structure while making a scoped feature or bug fix.
 - Reviewing abstractions for responsibility ownership, encapsulation, layering, naming, or accidental complexity.
 
-**What this document provides:** General maintainability guidance for agents working in this codebase — how to choose responsible owners for behavior, when to use object-oriented design, when not to add a class, how to keep abstractions inside the existing architecture, and how to avoid refactors that add complexity or drift outside the current task.
+**What this document provides:** The canonical JavaScript style conventions for this project — maintaining good quality code as you work on a task, how to choose responsible owners for behavior, language standard, formatting rules, linting constraints, inline code comments, and project-specific patterns like destructuring, type detection, and private class members. Following this guide keeps code consistent throughout the codebase.
 
 ### Code Documentation Guide
 
@@ -41,21 +31,13 @@ reviewing, or refactoring code in this project. This includes:
 - Deciding whether a given symbol *needs* documentation at all.
 - Choosing the right JSDoc tags for a given situation.
 
-### Error Handling
+### Server Error Handling
 
-@src/docs/error-handling.md
+@src/docs/server-error-handling.md
 
-**When to use this document:** Apply this guide whenever you are writing,
-reviewing, or refactoring server-side JavaScript error handling. This includes
-throwing application errors, validating request input, asserting internal
-invariants, wrapping expected failures with `cause`, writing route error
-handlers, and deciding whether an error should propagate as unexpected.
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or refactoring server-side JavaScript error handling. This includes throwing application errors, handling errors, validating request input, asserting internal invariants, writing route error handlers, and deciding whether an error should propagate as expected or unexpected.
 
-**What this document provides:** The project error-handling rules for Worker and
-Node-side server code — expected operational errors vs. unexpected programmer
-errors, which `src/kixx/errors/` class to throw, when to use assertions from
-`src/kixx/assertions/`, how `ValidationError` aggregates field errors, and how
-the HTTP router serializes expected errors.
+**What this document provides:** The project error-handling rules for server-side code — expected operational errors vs. unexpected programmer errors, which `src/kixx/errors/` class to throw, when and how to use assertions, how to use `ValidationError`, and how the HTTP router handles and serializes errors.
 
 ### Unit Testing Guide
 

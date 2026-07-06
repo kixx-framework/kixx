@@ -16,10 +16,7 @@ Run-time problems that a correctly-written program will eventually encounter. Th
 - Invalid user input, invalid configuration.
 - A requested resource does not exist.
 
-**Rule:** Throw expected errors with the most specific project error class. Catch
-an expected error only when the current layer can handle it or add useful
-context. If you catch an error and do not recognize it as one you know how to
-handle, rethrow it as an `AssertionError`.
+**Rule:** Throw expected errors with the most specific project error class. Catch an expected error only when the current layer can handle it or add useful context. If you catch an error and do not recognize it as one you know how to handle, rethrow it as an `AssertionError`.
 
 Use the error classes in `kixx/errors/mod.js` to represent expected errors:
 
@@ -39,17 +36,11 @@ Use the error classes in `kixx/errors/mod.js` to represent expected errors:
 | `NotImplementedError` | 501 | The requested behavior is intentionally not implemented. |
 | `OperationalError` | 500 fallback | An expected non-HTTP infrastructure, integration, or storage failure has no more specific class. |
 
-`WrappedError` is the base class. It defaults `expected` to `false`; the concrete
-operational and HTTP error classes above set `expected: true` by default. HTTP
-classes expose `httpStatusCode`, `code`, `name`, and `httpError`.
+`WrappedError` is the base class. It defaults `expected` to `false`; the concrete operational and HTTP error classes above set `expected: true` by default. HTTP classes expose `httpStatusCode`, `code`, `name`, and `httpError`.
 
 `AssertionError` is for unexpected conditions or broken assumptions.
 
-Messages on HTTP errors are serialized by the router fallback, so they must be
-safe to show to clients. Do not put secrets, raw upstream payloads, stack
-details, KV keys, or internal identifiers in an HTTP error message. Use a
-custom `code` when callers or templates need to distinguish a domain-specific
-outcome while keeping the HTTP status generic:
+Messages on HTTP errors are serialized by the router fallback, so they must be safe to show to clients. Do not put secrets, raw upstream payloads, stack details, KV keys, or internal identifiers in an HTTP error message. Use a custom `code` when callers or templates need to distinguish a domain-specific outcome while keeping the HTTP status generic:
 
 ```js
 throw new ConflictError('This username is already registered.', {
@@ -92,16 +83,12 @@ There may also be times when the right thing to do is to convert an operational 
 
 The way we protect against unexpected errors is to write down our assumptions as **assertions** at the boundaries of our code. An assertion that fails is a loud, immediate crash with a precise message — exactly what you want for a bug.
 
-Use `kixx/assertions/mod.js` for this. Pick the relative import path from the
-file you are editing.
+Use `kixx/assertions/mod.js` for this.
 
 There are two `AssertionError` sources:
 
-- Assertion helpers from `kixx/assertions/mod.js` throw the assertion
-  library's `AssertionError`. Use these helpers for normal invariant checks.
-- `AssertionError` from `kixx/errors/mod.js` is a `WrappedError` subclass
-  for explicitly rethrowing an impossible internal condition while preserving
-  `cause`, usually at a domain boundary. It is unexpected by default.
+- Assertion helpers from `kixx/assertions/mod.js` throw the assertion library's `AssertionError`. Use these helpers for normal invariant checks.
+- `AssertionError` from `kixx/errors/mod.js` is a `WrappedError` subclass for explicitly rethrowing an impossible internal condition while preserving `cause`, usually at a domain boundary. It is unexpected by default.
 
 ### When to Assert
 
@@ -185,9 +172,7 @@ if (error.length) {
 
 The `source` should match the form field name because `BaseForm#getFormContext()` uses it to attach field-level messages.
 
-Request handlers that can recover from validation failures should catch only
-the expected validation or domain codes they know how to render, update response
-props, and rethrow everything else:
+Request handlers that can recover from validation failures should catch only the expected validation or domain codes they know how to render, update response props, and rethrow everything else:
 
 ```js
 try {
@@ -202,8 +187,7 @@ try {
 
 ## Wrapping and Rethrowing
 
-When you catch an expected error at a layer that cannot handle it, wrap it with
-more context and rethrow. Preserve the chain with `cause`:
+When you catch an expected error at a layer that cannot handle it, wrap it with more context and rethrow. Preserve the chain with `cause`:
 
 ```js
 try {

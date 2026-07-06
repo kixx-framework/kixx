@@ -1,29 +1,11 @@
 # Unit Testing Guide
 
-**Running tests:**
-
-```shell
-# Run all non-integration tests
-node run-tests.js
-
-# Run tests for specific files or directories
-node run-tests.js [pathname ...]
-```
-
-**What this guide does NOT cover:** Source code style (see `docs/code-style-guide.md`)
-
----
-
-## What This Project Uses
-
 This project uses two ES module libraries installed in `node_modules/` and imported by bare module name:
 
 - `kixx-test` provides the test runner API: `describe`, `it`, `before`, `after`, `xit`, `xdescribe`, and `MockTracker`.
 - `kixx-assert` provides assertion helpers. Assertions throw `AssertionError` on failure.
 
-The project test runner is `node run-tests.js`. It imports test files first, which register top-level `describe` blocks, then executes the registered tests.
-
----
+The project test runner imports test files first, which register top-level `describe` blocks, then executes the registered tests.
 
 ## File Conventions
 
@@ -31,8 +13,6 @@ The project test runner is `node run-tests.js`. It imports test files first, whi
 - Name test files with the project convention `*.test.js`, for example `test/kixx/logger/logger.test.js`.
 - Mirror the source tree where practical: `src/kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`.
 - Use one top-level `describe` per test file, named after the module, class, or behavior under test.
-
----
 
 ## Imports
 
@@ -44,8 +24,6 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 ```
 
 Import only the helpers used in that file.
-
----
 
 ## Basic Structure
 
@@ -94,8 +72,6 @@ describe('ModuleName', ({ before, after, it, describe, xit, xdescribe }) => {
 
 Destructure only the helpers you use. Nested `describe` blocks are useful for grouping related behavior and setup.
 
----
-
 ## Setup Patterns
 
 Prefer small file-local helpers over shared global fixtures:
@@ -106,8 +82,6 @@ Prefer small file-local helpers over shared global fixtures:
 
 Use `before` when a group intentionally exercises one setup/action/result across several focused `it` blocks. Otherwise, keep setup inside the `it` so the test can be read in isolation.
 
----
-
 ## Hook Semantics
 
 - `before(fn, opts?)` runs once before tests and child suites in its enclosing `describe`.
@@ -117,8 +91,6 @@ Use `before` when a group intentionally exercises one setup/action/result across
 - Hooks in a disabled suite are registered, but their runnable blocks are disabled and do not execute.
 
 Prefer local setup inside each `it` for mutable state. Use `before` for expensive setup or shared fixtures that will not be mutated in a way that makes tests order-dependent.
-
----
 
 ## Test Functions and Timeouts
 
@@ -150,8 +122,6 @@ The default timeout is 1000ms per runnable block. Pass `{ timeout: ms }` to `it`
 
 Callback-style tests are detected by function arity. If the test function accepts one or more parameters, the runner treats it as callback-style and waits for `done()`.
 
----
-
 ## Skipping Tests
 
 ```javascript
@@ -175,8 +145,6 @@ describe('placeholder suite');
 ```
 
 A test or suite declared with only a name is disabled. Disabled tests are reported in the final disabled test count, not the executed test count.
-
----
 
 ## Assertions
 
@@ -211,8 +179,6 @@ assertOk(result.status);
 const assertShortDate = assertMatches(/^\d{4}-\d{2}-\d{2}$/);
 assertShortDate(dateString);
 ```
-
----
 
 ## Mocking With MockTracker
 
@@ -274,8 +240,6 @@ Useful mock APIs:
 - `tracker.restoreAll()` restores managed mocks but keeps them associated with the tracker.
 - `tracker.reset()` restores all mocks and clears the tracker.
 
----
-
 ## Error and Rejection Tests
 
 When testing thrown errors, catch and assert on stable fields. Prefer `error.name`, `error.code`, and `error.message` over `instanceof`, because vendored or duplicated modules can create different constructor identities.
@@ -324,8 +288,6 @@ it('rejects on failure', async () => {
     assertEqual('NotFoundError', caught.name);
 });
 ```
-
----
 
 ## Writing Good Tests
 
