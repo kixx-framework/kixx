@@ -1,5 +1,5 @@
 import { clearAdminSessionCookie } from '../lib/admin-session-cookie.js';
-import { renderAdminErrorPage } from '../lib/admin-error-page.js';
+import { renderHtmlErrorPage } from '../lib/html-error-page.js';
 
 
 export function adminErrorHandler(context, request, response, error) {
@@ -9,5 +9,5 @@ export function adminErrorHandler(context, request, response, error) {
         return response.respondWithRedirect(303, loginTarget.compilePathname().pathname);
     }
 
-    return renderAdminErrorPage(context, request, response, error, '/admin/errors');
+    return renderHtmlErrorPage(context, request, response, error, '/admin/errors', 'Admin');
 }
