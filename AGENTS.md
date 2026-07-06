@@ -41,7 +41,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Unit Testing Guide
 
-@src/docs/unit-testing-guide.md
+@test/README.md
 
 **When to use this document:** Apply this guide only when you have been explicitly asked to write new tests or update existing tests. Consult it whenever you are:
 
