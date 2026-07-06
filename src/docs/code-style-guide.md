@@ -1,14 +1,137 @@
-# Code Style Guide
+# Maintaining Code Quality
 
-**Linter is authoritative**: The ESLint config in `eslint.config.js` enforces the code style rules beyond what this guide explicitly includes. After every edit, run:
+Be disciplined in your code writing tasks to ensure that you are writing code for future maintainability. Following this code quality guide will help you avoid adding accidental complexity to the codebase.
 
-```shell
-node run-linter.js [filepath ...]
+## Owners of responsibility
+
+When you encounter procedural code, shift your focus from *how* an operation is performed to *what* object, method, or function is responsible for doing it.
+
+- A class is useful when there is durable state, a lifecycle, caching, or an API that benefits from grouping related operations.
+- A module is enough when the responsibility needs private helpers but no per-instance state.
+- A plain helper function is enough when the behavior is stateless, has no hidden invariants, and can be named precisely.
+- Data that carries important invariants should usually be manipulated through the module or object that owns those invariants.
+- Think of relationships between data and concepts as objects with their own responsibilities and capabilities.
+
+*Lean into Object Oriented Programming (OOP).* - strongly consider the owners of responsibility for your logic, but there is no need to follow the "one class per noun" methodology.
+
+## Use Encapsulation
+
+Encapsulation is also known as "information hiding". The information hidden within a module usually consists of details about how to implement some mechanism which other parts of the system don't need to know about.
+
+Encapsulate your code in two ways:
+
+1. Your interfaces - classes, method signatures, function signatures - should reflect a simpler, more abstract view of the object's functionality and hide the details.
+2. There are no dependencies on an object's, method's, or function's internal information from outside it.
+
+In perfect code, each object is completely independent of the others: You could work in any of the objects without knowing anything about any of the other objects except their public interfaces.
+
+## Respect Existing Architecture
+
+Project-specific architecture guidance takes precedence over general code quality guidance. Use this document to improve design within the boundaries described by the relevant project docs.
+
+- Read `docs/index.md` first and then the full documents relevant to the task.
+- Keep Worker application code in `src/` compatible with the Cloudflare Workers runtime. Do not use native Node.js modules or filesystem access there.
+- Keep app-specific behavior, request handlers, middleware, forms, error handlers, Transaction Scripts, data gateways, and collections under `src/app/` according to `src/app/README.md`.
+- Keep presentation-layer behavior, domain workflows, data access, browser scripting, error handling, and tests in the layers described by their dedicated guides.
+- Prefer the existing framework, collection, context, route, form, and template patterns before introducing a new architectural shape.
+
+## Separate specialized code from general-purpose code
+
+User interface code should be separated from general purpose domain code:
+
+- Handlers, views, and templates in a web application
+- A command line interface or terminal user interface
+
+Low level adapters and drivers should be separated from general purpose domain code:
+
+- Database adapters or mappings
+- File system abstractions
+- HTTP API clients
+
+## Smaller modules, classes, and methods are not always better
+
+Creating small classes, methods, and functions is NOT your goal when writing or refactoring code; making the code simpler is your goal. There are times when you should bring code together to make it simpler:
+
+- Code that shares information; for example, both pieces of code might depend on information about a common protocol.
+- They are used together: anyone using one of the pieces of code is likely to use the other as well.
+- They overlap conceptually, in that there is a simple higher-level category that includes both of the pieces of code.
+- It is hard to understand one of the pieces of code without looking at the other.
+
+## Avoid thin wrapper classes
+
+Avoid writing classes which are just thin wrappers over some data with getters and setters.
+
+This is bad:
+
+```javascript
+class Dog {
+
+    #color;
+    #weight;
+    #breeds;
+
+    constructor(args) {
+        this.#color = args.color;
+        this.#weight = args.weight;
+        this.#breeds = args.breeds;
+    }
+
+    get color() { return this.#color; }
+
+    get weight() {
+        return Number.parseFloat(this.#weight);
+    }
+
+    get breeds() {
+        return this.#breeds.join(', ');
+    }
+}
 ```
 
-If the linter reports an error, fix it — even if it isn't covered by this document.
+Don't write useless getters and setters like that. When you see it, either remove them, or remove the whole class if it serves no other purpose. Just operate on the plain JavaScript object, and maybe include a JSDoc @typedef type definition for it.
 
----
+This is better:
+
+```javascript
+class Dog {
+
+    constructor(args) {
+        this.color = args.color;
+        this.weight = Number.parseFloat(args.weight);
+        this.breeds = args.breeds.join(', ');
+    }
+}
+```
+
+Or use a type definition:
+
+```javascript
+/**
+ * @typedef
+ * @property {string} color - The common color of the dog
+ * @property {number} weight - The weight of the dog expressed as a float
+ * @property {string} breeds - The common breeds of the dog expressed as a comma separated list
+ */
+
+/**
+ * @returns {Dog}
+ */
+function createDog(args) {
+    return {
+        color: args.color,
+        weight: Number.parseFloat(args.weight),
+        breeds: args.breeds.join(', '),
+    };
+}
+```
+
+## Minimize the number of arguments for methods and functions
+
+Use the fewest number of arguments to a method or function as possible. More than three arguments should be avoided if possible. When a method seems to need more than two or three arguments, it is likely that some of those arguments could become a plain options, configuration, or specification object.
+
+## The Linter is Authoritative
+
+The ESLint config in `eslint.config.js` enforces the code style rules beyond what this guide explicitly includes. If the linter reports an error, fix it, even if it isn't covered by this document.
 
 ## Language Standard
 
@@ -23,7 +146,13 @@ The JavaScript code in `app/` must run on multiple platforms:
 
 Therefore, it is critically important that the code in `app/` is cross platform, using modern Web Platform APIs. Never use Node, Deno, Cloudflare Worker, or AWS Lambda specific APIs for the JavaScript code in `app/`.
 
----
+## Naming Conventions
+- **Files**: kebab-case (`user-service.js`, not `UserService.js`)
+- **Functions**: camelCase, verb-first (`createUser`, `validateToken`)
+- **Classes**: PascalCase with descriptive suffixes (`UserCreateInput`, `AuthResponse`)
+- **Constants**: SCREAMING_SNAKE_CASE (`MAX_RETRY_COUNT`)
+- **Boolean variables**: is/has/can prefix (`isActive`, `hasPermission`)
+- **Form Data Values**: snake_case (`email_address`, `user_id`), values used in template context
 
 ## Arrow Functions
 
@@ -43,8 +172,6 @@ const isConst = variable.defs.some((def) => {
 });
 ```
 
----
-
 ## One Statement Per Line (`max-statements-per-line`)
 
 Never put two statements on the same line. The most common mistake is a block-body arrow function on one line:
@@ -62,8 +189,6 @@ const fn = () => {
     doSomethingElse();
 };
 ```
-
----
 
 ## Function Argument Objects
 
@@ -83,8 +208,6 @@ function runSubProcess(args) {
 function runSubProcess({ argv = [], cwd = process.cwd() } = {}) { ... }
 ```
 
----
-
 ## Trailing Commas (`comma-dangle`)
 
 Multiline arrays, objects, function parameters, imports, and exports require a trailing comma after the last item. Single-line constructs must not have one:
@@ -101,8 +224,6 @@ const result = someFunction(
     secondArgument,
 );
 ```
-
----
 
 ## Unused Variables (`no-unused-vars`)
 
@@ -126,8 +247,6 @@ try {
 }
 ```
 
----
-
 ## Private Class Members
 
 Use ES2022 `#` private fields and methods instead of underscore prefixes:
@@ -146,8 +265,6 @@ class Foo {
 }
 ```
 
----
-
 ## `no-undef` and Web Platform Globals
 
 The target platforms for this web application expose Web platform APIs (`URL`, `Response`, `ReadableStream`, `structuredClone`, etc.) as globals. If a file uses one of these and the linter reports `no-undef`, add the global to the `languageOptions.globals` block in `eslint.config.js`. Do not qualify it with `globalThis`:
@@ -161,8 +278,6 @@ languageOptions: {
     },
 },
 ```
-
----
 
 ## Additional Lint Rules Enforced by `eslint.config.js`
 
@@ -182,11 +297,9 @@ Always trust the linter output. If it reports an error, fix it even if it is not
 - `no-plusplus`: use `+= 1` instead of `++`
 - `prefer-arrow-callback`: use arrow functions for callbacks, not named `function` expressions
 
----
-
 ## Type Detection
 
-In server-side code in `app/`, `plugins/`, and `kixx/`, use the Kixx assertion helpers instead of raw `typeof`. Import assertion helpers from `kixx/assertions/mod.js` using the correct relative path from the file you are editing.
+In server-side or tooling code, use the Kixx assertion helpers instead of raw `typeof`. Import assertion helpers from `kixx/assertions/mod.js` using the correct relative path from the file you are editing.
 
 ```javascript
 import { isUndefined, isString } from '../../kixx/assertions/mod.js';
@@ -225,8 +338,6 @@ Choose the relative import path from the file you are editing. Do not add a new 
 - `isEqual(a, b)`: strict equality plus valid-Date equality and NaN === NaN; curryable
 - `doesMatch(matcher, value)`: RegExp.test(), isEqual(), String.includes(), or ISO date matching; curryable
 - `toFriendlyString(value)`: human-readable value formatter for diagnostics
-
----
 
 
 ## Inline Code Comments
