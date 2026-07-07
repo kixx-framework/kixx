@@ -1,0 +1,184 @@
+/* -----------------------------------------------------------------------------
+    Admin layout — sidebar + main content
+
+    Admin pages opt into this shell through the admin stylesheet bundle. The
+    layout is built on the shared .with-sidebar primitive: the navigation is the
+    sidebar track, and the main content is the fluid track.
+
+    A single breakpoint flips everything together: past 52rem the content only
+    needs 60%, so the two tracks sit side by side, and the divider swaps from a
+    bottom rule to a right rule with the nav pinned sticky. Driving the wrap and
+    its presentation off the same breakpoint keeps them in lockstep while the
+    primitive itself stays breakpoint-free.
+
+    Full-height fix: .with-sidebar stretches its own children to match each
+    other, but that only reaches as tall as the row itself. When main content is
+    short, the row is short, so the nav's divider rule stops above the viewport
+    bottom. Scoping the fix to `body:has(> .admin-layout)` keeps standalone
+    admin auth pages unaffected and leaves .with-sidebar height-opinion-free.
+----------------------------------------------------------------------------- */
+
+body:has(> .admin-layout) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.admin-layout {
+    --sidebar-content-min: 100%;
+    flex: 1 1 auto;
+}
+
+@media (min-width: 52rem) {
+    .admin-layout {
+        --sidebar-content-min: 60%;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+    Admin header
+
+    The top bar used by admin shells and standalone admin auth pages. It
+    composes .cluster for alignment, keeps the wordmark responsive, and leaves
+    controls in a compact group at the trailing edge.
+----------------------------------------------------------------------------- */
+
+.admin-header {
+    padding-block: clamp(0.9rem, 3vw, 1.25rem);
+    padding-inline: var(--space-page-gutter);
+    border-bottom: var(--rule-width) solid var(--color-rule-strong);
+}
+
+/* Built on .cluster in the markup; only the justify axis differs from default. */
+.admin-header__inner {
+    --cluster-justify: space-between;
+}
+
+.admin-header__wordmark {
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+}
+
+/* Also a .cluster; tighter gap for the controls. */
+.admin-header__controls {
+    --cluster-space: 0.6rem;
+}
+
+/* -----------------------------------------------------------------------------
+    Admin sidebar navigation
+
+    The admin shell's section navigation. On narrow screens it reads as a top
+    stack with a bottom rule; at the shell breakpoint it becomes the sidebar
+    track and owns the vertical divider. Link state uses the same accent signal
+    for hover, keyboard focus, and the current page.
+----------------------------------------------------------------------------- */
+
+.admin-nav {
+    border-bottom: var(--hairline-width) solid var(--color-rule-strong);
+}
+
+.admin-nav__inner {
+    padding-block: clamp(1rem, 3vw, 1.5rem);
+}
+
+@media (min-width: 52rem) {
+    .admin-nav {
+        /* The cell stretches to the row height, so this thin rule reads as a
+           full-height column divider — structural, not decorative. */
+        border-bottom: 0;
+        border-right: var(--hairline-width) solid var(--color-rule-strong);
+    }
+
+    .admin-nav__inner {
+        position: sticky;
+        top: 0;
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+.admin-nav__title {
+    margin-bottom: 0.5rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    color: var(--color-ink-muted);
+}
+
+.admin-nav__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.admin-nav__list + .admin-nav__title {
+    margin-top: var(--space-md);
+}
+
+.admin-nav__link {
+    display: block;
+    padding-block: 0.55rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    border-left: 2px solid transparent;
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    text-decoration: none;
+}
+
+.admin-nav__link:hover,
+.admin-nav__link:focus-visible {
+    border-left-color: var(--color-ink-link);
+    background: var(--color-surface-sunken);
+    color: var(--color-ink-link);
+    outline: none;
+}
+
+.admin-nav__link[aria-current="page"] {
+    border-left-color: var(--color-ink-link);
+    background: var(--color-surface-sunken);
+    color: var(--color-ink-link);
+    font-weight: var(--weight-bold);
+}
+
+.admin-nav__link:focus-visible {
+    outline: 2px solid var(--color-focus-outline);
+    outline-offset: -2px;
+}
+
+/* -----------------------------------------------------------------------------
+    Admin main content
+
+    These rules are admin-shell structure rather than generic primitives. The
+    page sections are still built from the primitives above, but this block owns
+    admin viewport padding, section measures, and anchor spacing.
+----------------------------------------------------------------------------- */
+
+.admin-main {
+    padding: var(--space-page-gutter);
+}
+
+.admin-content-section {
+    /* Section-level vertical rhythm (the section is marked .flow in the markup):
+       header, prose, sub-headings, and specimen groups all space off this. */
+    --flow-space: var(--space-lg);
+    /* Leaves breathing room when jumped to via nav anchors. */
+    scroll-margin-top: 1.5rem;
+    max-width: 60rem;
+}
+
+.admin-content-section + .admin-content-section {
+    margin-top: var(--space-section-gap);
+    padding-top: var(--space-section-gap);
+    /* A full-ink section break — the same hairline an <hr> draws, so admin
+       pages read as a sequence of clearly divided document sections. */
+    border-top: var(--rule-width) solid var(--color-rule-strong);
+}
+
+/* h2 size/weight come from the global h2 role. The grid places the title,
+   lede, and section-level theme toggle into named areas so no wrapper div
+   is needed in the markup. */
+.admin-content-section__header p {
+    margin-top: 0.5rem;
+    max-width: var(--measure-prose);
+    color: var(--color-ink-muted);
+}

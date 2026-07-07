@@ -1,15 +1,21 @@
 # Frontend Development Guide
 
-This guide covers the frontend development conventions for this project: the live style guide, source stylesheet organization, class naming, design tokens, CSS formatting, CSS comments, and the page-local stylesheet pattern. For Hyperview template syntax, see `templates/README.md`. For where presentation-layer files live and how request handlers pass render data to templates, see `app/presentation/README.md`.
+This guide covers the frontend development conventions for this project: the live style guide, public and admin layout boundaries, source stylesheet organization, class naming, design tokens, CSS formatting, CSS comments, and the page-local stylesheet pattern. For Hyperview template syntax, see `templates/README.md`. For where presentation-layer files live and how request handlers pass render data to templates, see `app/presentation/README.md`.
+
+## Public Pages Are the Default
+
+The public website is the default presentation surface. Static public pages should use the default base template, `templates/base/default.html`, and the public stylesheet entrypoint, `/stylesheets/stylesheet.css`, through `templates/partials/common-site-styles.html`. The current homepage is the canonical example of this default path: root page metadata in `pages/page.json`, public page content in `pages/body.html`, route-level markup in `templates/pages/page.html`, and page-local CSS in `pages/page.css`.
+
+Admin pages are an extension of the public foundation, not the baseline every page inherits. Admin panel pages opt into their shell with `baseTemplate: "admin.html"`, while standalone admin authentication pages opt into `baseTemplate: "admin-login.html"`. Those admin base templates load the admin stylesheet entrypoint, `/stylesheets/admin.css`, which layers admin shell and style-guide rules over the shared public foundations.
 
 ## Follow the Style Guide
 
-Before writing or reviewing any frontend markup or CSS, check the live style guide. It is both the design reference and a set of working examples built from the project's own primitives and components:
+Before writing or reviewing any frontend markup or CSS, check the live style guide. It is the design reference and a set of working examples built from the project's own primitives and components:
 
 - Start with `pages/admin/style-guide/aesthetic/body.html` — the tone and design philosophy behind every other section.
 - Read the source files under `pages/admin/style-guide/` when you need concrete markup examples.
 
-Treat the style guide as the source of truth for aesthetic decisions: color use, type roles, spacing rhythm, component anatomy, and state treatment. Do not re-derive these choices from first principles per page.
+Treat the style guide as the source of truth for aesthetic decisions: color use, type roles, spacing rhythm, component anatomy, and state treatment. Its shell and navigation examples are admin examples; copy those only for admin pages. Public pages should borrow the shared tokens, typography roles, layout primitives, and reusable components without inheriting admin-panel chrome by default.
 
 ## Never Use Inline Styles
 
@@ -25,18 +31,21 @@ This rule also applies to CSS custom properties. Do not tune a component with an
 
 ## File Organization
 
-CSS lives under `stylesheets/`, served directly by the development server. The shared stylesheet bundle currently has one public entrypoint:
+CSS lives under `stylesheets/`, served directly by the development server. The public stylesheet bundle is the default entrypoint:
 
 ```text
 stylesheets/
 ├── stylesheet.css
+├── admin.css
 └── lib/
     ├── design-tokens.css
     ├── reset.css
     ├── typography.css
     ├── layout.css
     ├── components.css
-    └── forms.css
+    ├── forms.css
+    ├── admin-shell.css
+    └── admin-style-guide.css
 ```
 
 `templates/partials/common-site-styles.html` links `/stylesheets/stylesheet.css`. That entrypoint is a flat list of imports, and import order matters because later files rely on custom properties and base rules defined earlier:
@@ -50,14 +59,24 @@ stylesheets/
 @import "./lib/forms.css";
 ```
 
+`templates/partials/admin-site-styles.html` links `/stylesheets/admin.css`. The admin entrypoint imports the public bundle first, then imports admin-only styles:
+
+```css
+@import "./stylesheet.css";
+@import "./lib/admin-shell.css";
+@import "./lib/admin-style-guide.css";
+```
+
 Keep the bundle ordered from low-level foundations to higher-level components:
 
 - `design-tokens.css` owns the palette, semantic tokens, component tokens, spacing, type scale, measures, radii, and border widths.
 - `reset.css` owns low-specificity browser normalization and base element behavior.
 - `typography.css` owns type roles, matching `.type-*` utilities, inline code, keyboard keys, and blockquotes.
-- `layout.css` owns the app shell layout, reusable layout primitives, and shared content-section structure.
-- `components.css` owns style-guide demo chrome plus reusable theme components such as navigation, wordmark, theme toggle, buttons, cards, callouts, and site header.
+- `layout.css` owns reusable layout primitives and public-neutral layout helpers.
+- `components.css` owns reusable theme components such as wordmark, theme toggle, buttons, cards, and callouts.
 - `forms.css` owns form fields, text areas, and copy fields.
+- `admin-shell.css` owns admin-only layout chrome such as the admin header, sidebar navigation, admin layout wrapper, admin main region, and admin content sections.
+- `admin-style-guide.css` owns admin style-guide demo and documentation chrome such as specimen blocks, swatches, demo stages, and component reference layouts.
 
 Before adding a new file to `lib/`, prefer extending one of the existing files. The project favors a handful of well-documented stylesheets over many small files, so related rules stay close to the examples and comments that explain them.
 

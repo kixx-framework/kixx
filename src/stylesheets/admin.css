@@ -1,0 +1,12 @@
+/* -----------------------------------------------------------------------------
+    Admin stylesheet bundle
+
+    Admin pages extend the public foundation instead of replacing it. Keep the
+    shared bundle first so tokens, reset rules, typography, layout primitives,
+    reusable components, and forms are available before admin-only shell and
+    style-guide rules layer on top.
+----------------------------------------------------------------------------- */
+
+@import "./stylesheet.css";
+@import "./lib/admin-shell.css";
+@import "./lib/admin-style-guide.css";

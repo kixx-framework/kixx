@@ -1,6 +1,6 @@
 <div class="center center--form flow">
 {{#if alreadyLoggedIn}}
-    <header class="content-section__header">
+    <header class="admin-content-section__header">
         <h2>Already logged in</h2>
     </header>
 
@@ -13,7 +13,7 @@
     </div>
 {{else}}
 {{#if inviteValid}}
-    <header class="content-section__header">
+    <header class="admin-content-section__header">
         <h2>Create an admin account</h2>
         <p>Set up an administrator login for this site.</p>
     </header>
@@ -102,7 +102,7 @@
     {{#if throttled}}
     {{!-- Temporary rate-limit lockout (too many invalid invites or submissions).
           Non-specific so it cannot be used to probe invite-token state. --}}
-    <header class="content-section__header">
+    <header class="admin-content-section__header">
         <h2>Too many attempts</h2>
         <p>Please wait before trying again.</p>
     </header>
@@ -120,7 +120,7 @@
           or when a previously valid invite was spent, revoked, or expired. The
           message is intentionally non-specific so it cannot be used to probe
           token state. --}}
-    <header class="content-section__header">
+    <header class="admin-content-section__header">
         <h2>Invite required</h2>
         <p>Admin accounts are created by invitation only.</p>
     </header>

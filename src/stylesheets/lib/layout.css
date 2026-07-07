@@ -1,46 +1,4 @@
 /* -----------------------------------------------------------------------------
-    App layout — sidebar + main content
-
-    Built on the .with-sidebar primitive (see the markup): the nav is the
-    sidebar track, the main content the fluid one. Mobile-first — the content
-    demands the full width (--sidebar-content-min: 100%), so the pair wraps and
-    the nav stacks above the content as a clean vertical stream.
-
-    A single breakpoint flips everything together: past 52rem the content only
-    needs 60%, so the two tracks sit side by side, AND the divider swaps from a
-    bottom rule to a right rule with the nav pinned sticky. Driving the wrap and
-    its presentation off the same breakpoint keeps them in lockstep — the
-    primitive itself stays breakpoint-free; the shell simply opts into one.
-
-    Full-height fix: .with-sidebar stretches its own children to match each
-    other (the flex default align-items: stretch), but that only reaches as
-    tall as the row itself. When main content is short, the row is short, so
-    the nav's divider rule stops well above the viewport bottom. Scoping the
-    fix to `body:has(> .site-layout)` — rather than editing `body` directly —
-    keeps admin-login.html (same admin.css bundle, no .site-layout child)
-    unaffected, and leaves the reusable .with-sidebar primitive itself
-    breakpoint- and height-opinion-free for non-shell uses like the style
-    guide demo.
------------------------------------------------------------------------------ */
-
-body:has(> .site-layout) {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-}
-
-.site-layout {
-    --sidebar-content-min: 100%;
-    flex: 1 1 auto;
-}
-
-@media (min-width: 52rem) {
-    .site-layout {
-        --sidebar-content-min: 60%;
-    }
-}
-
-/* -----------------------------------------------------------------------------
     Layout primitives
 
     Composable, single-purpose layout utilities in the Every Layout tradition
@@ -153,8 +111,8 @@ body:has(> .site-layout) {
     Use .with-sidebar when the first child should behave as a sidebar and the
     last child should take the remaining width. The content holds at least
     --sidebar-content-min of the inline size; when that cannot be satisfied, the
-    pair wraps and both tracks become full-width. The app shell (.site-layout)
-    is built on this primitive.
+    pair wraps and both tracks become full-width. Shells can opt into this
+    primitive by setting their own --sidebar-content-min value.
 
     Custom properties:
       --sidebar-width        preferred sidebar track width
@@ -197,42 +155,4 @@ body:has(> .site-layout) {
 /* Form modifier: compose with .center for standalone form pages. */
 .center--form {
     --center-max: var(--measure-form);
-}
-
-/* -----------------------------------------------------------------------------
-    Main content
-
-    These rules are guide-shell structure rather than generic primitives. The
-    page sections are still built from the primitives above, but this block owns
-    the Kixx style-guide viewport padding, section measures, and anchor spacing.
------------------------------------------------------------------------------ */
-
-.site-main {
-    padding: var(--space-page-gutter);
-}
-
-.content-section {
-    /* Section-level vertical rhythm (the section is marked .flow in the markup):
-       header, prose, sub-headings, and specimen groups all space off this. */
-    --flow-space: var(--space-lg);
-    /* Leaves breathing room when jumped to via the nav anchors. */
-    scroll-margin-top: 1.5rem;
-    max-width: 60rem;
-}
-
-.content-section + .content-section {
-    margin-top: var(--space-section-gap);
-    padding-top: var(--space-section-gap);
-    /* A full-ink section break — the same hairline an <hr> draws, so the guide
-       reads as a sequence of clearly divided document sections. */
-    border-top: var(--rule-width) solid var(--color-rule-strong);
-}
-
-/* h2 size/weight come from the global h2 role. The grid places the title,
-   lede, and section-level theme toggle into named areas so no wrapper div
-   is needed in the markup. */
-.content-section__header p {
-    margin-top: 0.5rem;
-    max-width: var(--measure-prose);
-    color: var(--color-ink-muted);
 }
