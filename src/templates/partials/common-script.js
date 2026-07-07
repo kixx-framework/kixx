@@ -6,7 +6,7 @@
     const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
 
     function currentTheme() {
-        return document.documentElement.dataset.theme || (systemTheme.matches ? 'dark' : 'light');
+        return document.documentElement.dataset.colorScheme || (systemTheme.matches ? 'dark' : 'light');
     }
 
     function syncThemeControl() {
@@ -24,9 +24,9 @@
             const nextTheme = currentTheme() === 'dark' ? 'light' : 'dark';
             document.documentElement.dataset.theme = nextTheme;
             try {
-                localStorage.setItem('kixx-theme', nextTheme);
+                localStorage.setItem(window.COLOR_SCHEME_STORAGE_KEY, nextTheme);
             } catch (_err) {
-                document.documentElement.dataset.theme = nextTheme;
+                document.documentElement.dataset.colorScheme = nextTheme;
             }
             syncThemeControl();
         });

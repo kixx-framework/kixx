@@ -206,10 +206,10 @@
     --weight-bold: 700;
 }
 
-:root[data-theme="light"] {
+:root[data-color-scheme="light"] {
     color-scheme: light;
 }
 
-:root[data-theme="dark"] {
+:root[data-color-scheme="dark"] {
     color-scheme: dark;
 }

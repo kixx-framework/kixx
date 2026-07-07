@@ -7,13 +7,14 @@
 
         {{!-- Apply a saved theme before paint to avoid a flash of the wrong theme. --}}
         <script>
+            window.COLOR_SCHEME_STORAGE_KEY = 'current-color-scheme';
             try {
-                const storedTheme = localStorage.getItem('kixx-theme');
-                if (storedTheme === 'light' || storedTheme === 'dark') {
-                    document.documentElement.dataset.theme = storedTheme;
+                const scheme = localStorage.getItem(COLOR_SCHEME_STORAGE_KEY);
+                if (scheme === 'light' || scheme === 'dark') {
+                    document.documentElement.dataset.colorScheme = scheme;
                 }
             } catch (error) {
-                document.documentElement.removeAttribute('data-theme');
+                document.documentElement.removeAttribute('data-color-scheme');
             }
         </script>
 
