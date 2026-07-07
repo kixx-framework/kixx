@@ -34,7 +34,7 @@
     "homepage": "https://www.kixx.dev",
     "devDependencies": {
         "kixx-assert": "2.1.1",
-        "kixx-linting": "1.1.0",
+        "kixx-linting": "1.1.1",
         "kixx-test": "3.0.0"
     }
 }
