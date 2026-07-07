@@ -313,7 +313,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-    counter-reset: nav;
 }
 
 .site-nav__list + .site-nav__title {
@@ -321,24 +320,13 @@
 }
 
 .site-nav__link {
-    counter-increment: nav;
-    display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
+    display: block;
     padding-block: 0.55rem;
     padding-inline: clamp(1rem, 2.5vw, 1.75rem);
     border-left: 2px solid transparent;
     line-height: var(--leading-snug);
     color: var(--color-ink);
     text-decoration: none;
-}
-
-/* A monospaced index number gives the nav a tiered, manual-like hierarchy. */
-.site-nav__link::before {
-    content: counter(nav, decimal-leading-zero);
-    flex: 0 0 auto;
-    font-size: 0.72rem;
-    color: var(--color-ink-muted);
 }
 
 .site-nav__link:hover,
@@ -348,20 +336,11 @@
     color: var(--color-ink-link);
     outline: none;
 }
-.site-nav__link:hover::before,
-.site-nav__link:focus-visible::before {
-    color: var(--color-ink-link);
-}
 .site-nav__link[aria-current="page"] {
     border-left-color: var(--color-ink-link);
     background: var(--color-surface-sunken);
     color: var(--color-ink-link);
     font-weight: var(--weight-bold);
-}
-.site-nav__link[aria-current="page"]::before {
-    content: ">" counter(nav, decimal-leading-zero);
-    margin-left: -0.75ch;
-    color: var(--color-ink-link);
 }
 .site-nav__link:focus-visible {
     outline: 2px solid var(--color-focus-outline);
@@ -386,9 +365,10 @@ a.kixx-wordmark {
 .kixx-wordmark__slash-1,
 .kixx-wordmark__slash-2 {
     color: var(--color-ink-link);
+    letter-spacing: -0.25em;
 }
 .kixx-wordmark__kixx {
-    margin-left: 0.15em;
+    margin-left: 0.5em;
 }
 
 /* Theme toggle — a bracketed, boxed spec-sheet control. It names the theme it
