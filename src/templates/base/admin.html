@@ -1,32 +1,8 @@
 <!doctype html>
 <html lang="en-US">
     <head>
-        <meta charset="utf-8">
-
-        <title>{{ page.title }}</title>
-
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="color-scheme" content="light dark">
-        {{!-- Apply a saved theme before paint to avoid a flash of the wrong theme. --}}
-        <script>
-            try {
-                const storedTheme = localStorage.getItem('kixx-theme');
-                if (storedTheme === 'light' || storedTheme === 'dark') {
-                    document.documentElement.dataset.theme = storedTheme;
-                }
-            } catch (error) {
-                document.documentElement.removeAttribute('data-theme');
-            }
-        </script>
-
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&amp;family=Lexend+Deca:wght@100..900&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0&amp;display=swap" rel="stylesheet">
-
-        {{!-- Admin styles import the shared tokens, reset, layout, and components. --}}
-        <link href="/stylesheets/admin.css" rel="stylesheet">
+        {{>common-site-meta.html}}
+        {{>common-site-styles.html}}
 
         {{#if includes.page_stylesheet }}
         <style>{{{ includes.page_stylesheet }}}</style>
@@ -50,107 +26,7 @@
         <div class="site-layout with-sidebar">{{{ body }}}</div>
 
         <script>
-            const themeToggles = document.querySelectorAll('[data-js-behavior="theme-toggle"]');
-            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
-
-            function currentTheme() {
-                return document.documentElement.dataset.theme || (systemTheme.matches ? 'dark' : 'light');
-            }
-
-            function syncThemeControl() {
-                const theme = currentTheme();
-                themeToggles.forEach(toggle => {
-                    toggle.setAttribute('aria-pressed', String(theme === 'dark'));
-                    toggle.querySelector('.theme-toggle__icon').textContent = theme === 'dark' ? 'light_mode' : 'dark_mode';
-                });
-            }
-
-            themeToggles.forEach(toggle => {
-                toggle.addEventListener('click', () => {
-                    const nextTheme = currentTheme() === 'dark' ? 'light' : 'dark';
-                    document.documentElement.dataset.theme = nextTheme;
-                    try {
-                        localStorage.setItem('kixx-theme', nextTheme);
-                    } catch (error) {
-                        document.documentElement.dataset.theme = nextTheme;
-                    }
-                    syncThemeControl();
-                });
-            });
-
-            systemTheme.addEventListener('change', () => {
-                if (!document.documentElement.dataset.theme) {
-                    syncThemeControl();
-                }
-            });
-
-            syncThemeControl();
-        </script>
-
-        <script>
-            const copyFieldButtons = document.querySelectorAll('[data-js-behavior="copy-field"]');
-
-            copyFieldButtons.forEach(button => {
-                const field = document.getElementById(button.dataset.copyTarget);
-
-                // A copy button with no resolvable target field is a markup bug in
-                // whichever page rendered it; skip it instead of throwing so one
-                // broken control cannot stop every other copy-field on the page.
-                if (!field) {
-                    return;
-                }
-
-                const icon = button.querySelector('.copy-field__icon');
-                const status = field.closest('.copy-field')?.querySelector('.copy-field__status');
-                const defaultIconName = icon ? icon.textContent : null;
-
-                let resetTimeoutId = null;
-
-                function setStatus(message) {
-                    if (status) {
-                        status.textContent = message;
-                    }
-                }
-
-                function resetIcon() {
-                    if (icon && defaultIconName) {
-                        icon.textContent = defaultIconName;
-                    }
-                }
-
-                field.addEventListener('click', () => {
-                    field.select();
-                });
-
-                button.addEventListener('click', async () => {
-                    field.select();
-                    clearTimeout(resetTimeoutId);
-
-                    // Clipboard writes require a secure context and user permission;
-                    // fall back to "select and let the user copy manually" whenever
-                    // the API is missing or the browser denies the write.
-                    if (!navigator.clipboard || !navigator.clipboard.writeText) {
-                        setStatus('Press Ctrl+C or Cmd+C to copy.');
-                        return;
-                    }
-
-                    try {
-                        await navigator.clipboard.writeText(field.value);
-                        setStatus('Copied.');
-
-                        if (icon) {
-                            icon.textContent = 'check';
-                        }
-
-                        resetTimeoutId = setTimeout(() => {
-                            setStatus('');
-                            resetIcon();
-                        }, 2000);
-                    } catch {
-                        setStatus('Press Ctrl+C or Cmd+C to copy.');
-                    }
-                });
-            });
+        {{>common-script.js}}
         </script>
     </body>
 </html>
