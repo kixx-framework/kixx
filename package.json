@@ -12,7 +12,8 @@
     },
     "scripts": {
         "test": "node run-linter && node run-tests.js",
-        "lint": "node run-linter"
+        "lint": "node run-linter",
+        "dev": "node ./tools/devserver.js"
     },
     "repository": {
         "type": "git",

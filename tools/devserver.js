@@ -5,6 +5,7 @@ import { isNonEmptyString } from '../src/kixx/assertions/mod.js';
 import { OperationalError } from '../src/kixx/errors/mod.js';
 import AppServerProcess from './devserver/app-server-process.js';
 import { isStylesheetRequest, serveStylesheetFile } from './devserver/stylesheet-file-handler.js';
+import { isJavascriptRequest, serveJavascriptFile } from './devserver/javascript-file-handler.js';
 
 
 // Mirrors src/node-server.js's CLI surface so this script is a drop-in
@@ -75,6 +76,14 @@ async function handleRequest(request, response) {
     // restarting) the app server child process.
     if (isStylesheetRequest(pathname)) {
         await serveStylesheetFile(request, response, pathname);
+        return;
+    }
+
+    // Browser JavaScript modules live in src/javascript/ and, like the
+    // stylesheets above, are not copied into the app server's served public/
+    // directory by any build step, so serve them straight from source here.
+    if (isJavascriptRequest(pathname)) {
+        await serveJavascriptFile(request, response, pathname);
         return;
     }
 

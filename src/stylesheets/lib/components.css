@@ -419,7 +419,7 @@ a.kixx-wordmark {
 .kixx-wordmark__slash-1,
 .kixx-wordmark__slash-2 {
     color: var(--color-ink-link);
-    letter-spacing: 0;
+    letter-spacing: -0.25em;
 }
 
 .kixx-wordmark__kixx {
