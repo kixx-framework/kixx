@@ -1,10 +1,10 @@
 /* -----------------------------------------------------------------------------
     Style-guide demo & documentation
 
-    Everything here styles THIS reference guide only — specimens, prose, layout
-    demos, and do/don't cards. It is NOT part of the Kixx Admin Panel theme; it
-    lives in its own file (loaded after theme.css) so the theme lifts out cleanly.
-    Anything reusable belongs in theme.css, not here.
+    Everything in the first half styles THIS reference guide only — specimens,
+    prose, layout demos, and do/don't cards. The theme components (nav, buttons,
+    cards, callouts, header) live in the second half. Anything reusable belongs
+    with the theme components, not the guide-only demo chrome.
 ----------------------------------------------------------------------------- */
 
 /* Prose blocks of explanatory copy. It owns its internal rhythm directly because
@@ -19,26 +19,21 @@
     margin-block-start: var(--space-lg);
 }
 .doc-prose ul {
-    padding-left: 1.2rem;
+    padding-left: 1.5ch;
 }
 .doc-prose li + li {
     margin-top: var(--space-2xs);
 }
 
-/* A standalone section heading + its lede, sitting in the section flow. The
-   section flow owns the base gap; these component margins encode the exception:
-   more separation before a new guide section, then a tight heading/lede pair. */
+/* A standalone section heading + its lede, sitting in the section flow. */
 .doc-section-heading {
     margin-block-start: calc(var(--space-xl) - var(--space-lg));
 }
 .doc-lede {
     margin-block-start: calc(var(--space-2xs) - var(--space-lg));
-    max-width: 60ch;
+    max-width: var(--measure-prose);
     color: var(--color-ink-muted);
 }
-
-/* The "rule of thumb" notes are now the theme's .callout component (theme.css);
-   the guide uses its default neutral tone and wraps content in .callout__body. */
 
 /* Type specimens — a live sample over a metadata strip. Built on a flush card
    (.card.card--flush); the sample and meta strips pad themselves. */
@@ -49,8 +44,8 @@
 .specimen__sample {
     padding: clamp(1.25rem, 4vw, 2rem);
 }
-/* The meta strip is a .grid-auto in the markup (8rem tracks); it only tunes the
-   track floor and keeps an asymmetric row/column gap. */
+/* The meta strip is a .grid-auto in the markup (8rem tracks); it tunes the track
+   floor and keeps an asymmetric row/column gap. */
 .specimen__meta {
     --grid-min: 8rem;
     margin: 0;
@@ -64,15 +59,13 @@
     gap: 0.15rem;
 }
 .specimen__meta dt {
-    font-family: var(--font-mono);
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: var(--tracking-label);
     color: var(--color-ink-muted);
 }
 .specimen__meta dd {
     margin: 0;
-    font-family: var(--font-mono);
     font-size: var(--text-caption);
 }
 .specimen__use {
@@ -96,16 +89,13 @@
 ----------------------------------------------------------------------------- */
 .layout-demo {
     padding: var(--space-sm);
-    border: var(--hairline-width) dashed var(--color-rule);
-    border-radius: var(--radius-md);
+    border: var(--hairline-width) dashed var(--color-rule-strong);
     background: var(--color-surface-sunken);
 }
 .demo-box {
     padding: var(--space-xs) var(--space-sm);
-    border: var(--hairline-width) solid var(--color-rule);
-    border-radius: var(--radius-sm);
+    border: var(--hairline-width) solid var(--color-rule-strong);
     background: var(--color-bg);
-    font-family: var(--font-mono);
     font-size: var(--text-caption);
     text-align: center;
 }
@@ -117,8 +107,9 @@
     min-height: 4.5rem;
 }
 
-/* Do / Don't guidance cards — cyan = do, magenta = don't. A .grid-auto in the
-   markup; card accent modifiers provide the top edge color. */
+/* Do / Don't guidance cards. Built on .card with an accented left rule; the
+   do/dont modifiers recolor that rule with a status signal and mark the label
+   with an ASCII glyph, so the guidance reads even in greyscale. */
 .guidelines {
     --grid-min: 18rem;
     --grid-space: var(--space-sm);
@@ -127,18 +118,34 @@
     margin-top: var(--space-2xs);
 }
 .guideline ul {
-    padding-left: 1.2rem;
+    padding-left: 1.5ch;
     font-size: var(--text-body-sm);
     line-height: var(--leading-normal);
 }
 .guideline li + li {
     margin-top: var(--space-2xs);
 }
+.guideline__label::before {
+    margin-right: 0.5ch;
+    font-weight: var(--weight-bold);
+}
+.guideline--do {
+    --card-accent: var(--color-status-success);
+}
 .guideline--do .guideline__label {
-    color: var(--color-ink-secondary);
+    color: var(--color-status-success);
+}
+.guideline--do .guideline__label::before {
+    content: "[+]";
+}
+.guideline--dont {
+    --card-accent: var(--color-status-danger);
 }
 .guideline--dont .guideline__label {
-    color: var(--color-ink-primary);
+    color: var(--color-status-danger);
+}
+.guideline--dont .guideline__label::before {
+    content: "[x]";
 }
 
 /* -----------------------------------------------------------------------------
@@ -179,8 +186,7 @@
     justify-content: center;
     gap: var(--space-sm);
     padding: clamp(1.5rem, 5vw, 3rem);
-    border: var(--hairline-width) solid var(--color-rule);
-    border-radius: var(--radius-md);
+    border: var(--hairline-width) solid var(--color-rule-strong);
     background: var(--color-surface-sunken);
 }
 .demo-stage__hint {
@@ -193,14 +199,13 @@
 
 /* Numbered parts list, paired with an anatomy stage. */
 .parts-list {
-    padding-left: 1.4rem;
+    padding-left: 2.5ch;
     font-size: var(--text-body-sm);
 }
 .parts-list li + li {
     margin-top: var(--space-2xs);
 }
 .parts-list li::marker {
-    font-family: var(--font-mono);
     color: var(--color-ink-muted);
 }
 
@@ -228,9 +233,7 @@
 
 /* States table — each state name beside its visual treatment. */
 .state-list {
-    border: var(--hairline-width) solid var(--color-rule);
-    border-radius: var(--radius-md);
-    overflow: hidden; /* clip the row dividers to the rounded corners */
+    border: var(--hairline-width) solid var(--color-rule-strong);
 }
 .state-list > div {
     display: flex;
@@ -243,10 +246,9 @@
 }
 .state-list dt {
     flex: 0 0 6rem;
-    font-family: var(--font-mono);
     font-size: var(--text-caption);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: var(--tracking-label);
     color: var(--color-ink-muted);
 }
 .state-list dd {
@@ -258,11 +260,9 @@
 /* Copy-paste usage markup. */
 .code-block {
     padding: clamp(1rem, 3vw, 1.25rem);
-    border: var(--hairline-width) solid var(--color-rule);
-    border-radius: var(--radius-md);
+    border: var(--hairline-width) solid var(--color-rule-strong);
     background: var(--color-surface-sunken);
     overflow-x: auto;
-    font-family: var(--font-mono);
     font-size: var(--text-body-sm);
     line-height: var(--leading-normal);
 }
@@ -278,7 +278,7 @@
 ----------------------------------------------------------------------------- */
 
 .site-nav {
-    border-bottom: var(--hairline-width) solid var(--color-rule);
+    border-bottom: var(--hairline-width) solid var(--color-rule-strong);
 }
 
 .site-nav__inner {
@@ -290,7 +290,7 @@
         /* The cell stretches to the row height, so this thin rule reads as a
            full-height column divider — structural, not decorative. */
         border-bottom: 0;
-        border-right: var(--hairline-width) solid var(--color-rule);
+        border-right: var(--hairline-width) solid var(--color-rule-strong);
     }
     .site-nav__inner {
         position: sticky;
@@ -303,10 +303,9 @@
 .site-nav__title {
     margin-bottom: 0.5rem;
     padding-inline: clamp(1rem, 2.5vw, 1.75rem);
-    font-family: var(--font-mono);
     font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: var(--tracking-label);
     color: var(--color-ink-muted);
 }
 
@@ -326,30 +325,25 @@
     display: flex;
     align-items: baseline;
     gap: 0.75rem;
-    padding-block: 0.7rem;
+    padding-block: 0.55rem;
     padding-inline: clamp(1rem, 2.5vw, 1.75rem);
-    border-left: 3px solid transparent;
-    font-family: var(--font-display);
-    font-weight: 500;
-    line-height: 1.25;
+    border-left: 2px solid transparent;
+    line-height: var(--leading-snug);
     color: var(--color-ink);
     text-decoration: none;
-    transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease;
 }
 
 /* A monospaced index number gives the nav a tiered, manual-like hierarchy. */
 .site-nav__link::before {
     content: counter(nav, decimal-leading-zero);
     flex: 0 0 auto;
-    font-family: var(--font-mono);
     font-size: 0.72rem;
     color: var(--color-ink-muted);
-    transition: color 200ms ease;
 }
 
 .site-nav__link:hover,
 .site-nav__link:focus-visible {
-    border-left-color: var(--color-ink-primary);
+    border-left-color: var(--color-ink-link);
     background: var(--color-surface-sunken);
     color: var(--color-ink-link);
     outline: none;
@@ -359,68 +353,79 @@
     color: var(--color-ink-link);
 }
 .site-nav__link[aria-current="page"] {
-    border-left-color: var(--color-ink-primary);
+    border-left-color: var(--color-ink-link);
     background: var(--color-surface-sunken);
     color: var(--color-ink-link);
+    font-weight: var(--weight-bold);
 }
 .site-nav__link[aria-current="page"]::before {
+    content: ">" counter(nav, decimal-leading-zero);
+    margin-left: -0.75ch;
     color: var(--color-ink-link);
 }
 .site-nav__link:focus-visible {
-    outline: 3px solid var(--color-focus-outline);
-    outline-offset: -3px;
+    outline: 2px solid var(--color-focus-outline);
+    outline-offset: -2px;
 }
 
+/* Wordmark — a code-comment "//kixx". The slashes carry the one bit of accent
+   color; the name stays ink. Mono, bold, square: it looks like something typed. */
 .kixx-wordmark {
     font-family: var(--font-wordmark);
     display: inline-flex;
-    font-size: 3em;
-    font-weight: 600;
+    align-items: baseline;
+    font-size: 2em;
+    font-weight: var(--weight-bold);
     line-height: 1;
+    letter-spacing: -0.02em;
     text-decoration: none;
 }
 a.kixx-wordmark {
     color: var(--color-ink);
 }
-.kixx-wordmark__slash-1 {
-    font-size: 0.88em;
-    font-weight: 900;
-    letter-spacing: -0.25em;
-    color: var(--color-ink-secondary);
-}
+.kixx-wordmark__slash-1,
 .kixx-wordmark__slash-2 {
-    font-size: 0.88em;
-    font-weight: 900;
-    color: var(--color-ink-primary);
+    color: var(--color-ink-link);
 }
 .kixx-wordmark__kixx {
-    margin-left: 0.2em;
+    margin-left: 0.15em;
 }
 
+/* Theme toggle — a bracketed, boxed spec-sheet control. It names the theme it
+   switches TO. Inverts on hover like every other control. */
 .theme-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2em;
-    height: 2em;
-    border-width: 0;
-    border-radius: var(--radius-pill);
+    min-height: 2.25rem;
+    padding-inline: 0.75rem;
+    border: var(--button-border-width) solid var(--color-ink);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
     color: var(--color-ink);
     background: transparent;
-    transition: background-color 200ms ease, color 200ms ease;
-    font-size: clamp(1em, 3vw, 1.25em);
 }
 .theme-toggle:hover {
     background: var(--color-ink);
     color: var(--color-bg);
 }
 .theme-toggle:focus-visible {
-    outline: 3px solid var(--color-ink-primary);
-    outline-offset: 3px;
+    outline: 2px solid var(--color-focus-outline);
+    outline-offset: 2px;
 }
 
 /* -----------------------------------------------------------------------------
     Buttons
+
+    A terminal / spec-sheet control: a mono, uppercase label inside a square,
+    1px box. States are communicated by INVERSION (fill flips to ink) or a
+    border/color shift — never a shadow, never motion.
+      .button            outline box — the neutral default
+      .button--primary   solid ink fill — the one emphasized action
+      .button--danger    red outline — a destructive action (color as signal)
 ----------------------------------------------------------------------------- */
 
 .button {
@@ -428,134 +433,138 @@ a.kixx-wordmark {
     align-items: center;
     justify-content: center;
     min-height: 2.5rem;
-    padding-inline: 1.25rem;
+    padding-inline: 1rem;
     border: var(--button-border-width) solid var(--color-ink);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     font-family: var(--font-mono);
-    font-size: 0.85rem;
+    font-size: var(--text-body-sm);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--tracking-label);
     color: var(--color-ink);
     background: var(--color-bg);
     text-decoration: none;
-    transition: background-color 200ms ease, color 200ms ease, transform 100ms ease;
 }
+/* Bracket the label so it reads as a terminal target: [ save ]. */
+.button::before { content: "[\00a0"; }
+.button::after { content: "\00a0]"; }
+
 .button:not(:disabled):hover {
-    /* Plain (outline) buttons invert to a solid ink fill. */
+    /* Every button inverts to a solid ink fill — one shared hover treatment. */
     background: var(--color-ink);
     color: var(--color-bg);
     border-color: var(--color-ink);
 }
 .button:focus-visible {
-    outline: 3px solid var(--color-focus-outline);
+    outline: 2px solid var(--color-focus-outline);
     outline-offset: 2px;
 }
-/* Brand variants change only the resting fill; on hover they fall through to
-   the plain .button:hover above and invert to a solid ink fill, so every
-   button shares one hover treatment. */
+
+/* Primary — the emphasized action carries the inverted (filled) resting state,
+   so emphasis comes from FILL, not color. On hover it flips to the outline. */
 .button--primary {
-    background: var(--color-button-bg-primary);
-    border-color: var(--color-button-border-primary);
+    background: var(--color-ink);
+    border-color: var(--color-ink);
     color: var(--color-ink-on-accent);
 }
-.button--secondary {
-    background: var(--color-button-bg-secondary);
-    border-color: var(--color-button-border-secondary);
+.button--primary:not(:disabled):hover {
+    background: var(--color-bg);
+    color: var(--color-ink);
+}
+
+/* Danger — the one place a button borrows color, as a signal that the action
+   destroys something. Outline until hover, then a solid red fill. */
+.button--danger {
+    border-color: var(--color-status-danger);
+    color: var(--color-status-danger);
+}
+.button--danger:not(:disabled):hover {
+    background: var(--color-status-danger);
+    border-color: var(--color-status-danger);
     color: var(--color-ink-on-accent);
 }
-.button--tertiary {
-    background: var(--color-button-bg-tertiary);
-    border-color: var(--color-button-border-tertiary);
-    color: var(--color-ink-on-accent);
-}
-.button:active {
-    /* Tactile press — a 1px nudge; theme-agnostic, works on every variant. */
-    transform: translateY(1px);
-}
+
 .button:disabled {
-    /* Neutralise all variants — brand fill and ink border both give way to grey
-       so a disabled button reads as inactive, not as a muted brand action. */
-    background: var(--color-surface-sunken);
     border-color: var(--color-ink-muted);
     color: var(--color-ink-muted);
+    background: var(--color-bg);
     cursor: not-allowed;
 }
 
 /* -----------------------------------------------------------------------------
     Cards
 
-    The bordered-surface primitive: flat, softly rounded, with a 1px hairline
-    rule — the structural building block for dashboards, settings groups, and
-    list modules. Compose with optional modifiers:
-      .card                    padded bordered surface (the default)
+    The bordered-surface primitive: flat, square, hairline-ruled — the
+    structural building block for dashboards, settings groups, and list modules.
+    Depth comes from the 1px rule, never a shadow.
+      .card                    padded, hairline-bordered surface (the default)
       .card--flush             drop padding when inner strips pad themselves
-      .card--accent-primary    full border in the primary accent
-      .card--accent-secondary  full border in the secondary accent
+      .card--accent-primary    add an ink left-rule marker
+      .card--accent-secondary  add a muted left-rule marker
       .card--sunken            recessed fill (--color-surface-sunken)
 ----------------------------------------------------------------------------- */
 
 .card {
-    --card-accent: var(--color-ink-primary);
+    --card-accent: var(--color-ink);
     padding: var(--card-padding, clamp(1.1rem, 3vw, 1.5rem));
-    border: var(--hairline-width) solid var(--color-rule);
+    border: var(--hairline-width) solid var(--color-rule-strong);
     border-radius: var(--radius-md);
     /* Clip full-bleed inner strips (a flush card's sample/meta bands, a swatch
-       chip) to the rounded corners so nothing pokes past the radius. */
+       chip) to the card edge. */
     overflow: hidden;
     background: var(--color-bg);
 }
 .card--flush {
     padding: 0;
 }
+/* The accent is a heavier LEFT rule — a marker, not a colored box — the way a
+   changelog or quoted block is flagged. Keeps color out of the surface itself. */
 .card--accent-primary,
 .card--accent-secondary {
-    /* The accent recolors the whole border (all four sides) and steps it up
-       from the hairline to the heavier accent weight. */
-    border: var(--accent-border-width) solid var(--card-accent);
+    border-left-width: 3px;
+    border-left-color: var(--card-accent);
 }
 .card--accent-primary {
-    --card-accent: var(--color-ink-primary);
+    --card-accent: var(--color-ink);
 }
 .card--accent-secondary {
-    --card-accent: var(--color-ink-secondary);
+    --card-accent: var(--color-ink-muted);
 }
 .card--sunken {
-    /* A recessed surface for nested or read-only panels — the component home
-       for the --color-surface-sunken semantic token. */
     background: var(--color-surface-sunken);
 }
 
 /* -----------------------------------------------------------------------------
     Callouts
 
-    A bordered notice — a colored border, an optional icon, and a message on a
-    sunken surface. The default is a neutral emphasis note; three tone modifiers
-    recolor the border + icon from the status semantic tokens. A static surface,
-    like Cards — no interactive states.
+    A boxed notice: a hairline box with a heavier left marker in the tone color,
+    on a sunken surface. The default is a neutral note; three tone modifiers
+    recolor the marker + the ASCII icon from the semantic tokens. Static, like
+    Cards — no interactive states.
       .callout            neutral emphasis note (the default)
-      .callout--info      cyan   — calm, non-urgent information
-      .callout--warning   yellow — proceed with caution
-      .callout--error     red    — something failed or is blocked
+      .callout--info      link blue — calm, non-urgent information
+      .callout--warning   amber    — proceed with caution
+      .callout--error     red      — something failed or is blocked
 
-    Tone rides the border and the icon only — both are AA-safe ground for any
-    tone. The message stays --color-ink, so the yellow warning never lands as the
-    thin text where it would lose contrast (see the Colors status-color note).
+    Tone rides the left marker and the icon only — both graphical marks that
+    clear WCAG's 3:1 non-text threshold. The message stays --color-ink so the
+    warning tone never lands as thin text where it would lose contrast.
 ----------------------------------------------------------------------------- */
 
 .callout {
-    --callout-accent: var(--color-ink-primary);
+    --callout-accent: var(--color-ink);
     display: flex;
     align-items: flex-start;
     gap: var(--space-xs);
-    padding: 1rem 1.25rem;
-    border: var(--accent-border-width) solid var(--callout-accent);
-    border-radius: var(--radius-md);
+    padding: var(--space-sm);
+    border: var(--hairline-width) solid var(--color-rule);
+    border-left: 3px solid var(--callout-accent);
     background: var(--color-surface-sunken);
 }
 .callout__icon {
     flex: none;
-    font-size: 1.5rem;
-    line-height: var(--leading-tight);
+    font-family: var(--font-mono);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-body);
     color: var(--callout-accent);
 }
 .callout__body {
@@ -564,7 +573,7 @@ a.kixx-wordmark {
     gap: var(--space-2xs);
     min-width: 0; /* let long words wrap instead of stretching the flex item */
 }
-.callout--info    { --callout-accent: var(--color-ink-secondary); }
+.callout--info    { --callout-accent: var(--color-ink-link); }
 .callout--warning { --callout-accent: var(--color-status-warning); }
 .callout--error   { --callout-accent: var(--color-status-danger); }
 
@@ -573,18 +582,18 @@ a.kixx-wordmark {
 ----------------------------------------------------------------------------- */
 
 .site-header {
-    padding-block: clamp(0.9rem, 3vw, 1.5rem);
+    padding-block: clamp(0.9rem, 3vw, 1.25rem);
     padding-inline: var(--space-page-gutter);
-    border-bottom: var(--rule-width) solid var(--color-rule);
+    border-bottom: var(--rule-width) solid var(--color-rule-strong);
 }
 /* Built on .cluster in the markup; only the justify axis differs from default. */
 .site-header__inner {
     --cluster-justify: space-between;
 }
 .site-header__wordmark {
-    font-size: clamp(2rem, 5vw, 3rem);
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
 }
-/* Also a .cluster; tighter gap for the icon controls. */
+/* Also a .cluster; tighter gap for the controls. */
 .site-header__controls {
     --cluster-space: 0.6rem;
 }

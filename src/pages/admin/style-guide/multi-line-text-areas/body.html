@@ -23,7 +23,7 @@
     </div>
     <ol class="parts-list">
         <li><strong>Label</strong> &mdash; identical to the text field: mono, uppercase, muted, tied to the control with a <code>for</code>/<code>id</code> pair.</li>
-        <li><strong>Text area</strong> &mdash; a <code>&lt;textarea&gt;</code> on <code>.field__input</code>; same border and fill, but a 6.5rem minimum height and body line-height for reading multiple lines.</li>
+        <li><strong>Text area</strong> &mdash; a <code>&lt;textarea&gt;</code> on <code>.field__input</code>; same 1px box on the page surface, but a 6.5rem minimum height and body line-height for reading multiple lines.</li>
         <li><strong>Resize grip</strong> &mdash; the corner handle, constrained to <code>resize: vertical</code> so the area grows downward and never breaks the column width.</li>
         <li><strong>Hint</strong> &mdash; optional caption below; becomes the error message when the field is in error.</li>
     </ol>
@@ -83,9 +83,9 @@
         </div>
     </div>
     <dl class="state-list">
-        <div><dt>Default</dt><dd>Recessed fill, 2px muted border, sized to its <code>rows</code>. Quiet until engaged.</dd></div>
-        <div><dt>Hover</dt><dd>Border intensifies to full <code>--color-ink</code> — no movement, just a brighter edge.</dd></div>
-        <div><dt>Focus</dt><dd>Border stays active and a 3px <code>--color-focus-outline</code> ring appears, offset 2px.</dd></div>
+        <div><dt>Default</dt><dd>On the page surface, 1px muted box, sized to its <code>rows</code>. Quiet until engaged.</dd></div>
+        <div><dt>Hover</dt><dd>Border intensifies to full <code>--color-ink</code> — no movement, just a sharper edge.</dd></div>
+        <div><dt>Focus</dt><dd>Border stays active and a 2px <code>--color-focus-outline</code> ring appears, offset 2px.</dd></div>
         <div><dt>Resize</dt><dd>A vertical-only grip in the corner; the area grows downward without disturbing the layout width.</dd></div>
         <div><dt>Disabled</dt><dd>Muted border and text at half opacity, <code>not-allowed</code> cursor; hover, focus, and resize are suppressed.</dd></div>
         <div><dt>Read-only</dt><dd>Border becomes dashed; the text stays selectable and the field focusable, but it can't be edited.</dd></div>

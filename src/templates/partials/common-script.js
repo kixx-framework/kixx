@@ -13,7 +13,9 @@
         const theme = currentTheme();
         themeToggles.forEach(toggle => {
             toggle.setAttribute('aria-pressed', String(theme === 'dark'));
-            toggle.querySelector('.theme-toggle__icon').textContent = theme === 'dark' ? 'light_mode' : 'dark_mode';
+            // The control names the theme it switches TO, so it reads as an
+            // action label rather than a state indicator.
+            toggle.querySelector('.theme-toggle__label').textContent = theme === 'dark' ? 'light' : 'dark';
         });
     }
 

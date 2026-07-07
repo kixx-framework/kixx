@@ -1,5 +1,9 @@
 /* -----------------------------------------------------------------------------
-    Design tokens
+    Design tokens — Hypertext Minimalism
+
+    Performance through omission. One monospace family, a high-contrast
+    warm-monochrome palette, square corners, and hairline rules. Color is a
+    SIGNAL (a link, a status, a metric), never a mood.
 ----------------------------------------------------------------------------- */
 
 :root {
@@ -17,108 +21,110 @@
        ========================================================================= */
 
     /* --- Tier 1 · Reference palette ----------------------------------------
-       Raw, theme-agnostic values. The ONLY place literal colors may live;
-       nothing outside this block should write an hsl()/hex literal. */
-    --palette-white: hsl(0 0% 100%);
-    --palette-black: hsl(0 0% 0%);
-    --palette-cyan: hsl(186 100% 50%);
-    --palette-cyan-vivid: hsl(190 100% 50%);    /* light-mode secondary accent */
-    --palette-blue: hsl(208 100% 38%);          /* focus ring — light mode     */
-    --palette-magenta: hsl(330 100% 67%);
-    --palette-yellow: hsl(54 100% 50%);
-    --palette-highlight: hsl(60 100% 60%);      /* text selection              */
-    /* Status — a functional family, distinct from the brand accents above.
-       Each danger/warning role carries a light and a dark value so the mark
-       (bar, icon, text) keeps contrast on either ground. Warning is a deep
-       amber on light surfaces — brand yellow is too light to read there — and
-       the brand yellow itself on dark. Danger is a deep red on white, a
-       brighter red on black. */
-    --palette-red: hsl(353 74% 44%);            /* danger — light mode         */
-    --palette-red-bright: hsl(353 90% 68%);     /* danger — dark mode          */
-    --palette-amber: hsl(20 100% 50%);           /* warning — light mode        */
-    /* Neutral ramp — structural greys, light (100) to dark (900). */
-    --palette-gray-100: hsl(0 0% 96%);
-    --palette-gray-400: hsl(0 0% 64%);
-    --palette-gray-700: hsl(0 0% 38%);
-    --palette-gray-900: hsl(0 0% 10%);
+       Raw, theme-agnostic values. The ONLY place literal colors may live.
+       The base scheme is dark-gray-and-off-white, not pure black/white: a
+       faintly warm paper and a near-black ink read like a printed spec sheet
+       rather than a glaring screen. */
+
+    /* Neutral ramp — paper (lightest) to ink (darkest), plus a dark-mode pair. */
+    --palette-paper: hsl(40 20% 97%);       /* light bg — warm off-white       */
+    --palette-paper-sunken: hsl(40 16% 92%); /* light inset / code ground      */
+    --palette-ink: hsl(30 8% 12%);          /* light ink — near-black          */
+    --palette-ink-muted: hsl(30 5% 38%);    /* light secondary text            */
+
+    --palette-void: hsl(220 14% 8%);        /* dark bg — near-black            */
+    --palette-void-sunken: hsl(220 12% 13%); /* dark inset / code ground       */
+    --palette-chalk: hsl(40 14% 88%);       /* dark ink — off-white            */
+    --palette-chalk-muted: hsl(40 6% 56%);  /* dark secondary text             */
+
+    /* Hairline ramp — mid-contrast border greys so a 1px rule reads as a
+       precise line without competing with the ink. */
+    --palette-line-light: hsl(30 8% 74%);
+    --palette-line-dark: hsl(220 8% 28%);
+
+    /* Signals — used ONLY as a signal (link, status, metric), never as mood.
+       Link resolves close to the classic web blue on light, a brighter cyan-
+       blue on dark. Status carries a light + dark value so the mark holds
+       contrast on either ground. */
+    --palette-link-light: hsl(222 78% 42%);
+    --palette-link-dark: hsl(202 90% 66%);
+    --palette-red-light: hsl(2 66% 44%);    /* danger — light                  */
+    --palette-red-dark: hsl(2 84% 68%);     /* danger — dark                   */
+    --palette-amber-light: hsl(32 92% 34%); /* warning — light (deep amber)    */
+    --palette-amber-dark: hsl(40 92% 58%);  /* warning — dark                  */
+    --palette-green-light: hsl(146 56% 28%); /* success — light                */
+    --palette-green-dark: hsl(146 50% 56%); /* success — dark                  */
+    --palette-highlight-light: hsl(52 100% 70%); /* text selection — light     */
+    --palette-highlight-dark: hsl(52 80% 44%);   /* text selection — dark      */
 
     /* --- Tier 2 · Semantic (system) ----------------------------------------
        Role + theme aware, resolved FROM the palette. This is what component
-       rules consume; a rule should never reach past this layer to a palette
-       token or a literal. */
-    /* Brand accents — read as text / line / fill. */
-    --color-ink-primary: var(--palette-magenta);
-    --color-ink-secondary: light-dark(var(--palette-cyan-vivid), var(--palette-cyan));
-    /* Structure — black/white do the structural work. */
-    --color-ink: light-dark(var(--palette-black), var(--palette-white));
-    --color-ink-muted: light-dark(var(--palette-gray-700), var(--palette-gray-400));
-    --color-ink-on-accent: var(--palette-black);  /* ink/icon on a bright brand fill, any theme */
-    --color-bg: light-dark(var(--palette-white), var(--palette-black));
-    --color-surface-sunken: light-dark(var(--palette-gray-100), var(--palette-gray-900)); /* inset / recessed panels */
-    --color-rule: light-dark(var(--palette-black), var(--palette-white));
-    --color-ink-link: light-dark(var(--color-ink-primary), var(--color-ink-secondary));
-    --color-highlight: var(--palette-highlight);
-    --color-ink-highlight: var(--palette-black);  /* ink on the selection highlight */
-    /* Focus is its own system signal, not a brand accent: a cool blue, theme-
-       aware so it clears 3:1 (WCAG 1.4.11) on either ground — a deep blue on
-       light, the bright cyan on dark. Off magenta deliberately, so the ring
-       neither clashes with the red error border (adjacent warm hues) nor
-       vanishes against the magenta primary button. */
-    --color-focus-outline: light-dark(var(--palette-blue), var(--palette-cyan));
-    /* Status roles — kept off the brand accents so "wrong" never wears the same
-       color as "primary action" or "focused". Both read as a foreground mark
-       (text / border / icon) and are theme-aware so they keep contrast on light
-       and dark surfaces alike. Warning resolves to amber on light, brand yellow
-       on dark; for a yellow FILL, reach for --palette-yellow directly (as the
-       tertiary button does) — that's decoration, not a status signal. */
-    --color-status-danger: light-dark(var(--palette-red), var(--palette-red-bright));
-    --color-status-warning: light-dark(var(--palette-amber), var(--palette-yellow));
+       rules consume; a rule should never reach past this layer. */
+    --color-bg: light-dark(var(--palette-paper), var(--palette-void));
+    --color-surface-sunken: light-dark(var(--palette-paper-sunken), var(--palette-void-sunken));
+    --color-ink: light-dark(var(--palette-ink), var(--palette-chalk));
+    --color-ink-muted: light-dark(var(--palette-ink-muted), var(--palette-chalk-muted));
+    /* Ink that sits ON an inked fill (inverted controls) — reads as the page
+       background color against the ink block. */
+    --color-ink-on-accent: light-dark(var(--palette-paper), var(--palette-void));
+
+    /* Two rule weights: a quiet hairline for grouping, and a full-ink rule for
+       structural/character-grid lines (page edges, <hr>, field borders). */
+    --color-rule: light-dark(var(--palette-line-light), var(--palette-line-dark));
+    --color-rule-strong: var(--color-ink);
+
+    /* The single accent. Links carry it in text + underline; nothing else
+       borrows it for decoration. */
+    --color-ink-link: light-dark(var(--palette-link-light), var(--palette-link-dark));
+    /* Focus is the link blue too — a cool signal that clears 3:1 (WCAG 1.4.11)
+       on either ground and never reads as a status color. */
+    --color-focus-outline: var(--color-ink-link);
+
+    --color-highlight: light-dark(var(--palette-highlight-light), var(--palette-highlight-dark));
+    --color-ink-highlight: var(--color-ink);
+
+    /* Status roles — a functional family kept off the link accent, so "wrong"
+       never wears the same color as "a link". Each reads as a foreground mark
+       (text / border / icon) and is theme-aware. */
+    --color-status-danger: light-dark(var(--palette-red-light), var(--palette-red-dark));
+    --color-status-warning: light-dark(var(--palette-amber-light), var(--palette-amber-dark));
+    --color-status-success: light-dark(var(--palette-green-light), var(--palette-green-dark));
 
     /* --- Tier 3 · Component -------------------------------------------------
-       Scoped tokens, resolved here so component rules stay declarative. (More
-       component tokens live next to their component, e.g. --card-accent on
-       .card.) Brand fills resolve straight from the palette because the fill IS
-       that brand color; everything else routes through Tier 2. */
-    --color-button-bg-primary: var(--palette-magenta);
-    --color-button-border-primary: light-dark(var(--palette-black), var(--color-button-bg-primary));
-    --color-button-bg-secondary: var(--palette-cyan);
-    --color-button-border-secondary: light-dark(var(--palette-black), var(--color-button-bg-secondary));
-    --color-button-bg-tertiary: var(--palette-yellow);
-    --color-button-border-tertiary: light-dark(var(--palette-black), var(--color-button-bg-tertiary));
+       Scoped tokens, resolved here so component rules stay declarative. */
 
-    /* fields */
-    --field-border-width: 2px;
+    /* fields — square, hairline, on the page ground (not a filled well). The
+       resting border is quiet (muted); hover and focus intensify it to full
+       ink, with the accent reserved for the focus outline ring. */
+    --field-border-width: 1px;
     --color-field-border: var(--color-ink-muted);
     --color-field-border-active: var(--color-ink);
     --color-field-border-error: var(--color-status-danger);
-    --color-field-bg: var(--color-surface-sunken);
+    --color-field-bg: var(--color-bg);
 
-    /* borders */
-    --button-border-width: 2px;
-    --rule-width: 3px;
+    /* borders — thin, precise, character-width. */
+    --button-border-width: 1px;
+    --rule-width: 1px;
     --hairline-width: 1px;
-    --accent-border-width: 2px; /* colored accent border — cards & callouts */
+    --accent-border-width: 1px;
 
-    /* Corner radius — the system is soft, not hard-edged. A small, even scale:
-       a gentle radius on surfaces and controls, full pills for buttons and
-       chips. Applied everywhere a corner meets so nothing reads as sharp. */
-    --radius-sm: 0.25rem;   /* inline marks: code, kbd, small chips         */
-    --radius-md: 0.5rem;    /* surfaces & controls: cards, inputs, callouts  */
-    --radius-pill: 999px;   /* fully-rounded: buttons, pills, icon controls  */
+    /* Corner radius — none. The system is square; nothing rounds. Kept as
+       tokens so any lingering reference still resolves to a hard corner. */
+    --radius-sm: 0;
+    --radius-md: 0;
+    --radius-pill: 0;
 
-    /* Spacing & layout — a clean, modular grid. */
-    --space-page-gutter: clamp(1.25rem, 4vw, 3rem);
-    --space-section-gap: clamp(2.5rem, 6vw, 4.5rem);
-    --sidebar-width: clamp(13rem, 22vw, 17rem);
-    /* Comfortable reading measure (~65 characters). Shared by section ledes and
-       body prose so a deck never wraps tighter than the copy beneath it. */
-    --measure-prose: 65ch;
-    /* Narrow measure for standalone forms (login, sign-up, settings). Keeps a
-       form column comfortably readable rather than stretching to the prose measure. */
-    --measure-form: 28rem;
+    /* Spacing & layout — a strict, character-aware grid. Whitespace is
+       functional: it separates units of information, it is not luxury. */
+    --space-page-gutter: clamp(1rem, 3vw, 2rem);
+    --space-section-gap: clamp(2rem, 5vw, 3.5rem);
+    --sidebar-width: clamp(12rem, 20vw, 15rem);
+    /* Reading measures in CHARACTER units — the aesthetic's grid material. */
+    --measure-prose: 72ch;
+    --measure-form: 42ch;
 
     /* Vertical spacing scale — fixed rem steps, consumed by the .flow primitive
-       (and anywhere a gap is needed). Keeps rhythm on a predictable ladder. */
+       (and anywhere a gap is needed). */
     --space-3xs: 0.25rem;
     --space-2xs: 0.5rem;
     --space-xs: 0.75rem;
@@ -128,53 +134,51 @@
     --space-xl: 3rem;
     --space-2xl: 4.5rem;
 
-    /* Typography */
-    --font-display: "DM Sans", ui-sans-serif, Helvetica, Arial, Roboto, sans-serif;
-    --font-body: "Helvetica Neue", Helvetica, ui-sans-serif, Arial, Roboto, sans-serif;
-    --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
-    --font-wordmark: "Lexend Deca", sans-serif;
+    /* -------------------------------------------------------------------------
+        Typography — one monospace family for EVERYTHING. The page requests
+        zero text font files; it renders in the operating system's own
+        monospace face. Type is grid material: characters are units of measure,
+        so columns and rhythm align to an invisible character cell.
+    ------------------------------------------------------------------------- */
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Code", "JetBrains Mono", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    --font-display: var(--font-mono);
+    --font-body: var(--font-mono);
+    --font-wordmark: var(--font-mono);
 
     /* -------------------------------------------------------------------------
-        Type scale — fixed rem steps. See the Typography section of the guide
-        for the full rationale. Short version: an admin panel has no hero
-        moments, headings sit inside a capped content column, and fixed rem
-        honors browser zoom (WCAG 1.4.4) where fluid `vw` units do not. So we
-        never use clamp() for type here — if a size is ever too big on mobile,
-        add a discrete breakpoint step, not continuous scaling.
-
-        Two registers carry the system:
-          - Expressive (DM Sans)    : structural headings h1-h4
-          - Functional (Helvetica)  : reading + UI text, body-lg ... caption
-        Plus Label (mono, uppercase) and Code (mono).
+        Type scale — fixed rem steps (never clamp(): fixed rem honors browser
+        zoom, WCAG 1.4.4). Monospace runs wide, so the heading steps sit lower
+        than a proportional scale would. Hierarchy comes from SIZE and WEIGHT,
+        not color or decoration.
     ------------------------------------------------------------------------- */
-    --text-h1: 2.25rem;       /* 36px - page title (one per screen)       */
-    --text-h2: 1.75rem;       /* 28px - section title                     */
-    --text-h3: 1.375rem;      /* 22px - subsection / card heading         */
-    --text-h4: 1.125rem;      /* 18px - minor heading / form field group  */
-    --text-body-lg: 1.125rem; /* 18px - long-form reading copy            */
+    --text-h1: 1.875rem;      /* 30px - page title (one per screen)       */
+    --text-h2: 1.5rem;        /* 24px - section title                     */
+    --text-h3: 1.25rem;       /* 20px - subsection / card heading         */
+    --text-h4: 1.0625rem;     /* 17px - minor heading / form field group  */
+    --text-body-lg: 1.0625rem; /* 17px - long-form reading copy           */
     --text-body: 1rem;        /* 16px - default UI text                   */
-    --text-body-sm: 0.9375rem; /* 15px - dense rows, helper text, cells   */
-    --text-caption: 0.8125rem; /* 13px - captions, metadata, timestamps  */
-    --text-label: 0.75rem;    /* 12px - uppercase mono labels / overlines */
+    --text-body-sm: 0.875rem; /* 14px - dense rows, helper text, cells    */
+    --text-caption: 0.8125rem; /* 13px - captions, metadata, timestamps   */
+    --text-label: 0.75rem;    /* 12px - uppercase labels / overlines      */
 
-    /* Line-height is ROLE-DEPENDENT, never one global value: tight for big
-       headings, open for reading copy (the brief asks for 1.5+), compact for
-       dense UI where vertical space is precious. */
-    --leading-tight: 1.15;    /* large headings (h1, h2)        */
-    --leading-snug: 1.25;     /* smaller headings (h3, h4)      */
-    --leading-normal: 1.4;    /* dense UI text, labels, caption */
-    --leading-body: 1.45;     /* default body                   */
-    --leading-relaxed: 1.55;  /* long-form reading copy         */
+    /* Line-height is ROLE-DEPENDENT. Monospace reading copy wants generous
+       leading; headings and dense UI run tighter. */
+    --leading-tight: 1.2;     /* large headings (h1, h2)        */
+    --leading-snug: 1.3;      /* smaller headings (h3, h4)      */
+    --leading-normal: 1.45;   /* dense UI text, labels, caption */
+    --leading-body: 1.55;     /* default body                   */
+    --leading-relaxed: 1.65;  /* long-form reading copy         */
 
-    /* Tracking. DM Sans tightens nicely at large display sizes; uppercased mono
-       labels open up for legibility. Everything else stays at 0 (the default). */
-    --tracking-tight: -0.01em; /* large headings   */
-    --tracking-label: 0.1em;   /* uppercase labels */
+    /* Tracking. Uppercased labels open up for legibility; monospace body and
+       headings stay at 0 (the face is already even-width). */
+    --tracking-tight: 0;
+    --tracking-label: 0.12em;
 
-    /* Weight ramp (DM Sans is variable; Helvetica maps to the nearest face). */
+    /* Weight ramp. System monospace faces reliably offer only regular and bold,
+       so the scale maps medium/semibold onto bold — hierarchy leans on 700. */
     --weight-regular: 400;
-    --weight-medium: 500;   /* available; used sparingly */
-    --weight-semibold: 600;
+    --weight-medium: 400;
+    --weight-semibold: 700;
     --weight-bold: 700;
 }
 

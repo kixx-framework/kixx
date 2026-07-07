@@ -1,22 +1,26 @@
 <header class="content-section__header">
     <h2>Typography</h2>
-    <p>How to effectively use typography in the Kixx Admin Panel theme.</p>
+    <p>One monospace family, system-provided. Hierarchy from size and weight alone.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">Typography is the primary design element in this theme. Hierarchy is carried by <strong>scale and weight</strong> &mdash; not color, underlines, or decoration &mdash; so the system stays small, predictable, and honest about being an admin panel rather than a landing page.</p>
+    <p class="type-body-lg">Typography is the primary design element in this theme &mdash; and very nearly the only one. A single <strong>monospace family</strong> carries body text, headings, labels, and UI copy alike. Hierarchy is set by <strong>scale and weight</strong>, never color or decoration, so the system stays small, honest, and unmistakably a technical tool.</p>
 
-    <h3 class="type-h3">Two registers, plus labels and code</h3>
-    <p>Every piece of text belongs to one of four groups:</p>
+    <h3 class="type-h3">System fonts &mdash; no web fonts at all</h3>
+    <p>The theme downloads <strong>zero text font files</strong>. It renders in the operating system&rsquo;s own monospace face &mdash; SF&nbsp;Mono, Cascadia&nbsp;Code, DejaVu&nbsp;Sans&nbsp;Mono, or whatever the reader already has &mdash; resolved through the <code>--font-mono</code> stack. That is the aesthetic&rsquo;s core promise made concrete: the page requests no fonts, so it paints instantly and reads the same on any machine.</p>
+
+    <h3 class="type-h3">Type as grid material</h3>
+    <p>Because every glyph is the same width, characters double as units of measure. Reading widths are set in <code>ch</code> (<code>--measure-prose</code> is <code>72ch</code>), so a column is literally a count of characters, and the whole page aligns to an invisible sheet of graph paper.</p>
+    <p>Two families of role still exist, but they are <em>weights and sizes of the one face</em>, not different typefaces:</p>
     <ul>
-        <li><strong>Expressive</strong> (<code>DM Sans</code>) &mdash; the structural headings <code>h1</code>&ndash;<code>h4</code>. Heavy weights and tight line-height, used sparingly for impact.</li>
-        <li><strong>Functional</strong> (<code>Helvetica Neue</code>) &mdash; reading and UI text, from <code>.type-body-lg</code> down to <code>.type-caption</code>.</li>
-        <li><strong>Label / overline</strong> (mono, uppercase) &mdash; the theme's signature for small functional text. The buttons and the sidebar title already use it.</li>
-        <li><strong>Code</strong> (mono) &mdash; inline tokens, values, and snippets like <code>--text-h1</code>.</li>
+        <li><strong>Structural headings</strong> &mdash; <code>h1</code>&ndash;<code>h4</code>, bold and larger.</li>
+        <li><strong>Reading &amp; UI text</strong> &mdash; from <code>.type-body-lg</code> down to <code>.type-caption</code>.</li>
+        <li><strong>Label / overline</strong> &mdash; uppercase and tracked; the signature for small functional text. Buttons, field labels, and the nav title all use it.</li>
+        <li><strong>Code</strong> &mdash; the same face with a faint ground, for inline tokens like <code>--text-h1</code>.</li>
     </ul>
 
     <h3 class="type-h3">Why every size is a fixed <code>rem</code></h3>
-    <p>Marketing sites use fluid <code>clamp()</code> headings so a hero looks huge on desktop and still fits a phone. An admin panel has no heroes: headings are structural labels inside a capped content column, and the window stays roughly one size all day. So we use fixed <code>rem</code> steps instead:</p>
+    <p>Marketing sites use fluid <code>clamp()</code> headings so a hero looks huge on desktop and still fits a phone. An admin panel has no heroes: headings are structural labels inside a capped character column. So we use fixed <code>rem</code> steps &mdash; monospace runs wide, so the steps sit a little lower than a proportional scale would:</p>
     <ul>
         <li><strong>Predictable density.</strong> A section title is the same size every time, so dense screens and data tables stay stable instead of breathing with the viewport.</li>
         <li><strong>Zoom &amp; accessibility.</strong> Fixed <code>rem</code> scales cleanly with browser zoom; <code>vw</code>-based fluid type partially ignores it, working against WCAG 1.4.4 (Resize Text).</li>
@@ -24,24 +28,25 @@
     </ul>
 
     <div class="callout">
+        <span class="callout__icon" aria-hidden="true">*</span>
         <div class="callout__body">
             <p class="type-label">Rule of thumb</p>
-            <p>Line-height is role-dependent, never one global value. Big headings run tight (1.15), reading copy opens to 1.55 for breathability, and dense UI text sits near 1.4 to save vertical space.</p>
+            <p>Line-height is role-dependent, never one global value. Big headings run tight (1.2), reading copy opens to 1.65 for breathability, and dense UI text sits near 1.45 to save vertical space.</p>
         </div>
     </div>
 </div>
 
 <h3 class="type-h3 doc-section-heading">The scale</h3>
-<p class="doc-lede">Each specimen shows the live role with its class, size, weight, line-height, and intended use. Samples use the <code>.type-*</code> utility classes so they don't disturb the page's heading outline.</p>
+<p class="doc-lede">Each specimen shows the live role with its class, size, weight, and line-height. Samples use the <code>.type-*</code> utility classes so they don&rsquo;t disturb the page&rsquo;s heading outline.</p>
 
 <div class="specimen-list">
     <article class="card card--flush specimen">
         <div class="specimen__sample"><p class="type-h1">Account settings</p></div>
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>h1 &middot; .type-h1</dd></div>
-            <div><dt>Size</dt><dd>2.25rem &middot; 36px</dd></div>
+            <div><dt>Size</dt><dd>1.875rem &middot; 30px</dd></div>
             <div><dt>Weight</dt><dd>700 &middot; Bold</dd></div>
-            <div><dt>Line-height</dt><dd>1.15</dd></div>
+            <div><dt>Line-height</dt><dd>1.2</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Page title &mdash; one per screen, at the top of the main content.</dd></div>
         </dl>
     </article>
@@ -50,9 +55,9 @@
         <div class="specimen__sample"><p class="type-h2">Notification preferences</p></div>
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>h2 &middot; .type-h2</dd></div>
-            <div><dt>Size</dt><dd>1.75rem &middot; 28px</dd></div>
+            <div><dt>Size</dt><dd>1.5rem &middot; 24px</dd></div>
             <div><dt>Weight</dt><dd>700 &middot; Bold</dd></div>
-            <div><dt>Line-height</dt><dd>1.15</dd></div>
+            <div><dt>Line-height</dt><dd>1.2</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Section titles within a page. The sidebar nav links to these.</dd></div>
         </dl>
     </article>
@@ -61,9 +66,9 @@
         <div class="specimen__sample"><p class="type-h3">Email digests</p></div>
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>h3 &middot; .type-h3</dd></div>
-            <div><dt>Size</dt><dd>1.375rem &middot; 22px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; Semibold</dd></div>
-            <div><dt>Line-height</dt><dd>1.25</dd></div>
+            <div><dt>Size</dt><dd>1.25rem &middot; 20px</dd></div>
+            <div><dt>Weight</dt><dd>700 &middot; Bold</dd></div>
+            <div><dt>Line-height</dt><dd>1.3</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Subsections and card headings inside a section.</dd></div>
         </dl>
     </article>
@@ -72,20 +77,20 @@
         <div class="specimen__sample"><p class="type-h4">Delivery frequency</p></div>
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>h4 &middot; .type-h4</dd></div>
-            <div><dt>Size</dt><dd>1.125rem &middot; 18px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; Semibold</dd></div>
-            <div><dt>Line-height</dt><dd>1.25</dd></div>
+            <div><dt>Size</dt><dd>1.0625rem &middot; 17px</dd></div>
+            <div><dt>Weight</dt><dd>700 &middot; Bold</dd></div>
+            <div><dt>Line-height</dt><dd>1.3</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Minor headings and form field-group labels.</dd></div>
         </dl>
     </article>
 
     <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-body-lg">Choose how often you'd like a summary of account activity. Digests group quieter notifications into a single, readable email so your inbox stays calm.</p></div>
+        <div class="specimen__sample"><p class="type-body-lg">Choose how often you&rsquo;d like a summary of account activity. Digests group quieter notifications into a single, readable email so your inbox stays calm.</p></div>
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>.type-body-lg</dd></div>
-            <div><dt>Size</dt><dd>1.125rem &middot; 18px</dd></div>
+            <div><dt>Size</dt><dd>1.0625rem &middot; 17px</dd></div>
             <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.55</dd></div>
+            <div><dt>Line-height</dt><dd>1.65</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Long-form reading copy: intros, explanations, help articles.</dd></div>
         </dl>
     </article>
@@ -96,7 +101,7 @@
             <div><dt>Class</dt><dd>.type-body &middot; body</dd></div>
             <div><dt>Size</dt><dd>1rem &middot; 16px</dd></div>
             <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.45</dd></div>
+            <div><dt>Line-height</dt><dd>1.55</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Default UI text and descriptions &mdash; the page baseline.</dd></div>
         </dl>
     </article>
@@ -105,9 +110,9 @@
         <div class="specimen__sample"><p class="type-body-sm">Applies to this device only. Other signed-in devices keep their own settings.</p></div>
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>.type-body-sm</dd></div>
-            <div><dt>Size</dt><dd>0.9375rem &middot; 15px</dd></div>
+            <div><dt>Size</dt><dd>0.875rem &middot; 14px</dd></div>
             <div><dt>Weight</dt><dd>400 &middot; Regular</dd></div>
-            <div><dt>Line-height</dt><dd>1.4</dd></div>
+            <div><dt>Line-height</dt><dd>1.45</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Dense rows, helper text, and data-table cells.</dd></div>
         </dl>
     </article>
@@ -118,7 +123,7 @@
             <div><dt>Class</dt><dd>.type-caption</dd></div>
             <div><dt>Size</dt><dd>0.8125rem &middot; 13px</dd></div>
             <div><dt>Weight</dt><dd>400 &middot; muted</dd></div>
-            <div><dt>Line-height</dt><dd>1.4</dd></div>
+            <div><dt>Line-height</dt><dd>1.45</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Captions, metadata, and timestamps.</dd></div>
         </dl>
     </article>
@@ -128,9 +133,9 @@
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>.type-label</dd></div>
             <div><dt>Size</dt><dd>0.75rem &middot; 12px</dd></div>
-            <div><dt>Weight</dt><dd>600 &middot; mono, caps</dd></div>
-            <div><dt>Tracking</dt><dd>+0.1em</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Overlines, field labels, and status chips. The theme's small-text signature.</dd></div>
+            <div><dt>Weight</dt><dd>700 &middot; caps</dd></div>
+            <div><dt>Tracking</dt><dd>+0.12em</dd></div>
+            <div class="specimen__use"><dt>Use for</dt><dd>Overlines, field labels, and status chips. The theme&rsquo;s small-text signature.</dd></div>
         </dl>
     </article>
 
@@ -139,7 +144,7 @@
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>code &middot; .type-code</dd></div>
             <div><dt>Size</dt><dd>0.9em &middot; relative</dd></div>
-            <div><dt>Weight</dt><dd>400 &middot; mono</dd></div>
+            <div><dt>Weight</dt><dd>400 &middot; on a faint ground</dd></div>
             <div><dt>Line-height</dt><dd>inherits</dd></div>
             <div class="specimen__use"><dt>Use for</dt><dd>Inline tokens, values, and short code snippets.</dd></div>
         </dl>
@@ -153,17 +158,17 @@
         <ul>
             <li>Reach for semantic elements first &mdash; <code>h1</code>&ndash;<code>h4</code> and <code>p</code> render correctly with no classes.</li>
             <li>Signal importance with size and weight, not color, italics, or underlines.</li>
-            <li>Let paragraphs breathe: <code>.type-body-lg</code> at 1.55 for anything people actually read.</li>
+            <li>Let paragraphs breathe: <code>.type-body-lg</code> at 1.65 for anything people actually read.</li>
             <li>Keep a single <code>h1</code> per screen as the page title.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
-        <p class="type-label guideline__label">Don't</p>
+        <p class="type-label guideline__label">Don&rsquo;t</p>
         <ul>
+            <li>Introduce a second typeface or download a web font &mdash; the system is one system-provided mono family.</li>
             <li>Pick a heading level for its size &mdash; choose the level for structure, then restyle with a <code>.type-*</code> class.</li>
             <li>Invent new font sizes; every size lives in a <code>--text-*</code> token.</li>
             <li>Reintroduce fluid <code>clamp()</code> type &mdash; fixed <code>rem</code> only, with a breakpoint step if needed.</li>
-            <li>Drop reading copy below 1.5 line-height.</li>
         </ul>
     </div>
 </div>

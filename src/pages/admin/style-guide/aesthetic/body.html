@@ -1,123 +1,103 @@
 <header class="content-section__header">
     <h2>Design Aesthetic</h2>
-    <p>The design direction for the Kixx admin panel.</p>
+    <p>The design direction for the Kixx admin panel: Hypertext Minimalism.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">This brief sets the design direction for the Kixx admin panel: <strong>Modern Humanist Minimalism</strong>. The goal is a digital environment that feels like a <strong>&ldquo;Global Digital Park&rdquo;</strong> &mdash; highly organised, open to everyone, and teeming with human expression. The design stays &ldquo;invisible&rdquo; enough to let the content shine, yet &ldquo;bold&rdquo; enough to signal quality and trust.</p>
+    <p class="type-body-lg"><strong>Hypertext Minimalism</strong> is built on performance through omission. It rejects the modern web&rsquo;s bloat, heavy frameworks, and over-designed interfaces in favor of digital sustainability and raw speed. The tone is deeply intentional, utilitarian, and uncompromisingly pragmatic.</p>
 
-    <p>Everything below is intent, not implementation. The <a href="#colors">Colors</a>, <a href="#typography">Typography</a>, and component pages are where these principles harden into tokens and classes; this page is the why behind them.</p>
+    <p>It tells the user: <em>we value your time, your bandwidth, and the clarity of information above all else.</em> The design aesthetic <em>is</em> the lack of design &mdash; unadorned semantic HTML elevated into a statement of engineering discipline and respect for web standards.</p>
+
+    <p>The true hallmark is the user&rsquo;s immediate realization that the site was built to be as lightweight as possible. Everything below is intent, not implementation. The <a href="/admin/style-guide/colors">Colors</a>, <a href="/admin/style-guide/typography">Typography</a>, and component pages are where these principles harden into tokens and classes; this page is the why behind them.</p>
 </div>
 
-<h3 class="type-h3 doc-section-heading">Core design pillars</h3>
-<p class="doc-lede">Three commitments the whole system answers to. Every smaller decision &mdash; a radius, a weight, a margin &mdash; should trace back to one of them.</p>
-<div class="card-gallery grid-auto">
-    <div class="card card--accent-primary flow">
-        <h4 class="type-h4">Radical clarity</h4>
-        <p class="type-body-sm">Information is tiered with an aggressive hierarchy. A user should never wonder where to find a resource or its documentation.</p>
-    </div>
-    <div class="card card--accent-secondary flow">
-        <h4 class="type-h4">Open vitality</h4>
-        <p class="type-body-sm">Avoid the &ldquo;stuffy&rdquo; feel of traditional open-source tooling. High-energy color and bold layout keep the surface alive without shouting.</p>
-    </div>
-    <div class="card flow">
-        <h4 class="type-h4">Structural integrity</h4>
-        <p class="type-body-sm">A clean, modular grid reflects the stability of the framework. It should feel dependable and orderly &mdash; softened corners and generous spacing keep it from turning rigid or cold.</p>
-    </div>
-</div>
+<hr>
 
-<h3 class="type-h3 doc-section-heading">Visual language</h3>
-<p class="doc-lede">How the pillars show up on screen: type, color, icons, and illustration.</p>
+<h3 class="type-h3 doc-section-heading">Layout &amp; document flow</h3>
+<p class="doc-lede">Embrace the natural, fluid mechanics of the browser rather than fighting them.</p>
 <div class="doc-prose">
-    <h4 class="type-h4">Typography</h4>
     <ul>
-        <li><strong>Primary typeface</strong> &mdash; a geometric or humanist sans-serif</li>
-        <li><strong>Styling</strong> &mdash; heavy weights for hero headers to create impact; generous line-height (1.5+) for body copy to keep it accessible and breathable.</li>
-        <li><strong>Direction</strong> &mdash; typography is the primary design element. Denote importance with scale, not decoration.</li>
+        <li><strong>Strict grid</strong> &mdash; often literally a character grid. Text blocks, rules, tables, and form fields snap to it.</li>
+        <li><strong>Functional whitespace</strong> &mdash; it separates units of information cleanly; it is not luxury or premium restraint.</li>
+        <li><strong>Dense data is first-class</strong> &mdash; tables and key-value pairs are shown plainly, not hidden behind an accordion.</li>
+        <li><strong>Metadata up front</strong> &mdash; versions, dates, authorship, and status are displayed plainly, the way a man page or changelog header presents them.</li>
+        <li><strong>Responsive by default</strong> &mdash; the layout adapts to any screen size.</li>
+        <li><strong>Limited text width</strong> &mdash; character-relative measures like <code>72ch</code> keep lines readable on any screen.</li>
+        <li><strong>Vertical flow</strong> &mdash; rhythm comes from simple vertical spacing, like a well-formatted technical paper or README.</li>
     </ul>
-
-    <h4 class="type-h4">Color palette</h4>
-    <ul>
-        <li><strong>Anchor colors</strong> &mdash; professional black and white provide the foundation.</li>
-        <li><strong>Action palette</strong> &mdash; high-contrast accents (vibrant blue, magenta, and soft yellow).</li>
-        <li><strong>Application</strong> &mdash; large blocks of color mark section breaks, giving long-form content a modular rhythm.</li>
-    </ul>
-
-    <h4 class="type-h4">Iconography</h4>
-    <p>Icons are plain, legible, and functional. A slight rounded quality is welcome, but never whimsical &mdash; use icons to clarify structure, not to decorate every line.</p>
-
-    <h4 class="type-h4">Illustration</h4>
-    <p>Illustration is small, simple, and diagrammatic. It should feel like it came from a thoughtful manual, not a brand-agency moodboard.</p>
 </div>
+
+<hr>
+
+<h3 class="type-h3 doc-section-heading">Typography &amp; semantics</h3>
+<p class="doc-lede">Type is a vehicle for information &mdash; and grid material, not just a reading medium.</p>
+<div class="doc-prose">
+    <ul>
+        <li><strong>Monospace-first, monospace-only</strong> &mdash; body text, headings, labels, and UI copy all share the one family.</li>
+        <li><strong>System fonts</strong> &mdash; the design defaults to the operating system&rsquo;s local monospace stack. No custom web fonts are downloaded.</li>
+        <li><strong>Characters as units of measure</strong> &mdash; line height, column widths, and spacing align to an invisible sheet of graph paper.</li>
+        <li><strong>Hierarchy from weight &amp; size</strong> &mdash; a heading is bigger and heavier; it is never a different hue.</li>
+        <li><strong>Explicit hyperlinks</strong> &mdash; underlined and clearly distinct from prose. Functional nodes, not styled buttons.</li>
+    </ul>
+</div>
+<div class="callout">
+    <span class="callout__icon" aria-hidden="true">*</span>
+    <div class="callout__body">
+        <p class="type-label">The test</p>
+        <p>Open the network panel: the page should request no font files at all. If a typeface is downloading, the aesthetic has already been broken.</p>
+    </div>
+</div>
+
+<hr>
+
+<h3 class="type-h3 doc-section-heading">Visual elements &amp; structural accents</h3>
+<p class="doc-lede">Embellishment is actively avoided. Any divider exists purely to organize information.</p>
+<div class="doc-prose">
+    <ul>
+        <li><strong>Native horizontal rules</strong> &mdash; section breaks are a plain <code>&lt;hr&gt;</code>, a single thin line that anchors the content. Every break on this page is one.</li>
+        <li><strong>ASCII &amp; Unicode ornament</strong> &mdash; instead of SVG or icon fonts, use keyboard characters and basic symbols: <code>-&gt;</code>, <code>*</code>, <code>[ ]</code>, <code>&#9474;</code>, <code>&#9472;</code>, <code>&#9484; &#9488;</code>, <code>&#9492; &#9496;</code>, <code>&#9617; &#9619; &#9608;</code>.</li>
+        <li><strong>No custom imagery</strong> &mdash; no hero illustrations, no decorative backgrounds. The typography and section breaks <em>are</em> the visuals.</li>
+        <li><strong>Thin, square borders</strong> &mdash; single-pixel or character-width. Corners are square; nothing is rounded enough to feel soft.</li>
+        <li><strong>Spec-sheet controls</strong> &mdash; buttons and form fields look bracketed, boxed, or underlined, never pill-shaped or heavily padded.</li>
+        <li><strong>Quiet interactive states</strong> &mdash; communicated through inversion, a color shift, or a hairline border change; never a shadow or motion.</li>
+    </ul>
+</div>
+
+<hr>
+
+<h3 class="type-h3 doc-section-heading">Color &amp; browser adaptability</h3>
+<p class="doc-lede">Stark, and respectful of the user&rsquo;s system preferences with minimal code.</p>
+<div class="doc-prose">
+    <ul>
+        <li><strong>High-contrast monochrome</strong> &mdash; a dark-gray-and-off-white base, close to black and white.</li>
+        <li><strong>Native dark mode</strong> &mdash; matches the OS preference without heavy theme scripts, with a sticky manual override.</li>
+        <li><strong>A single accent</strong> &mdash; a consistent secondary color for links, code, and blockquotes; close to the classic web blue in light mode, brighter in dark.</li>
+        <li><strong>Color as signal, not mood</strong> &mdash; one accent for a link, a status, or a highlighted metric. Nothing borrows color for decoration.</li>
+    </ul>
+</div>
+
+<hr>
+
+<h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
     <div class="card card--accent-secondary guideline guideline--do">
-        <p class="type-label guideline__label">Good directions</p>
+        <p class="type-label guideline__label">Do</p>
         <ul>
-            <li>Simple line drawings.</li>
-            <li>Small object illustrations.</li>
-            <li>Browser-window sketches.</li>
-            <li>Tool-like icons.</li>
-            <li>Notebook-style diagrams.</li>
-            <li>Practical visual metaphors.</li>
+            <li>Reach for plain semantic HTML before any class or wrapper.</li>
+            <li>Break sections with a native <code>&lt;hr&gt;</code>.</li>
+            <li>Use ASCII and Unicode marks in place of icons.</li>
+            <li>Let weight and size carry every bit of hierarchy.</li>
+            <li>Keep color to a single functional signal.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
         <p class="type-label guideline__label">Avoid</p>
         <ul>
-            <li>Glossy 3D artifacts.</li>
-            <li>AI-generated people.</li>
-            <li>Corporate character illustrations.</li>
-            <li>Fantasy landscapes.</li>
-            <li>Aggressive retro pixel art.</li>
-            <li>Overly cute cartoons.</li>
+            <li>Downloading web fonts or icon-font libraries.</li>
+            <li>Rounded corners, shadows, gradients, or motion.</li>
+            <li>Hero images, decorative backgrounds, or illustration.</li>
+            <li>Color used as mood, or to carry meaning on its own.</li>
+            <li>Heavy padding, pill shapes, or faux elevation.</li>
         </ul>
-    </div>
-</div>
-
-<h3 class="type-h3 doc-section-heading">UI &amp; interaction</h3>
-<p class="doc-lede">The feel of the controls themselves &mdash; shapes, lines, and space.</p>
-<div class="doc-prose">
-    <ul>
-        <li><strong>Buttons</strong> &mdash; flat, fully-rounded &ldquo;pill&rdquo; shapes with bold labels. The rounded form is a signature of the system: friendly and approachable, never sharp. High-contrast hover states (e.g. magenta to black) give clear feedback.</li>
-        <li><strong>Corners &amp; radius</strong> &mdash; soften shapes with a consistent corner radius. Buttons and chips are full pills; cards, inputs, and surfaces carry a gentle, even radius. Rounding is a core part of the visual language, not an afterthought &mdash; define a small radius scale and apply it everywhere a corner meets, so nothing reads as hard-edged.</li>
-        <li><strong>Borders &amp; lines</strong> &mdash; thin, 1px lines separate grid modules. This keeps the surface clean and modular &mdash; structure you can read at a glance, without feeling severe.</li>
-        <li><strong>Space</strong> &mdash; embrace macro white space. Large margins between sections reduce cognitive load and make dense information feel manageable.</li>
-        <li><strong>Forms &amp; inputs</strong> &mdash; input areas feel plain and trustworthy: easy to read, easy to tap on mobile, and visually obvious.</li>
-    </ul>
-</div>
-<div class="callout">
-    <div class="callout__body">
-        <p class="type-label">The tone</p>
-        <p>UI elements should communicate that the user is interacting with a community project, not entering a conversion funnel.</p>
-    </div>
-</div>
-
-<h3 class="type-h3 doc-section-heading">Functional requirements</h3>
-<p class="doc-lede">The non-negotiables every screen has to honour, regardless of styling.</p>
-<div class="doc-prose">
-    <ul>
-        <li><strong>Responsiveness</strong> &mdash; mobile-first design. The modular grid must be fluid; on mobile, collage elements stack into a clean, vertical stream of information.</li>
-        <li><strong>Dark theme</strong> &mdash; ship both a dark and a light theme. Follow the system default, but provide a sticky user switch.</li>
-        <li><strong>Accessibility</strong> &mdash; color-contrast ratios should meet WCAG AA.</li>
-    </ul>
-</div>
-
-<h3 class="type-h3 doc-section-heading">Inclusivity</h3>
-<p class="doc-lede">The admin panel should avoid the gendered defaults common in developer tooling, without overcorrecting into something that feels soft or infantilising.</p>
-<div class="doc-prose">
-    <p>Steer clear of:</p>
-    <ul>
-        <li>Aggressive hacker aesthetics.</li>
-        <li>Militarised language in visuals.</li>
-        <li>Dark-only terminal culture.</li>
-        <li>Hyper-competitive startup energy.</li>
-        <li>Overly masculine color and imagery conventions.</li>
-    </ul>
-    <p>The design should feel equally appropriate for a hobbyist, teacher, small-business owner, scientist, artist, nonprofit operator, or programmer.</p>
-</div>
-<div class="callout">
-    <div class="callout__body">
-        <p class="type-label">The goal</p>
-        <p><strong>Welcoming competence.</strong> Present enough to feel capable and trustworthy, warm enough that nobody feels like they wandered into the wrong room.</p>
     </div>
 </div>

@@ -1,65 +1,62 @@
 <header class="content-section__header">
     <h2>Buttons</h2>
-    <p>The action control &mdash; a mono, uppercase label in a rounded, pill-shaped target.</p>
+    <p>The action control &mdash; a mono, uppercase label inside a square, bracketed box.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">Buttons trigger actions. The label is set in the mono <a href="#typography">label register</a> &mdash; uppercase and tracked &mdash; inside a fully-rounded, 2px-bordered pill, so an action reads as a deliberate, approachable thing to press.</p>
+    <p class="type-body-lg">Buttons trigger actions. The label is set in the mono <a href="/admin/style-guide/typography">label register</a> &mdash; uppercase and tracked &mdash; wrapped in brackets inside a square, 1px box, so an action reads like a terminal target you can type at: <code>[ save ]</code>.</p>
 
-    <p><strong>When to use:</strong> a <code>&lt;button&gt;</code> performs an action (save, delete, open a dialog); a <em>link</em> navigates somewhere. If pressing it changes the URL, it's a link &mdash; you can style it <code>.button</code>, but keep the <code>&lt;a&gt;</code> element. Keep a single primary action per view.</p>
+    <p><strong>When to use:</strong> a <code>&lt;button&gt;</code> performs an action (save, delete, open a dialog); a <em>link</em> navigates somewhere. If pressing it changes the URL, it&rsquo;s a link &mdash; you can style it <code>.button</code>, but keep the <code>&lt;a&gt;</code> element. Keep a single primary action per view.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Anatomy</h3>
-<p class="doc-lede">Every button is the same shape; only the fill changes between variants.</p>
+<p class="doc-lede">Every button is the same square box; emphasis comes from the fill, never from size or a brand hue.</p>
 <div class="anatomy flow">
     <div class="demo-stage">
         <button class="button button--primary" type="button">Save changes</button>
     </div>
     <ol class="parts-list">
-        <li><strong>Label</strong> &mdash; a verb in the mono label register: uppercase, <code>+0.04em</code> tracking.</li>
-        <li><strong>Border</strong> &mdash; a 2px solid edge (<code>--button-border-width</code>) on fully-rounded pill corners (<code>--radius-pill</code>).</li>
-        <li><strong>Fill</strong> &mdash; the page surface for plain buttons, a brand color for emphasis.</li>
+        <li><strong>Label</strong> &mdash; a verb in the mono label register: uppercase, tracked.</li>
+        <li><strong>Brackets</strong> &mdash; <code>[</code> and <code>]</code> framing the label, added in CSS so it reads as a spec-sheet control.</li>
+        <li><strong>Box</strong> &mdash; a 1px solid edge (<code>--button-border-width</code>) on square corners &mdash; no radius.</li>
+        <li><strong>Fill</strong> &mdash; the page surface for the default button; solid ink for the one primary action.</li>
         <li><strong>Target</strong> &mdash; a <code>2.5rem</code> minimum height for a comfortable, consistent target.</li>
-        <li><strong>Focus ring</strong> &mdash; a 3px <code>--color-focus-outline</code> outline, offset 2px (keyboard only).</li>
+        <li><strong>Focus ring</strong> &mdash; a 2px <code>--color-focus-outline</code> outline, offset 2px (keyboard only).</li>
     </ol>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Variants</h3>
-<p class="doc-lede">One plain button plus three brand fills. Emphasis comes from fill, not size.</p>
+<p class="doc-lede">Three variants only. Emphasis comes from fill; the one use of color is the destructive signal.</p>
 <div class="example-grid grid-auto">
     <div class="card card--flush example">
         <div class="example__preview"><button class="button" type="button">Cancel</button></div>
-        <div class="example__label"><code>.button</code><span class="example__note">Plain / neutral &mdash; inverts to ink on hover</span></div>
+        <div class="example__label"><code>.button</code><span class="example__note">Default &mdash; outline, inverts on hover</span></div>
     </div>
     <div class="card card--flush example">
         <div class="example__preview"><button class="button button--primary" type="button">Save</button></div>
-        <div class="example__label"><code>.button--primary</code><span class="example__note">The one primary action</span></div>
+        <div class="example__label"><code>.button--primary</code><span class="example__note">The one primary action &mdash; solid ink fill</span></div>
     </div>
     <div class="card card--flush example">
-        <div class="example__preview"><button class="button button--secondary" type="button">Invite</button></div>
-        <div class="example__label"><code>.button--secondary</code><span class="example__note">Secondary emphasis</span></div>
-    </div>
-    <div class="card card--flush example">
-        <div class="example__preview"><button class="button button--tertiary" type="button">Export</button></div>
-        <div class="example__label"><code>.button--tertiary</code><span class="example__note">Tertiary emphasis</span></div>
+        <div class="example__preview"><button class="button button--danger" type="button">Delete</button></div>
+        <div class="example__label"><code>.button--danger</code><span class="example__note">Destructive &mdash; color as signal</span></div>
     </div>
 </div>
 
 <h3 class="type-h3 doc-section-heading">States</h3>
-<p class="doc-lede">Hover, focus (press <kbd>Tab</kbd>), and click the live buttons to see each state.</p>
+<p class="doc-lede">Hover, focus (press <kbd>Tab</kbd>), and click the live buttons to see each state. States are inversions and border shifts &mdash; no shadow, no motion.</p>
 <div class="states flow">
     <div class="demo-stage">
         <button class="button button--primary" type="button">Primary</button>
-        <button class="button" type="button">Plain</button>
+        <button class="button" type="button">Default</button>
+        <button class="button button--danger" type="button">Delete</button>
         <button class="button button--primary" type="button" disabled>Disabled</button>
         <p class="demo-stage__hint">These are real controls &mdash; hover, tab to them, and press.</p>
     </div>
     <dl class="state-list">
-        <div><dt>Default</dt><dd>Resting. Plain sits on the page surface with an ink border; brand variants carry their fill.</dd></div>
-        <div><dt>Hover</dt><dd>Every variant inverts to a solid ink fill &mdash; the brand fill drops away so all buttons share one hover treatment.</dd></div>
-        <div><dt>Focus</dt><dd>A 3px <code>--color-focus-outline</code> ring, offset 2px. Shows for keyboard focus (<code>:focus-visible</code>), not mouse clicks.</dd></div>
-        <div><dt>Active</dt><dd>Nudges down 1px on press &mdash; a tactile, theme-agnostic cue.</dd></div>
-        <div><dt>Disabled</dt><dd>Brand fill and border are replaced with <code>--color-surface-sunken</code> and <code>--color-ink-muted</code> &mdash; all variants go grey so none reads as a muted brand action. Hover and press are suppressed.</dd></div>
+        <div><dt>Default</dt><dd>Resting. The default button sits on the page surface with an ink box; primary carries the solid ink fill.</dd></div>
+        <div><dt>Hover</dt><dd>Inversion. The default button fills with ink; the primary flips to an outline; danger fills red &mdash; a simple flip, no transition.</dd></div>
+        <div><dt>Focus</dt><dd>A 2px <code>--color-focus-outline</code> ring, offset 2px. Shows for keyboard focus (<code>:focus-visible</code>), not mouse clicks.</dd></div>
+        <div><dt>Disabled</dt><dd>Box and label go to <code>--color-ink-muted</code> on the page surface, so a disabled button reads as inactive. Hover is suppressed.</dd></div>
     </dl>
 </div>
 
@@ -68,11 +65,14 @@
 <pre class="code-block"><code>&lt;!-- Primary action — one per view --&gt;
 &lt;button class="button button--primary" type="button"&gt;Save changes&lt;/button&gt;
 
-&lt;!-- Secondary / neutral action --&gt;
+&lt;!-- Default / neutral action --&gt;
 &lt;button class="button" type="button"&gt;Cancel&lt;/button&gt;
 
+&lt;!-- Destructive action --&gt;
+&lt;button class="button button--danger" type="button"&gt;Delete&lt;/button&gt;
+
 &lt;!-- Navigation that looks like a button: keep the &lt;a&gt; --&gt;
-&lt;a class="button button--secondary" href="/settings"&gt;Open settings&lt;/a&gt;
+&lt;a class="button" href="/settings"&gt;Open settings&lt;/a&gt;
 
 &lt;!-- Disabled --&gt;
 &lt;button class="button button--primary" type="button" disabled&gt;Saving…&lt;/button&gt;</code></pre>
@@ -80,11 +80,11 @@
 <h3 class="type-h3 doc-section-heading">Accessibility</h3>
 <div class="doc-prose">
     <ul>
-        <li>Use <code>&lt;button&gt;</code> for actions and <code>&lt;a&gt;</code> for navigation &mdash; keyboards and screen readers treat them differently; don't swap them.</li>
-        <li>Always set <code>type</code> on a <code>&lt;button&gt;</code> (<code>button</code> or <code>submit</code>) so it can't submit a form by accident.</li>
-        <li>The visible label is the accessible name; keep it a clear verb. An icon-only button needs an <code>aria-label</code>.</li>
-        <li>Never remove the focus ring &mdash; <code>:focus-visible</code> shows it for keyboard users only, so it doesn't clutter mouse clicks.</li>
-        <li>Buttons hold a <code>2.5rem</code> minimum height for a comfortable, consistent target; keep interactive controls at least this size.</li>
+        <li>Use <code>&lt;button&gt;</code> for actions and <code>&lt;a&gt;</code> for navigation &mdash; keyboards and screen readers treat them differently; don&rsquo;t swap them.</li>
+        <li>Always set <code>type</code> on a <code>&lt;button&gt;</code> (<code>button</code> or <code>submit</code>) so it can&rsquo;t submit a form by accident.</li>
+        <li>The visible label is the accessible name; keep it a clear verb. The brackets are added in CSS, so they never reach the accessibility tree.</li>
+        <li>Never remove the focus ring &mdash; <code>:focus-visible</code> shows it for keyboard users only.</li>
+        <li>Buttons hold a <code>2.5rem</code> minimum height for a comfortable target; keep interactive controls at least this size.</li>
         <li>When a control is disabled but users still need to know it exists, prefer <code>aria-disabled="true"</code> (it stays focusable and announced) over the <code>disabled</code> attribute.</li>
     </ul>
 </div>
@@ -94,19 +94,19 @@
     <div class="card card--accent-secondary guideline guideline--do">
         <p class="type-label guideline__label">Do</p>
         <ul>
-            <li>Keep one primary button per view; make everything else plain or secondary.</li>
+            <li>Keep one primary button per view; make everything else the default outline.</li>
             <li>Lead the label with a verb &mdash; &ldquo;Save changes,&rdquo; &ldquo;Delete,&rdquo; &ldquo;Invite.&rdquo;</li>
-            <li>Let the variant carry emphasis and trust the fixed sizes.</li>
-            <li>Reach for <code>.button</code> (plain) for low-emphasis and cancel actions.</li>
+            <li>Let the fill carry emphasis and trust the fixed sizes.</li>
+            <li>Reserve <code>.button--danger</code> for actions that destroy something.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
-        <p class="type-label guideline__label">Don't</p>
+        <p class="type-label guideline__label">Don&rsquo;t</p>
         <ul>
             <li>Stack several primary buttons competing for the same attention.</li>
-            <li>Use a button to navigate &mdash; that's a link's job.</li>
+            <li>Use a button to navigate &mdash; that&rsquo;s a link&rsquo;s job.</li>
             <li>Remove the focus ring or drop below the <code>2.5rem</code> target.</li>
-            <li>Invent new fills; the four variants map to the brand palette.</li>
+            <li>Add a shadow, a radius, or a hover transition &mdash; states are inversions, not motion.</li>
         </ul>
     </div>
 </div>

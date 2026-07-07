@@ -2,37 +2,57 @@
 
 /* Reference palette grid — narrower tracks for the raw-ingredient chips. */
 .swatch-list--palette {
-    --grid-min: 11rem;
+    --grid-min: 12rem;
 }
 
 /* Semantic token grid — wider tracks to fit the longer token names. */
 .swatch-list--semantic {
-    --grid-min: 13rem;
+    --grid-min: 14rem;
 }
 
 /* Each chip paints the live token it documents through the .swatch__chip
    --swatch hook, so the color shown is always what the theme currently
    resolves to. One modifier per token keeps the value out of the markup. */
-.swatch__chip--palette-magenta { --swatch: var(--palette-magenta); }
-.swatch__chip--palette-cyan { --swatch: var(--palette-cyan); }
-.swatch__chip--palette-blue { --swatch: var(--palette-blue); }
-.swatch__chip--palette-yellow { --swatch: var(--palette-yellow); }
-.swatch__chip--palette-highlight { --swatch: var(--palette-highlight); }
-.swatch__chip--palette-red { --swatch: var(--palette-red); }
-.swatch__chip--palette-red-bright { --swatch: var(--palette-red-bright); }
-.swatch__chip--palette-amber { --swatch: var(--palette-amber); }
-.swatch__chip--palette-black { --swatch: var(--palette-black); }
-.swatch__chip--palette-white { --swatch: var(--palette-white); }
 
-.swatch__chip--color-ink { --swatch: var(--color-ink); }
-.swatch__chip--color-ink-muted { --swatch: var(--color-ink-muted); }
+/* Reference palette — neutrals (light end). */
+.swatch__chip--palette-paper { --swatch: var(--palette-paper); }
+.swatch__chip--palette-paper-sunken { --swatch: var(--palette-paper-sunken); }
+.swatch__chip--palette-ink { --swatch: var(--palette-ink); }
+.swatch__chip--palette-ink-muted { --swatch: var(--palette-ink-muted); }
+
+/* Reference palette — neutrals (dark end). */
+.swatch__chip--palette-void { --swatch: var(--palette-void); }
+.swatch__chip--palette-void-sunken { --swatch: var(--palette-void-sunken); }
+.swatch__chip--palette-chalk { --swatch: var(--palette-chalk); }
+.swatch__chip--palette-chalk-muted { --swatch: var(--palette-chalk-muted); }
+
+/* Reference palette — hairline ramp. */
+.swatch__chip--palette-line-light { --swatch: var(--palette-line-light); }
+.swatch__chip--palette-line-dark { --swatch: var(--palette-line-dark); }
+
+/* Reference palette — signals. */
+.swatch__chip--palette-link-light { --swatch: var(--palette-link-light); }
+.swatch__chip--palette-link-dark { --swatch: var(--palette-link-dark); }
+.swatch__chip--palette-red-light { --swatch: var(--palette-red-light); }
+.swatch__chip--palette-red-dark { --swatch: var(--palette-red-dark); }
+.swatch__chip--palette-amber-light { --swatch: var(--palette-amber-light); }
+.swatch__chip--palette-amber-dark { --swatch: var(--palette-amber-dark); }
+.swatch__chip--palette-green-light { --swatch: var(--palette-green-light); }
+.swatch__chip--palette-green-dark { --swatch: var(--palette-green-dark); }
+.swatch__chip--palette-highlight-light { --swatch: var(--palette-highlight-light); }
+.swatch__chip--palette-highlight-dark { --swatch: var(--palette-highlight-dark); }
+
+/* Semantic tokens — resolve live, so they reflect the current theme. */
 .swatch__chip--color-bg { --swatch: var(--color-bg); }
 .swatch__chip--color-surface-sunken { --swatch: var(--color-surface-sunken); }
-.swatch__chip--color-rule { --swatch: var(--color-rule); }
-.swatch__chip--color-ink-primary { --swatch: var(--color-ink-primary); }
-.swatch__chip--color-ink-secondary { --swatch: var(--color-ink-secondary); }
-.swatch__chip--color-ink-link { --swatch: var(--color-ink-link); }
+.swatch__chip--color-ink { --swatch: var(--color-ink); }
+.swatch__chip--color-ink-muted { --swatch: var(--color-ink-muted); }
 .swatch__chip--color-ink-on-accent { --swatch: var(--color-ink-on-accent); }
+.swatch__chip--color-rule { --swatch: var(--color-rule); }
+.swatch__chip--color-rule-strong { --swatch: var(--color-rule-strong); }
+.swatch__chip--color-ink-link { --swatch: var(--color-ink-link); }
 .swatch__chip--color-focus-outline { --swatch: var(--color-focus-outline); }
+.swatch__chip--color-highlight { --swatch: var(--color-highlight); }
 .swatch__chip--color-status-danger { --swatch: var(--color-status-danger); }
 .swatch__chip--color-status-warning { --swatch: var(--color-status-warning); }
+.swatch__chip--color-status-success { --swatch: var(--color-status-success); }

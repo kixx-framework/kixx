@@ -1,6 +1,14 @@
+        {{!--
+            Hypertext Minimalism requests ZERO text font files — the UI renders
+            in the operating system's own monospace face (see --font-mono).
+
+            The only remaining font request is the Material Symbols icon font,
+            kept solely for admin/login page templates not yet migrated to
+            Unicode marks. Drop these two links once those pages are updated.
+        --}}
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&amp;family=Lexend+Deca:wght@100..900&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0&amp;display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0&amp;display=swap" rel="stylesheet">
 
         {{!-- Admin styles import the shared tokens, reset, layout, and components. --}}
         <link href="/stylesheets/stylesheet.css" rel="stylesheet">

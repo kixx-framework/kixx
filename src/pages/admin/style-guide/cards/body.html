@@ -4,53 +4,53 @@
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">A card is a flat, hairline-bordered panel &mdash; the structural building block for dashboards, settings groups, and list modules. Softly rounded corners (<code>--radius-md</code>), a 1px rule, a flat fill: clean and modular, not decorative.</p>
+    <p class="type-body-lg">A card is a flat, hairline-bordered panel &mdash; the structural building block for dashboards, settings groups, and list modules. Square corners, a 1px rule, a flat fill: a spec-sheet box, not a decorative surface. Depth comes from the rule, never a shadow.</p>
 
-    <p>Because it's built entirely from semantic tokens &mdash; <code>--color-rule</code> for the border, <code>--color-bg</code> for the fill, and <code>--color-ink-primary</code> / <code>--color-ink-secondary</code> for accent variants &mdash; a card is correct in both light and dark with no extra work. It's a small, concrete demonstration of the <a href="#colors">color contract</a>.</p>
+    <p>Because it&rsquo;s built entirely from semantic tokens &mdash; <code>--color-rule-strong</code> for the border, <code>--color-bg</code> for the fill, and <code>--color-ink</code> / <code>--color-ink-muted</code> for the accent marker &mdash; a card is correct in both light and dark with no extra work. It&rsquo;s a small, concrete demonstration of the <a href="/admin/style-guide/colors">color contract</a>.</p>
 
-    <p><strong>When to use:</strong> group related content into a distinct surface. When you only need to space things out, reach for <a href="#layout"><code>.flow</code> or a layout primitive</a> instead &mdash; a card is a surface, not a spacer.</p>
+    <p><strong>When to use:</strong> group related content into a distinct surface. When you only need to space things out, reach for <a href="/admin/style-guide/layout"><code>.flow</code> or a layout primitive</a> instead &mdash; a card is a surface, not a spacer.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Anatomy</h3>
-<p class="doc-lede">Four parts, with the accent border optional. The default card is just a surface, a hairline border, and padding.</p>
+<p class="doc-lede">Four parts, with the accent marker optional. The default card is just a surface, a hairline box, and padding.</p>
 <div class="anatomy flow">
     <div class="demo-stage">
         <div class="card card--accent-secondary card-anatomy-demo flow">
             <h4 class="type-h4">Notification preferences</h4>
-            <p class="type-body-sm">A surface with a hairline border, built-in padding, and an optional accent border in a brand ink.</p>
+            <p class="type-body-sm">A surface with a hairline box, built-in padding, and an optional accent marker down the left edge.</p>
         </div>
     </div>
     <ol class="parts-list">
         <li><strong>Surface</strong> &mdash; the flat fill (<code>--color-bg</code>); the card sits straight on the page, no shadow.</li>
-        <li><strong>Hairline border</strong> &mdash; a 1px rule on all four sides (<code>--color-rule</code>).</li>
+        <li><strong>Hairline box</strong> &mdash; a 1px rule on all four square sides (<code>--color-rule-strong</code>).</li>
         <li><strong>Padding</strong> &mdash; built-in breathing room (<code>--card-padding</code>); removed by <code>.card--flush</code>.</li>
-        <li><strong>Accent border</strong> &mdash; optional; recolors the whole border in the primary or secondary accent and steps it up to <code>--accent-border-width</code> (2px), via <code>.card--accent-primary</code> / <code>.card--accent-secondary</code>.</li>
+        <li><strong>Accent marker</strong> &mdash; optional; a 3px left rule in ink or muted, flagging the panel like a changelog entry, via <code>.card--accent-primary</code> / <code>.card--accent-secondary</code>.</li>
     </ol>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Variants</h3>
-<p class="doc-lede">A base class plus optional, composable modifiers. Accent borders come in primary and secondary only.</p>
+<p class="doc-lede">A base class plus optional, composable modifiers. The accent is a left-edge marker, not a colored box.</p>
 <div class="doc-prose">
     <ul>
         <li><code>.card</code> &mdash; the bordered surface, padded by default. Drop in any content.</li>
         <li><code>.card--flush</code> &mdash; removes the padding when the card is split into strips that pad themselves. The type specimens in the Typography section are flush cards.</li>
-        <li><code>.card--accent-primary</code> &mdash; swaps the hairline for a full 2px border in the primary ink.</li>
-        <li><code>.card--accent-secondary</code> &mdash; swaps the hairline for a full 2px border in the secondary ink.</li>
+        <li><code>.card--accent-primary</code> &mdash; adds a 3px left marker in <code>--color-ink</code>.</li>
+        <li><code>.card--accent-secondary</code> &mdash; adds a 3px left marker in <code>--color-ink-muted</code>, for a quieter flag.</li>
         <li><code>.card--sunken</code> &mdash; a recessed fill (<code>--color-surface-sunken</code>) for nested or read-only panels.</li>
     </ul>
 </div>
 <div class="card-gallery grid-auto">
     <div class="card flow">
         <h4 class="type-h4">Default card</h4>
-        <p class="type-body-sm">A padded surface with a hairline border. This is the default &mdash; reach for it first.</p>
+        <p class="type-body-sm">A padded surface with a hairline box. This is the default &mdash; reach for it first.</p>
     </div>
     <div class="card card--accent-primary flow">
-        <h4 class="type-h4">Primary accented card</h4>
-        <p class="type-body-sm">The same surface with its full border recolored in the primary ink.</p>
+        <h4 class="type-h4">Primary marker</h4>
+        <p class="type-body-sm">The same surface with a 3px ink marker down the left edge.</p>
     </div>
     <div class="card card--accent-secondary flow">
-        <h4 class="type-h4">Secondary accented card</h4>
-        <p class="type-body-sm">A secondary accent border for a parallel, non-tertiary emphasis.</p>
+        <h4 class="type-h4">Secondary marker</h4>
+        <p class="type-body-sm">A quieter, muted left marker for a parallel, lower-emphasis flag.</p>
     </div>
     <div class="card card--sunken flow">
         <h4 class="type-h4">Sunken card</h4>
@@ -59,16 +59,16 @@
 </div>
 
 <h3 class="type-h3 doc-section-heading">Usage</h3>
-<p class="doc-lede">Use a sectioning element (<code>article</code> / <code>section</code>) when the card is a content region; a plain <code>div</code> when it's purely visual.</p>
+<p class="doc-lede">Use a sectioning element (<code>article</code> / <code>section</code>) when the card is a content region; a plain <code>div</code> when it&rsquo;s purely visual.</p>
 <pre class="code-block"><code>&lt;article class="card flow"&gt;
 &lt;h3 class="type-h3"&gt;Card title&lt;/h3&gt;
 &lt;p class="type-body-sm"&gt;Any content goes here.&lt;/p&gt;
 &lt;/article&gt;
 
-&lt;!-- Primary accent border --&gt;
+&lt;!-- Ink left marker --&gt;
 &lt;article class="card card--accent-primary"&gt;…&lt;/article&gt;
 
-&lt;!-- Secondary accent border --&gt;
+&lt;!-- Muted left marker --&gt;
 &lt;article class="card card--accent-secondary"&gt;…&lt;/article&gt;
 
 &lt;!-- Recessed surface for a nested panel --&gt;
@@ -78,8 +78,8 @@
 <div class="doc-prose">
     <ul>
         <li>A card is a presentational surface &mdash; it adds no semantics. Put the real structure inside it (a heading, list, or landmark) so assistive tech still gets an outline.</li>
-        <li>Keep DOM order logical; the border groups content visually but doesn't change reading order.</li>
-        <li>Don't rely on the hairline alone to signal grouping &mdash; it uses <code>--color-rule</code> (maximum contrast) for exactly this reason. Keep it.</li>
+        <li>Keep DOM order logical; the box groups content visually but doesn&rsquo;t change reading order.</li>
+        <li>Don&rsquo;t rely on the hairline alone to signal grouping &mdash; it uses <code>--color-rule-strong</code> (full ink) for exactly this reason. Keep it.</li>
         <li>If a whole card is one target, wrap its content in a single <code>&lt;a&gt;</code> / <code>&lt;button&gt;</code> rather than nesting interactive elements, and keep a visible focus style.</li>
     </ul>
 </div>
@@ -96,14 +96,13 @@
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
-        <p class="type-label guideline__label">Don't</p>
+        <p class="type-label guideline__label">Don&rsquo;t</p>
         <ul>
-            <li>Add drop shadows or faux elevation &mdash; the system stays flat; depth comes from the hairline border, not shadow.</li>
-            <li>Hardcode a corner radius &mdash; the rounding comes from <code>--radius-md</code>; keep it consistent across surfaces.</li>
+            <li>Add drop shadows or faux elevation &mdash; the system stays flat; depth comes from the hairline box, not shadow.</li>
+            <li>Round the corners &mdash; the system is square everywhere (<code>--radius-md</code> is <code>0</code>). Keep it consistent.</li>
             <li>Nest bordered cards more than one level deep; the rules start to fight.</li>
-            <li>Use a card just to create space &mdash; that's the job of <code>.flow</code> and the layout primitives.</li>
-            <li>Hardcode the border, fill, or accent; they come from the card modifiers and color tokens.</li>
-            <li>Add a tertiary card accent; cards support primary and secondary accent borders only.</li>
+            <li>Use a card just to create space &mdash; that&rsquo;s the job of <code>.flow</code> and the layout primitives.</li>
+            <li>Tint the surface or paint a full colored border; the accent is a left marker in ink or muted, nothing more.</li>
         </ul>
     </div>
 </div>

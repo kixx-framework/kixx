@@ -1,22 +1,22 @@
 <header class="content-section__header">
     <h2>Callouts</h2>
-    <p>A bordered notice that flags a message without derailing the page.</p>
+    <p>A boxed notice that flags a message without derailing the page.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">A callout lifts one message out of the surrounding copy &mdash; a rule of thumb, a caution, an error &mdash; onto a sunken surface inside a colored border, with an optional icon. It's the calm way to raise your voice: present enough to catch the eye, quiet enough not to shout over the content.</p>
+    <p class="type-body-lg">A callout lifts one message out of the surrounding copy &mdash; a rule of thumb, a caution, an error &mdash; onto a sunken surface inside a hairline box with a heavier left marker, and an optional ASCII mark. It&rsquo;s the calm way to raise your voice: present enough to catch the eye, quiet enough not to shout.</p>
 
-    <p>It's the first real consumer of the <a href="#colors">status colors</a>. The tone rides the border and the icon &mdash; graphical marks, which clear WCAG's 3:1 non-text threshold &mdash; while the message stays <code>--color-ink</code>. That's deliberate: it's why the warning tone resolves to a deep amber on light surfaces rather than the brand yellow, which is too light to read as a thin mark on white.</p>
+    <p>It&rsquo;s the first real consumer of the <a href="/admin/style-guide/colors">status colors</a>. The tone rides the left marker and the mark &mdash; graphical elements, which clear WCAG&rsquo;s 3:1 non-text threshold &mdash; while the message stays <code>--color-ink</code>. That&rsquo;s deliberate: it&rsquo;s why the warning tone resolves to a deep amber on light surfaces rather than the brand yellow, which is too light to read as a thin mark on paper.</p>
 
     <p><strong>When to use:</strong> to surface a single, scannable message tied to its context. For a transient confirmation that auto-dismisses, reach for a toast instead; for page-blocking decisions, a dialog. A callout is a <em>note on the page</em>, not an interruption of it &mdash; and a page stacked with callouts has none.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Anatomy</h3>
-<p class="doc-lede">Four parts; the icon is optional, the tone is a modifier. The default callout is a border, a body, and a surface.</p>
+<p class="doc-lede">Four parts; the mark is optional, the tone is a modifier. The default callout is a left marker, a body, and a surface.</p>
 <div class="anatomy flow">
     <div class="demo-stage">
         <div class="callout callout--warning">
-            <span class="material-symbols-rounded callout__icon" aria-hidden="true">warning</span>
+            <span class="callout__icon" aria-hidden="true">[!]</span>
             <div class="callout__body">
                 <p class="type-label">Unsaved changes</p>
                 <p class="type-body-sm">Leaving now will discard edits to this record. Save first if you want to keep them.</p>
@@ -24,8 +24,8 @@
         </div>
     </div>
     <ol class="parts-list">
-        <li><strong>Accent border</strong> &mdash; a 2px border on all sides (<code>--callout-accent</code>, <code>--accent-border-width</code>); the tone modifier recolors it.</li>
-        <li><strong>Icon</strong> &mdash; optional, inherits <code>--callout-accent</code>; reinforces the tone so meaning survives without color (<code>.callout__icon</code>).</li>
+        <li><strong>Left marker</strong> &mdash; a 3px left border (<code>--callout-accent</code>) on an otherwise hairline box; the tone modifier recolors it.</li>
+        <li><strong>Mark</strong> &mdash; optional ASCII glyph (<code>[!]</code>, <code>[i]</code>, <code>[x]</code>, <code>*</code>), inherits <code>--callout-accent</code>; reinforces the tone so meaning survives without color (<code>.callout__icon</code>).</li>
         <li><strong>Body</strong> &mdash; the message (<code>.callout__body</code>): an optional label plus copy, always in <code>--color-ink</code>.</li>
         <li><strong>Surface</strong> &mdash; the recessed fill (<code>--color-surface-sunken</code>) that lifts the note off the page.</li>
     </ol>
@@ -35,53 +35,54 @@
 <p class="doc-lede">A base class plus three tone modifiers. Each tone resolves from a semantic token &mdash; no raw color anywhere.</p>
 <div class="doc-prose">
     <ul>
-        <li><code>.callout</code> &mdash; the neutral emphasis note; the border is the primary ink (<code>--color-ink-primary</code>). Reach for it for a plain &ldquo;rule of thumb.&rdquo;</li>
-        <li><code>.callout--info</code> &mdash; cyan (<code>--color-ink-secondary</code>); calm, non-urgent information.</li>
+        <li><code>.callout</code> &mdash; the neutral emphasis note; the marker is <code>--color-ink</code>. Reach for it for a plain &ldquo;rule of thumb.&rdquo;</li>
+        <li><code>.callout--info</code> &mdash; the link blue (<code>--color-ink-link</code>); calm, non-urgent information.</li>
         <li><code>.callout--warning</code> &mdash; amber on light, yellow on dark (<code>--color-status-warning</code>); proceed with caution.</li>
         <li><code>.callout--error</code> &mdash; red (<code>--color-status-danger</code>); something failed or is blocked.</li>
     </ul>
 </div>
 <div class="flow">
     <div class="callout">
+        <span class="callout__icon" aria-hidden="true">*</span>
         <div class="callout__body">
             <p class="type-label">Rule of thumb</p>
             <p class="type-body-sm">The default tone. One note per idea &mdash; if everything is highlighted, nothing is.</p>
         </div>
     </div>
     <div class="callout callout--info">
-        <span class="material-symbols-rounded callout__icon" aria-hidden="true">info</span>
+        <span class="callout__icon" aria-hidden="true">[i]</span>
         <div class="callout__body">
             <p class="type-label">Heads up</p>
             <p class="type-body-sm">Scheduled maintenance runs Sunday 02:00&ndash;03:00 UTC. No action needed.</p>
         </div>
     </div>
     <div class="callout callout--warning">
-        <span class="material-symbols-rounded callout__icon" aria-hidden="true">warning</span>
+        <span class="callout__icon" aria-hidden="true">[!]</span>
         <div class="callout__body">
             <p class="type-label">Warning</p>
-            <p class="type-body-sm">This API key has read-write access. Rotate it if it's ever been shared.</p>
+            <p class="type-body-sm">This API key has read-write access. Rotate it if it&rsquo;s ever been shared.</p>
         </div>
     </div>
     <div class="callout callout--error">
-        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <span class="callout__icon" aria-hidden="true">[x]</span>
         <div class="callout__body">
-            <p class="type-label">Couldn't save</p>
+            <p class="type-label">Couldn&rsquo;t save</p>
             <p class="type-body-sm">The server rejected the request (HTTP 422). Check the highlighted fields and try again.</p>
         </div>
     </div>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Usage</h3>
-<p class="doc-lede">Wrap the message in <code>.callout__body</code> so the optional icon and the copy lay out side by side. The icon is decorative &mdash; the tone word in the body carries the meaning.</p>
+<p class="doc-lede">Wrap the message in <code>.callout__body</code> so the optional mark and the copy lay out side by side. The mark is decorative &mdash; the tone word in the body carries the meaning.</p>
 <pre class="code-block"><code>&lt;div class="callout callout--warning"&gt;
-&lt;span class="material-symbols-rounded callout__icon" aria-hidden="true"&gt;warning&lt;/span&gt;
+&lt;span class="callout__icon" aria-hidden="true"&gt;[!]&lt;/span&gt;
 &lt;div class="callout__body"&gt;
 &lt;p class="type-label"&gt;Warning&lt;/p&gt;
 &lt;p&gt;Proceed-with-caution message goes here.&lt;/p&gt;
 &lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- Neutral note: no modifier, no icon needed --&gt;
+&lt;!-- Neutral note: no modifier, no mark needed --&gt;
 &lt;div class="callout"&gt;
 &lt;div class="callout__body"&gt;&lt;p&gt;A plain rule of thumb.&lt;/p&gt;&lt;/div&gt;
 &lt;/div&gt;
@@ -92,10 +93,10 @@
 <h3 class="type-h3 doc-section-heading">Accessibility</h3>
 <div class="doc-prose">
     <ul>
-        <li>Never lean on the border color alone &mdash; pair the tone with the icon and a word (&ldquo;Warning&rdquo;, &ldquo;Couldn't save&rdquo;) so it reads in greyscale and for color-blind users.</li>
-        <li>The icon is decorative once the text says the same thing; mark it <code>aria-hidden="true"</code> so it isn't announced twice.</li>
+        <li>Never lean on the marker color alone &mdash; pair the tone with the ASCII mark and a word (&ldquo;Warning&rdquo;, &ldquo;Couldn&rsquo;t save&rdquo;) so it reads in greyscale and for color-blind users.</li>
+        <li>The mark is decorative once the text says the same thing; give it <code>aria-hidden="true"</code> so it isn&rsquo;t announced.</li>
         <li>For a callout that appears <em>in response to an action</em> (a save error, say), add <code>role="alert"</code> &mdash; or <code>role="status"</code> for non-urgent info &mdash; so screen readers announce it. A note present on load needs neither.</li>
-        <li>Keep the message in <code>--color-ink</code>; it sits on <code>--color-surface-sunken</code> and clears AA. Don't recolor body text to the accent &mdash; the status hues are tuned for marks (3:1), not for text (4.5:1).</li>
+        <li>Keep the message in <code>--color-ink</code>; it sits on <code>--color-surface-sunken</code> and clears AA. Don&rsquo;t recolor body text to the tone &mdash; the status hues are tuned for marks (3:1), not for text (4.5:1).</li>
     </ul>
 </div>
 
@@ -106,12 +107,12 @@
         <ul>
             <li>Match the tone to the stakes: info for FYIs, warning before risk, error for failure.</li>
             <li>Keep it to one idea, and put the gist in the first few words.</li>
-            <li>Pair every tone with its icon and a label word, not color alone.</li>
-            <li>Let warning and error ride the border and icon; leave the body text in <code>--color-ink</code>.</li>
+            <li>Pair every tone with its ASCII mark and a label word, not color alone.</li>
+            <li>Let warning and error ride the marker and mark; leave the body text in <code>--color-ink</code>.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
-        <p class="type-label guideline__label">Don't</p>
+        <p class="type-label guideline__label">Don&rsquo;t</p>
         <ul>
             <li>Stack callouts down the page &mdash; competing alarms read as none at all.</li>
             <li>Paint the body text or the whole surface in the tone color, especially yellow.</li>

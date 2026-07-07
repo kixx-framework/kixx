@@ -21,7 +21,7 @@
     </div>
     <ol class="parts-list">
         <li><strong>Label</strong> &mdash; mono, uppercase, muted; sits directly above the input and is always connected with a matching <code>for</code>/<code>id</code> pair.</li>
-        <li><strong>Input</strong> &mdash; the interactive control; a 2px muted border, recessed fill, and 2.75rem minimum height for a comfortable target.</li>
+        <li><strong>Input</strong> &mdash; the interactive control; a 1px muted box on the page surface, square corners, and a 2.75rem minimum height for a comfortable target.</li>
         <li><strong>Hint</strong> &mdash; optional caption below; describes the expected format or explains a constraint. When the field is in error, the hint becomes the error message.</li>
     </ol>
 </div>
@@ -91,9 +91,9 @@
         </div>
     </div>
     <dl class="state-list">
-        <div><dt>Default</dt><dd>Recessed fill, 2px muted border. Quiet until the user engages.</dd></div>
-        <div><dt>Hover</dt><dd>Border intensifies to full <code>--color-ink</code> — the field brightens without moving or jumping.</dd></div>
-        <div><dt>Focus</dt><dd>Border stays active and a 3px <code>--color-focus-outline</code> ring appears, offset 2px from the border edge.</dd></div>
+        <div><dt>Default</dt><dd>On the page surface, 1px muted box. Quiet until the user engages.</dd></div>
+        <div><dt>Hover</dt><dd>Border intensifies to full <code>--color-ink</code> — the field sharpens without moving or jumping.</dd></div>
+        <div><dt>Focus</dt><dd>Border stays active and a 2px <code>--color-focus-outline</code> ring appears, offset 2px from the border edge.</dd></div>
         <div><dt>Disabled</dt><dd>Muted border and muted text at half opacity; cursor becomes <code>not-allowed</code>. Hover and focus are suppressed.</dd></div>
         <div><dt>Read-only</dt><dd>Border becomes dashed — a visual signal the value is visible but not editable. The field remains focusable and its text is selectable.</dd></div>
         <div><dt>Error</dt><dd>Border turns <code>--color-field-border-error</code> (the danger red, from <a href="#colors">the status color</a>). The hint below carries the error message in the same color.</dd></div>

@@ -174,7 +174,9 @@ body:has(> .site-layout) {
 .content-section + .content-section {
     margin-top: var(--space-section-gap);
     padding-top: var(--space-section-gap);
-    border-top: var(--hairline-width) solid var(--color-rule);
+    /* A full-ink section break — the same hairline an <hr> draws, so the guide
+       reads as a sequence of clearly divided document sections. */
+    border-top: var(--rule-width) solid var(--color-rule-strong);
 }
 
 /* h2 size/weight come from the global h2 role. The grid places the title,

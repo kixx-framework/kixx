@@ -1,11 +1,11 @@
 
 /* -----------------------------------------------------------------------------
-    Reset: Influenced by the Josh Comeau:
+    Reset: influenced by Josh Comeau's custom CSS reset.
         https://www.joshwcomeau.com/css/custom-css-reset/
 ----------------------------------------------------------------------------- */
 
 html {
-    /* Sets the rm size for the rest of the styles */
+    /* Sets the rem size for the rest of the styles */
     font-size: 16px;
     scroll-behavior: smooth;
 }
@@ -54,11 +54,12 @@ ul, ol, dl, pre {
 p {
     text-wrap: pretty;
 }
+/* Headings share the one monospace family; hierarchy is size + weight only.
+   No balance/tracking tricks — a heading is simply bigger and heavier. */
 h1, h2, h3, h4, h5, h6 {
-    text-wrap: balance;
     font-family: var(--font-display);
-    font-weight: 600;
-    line-height: 1.2;
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-snug);
     letter-spacing: 0;
 }
 
@@ -67,17 +68,30 @@ button {
     letter-spacing: 0;
 }
 
+/* Horizontal rule — the native section break, rendered as a single hairline.
+   No gradients, no shadows: a thin line that anchors the content, the way a
+   changelog or man page divides its sections. */
+hr {
+    height: 0;
+    margin-block: var(--space-lg);
+    border: 0;
+    border-top: var(--hairline-width) solid var(--color-rule-strong);
+}
+
+/* Links stay in their most recognizable native state: the accent color, plainly
+   underlined, clearly distinct from prose. Functional nodes, not styled buttons. */
 a {
-    /* Ink text for max legibility; brand color carries in the underline only. */
-    color: var(--color-ink);
+    color: var(--color-ink-link);
     text-decoration-line: underline;
-    text-decoration-color: var(--color-ink-link);
-    text-decoration-thickness: 2px;
+    text-decoration-thickness: 1px;
     text-underline-offset: 0.15em;
-    transition: color 200ms ease, text-decoration-color 200ms ease;
 }
 a:hover {
-    color: var(--color-ink-link);
+    text-decoration-thickness: 2px;
+}
+a:focus-visible {
+    outline: 2px solid var(--color-focus-outline);
+    outline-offset: 2px;
 }
 
 ::selection {
