@@ -1,0 +1,190 @@
+/* -----------------------------------------------------------------------------
+    Text Fields (single-line inputs)
+
+    .field wraps a label, the <input>, and optional hint / error text in a
+    column stack. Gap-based spacing — no .flow nesting needed.
+
+    Modifier (applied to .field):
+      .field--error    — error-colored border and hint text
+----------------------------------------------------------------------------- */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+}
+
+.field__label {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    cursor: default;
+}
+
+.field__input {
+    display: block;
+    width: 100%;
+    min-height: 2.75rem;
+    padding-block: var(--space-2xs);
+    padding-inline: var(--space-sm);
+    border: var(--field-border-width) solid var(--color-field-border);
+    border-radius: var(--radius-md);
+    font: inherit;
+    font-size: var(--text-body);
+    color: var(--color-ink);
+    background: var(--color-field-bg);
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 150ms ease;
+}
+
+.field__input::placeholder {
+    color: var(--color-ink-muted);
+    opacity: 1; /* Firefox reduces placeholder opacity by default */
+}
+
+.field__input:hover:not(:disabled):not([readonly]) {
+    border-color: var(--color-field-border-active);
+}
+
+.field__input:focus {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: 2px;
+    border-color: var(--color-field-border-active);
+}
+
+/* Number inputs: hide default spinners for a cleaner inline field. */
+.field__input[type="number"]::-webkit-inner-spin-button,
+.field__input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+}
+.field__input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+.field__input:disabled {
+    border-color: var(--color-ink-muted);
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.field__input[readonly] {
+    border-style: dashed;
+}
+
+.field__hint {
+    font-size: var(--text-caption);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-muted);
+}
+
+/* Error state — applied to the .field wrapper so all three parts respond. */
+.field--error .field__input {
+    border-color: var(--color-field-border-error);
+    border-style: solid; /* override readonly's dashed if both are set */
+}
+
+.field--error .field__hint {
+    color: var(--color-field-border-error);
+}
+
+/* -----------------------------------------------------------------------------
+    Text Area Fields (multi-line inputs)
+
+    A <textarea> reuses the .field wrapper and the .field__input class outright,
+    so label, hint, .field--error, and every hover / focus / disabled / readonly
+    state carry over untouched. These rules add only the multi-line specifics:
+    a taller default, a reading-comfortable line-height, and a vertical-only
+    resize grip (horizontal resize would break the column layout).
+----------------------------------------------------------------------------- */
+
+textarea.field__input {
+    min-height: 6.5rem; /* ~3 rows before the user grows it */
+    line-height: var(--leading-body);
+    resize: vertical;
+}
+
+/* -----------------------------------------------------------------------------
+    Copy Field
+
+    A labeled, read-only value paired with a copy-to-clipboard button — the
+    display primitive for any value someone might want to copy verbatim (a
+    one-time secret, a URL, an id). The value reuses .field__input outright so
+    its border, padding, font, and readonly dashed-border state stay in sync
+    with ordinary form fields; only the row layout, button, and status text
+    are specific to this component. Progressive: without JavaScript the value
+    is a plain read-only input, selectable and copyable by hand. With
+    JavaScript, the delegated script in the admin base template
+    (data-js-behavior="copy-field") adds click-to-select and one-click
+    clipboard writes plus status feedback.
+----------------------------------------------------------------------------- */
+
+.copy-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+}
+
+.copy-field__label {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    cursor: default;
+}
+
+.copy-field__row {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-2xs);
+}
+
+.copy-field__value {
+    /* min-width: 0 lets the input shrink below its content length inside the
+       flex row; the input itself scrolls long values natively on overflow, so
+       no extra overflow handling is needed here. */
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.copy-field__button {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    min-height: 2.75rem; /* matches .field__input so the row's two edges align */
+    border: var(--field-border-width) solid var(--color-field-border);
+    border-radius: var(--radius-md);
+    color: var(--color-ink);
+    background: var(--color-bg);
+    transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+.copy-field__button:hover {
+    background: var(--color-ink);
+    color: var(--color-bg);
+    border-color: var(--color-ink);
+}
+.copy-field__button:focus-visible {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: 2px;
+}
+
+.copy-field__icon {
+    font-size: 1.15em;
+}
+
+.copy-field__status {
+    min-height: 1em; /* reserve space so status text appearing/clearing does not shift layout */
+    font-size: var(--text-caption);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-muted);
+}
+

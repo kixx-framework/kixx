@@ -1,0 +1,590 @@
+/* -----------------------------------------------------------------------------
+    Style-guide demo & documentation
+
+    Everything here styles THIS reference guide only — specimens, prose, layout
+    demos, and do/don't cards. It is NOT part of the Kixx Admin Panel theme; it
+    lives in its own file (loaded after theme.css) so the theme lifts out cleanly.
+    Anything reusable belongs in theme.css, not here.
+----------------------------------------------------------------------------- */
+
+/* Prose blocks of explanatory copy. It owns its internal rhythm directly because
+   guide prose has list and heading rules beyond the generic .flow primitive. */
+.doc-prose {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    max-width: var(--measure-prose);
+}
+.doc-prose > :where(h2, h3, h4) {
+    margin-block-start: var(--space-lg);
+}
+.doc-prose ul {
+    padding-left: 1.2rem;
+}
+.doc-prose li + li {
+    margin-top: var(--space-2xs);
+}
+
+/* A standalone section heading + its lede, sitting in the section flow. The
+   section flow owns the base gap; these component margins encode the exception:
+   more separation before a new guide section, then a tight heading/lede pair. */
+.doc-section-heading {
+    margin-block-start: calc(var(--space-xl) - var(--space-lg));
+}
+.doc-lede {
+    margin-block-start: calc(var(--space-2xs) - var(--space-lg));
+    max-width: 60ch;
+    color: var(--color-ink-muted);
+}
+
+/* The "rule of thumb" notes are now the theme's .callout component (theme.css);
+   the guide uses its default neutral tone and wraps content in .callout__body. */
+
+/* Type specimens — a live sample over a metadata strip. Built on a flush card
+   (.card.card--flush); the sample and meta strips pad themselves. */
+.specimen-list {
+    display: grid;
+    gap: 1.25rem;
+}
+.specimen__sample {
+    padding: clamp(1.25rem, 4vw, 2rem);
+}
+/* The meta strip is a .grid-auto in the markup (8rem tracks); it only tunes the
+   track floor and keeps an asymmetric row/column gap. */
+.specimen__meta {
+    --grid-min: 8rem;
+    margin: 0;
+    padding: 0.85rem clamp(1.25rem, 4vw, 2rem);
+    border-top: var(--hairline-width) solid var(--color-rule);
+    gap: 0.6rem 1.5rem;
+}
+.specimen__meta div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.specimen__meta dt {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-ink-muted);
+}
+.specimen__meta dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-caption);
+}
+.specimen__use {
+    grid-column: 1 / -1;
+}
+
+/* Card gallery — a .grid-auto in the markup; just tunes the track floor + gap. */
+.card-gallery {
+    --grid-min: 16rem;
+    --grid-space: var(--space-sm);
+}
+.card-anatomy-demo {
+    max-width: 22rem;
+}
+
+/* -----------------------------------------------------------------------------
+    Layout-primitive demos
+
+    Visualize a primitive by rendering its children as labelled boxes inside a
+    dashed frame, so the structure reads at a glance. Demo chrome only.
+----------------------------------------------------------------------------- */
+.layout-demo {
+    padding: var(--space-sm);
+    border: var(--hairline-width) dashed var(--color-rule);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+}
+.demo-box {
+    padding: var(--space-xs) var(--space-sm);
+    border: var(--hairline-width) solid var(--color-rule);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    font-family: var(--font-mono);
+    font-size: var(--text-caption);
+    text-align: center;
+}
+/* A taller box for sidebar / switcher demos so the column behaviour is obvious. */
+.demo-box--tall {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 4.5rem;
+}
+
+/* Do / Don't guidance cards — cyan = do, magenta = don't. A .grid-auto in the
+   markup; card accent modifiers provide the top edge color. */
+.guidelines {
+    --grid-min: 18rem;
+    --grid-space: var(--space-sm);
+}
+.guideline > * + * {
+    margin-top: var(--space-2xs);
+}
+.guideline ul {
+    padding-left: 1.2rem;
+    font-size: var(--text-body-sm);
+    line-height: var(--leading-normal);
+}
+.guideline li + li {
+    margin-top: var(--space-2xs);
+}
+.guideline--do .guideline__label {
+    color: var(--color-ink-secondary);
+}
+.guideline--dont .guideline__label {
+    color: var(--color-ink-primary);
+}
+
+/* -----------------------------------------------------------------------------
+    Color swatches — a token reference. Each swatch is a flush card: a chip
+    painted with the live token over a name + usage strip, so the value shown is
+    always what the theme currently resolves to.
+----------------------------------------------------------------------------- */
+.swatch__chip {
+    height: 3.5rem;
+    border-bottom: var(--hairline-width) solid var(--color-rule);
+    background: var(--swatch, var(--color-bg));
+}
+.swatch__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.65rem clamp(0.75rem, 2vw, 1rem);
+}
+.swatch__body code {
+    align-self: flex-start;
+}
+
+/* -----------------------------------------------------------------------------
+    Per-component documentation template
+
+    Reusable demo blocks so every component section reads — and is authored —
+    the same way. Canonical skeleton, in order:
+        intro prose (what it is + when to use)
+        Anatomy · Variants · States · Usage · Accessibility · Guidelines
+    States applies to INTERACTIVE components only; static surfaces omit it.
+----------------------------------------------------------------------------- */
+
+/* A neutral stage for a live sample — used by Anatomy and the States demo. */
+.demo-stage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    padding: clamp(1.5rem, 5vw, 3rem);
+    border: var(--hairline-width) solid var(--color-rule);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+}
+.demo-stage__hint {
+    flex-basis: 100%;
+    margin: 0;
+    text-align: center;
+    color: var(--color-ink-muted);
+    font-size: var(--text-caption);
+}
+
+/* Numbered parts list, paired with an anatomy stage. */
+.parts-list {
+    padding-left: 1.4rem;
+    font-size: var(--text-body-sm);
+}
+.parts-list li + li {
+    margin-top: var(--space-2xs);
+}
+.parts-list li::marker {
+    font-family: var(--font-mono);
+    color: var(--color-ink-muted);
+}
+
+/* Variant tiles — a live preview over a label strip; flush cards in a grid. */
+.example__preview {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    padding: clamp(1.5rem, 4vw, 2.25rem);
+}
+.example__label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem 0.75rem;
+    padding: 0.65rem clamp(1rem, 3vw, 1.25rem);
+    border-top: var(--hairline-width) solid var(--color-rule);
+}
+.example__note {
+    color: var(--color-ink-muted);
+    font-size: var(--text-caption);
+}
+
+/* States table — each state name beside its visual treatment. */
+.state-list {
+    border: var(--hairline-width) solid var(--color-rule);
+    border-radius: var(--radius-md);
+    overflow: hidden; /* clip the row dividers to the rounded corners */
+}
+.state-list > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.25rem;
+    padding: 0.7rem clamp(1rem, 3vw, 1.25rem);
+}
+.state-list > div + div {
+    border-top: var(--hairline-width) solid var(--color-rule);
+}
+.state-list dt {
+    flex: 0 0 6rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-muted);
+}
+.state-list dd {
+    flex: 1 1 14rem;
+    margin: 0;
+    font-size: var(--text-body-sm);
+}
+
+/* Copy-paste usage markup. */
+.code-block {
+    padding: clamp(1rem, 3vw, 1.25rem);
+    border: var(--hairline-width) solid var(--color-rule);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: var(--text-body-sm);
+    line-height: var(--leading-normal);
+}
+.code-block code {
+    padding: 0;
+    background: none;
+    font-size: inherit;
+    white-space: pre;
+}
+
+/* -----------------------------------------------------------------------------
+    Sidebar navigation
+----------------------------------------------------------------------------- */
+
+.site-nav {
+    border-bottom: var(--hairline-width) solid var(--color-rule);
+}
+
+.site-nav__inner {
+    padding-block: clamp(1rem, 3vw, 1.5rem);
+}
+
+@media (min-width: 52rem) {
+    .site-nav {
+        /* The cell stretches to the row height, so this thin rule reads as a
+           full-height column divider — structural, not decorative. */
+        border-bottom: 0;
+        border-right: var(--hairline-width) solid var(--color-rule);
+    }
+    .site-nav__inner {
+        position: sticky;
+        top: 0;
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+.site-nav__title {
+    margin-bottom: 0.5rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-muted);
+}
+
+.site-nav__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: nav;
+}
+
+.site-nav__list + .site-nav__title {
+    margin-top: var(--space-md);
+}
+
+.site-nav__link {
+    counter-increment: nav;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding-block: 0.7rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    border-left: 3px solid transparent;
+    font-family: var(--font-display);
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--color-ink);
+    text-decoration: none;
+    transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease;
+}
+
+/* A monospaced index number gives the nav a tiered, manual-like hierarchy. */
+.site-nav__link::before {
+    content: counter(nav, decimal-leading-zero);
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-ink-muted);
+    transition: color 200ms ease;
+}
+
+.site-nav__link:hover,
+.site-nav__link:focus-visible {
+    border-left-color: var(--color-ink-primary);
+    background: var(--color-surface-sunken);
+    color: var(--color-ink-link);
+    outline: none;
+}
+.site-nav__link:hover::before,
+.site-nav__link:focus-visible::before {
+    color: var(--color-ink-link);
+}
+.site-nav__link[aria-current="page"] {
+    border-left-color: var(--color-ink-primary);
+    background: var(--color-surface-sunken);
+    color: var(--color-ink-link);
+}
+.site-nav__link[aria-current="page"]::before {
+    color: var(--color-ink-link);
+}
+.site-nav__link:focus-visible {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: -3px;
+}
+
+.kixx-wordmark {
+    font-family: var(--font-wordmark);
+    display: inline-flex;
+    font-size: 3em;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+}
+a.kixx-wordmark {
+    color: var(--color-ink);
+}
+.kixx-wordmark__slash-1 {
+    font-size: 0.88em;
+    font-weight: 900;
+    letter-spacing: -0.25em;
+    color: var(--color-ink-secondary);
+}
+.kixx-wordmark__slash-2 {
+    font-size: 0.88em;
+    font-weight: 900;
+    color: var(--color-ink-primary);
+}
+.kixx-wordmark__kixx {
+    margin-left: 0.2em;
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2em;
+    height: 2em;
+    border-width: 0;
+    border-radius: var(--radius-pill);
+    color: var(--color-ink);
+    background: transparent;
+    transition: background-color 200ms ease, color 200ms ease;
+    font-size: clamp(1em, 3vw, 1.25em);
+}
+.theme-toggle:hover {
+    background: var(--color-ink);
+    color: var(--color-bg);
+}
+.theme-toggle:focus-visible {
+    outline: 3px solid var(--color-ink-primary);
+    outline-offset: 3px;
+}
+
+/* -----------------------------------------------------------------------------
+    Buttons
+----------------------------------------------------------------------------- */
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+    padding-inline: 1.25rem;
+    border: var(--button-border-width) solid var(--color-ink);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-ink);
+    background: var(--color-bg);
+    text-decoration: none;
+    transition: background-color 200ms ease, color 200ms ease, transform 100ms ease;
+}
+.button:not(:disabled):hover {
+    /* Plain (outline) buttons invert to a solid ink fill. */
+    background: var(--color-ink);
+    color: var(--color-bg);
+    border-color: var(--color-ink);
+}
+.button:focus-visible {
+    outline: 3px solid var(--color-focus-outline);
+    outline-offset: 2px;
+}
+/* Brand variants change only the resting fill; on hover they fall through to
+   the plain .button:hover above and invert to a solid ink fill, so every
+   button shares one hover treatment. */
+.button--primary {
+    background: var(--color-button-bg-primary);
+    border-color: var(--color-button-border-primary);
+    color: var(--color-ink-on-accent);
+}
+.button--secondary {
+    background: var(--color-button-bg-secondary);
+    border-color: var(--color-button-border-secondary);
+    color: var(--color-ink-on-accent);
+}
+.button--tertiary {
+    background: var(--color-button-bg-tertiary);
+    border-color: var(--color-button-border-tertiary);
+    color: var(--color-ink-on-accent);
+}
+.button:active {
+    /* Tactile press — a 1px nudge; theme-agnostic, works on every variant. */
+    transform: translateY(1px);
+}
+.button:disabled {
+    /* Neutralise all variants — brand fill and ink border both give way to grey
+       so a disabled button reads as inactive, not as a muted brand action. */
+    background: var(--color-surface-sunken);
+    border-color: var(--color-ink-muted);
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
+}
+
+/* -----------------------------------------------------------------------------
+    Cards
+
+    The bordered-surface primitive: flat, softly rounded, with a 1px hairline
+    rule — the structural building block for dashboards, settings groups, and
+    list modules. Compose with optional modifiers:
+      .card                    padded bordered surface (the default)
+      .card--flush             drop padding when inner strips pad themselves
+      .card--accent-primary    full border in the primary accent
+      .card--accent-secondary  full border in the secondary accent
+      .card--sunken            recessed fill (--color-surface-sunken)
+----------------------------------------------------------------------------- */
+
+.card {
+    --card-accent: var(--color-ink-primary);
+    padding: var(--card-padding, clamp(1.1rem, 3vw, 1.5rem));
+    border: var(--hairline-width) solid var(--color-rule);
+    border-radius: var(--radius-md);
+    /* Clip full-bleed inner strips (a flush card's sample/meta bands, a swatch
+       chip) to the rounded corners so nothing pokes past the radius. */
+    overflow: hidden;
+    background: var(--color-bg);
+}
+.card--flush {
+    padding: 0;
+}
+.card--accent-primary,
+.card--accent-secondary {
+    /* The accent recolors the whole border (all four sides) and steps it up
+       from the hairline to the heavier accent weight. */
+    border: var(--accent-border-width) solid var(--card-accent);
+}
+.card--accent-primary {
+    --card-accent: var(--color-ink-primary);
+}
+.card--accent-secondary {
+    --card-accent: var(--color-ink-secondary);
+}
+.card--sunken {
+    /* A recessed surface for nested or read-only panels — the component home
+       for the --color-surface-sunken semantic token. */
+    background: var(--color-surface-sunken);
+}
+
+/* -----------------------------------------------------------------------------
+    Callouts
+
+    A bordered notice — a colored border, an optional icon, and a message on a
+    sunken surface. The default is a neutral emphasis note; three tone modifiers
+    recolor the border + icon from the status semantic tokens. A static surface,
+    like Cards — no interactive states.
+      .callout            neutral emphasis note (the default)
+      .callout--info      cyan   — calm, non-urgent information
+      .callout--warning   yellow — proceed with caution
+      .callout--error     red    — something failed or is blocked
+
+    Tone rides the border and the icon only — both are AA-safe ground for any
+    tone. The message stays --color-ink, so the yellow warning never lands as the
+    thin text where it would lose contrast (see the Colors status-color note).
+----------------------------------------------------------------------------- */
+
+.callout {
+    --callout-accent: var(--color-ink-primary);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    padding: 1rem 1.25rem;
+    border: var(--accent-border-width) solid var(--callout-accent);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-sunken);
+}
+.callout__icon {
+    flex: none;
+    font-size: 1.5rem;
+    line-height: var(--leading-tight);
+    color: var(--callout-accent);
+}
+.callout__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    min-width: 0; /* let long words wrap instead of stretching the flex item */
+}
+.callout--info    { --callout-accent: var(--color-ink-secondary); }
+.callout--warning { --callout-accent: var(--color-status-warning); }
+.callout--error   { --callout-accent: var(--color-status-danger); }
+
+/* -----------------------------------------------------------------------------
+    Site Header
+----------------------------------------------------------------------------- */
+
+.site-header {
+    padding-block: clamp(0.9rem, 3vw, 1.5rem);
+    padding-inline: var(--space-page-gutter);
+    border-bottom: var(--rule-width) solid var(--color-rule);
+}
+/* Built on .cluster in the markup; only the justify axis differs from default. */
+.site-header__inner {
+    --cluster-justify: space-between;
+}
+.site-header__wordmark {
+    font-size: clamp(2rem, 5vw, 3rem);
+}
+/* Also a .cluster; tighter gap for the icon controls. */
+.site-header__controls {
+    --cluster-space: 0.6rem;
+}

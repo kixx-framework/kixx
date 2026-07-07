@@ -1,0 +1,187 @@
+
+/* -----------------------------------------------------------------------------
+    App layout — sidebar + main content
+
+    Built on the .with-sidebar primitive (see the markup): the nav is the
+    sidebar track, the main content the fluid one. Mobile-first — the content
+    demands the full width (--sidebar-content-min: 100%), so the pair wraps and
+    the nav stacks above the content as a clean vertical stream.
+
+    A single breakpoint flips everything together: past 52rem the content only
+    needs 60%, so the two tracks sit side by side, AND the divider swaps from a
+    bottom rule to a right rule with the nav pinned sticky. Driving the wrap and
+    its presentation off the same breakpoint keeps them in lockstep — the
+    primitive itself stays breakpoint-free; the shell simply opts into one.
+
+    Full-height fix: .with-sidebar stretches its own children to match each
+    other (the flex default align-items: stretch), but that only reaches as
+    tall as the row itself. When main content is short, the row is short, so
+    the nav's divider rule stops well above the viewport bottom. Scoping the
+    fix to `body:has(> .site-layout)` — rather than editing `body` directly —
+    keeps admin-login.html (same admin.css bundle, no .site-layout child)
+    unaffected, and leaves the reusable .with-sidebar primitive itself
+    breakpoint- and height-opinion-free for non-shell uses like the style
+    guide demo.
+----------------------------------------------------------------------------- */
+
+body:has(> .site-layout) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.site-layout {
+    --sidebar-content-min: 100%;
+    flex: 1 1 auto;
+}
+
+@media (min-width: 52rem) {
+    .site-layout {
+        --sidebar-content-min: 60%;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+    Layout primitives
+
+    Composable, single-purpose layout utilities in the Every Layout tradition
+    (Heydon Pickering / Andy Bell). Each is one class tuned by its own scoped
+    custom properties, which default to the design tokens — set a property on the
+    element (or an ancestor) to adjust a single axis without writing bespoke CSS.
+
+    The family:
+      .flow         vertical stack with parent-owned gap between siblings
+      .cluster      horizontal group that wraps; gap-driven
+      .grid-auto    auto-fit responsive grid, tracks never below --grid-min
+      .switcher     row that flips to a column below a width threshold
+      .with-sidebar fixed-ish sidebar beside fluid content; wraps when tight
+      .center       caps a column to a measure and centers it
+
+    Composition over bespoke layout: reach for these before writing a new
+    display:flex / display:grid rule. Most page structure is a nesting of the six.
+----------------------------------------------------------------------------- */
+
+/* -----------------------------------------------------------------------------
+    Flow — vertical rhythm primitive
+
+    The Stack / "flow" idea (Andy Bell / Every Layout / Piccalilli). Add .flow to
+    any container and its DIRECT children get consistent vertical spacing from
+    the container's row gap. Spacing is a relationship BETWEEN siblings, so it
+    lives on the parent flow, not on per-element classes.
+
+    Tune a container's rhythm by setting --flow-space on that container. Nested
+    flow elements are safe: the outer flow owns the nested element's outside gap,
+    and the inner flow owns the rhythm between its own children. If one child
+    needs exceptional outside spacing, make that exception explicit with a
+    component rule or utility margin instead of overloading --flow-space.
+----------------------------------------------------------------------------- */
+.flow {
+    --flow-space: var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--flow-space);
+}
+
+/* Cluster — horizontal group that wraps; gap-driven. Toolbars, button rows,
+   tag/chip lists, the header controls. Tune alignment with --cluster-align /
+   --cluster-justify. */
+.cluster {
+    --cluster-space: var(--space-sm);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cluster-space);
+    align-items: var(--cluster-align, center);
+    justify-content: var(--cluster-justify, flex-start);
+}
+
+/* Grid — auto-fit responsive grid. Tracks never drop below --grid-min, and the
+   min() guard stops a single track from overflowing a viewport narrower than
+   --grid-min. */
+.grid-auto {
+    --grid-min: 14rem;
+    --grid-space: var(--space-md);
+    display: grid;
+    gap: var(--grid-space);
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--grid-min), 100%), 1fr));
+}
+
+/* Switcher — a row that flips to a single column once the container is narrower
+   than --switcher-threshold. No media query: below the threshold the flex-basis
+   calc goes negative, forcing each child onto its own row. */
+.switcher {
+    --switcher-threshold: 30rem;
+    --switcher-space: var(--space-sm);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--switcher-space);
+}
+.switcher > * {
+    flex-grow: 1;
+    flex-basis: calc((var(--switcher-threshold) - 100%) * 999);
+}
+
+/* Sidebar — a fixed-ish sidebar (--sidebar-width) beside fluid content. The
+   content holds at least --sidebar-content-min of the width; when it can't, the
+   pair wraps and both go full-width. The app shell (.site-layout) is built on
+   this. Gap defaults to 0 so a divider rule can do the visible separating. */
+.with-sidebar {
+    --sidebar-space: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sidebar-space);
+}
+.with-sidebar > :first-child {
+    flex-basis: var(--sidebar-width);
+    flex-grow: 1;
+}
+.with-sidebar > :last-child {
+    flex-basis: 0;
+    flex-grow: 999;
+    min-inline-size: var(--sidebar-content-min, 60%);
+}
+
+/* Center — caps a column to a measure and centers it horizontally. Defaults to
+   the shared prose measure; raise --center-max for wider columns. */
+.center {
+    --center-max: var(--measure-prose);
+    max-inline-size: var(--center-max);
+    margin-inline: auto;
+}
+
+/* Caps a centered column to the narrower form measure. Compose with .center on
+   standalone form pages (login, sign-up, settings). */
+.center--form {
+    --center-max: var(--measure-form);
+}
+
+/* -----------------------------------------------------------------------------
+    Main content
+----------------------------------------------------------------------------- */
+
+.site-main {
+    padding: var(--space-page-gutter);
+}
+
+.content-section {
+    /* Section-level vertical rhythm (the section is marked .flow in the markup):
+       header, prose, sub-headings, and specimen groups all space off this. */
+    --flow-space: var(--space-lg);
+    /* Leaves breathing room when jumped to via the nav anchors. */
+    scroll-margin-top: 1.5rem;
+    max-width: 60rem;
+}
+
+.content-section + .content-section {
+    margin-top: var(--space-section-gap);
+    padding-top: var(--space-section-gap);
+    border-top: var(--hairline-width) solid var(--color-rule);
+}
+
+/* h2 size/weight come from the global h2 role. The grid places the title,
+   lede, and section-level theme toggle into named areas so no wrapper div
+   is needed in the markup. */
+.content-section__header p {
+    margin-top: 0.5rem;
+    max-width: var(--measure-prose);
+    color: var(--color-ink-muted);
+}

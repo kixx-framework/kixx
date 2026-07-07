@@ -1,0 +1,114 @@
+
+/* -----------------------------------------------------------------------------
+    Typography roles
+
+    Semantic elements (h1-h4, p, code) already render at the right role, so plain
+    HTML is correct with no classes. The matching .type-* utility classes apply
+    the SAME role to ANY element - reach for them only when the visual size must
+    differ from the semantic level (e.g. a <p> that should read as a label, or an
+    <h2> that should look like an h3).
+
+    Golden rule: choose a heading level for document STRUCTURE, then, if the size
+    is wrong, restyle it with a .type-* class. Never pick a level for its size.
+----------------------------------------------------------------------------- */
+
+/* Expressive register - structural headings (DM Sans, heavy, tight). */
+h1, .type-h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-h1);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-tight);
+}
+h2, .type-h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-h2);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+}
+h3, .type-h3 {
+    font-family: var(--font-display);
+    font-size: var(--text-h3);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-snug);
+}
+h4, .type-h4 {
+    font-family: var(--font-display);
+    font-size: var(--text-h4);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-snug);
+}
+
+/* Functional register - reading & UI text (Helvetica Neue). */
+.type-body-lg {
+    font-family: var(--font-body);
+    font-size: var(--text-body-lg);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-relaxed); /* 1.55 - breathing room for paragraphs */
+}
+.type-body {
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-body);
+}
+.type-body-sm {
+    font-family: var(--font-body);
+    font-size: var(--text-body-sm);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-normal);
+}
+.type-caption {
+    font-family: var(--font-body);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-muted);
+}
+
+/* Label / overline - mono + uppercase. The theme's signature for small
+   functional text; .button and .site-nav__title follow the same convention. */
+.type-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-normal);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+}
+
+/* Inline code - mono, sized in em so it tracks whatever text it sits in. */
+code, .type-code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-sunken);
+}
+
+/* Keyboard key — mono, slightly bordered, surfaced. */
+kbd {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 0.1em 0.4em;
+    border: 1px solid var(--color-ink-muted);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-sunken);
+}
+
+.material-symbols-rounded {
+    direction: ltr;
+    display: inline-block;
+    flex: 0 0 auto;
+    font-family: "Material Symbols Rounded";
+    font-feature-settings: "liga";
+    font-size: 1.35em;
+    font-style: normal;
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    font-weight: 500;
+    letter-spacing: normal;
+    line-height: 1;
+    text-transform: none;
+    white-space: nowrap;
+    word-wrap: normal;
+}
