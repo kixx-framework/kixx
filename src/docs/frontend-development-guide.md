@@ -1,6 +1,6 @@
 # Frontend Development Guide
 
-This guide covers CSS and frontend conventions for this project: the live style guide, the no-inline-styles rule, how `src/stylesheets/` is organized, class naming, design tokens, and the page-local stylesheet pattern. For Hyperview template syntax, see `src/templates/README.md`. For where presentation-layer files live and how request handlers pass render data to templates, see `src/app/presentation/README.md`.
+This guide covers the frontend development conventions for this project: the live style guide, code organization guidelines, the `stylesheets/` directory, class naming, design tokens, and the page-local stylesheet pattern. For Hyperview template syntax, see `templates/README.md`. For where presentation-layer files live and how request handlers pass render data to templates, see `app/presentation/README.md`.
 
 ## Follow the Style Guide
 
@@ -23,7 +23,7 @@ When you need styling, resolve it in this order:
 
 ## File Organization
 
-CSS lives under `src/stylesheets/`, served directly by the development server. Here is an example of a stylesheets/ directory structure:
+CSS lives under `stylesheets/`, served directly by the development server. Here is an example of a stylesheets/ directory structure:
 
 ```text
 stylesheets/
@@ -99,7 +99,7 @@ component token  →  semantic token  →  reference (palette) token
 - **Tier 2 · Semantic** (`--color-*`) — role- and theme-aware, resolved from the palette (often via `light-dark()`). This is the tier component rules should read.
 - **Tier 3 · Component** (`--color-button-bg-primary`, etc., plus component-scoped tokens like `--callout-accent` defined next to their component) — resolved here, or inline in the component's own rule, so the component declaration stays declarative.
 
-The full palette, semantic roles, and rationale (contrast requirements, light/dark behavior) are documented in the Colors section of the style guide (`src/pages/admin/style-guide/colors/`) — read that page before adding a new color token or reaching past the semantic tier.
+The full palette, semantic roles, and rationale (contrast requirements, light/dark behavior) are documented in the Colors section of the style guide (`pages/admin/style-guide/colors/`) — read that page before adding a new color token or reaching past the semantic tier.
 
 The same tiered approach applies to spacing (`--space-*` scale, consumed by `.flow`), type scale (`--text-*`, `--leading-*`, `--tracking-*`, `--weight-*`), and structural values (`--radius-*`, border widths). See the Typography and Layout sections of the style guide for the rationale behind each scale.
 
@@ -116,7 +116,7 @@ The same tiered approach applies to spacing (`--space-*` scale, consumed by `.fl
 | `.with-sidebar` | Fixed-ish sidebar beside fluid content; wraps when tight, tuned by `--sidebar-width` |
 | `.center` | Caps a column to `--center-max` and centers it |
 
-Compose these before writing a new `display: flex` or `display: grid` rule — most page structure in this project is a nesting of the six. Because `.flow` uses `gap`, nested `.flow` elements are safe: the outer flow controls the nested element's outside spacing, and the inner flow controls spacing between its own children. Read the comment block above each primitive in `standard-include.css` for the specific reasoning (why a breakpoint is or isn't used, what each custom property controls), and see the Layout section of the style guide (`src/pages/admin/style-guide/layout/`) for live, annotated examples.
+Compose these before writing a new `display: flex` or `display: grid` rule — most page structure in this project is a nesting of the six. Because `.flow` uses `gap`, nested `.flow` elements are safe: the outer flow controls the nested element's outside spacing, and the inner flow controls spacing between its own children. Read the comment block above each primitive in `standard-include.css` for the specific reasoning (why a breakpoint is or isn't used, what each custom property controls), and see the Layout section of the style guide (`pages/admin/style-guide/layout/`) for live, annotated examples.
 
 When a primitive needs shell-specific defaults — for example, `.site-layout` sets `--sidebar-content-min` for the admin app shell built on `.with-sidebar` — scope those defaults to the specific class in `admin-layout.css` rather than changing the primitive's own defaults in `standard-include.css`. The primitive itself should stay generically reusable; per-shell opinions belong in the file that owns that shell.
 
@@ -140,6 +140,6 @@ To supply page-local CSS, add a `page_stylesheet` entry to the page's `includes`
 }
 ```
 
-`src/pages/admin/style-guide/colors/` is a working example of this pattern: `colors/page.json` includes both `body.html` (the page content) and `page.css` (styling specific to that one page), keeping the page's one-off layout rules out of the shared stylesheets entirely.
+`pages/admin/style-guide/colors/` is a working example of this pattern: `colors/page.json` includes both `body.html` (the page content) and `page.css` (styling specific to that one page), keeping the page's one-off layout rules out of the shared stylesheets entirely.
 
 This is the supported pattern for localized styles — it is the third option in the [style resolution order](#never-use-inline-styles) above, after reusing an existing primitive/component and after proposing a new shared utility. Reach for `page_stylesheet` only when the styling is specific to one page and not worth generalizing.

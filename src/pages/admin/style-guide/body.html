@@ -1,28 +1,38 @@
 <header class="content-section__header">
     <h2>Style Guide</h2>
-    <p>The working reference for placeholder UI design for a default Kixx site.</p>
+    <p>The working frontend reference for Kixx pages, templates, and shared CSS.</p>
 </header>
 
-<div class="doc-prose">
-    <p class="type-body-lg">This style guide is a place-holder as part of your default Kixx installation. <strong>The intention is for you to replace this style guide once you have established the aesthetic for your site.</strong> It documents the visual system, reusable layout primitives, and component patterns used on the public facing site as well as inside the authenticated admin experience; it is not a marketing guide, brand manual, or general framework documentation.</p>
-
-    <p>Use the style guide when creating or changing public site or admin pages, forms, screens, dashboards, and other operational UI. The guide keeps UI work aligned around the same tone &mdash; <strong>Hypertext Minimalism</strong>: fast, plain, highly structured, and honest. Performance through omission.</p>
+<div class="callout callout--warning">
+    <span class="callout__icon" aria-hidden="true">[!]</span>
+    <div class="callout__body">
+        <p class="type-label">Style Guide Place-Holder</p>
+        <p class="type-body-sm">This style guide is a place-holder as part of your default Kixx installation. The intention is for you to replace it once you have established the aesthetic for your site.</p>
+    </div>
 </div>
 
-<h3 class="type-h3 doc-section-heading">What it contains</h3>
-<p class="doc-lede">The sections move from design intent to concrete implementation details.</p>
+<div class="doc-prose">
+    <p class="type-body-lg">Use this style guide before changing any frontend markup or CSS. It is the live source of truth for the site&rsquo;s aesthetic, design tokens, layout primitives, type roles, components, form controls, and documentation patterns.</p>
+
+    <p>The system is intentionally narrow: <strong>Hypertext Minimalism</strong>. Build from semantic HTML, system monospace type, thin structural rules, square controls, explicit links, functional whitespace, and color used only as a signal. When a page feels over-designed, reduce the surface area before adding another style.</p>
+
+    <p>For implementation details, pair this guide with <code>docs/frontend-development-guide.md</code>. That document explains the no-inline-styles rule, the stylesheet organization, BEM naming, token layering, layout primitive contract, and page-local stylesheet pattern.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Development workflow</h3>
+<p class="doc-lede">Follow this order when doing frontend work.</p>
 <div class="card-gallery grid-auto">
     <div class="card flow">
-        <h4 class="type-h4">Foundations</h4>
-        <p class="type-body-sm"><a href="/admin/style-guide/aesthetic">Aesthetic</a>, <a href="/admin/style-guide/typography">Typography</a>, and <a href="/admin/style-guide/colors">Colors</a> define the admin panel's tone, hierarchy, token system, and theme-aware color contract.</p>
+        <h4 class="type-h4">1. Read the intent</h4>
+        <p class="type-body-sm">Start with <a href="/admin/style-guide/aesthetic">Aesthetic</a>. It defines the tone behind every later choice: fast, plain, structured, document-like, and honest.</p>
     </div>
     <div class="card flow">
-        <h4 class="type-h4">Layout</h4>
-        <p class="type-body-sm"><a href="/admin/style-guide/layout">Layout</a> documents the composable primitives used to arrange admin screens: flow, cluster, grid, switcher, sidebar, and center.</p>
+        <h4 class="type-h4">2. Reuse foundations</h4>
+        <p class="type-body-sm">Use <a href="/admin/style-guide/typography">Typography</a>, <a href="/admin/style-guide/colors">Colors</a>, and <a href="/admin/style-guide/layout">Layout</a> before introducing new type, color, spacing, or arrangement rules.</p>
     </div>
     <div class="card flow">
-        <h4 class="type-h4">Components</h4>
-        <p class="type-body-sm"><a href="/admin/style-guide/buttons">Buttons</a>, <a href="/admin/style-guide/cards">Cards</a>, <a href="/admin/style-guide/text-fields">Text Fields</a>, <a href="/admin/style-guide/multi-line-text-areas">Multi-Line Text Areas</a>, and <a href="/admin/style-guide/callouts">Callouts</a> show live examples, usage rules, states, and accessibility guidance.</p>
+        <h4 class="type-h4">3. Copy the pattern</h4>
+        <p class="type-body-sm">For <a href="/admin/style-guide/buttons">Buttons</a>, <a href="/admin/style-guide/cards">Cards</a>, <a href="/admin/style-guide/text-fields">Text Fields</a>, <a href="/admin/style-guide/multi-line-text-areas">Multi-Line Text Areas</a>, and <a href="/admin/style-guide/callouts">Callouts</a>, copy the documented anatomy and states instead of inventing parallel markup.</p>
     </div>
 </div>
 
@@ -37,12 +47,38 @@
         <li>Match component anatomy, variants, states, and usage examples before adding modifiers.</li>
     </ul>
 
-    <p>If a pattern is missing, prefer extending the shared design system with a reusable token, primitive, or component rather than solving one page with a one-off style. This guide should remain the source of truth for how the UI is built.</p>
+    <p>If a pattern is missing, prefer extending the shared design system with a reusable token, primitive, or component rather than solving one page with a one-off
+ style. This guide should remain the source of truth for how the UI is built.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Decision rules</h3>
+<div class="guidelines grid-auto">
+    <div class="card card--accent-secondary guideline guideline--do">
+        <p class="type-label guideline__label">Do</p>
+        <ul>
+            <li>Use semantic HTML first; add classes only when the design system needs them.</li>
+            <li>Resolve colors, spacing, type, borders, and radii through existing tokens.</li>
+            <li>Compose layout with primitives before writing bespoke flex or grid CSS.</li>
+            <li>Prefer existing component anatomy, variants, and states over one-off selectors.</li>
+            <li>Use page-local <code>page_stylesheet</code> includes only for styling that truly belongs to one page.</li>
+        </ul>
+    </div>
+    <div class="card card--accent-primary guideline guideline--dont">
+        <p class="type-label guideline__label">Avoid</p>
+        <ul>
+            <li>Inline <code>style</code> attributes in templates.</li>
+            <li>Raw color literals or direct <code>--palette-*</code> references inside component rules.</li>
+            <li>New wrappers, modifiers, or utilities when a primitive or component already fits.</li>
+            <li>Decorative gradients, shadows, rounded corners, icons, images, or motion.</li>
+            <li>Adding dependencies, web fonts, or icon libraries for visual polish.</li>
+        </ul>
+    </div>
 </div>
 
 <div class="callout">
+    <span class="callout__icon" aria-hidden="true">*</span>
     <div class="callout__body">
         <p class="type-label">Rule of thumb</p>
-        <p>Build admin UI from the guide outward: foundations first, layout second, component details last. The result should feel like one system even when many pages are built at different times.</p>
+        <p>If you need new CSS, first decide whether it is a token, a primitive, a shared component, a form control, or a page-local exception. Then edit the matching file and update the style guide example when the pattern becomes reusable.</p>
     </div>
 </div>
