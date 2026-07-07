@@ -26,16 +26,20 @@
        faintly warm paper and a near-black ink read like a printed spec sheet
        rather than a glaring screen. */
 
-    /* Neutral ramp — paper (lightest) to ink (darkest), plus a dark-mode pair. */
-    --palette-paper: hsl(40 20% 97%);       /* light bg — warm off-white       */
-    --palette-paper-sunken: hsl(40 16% 92%); /* light inset / code ground      */
-    --palette-ink: hsl(30 8% 12%);          /* light ink — near-black          */
-    --palette-ink-muted: hsl(30 5% 38%);    /* light secondary text            */
+    /* Neutral ramp — paper (lightest) to ink (darkest), plus a dark-mode pair.
+       - paper / void: document backgrounds.
+       - paper-sunken / void-sunken: inset surfaces and code grounds.
+       - ink / chalk: primary foreground text.
+       - ink-muted / chalk-muted: secondary foreground text. */
+    --palette-paper: hsl(40 20% 97%);
+    --palette-paper-sunken: hsl(40 16% 92%);
+    --palette-ink: hsl(30 8% 12%);
+    --palette-ink-muted: hsl(30 5% 38%);
 
-    --palette-void: hsl(220 14% 8%);        /* dark bg — near-black            */
-    --palette-void-sunken: hsl(220 12% 13%); /* dark inset / code ground       */
-    --palette-chalk: hsl(40 14% 88%);       /* dark ink — off-white            */
-    --palette-chalk-muted: hsl(40 6% 56%);  /* dark secondary text             */
+    --palette-void: hsl(220 14% 8%);
+    --palette-void-sunken: hsl(220 12% 13%);
+    --palette-chalk: hsl(40 14% 88%);
+    --palette-chalk-muted: hsl(40 6% 56%);
 
     /* Hairline ramp — mid-contrast border greys so a 1px rule reads as a
        precise line without competing with the ink. */
@@ -44,18 +48,18 @@
 
     /* Signals — used ONLY as a signal (link, status, metric), never as mood.
        Link resolves close to the classic web blue on light, a brighter cyan-
-       blue on dark. Status carries a light + dark value so the mark holds
-       contrast on either ground. */
+       blue on dark. Status and selection tokens carry light + dark values so
+       the mark holds contrast on either ground. */
     --palette-link-light: hsl(222 78% 42%);
     --palette-link-dark: hsl(202 90% 66%);
-    --palette-red-light: hsl(2 66% 44%);    /* danger — light                  */
-    --palette-red-dark: hsl(2 84% 68%);     /* danger — dark                   */
-    --palette-amber-light: hsl(32 92% 34%); /* warning — light (deep amber)    */
-    --palette-amber-dark: hsl(40 92% 58%);  /* warning — dark                  */
-    --palette-green-light: hsl(146 56% 28%); /* success — light                */
-    --palette-green-dark: hsl(146 50% 56%); /* success — dark                  */
-    --palette-highlight-light: hsl(52 100% 70%); /* text selection — light     */
-    --palette-highlight-dark: hsl(52 80% 44%);   /* text selection — dark      */
+    --palette-red-light: hsl(2 66% 44%);
+    --palette-red-dark: hsl(2 84% 68%);
+    --palette-amber-light: hsl(32 92% 34%);
+    --palette-amber-dark: hsl(40 92% 58%);
+    --palette-green-light: hsl(146 56% 28%);
+    --palette-green-dark: hsl(146 50% 56%);
+    --palette-highlight-light: hsl(52 100% 70%);
+    --palette-highlight-dark: hsl(52 80% 44%);
 
     /* --- Tier 2 · Semantic (system) ----------------------------------------
        Role + theme aware, resolved FROM the palette. This is what component
@@ -93,7 +97,7 @@
     /* --- Tier 3 · Component -------------------------------------------------
        Scoped tokens, resolved here so component rules stay declarative. */
 
-    /* fields — square, hairline, on the page ground (not a filled well). The
+    /* Fields — square, hairline, on the page ground (not a filled well). The
        resting border is quiet (muted); hover and focus intensify it to full
        ink, with the accent reserved for the focus outline ring. */
     --field-border-width: 1px;
@@ -102,7 +106,7 @@
     --color-field-border-error: var(--color-status-danger);
     --color-field-bg: var(--color-bg);
 
-    /* borders — thin, precise, character-width. */
+    /* Borders — thin, precise, character-width. */
     --button-border-width: 1px;
     --rule-width: 1px;
     --hairline-width: 1px;
@@ -135,10 +139,12 @@
     --space-2xl: 4.5rem;
 
     /* -------------------------------------------------------------------------
-        Typography — one monospace family for EVERYTHING. The page requests
-        zero text font files; it renders in the operating system's own
-        monospace face. Type is grid material: characters are units of measure,
-        so columns and rhythm align to an invisible character cell.
+        Typography
+
+        One monospace family for EVERYTHING. The page requests zero text font
+        files; it renders in the operating system's own monospace face. Type is
+        grid material: characters are units of measure, so columns and rhythm
+        align to an invisible character cell.
     ------------------------------------------------------------------------- */
     --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Code", "JetBrains Mono", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
     --font-display: var(--font-mono);
@@ -146,28 +152,46 @@
     --font-wordmark: var(--font-mono);
 
     /* -------------------------------------------------------------------------
-        Type scale — fixed rem steps (never clamp(): fixed rem honors browser
-        zoom, WCAG 1.4.4). Monospace runs wide, so the heading steps sit lower
-        than a proportional scale would. Hierarchy comes from SIZE and WEIGHT,
-        not color or decoration.
+        Type scale
+
+        Fixed rem steps only (never clamp()): fixed rem honors browser zoom
+        (WCAG 1.4.4). Monospace runs wide, so the heading steps sit lower than a
+        proportional scale would. Hierarchy comes from SIZE and WEIGHT, not
+        color or decoration.
+
+        Role mapping:
+          --text-h1        30px page title (one per screen)
+          --text-h2        24px section title
+          --text-h3        20px subsection / card heading
+          --text-h4        17px minor heading / form field group
+          --text-body-lg   17px long-form reading copy
+          --text-body      16px default UI text
+          --text-body-sm   14px dense rows, helper text, cells
+          --text-caption   13px captions, metadata, timestamps
+          --text-label     12px uppercase labels / overlines
     ------------------------------------------------------------------------- */
-    --text-h1: 1.875rem;      /* 30px - page title (one per screen)       */
-    --text-h2: 1.5rem;        /* 24px - section title                     */
-    --text-h3: 1.25rem;       /* 20px - subsection / card heading         */
-    --text-h4: 1.0625rem;     /* 17px - minor heading / form field group  */
-    --text-body-lg: 1.0625rem; /* 17px - long-form reading copy           */
-    --text-body: 1rem;        /* 16px - default UI text                   */
-    --text-body-sm: 0.875rem; /* 14px - dense rows, helper text, cells    */
-    --text-caption: 0.8125rem; /* 13px - captions, metadata, timestamps   */
-    --text-label: 0.75rem;    /* 12px - uppercase labels / overlines      */
+    --text-h1: 1.875rem;
+    --text-h2: 1.5rem;
+    --text-h3: 1.25rem;
+    --text-h4: 1.0625rem;
+    --text-body-lg: 1.0625rem;
+    --text-body: 1rem;
+    --text-body-sm: 0.875rem;
+    --text-caption: 0.8125rem;
+    --text-label: 0.75rem;
 
     /* Line-height is ROLE-DEPENDENT. Monospace reading copy wants generous
-       leading; headings and dense UI run tighter. */
-    --leading-tight: 1.2;     /* large headings (h1, h2)        */
-    --leading-snug: 1.3;      /* smaller headings (h3, h4)      */
-    --leading-normal: 1.45;   /* dense UI text, labels, caption */
-    --leading-body: 1.55;     /* default body                   */
-    --leading-relaxed: 1.65;  /* long-form reading copy         */
+       leading; headings and dense UI run tighter.
+       - tight: large headings (h1, h2)
+       - snug: smaller headings (h3, h4)
+       - normal: dense UI text, labels, captions
+       - body: default body copy
+       - relaxed: long-form reading copy */
+    --leading-tight: 1.2;
+    --leading-snug: 1.3;
+    --leading-normal: 1.45;
+    --leading-body: 1.55;
+    --leading-relaxed: 1.65;
 
     /* Tracking. Uppercased labels open up for legibility; monospace body and
        headings stay at 0 (the face is already even-width). */
@@ -182,5 +206,10 @@
     --weight-bold: 700;
 }
 
-:root[data-theme="light"] { color-scheme: light; }
-:root[data-theme="dark"]  { color-scheme: dark; }
+:root[data-theme="light"] {
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+}

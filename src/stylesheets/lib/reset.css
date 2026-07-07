@@ -1,16 +1,23 @@
-
 /* -----------------------------------------------------------------------------
-    Reset: influenced by Josh Comeau's custom CSS reset.
-        https://www.joshwcomeau.com/css/custom-css-reset/
+    Reset
+
+    A small browser-normalization layer influenced by Josh Comeau's custom CSS
+    reset: https://www.joshwcomeau.com/css/custom-css-reset/
+
+    The reset intentionally stays low-specificity. It establishes predictable
+    sizing, inheritance, native element defaults, and document-wide affordances;
+    component classes should be able to override it without selector games.
 ----------------------------------------------------------------------------- */
 
 html {
-    /* Sets the rem size for the rest of the styles */
+    /* Keep rem math explicit for tokens and component dimensions. */
     font-size: 16px;
     scroll-behavior: smooth;
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
 }
 
@@ -26,37 +33,63 @@ body {
 }
 
 :root[data-theme="dark"] body {
-    /* Improve text rendering on dark backgrounds */
+    /* Dark surfaces benefit from lighter antialiasing on WebKit. */
     -webkit-font-smoothing: antialiased;
 }
 
-/* Improve media defaults */
-img, picture, video, canvas, svg {
+/* Media defaults: block-level, responsive, and never wider than the container. */
+img,
+picture,
+video,
+canvas,
+svg {
     display: block;
     max-width: 100%;
 }
-/* Inherit fonts for form controls */
-input, button, textarea, select {
+
+/* Form controls should inherit the one-font system unless a component opts out. */
+input,
+button,
+textarea,
+select {
     font: inherit;
 }
-/* Avoid text overflows */
-p, h1, h2, h3, h4, h5, h6 {
+
+/* Text-bearing block elements should wrap long tokens instead of overflowing. */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     overflow-wrap: break-word;
     margin: 0;
 }
+
 /* Lists and block elements carry no default block margin; vertical rhythm comes
    from parent-owned gaps and component rules. Keep this at ELEMENT specificity
    so component classes can still opt into their own margins when needed. */
-ul, ol, dl, pre {
+ul,
+ol,
+dl,
+pre {
     margin-block: 0;
 }
-/* Improve line wrapping */
+
+/* Prefer nicer prose wrapping where the browser supports it. */
 p {
     text-wrap: pretty;
 }
+
 /* Headings share the one monospace family; hierarchy is size + weight only.
    No balance/tracking tricks — a heading is simply bigger and heavier. */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     font-family: var(--font-display);
     font-weight: var(--weight-bold);
     line-height: var(--leading-snug);
@@ -86,9 +119,11 @@ a {
     text-decoration-thickness: 1px;
     text-underline-offset: 0.15em;
 }
+
 a:hover {
     text-decoration-thickness: 2px;
 }
+
 a:focus-visible {
     outline: 2px solid var(--color-focus-outline);
     outline-offset: 2px;

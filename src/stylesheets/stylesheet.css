@@ -1,3 +1,11 @@
+/* -----------------------------------------------------------------------------
+    Stylesheet bundle
+
+    Keep imports ordered from low-level foundations to higher-level components.
+    Later files may rely on tokens, reset rules, typography roles, and layout
+    primitives defined earlier in the bundle.
+----------------------------------------------------------------------------- */
+
 @import "./lib/design-tokens.css";
 @import "./lib/reset.css";
 @import "./lib/typography.css";

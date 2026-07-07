@@ -1,4 +1,3 @@
-
 /* -----------------------------------------------------------------------------
     Typography roles
 
@@ -15,22 +14,29 @@
 ----------------------------------------------------------------------------- */
 
 /* Structural headings — bigger + heavier steps of the one mono face. */
-h1, .type-h1 {
+h1,
+.type-h1 {
     font-size: var(--text-h1);
     font-weight: var(--weight-bold);
     line-height: var(--leading-tight);
 }
-h2, .type-h2 {
+
+h2,
+.type-h2 {
     font-size: var(--text-h2);
     font-weight: var(--weight-bold);
     line-height: var(--leading-tight);
 }
-h3, .type-h3 {
+
+h3,
+.type-h3 {
     font-size: var(--text-h3);
     font-weight: var(--weight-bold);
     line-height: var(--leading-snug);
 }
-h4, .type-h4 {
+
+h4,
+.type-h4 {
     font-size: var(--text-h4);
     font-weight: var(--weight-bold);
     line-height: var(--leading-snug);
@@ -40,18 +46,22 @@ h4, .type-h4 {
 .type-body-lg {
     font-size: var(--text-body-lg);
     font-weight: var(--weight-regular);
-    line-height: var(--leading-relaxed); /* 1.65 — breathing room for prose */
+    /* Long-form prose needs extra leading to stay readable in monospace. */
+    line-height: var(--leading-relaxed);
 }
+
 .type-body {
     font-size: var(--text-body);
     font-weight: var(--weight-regular);
     line-height: var(--leading-body);
 }
+
 .type-body-sm {
     font-size: var(--text-body-sm);
     font-weight: var(--weight-regular);
     line-height: var(--leading-normal);
 }
+
 .type-caption {
     font-size: var(--text-caption);
     font-weight: var(--weight-regular);
@@ -71,7 +81,8 @@ h4, .type-h4 {
 
 /* Inline code — the whole page is already mono, so code needs only a faint
    ground and square padding to read as a distinct token, not a new typeface. */
-code, .type-code {
+code,
+.type-code {
     font-family: var(--font-mono);
     font-size: 0.9em;
     padding: 0.1em 0.35em;

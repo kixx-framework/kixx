@@ -15,12 +15,15 @@
     gap: var(--space-sm);
     max-width: var(--measure-prose);
 }
+
 .doc-prose > :where(h2, h3, h4) {
     margin-block-start: var(--space-lg);
 }
+
 .doc-prose ul {
     padding-left: 1.5ch;
 }
+
 .doc-prose li + li {
     margin-top: var(--space-2xs);
 }
@@ -29,6 +32,7 @@
 .doc-section-heading {
     margin-block-start: calc(var(--space-xl) - var(--space-lg));
 }
+
 .doc-lede {
     margin-block-start: calc(var(--space-2xs) - var(--space-lg));
     max-width: var(--measure-prose);
@@ -41,9 +45,11 @@
     display: grid;
     gap: 1.25rem;
 }
+
 .specimen__sample {
     padding: clamp(1.25rem, 4vw, 2rem);
 }
+
 /* The meta strip is a .grid-auto in the markup (8rem tracks); it tunes the track
    floor and keeps an asymmetric row/column gap. */
 .specimen__meta {
@@ -53,21 +59,25 @@
     border-top: var(--hairline-width) solid var(--color-rule);
     gap: 0.6rem 1.5rem;
 }
+
 .specimen__meta div {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
 }
+
 .specimen__meta dt {
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: var(--tracking-label);
     color: var(--color-ink-muted);
 }
+
 .specimen__meta dd {
     margin: 0;
     font-size: var(--text-caption);
 }
+
 .specimen__use {
     grid-column: 1 / -1;
 }
@@ -77,6 +87,7 @@
     --grid-min: 16rem;
     --grid-space: var(--space-sm);
 }
+
 .card-anatomy-demo {
     max-width: 22rem;
 }
@@ -92,6 +103,7 @@
     border: var(--hairline-width) dashed var(--color-rule-strong);
     background: var(--color-surface-sunken);
 }
+
 .demo-box {
     padding: var(--space-xs) var(--space-sm);
     border: var(--hairline-width) solid var(--color-rule-strong);
@@ -99,6 +111,7 @@
     font-size: var(--text-caption);
     text-align: center;
 }
+
 /* A taller box for sidebar / switcher demos so the column behaviour is obvious. */
 .demo-box--tall {
     display: flex;
@@ -114,36 +127,46 @@
     --grid-min: 18rem;
     --grid-space: var(--space-sm);
 }
+
 .guideline > * + * {
     margin-top: var(--space-2xs);
 }
+
 .guideline ul {
     padding-left: 1.5ch;
     font-size: var(--text-body-sm);
     line-height: var(--leading-normal);
 }
+
 .guideline li + li {
     margin-top: var(--space-2xs);
 }
+
 .guideline__label::before {
     margin-right: 0.5ch;
     font-weight: var(--weight-bold);
 }
+
 .guideline--do {
     --card-accent: var(--color-status-success);
 }
+
 .guideline--do .guideline__label {
     color: var(--color-status-success);
 }
+
 .guideline--do .guideline__label::before {
     content: "[+]";
 }
+
 .guideline--dont {
     --card-accent: var(--color-status-danger);
 }
+
 .guideline--dont .guideline__label {
     color: var(--color-status-danger);
 }
+
 .guideline--dont .guideline__label::before {
     content: "[x]";
 }
@@ -158,12 +181,14 @@
     border-bottom: var(--hairline-width) solid var(--color-rule);
     background: var(--swatch, var(--color-bg));
 }
+
 .swatch__body {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
     padding: 0.65rem clamp(0.75rem, 2vw, 1rem);
 }
+
 .swatch__body code {
     align-self: flex-start;
 }
@@ -189,6 +214,7 @@
     border: var(--hairline-width) solid var(--color-rule-strong);
     background: var(--color-surface-sunken);
 }
+
 .demo-stage__hint {
     flex-basis: 100%;
     margin: 0;
@@ -202,9 +228,11 @@
     padding-left: 2.5ch;
     font-size: var(--text-body-sm);
 }
+
 .parts-list li + li {
     margin-top: var(--space-2xs);
 }
+
 .parts-list li::marker {
     color: var(--color-ink-muted);
 }
@@ -218,6 +246,7 @@
     gap: var(--space-sm);
     padding: clamp(1.5rem, 4vw, 2.25rem);
 }
+
 .example__label {
     display: flex;
     flex-wrap: wrap;
@@ -226,6 +255,7 @@
     padding: 0.65rem clamp(1rem, 3vw, 1.25rem);
     border-top: var(--hairline-width) solid var(--color-rule);
 }
+
 .example__note {
     color: var(--color-ink-muted);
     font-size: var(--text-caption);
@@ -235,15 +265,18 @@
 .state-list {
     border: var(--hairline-width) solid var(--color-rule-strong);
 }
+
 .state-list > div {
     display: flex;
     flex-wrap: wrap;
     gap: 0.3rem 1.25rem;
     padding: 0.7rem clamp(1rem, 3vw, 1.25rem);
 }
+
 .state-list > div + div {
     border-top: var(--hairline-width) solid var(--color-rule);
 }
+
 .state-list dt {
     flex: 0 0 6rem;
     font-size: var(--text-caption);
@@ -251,6 +284,7 @@
     letter-spacing: var(--tracking-label);
     color: var(--color-ink-muted);
 }
+
 .state-list dd {
     flex: 1 1 14rem;
     margin: 0;
@@ -266,6 +300,7 @@
     font-size: var(--text-body-sm);
     line-height: var(--leading-normal);
 }
+
 .code-block code {
     padding: 0;
     background: none;
@@ -275,6 +310,11 @@
 
 /* -----------------------------------------------------------------------------
     Sidebar navigation
+
+    The guide shell's section navigation. On narrow screens it reads as a top
+    stack with a bottom rule; at the shell breakpoint it becomes the sidebar
+    track and owns the vertical divider. Link state uses the same accent signal
+    for hover, keyboard focus, and the current page.
 ----------------------------------------------------------------------------- */
 
 .site-nav {
@@ -336,19 +376,31 @@
     color: var(--color-ink-link);
     outline: none;
 }
+
 .site-nav__link[aria-current="page"] {
     border-left-color: var(--color-ink-link);
     background: var(--color-surface-sunken);
     color: var(--color-ink-link);
     font-weight: var(--weight-bold);
 }
+
 .site-nav__link:focus-visible {
     outline: 2px solid var(--color-focus-outline);
     outline-offset: -2px;
 }
 
-/* Wordmark — a code-comment "//kixx". The slashes carry the one bit of accent
-   color; the name stays ink. Mono, bold, square: it looks like something typed. */
+/* -----------------------------------------------------------------------------
+    Wordmark
+
+    A code-comment "//kixx". The slashes carry the one bit of accent color; the
+    name stays ink. Mono, bold, square: it looks like something typed.
+
+    Expected structure:
+        .kixx-wordmark
+          .kixx-wordmark__slash-1
+          .kixx-wordmark__slash-2
+          .kixx-wordmark__kixx
+----------------------------------------------------------------------------- */
 .kixx-wordmark {
     font-family: var(--font-wordmark);
     display: inline-flex;
@@ -356,23 +408,30 @@
     font-size: 2em;
     font-weight: var(--weight-bold);
     line-height: 1;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
     text-decoration: none;
 }
+
 a.kixx-wordmark {
     color: var(--color-ink);
 }
+
 .kixx-wordmark__slash-1,
 .kixx-wordmark__slash-2 {
     color: var(--color-ink-link);
-    letter-spacing: -0.25em;
+    letter-spacing: 0;
 }
+
 .kixx-wordmark__kixx {
     margin-left: 0.5em;
 }
 
-/* Theme toggle — a bracketed, boxed spec-sheet control. It names the theme it
-   switches TO. Inverts on hover like every other control. */
+/* -----------------------------------------------------------------------------
+    Theme toggle
+
+    A bracketed, boxed spec-sheet control. It names the theme it switches TO and
+    inverts on hover like every other control.
+----------------------------------------------------------------------------- */
 .theme-toggle {
     display: inline-flex;
     align-items: center;
@@ -388,10 +447,12 @@ a.kixx-wordmark {
     color: var(--color-ink);
     background: transparent;
 }
+
 .theme-toggle:hover {
     background: var(--color-ink);
     color: var(--color-bg);
 }
+
 .theme-toggle:focus-visible {
     outline: 2px solid var(--color-focus-outline);
     outline-offset: 2px;
@@ -403,6 +464,8 @@ a.kixx-wordmark {
     A terminal / spec-sheet control: a mono, uppercase label inside a square,
     1px box. States are communicated by INVERSION (fill flips to ink) or a
     border/color shift — never a shadow, never motion.
+
+    Modifiers:
       .button            outline box — the neutral default
       .button--primary   solid ink fill — the one emphasized action
       .button--danger    red outline — a destructive action (color as signal)
@@ -424,9 +487,15 @@ a.kixx-wordmark {
     background: var(--color-bg);
     text-decoration: none;
 }
+
 /* Bracket the label so it reads as a terminal target: [ save ]. */
-.button::before { content: "[\00a0"; }
-.button::after { content: "\00a0]"; }
+.button::before {
+    content: "[\00a0";
+}
+
+.button::after {
+    content: "\00a0]";
+}
 
 .button:not(:disabled):hover {
     /* Every button inverts to a solid ink fill — one shared hover treatment. */
@@ -434,6 +503,7 @@ a.kixx-wordmark {
     color: var(--color-bg);
     border-color: var(--color-ink);
 }
+
 .button:focus-visible {
     outline: 2px solid var(--color-focus-outline);
     outline-offset: 2px;
@@ -446,6 +516,7 @@ a.kixx-wordmark {
     border-color: var(--color-ink);
     color: var(--color-ink-on-accent);
 }
+
 .button--primary:not(:disabled):hover {
     background: var(--color-bg);
     color: var(--color-ink);
@@ -457,6 +528,7 @@ a.kixx-wordmark {
     border-color: var(--color-status-danger);
     color: var(--color-status-danger);
 }
+
 .button--danger:not(:disabled):hover {
     background: var(--color-status-danger);
     border-color: var(--color-status-danger);
@@ -476,6 +548,8 @@ a.kixx-wordmark {
     The bordered-surface primitive: flat, square, hairline-ruled — the
     structural building block for dashboards, settings groups, and list modules.
     Depth comes from the 1px rule, never a shadow.
+
+    Modifiers:
       .card                    padded, hairline-bordered surface (the default)
       .card--flush             drop padding when inner strips pad themselves
       .card--accent-primary    add an ink left-rule marker
@@ -493,9 +567,11 @@ a.kixx-wordmark {
     overflow: hidden;
     background: var(--color-bg);
 }
+
 .card--flush {
     padding: 0;
 }
+
 /* The accent is a heavier LEFT rule — a marker, not a colored box — the way a
    changelog or quoted block is flagged. Keeps color out of the surface itself. */
 .card--accent-primary,
@@ -503,12 +579,15 @@ a.kixx-wordmark {
     border-left-width: 3px;
     border-left-color: var(--card-accent);
 }
+
 .card--accent-primary {
     --card-accent: var(--color-ink);
 }
+
 .card--accent-secondary {
     --card-accent: var(--color-ink-muted);
 }
+
 .card--sunken {
     background: var(--color-surface-sunken);
 }
@@ -520,6 +599,8 @@ a.kixx-wordmark {
     on a sunken surface. The default is a neutral note; three tone modifiers
     recolor the marker + the ASCII icon from the semantic tokens. Static, like
     Cards — no interactive states.
+
+    Modifiers:
       .callout            neutral emphasis note (the default)
       .callout--info      link blue — calm, non-urgent information
       .callout--warning   amber    — proceed with caution
@@ -540,6 +621,7 @@ a.kixx-wordmark {
     border-left: 3px solid var(--callout-accent);
     background: var(--color-surface-sunken);
 }
+
 .callout__icon {
     flex: none;
     font-family: var(--font-mono);
@@ -547,18 +629,33 @@ a.kixx-wordmark {
     line-height: var(--leading-body);
     color: var(--callout-accent);
 }
+
 .callout__body {
     display: flex;
     flex-direction: column;
     gap: var(--space-2xs);
-    min-width: 0; /* let long words wrap instead of stretching the flex item */
+    /* Let long words wrap instead of stretching the flex item. */
+    min-width: 0;
 }
-.callout--info    { --callout-accent: var(--color-ink-link); }
-.callout--warning { --callout-accent: var(--color-status-warning); }
-.callout--error   { --callout-accent: var(--color-status-danger); }
+
+.callout--info {
+    --callout-accent: var(--color-ink-link);
+}
+
+.callout--warning {
+    --callout-accent: var(--color-status-warning);
+}
+
+.callout--error {
+    --callout-accent: var(--color-status-danger);
+}
 
 /* -----------------------------------------------------------------------------
     Site Header
+
+    The top bar used outside the sidebar shell. It composes .cluster for
+    alignment, keeps the wordmark responsive, and leaves controls in a compact
+    group at the trailing edge.
 ----------------------------------------------------------------------------- */
 
 .site-header {
@@ -566,13 +663,16 @@ a.kixx-wordmark {
     padding-inline: var(--space-page-gutter);
     border-bottom: var(--rule-width) solid var(--color-rule-strong);
 }
+
 /* Built on .cluster in the markup; only the justify axis differs from default. */
 .site-header__inner {
     --cluster-justify: space-between;
 }
+
 .site-header__wordmark {
     font-size: clamp(1.75rem, 4vw, 2.25rem);
 }
+
 /* Also a .cluster; tighter gap for the controls. */
 .site-header__controls {
     --cluster-space: 0.6rem;

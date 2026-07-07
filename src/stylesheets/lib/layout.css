@@ -1,4 +1,3 @@
-
 /* -----------------------------------------------------------------------------
     App layout — sidebar + main content
 
@@ -82,9 +81,18 @@ body:has(> .site-layout) {
     gap: var(--flow-space);
 }
 
-/* Cluster — horizontal group that wraps; gap-driven. Toolbars, button rows,
-   tag/chip lists, the header controls. Tune alignment with --cluster-align /
-   --cluster-justify. */
+/* -----------------------------------------------------------------------------
+    Cluster — wrapping inline groups
+
+    Use .cluster for toolbars, button rows, tag/chip lists, header controls, and
+    any horizontal group where wrapping is acceptable. It is gap-driven, so the
+    same spacing applies across rows and columns.
+
+    Custom properties:
+      --cluster-space    row and column gap
+      --cluster-align    cross-axis alignment (default: center)
+      --cluster-justify  main-axis alignment (default: flex-start)
+----------------------------------------------------------------------------- */
 .cluster {
     --cluster-space: var(--space-sm);
     display: flex;
@@ -94,9 +102,18 @@ body:has(> .site-layout) {
     justify-content: var(--cluster-justify, flex-start);
 }
 
-/* Grid — auto-fit responsive grid. Tracks never drop below --grid-min, and the
-   min() guard stops a single track from overflowing a viewport narrower than
-   --grid-min. */
+/* -----------------------------------------------------------------------------
+    Grid — auto-fit responsive tracks
+
+    Use .grid-auto for galleries, option groups, swatches, and repeated cards.
+    Tracks fill the available row and never drop below --grid-min; the min()
+    guard stops a single track from overflowing a viewport narrower than that
+    requested minimum.
+
+    Custom properties:
+      --grid-min    minimum track width before wrapping
+      --grid-space  row and column gap
+----------------------------------------------------------------------------- */
 .grid-auto {
     --grid-min: 14rem;
     --grid-space: var(--space-md);
@@ -105,9 +122,18 @@ body:has(> .site-layout) {
     grid-template-columns: repeat(auto-fit, minmax(min(var(--grid-min), 100%), 1fr));
 }
 
-/* Switcher — a row that flips to a single column once the container is narrower
-   than --switcher-threshold. No media query: below the threshold the flex-basis
-   calc goes negative, forcing each child onto its own row. */
+/* -----------------------------------------------------------------------------
+    Switcher — row-to-column without a breakpoint
+
+    Use .switcher when a group should sit in a row while there is room, then
+    become one item per row when the container is narrower than
+    --switcher-threshold. No media query is required: below the threshold the
+    flex-basis calculation goes negative, forcing each child onto its own row.
+
+    Custom properties:
+      --switcher-threshold  minimum container width before switching to rows
+      --switcher-space      row and column gap
+----------------------------------------------------------------------------- */
 .switcher {
     --switcher-threshold: 30rem;
     --switcher-space: var(--space-sm);
@@ -115,47 +141,70 @@ body:has(> .site-layout) {
     flex-wrap: wrap;
     gap: var(--switcher-space);
 }
+
 .switcher > * {
     flex-grow: 1;
     flex-basis: calc((var(--switcher-threshold) - 100%) * 999);
 }
 
-/* Sidebar — a fixed-ish sidebar (--sidebar-width) beside fluid content. The
-   content holds at least --sidebar-content-min of the width; when it can't, the
-   pair wraps and both go full-width. The app shell (.site-layout) is built on
-   this. Gap defaults to 0 so a divider rule can do the visible separating. */
+/* -----------------------------------------------------------------------------
+    Sidebar — fixed-ish rail beside fluid content
+
+    Use .with-sidebar when the first child should behave as a sidebar and the
+    last child should take the remaining width. The content holds at least
+    --sidebar-content-min of the inline size; when that cannot be satisfied, the
+    pair wraps and both tracks become full-width. The app shell (.site-layout)
+    is built on this primitive.
+
+    Custom properties:
+      --sidebar-width        preferred sidebar track width
+      --sidebar-content-min  minimum content track share before wrapping
+      --sidebar-space        gap between tracks (default: 0 for divider rules)
+----------------------------------------------------------------------------- */
 .with-sidebar {
     --sidebar-space: 0;
     display: flex;
     flex-wrap: wrap;
     gap: var(--sidebar-space);
 }
+
 .with-sidebar > :first-child {
     flex-basis: var(--sidebar-width);
     flex-grow: 1;
 }
+
 .with-sidebar > :last-child {
     flex-basis: 0;
     flex-grow: 999;
     min-inline-size: var(--sidebar-content-min, 60%);
 }
 
-/* Center — caps a column to a measure and centers it horizontally. Defaults to
-   the shared prose measure; raise --center-max for wider columns. */
+/* -----------------------------------------------------------------------------
+    Center — measured centered column
+
+    Use .center for readable prose or constrained utility pages. It caps the
+    inline size to --center-max and centers the box horizontally.
+
+    Custom properties:
+      --center-max  maximum inline size (default: prose measure)
+----------------------------------------------------------------------------- */
 .center {
     --center-max: var(--measure-prose);
     max-inline-size: var(--center-max);
     margin-inline: auto;
 }
 
-/* Caps a centered column to the narrower form measure. Compose with .center on
-   standalone form pages (login, sign-up, settings). */
+/* Form modifier: compose with .center for standalone form pages. */
 .center--form {
     --center-max: var(--measure-form);
 }
 
 /* -----------------------------------------------------------------------------
     Main content
+
+    These rules are guide-shell structure rather than generic primitives. The
+    page sections are still built from the primitives above, but this block owns
+    the Kixx style-guide viewport padding, section measures, and anchor spacing.
 ----------------------------------------------------------------------------- */
 
 .site-main {
