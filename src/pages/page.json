@@ -5,6 +5,6 @@
         "description": "A new Kixx web application"
     },
     "includes": {
-        "message": { "filename": "message.md" }
+        "body": { "filename": "body.html" }
     }
 }

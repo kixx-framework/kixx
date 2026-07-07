@@ -10,21 +10,7 @@
         {{/if}}
     </head>
     <body>
-        <header class="site-header">
-            <div class="site-header__inner cluster">
-                <a class="kixx-wordmark site-header__wordmark" href="/" aria-label="Kixx — home">
-                    <span class="kixx-wordmark__slash-1">/</span>
-                    <span class="kixx-wordmark__slash-2">/</span>
-                    <span class="kixx-wordmark__kixx">kixx</span>
-                </a>
-                <div class="site-header__controls cluster">
-                    <button class="theme-toggle" type="button" data-js-behavior="theme-toggle" aria-label="Switch color theme">
-                        <span class="theme-toggle__label">dark</span>
-                    </button>
-                </div>
-            </div>
-        </header>
-        <main class="site-main center">{{{ body }}}</main>
+        {{{ body }}}
 
         <script>
         {{>common-script.js}}
