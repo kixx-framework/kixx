@@ -6,13 +6,10 @@ This guide covers the frontend development conventions for this project: the liv
 
 Before writing or reviewing any frontend markup or CSS, check the live style guide. It is both the design reference and a set of working examples built from the project's own primitives and components:
 
-- Start with `/admin/style-guide/aesthetic` — the tone and design philosophy behind every other section.
-- Browse the full guide under `/admin/style-guide/`.
+- Start with `pages/admin/style-guide/aesthetic/body.html` — the tone and design philosophy behind every other section.
 - Read the source files under `pages/admin/style-guide/` when you need concrete markup examples.
 
 Treat the style guide as the source of truth for aesthetic decisions: color use, type roles, spacing rhythm, component anatomy, and state treatment. Do not re-derive these choices from first principles per page.
-
-The current aesthetic is intentionally plain and document-like: one monospace family, fixed type steps, warm monochrome surfaces, square corners, hairline rules, and color used as a signal rather than decoration. Preserve that restraint when adding new frontend code.
 
 ## Never Use Inline Styles
 
@@ -22,7 +19,7 @@ When you need styling, resolve it in this order:
 
 1. **Reuse an existing component, utility, or layout primitive.** Most page structure is a composition of the primitives described below.
 2. **Extend an existing shared stylesheet.** If nothing fits and the rule is reusable, add a well-named class to the appropriate file in `stylesheets/lib/`.
-3. **Use a page-local `page_stylesheet` include for genuinely localized styles.** When a style truly belongs to one page and is not reusable, supply it through the `page_stylesheet` include instead of an inline `style` attribute.
+3. **Use a page-local `page_stylesheet` include for genuinely localized styles.** When a style truly belongs to one page and is not reusable, supply it through the `page_stylesheet` include instead of an inline `style` attribute. See app/presentation/README.md to learn how to use page includes.
 
 This rule also applies to CSS custom properties. Do not tune a component with an inline `style` attribute. Put the custom-property override in a modifier class, a reusable class, or the page's local stylesheet.
 
@@ -173,8 +170,6 @@ The same tiered thinking applies to spacing (`--space-*`), measures (`--measure-
 
 ## Typography
 
-The system uses one monospace family for everything. Plain semantic HTML should usually render correctly without extra classes: headings map to heading roles, body text maps to the base body role, and inline code stays in the same monospace system with a subtle sunken ground.
-
 Choose heading levels for document structure first. If the semantic level is correct but the visual size is wrong, apply the matching `.type-*` utility rather than changing the heading level.
 
 Do not use color, italics, negative tracking, or decoration to create hierarchy. Hierarchy comes from size, weight, spacing, and structure. Type sizes are fixed rem steps so browser zoom remains predictable; do not introduce fluid font sizing.
@@ -201,22 +196,6 @@ When a primitive needs shell-specific defaults, scope those defaults to the shel
 ## Components and Forms
 
 Reusable components live in `components.css` and `forms.css`. Copy their documented anatomy instead of inventing parallel markup.
-
-Current reusable theme components include:
-
-- `.site-nav`
-- `.kixx-wordmark`
-- `.theme-toggle`
-- `.button`
-- `.card`
-- `.callout`
-- `.site-header`
-
-Current form components include:
-
-- `.field`
-- `textarea.field__input`
-- `.copy-field`
 
 Component state should be visible, semantic, and restrained. Buttons invert or shift border color; destructive actions use the danger signal; focus uses `--color-focus-outline`; cards and callouts remain flat, square, and hairline-ruled. Do not add shadows, decorative gradients, rounded card treatments, or ornamental color fills unless the style guide has first established that pattern.
 
