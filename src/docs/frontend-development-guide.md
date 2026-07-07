@@ -1,124 +1,224 @@
 # Frontend Development Guide
 
-This guide covers the frontend development conventions for this project: the live style guide, code organization guidelines, the `stylesheets/` directory, class naming, design tokens, and the page-local stylesheet pattern. For Hyperview template syntax, see `templates/README.md`. For where presentation-layer files live and how request handlers pass render data to templates, see `app/presentation/README.md`.
+This guide covers the frontend development conventions for this project: the live style guide, source stylesheet organization, class naming, design tokens, CSS formatting, CSS comments, and the page-local stylesheet pattern. For Hyperview template syntax, see `templates/README.md`. For where presentation-layer files live and how request handlers pass render data to templates, see `app/presentation/README.md`.
 
 ## Follow the Style Guide
 
 Before writing or reviewing any frontend markup or CSS, check the live style guide. It is both the design reference and a set of working examples built from the project's own primitives and components:
 
-- Start with `pages/admin/style-guide/aesthetic` — the tone and design philosophy behind every other section.
-- Browse the full guide in `pages/admin/style-guide/`.
+- Start with `/admin/style-guide/aesthetic` — the tone and design philosophy behind every other section.
+- Browse the full guide under `/admin/style-guide/`.
+- Read the source files under `pages/admin/style-guide/` when you need concrete markup examples.
 
-Treat the style guide as the source of truth for aesthetic decisions (color use, type roles, spacing rhythm, component anatomy) rather than re-deriving them from first principles per page.
+Treat the style guide as the source of truth for aesthetic decisions: color use, type roles, spacing rhythm, component anatomy, and state treatment. Do not re-derive these choices from first principles per page.
+
+The current aesthetic is intentionally plain and document-like: one monospace family, fixed type steps, warm monochrome surfaces, square corners, hairline rules, and color used as a signal rather than decoration. Preserve that restraint when adding new frontend code.
 
 ## Never Use Inline Styles
 
-Do not use inline `style="..."` attributes in HTML templates. Inline styles bypass the design system, cannot be reused, and scatter presentation decisions across templates instead of keeping them in the stylesheets.
+Do not use inline `style="..."` attributes in HTML templates. Inline styles bypass the design system, cannot be reused, and scatter presentation decisions across templates instead of keeping them in stylesheets.
 
 When you need styling, resolve it in this order:
 
-1. **Reuse an existing component, utility, or layout primitive.** Most page structure is a composition of the primitives described below — reach for one before writing any new CSS.
-2. **Propose a new generic utility or component.** If nothing fits, add a reusable, multi-use class to the appropriate stylesheet (see [File Organization](#file-organization) below) rather than a one-off rule. Name it for the concept it represents so other pages can use it too. Avoid single-use classes that only exist to dodge an inline style.
-3. **Use a page-local `page_stylesheet` include for genuinely localized styles.** When a style truly belongs to one page and is not reusable, supply it through the `page_stylesheet` include instead of an inline `style` attribute — see [Page-Local Styles](#page-local-styles-via-page_stylesheet) below.
+1. **Reuse an existing component, utility, or layout primitive.** Most page structure is a composition of the primitives described below.
+2. **Extend an existing shared stylesheet.** If nothing fits and the rule is reusable, add a well-named class to the appropriate file in `stylesheets/lib/`.
+3. **Use a page-local `page_stylesheet` include for genuinely localized styles.** When a style truly belongs to one page and is not reusable, supply it through the `page_stylesheet` include instead of an inline `style` attribute.
+
+This rule also applies to CSS custom properties. Do not tune a component with an inline `style` attribute. Put the custom-property override in a modifier class, a reusable class, or the page's local stylesheet.
 
 ## File Organization
 
-CSS lives under `stylesheets/`, served directly by the development server. Here is an example of a stylesheets/ directory structure:
+CSS lives under `stylesheets/`, served directly by the development server. The shared stylesheet bundle currently has one public entrypoint:
 
 ```text
 stylesheets/
-├── admin.css
-├── website.css
+├── stylesheet.css
 └── lib/
     ├── design-tokens.css
     ├── reset.css
-    ├── standard-include.css
-    ├── admin-layout.css
-    └── admin-components.css
+    ├── typography.css
+    ├── layout.css
+    ├── components.css
+    └── forms.css
 ```
 
-Bundle entry points are in the root of the stylesheets/ directory — each is a flat list of `@import` statements, and import order matters because later files can rely on custom properties and reset rules defined earlier. Here are two examples:
-
-**admin.css**
+`templates/partials/common-site-styles.html` links `/stylesheets/stylesheet.css`. That entrypoint is a flat list of imports, and import order matters because later files rely on custom properties and base rules defined earlier:
 
 ```css
 @import "./lib/design-tokens.css";
 @import "./lib/reset.css";
-@import "./lib/standard-include.css";
-@import "./lib/admin-layout.css";
-@import "./lib/admin-components.css";
+@import "./lib/typography.css";
+@import "./lib/layout.css";
+@import "./lib/components.css";
+@import "./lib/forms.css";
 ```
 
-**website.css**
+Keep the bundle ordered from low-level foundations to higher-level components:
+
+- `design-tokens.css` owns the palette, semantic tokens, component tokens, spacing, type scale, measures, radii, and border widths.
+- `reset.css` owns low-specificity browser normalization and base element behavior.
+- `typography.css` owns type roles, matching `.type-*` utilities, inline code, keyboard keys, and blockquotes.
+- `layout.css` owns the app shell layout, reusable layout primitives, and shared content-section structure.
+- `components.css` owns style-guide demo chrome plus reusable theme components such as navigation, wordmark, theme toggle, buttons, cards, callouts, and site header.
+- `forms.css` owns form fields, text areas, and copy fields.
+
+Before adding a new file to `lib/`, prefer extending one of the existing files. The project favors a handful of well-documented stylesheets over many small files, so related rules stay close to the examples and comments that explain them.
+
+## CSS Formatting
+
+Use the formatting already present in `stylesheets/`:
+
+- Four spaces for indentation.
+- One selector per line when a selector list has multiple selectors.
+- One declaration per line.
+- A blank line between adjacent rules.
+- Opening braces on the selector line.
+- Expanded rule blocks, even for one-declaration modifiers.
+- No padded inline comments after declarations; put explanatory comments above the declaration or rule they describe.
+
+Example:
+
 ```css
-/* website.css */
-@import "./lib/design-tokens.css";
-@import "./lib/reset.css";
-@import "./lib/standard-include.css";
+.callout--warning {
+    --callout-accent: var(--color-status-warning);
+}
+
+.callout--error {
+    --callout-accent: var(--color-status-danger);
+}
 ```
 
-Before adding a new file to `lib/`, prefer extending one of the existing ones — the project favors a handful of well-organized files over many small ones, so related rules stay next to each other and the `@import` list stays short. Introduce a new `lib/` file only when a section grows large enough that it earns its own concern (as `admin-layout.css` did for the app shell).
+Keep selectors readable and low-surprise. Prefer classes over complex structural selectors unless the structure is part of the component contract. Structural selectors are acceptable for primitives like `.with-sidebar > :first-child` because the child relationship is the primitive's API.
+
+## CSS Comments
+
+The source stylesheets are also developer documentation. Verbose comments are acceptable because comments are stripped from production build output.
+
+Use a section block for every major file section or public component:
+
+```css
+/* -----------------------------------------------------------------------------
+    Section title
+
+    Explain what this section owns, when to use it, and any constraints or
+    custom properties authors need to understand.
+----------------------------------------------------------------------------- */
+```
+
+Use short local comments for non-obvious implementation details, browser quirks, accessibility decisions, or intentional tradeoffs. A useful comment explains why the rule exists, what contract it protects, or what would break if it changed. Avoid comments that only restate the declaration.
+
+For component and primitive sections, document the public contract:
+
+- What the class is for.
+- When to use it.
+- Expected markup structure when relevant.
+- Modifier classes.
+- Exposed custom properties.
+- Important state or accessibility behavior.
 
 ## Naming Convention: BEM
 
 Component classes follow Block-Element-Modifier (BEM):
 
 ```css
-.callout { }          /* block */
-.callout__body { }    /* element: __ separates block from a part of it */
-.callout--warning { } /* modifier: -- separates block from a variant of it */
+.callout {
+    /* block */
+}
+
+.callout__body {
+    /* element: __ separates block from a part of it */
+}
+
+.callout--warning {
+    /* modifier: -- separates block from a variant of it */
+}
 ```
 
-An element name is only ever attached to its own block (`.callout__body`, not `.body`). A modifier always sits alongside its block's base class in markup (`class="callout callout--warning"`), never alone — the base class carries the shared rules, and the modifier only overrides what varies.
+An element name is only ever attached to its own block (`.callout__body`, not `.body`). A modifier always sits alongside its block's base class in markup (`class="callout callout--warning"`), never alone. The base class carries the shared rules, and the modifier only overrides what varies.
 
-Utility classes (the layout primitives and type roles described below) are flat, single-purpose names without BEM structure — `.flow`, `.cluster`, `.type-label` — because they are not components with internal parts, just one reusable declaration block.
+Utility classes are flat, single-purpose names without BEM structure: `.flow`, `.cluster`, `.center`, `.type-label`. They are not components with internal parts; they are reusable declaration blocks.
 
 ### Tuning Instances with Custom Properties
 
-Prefer a scoped CSS custom property over a new modifier class when only a value changes, not the structure. Components commonly expose their own token, resolved from a shared design token, that a modifier class or an inline `style` on a specific instance can override:
+Prefer a scoped CSS custom property over a new modifier class when only a value changes, not the structure. Components commonly expose their own component token, resolved from a semantic token, so a modifier can change one value without repeating the whole rule:
 
 ```css
 .callout {
-    --callout-accent: var(--color-ink-primary);
-    border: var(--accent-border-width) solid var(--callout-accent);
+    --callout-accent: var(--color-ink);
+    border-left: 3px solid var(--callout-accent);
 }
-.callout--warning { --callout-accent: var(--color-status-warning); }
+
+.callout--warning {
+    --callout-accent: var(--color-status-warning);
+}
 ```
 
-This keeps the modifier declaration to a single custom-property assignment instead of repeating the whole rule, and it is how the layout primitives (see below) expose their own tuning points, like `--sidebar-width` or `--switcher-threshold`.
+The same pattern is used by layout primitives. For example, `.grid-auto` exposes `--grid-min` and `--grid-space`, `.cluster` exposes `--cluster-space`, and `.center` exposes `--center-max`.
 
 ## Design Tokens
 
-`design-tokens.css` defines a three-tier custom-property system. References flow one direction only — a component rule never names a raw `--palette-*` token or a literal color:
+`design-tokens.css` defines a three-tier custom-property system. References flow one direction only:
 
 ```text
-component token  →  semantic token  →  reference (palette) token
+component token  ->  semantic token  ->  reference palette token
 ```
 
-- **Tier 1 · Reference palette** (`--palette-*`) — raw, theme-agnostic values. The only place a literal color (`hsl()`, hex) may appear.
-- **Tier 2 · Semantic** (`--color-*`) — role- and theme-aware, resolved from the palette (often via `light-dark()`). This is the tier component rules should read.
-- **Tier 3 · Component** (`--color-button-bg-primary`, etc., plus component-scoped tokens like `--callout-accent` defined next to their component) — resolved here, or inline in the component's own rule, so the component declaration stays declarative.
+- **Tier 1 · Reference palette** (`--palette-*`) — raw, theme-agnostic values. This is the only place literal colors such as `hsl()` belong.
+- **Tier 2 · Semantic** (`--color-*`) — role- and theme-aware tokens resolved from the palette, often with `light-dark()`. Component rules should read from this tier.
+- **Tier 3 · Component** (`--field-border-width`, `--color-field-border`, `--button-border-width`, component-scoped tokens like `--callout-accent`) — resolved component values that keep component declarations declarative.
 
-The full palette, semantic roles, and rationale (contrast requirements, light/dark behavior) are documented in the Colors section of the style guide (`pages/admin/style-guide/colors/`) — read that page before adding a new color token or reaching past the semantic tier.
+A component rule must not name a raw `--palette-*` token or a literal color. Use semantic tokens for foregrounds, backgrounds, rules, status marks, focus outlines, and selection colors.
 
-The same tiered approach applies to spacing (`--space-*` scale, consumed by `.flow`), type scale (`--text-*`, `--leading-*`, `--tracking-*`, `--weight-*`), and structural values (`--radius-*`, border widths). See the Typography and Layout sections of the style guide for the rationale behind each scale.
+The same tiered thinking applies to spacing (`--space-*`), measures (`--measure-*`), type scale (`--text-*`, `--leading-*`, `--tracking-*`, `--weight-*`), radii, and border widths. Read the comments in `design-tokens.css` and the relevant style-guide pages before adding a new token.
+
+## Typography
+
+The system uses one monospace family for everything. Plain semantic HTML should usually render correctly without extra classes: headings map to heading roles, body text maps to the base body role, and inline code stays in the same monospace system with a subtle sunken ground.
+
+Choose heading levels for document structure first. If the semantic level is correct but the visual size is wrong, apply the matching `.type-*` utility rather than changing the heading level.
+
+Do not use color, italics, negative tracking, or decoration to create hierarchy. Hierarchy comes from size, weight, spacing, and structure. Type sizes are fixed rem steps so browser zoom remains predictable; do not introduce fluid font sizing.
 
 ## Layout Primitives
 
-`standard-include.css` defines a small family of composable, single-purpose layout primitives in the Every Layout tradition (Heydon Pickering / Andy Bell). Each is one class tuned by its own scoped custom properties, which default to design tokens:
+`layout.css` defines a small family of composable, single-purpose layout primitives in the Every Layout tradition. Each is one class tuned by scoped custom properties:
 
 | Class | Purpose |
 | --- | --- |
-| `.flow` | Vertical stack with parent-owned gap between siblings, tuned by `--flow-space` |
-| `.cluster` | Horizontal group that wraps; gap-driven, tuned by `--cluster-space` |
-| `.grid-auto` | Auto-fit responsive grid, tracks never below `--grid-min` |
-| `.switcher` | Row that flips to a column below `--switcher-threshold`, no media query |
-| `.with-sidebar` | Fixed-ish sidebar beside fluid content; wraps when tight, tuned by `--sidebar-width` |
-| `.center` | Caps a column to `--center-max` and centers it |
+| `.flow` | Vertical stack with parent-owned gap between direct children, tuned by `--flow-space` |
+| `.cluster` | Horizontal group that wraps, tuned by `--cluster-space`, `--cluster-align`, and `--cluster-justify` |
+| `.grid-auto` | Auto-fit responsive grid, tuned by `--grid-min` and `--grid-space` |
+| `.switcher` | Row that flips to one item per row below `--switcher-threshold`, no media query |
+| `.with-sidebar` | Fixed-ish sidebar beside fluid content, tuned by `--sidebar-width`, `--sidebar-content-min`, and `--sidebar-space` |
+| `.center` | Measured centered column, tuned by `--center-max` |
 
-Compose these before writing a new `display: flex` or `display: grid` rule — most page structure in this project is a nesting of the six. Because `.flow` uses `gap`, nested `.flow` elements are safe: the outer flow controls the nested element's outside spacing, and the inner flow controls spacing between its own children. Read the comment block above each primitive in `standard-include.css` for the specific reasoning (why a breakpoint is or isn't used, what each custom property controls), and see the Layout section of the style guide (`pages/admin/style-guide/layout/`) for live, annotated examples.
+Compose these before writing a new `display: flex` or `display: grid` rule. Most page structure should be a nesting of these primitives.
 
-When a primitive needs shell-specific defaults — for example, `.site-layout` sets `--sidebar-content-min` for the admin app shell built on `.with-sidebar` — scope those defaults to the specific class in `admin-layout.css` rather than changing the primitive's own defaults in `standard-include.css`. The primitive itself should stay generically reusable; per-shell opinions belong in the file that owns that shell.
+Because `.flow` uses `gap`, nested `.flow` elements are safe: the outer flow controls the nested element's outside spacing, and the inner flow controls spacing between its own children. If one child needs exceptional outside spacing, make that exception explicit with a component rule or page-local style.
+
+When a primitive needs shell-specific defaults, scope those defaults to the shell class. For example, `.site-layout` sets `--sidebar-content-min` for the app shell built on `.with-sidebar`; the primitive itself stays generally reusable.
+
+## Components and Forms
+
+Reusable components live in `components.css` and `forms.css`. Copy their documented anatomy instead of inventing parallel markup.
+
+Current reusable theme components include:
+
+- `.site-nav`
+- `.kixx-wordmark`
+- `.theme-toggle`
+- `.button`
+- `.card`
+- `.callout`
+- `.site-header`
+
+Current form components include:
+
+- `.field`
+- `textarea.field__input`
+- `.copy-field`
+
+Component state should be visible, semantic, and restrained. Buttons invert or shift border color; destructive actions use the danger signal; focus uses `--color-focus-outline`; cards and callouts remain flat, square, and hairline-ruled. Do not add shadows, decorative gradients, rounded card treatments, or ornamental color fills unless the style guide has first established that pattern.
 
 ## Page-Local Styles via `page_stylesheet`
 
@@ -126,7 +226,7 @@ Most base templates conditionally render a `page_stylesheet` include into a `<st
 
 ```html
 {{#if includes.page_stylesheet }}
-<style>{{ includes.page_stylesheet }}</style>
+<style>{{{ includes.page_stylesheet }}}</style>
 {{/if}}
 ```
 
@@ -140,6 +240,6 @@ To supply page-local CSS, add a `page_stylesheet` entry to the page's `includes`
 }
 ```
 
-`pages/admin/style-guide/colors/` is a working example of this pattern: `colors/page.json` includes both `body.html` (the page content) and `page.css` (styling specific to that one page), keeping the page's one-off layout rules out of the shared stylesheets entirely.
+`pages/admin/style-guide/colors/` is a working example of this pattern: `colors/page.json` includes both `body.html` and `page.css`, keeping one-page layout rules out of the shared stylesheets.
 
-This is the supported pattern for localized styles — it is the third option in the [style resolution order](#never-use-inline-styles) above, after reusing an existing primitive/component and after proposing a new shared utility. Reach for `page_stylesheet` only when the styling is specific to one page and not worth generalizing.
+This is the supported pattern for localized styles. Reach for `page_stylesheet` only when the styling is specific to one page and is not worth generalizing into `stylesheets/lib/`.
