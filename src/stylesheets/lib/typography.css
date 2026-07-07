@@ -97,23 +97,3 @@ blockquote {
     border-left: 2px solid var(--color-ink-link);
     color: var(--color-ink-muted);
 }
-
-/* Material Symbols icon font — retained ONLY for admin/login page templates not
-   yet migrated to Unicode marks. Redesigned surfaces use plain characters
-   instead; drop this rule (and the font request) once those pages are updated. */
-.material-symbols-rounded {
-    direction: ltr;
-    display: inline-block;
-    flex: 0 0 auto;
-    font-family: "Material Symbols Rounded";
-    font-feature-settings: "liga";
-    font-size: 1.35em;
-    font-style: normal;
-    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
-    font-weight: 400;
-    letter-spacing: normal;
-    line-height: 1;
-    text-transform: none;
-    white-space: nowrap;
-    word-wrap: normal;
-}

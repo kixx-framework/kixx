@@ -5,6 +5,7 @@
         "description": "A new Kixx web application"
     },
     "includes": {
-        "body": { "filename": "body.html" }
+        "body": { "filename": "body.html" },
+        "page_stylesheet": { "filename": "page.css" }
     }
 }

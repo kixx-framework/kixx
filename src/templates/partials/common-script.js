@@ -96,7 +96,9 @@
                 setStatus('Copied.');
 
                 if (icon) {
-                    icon.textContent = 'check';
+                    // Plain success mark, consistent with the "copy" text token
+                    // that replaced the old Material Symbols icon.
+                    icon.textContent = '✓';
                 }
 
                 resetTimeoutId = setTimeout(() => {

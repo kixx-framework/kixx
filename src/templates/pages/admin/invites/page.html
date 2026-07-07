@@ -13,7 +13,7 @@
         --}}
         {{#if newInviteUrl}}
         <div class="callout callout--info" role="status">
-            <span class="material-symbols-rounded callout__icon" aria-hidden="true">link</span>
+            <span class="callout__icon" aria-hidden="true">[i]</span>
             <div class="callout__body">
                 <p class="type-body-sm">New invite link created. Copy it now — it is shown only once and cannot be retrieved later.</p>
                 <div class="copy-field">
@@ -21,7 +21,7 @@
                     <div class="copy-field__row">
                         <input class="field__input copy-field__value" id="new-invite-url" type="text" value="{{ newInviteUrl }}" readonly>
                         <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="new-invite-url" aria-label="Copy invite link">
-                            <span class="material-symbols-rounded copy-field__icon" aria-hidden="true">content_copy</span>
+                            <span class="copy-field__icon" aria-hidden="true">copy</span>
                         </button>
                     </div>
                     <p class="copy-field__status" role="status" aria-live="polite"></p>

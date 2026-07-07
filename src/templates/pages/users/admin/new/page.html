@@ -5,7 +5,7 @@
     </header>
 
     <div class="callout callout--warning" role="alert">
-        <span class="material-symbols-rounded callout__icon" aria-hidden="true">warning</span>
+        <span class="callout__icon" aria-hidden="true">[!]</span>
         <div class="callout__body">
             <p class="type-label">Admin session active</p>
             <p class="type-body-sm">You are already logged in as an admin user. Delete your cookies for this site and try again.</p>
@@ -20,7 +20,7 @@
 
     {{#if throttled}}
     <div class="callout callout--error" role="alert">
-        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <span class="callout__icon" aria-hidden="true">[x]</span>
         <div class="callout__body">
             <p class="type-label">Too many attempts</p>
             <p class="type-body-sm">{{ throttleMessage }}</p>
@@ -35,7 +35,7 @@
     --}}
     {{#if formError}}
     <div class="callout callout--error" role="alert">
-        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <span class="callout__icon" aria-hidden="true">[x]</span>
         <div class="callout__body">
             <p class="type-label">Account already exists</p>
             <p class="type-body-sm">{{ formError }}</p>
@@ -108,7 +108,7 @@
     </header>
 
     <div class="callout callout--error" role="alert">
-        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <span class="callout__icon" aria-hidden="true">[x]</span>
         <div class="callout__body">
             {{!-- No type-label here: the header above already reads "Too many
                   attempts", so a matching label would just repeat it. --}}
@@ -126,7 +126,7 @@
     </header>
 
     <div class="callout callout--error" role="alert">
-        <span class="material-symbols-rounded callout__icon" aria-hidden="true">error</span>
+        <span class="callout__icon" aria-hidden="true">[x]</span>
         <div class="callout__body">
             <p class="type-label">Invalid invite</p>
             <p class="type-body-sm">This invite link is invalid, expired, or has already been used. Ask an administrator for a new invitation.</p>

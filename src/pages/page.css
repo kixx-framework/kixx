@@ -1,0 +1,214 @@
+.page-header {
+    max-width: 68rem;
+    padding: var(--space-lg) var(--space-page-gutter) var(--space-2xl);
+}
+
+/* -----------------------------------------------------------------------------
+    Home page — CSS Zen Garden markup, styled in the Hypertext Minimalism voice.
+
+    The Zen Garden HTML is fixed (the whole point of the exercise), so this
+    page-local sheet carries the entire design. It reads like a man page or
+    README rendered in a terminal: one monospace family, hairline section
+    rules, a capped reading column, and a right-hand index panel.
+
+    Scoped to the home page only and injected inline via the page_stylesheet
+    include, so it never leaks into the shared bundle. It consumes the semantic
+    --color-* / --space-* / --text-* tokens exactly like the shared components;
+    dark mode comes for free through light-dark() in those tokens.
+----------------------------------------------------------------------------- */
+
+/* The document shell: a masthead across the top, then a reading column beside a
+   fixed index panel. Capped and centered so long monospace lines never sprawl. */
+.page-wrapper {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+    grid-template-areas:
+        "intro   intro"
+        "main    sidebar";
+    column-gap: var(--space-xl);
+    row-gap: var(--space-lg);
+    align-items: start;
+    max-width: 68rem;
+    margin-inline: auto;
+    padding: var(--space-lg) var(--space-page-gutter) var(--space-2xl);
+}
+
+/* Below the sidebar threshold the index panel drops beneath the prose and the
+   whole thing becomes a single readable column. No breakpoints elsewhere. */
+@media (max-width: 45rem) {
+    .page-wrapper {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "intro"
+            "main"
+            "sidebar";
+    }
+}
+
+/* -----------------------------------------------------------------------------
+    Masthead (.intro) — the document header + its two lead paragraphs.
+----------------------------------------------------------------------------- */
+.intro {
+    grid-area: intro;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    /* A full-ink rule under the masthead is the primary structural divide, the
+       way a man page separates NAME from the body. */
+    padding-bottom: var(--space-lg);
+    border-bottom: var(--rule-width) solid var(--color-rule-strong);
+}
+.intro header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+}
+.intro h1 {
+    font-size: clamp(2rem, 6vw, 3rem);
+    line-height: var(--leading-tight);
+}
+/* The tagline is subordinate: smaller and muted, never a second color accent. */
+.intro h2 {
+    font-size: var(--text-h3);
+    font-weight: var(--weight-regular);
+    color: var(--color-ink-muted);
+}
+.summary,
+.preamble {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    max-width: var(--measure-prose);
+}
+.summary {
+    font-size: var(--text-body-lg);
+    line-height: var(--leading-relaxed);
+}
+.preamble h3 {
+    margin-bottom: var(--space-3xs);
+}
+
+/* -----------------------------------------------------------------------------
+    Main column (.supporting) — a stack of article sections divided by hairlines,
+    like the numbered sections of a spec document.
+----------------------------------------------------------------------------- */
+.supporting {
+    grid-area: main;
+    display: flex;
+    flex-direction: column;
+    max-width: var(--measure-prose);
+}
+/* Each article block owns its internal rhythm; the sections themselves are set
+   apart by a quiet hairline rule and even vertical padding. */
+.supporting > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding-block: var(--space-lg);
+}
+.supporting > div + div {
+    border-top: var(--hairline-width) solid var(--color-rule);
+}
+/* Section headings read like markdown/man-page headers: a muted "#" marker sets
+   them off without borrowing the link accent. */
+.supporting h3 {
+    display: flex;
+    gap: var(--space-2xs);
+}
+.supporting h3::before {
+    content: "#";
+    color: var(--color-ink-muted);
+}
+/* The byline paragraph is metadata, so it drops to caption weight and color. */
+.supporting [role="contentinfo"] {
+    margin-top: var(--space-sm);
+    font-size: var(--text-caption);
+    color: var(--color-ink-muted);
+}
+
+/* -----------------------------------------------------------------------------
+    Footer — the validator / license row rendered as bracketed terminal chips,
+    matching the [ button ] treatment in the shared component sheet.
+----------------------------------------------------------------------------- */
+.supporting footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    margin-top: var(--space-lg);
+    padding-top: var(--space-lg);
+    border-top: var(--rule-width) solid var(--color-rule-strong);
+}
+.supporting footer a {
+    font-size: var(--text-label);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--color-ink);
+}
+/* Non-breaking spaces inside the brackets keep the label off the corner. */
+.supporting footer a::before { content: "[\00a0"; }
+.supporting footer a::after  { content: "\00a0]"; }
+.supporting footer a:hover {
+    color: var(--color-ink-link);
+}
+.supporting footer a:hover::before,
+.supporting footer a:hover::after {
+    color: var(--color-ink-link);
+}
+
+/* -----------------------------------------------------------------------------
+    Sidebar (.sidebar) — a right-hand index panel: the design directory and the
+    resource links, presented as a plain-text listing.
+----------------------------------------------------------------------------- */
+.sidebar {
+    grid-area: sidebar;
+    font-size: var(--text-body-sm);
+    line-height: var(--leading-normal);
+}
+.sidebar .wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    /* Sticks alongside the prose on wide screens; harmless once it stacks. */
+    position: sticky;
+    top: var(--space-lg);
+}
+/* Panel headings share the uppercase tracked "label" register used across the
+   system for small functional text. */
+.sidebar h3 {
+    font-size: var(--text-label);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--color-ink-muted);
+    padding-bottom: var(--space-2xs);
+    margin-bottom: var(--space-xs);
+    border-bottom: var(--hairline-width) solid var(--color-rule);
+}
+.sidebar ul {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    list-style: none;
+    padding: 0;
+}
+/* The designer credit sits quietly after the linked design name. */
+.sidebar .designer-name {
+    color: var(--color-ink-muted);
+}
+/* Archive + resource rows read as a single tap target line each. */
+.design-archives .indicator {
+    color: var(--color-ink-muted);
+}
+
+/* -----------------------------------------------------------------------------
+    Inline detail — abbreviations get a dotted underline so the expanded title
+    is discoverable without adding a second text color.
+----------------------------------------------------------------------------- */
+abbr[title] {
+    text-decoration: underline dotted;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+    cursor: help;
+}
