@@ -12,21 +12,17 @@
     dark mode comes for free through light-dark() in those tokens.
 ----------------------------------------------------------------------------- */
 
-/* The document shell: context and masthead rows across the top, then a reading
-   column beside a fixed index panel. Capped and centered so long monospace
-   lines never sprawl. */
+/* The document shell: masthead row across the top, then a reading column beside
+   a fixed index panel. The shared page template owns the width cap. */
 .home-page {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
     grid-template-areas:
-        "context context"
         "intro   intro"
         "main    sidebar";
     column-gap: var(--space-xl);
     row-gap: var(--space-lg);
     align-items: start;
-    max-width: 68rem;
-    margin-inline: auto;
     padding: var(--space-lg) var(--space-page-gutter) var(--space-2xl);
 }
 
@@ -36,7 +32,6 @@
     .home-page {
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas:
-            "context"
             "intro"
             "main"
             "sidebar";
@@ -44,10 +39,11 @@
 }
 
 /* -----------------------------------------------------------------------------
-    Context (#zen-context) — starter project notes pinned to the first grid row.
+    Context (#zen-context) — starter project notes before the Zen Garden layout.
 ----------------------------------------------------------------------------- */
 #zen-context {
-    grid-area: context;
+    margin-top: var(--space-lg);
+    padding-inline: var(--space-page-gutter);
 }
 
 /* -----------------------------------------------------------------------------

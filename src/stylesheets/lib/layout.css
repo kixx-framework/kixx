@@ -156,3 +156,8 @@
 .center--form {
     --center-max: var(--measure-form);
 }
+
+/* Site modifier: compose with .center for the default public page shell. */
+.center--site {
+    --center-max: 68rem;
+}
