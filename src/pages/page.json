@@ -1,5 +1,6 @@
 {
     "baseTemplate": "default.html",
+    "pageTemplate": "default.html",
     "page": {
         "title": "A Kixx App",
         "description": "A new Kixx web application"
