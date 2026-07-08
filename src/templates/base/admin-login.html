@@ -11,7 +11,13 @@
     <body>
         {{>admin-site-header.html}}
 
+        {{#if body }}
         <main class="admin-main center">{{{ body }}}</main>
+        {{ else }}{{#if includes.body }}
+        <main class="admin-main center">{{{ includes.body }}}</main>
+        {{ else }}
+        <main class="admin-main center">No content.</main>
+        {{/if}}{{/if}}
 
         <script type="module" src="/javascript/site.js"></script>
     </body>

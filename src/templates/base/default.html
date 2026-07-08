@@ -10,7 +10,13 @@
         {{/if}}
     </head>
     <body>
-        {{{ body }}}
+        {{#if body }}
+            {{{ body }}}
+        {{ else }}{{#if includes.body }}
+            {{{ includes.body }}}
+        {{ else }}
+            <p>No content.</p>
+        {{/if}}{{/if}}
 
         <script type="module" src="/javascript/site.js"></script>
     </body>
