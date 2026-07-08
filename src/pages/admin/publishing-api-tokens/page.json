@@ -1,6 +1,5 @@
 {
-    "baseTemplate": "admin.html",
-    "page": {
+    "subpage": {
         "title": "Publishing API Tokens"
     }
 }

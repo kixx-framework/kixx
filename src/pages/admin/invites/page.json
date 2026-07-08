@@ -1,6 +1,5 @@
 {
-    "baseTemplate": "admin.html",
-    "page": {
-        "title": "Admin Invites"
+    "subpage": {
+        "title": "Admin User Invites"
     }
 }

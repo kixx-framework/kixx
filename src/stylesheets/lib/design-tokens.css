@@ -154,10 +154,12 @@
     /* -------------------------------------------------------------------------
         Type scale
 
-        Fixed rem steps only (never clamp()): fixed rem honors browser zoom
+        Shared reusable roles use fixed rem steps: fixed rem honors browser zoom
         (WCAG 1.4.4). Monospace runs wide, so the heading steps sit lower than a
         proportional scale would. Hierarchy comes from SIZE and WEIGHT, not
-        color or decoration.
+        color or decoration. Public marketing pages may add bounded, page-local
+        display sizing for mastheads or heroes; do not put those exceptions in
+        this shared scale.
 
         Role mapping:
           --text-h1        30px page title (one per screen)

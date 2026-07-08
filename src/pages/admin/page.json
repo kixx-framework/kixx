@@ -1,0 +1,7 @@
+{
+    "baseTemplate": "admin.html",
+    "pageTemplate": "",
+    "page": {
+        "title": { "template": "{{ subpage.title }} | Admin" }
+    }
+}

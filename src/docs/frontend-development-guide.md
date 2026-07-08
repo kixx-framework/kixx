@@ -191,7 +191,7 @@ The same tiered thinking applies to spacing (`--space-*`), measures (`--measure-
 
 Choose heading levels for document structure first. If the semantic level is correct but the visual size is wrong, apply the matching `.type-*` utility rather than changing the heading level.
 
-Do not use color, italics, negative tracking, or decoration to create hierarchy. Hierarchy comes from size, weight, spacing, and structure. Type sizes are fixed rem steps so browser zoom remains predictable; do not introduce fluid font sizing.
+Do not use color, italics, negative tracking, or decoration to create hierarchy. Hierarchy comes from size, weight, spacing, and structure. Shared typography roles are fixed `rem` steps so browser zoom remains predictable. Admin pages, shared components, and reusable `.type-*` roles should not use fluid font sizing. Public marketing pages may use bounded, page-local display sizing for mastheads or heroes when the text is part of the composition; keep body copy, navigation, form text, and ordinary section headings on the shared roles.
 
 ## Layout Primitives
 

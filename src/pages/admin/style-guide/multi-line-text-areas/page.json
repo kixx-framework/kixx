@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Text Areas : Style Guide"
+    "subpage": {
+        "title": "Text Areas"
     },
     "includes": {
         "body": { "filename": "body.html" },

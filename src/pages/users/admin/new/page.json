@@ -1,6 +1,5 @@
 {
-    "baseTemplate": "admin-login.html",
-    "page": {
-        "title": "New Account : Admin"
+    "subpage": {
+        "title": "New Account"
     }
 }

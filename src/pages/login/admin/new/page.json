@@ -1,6 +1,5 @@
 {
-    "baseTemplate": "admin-login.html",
-    "page": {
-        "title": "Login : Admin"
+    "subpage": {
+        "title": "Login"
     }
 }

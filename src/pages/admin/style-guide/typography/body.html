@@ -19,13 +19,15 @@
         <li><strong>Code</strong> &mdash; the same face with a faint ground, for inline tokens like <code>--text-h1</code>.</li>
     </ul>
 
-    <h3 class="type-h3">Why every size is a fixed <code>rem</code></h3>
-    <p>Marketing sites use fluid <code>clamp()</code> headings so a hero looks huge on desktop and still fits a phone. An admin panel has no heroes: headings are structural labels inside a capped character column. So we use fixed <code>rem</code> steps &mdash; monospace runs wide, so the steps sit a little lower than a proportional scale would:</p>
+    <h3 class="type-h3">Typeface sizing by surface</h3>
+    <p>Admin pages and public marketing pages share the same system-provided monospace family, but they do not size text for the same job. Admin screens use the fixed <code>rem</code> scale documented below because headings are structural labels inside dense tools. Public marketing pages may add bounded, page-local display sizing for mastheads or heroes where the text is part of the composition.</p>
+    <p>For admin pages, keep typography on the shared fixed <code>rem</code> roles:</p>
     <ul>
         <li><strong>Predictable density.</strong> A section title is the same size every time, so dense screens and data tables stay stable instead of breathing with the viewport.</li>
         <li><strong>Zoom &amp; accessibility.</strong> Fixed <code>rem</code> scales cleanly with browser zoom; <code>vw</code>-based fluid type partially ignores it, working against WCAG 1.4.4 (Resize Text).</li>
         <li><strong>Simplicity.</strong> If a heading is ever too large on mobile, add one discrete breakpoint step &mdash; never continuous scaling.</li>
     </ul>
+    <p>For public marketing pages, body copy, navigation, form text, and ordinary section headings should still use the shared roles. Limit fluid sizing to page-specific display text, define it in that page&rsquo;s <code>page_stylesheet</code>, and keep <code>rem</code> bounds around any <code>clamp()</code> so zoom behavior remains predictable. The home page masthead is the model: <code>.intro h1</code> uses <code>clamp(2rem, 6vw, 3rem)</code> because it is display composition, not an admin heading role.</p>
 
     <div class="callout">
         <span class="callout__icon" aria-hidden="true">*</span>
@@ -160,6 +162,7 @@
             <li>Signal importance with size and weight, not color, italics, or underlines.</li>
             <li>Let paragraphs breathe: <code>.type-body-lg</code> at 1.65 for anything people actually read.</li>
             <li>Keep a single <code>h1</code> per screen as the page title.</li>
+            <li>Scope public marketing display sizes to the page stylesheet; keep admin screens on the shared <code>.type-*</code> roles.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
@@ -167,8 +170,8 @@
         <ul>
             <li>Introduce a second typeface or download a web font &mdash; the system is one system-provided mono family.</li>
             <li>Pick a heading level for its size &mdash; choose the level for structure, then restyle with a <code>.type-*</code> class.</li>
-            <li>Invent new font sizes; every size lives in a <code>--text-*</code> token.</li>
-            <li>Reintroduce fluid <code>clamp()</code> type &mdash; fixed <code>rem</code> only, with a breakpoint step if needed.</li>
+            <li>Invent new reusable or admin font sizes; shared roles live in <code>--text-*</code> tokens.</li>
+            <li>Use fluid <code>clamp()</code> type in admin panels, shared components, or reusable <code>.type-*</code> roles.</li>
         </ul>
     </div>
 </div>

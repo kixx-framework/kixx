@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Typography : Style Guide"
+    "subpage": {
+        "title": "Typography"
     },
     "includes": {
         "body": { "filename": "body.html" }

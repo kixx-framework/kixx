@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Cards : Style Guide"
+    "subpage": {
+        "title": "Cards"
     },
     "includes": {
         "body": { "filename": "body.html" }

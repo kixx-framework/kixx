@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Colors : Style Guide"
+    "subpage": {
+        "title": "Colors"
     },
     "includes": {
         "body": { "filename": "body.html" },

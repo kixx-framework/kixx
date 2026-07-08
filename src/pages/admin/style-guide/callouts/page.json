@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Callouts : Style Guide"
+    "subpage": {
+        "title": "Callouts"
     },
     "includes": {
         "body": { "filename": "body.html" },

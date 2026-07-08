@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Buttons : Style Guide"
+    "subpage": {
+        "title": "Buttons"
     },
     "includes": {
         "body": { "filename": "body.html" },

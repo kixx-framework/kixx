@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Layout : Style Guide"
+    "subpage": {
+        "title": "Layout"
     },
     "includes": {
         "body": { "filename": "body.html" },

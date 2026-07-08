@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Text Fields : Style Guide"
+    "subpage": {
+        "title": "Text Fields"
     },
     "includes": {
         "body": { "filename": "body.html" },

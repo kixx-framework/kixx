@@ -2,7 +2,10 @@
     "baseTemplate": "admin.html",
     "pageTemplate": "admin/style-guide/style-guide-wrapper.html",
     "page": {
-        "title": "Introduction : Style Guide"
+        "title": { "template": "{{ subpage.title }} | Style Guide" }
+    },
+    "subpage": {
+        "title": "Introduction"
     },
     "includes": {
         "body": { "filename": "body.html" }

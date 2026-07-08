@@ -1,6 +1,6 @@
 {
-    "page": {
-        "title": "Aesthetic : Style Guide"
+    "subpage": {
+        "title": "Aesthetic"
     },
     "includes": {
         "body": { "filename": "body.html" }
