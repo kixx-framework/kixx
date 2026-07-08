@@ -15,7 +15,8 @@ import LoggerWriter from './plugins/node-logger-writer/lib/logger-writer.js';
 import ServerRequest from './plugins/node-server-request/lib/server-request.js';
 import ServerResponse from './kixx/http-router/server-response.js';
 import * as app from './app/app.js';
-import { generalPlugins, nodePlugins } from './plugins/mod.js';
+import generalPlugins from './plugins/general.js';
+import nodePlugins from './plugins/node.js';
 import { readConfig } from './plugins/node-config/lib/config.js';
 import virtualHosts from './virtual-hosts.js';
 
