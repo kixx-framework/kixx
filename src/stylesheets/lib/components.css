@@ -36,6 +36,34 @@ a.kixx-wordmark {
 }
 
 /* -----------------------------------------------------------------------------
+    Site header
+
+    The default site top bar. It composes .cluster for alignment, keeps the
+    wordmark responsive, and leaves controls in a
+    compact group at the trailing edge.
+----------------------------------------------------------------------------- */
+
+.site-header {
+    padding-block: clamp(0.9rem, 3vw, 1.25rem);
+    padding-inline: var(--space-page-gutter);
+    border-bottom: var(--rule-width) solid var(--color-rule-strong);
+}
+
+/* Built on .cluster in the markup; only the justify axis differs from default. */
+.site-header__inner {
+    --cluster-justify: space-between;
+}
+
+.site-header__wordmark {
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+}
+
+/* Also a .cluster; tighter gap for the controls. */
+.site-header__controls {
+    --cluster-space: 0.6rem;
+}
+
+/* -----------------------------------------------------------------------------
     Theme toggle
 
     A bracketed, boxed spec-sheet control. It names the theme it switches TO and
