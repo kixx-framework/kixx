@@ -2,27 +2,15 @@
 <html lang="en-US">
     <head>
         {{>common-site-meta.html}}
-        {{>admin-site-styles.html}}
+        <link href="/stylesheets/admin.css" rel="stylesheet">
 
         {{#if includes.page_stylesheet }}
         <style>{{{ includes.page_stylesheet }}}</style>
         {{/if}}
     </head>
     <body>
-        <header class="admin-header">
-            <div class="admin-header__inner cluster">
-                <a class="kixx-wordmark admin-header__wordmark" href="/" aria-label="Kixx — home">
-                    <span class="kixx-wordmark__slash-1">/</span>
-                    <span class="kixx-wordmark__slash-2">/</span>
-                    <span class="kixx-wordmark__kixx">kixx</span>
-                </a>
-                <div class="admin-header__controls cluster">
-                    <button class="theme-toggle" type="button" data-js-behavior="theme-toggle" aria-label="Switch color theme">
-                        <span class="theme-toggle__label">dark</span>
-                    </button>
-                </div>
-            </div>
-        </header>
+        {{>admin-site-header.html}}
+
         <main class="admin-main center">{{{ body }}}</main>
 
         <script type="module" src="/javascript/site.js"></script>
