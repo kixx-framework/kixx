@@ -64,7 +64,7 @@ try {
     }
 }
 
-const serverConfig = readConfig(sourceConfig, environment, {
+const config = readConfig(sourceConfig, environment, {
     resolveFilepath,
 });
 
@@ -101,6 +101,7 @@ const logger = new Logger({
 
 const appContext = new ApplicationContext({
     env,
+    config,
     runtime,
     logger,
 });
@@ -159,7 +160,7 @@ async function handleRequest(nodeRequest, nodeResponse) {
     try {
         const request = new ServerRequest(nodeRequest, { trustProxy });
         isHeadRequest = request.isHeadRequest();
-        const requestContext = appContext.createRequestContext(env, request, serverConfig);
+        const requestContext = appContext.createRequestContext(env, request);
         const response = await router.handleRequest(requestContext, request, new ServerResponse());
         sendResponse(nodeResponse, response, isHeadRequest);
     } catch (cause) {

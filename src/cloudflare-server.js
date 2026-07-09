@@ -15,7 +15,7 @@ import cloudflarePlugins from './plugins/cloudflare.js';
 import virtualHosts from './virtual-hosts.js';
 
 const environment = env.ENVIRONMENT || 'development';
-const serverConfig = readConfig(sourceConfig, environment);
+const config = readConfig(sourceConfig, environment);
 const name = env.APP_NAME || 'kixx-app';
 
 const runtime = new AppRuntime({
@@ -31,6 +31,7 @@ const logger = new Logger({
 
 const appContext = new ApplicationContext({
     env,
+    config,
     runtime,
     logger,
 });
@@ -82,7 +83,7 @@ export default {
     async fetch(nativeRequest, requestEnvironment, _cloudflare) {
         try {
             const request = new ServerRequest(nativeRequest);
-            const requestContext = appContext.createRequestContext(requestEnvironment, request, serverConfig);
+            const requestContext = appContext.createRequestContext(requestEnvironment, request);
 
             const response = await router.handleRequest(requestContext, request, new ServerResponse());
 

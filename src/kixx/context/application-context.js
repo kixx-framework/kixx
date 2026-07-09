@@ -22,10 +22,11 @@ import {
  * registries and spawns a per-request RequestContext for each incoming request.
  *
  * One ApplicationContext exists for the lifetime of the process. It holds the
- * root logger, environment, and runtime metadata, and exposes registration and
- * lookup helpers for services and collections. The service and collection
- * registries it owns are shared by reference with every RequestContext it
- * creates, so registrations made here are visible to later requests.
+ * root logger, application config, environment, and runtime metadata, and
+ * exposes registration and lookup helpers for services and collections. The
+ * service and collection registries it owns are shared by reference with every
+ * RequestContext it creates, so registrations made here are visible to later
+ * requests.
  *
  * @extends BaseContext
  */
@@ -38,12 +39,19 @@ export default class ApplicationContext extends BaseContext {
     /**
      * @param {Object} options
      * @param {Logger} options.logger - Root application logger shared with every request context.
+     * @param {Object} [options.config] - Resolved application configuration shared with every request context.
      * @param {Object} options.env - Environment variables, secrets, and platform bindings.
      * @param {AppRuntime} options.runtime - Runtime metadata shared with every request context.
      */
     constructor(options) {
-        const { env, logger, runtime } = options ?? {};
-        super({ env, logger, runtime });
+        const {
+            config,
+            env,
+            logger,
+            runtime,
+        } = options ?? {};
+
+        super({ config, env, logger, runtime });
     }
 
     /**
@@ -106,19 +114,18 @@ export default class ApplicationContext extends BaseContext {
      * Creates a RequestContext for an individual request.
      *
      * The request context receives the request-scoped environment while sharing
-     * the application runtime, logger, services, and collections. When a request
-     * is provided, its `id` becomes the new context's requestId.
+     * the application runtime, config, logger, services, and collections. When
+     * a request is provided, its `id` becomes the new context's requestId.
      *
      * @param {Object} env - Request-scoped environment variables, secrets, and bindings
      * @param {import('../http-router/server-request-interface.js').ServerRequestInterface} [request]
      *   Request being handled by the context
-     * @param {Object} [config] - Request-scoped application configuration.
      * @returns {RequestContext} Context for handling one request
      */
-    createRequestContext(env, request, config) {
+    createRequestContext(env, request) {
         return new RequestContext({
             env,
-            config,
+            config: this.config,
             requestId: request?.id,
             runtime: this.runtime,
             services: this.#services,

@@ -12,12 +12,13 @@ import RequestContext from '../../../src/kixx/context/request-context.js';
 
 function makeApplicationContext(options) {
     const {
+        config = { name: 'test-app' },
         logger = { name: 'test-logger' },
         env = {},
         runtime = { mode: 'server' },
     } = options ?? {};
 
-    return new ApplicationContext({ logger, env, runtime });
+    return new ApplicationContext({ config, logger, env, runtime });
 }
 
 function catchError(fn) {
@@ -42,30 +43,28 @@ async function catchAsyncError(fn) {
 describe('ApplicationContext', ({ describe }) => {
 
     describe('constructor', ({ it }) => {
-        it('assigns env, logger, and runtime as enumerable read-only properties', () => {
+        it('assigns config, env, logger, and runtime as enumerable read-only properties', () => {
+            const config = { name: 'app' };
             const logger = { name: 'app' };
             const env = { NODE_ENV: 'test' };
             const runtime = { mode: 'server' };
-            const context = new ApplicationContext({ logger, env, runtime });
+            const context = new ApplicationContext({ config, logger, env, runtime });
 
+            assertEqual(config, context.config);
             assertEqual(env, context.env);
             assertEqual(logger, context.logger);
             assertEqual(runtime, context.runtime);
+            assert(Object.keys(context).includes('config'), 'expected config to be enumerable');
             assert(Object.keys(context).includes('env'), 'expected env to be enumerable');
             assert(Object.keys(context).includes('logger'), 'expected logger to be enumerable');
             assert(Object.keys(context).includes('runtime'), 'expected runtime to be enumerable');
         });
 
-        it('does not expose config even when provided', () => {
-            const context = new ApplicationContext({
-                config: { name: 'app' },
-                logger: { name: 'app' },
-                env: {},
-                runtime: { mode: 'server' },
-            });
+        it('leaves config undefined when omitted', () => {
+            const context = new ApplicationContext({ logger: {}, env: {}, runtime: {} });
 
             assertUndefined(context.config);
-            assert(!Object.keys(context).includes('config'), 'expected config not to be enumerable');
+            assert(Object.keys(context).includes('config'), 'expected config to be enumerable');
         });
     });
 
@@ -155,25 +154,27 @@ describe('ApplicationContext', ({ describe }) => {
     });
 
     describe('createRequestContext', ({ it }) => {
-        it('returns a RequestContext sharing the logger and runtime', () => {
-            const context = makeApplicationContext();
-            const requestConfig = { name: 'request-app' };
+        it('returns a RequestContext sharing the application config, logger, and runtime', () => {
+            const config = { name: 'request-app' };
+            const context = makeApplicationContext({ config });
 
-            const requestContext = context.createRequestContext({}, null, requestConfig);
+            const requestContext = context.createRequestContext({}, null);
 
             assert(requestContext instanceof RequestContext, 'expected a RequestContext');
-            assertEqual(requestConfig, requestContext.config);
+            assertEqual(config, requestContext.config);
             assertEqual(context.logger, requestContext.logger);
             assertEqual(context.runtime, requestContext.runtime);
         });
 
-        it('uses the request config when one is provided', () => {
-            const context = makeApplicationContext();
-            const requestConfig = { name: 'fresh-app' };
+        it('uses the same application config for every request context', () => {
+            const config = { name: 'fresh-app' };
+            const context = makeApplicationContext({ config });
 
-            const requestContext = context.createRequestContext({}, { id: 'req-123' }, requestConfig);
+            const firstContext = context.createRequestContext({}, { id: 'req-123' });
+            const secondContext = context.createRequestContext({}, { id: 'req-456' });
 
-            assertEqual(requestConfig, requestContext.config);
+            assertEqual(config, firstContext.config);
+            assertEqual(config, secondContext.config);
         });
 
         it('gives the request context its own request-scoped env', () => {
