@@ -12,10 +12,8 @@ import {
     isBoolean,
     isString,
     isNonEmptyString,
-    isObjectNotNull,
     isPlainObject,
     assert,
-    assertFunction,
     assertNonEmptyString,
 } from '../../../kixx/assertions/mod.js';
 import { OperationalError } from '../../../kixx/errors/mod.js';
@@ -76,13 +74,12 @@ const textDecoder = new TextDecoder();
  * row, so it is invisible to the store). `delete()` removes the manifest row
  * first, then unlinks the body file, so a crash leaves at most an orphan file.
  *
- * The object root, bucket allow-list, and manifest connection are resolved from
- * `context.config.env.OBJECT_STORE` on first use and then fixed for the store's
- * lifetime: a later request that resolves a different root or bucket set is a
- * programmer error and throws an `AssertionError`. The connection is opened in
- * WAL mode with a busy timeout so concurrent writers from other processes retry
- * instead of failing with `SQLITE_BUSY`. Body bytes never pass through SQLite, so
- * only metadata writes serialize on the manifest.
+ * The object root and bucket allow-list are resolved from immutable application
+ * config during plugin registration and passed into the constructor. The
+ * manifest connection is opened lazily in WAL mode with a busy timeout so
+ * concurrent writers from other processes retry instead of failing with
+ * `SQLITE_BUSY`. Body bytes never pass through SQLite, so only metadata writes
+ * serialize on the manifest.
  *
  * Reads are read-after-write consistent on the local machine, satisfying the
  * contract's strong-consistency guarantee.
@@ -96,32 +93,31 @@ export default class ObjectStore {
 
     #database = null;
     #ownsDatabase = false;
-    #pathOverride = null;
-    #bucketsOverride = null;
+    #root = null;
+    #buckets = null;
+    #manifestPath = null;
+    #tempDirectory = null;
     #sqliteOptions = null;
 
-    // Resolved-and-locked store spec, populated on first use.
-    #buckets = null;
-    #tempDirectory = null;
-    #specKey = null;
+    #directoriesReady = false;
     #prepared = false;
     #closed = false;
 
     /**
      * @param {Object} options - Store configuration
      * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create an ObjectStore child logger
-     * @param {string} [options.path] - Object root directory used instead of resolving one from config
-     * @param {Object} [options.buckets] - Bucket allow-list (`{ [bucketName]: { directory } }`) used instead of config
+     * @param {string} options.path - Object root directory
+     * @param {Object} options.buckets - Bucket allow-list (`{ [bucketName]: { directory } }`)
      * @param {Object} [options.sqliteOptions] - Options forwarded to the `DatabaseSync` constructor when opening the manifest
      * @param {import('node:sqlite').DatabaseSync} [options.database] - Pre-opened manifest connection to use instead of opening one
      * @param {boolean} [options.ownsDatabase] - Whether `close()` should close the connection. Defaults to false when
      *   `database` is supplied and true otherwise.
-     * @throws {AssertionError} When logger is missing, or when `path` is supplied but empty
+     * @throws {AssertionError} When logger, path, or buckets are missing or invalid
      */
     constructor(options) {
         const {
             logger,
-            path: pathOverride,
+            path: root,
             buckets,
             sqliteOptions,
             database,
@@ -129,6 +125,8 @@ export default class ObjectStore {
         } = options ?? {};
 
         assert(logger, 'ObjectStore requires a logger');
+        assertNonEmptyString(root, 'ObjectStore requires a path');
+        assert(isPlainObject(buckets), 'ObjectStore requires buckets');
 
         if (database) {
             // An injected connection is owned by the caller unless explicitly claimed.
@@ -138,16 +136,10 @@ export default class ObjectStore {
             this.#ownsDatabase = isBoolean(ownsDatabase) ? ownsDatabase : true;
         }
 
-        if (!isUndefined(pathOverride)) {
-            assertNonEmptyString(pathOverride, 'ObjectStore "path" must be a non-empty string when provided');
-            this.#pathOverride = pathOverride;
-        }
-
-        if (!isUndefined(buckets)) {
-            assert(isPlainObject(buckets), 'ObjectStore "buckets" must be a plain object when provided');
-            this.#bucketsOverride = buckets;
-        }
-
+        this.#root = root;
+        this.#buckets = this.#resolveBuckets(root, buckets);
+        this.#manifestPath = path.join(root, MANIFEST_FILENAME);
+        this.#tempDirectory = path.join(root, TEMP_DIRNAME);
         this.#sqliteOptions = sqliteOptions ?? {};
         this.#logger = logger.createChild('ObjectStore');
     }
@@ -156,7 +148,7 @@ export default class ObjectStore {
      * Stores a body under `bucket`/`key`, creating or overwriting any existing
      * object.
      *
-     * @param {RequestContext} context - Request context used to resolve Node store config
+     * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} bucket - Configured bucket name
      * @param {string} key - Object key
      * @param {ReadableStream|ArrayBuffer|ArrayBufferView|string|Blob} body - Object body; must be non-null
@@ -164,8 +156,8 @@ export default class ObjectStore {
      * @returns {Promise<ObjectMeta>} Metadata for the stored object
      * @throws {AssertionError} When the bucket, key, body, or options are invalid
      */
-    async put(context, bucket, key, body, options) {
-        const bucketDirectory = this.#resolveBucketDirectory(context, bucket);
+    async put(_context, bucket, key, body, options) {
+        const bucketDirectory = this.#resolveBucketDirectory(bucket);
         this.#assertValidKey(key);
 
         let readable;
@@ -193,7 +185,7 @@ export default class ObjectStore {
         const customMetadata = this.#resolveCustomMetadata(options);
         this.#logger.debug('put() writing object', { bucket, key });
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
         const filePath = this.#resolveFilePath(bucketDirectory, key);
 
         // Stage the body to a temp file (hashing and counting as it streams), then
@@ -251,18 +243,18 @@ export default class ObjectStore {
     /**
      * Retrieves the object body and metadata for `bucket`/`key`.
      *
-     * @param {RequestContext} context - Request context used to resolve Node store config
+     * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} bucket - Configured bucket name
      * @param {string} key - Object key
      * @returns {Promise<ObjectBody|null>} The object body and metadata, or null when absent
      * @throws {AssertionError} When the bucket or key is invalid
      */
-    async get(context, bucket, key) {
-        const bucketDirectory = this.#resolveBucketDirectory(context, bucket);
+    async get(_context, bucket, key) {
+        const bucketDirectory = this.#resolveBucketDirectory(bucket);
         this.#assertValidKey(key);
         this.#logger.debug('get() loading object', { bucket, key });
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
         const row = db
             .prepare('SELECT key, content_type, etag, content_length, uploaded, custom_metadata FROM objects WHERE bucket = ? AND key = ?')
             .get(bucket, key);
@@ -294,18 +286,18 @@ export default class ObjectStore {
     /**
      * Retrieves only the metadata for `bucket`/`key`, without the body.
      *
-     * @param {RequestContext} context - Request context used to resolve Node store config
+     * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} bucket - Configured bucket name
      * @param {string} key - Object key
      * @returns {Promise<ObjectMeta|null>} The object metadata, or null when absent
      * @throws {AssertionError} When the bucket or key is invalid
      */
-    async head(context, bucket, key) {
-        this.#resolveBucketDirectory(context, bucket);
+    async head(_context, bucket, key) {
+        this.#resolveBucketDirectory(bucket);
         this.#assertValidKey(key);
         this.#logger.debug('head() loading metadata', { bucket, key });
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
         const row = db
             .prepare('SELECT key, content_type, etag, content_length, uploaded, custom_metadata FROM objects WHERE bucket = ? AND key = ?')
             .get(bucket, key);
@@ -317,18 +309,18 @@ export default class ObjectStore {
      * Deletes `bucket`/`key`. Resolves with no value, and deleting an absent key
      * is a successful no-op.
      *
-     * @param {RequestContext} context - Request context used to resolve Node store config
+     * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} bucket - Configured bucket name
      * @param {string} key - Object key
      * @returns {Promise<void>}
      * @throws {AssertionError} When the bucket or key is invalid
      */
-    async delete(context, bucket, key) {
-        const bucketDirectory = this.#resolveBucketDirectory(context, bucket);
+    async delete(_context, bucket, key) {
+        const bucketDirectory = this.#resolveBucketDirectory(bucket);
         this.#assertValidKey(key);
         this.#logger.debug('delete() removing object', { bucket, key });
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
         // Remove the manifest row first so the object becomes invisible immediately;
         // a crash before the unlink leaves at most a benign orphan body file.
         db.prepare('DELETE FROM objects WHERE bucket = ? AND key = ?').run(bucket, key);
@@ -349,14 +341,14 @@ export default class ObjectStore {
     /**
      * Lists objects in `bucket`, ordered lexicographically by key.
      *
-     * @param {RequestContext} context - Request context used to resolve Node store config
+     * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} bucket - Configured bucket name
      * @param {import('../../../kixx/object-store/object-store-interface.js').ObjectListOptions} [options] - List options
      * @returns {Promise<ObjectList>} A keyset-paginated page of objects
      * @throws {AssertionError} When the bucket or options are invalid
      */
-    async list(context, bucket, options) {
-        this.#resolveBucketDirectory(context, bucket);
+    async list(_context, bucket, options) {
+        this.#resolveBucketDirectory(bucket);
         const {
             prefix,
             cursor,
@@ -403,7 +395,7 @@ export default class ObjectStore {
             delimiter: resolvedDelimiter,
         });
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
 
         // The query path is synchronous SQLite work; the async signature keeps the
         // method portable with the streaming adapters.
@@ -439,7 +431,6 @@ export default class ObjectStore {
             this.#database.close();
         }
         this.#database = null;
-        this.#specKey = null;
         this.#prepared = false;
     }
 
@@ -728,58 +719,35 @@ export default class ObjectStore {
     }
 
     /**
-     * Resolves the configured directory for a bucket, ensuring the store spec is
-     * resolved and the manifest connection is ready.
-     * @param {RequestContext} context - Request context used to resolve Node store config
+     * Resolves the configured directory for a bucket.
      * @param {string} bucket - Configured bucket name
      * @returns {string} Absolute bucket directory
-     * @throws {AssertionError} When the bucket is unknown or the store is closed
+     * @throws {AssertionError} When the bucket is unknown
      */
-    #resolveBucketDirectory(context, bucket) {
+    #resolveBucketDirectory(bucket) {
         assertNonEmptyString(bucket, 'ObjectStore bucket must be a non-empty string');
-        this.#getDatabase(context);
         const directory = this.#buckets.get(bucket);
         assert(directory, `ObjectStore bucket "${ bucket }" is not configured`);
         return directory;
     }
 
     /**
-     * Returns the manifest connection, resolving and locking the store spec and
-     * preparing the schema on first use.
-     * @param {RequestContext} context - Request context used to resolve Node store config
+     * Returns the manifest connection, opening and preparing the schema on first use.
      * @returns {import('node:sqlite').DatabaseSync} The prepared connection
      * @throws {AssertionError} When the store has been closed
      */
-    #getDatabase(context) {
+    #getDatabase() {
         if (this.#closed) {
             throw new AssertionError('ObjectStore has been closed');
         }
 
-        if (this.#specKey === null) {
-            const spec = this.#resolveStoreSpec(context);
-            this.#buckets = spec.buckets;
-            this.#tempDirectory = path.join(spec.root, TEMP_DIRNAME);
-            this.#specKey = spec.key;
+        if (!this.#directoriesReady) {
+            this.#ensureStoreDirectories();
+            this.#directoriesReady = true;
+        }
 
-            // The root, temp, and bucket directories must exist before the manifest
-            // is opened or a body is staged. Creation is idempotent.
-            fs.mkdirSync(this.#tempDirectory, { recursive: true });
-            for (const directory of this.#buckets.values()) {
-                fs.mkdirSync(directory, { recursive: true });
-            }
-
-            if (!this.#database) {
-                this.#database = new DatabaseSync(spec.manifestPath, this.#sqliteOptions);
-            }
-        } else {
-            const spec = this.#resolveStoreSpec(context);
-            if (spec.key !== this.#specKey) {
-                // The resolved root and bucket set are expected to be constant; a
-                // change means the application is misconfigured.
-                throw new AssertionError(
-                    'ObjectStore root and bucket configuration must not change after first use',
-                );
-            }
+        if (!this.#database) {
+            this.#database = new DatabaseSync(this.#manifestPath, this.#sqliteOptions);
         }
 
         if (!this.#prepared) {
@@ -805,10 +773,7 @@ export default class ObjectStore {
         return this.#database;
     }
 
-    #resolveStoreSpec(context) {
-        const root = this.#resolveRoot(context);
-        const bucketsConfig = this.#resolveBucketsConfig(context);
-
+    #resolveBuckets(root, bucketsConfig) {
         const buckets = new Map();
         for (const [ name, conf ] of Object.entries(bucketsConfig)) {
             this.#assertSafeSegment(name, `ObjectStore bucket name "${ name }"`);
@@ -818,49 +783,20 @@ export default class ObjectStore {
             this.#assertSafeSegment(directoryName, `ObjectStore bucket directory "${ directoryName }"`);
             buckets.set(name, path.join(root, directoryName));
         }
-
-        return {
-            root,
-            buckets,
-            manifestPath: path.join(root, MANIFEST_FILENAME),
-            key: createSpecKey(root, bucketsConfig, this.#sqliteOptions),
-        };
+        return buckets;
     }
 
-    #resolveRoot(context) {
-        if (this.#pathOverride) {
-            return this.#pathOverride;
+    #ensureStoreDirectories() {
+        // The root, temp, and bucket directories must exist before the manifest
+        // is opened or a body is staged. Creation is idempotent.
+        try {
+            fs.mkdirSync(this.#tempDirectory, { recursive: true });
+            for (const directory of this.#buckets.values()) {
+                fs.mkdirSync(directory, { recursive: true });
+            }
+        } catch (cause) {
+            throw new OperationalError(`Unable to create object store directory under ${ this.#root }`, { cause });
         }
-
-        const config = context?.config;
-        const storeConfig = config?.env?.OBJECT_STORE;
-        assertNonEmptyString(
-            storeConfig?.path,
-            'ObjectStore requires context.config.env.OBJECT_STORE.path',
-        );
-        assertFunction(
-            config?.resolveFilepath,
-            'ObjectStore requires context.config.resolveFilepath',
-        );
-
-        const resolved = config.resolveFilepath(storeConfig.path);
-        assertNonEmptyString(
-            resolved,
-            'ObjectStore context.config.resolveFilepath() must return a non-empty string',
-        );
-        return resolved;
-    }
-
-    #resolveBucketsConfig(context) {
-        if (this.#bucketsOverride) {
-            return this.#bucketsOverride;
-        }
-        const bucketsConfig = context?.config?.env?.OBJECT_STORE?.buckets;
-        assert(
-            isPlainObject(bucketsConfig),
-            'ObjectStore requires context.config.env.OBJECT_STORE.buckets',
-        );
-        return bucketsConfig;
     }
 
     #assertSafeSegment(segment, label) {
@@ -910,26 +846,4 @@ function decodeCursor(cursor) {
         throw new AssertionError('ObjectStore list "cursor" is not a valid cursor');
     }
     return decoded;
-}
-
-function createSpecKey(root, bucketsConfig, sqliteOptions) {
-    return JSON.stringify({
-        root,
-        buckets: normalizeSpecValue(bucketsConfig),
-        sqliteOptions: normalizeSpecValue(sqliteOptions),
-    });
-}
-
-function normalizeSpecValue(value) {
-    if (Array.isArray(value)) {
-        return value.map((item) => normalizeSpecValue(item));
-    }
-    if (isObjectNotNull(value)) {
-        const result = {};
-        for (const key of Object.keys(value).sort()) {
-            result[key] = normalizeSpecValue(value[key]);
-        }
-        return result;
-    }
-    return value;
 }

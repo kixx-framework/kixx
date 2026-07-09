@@ -94,9 +94,9 @@
  * - Cloudflare adapters resolve the per-bucket R2 binding from `context.env` on
  *   every call, using the bucket allow-list in
  *   `context.config.env.OBJECT_STORE.buckets`.
- * - Node.js adapters resolve the object root from
- *   `context.config.env.OBJECT_STORE.path` via `context.config.resolveFilepath()`
- *   on first use, then hold it fixed for the store's lifetime.
+ * - Node.js adapters receive the resolved object root and bucket allow-list from
+ *   immutable application config during plugin registration, so method contexts
+ *   are accepted for interface compatibility but do not drive configuration.
  *
  * ## Runtime adapters
  * @see ObjectStore in ../../plugins/cloudflare-object-store/lib/object-store.js for the Cloudflare R2 implementation
