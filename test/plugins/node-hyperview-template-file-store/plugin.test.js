@@ -49,7 +49,7 @@ describe('node-hyperview-template-file-store plugin', ({ after, it }) => {
         };
         const requestContext = {
             config: {
-                env: { TEMPLATE_FILE_STORE: { directory: './templates' } },
+                env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './templates' } },
                 resolveFilepath,
             },
         };
@@ -82,7 +82,7 @@ describe('node-hyperview-template-file-store plugin', ({ after, it }) => {
 
         assert(error, 'expected service operation to throw');
         assertEqual('AssertionError', error.name);
-        assertMatches('TEMPLATE_FILE_STORE.directory', error.message);
+        assertMatches('HYPERVIEW_TEMPLATE_FILE_STORE.directory', error.message);
     });
 });
 

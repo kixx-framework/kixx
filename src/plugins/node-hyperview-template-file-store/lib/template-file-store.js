@@ -19,7 +19,7 @@ const PARTIALS_PREFIX = 'partials/';
  * This is the Node.js port of the Cloudflare KV template store. Where the
  * Cloudflare adapter resolves a KV binding from each request `context`, this
  * adapter resolves its root directory from
- * `context.config.env.TEMPLATE_FILE_STORE.directory` and
+ * `context.config.env.HYPERVIEW_TEMPLATE_FILE_STORE.directory` and
  * `context.config.resolveFilepath()` on first use unless an explicit
  * constructor `directory` was supplied. The resolved directory is fixed for the
  * lifetime of the store: a later request that resolves a different directory is
@@ -238,10 +238,10 @@ export default class TemplateFileStore {
 
     #resolveDirectoryFromConfig(context) {
         const config = context?.config;
-        const storeConfig = config?.env?.TEMPLATE_FILE_STORE;
+        const storeConfig = config?.env?.HYPERVIEW_TEMPLATE_FILE_STORE;
         assertNonEmptyString(
             storeConfig?.directory,
-            'TemplateFileStore requires context.config.env.TEMPLATE_FILE_STORE.directory',
+            'TemplateFileStore requires context.config.env.HYPERVIEW_TEMPLATE_FILE_STORE.directory',
         );
         assertFunction(
             config?.resolveFilepath,

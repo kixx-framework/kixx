@@ -94,7 +94,7 @@
  * - Cloudflare adapters resolve their request-scoped KV binding from
  *   `context.env` on every call.
  * - Node.js adapters resolve the local filesystem root from
- *   `context.config.env.PAGE_DATA_STORE` via `context.config.resolveFilepath()`
+ *   `context.config.env.HYPERVIEW_PAGE_DATA_STORE` via `context.config.resolveFilepath()`
  *   on first use, unless an explicit constructor override was supplied, then
  *   hold it fixed for the store's lifetime.
  *

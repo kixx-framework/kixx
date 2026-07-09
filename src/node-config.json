@@ -28,10 +28,10 @@
                     "uploads": {}
                 }
             },
-            "PAGE_DATA_STORE": {
+            "HYPERVIEW_PAGE_DATA_STORE": {
                 "directory": "./pages"
             },
-            "TEMPLATE_FILE_STORE": {
+            "HYPERVIEW_TEMPLATE_FILE_STORE": {
                 "directory": "./templates"
             },
             "STATIC_FILE_STORE": {
@@ -64,10 +64,10 @@
                     "uploads": {}
                 }
             },
-            "PAGE_DATA_STORE": {
+            "HYPERVIEW_PAGE_DATA_STORE": {
                 "directory": "./pages"
             },
-            "TEMPLATE_FILE_STORE": {
+            "HYPERVIEW_TEMPLATE_FILE_STORE": {
                 "directory": "./templates"
             },
             "STATIC_FILE_STORE": {
@@ -100,10 +100,10 @@
                     "uploads": {}
                 }
             },
-            "PAGE_DATA_STORE": {
+            "HYPERVIEW_PAGE_DATA_STORE": {
                 "directory": "./pages"
             },
-            "TEMPLATE_FILE_STORE": {
+            "HYPERVIEW_TEMPLATE_FILE_STORE": {
                 "directory": "./templates"
             },
             "STATIC_FILE_STORE": {

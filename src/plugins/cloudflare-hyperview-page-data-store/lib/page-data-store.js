@@ -4,7 +4,7 @@ import { assert, assertNonEmptyString, isObjectNotNull } from '../../../kixx/ass
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
  */
 
-const DEFAULT_BINDING_NAME = 'PAGE_DATA_STORE';
+const DEFAULT_BINDING_NAME = 'HYPERVIEW_PAGE_DATA_STORE';
 
 /**
  * Cloudflare KV-backed store for Hyperview page assets.
@@ -164,7 +164,7 @@ export default class PageDataStore {
 
     #getKVStore(context) {
         const { config, env } = context;
-        let { bindingName } = config?.env?.PAGE_DATA_STORE ?? {};
+        let { bindingName } = config?.env?.HYPERVIEW_PAGE_DATA_STORE ?? {};
         bindingName = bindingName || DEFAULT_BINDING_NAME;
         const kvStore = env[bindingName];
         assert(kvStore, `PageDataStore KV binding "${ bindingName }" is not bound on context.env`);

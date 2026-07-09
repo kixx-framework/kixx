@@ -7,7 +7,7 @@ import { assert, assertNonEmptyString } from '../../../kixx/assertions/mod.js';
 const BASE_TEMPLATE_PREFIX = 'base/';
 const PAGE_TEMPLATE_PREFIX = 'pages/';
 const PARTIALS_PREFIX = 'partials/';
-const DEFAULT_BINDING_NAME = 'TEMPLATE_FILE_STORE';
+const DEFAULT_BINDING_NAME = 'HYPERVIEW_TEMPLATE_FILE_STORE';
 
 /**
  * Cloudflare KV-backed store for shared Hyperview templates.
@@ -184,7 +184,7 @@ export default class TemplateFileStore {
 
     #getKVStore(context) {
         const { config, env } = context;
-        let { bindingName } = config?.env?.TEMPLATE_FILE_STORE ?? {};
+        let { bindingName } = config?.env?.HYPERVIEW_TEMPLATE_FILE_STORE ?? {};
         bindingName = bindingName || DEFAULT_BINDING_NAME;
         const kvStore = env[bindingName];
         assert(kvStore, `TemplateFileStore KV binding "${ bindingName }" is not bound on context.env`);

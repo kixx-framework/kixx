@@ -45,7 +45,7 @@ function makeKVNamespace(initial) {
 }
 
 function makeContext(kvStore) {
-    return { env: { PAGE_DATA_STORE: kvStore ?? makeKVNamespace() } };
+    return { env: { HYPERVIEW_PAGE_DATA_STORE: kvStore ?? makeKVNamespace() } };
 }
 
 function makeStore() {

@@ -16,7 +16,7 @@ import {
  * This is the Node.js port of the Cloudflare KV page data store. Where the
  * Cloudflare adapter resolves a KV binding from each request `context`, this
  * adapter resolves its root directory from
- * `context.config.env.PAGE_DATA_STORE.directory` and
+ * `context.config.env.HYPERVIEW_PAGE_DATA_STORE.directory` and
  * `context.config.resolveFilepath()` on first use unless an explicit
  * constructor `directory` was supplied. The resolved directory is fixed for the
  * lifetime of the store: a later request that resolves a different directory is
@@ -240,10 +240,10 @@ export default class PageDataStore {
 
     #resolveDirectoryFromConfig(context) {
         const config = context?.config;
-        const storeConfig = config?.env?.PAGE_DATA_STORE;
+        const storeConfig = config?.env?.HYPERVIEW_PAGE_DATA_STORE;
         assertNonEmptyString(
             storeConfig?.directory,
-            'PageDataStore requires context.config.env.PAGE_DATA_STORE.directory',
+            'PageDataStore requires context.config.env.HYPERVIEW_PAGE_DATA_STORE.directory',
         );
         assertFunction(
             config?.resolveFilepath,

@@ -49,7 +49,7 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
         };
         const requestContext = {
             config: {
-                env: { PAGE_DATA_STORE: { directory: './pages' } },
+                env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './pages' } },
                 resolveFilepath,
             },
         };
@@ -82,7 +82,7 @@ describe('node-hyperview-page-data-store plugin', ({ after, it }) => {
 
         assert(error, 'expected service operation to throw');
         assertEqual('AssertionError', error.name);
-        assertMatches('PAGE_DATA_STORE.directory', error.message);
+        assertMatches('HYPERVIEW_PAGE_DATA_STORE.directory', error.message);
     });
 });
 

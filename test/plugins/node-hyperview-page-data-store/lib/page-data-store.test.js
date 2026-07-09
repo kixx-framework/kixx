@@ -98,13 +98,13 @@ describe('PageDataStore (node)', ({ after, describe }) => {
     });
 
     describe('request config', ({ it }) => {
-        it('resolves PAGE_DATA_STORE.directory from the method context', async () => {
+        it('resolves HYPERVIEW_PAGE_DATA_STORE.directory from the method context', async () => {
             const directory = await makeTempDir();
             const tracker = new MockTracker();
             const resolveFilepath = tracker.fn(() => directory);
             const context = {
                 config: {
-                    env: { PAGE_DATA_STORE: { directory: './pages' } },
+                    env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './pages' } },
                     resolveFilepath,
                 },
             };
@@ -117,7 +117,7 @@ describe('PageDataStore (node)', ({ after, describe }) => {
             assertEqual('# Body', result);
         });
 
-        it('throws when PAGE_DATA_STORE.directory is missing', async () => {
+        it('throws when HYPERVIEW_PAGE_DATA_STORE.directory is missing', async () => {
             const store = new PageDataStore({ logger: makeLogger() });
 
             const caught = await catchAsyncError(() => {
@@ -126,7 +126,7 @@ describe('PageDataStore (node)', ({ after, describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('PAGE_DATA_STORE.directory', caught.message);
+            assertMatches('HYPERVIEW_PAGE_DATA_STORE.directory', caught.message);
         });
 
         it('locks the resolved directory across requests with a stable config', async () => {
@@ -135,7 +135,7 @@ describe('PageDataStore (node)', ({ after, describe }) => {
             const makeConfigContext = () => {
                 return {
                     config: {
-                        env: { PAGE_DATA_STORE: { directory: './pages' } },
+                        env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './pages' } },
                         resolveFilepath,
                     },
                 };
@@ -158,13 +158,13 @@ describe('PageDataStore (node)', ({ after, describe }) => {
             };
             const firstContext = {
                 config: {
-                    env: { PAGE_DATA_STORE: { directory: './first' } },
+                    env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './first' } },
                     resolveFilepath,
                 },
             };
             const secondContext = {
                 config: {
-                    env: { PAGE_DATA_STORE: { directory: './second' } },
+                    env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './second' } },
                     resolveFilepath,
                 },
             };

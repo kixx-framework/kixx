@@ -98,13 +98,13 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
     });
 
     describe('request config', ({ it }) => {
-        it('resolves TEMPLATE_FILE_STORE.directory from the method context', async () => {
+        it('resolves HYPERVIEW_TEMPLATE_FILE_STORE.directory from the method context', async () => {
             const directory = await makeTempDir();
             const tracker = new MockTracker();
             const resolveFilepath = tracker.fn(() => directory);
             const context = {
                 config: {
-                    env: { TEMPLATE_FILE_STORE: { directory: './templates' } },
+                    env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './templates' } },
                     resolveFilepath,
                 },
             };
@@ -117,7 +117,7 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
             assertEqual('<home/>', result.source);
         });
 
-        it('throws when TEMPLATE_FILE_STORE.directory is missing', async () => {
+        it('throws when HYPERVIEW_TEMPLATE_FILE_STORE.directory is missing', async () => {
             const store = new TemplateFileStore({ logger: makeLogger() });
 
             const caught = await catchAsyncError(() => {
@@ -126,7 +126,7 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('TEMPLATE_FILE_STORE.directory', caught.message);
+            assertMatches('HYPERVIEW_TEMPLATE_FILE_STORE.directory', caught.message);
         });
 
         it('locks the resolved directory across requests with a stable config', async () => {
@@ -135,7 +135,7 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
             const makeConfigContext = () => {
                 return {
                     config: {
-                        env: { TEMPLATE_FILE_STORE: { directory: './templates' } },
+                        env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './templates' } },
                         resolveFilepath,
                     },
                 };
@@ -158,13 +158,13 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
             };
             const firstContext = {
                 config: {
-                    env: { TEMPLATE_FILE_STORE: { directory: './first' } },
+                    env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './first' } },
                     resolveFilepath,
                 },
             };
             const secondContext = {
                 config: {
-                    env: { TEMPLATE_FILE_STORE: { directory: './second' } },
+                    env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './second' } },
                     resolveFilepath,
                 },
             };
