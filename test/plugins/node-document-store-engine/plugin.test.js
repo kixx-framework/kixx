@@ -18,17 +18,17 @@ async function makeTempDir() {
     return dir;
 }
 
-function makeLogger() {
-    return new Logger({ name: 'Test', level: 'NONE' });
-}
-
-async function catchAsyncError(fn) {
+function catchError(fn) {
     try {
-        await fn();
+        fn();
     } catch (error) {
         return error;
     }
     return null;
+}
+
+function makeLogger() {
+    return new Logger({ name: 'Test', level: 'NONE' });
 }
 
 
@@ -43,7 +43,7 @@ describe('node-document-store-engine plugin', ({ after, it }) => {
         }
     });
 
-    it('registers the document store engine without application config', async () => {
+    it('registers the document store engine from application config', async () => {
         const directory = await makeTempDir();
         const sqlitePath = path.join(directory, 'document_store.sqlite');
         const registered = {};
@@ -51,16 +51,14 @@ describe('node-document-store-engine plugin', ({ after, it }) => {
         const resolveFilepath = tracker.fn(() => sqlitePath);
 
         const context = {
+            config: {
+                env: { DOCUMENT_STORE: { path: '../data/document_store.sqlite' } },
+                resolveFilepath,
+            },
             logger: makeLogger(),
             registerService(name, service) {
                 registered.name = name;
                 registered.service = service;
-            },
-        };
-        const requestContext = {
-            config: {
-                env: { DOCUMENT_STORE: { path: '../data/document_store.sqlite' } },
-                resolveFilepath,
             },
         };
 
@@ -69,18 +67,24 @@ describe('node-document-store-engine plugin', ({ after, it }) => {
         registered.service.setIndexDefinitions([]);
 
         assertEqual('DocumentStoreEngine', registered.name);
-        assertEqual(0, resolveFilepath.mock.callCount());
-
-        await registered.service.put(requestContext, { type: 'Note', id: 'n1', title: 'Hello' });
-        const record = await registered.service.get(requestContext, 'Note', 'n1');
-
+        assertEqual(1, resolveFilepath.mock.callCount());
         assertEqual('../data/document_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
+
+        await registered.service.put(null, { type: 'Note', id: 'n1', title: 'Hello' });
+        const record = await registered.service.get(null, 'Note', 'n1');
+
         assertEqual('Hello', record.doc.title);
     });
 
-    it('throws from the registered service when the request config path is missing', async () => {
+    it('throws during registration when the application config path is missing', () => {
         const registered = {};
         const context = {
+            config: {
+                env: {},
+                resolveFilepath(filepath) {
+                    return filepath;
+                },
+            },
             logger: makeLogger(),
             registerService(name, service) {
                 registered.name = name;
@@ -88,16 +92,30 @@ describe('node-document-store-engine plugin', ({ after, it }) => {
             },
         };
 
-        register(context);
-        engines.push(registered.service);
-        registered.service.setIndexDefinitions([]);
+        const error = catchError(() => register(context));
 
-        const error = await catchAsyncError(() => {
-            return registered.service.get({ config: { env: {} } }, 'Note', 'missing');
-        });
-
-        assert(error, 'expected service operation to throw');
+        assert(error, 'expected registration to throw');
         assertEqual('AssertionError', error.name);
         assertMatches('DOCUMENT_STORE.path', error.message);
+    });
+
+    it('throws during registration when resolveFilepath is missing', () => {
+        const registered = {};
+        const context = {
+            config: {
+                env: { DOCUMENT_STORE: { path: '../data/document_store.sqlite' } },
+            },
+            logger: makeLogger(),
+            registerService(name, service) {
+                registered.name = name;
+                registered.service = service;
+            },
+        };
+
+        const error = catchError(() => register(context));
+
+        assert(error, 'expected registration to throw');
+        assertEqual('AssertionError', error.name);
+        assertMatches('resolveFilepath', error.message);
     });
 });

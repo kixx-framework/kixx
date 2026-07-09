@@ -35,10 +35,9 @@
  * to their platform:
  * - Cloudflare adapters resolve their request-scoped D1 binding from
  *   `context.env` on every call.
- * - Node.js adapters resolve the local database file location from
- *   `context.config.env.DOCUMENT_STORE` via `context.config.resolveFilepath()`
- *   on first use, unless an explicit constructor override was supplied, then
- *   hold it fixed for the engine's lifetime.
+ * - Node.js adapters receive their local database file location during plugin
+ *   registration from immutable application config, and accept `context` for
+ *   interface compatibility.
  *
  * Implementations MUST accept the argument so callers can stay runtime-agnostic.
  *

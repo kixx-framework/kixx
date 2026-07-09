@@ -14,7 +14,6 @@ import {
     isObjectNotNull,
     assert,
     assertArray,
-    assertFunction,
     assertNonEmptyString,
 } from '../../../kixx/assertions/mod.js';
 
@@ -34,18 +33,15 @@ const CURSOR_RANGE_OPTION_KEYS = [
  *
  * Mirrors the observable document, index, cursor, and error semantics of the
  * Cloudflare D1 adapter, but is built on Node's built-in `node:sqlite`
- * `DatabaseSync` API. Plugin-created instances resolve the SQLite file from
- * `context.config.env.DOCUMENT_STORE.path` and `context.config.resolveFilepath()`
- * on first use, then open and cache that connection. The resolved database spec
- * is fixed for the lifetime of the engine: a later request that resolves a
- * different path or options is a programmer error and throws an `AssertionError`.
+ * `DatabaseSync` API. Plugin-created instances receive their resolved SQLite
+ * file path and options from immutable application config during plugin
+ * registration, then open and cache that connection on first use.
  *
  * A connection may be supplied (`database`) or opened from a file system `path`.
  * These explicit constructor paths are useful for focused tests and low-level
- * use. When the engine opens a connection itself, whether from constructor
- * `path` or request config, it owns that connection and closes it in `close()`;
- * an injected connection is left open for the caller to manage unless
- * `ownsDatabase` is set to true.
+ * use. When the engine opens a connection itself, it owns that connection and
+ * closes it in `close()`; an injected connection is left open for the caller to
+ * manage unless `ownsDatabase` is set to true.
  *
  * Secondary indexes are configured through `setIndexDefinitions()` before the
  * database is first used, so callers can construct the engine before all
@@ -64,7 +60,6 @@ export default class DocumentStoreEngine {
     #ownsDatabase = false;
     #path = null;
     #sqliteOptions = null;
-    #databaseSpecKey = null;
     #closed = false;
 
     #indexDefinitions = null;
@@ -77,12 +72,12 @@ export default class DocumentStoreEngine {
     /**
      * @param {Object} options - Configuration options
      * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a named child logger
-     * @param {string} [options.path] - File system path or `':memory:'` opened when no `database` is supplied
+     * @param {string} [options.path] - File system path or `':memory:'`. Required when no `database` is supplied.
      * @param {Object} [options.sqliteOptions] - Options forwarded to the `DatabaseSync` constructor when opening `path`
      * @param {import('node:sqlite').DatabaseSync} [options.database] - Pre-opened SQLite connection to use instead of opening `path`
      * @param {boolean} [options.ownsDatabase] - Whether `close()` should close the connection. Defaults to false when
      *   `database` is supplied and true when the engine opens `path`.
-     * @throws {AssertionError} When logger is missing, or when `path` is supplied but empty
+     * @throws {AssertionError} When logger is missing, or when neither `database` nor a non-empty `path` is supplied
      */
     constructor(options) {
         const {
@@ -99,13 +94,11 @@ export default class DocumentStoreEngine {
             // An injected connection is owned by the caller unless explicitly claimed.
             this.#database = database;
             this.#ownsDatabase = isBoolean(ownsDatabase) ? ownsDatabase : false;
-        } else if (!isUndefined(path)) {
-            assertNonEmptyString(path, 'DocumentStoreEngine "path" must be a non-empty string when provided');
+        } else {
+            assertNonEmptyString(path, 'DocumentStoreEngine requires a database or path');
             this.#path = path;
             this.#sqliteOptions = sqliteOptions ?? {};
             // A connection opened by the engine is owned by the engine by default.
-            this.#ownsDatabase = isBoolean(ownsDatabase) ? ownsDatabase : true;
-        } else {
             this.#ownsDatabase = isBoolean(ownsDatabase) ? ownsDatabase : true;
         }
 
@@ -172,15 +165,15 @@ export default class DocumentStoreEngine {
      * reconciled by dropping and recreating the affected index. Safe to call on
      * every startup — DDL uses IF NOT EXISTS or is guarded by the PRAGMA pre-check.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} _context - Request or execution context accepted for engine interface compatibility
      * @returns {Promise<void>}
      * @throws {AssertionError} When `setIndexDefinitions()` has not been called
      * @throws {Error} When table creation, schema reconciliation, or PRAGMA introspection fails
      */
-    async prepareDatabase(context) {
+    async prepareDatabase(_context) {
         assertArray(this.#indexDefinitions, 'DocumentStoreEngine#setIndexDefinitions() must be called before the database can be used');
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
 
         const createTableSQL = `
             CREATE TABLE IF NOT EXISTS documents (
@@ -311,7 +304,7 @@ export default class DocumentStoreEngine {
      * The index name must correspond to an entry in `indexDefinitions`. Each record in
      * the result exposes the matched index value as `key`.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @param {string} type - Document type used to scope the query
      * @param {Object} [options]
      * @param {string} options.index - Name of the configured index key to query
@@ -388,7 +381,7 @@ export default class DocumentStoreEngine {
      * Unlike `query()`, no named index is required — every document row carries `sort_key`.
      * Each record in the result exposes the sort key as `sortKey` (not `key`).
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @param {string} type - Document type used to scope the scan
      * @param {Object} [options]
      * @param {boolean} [options.descending=false] - Sort in descending order when true
@@ -455,7 +448,7 @@ export default class DocumentStoreEngine {
     /**
      * Retrieves a single document by type and id.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @param {string} type - Document type
      * @param {string} id - Document identifier
      * @returns {Promise<(Object|null)>} The stored record with parsed `doc` payload or null if not found
@@ -491,7 +484,7 @@ export default class DocumentStoreEngine {
      * rejected, or `update()` when the caller must prove it saw the current
      * version before writing.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @param {Object} doc - Document payload; must include `type` and `id` string properties
      * @param {string} doc.type - Document type
      * @param {string} doc.id - Document identifier
@@ -546,7 +539,7 @@ export default class DocumentStoreEngine {
     /**
      * Updates an existing document when its current version matches the expected version.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @param {Object} doc - Document payload; must include `type` and `id` string properties
      * @param {string} doc.type - Document type
      * @param {string} doc.id - Document identifier
@@ -618,7 +611,7 @@ export default class DocumentStoreEngine {
     /**
      * Creates a document only when no row already exists for the same type and id.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @param {Object} doc - Document payload; must include `type` and `id` string properties
      * @param {string} doc.type - Document type
      * @param {string} doc.id - Document identifier
@@ -681,7 +674,7 @@ export default class DocumentStoreEngine {
      * - **Force delete** (`version` is absent): Deletes unconditionally. Returns
      *   `false` (rather than throwing) when no matching row exists.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @param {string} type - Document type
      * @param {string} id - Document identifier
      * @param {number} [version] - Expected current version; omit for an unconditional delete
@@ -748,7 +741,6 @@ export default class DocumentStoreEngine {
             this.#database.close();
         }
         this.#database = null;
-        this.#databaseSpecKey = null;
     }
 
     /**
@@ -794,11 +786,11 @@ export default class DocumentStoreEngine {
      * concurrent callers onto a single in-flight prepare. On failure the cached
      * promise is cleared so the next call retries.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
+     * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @returns {Promise<void>}
      */
     #ensurePrepared(context) {
-        this.#getDatabase(context);
+        this.#getDatabase();
         if (this.#prepared) {
             return Promise.resolve();
         }
@@ -817,74 +809,24 @@ export default class DocumentStoreEngine {
      * Opening is deferred so construction stays cheap and a `':memory:'` engine
      * that is closed before any operation never allocates a database.
      *
-     * @param {Object} context - Request or execution context used to resolve Node request config
      * @returns {import('node:sqlite').DatabaseSync} SQLite connection
      */
-    #getDatabase(context) {
+    #getDatabase() {
         if (this.#closed) {
             throw new AssertionError('DocumentStoreEngine has been closed');
         }
 
-        // An injected connection has no spec to resolve or lock.
-        if (this.#database && !this.#databaseSpecKey) {
+        if (this.#database) {
             return this.#database;
         }
 
-        const databaseSpec = this.#resolveDatabaseSpec(context);
-
-        if (this.#databaseSpecKey === null) {
-            // First use opens the connection and locks the database spec for the
-            // lifetime of the engine.
-            ensureDatabaseDirectory(databaseSpec.path);
-            try {
-                this.#database = new DatabaseSync(databaseSpec.path, databaseSpec.sqliteOptions);
-            } catch (cause) {
-                throw new OperationalError(`Unable to open SQLite database from ${ databaseSpec.path }`, { cause });
-            }
-            this.#databaseSpecKey = databaseSpec.key;
-        } else if (this.#databaseSpecKey !== databaseSpec.key) {
-            // The resolved path and options are expected to be constant; a change
-            // means the application is misconfigured, which is a programmer error.
-            throw new AssertionError(
-                'DocumentStoreEngine database path and options must not change after the database is opened',
-            );
+        ensureDatabaseDirectory(this.#path);
+        try {
+            this.#database = new DatabaseSync(this.#path, this.#sqliteOptions);
+        } catch (cause) {
+            throw new OperationalError(`Unable to open SQLite database from ${ this.#path }`, { cause });
         }
-
         return this.#database;
-    }
-
-    #resolveDatabaseSpec(context) {
-        if (this.#path) {
-            return {
-                path: this.#path,
-                sqliteOptions: this.#sqliteOptions,
-                key: createDatabaseSpecKey(this.#path, this.#sqliteOptions),
-            };
-        }
-
-        const config = context?.config;
-        const storeConfig = config?.env?.DOCUMENT_STORE;
-        assertNonEmptyString(
-            storeConfig?.path,
-            'DocumentStoreEngine requires context.config.env.DOCUMENT_STORE.path',
-        );
-        assertFunction(
-            config?.resolveFilepath,
-            'DocumentStoreEngine requires context.config.resolveFilepath',
-        );
-
-        const resolvedPath = config.resolveFilepath(storeConfig.path);
-        assertNonEmptyString(
-            resolvedPath,
-            'DocumentStoreEngine context.config.resolveFilepath() must return a non-empty string',
-        );
-
-        const sqliteOptions = storeConfig.sqliteOptions ?? {};
-        return {
-            path: resolvedPath,
-            sqliteOptions,
-            key: createDatabaseSpecKey(resolvedPath, sqliteOptions),
-        };
     }
 }
 
@@ -936,27 +878,6 @@ function getGeneratedColumnJsonPath(tableSQL, columnName) {
 
 function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function createDatabaseSpecKey(path, sqliteOptions) {
-    return JSON.stringify({
-        path,
-        sqliteOptions: normalizeSpecValue(sqliteOptions),
-    });
-}
-
-function normalizeSpecValue(value) {
-    if (Array.isArray(value)) {
-        return value.map((item) => normalizeSpecValue(item));
-    }
-    if (isObjectNotNull(value)) {
-        const result = {};
-        for (const key of Object.keys(value).sort()) {
-            result[key] = normalizeSpecValue(value[key]);
-        }
-        return result;
-    }
-    return value;
 }
 
 function createCursorScope(args) {

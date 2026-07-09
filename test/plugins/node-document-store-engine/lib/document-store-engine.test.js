@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
-import { describe, MockTracker } from 'kixx-test';
+import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import DocumentStoreEngine from '../../../../src/plugins/node-document-store-engine/lib/document-store-engine.js';
@@ -31,16 +31,6 @@ function catchError(fn) {
     return null;
 }
 
-async function catchAsyncError(fn) {
-    try {
-        await fn();
-    } catch (error) {
-        return error;
-    }
-    return null;
-}
-
-
 describe('Node DocumentStoreEngine', ({ after, describe }) => {
 
     after(async () => {
@@ -58,10 +48,12 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
             assertMatches('DocumentStoreEngine requires a logger', caught.message);
         });
 
-        it('allows logger-only construction for request-config-backed engines', () => {
-            const engine = new DocumentStoreEngine({ logger: makeLogger() });
+        it('throws when neither a database nor path is provided', () => {
+            const caught = catchError(() => new DocumentStoreEngine({ logger: makeLogger() }));
 
-            engine.close();
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('database or path', caught.message);
         });
 
         it('throws when an explicit path is empty', () => {
@@ -69,101 +61,7 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('path', caught.message);
-        });
-    });
-
-    describe('request config', ({ it }) => {
-        it('resolves DOCUMENT_STORE.path from the method context', async () => {
-            const directory = await makeTempDir();
-            const sqlitePath = path.join(directory, 'document_store.sqlite');
-            const tracker = new MockTracker();
-            const resolveFilepath = tracker.fn(() => sqlitePath);
-            const context = {
-                config: {
-                    env: { DOCUMENT_STORE: { path: '../data/document_store.sqlite' } },
-                    resolveFilepath,
-                },
-            };
-            const engine = new DocumentStoreEngine({ logger: makeLogger() });
-            engine.setIndexDefinitions([]);
-
-            await engine.put(context, { type: 'Note', id: 'n1', title: 'Hello' });
-            const record = await engine.get(context, 'Note', 'n1');
-
-            assertEqual('../data/document_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
-            assertEqual('Hello', record.doc.title);
-            engine.close();
-        });
-
-        it('throws when DOCUMENT_STORE.path is missing', async () => {
-            const engine = new DocumentStoreEngine({ logger: makeLogger() });
-            engine.setIndexDefinitions([]);
-
-            const caught = await catchAsyncError(() => engine.get({ config: { env: {} } }, 'Note', 'missing'));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('DOCUMENT_STORE.path', caught.message);
-            engine.close();
-        });
-
-        it('reuses the same database across requests with a stable resolved path', async () => {
-            const directory = await makeTempDir();
-            const sqlitePath = path.join(directory, 'document_store.sqlite');
-            const resolveFilepath = () => sqlitePath;
-            const makeContext = () => {
-                return {
-                    config: {
-                        env: { DOCUMENT_STORE: { path: '../data/document_store.sqlite' } },
-                        resolveFilepath,
-                    },
-                };
-            };
-            const engine = new DocumentStoreEngine({ logger: makeLogger() });
-            engine.setIndexDefinitions([]);
-
-            // A fresh context object each request still resolves the same path, so
-            // a document written on one request is visible on the next.
-            await engine.put(makeContext(), { type: 'Note', id: 'same', title: 'First' });
-            await engine.put(makeContext(), { type: 'Note', id: 'same', title: 'Second' });
-
-            assertEqual('Second', (await engine.get(makeContext(), 'Note', 'same')).doc.title);
-            engine.close();
-        });
-
-        it('throws when the resolved path changes after the database is opened', async () => {
-            const directory = await makeTempDir();
-            const firstPath = path.join(directory, 'first.sqlite');
-            const secondPath = path.join(directory, 'second.sqlite');
-            const resolveFilepath = (configuredPath) => {
-                return configuredPath === './first.sqlite' ? firstPath : secondPath;
-            };
-            const firstContext = {
-                config: {
-                    env: { DOCUMENT_STORE: { path: './first.sqlite' } },
-                    resolveFilepath,
-                },
-            };
-            const secondContext = {
-                config: {
-                    env: { DOCUMENT_STORE: { path: './second.sqlite' } },
-                    resolveFilepath,
-                },
-            };
-            const engine = new DocumentStoreEngine({ logger: makeLogger() });
-            engine.setIndexDefinitions([]);
-
-            await engine.put(firstContext, { type: 'Note', id: 'same', title: 'First' });
-
-            const caught = await catchAsyncError(() => {
-                return engine.put(secondContext, { type: 'Note', id: 'same', title: 'Second' });
-            });
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('must not change', caught.message);
-            engine.close();
+            assertMatches('database or path', caught.message);
         });
     });
 
@@ -174,6 +72,27 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
 
             await engine.put(null, { type: 'Note', id: 'n1', title: 'Hello' });
             const record = await engine.get(null, 'Note', 'n1');
+
+            assertEqual('Hello', record.doc.title);
+            engine.close();
+        });
+
+        it('keeps using the constructor path regardless of method context config', async () => {
+            const directory = await makeTempDir();
+            const sqlitePath = path.join(directory, 'document_store.sqlite');
+            const context = {
+                config: {
+                    env: { DOCUMENT_STORE: { path: './ignored.sqlite' } },
+                    resolveFilepath() {
+                        throw new Error('method context config should not be used');
+                    },
+                },
+            };
+            const engine = new DocumentStoreEngine({ logger: makeLogger(), path: sqlitePath });
+            engine.setIndexDefinitions([]);
+
+            await engine.put(context, { type: 'Note', id: 'n1', title: 'Hello' });
+            const record = await engine.get(context, 'Note', 'n1');
 
             assertEqual('Hello', record.doc.title);
             engine.close();
