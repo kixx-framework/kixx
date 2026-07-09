@@ -68,10 +68,9 @@
  * first argument. Runtime adapters use that context according to their platform:
  * - Cloudflare adapters resolve their request-scoped KV binding from
  *   `context.env` on every call.
- * - Node.js adapters resolve the local database file location from
- *   `context.config.env.KEY_VALUE_STORE` via `context.config.resolveFilepath()`
- *   on first use, unless an explicit constructor override was supplied, then
- *   hold it fixed for the store's lifetime.
+ * - Node.js adapters receive their local database file location during plugin
+ *   registration from immutable application config, and accept `context` for
+ *   interface compatibility.
  *
  * Implementations MUST accept the argument so callers can stay runtime-agnostic.
  *

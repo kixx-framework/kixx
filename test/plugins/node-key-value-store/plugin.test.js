@@ -22,6 +22,15 @@ function makeLogger() {
     return new Logger({ name: 'Test', level: 'NONE' });
 }
 
+function catchError(fn) {
+    try {
+        fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}
+
 describe('node-key-value-store plugin', ({ after, it }) => {
 
     after(async () => {
@@ -34,7 +43,7 @@ describe('node-key-value-store plugin', ({ after, it }) => {
         }
     });
 
-    it('registers the key value store without application config', async () => {
+    it('registers the key value store from application config', async () => {
         const directory = await makeTempDir();
         const sqlitePath = path.join(directory, 'key_value_store.sqlite');
         const registered = {};
@@ -42,16 +51,14 @@ describe('node-key-value-store plugin', ({ after, it }) => {
         const resolveFilepath = tracker.fn(() => sqlitePath);
 
         const context = {
+            config: {
+                env: { KEY_VALUE_STORE: { path: '../data/key_value_store.sqlite' } },
+                resolveFilepath,
+            },
             logger: makeLogger(),
             registerService(name, service) {
                 registered.name = name;
                 registered.service = service;
-            },
-        };
-        const requestContext = {
-            config: {
-                env: { KEY_VALUE_STORE: { path: '../data/key_value_store.sqlite' } },
-                resolveFilepath,
             },
         };
 
@@ -59,16 +66,22 @@ describe('node-key-value-store plugin', ({ after, it }) => {
         stores.push(registered.service);
 
         assertEqual('KeyValueStore', registered.name);
-        assertEqual(0, resolveFilepath.mock.callCount());
-
-        await registered.service.put(requestContext, 'greeting', 'hello');
+        assertEqual(1, resolveFilepath.mock.callCount());
         assertEqual('../data/key_value_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
-        assertEqual('hello', await registered.service.get(requestContext, 'greeting'));
+
+        await registered.service.put(null, 'greeting', 'hello');
+        assertEqual('hello', await registered.service.get(null, 'greeting'));
     });
 
-    it('throws from the registered service when the request config path is missing', async () => {
+    it('throws during registration when the application config path is missing', () => {
         const registered = {};
         const context = {
+            config: {
+                env: {},
+                resolveFilepath(filepath) {
+                    return filepath;
+                },
+            },
             logger: makeLogger(),
             registerService(name, service) {
                 registered.name = name;
@@ -76,22 +89,30 @@ describe('node-key-value-store plugin', ({ after, it }) => {
             },
         };
 
-        register(context);
-        stores.push(registered.service);
+        const error = catchError(() => register(context));
 
-        const error = await catchAsyncError(() => registered.service.get({ config: { env: {} } }, 'missing'));
-
-        assert(error, 'expected service operation to throw');
+        assert(error, 'expected registration to throw');
         assertEqual('AssertionError', error.name);
         assertMatches('KEY_VALUE_STORE.path', error.message);
     });
-});
 
-async function catchAsyncError(fn) {
-    try {
-        await fn();
-    } catch (error) {
-        return error;
-    }
-    return null;
-}
+    it('throws during registration when resolveFilepath is missing', () => {
+        const registered = {};
+        const context = {
+            config: {
+                env: { KEY_VALUE_STORE: { path: '../data/key_value_store.sqlite' } },
+            },
+            logger: makeLogger(),
+            registerService(name, service) {
+                registered.name = name;
+                registered.service = service;
+            },
+        };
+
+        const error = catchError(() => register(context));
+
+        assert(error, 'expected registration to throw');
+        assertEqual('AssertionError', error.name);
+        assertMatches('resolveFilepath', error.message);
+    });
+});

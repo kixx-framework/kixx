@@ -7,9 +7,7 @@ import {
     AssertionError,
     isUndefined,
     isBoolean,
-    isObjectNotNull,
     assert,
-    assertFunction,
     assertNonEmptyString,
 } from '../../../kixx/assertions/mod.js';
 
@@ -44,15 +42,11 @@ const textDecoder = new TextDecoder();
  *
  * The Node.js port of the key/value cache contract. Where the Cloudflare adapter
  * resolves a request-scoped KV binding from `context.env.KEY_VALUE_STORE`, this
- * adapter resolves the SQLite file from
- * `context.config.env.KEY_VALUE_STORE.path` and `context.config.resolveFilepath()`
- * on first use, then opens and caches that connection. The resolved database spec
- * is fixed for the lifetime of the store: a later request that resolves a
- * different path or options is a programmer error and throws an `AssertionError`.
- * A single on-disk database (kept on local disk, not a network
- * mount) is the shared medium across every process on the machine, so cache
- * state survives process restarts and is visible to sibling workers without
- * keeping anything in process memory.
+ * adapter receives its resolved SQLite file path and options from immutable
+ * application config during plugin registration. A single on-disk database
+ * (kept on local disk, not a network mount) is the shared medium across every
+ * process on the machine, so cache state survives process restarts and is
+ * visible to sibling workers without keeping anything in process memory.
  *
  * Entries live in a flat `kv` table: the value is stored as an opaque `BLOB` and
  * an optional `expires_at` Unix-seconds column carries the expiry. No type
@@ -84,19 +78,18 @@ export default class KeyValueStore {
     #ownsDatabase = false;
     #path = null;
     #sqliteOptions = null;
-    #databaseSpecKey = null;
     #prepared = false;
     #closed = false;
 
     /**
      * @param {Object} options - Store configuration
      * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a KeyValueStore child logger
-     * @param {string} [options.path] - File system path or `':memory:'` opened when no `database` is supplied
+     * @param {string} [options.path] - File system path or `':memory:'`. Required when no `database` is supplied.
      * @param {Object} [options.sqliteOptions] - Options forwarded to the `DatabaseSync` constructor when opening `path`
      * @param {import('node:sqlite').DatabaseSync} [options.database] - Pre-opened SQLite connection to use instead of opening `path`
      * @param {boolean} [options.ownsDatabase] - Whether `close()` should close the connection. Defaults to false when
      *   `database` is supplied and true when the store opens `path`.
-     * @throws {AssertionError} When logger is missing, or when `path` is supplied but empty
+     * @throws {AssertionError} When logger is missing, or when neither `database` nor a non-empty `path` is supplied
      */
     constructor(options) {
         const {
@@ -113,13 +106,11 @@ export default class KeyValueStore {
             // An injected connection is owned by the caller unless explicitly claimed.
             this.#database = database;
             this.#ownsDatabase = isBoolean(ownsDatabase) ? ownsDatabase : false;
-        } else if (!isUndefined(path)) {
-            assertNonEmptyString(path, 'KeyValueStore "path" must be a non-empty string when provided');
+        } else {
+            assertNonEmptyString(path, 'KeyValueStore requires a database or path');
             this.#path = path;
             this.#sqliteOptions = sqliteOptions ?? {};
             // A connection opened by the store is owned by the store by default.
-            this.#ownsDatabase = isBoolean(ownsDatabase) ? ownsDatabase : true;
-        } else {
             this.#ownsDatabase = isBoolean(ownsDatabase) ? ownsDatabase : true;
         }
 
@@ -129,18 +120,18 @@ export default class KeyValueStore {
     /**
      * Retrieves a value by key, decoded per `options.type`.
      *
-     * @param {RequestContext} context - Request context used to resolve Node request config
+     * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} key - Cache key
      * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
      * @returns {Promise<string|import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|null>} The decoded value, or null when absent or expired
      * @throws {AssertionError} When the key or `options.type` is invalid
      */
-    async get(context, key, options) {
+    async get(_context, key, options) {
         this.#assertValidKey(key);
         const type = this.#resolveType(options);
         this.#logger.debug('get() loading key', { key, type });
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
         const nowSeconds = Math.floor(Date.now() / 1000);
 
         // The expiry guard hides entries whose absolute expiry has passed; an
@@ -160,21 +151,21 @@ export default class KeyValueStore {
      * Creates or overwrites a value, encoded per `options.type`, with optional
      * expiration.
      *
-     * @param {RequestContext} context - Request context used to resolve Node request config
+     * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} key - Cache key
      * @param {string|import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|ArrayBufferView} value - Value to store; must match the declared type and be non-null
      * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
      * @returns {Promise<void>}
      * @throws {AssertionError} When the key, value, type, or expiry options are invalid
      */
-    async put(context, key, value, options) {
+    async put(_context, key, value, options) {
         this.#assertValidKey(key);
         const type = this.#resolveType(options);
         const blob = this.#encodeValue(type, value);
         const expiresAt = this.#resolveExpiresAt(options);
         this.#logger.debug('put() writing key', { key, type });
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
 
         db
             .prepare(`
@@ -193,16 +184,16 @@ export default class KeyValueStore {
      * Deletes a value by key. Resolves with no value, and does not report whether
      * the key previously existed.
      *
-     * @param {RequestContext} context - Request context used to resolve Node request config
+     * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} key - Cache key
      * @returns {Promise<void>}
      * @throws {AssertionError} When the key is invalid
      */
-    async delete(context, key) {
+    async delete(_context, key) {
         this.#assertValidKey(key);
         this.#logger.debug('delete() removing key', { key });
 
-        const db = this.#getDatabase(context);
+        const db = this.#getDatabase();
         db.prepare('DELETE FROM kv WHERE key = ?').run(key);
     }
 
@@ -225,7 +216,6 @@ export default class KeyValueStore {
             this.#database.close();
         }
         this.#database = null;
-        this.#databaseSpecKey = null;
         this.#prepared = false;
     }
 
@@ -390,30 +380,17 @@ export default class KeyValueStore {
      * Opening is deferred so construction stays cheap. Preparation runs the WAL and
      * busy-timeout pragmas and creates the `kv` table; it is synchronous, so there
      * is no interleaving window for concurrent callers between open and prepare.
-     * @param {RequestContext} context - Request context used to resolve Node request config
      * @returns {import('node:sqlite').DatabaseSync} The prepared connection
      * @throws {AssertionError} When the store has been closed
      */
-    #getDatabase(context) {
+    #getDatabase() {
         if (this.#closed) {
             throw new AssertionError('KeyValueStore has been closed');
         }
 
-        // An injected connection has no spec to resolve or lock; otherwise the spec
-        // is resolved on first use and locked for the lifetime of the store.
-        if (!this.#database || this.#databaseSpecKey) {
-            const databaseSpec = this.#resolveDatabaseSpec(context);
-            if (this.#databaseSpecKey === null) {
-                ensureDatabaseDirectory(databaseSpec.path);
-                this.#database = new DatabaseSync(databaseSpec.path, databaseSpec.sqliteOptions);
-                this.#databaseSpecKey = databaseSpec.key;
-            } else if (this.#databaseSpecKey !== databaseSpec.key) {
-                // The resolved path and options are expected to be constant; a change
-                // means the application is misconfigured, which is a programmer error.
-                throw new AssertionError(
-                    'KeyValueStore database path and options must not change after the database is opened',
-                );
-            }
+        if (!this.#database) {
+            ensureDatabaseDirectory(this.#path);
+            this.#database = new DatabaseSync(this.#path, this.#sqliteOptions);
         }
 
         if (!this.#prepared) {
@@ -421,40 +398,6 @@ export default class KeyValueStore {
             this.#prepared = true;
         }
         return this.#database;
-    }
-
-    #resolveDatabaseSpec(context) {
-        if (this.#path) {
-            return {
-                path: this.#path,
-                sqliteOptions: this.#sqliteOptions,
-                key: createDatabaseSpecKey(this.#path, this.#sqliteOptions),
-            };
-        }
-
-        const config = context?.config;
-        const storeConfig = config?.env?.KEY_VALUE_STORE;
-        assertNonEmptyString(
-            storeConfig?.path,
-            'KeyValueStore requires context.config.env.KEY_VALUE_STORE.path',
-        );
-        assertFunction(
-            config?.resolveFilepath,
-            'KeyValueStore requires context.config.resolveFilepath',
-        );
-
-        const resolvedPath = config.resolveFilepath(storeConfig.path);
-        assertNonEmptyString(
-            resolvedPath,
-            'KeyValueStore context.config.resolveFilepath() must return a non-empty string',
-        );
-
-        const sqliteOptions = storeConfig.sqliteOptions ?? {};
-        return {
-            path: resolvedPath,
-            sqliteOptions,
-            key: createDatabaseSpecKey(resolvedPath, sqliteOptions),
-        };
     }
 
     /**
@@ -493,25 +436,4 @@ function ensureDatabaseDirectory(filePath) {
     } catch (cause) {
         throw new OperationalError(`Unable to create SQLite database directory ${ directory }`, { cause });
     }
-}
-
-function createDatabaseSpecKey(path, sqliteOptions) {
-    return JSON.stringify({
-        path,
-        sqliteOptions: normalizeSpecValue(sqliteOptions),
-    });
-}
-
-function normalizeSpecValue(value) {
-    if (Array.isArray(value)) {
-        return value.map((item) => normalizeSpecValue(item));
-    }
-    if (isObjectNotNull(value)) {
-        const result = {};
-        for (const key of Object.keys(value).sort()) {
-            result[key] = normalizeSpecValue(value[key]);
-        }
-        return result;
-    }
-    return value;
 }

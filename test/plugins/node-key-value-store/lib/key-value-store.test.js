@@ -77,10 +77,12 @@ describe('Node KeyValueStore', ({ after, describe }) => {
             assertMatches('KeyValueStore requires a logger', caught.message);
         });
 
-        it('allows logger-only construction for request-config-backed stores', () => {
-            const store = new KeyValueStore({ logger: makeLogger() });
+        it('throws when neither a database nor path is provided', () => {
+            const caught = catchError(() => new KeyValueStore({ logger: makeLogger() }));
 
-            store.close();
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('database or path', caught.message);
         });
 
         it('throws when options are not provided', () => {
@@ -88,94 +90,42 @@ describe('Node KeyValueStore', ({ after, describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
+            assertMatches('logger', caught.message);
         });
     });
 
-    describe('request config', ({ it }) => {
-        it('resolves KEY_VALUE_STORE.path from the method context', async () => {
+    describe('explicit database configuration', ({ it }) => {
+        it('keeps using the constructor path regardless of method context config', async () => {
             const directory = await makeTempDir();
             const sqlitePath = path.join(directory, 'key_value_store.sqlite');
-            const tracker = new MockTracker();
-            const resolveFilepath = tracker.fn(() => sqlitePath);
             const context = {
                 config: {
-                    env: { KEY_VALUE_STORE: { path: '../data/key_value_store.sqlite' } },
-                    resolveFilepath,
+                    env: { KEY_VALUE_STORE: { path: './ignored.sqlite' } },
+                    resolveFilepath() {
+                        throw new Error('method context config should not be used');
+                    },
                 },
             };
-            const store = new KeyValueStore({ logger: makeLogger() });
+            const store = new KeyValueStore({ logger: makeLogger(), path: sqlitePath });
 
-            await store.put(context, 'greeting', 'hello');
-            const result = await store.get(context, 'greeting');
+            await store.put(context, 'shared', 'first');
+            await store.put(context, 'shared', 'second');
 
-            assertEqual('../data/key_value_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
-            assertEqual('hello', result);
+            assertEqual('second', await store.get(context, 'shared'));
             store.close();
         });
 
-        it('throws when KEY_VALUE_STORE.path is missing', async () => {
-            const store = new KeyValueStore({ logger: makeLogger() });
-
-            const caught = await catchAsyncError(() => store.get({ config: { env: {} } }, 'missing'));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('KEY_VALUE_STORE.path', caught.message);
-            store.close();
-        });
-
-        it('reuses the same database across requests with a stable resolved path', async () => {
+        it('persists values through a constructor-supplied file path', async () => {
             const directory = await makeTempDir();
             const sqlitePath = path.join(directory, 'key_value_store.sqlite');
-            const resolveFilepath = () => sqlitePath;
-            const makeConfigContext = () => {
-                return {
-                    config: {
-                        env: { KEY_VALUE_STORE: { path: '../data/key_value_store.sqlite' } },
-                        resolveFilepath,
-                    },
-                };
-            };
-            const store = new KeyValueStore({ logger: makeLogger() });
+            const firstStore = new KeyValueStore({ logger: makeLogger(), path: sqlitePath });
+            const secondStore = new KeyValueStore({ logger: makeLogger(), path: sqlitePath });
 
-            // A fresh context object each request still resolves the same path, so
-            // a value written on one request is visible on the next.
-            await store.put(makeConfigContext(), 'shared', 'first');
-            await store.put(makeConfigContext(), 'shared', 'second');
+            await firstStore.put(makeContext(), 'shared', 'first');
+            firstStore.close();
 
-            assertEqual('second', await store.get(makeConfigContext(), 'shared'));
-            store.close();
-        });
-
-        it('throws when the resolved path changes after the database is opened', async () => {
-            const directory = await makeTempDir();
-            const firstPath = path.join(directory, 'first.sqlite');
-            const secondPath = path.join(directory, 'second.sqlite');
-            const resolveFilepath = (configuredPath) => {
-                return configuredPath === './first.sqlite' ? firstPath : secondPath;
-            };
-            const firstContext = {
-                config: {
-                    env: { KEY_VALUE_STORE: { path: './first.sqlite' } },
-                    resolveFilepath,
-                },
-            };
-            const secondContext = {
-                config: {
-                    env: { KEY_VALUE_STORE: { path: './second.sqlite' } },
-                    resolveFilepath,
-                },
-            };
-            const store = new KeyValueStore({ logger: makeLogger() });
-
-            await store.put(firstContext, 'shared', 'first');
-
-            const caught = await catchAsyncError(() => store.put(secondContext, 'shared', 'second'));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('must not change', caught.message);
-            store.close();
+            assertEqual('first', await secondStore.get(makeContext(), 'shared'));
+            secondStore.close();
         });
     });
 
