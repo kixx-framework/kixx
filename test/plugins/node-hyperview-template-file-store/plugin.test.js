@@ -34,39 +34,43 @@ describe('node-hyperview-template-file-store plugin', ({ after, it }) => {
         }
     });
 
-    it('registers the template file store without application config', async () => {
+    it('registers the template file store with application config', async () => {
         const directory = await makeTempDir();
         const registered = {};
         const tracker = new MockTracker();
         const resolveFilepath = tracker.fn(() => directory);
 
         const context = {
+            config: {
+                env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './templates' } },
+                resolveFilepath,
+            },
             logger: makeLogger(),
             registerService(name, service) {
                 registered.name = name;
                 registered.service = service;
-            },
-        };
-        const requestContext = {
-            config: {
-                env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './templates' } },
-                resolveFilepath,
             },
         };
 
         register(context);
 
         assertEqual('HyperviewTemplateFileStore', registered.name);
-        assertEqual(0, resolveFilepath.mock.callCount());
-
-        await registered.service.putBaseTemplate(requestContext, null, 'website.html', '<html></html>');
+        assertEqual(1, resolveFilepath.mock.callCount());
         assertEqual('./templates', resolveFilepath.mock.getCall(0).arguments[0]);
+
+        await registered.service.putBaseTemplate(null, null, 'website.html', '<html></html>');
         assertEqual('<html></html>', await readBackingFile(directory, 'base/website.html'));
     });
 
-    it('throws from the registered service when the request config directory is missing', async () => {
+    it('throws during registration when the application config directory is missing', () => {
         const registered = {};
         const context = {
+            config: {
+                env: {},
+                resolveFilepath(filepath) {
+                    return filepath;
+                },
+            },
             logger: makeLogger(),
             registerService(name, service) {
                 registered.name = name;
@@ -74,21 +78,33 @@ describe('node-hyperview-template-file-store plugin', ({ after, it }) => {
             },
         };
 
-        register(context);
-
-        const error = await catchAsyncError(() => {
-            return registered.service.getBaseTemplate({ config: { env: {} } }, null, 'missing.html');
-        });
+        const error = catchError(() => register(context));
 
         assert(error, 'expected service operation to throw');
         assertEqual('AssertionError', error.name);
         assertMatches('HYPERVIEW_TEMPLATE_FILE_STORE.directory', error.message);
     });
+
+    it('throws during registration when resolveFilepath is missing', () => {
+        const context = {
+            config: {
+                env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './templates' } },
+            },
+            logger: makeLogger(),
+            registerService() {},
+        };
+
+        const error = catchError(() => register(context));
+
+        assert(error, 'expected service operation to throw');
+        assertEqual('AssertionError', error.name);
+        assertMatches('resolveFilepath', error.message);
+    });
 });
 
-async function catchAsyncError(fn) {
+function catchError(fn) {
     try {
-        await fn();
+        fn();
     } catch (error) {
         return error;
     }

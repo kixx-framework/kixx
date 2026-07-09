@@ -2,7 +2,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
-import { describe, MockTracker } from 'kixx-test';
+import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import TemplateFileStore from '../../../../src/plugins/node-hyperview-template-file-store/lib/template-file-store.js';
@@ -90,95 +90,12 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
             assertEqual('AssertionError', caught.name);
         });
 
-        it('allows logger-only construction for request-config-backed stores', () => {
-            const store = new TemplateFileStore({ logger: makeLogger() });
-
-            assert(store, 'expected store to be constructed');
-        });
-    });
-
-    describe('request config', ({ it }) => {
-        it('resolves HYPERVIEW_TEMPLATE_FILE_STORE.directory from the method context', async () => {
-            const directory = await makeTempDir();
-            const tracker = new MockTracker();
-            const resolveFilepath = tracker.fn(() => directory);
-            const context = {
-                config: {
-                    env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './templates' } },
-                    resolveFilepath,
-                },
-            };
-            const store = new TemplateFileStore({ logger: makeLogger() });
-
-            await store.putBaseTemplate(context, null, 'home.html', '<home/>');
-            const result = await store.getBaseTemplate(context, null, 'home.html');
-
-            assertEqual('./templates', resolveFilepath.mock.getCall(0).arguments[0]);
-            assertEqual('<home/>', result.source);
-        });
-
-        it('throws when HYPERVIEW_TEMPLATE_FILE_STORE.directory is missing', async () => {
-            const store = new TemplateFileStore({ logger: makeLogger() });
-
-            const caught = await catchAsyncError(() => {
-                return store.getBaseTemplate({ config: { env: {} } }, null, 'missing.html');
-            });
+        it('throws when directory is not provided', () => {
+            const caught = catchError(() => new TemplateFileStore({ logger: makeLogger() }));
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('HYPERVIEW_TEMPLATE_FILE_STORE.directory', caught.message);
-        });
-
-        it('locks the resolved directory across requests with a stable config', async () => {
-            const directory = await makeTempDir();
-            const resolveFilepath = () => directory;
-            const makeConfigContext = () => {
-                return {
-                    config: {
-                        env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './templates' } },
-                        resolveFilepath,
-                    },
-                };
-            };
-            const store = new TemplateFileStore({ logger: makeLogger() });
-
-            // A fresh context object each request still resolves the same directory,
-            // so a template written on one request is readable on the next.
-            await store.putBaseTemplate(makeConfigContext(), null, 'home.html', '<home/>');
-            const result = await store.getBaseTemplate(makeConfigContext(), null, 'home.html');
-
-            assertEqual('<home/>', result.source);
-        });
-
-        it('throws when the resolved directory changes after it is set', async () => {
-            const firstDirectory = await makeTempDir();
-            const secondDirectory = await makeTempDir();
-            const resolveFilepath = (configuredPath) => {
-                return configuredPath === './first' ? firstDirectory : secondDirectory;
-            };
-            const firstContext = {
-                config: {
-                    env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './first' } },
-                    resolveFilepath,
-                },
-            };
-            const secondContext = {
-                config: {
-                    env: { HYPERVIEW_TEMPLATE_FILE_STORE: { directory: './second' } },
-                    resolveFilepath,
-                },
-            };
-            const store = new TemplateFileStore({ logger: makeLogger() });
-
-            await store.putBaseTemplate(firstContext, null, 'home.html', '<home/>');
-
-            const caught = await catchAsyncError(() => {
-                return store.getBaseTemplate(secondContext, null, 'home.html');
-            });
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('must not change', caught.message);
+            assertMatches('TemplateFileStore requires a directory', caught.message);
         });
     });
 

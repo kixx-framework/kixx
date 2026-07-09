@@ -2,7 +2,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
-import { describe, MockTracker } from 'kixx-test';
+import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import PageDataStore from '../../../../src/plugins/node-hyperview-page-data-store/lib/page-data-store.js';
@@ -90,95 +90,12 @@ describe('PageDataStore (node)', ({ after, describe }) => {
             assertEqual('AssertionError', caught.name);
         });
 
-        it('allows logger-only construction for request-config-backed stores', () => {
-            const store = new PageDataStore({ logger: makeLogger() });
-
-            assert(store, 'expected store to be constructed');
-        });
-    });
-
-    describe('request config', ({ it }) => {
-        it('resolves HYPERVIEW_PAGE_DATA_STORE.directory from the method context', async () => {
-            const directory = await makeTempDir();
-            const tracker = new MockTracker();
-            const resolveFilepath = tracker.fn(() => directory);
-            const context = {
-                config: {
-                    env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './pages' } },
-                    resolveFilepath,
-                },
-            };
-            const store = new PageDataStore({ logger: makeLogger() });
-
-            await store.putTextFile(context, null, '/body.md', '# Body');
-            const result = await store.getTextFile(context, null, '/body.md');
-
-            assertEqual('./pages', resolveFilepath.mock.getCall(0).arguments[0]);
-            assertEqual('# Body', result);
-        });
-
-        it('throws when HYPERVIEW_PAGE_DATA_STORE.directory is missing', async () => {
-            const store = new PageDataStore({ logger: makeLogger() });
-
-            const caught = await catchAsyncError(() => {
-                return store.getTextFile({ config: { env: {} } }, null, '/missing.md');
-            });
+        it('throws when directory is not provided', () => {
+            const caught = catchError(() => new PageDataStore({ logger: makeLogger() }));
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('HYPERVIEW_PAGE_DATA_STORE.directory', caught.message);
-        });
-
-        it('locks the resolved directory across requests with a stable config', async () => {
-            const directory = await makeTempDir();
-            const resolveFilepath = () => directory;
-            const makeConfigContext = () => {
-                return {
-                    config: {
-                        env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './pages' } },
-                        resolveFilepath,
-                    },
-                };
-            };
-            const store = new PageDataStore({ logger: makeLogger() });
-
-            // A fresh context object each request still resolves the same directory,
-            // so a file written on one request is readable on the next.
-            await store.putTextFile(makeConfigContext(), null, '/body.md', '# Body');
-            const result = await store.getTextFile(makeConfigContext(), null, '/body.md');
-
-            assertEqual('# Body', result);
-        });
-
-        it('throws when the resolved directory changes after it is set', async () => {
-            const firstDirectory = await makeTempDir();
-            const secondDirectory = await makeTempDir();
-            const resolveFilepath = (configuredPath) => {
-                return configuredPath === './first' ? firstDirectory : secondDirectory;
-            };
-            const firstContext = {
-                config: {
-                    env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './first' } },
-                    resolveFilepath,
-                },
-            };
-            const secondContext = {
-                config: {
-                    env: { HYPERVIEW_PAGE_DATA_STORE: { directory: './second' } },
-                    resolveFilepath,
-                },
-            };
-            const store = new PageDataStore({ logger: makeLogger() });
-
-            await store.putTextFile(firstContext, null, '/body.md', '# Body');
-
-            const caught = await catchAsyncError(() => {
-                return store.getTextFile(secondContext, null, '/body.md');
-            });
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('must not change', caught.message);
+            assertMatches('PageDataStore requires a directory', caught.message);
         });
     });
 
