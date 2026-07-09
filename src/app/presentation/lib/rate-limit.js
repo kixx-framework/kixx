@@ -5,15 +5,15 @@ import { isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js
 /**
  * In-code fallback policies, used when `config.env.RATE_LIMIT` (or one of its
  * blocks) is absent. These mirror the seeded `node-config.json` defaults so the
- * controls stay active even on a misconfigured deployment. The INVITE policy is
+ * controls stay active even on a misconfigured deployment. The ADMIN_INVITE policy is
  * deliberately the strictest because invite tokens are high-entropy and guessing
  * them should get far less runway than mistyping a password.
  * @type {Object<string, import('../../collections/rate-limit-collection.js').RateLimitPolicy>}
  */
 const DEFAULT_POLICIES = Object.freeze({
-    LOGIN: { maxFailures: 5, windowSeconds: 900, cooldownSeconds: 900 },
-    SIGNUP: { maxFailures: 10, windowSeconds: 900, cooldownSeconds: 900 },
-    INVITE: { maxFailures: 3, windowSeconds: 900, cooldownSeconds: 3600 },
+    ADMIN_LOGIN: { maxFailures: 5, windowSeconds: 900, cooldownSeconds: 900 },
+    ADMIN_SIGNUP: { maxFailures: 10, windowSeconds: 900, cooldownSeconds: 900 },
+    ADMIN_INVITE: { maxFailures: 3, windowSeconds: 900, cooldownSeconds: 3600 },
 });
 
 // A null client IP (no determinable address) collapses into one shared bucket
@@ -50,7 +50,7 @@ export async function checkLoginThrottle(context, request, email) {
  */
 export async function recordLoginFailure(context, request, email) {
     const rateLimits = context.getCollection('RateLimit');
-    const policy = getPolicy(context, 'LOGIN');
+    const policy = getPolicy(context, 'ADMIN_LOGIN');
     const scopes = await loginScopes(request, email);
     const states = await Promise.all(scopes.map((scope) => rateLimits.recordFailure(context, scope, policy)));
     return mergeStates(states);
@@ -88,7 +88,7 @@ export async function checkSignupThrottle(context, request) {
  */
 export async function recordSignupFailure(context, request) {
     const rateLimits = context.getCollection('RateLimit');
-    return rateLimits.recordFailure(context, signupScope(request), getPolicy(context, 'SIGNUP'));
+    return rateLimits.recordFailure(context, signupScope(request), getPolicy(context, 'ADMIN_SIGNUP'));
 }
 
 /**
@@ -125,7 +125,7 @@ export async function checkInviteThrottle(context, request) {
  */
 export async function recordInviteGuess(context, request) {
     const rateLimits = context.getCollection('RateLimit');
-    return rateLimits.recordFailure(context, inviteScope(request), getPolicy(context, 'INVITE'));
+    return rateLimits.recordFailure(context, inviteScope(request), getPolicy(context, 'ADMIN_INVITE'));
 }
 
 /**
