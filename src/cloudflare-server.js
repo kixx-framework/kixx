@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import sourceConfig from './cloudflare-config.js';
 import { readConfig } from './plugins/cloudflare-config/lib/config.js';
 import Logger from './kixx/logger/logger.js';
 import ApplicationContext from './kixx/context/application-context.js';
@@ -14,6 +15,7 @@ import cloudflarePlugins from './plugins/cloudflare.js';
 import virtualHosts from './virtual-hosts.js';
 
 const environment = env.ENVIRONMENT || 'development';
+const serverConfig = readConfig(sourceConfig, environment);
 const name = env.APP_NAME || 'kixx-app';
 
 const runtime = new AppRuntime({
@@ -80,8 +82,7 @@ export default {
     async fetch(nativeRequest, requestEnvironment, _cloudflare) {
         try {
             const request = new ServerRequest(nativeRequest);
-            const requestConfig = await readConfig(requestEnvironment, environment);
-            const requestContext = appContext.createRequestContext(requestEnvironment, request, requestConfig);
+            const requestContext = appContext.createRequestContext(requestEnvironment, request, serverConfig);
 
             const response = await router.handleRequest(requestContext, request, new ServerResponse());
 

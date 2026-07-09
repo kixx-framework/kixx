@@ -1,7 +1,6 @@
 import { Readable } from 'node:stream';
 import {
     isNonEmptyString,
-    isObjectNotNull,
     isString,
     isValidDate,
 } from '../../../kixx/assertions/mod.js';
@@ -9,6 +8,7 @@ import {
     BadRequestError,
     UnsupportedMediaTypeError,
 } from '../../../kixx/errors/mod.js';
+import deepFreeze from '../../../kixx/utils/deep-freeze.js';
 
 let serverRequestSequence = 0;
 
@@ -353,19 +353,6 @@ export default class ServerRequest {
             throw new BadRequestError('Request body could not be parsed as form data', { cause }, this.formData);
         }
     }
-}
-
-// Freeze recursively so that wildcard params — which path-to-regexp returns as
-// arrays — cannot be mutated by one middleware and observed by another. A
-// shallow Object.freeze would leave those nested arrays writable.
-function deepFreeze(value) {
-    if (isObjectNotNull(value)) {
-        for (const key of Object.keys(value)) {
-            deepFreeze(value[ key ]);
-        }
-        Object.freeze(value);
-    }
-    return value;
 }
 
 // Build a Web Headers instance from the Node headers object. HTTP/2 pseudo-headers

@@ -14,7 +14,6 @@ import { isJavascriptRequest, serveJavascriptFile } from './devserver/javascript
 const { values: cliOptions } = util.parseArgs({
     args: process.argv.slice(2),
     options: {
-        config: { type: 'string', short: 'c' },
         environment: { type: 'string', short: 'e' },
         port: { type: 'string', short: 'p' },
         dotenv: { type: 'string' },
@@ -38,10 +37,6 @@ if (port === null) {
 // --port is withheld here since the child is always given a dynamically
 // discovered port instead of the value the developer passed to devserver.js.
 const forwardedAppServerArgs = [];
-
-if (isNonEmptyString(cliOptions.config)) {
-    forwardedAppServerArgs.push('--config', cliOptions.config);
-}
 
 if (isNonEmptyString(cliOptions.environment)) {
     forwardedAppServerArgs.push('--environment', cliOptions.environment);

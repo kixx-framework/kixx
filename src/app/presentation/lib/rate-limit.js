@@ -4,7 +4,7 @@ import { isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js
 
 /**
  * In-code fallback policies, used when `config.env.RATE_LIMIT` (or one of its
- * blocks) is absent. These mirror the seeded `node-config.json` defaults so the
+ * blocks) is absent. These mirror the seeded defaults from the config so the
  * controls stay active even on a misconfigured deployment. The ADMIN_INVITE policy is
  * deliberately the strictest because invite tokens are high-entropy and guessing
  * them should get far less runway than mistyping a password.

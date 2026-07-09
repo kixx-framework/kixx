@@ -14,6 +14,7 @@ import HttpRouter from './kixx/http-router/http-router.js';
 import LoggerWriter from './plugins/node-logger-writer/lib/logger-writer.js';
 import ServerRequest from './plugins/node-server-request/lib/server-request.js';
 import ServerResponse from './kixx/http-router/server-response.js';
+import sourceConfig from './node-config.js';
 import * as app from './app/app.js';
 import generalPlugins from './plugins/general.js';
 import nodePlugins from './plugins/node.js';
@@ -28,7 +29,6 @@ const THIS_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const { values: cliOptions } = util.parseArgs({
     args: process.argv.slice(2),
     options: {
-        config: { type: 'string', short: 'c' },
         environment: { type: 'string', short: 'e' },
         port: { type: 'string', short: 'p' },
         dotenv: { type: 'string' },
@@ -37,7 +37,7 @@ const { values: cliOptions } = util.parseArgs({
     allowPositionals: true,
 });
 
-// The environment selects a section of the config file's `environments` map;
+// The environment selects a section of the config module's `environments` map;
 // default to development when --environment or NODE_ENV is not provided.
 let environment = isNonEmptyString(cliOptions.environment)
     ? cliOptions.environment
@@ -64,14 +64,7 @@ try {
     }
 }
 
-// The config file path comes from --config, falling back to the CONFIG_FILE env var.
-let configFilePath = isNonEmptyString(cliOptions.config) ? cliOptions.config : process.env.CONFIG_FILE;
-
-if (isNonEmptyString(configFilePath)) {
-    configFilePath = path.resolve(configFilePath);
-} else {
-    configFilePath = path.join(THIS_DIRECTORY, 'node-config.json');
-}
+const serverConfig = readConfig(sourceConfig, environment, THIS_DIRECTORY);
 
 const DEFAULT_PORT = '2026';
 
@@ -164,8 +157,7 @@ async function handleRequest(nodeRequest, nodeResponse) {
     try {
         const request = new ServerRequest(nodeRequest, { trustProxy });
         isHeadRequest = request.isHeadRequest();
-        const requestConfig = readConfig(configFilePath, environment);
-        const requestContext = appContext.createRequestContext(env, request, requestConfig);
+        const requestContext = appContext.createRequestContext(env, request, serverConfig);
         const response = await router.handleRequest(requestContext, request, new ServerResponse());
         sendResponse(nodeResponse, response, isHeadRequest);
     } catch (cause) {
