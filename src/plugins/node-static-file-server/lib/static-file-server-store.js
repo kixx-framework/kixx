@@ -8,10 +8,8 @@ import { sha256Hex } from '../../../kixx/utils/crypto.js';
 import {
     AssertionError,
     assert,
-    assertFunction,
     assertNonEmptyString,
     isNonEmptyString,
-    isUndefined,
     isValidDate,
 } from '../../../kixx/assertions/mod.js';
 import AssetMetadataStore, { METADATA_DIRNAME } from './asset-metadata-store.js';
@@ -28,13 +26,9 @@ import AssetMetadataStore, { METADATA_DIRNAME } from './asset-metadata-store.js'
  * Node.js filesystem-backed static file store.
  *
  * The Node.js port of the static file store contract. Where the Cloudflare adapter
- * resolves a KV binding from each request `context`, this adapter resolves its
- * public root directory from `context.config.env.STATIC_FILE_STORE.directory`
- * and `context.config.resolveFilepath()` on first `read()` unless an explicit
- * constructor `directory` was supplied. The resolved root directory is fixed for
- * the lifetime of the store: a later request that resolves a different root is a
- * programmer error and throws an `AssertionError`. It maps a `key` (and optional
- * Build ID `namespace`) onto a real filesystem path.
+ * resolves a KV binding from each request `context`, this adapter owns a fixed
+ * public root directory supplied during plugin registration. It maps a `key` (and
+ * optional Build ID `namespace`) onto a real filesystem path.
  *
  * `read()` returns a {@link StaticFileResult} whose body streams the file from
  * disk. Content-Type and ETag come from the asset's `.meta/` metadata sidecar when
@@ -50,13 +44,8 @@ export default class StaticFileStore {
 
     #logger = null;
 
-    // An explicit constructor root (already path.resolve'd), or null when the
-    // root comes from request config. Fixed for the lifetime of the store.
+    // Fixed for the lifetime of the store.
     #rootDirectory = null;
-
-    // The root directory resolved from request config, locked on first read.
-    // Only used when no explicit constructor `directory` was supplied.
-    #resolvedRootDirectory = null;
 
     // The per-asset metadata store for this store's (fixed) root, created lazily.
     #metadataStore = null;
@@ -69,32 +58,28 @@ export default class StaticFileStore {
     /**
      * @param {Object} options - Store configuration
      * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a StaticFileStore child logger
-     * @param {string} [options.directory] - Filesystem directory override that roots the public files
-     * @throws {AssertionError} When logger is not provided, or when `directory` is supplied but empty
+     * @param {string} options.directory - Filesystem directory that roots the public files
+     * @throws {AssertionError} When logger is not provided, or when `directory` is not provided
      */
     constructor(options) {
         const { logger, directory } = options ?? {};
         assert(logger, 'StaticFileStore requires a logger');
-        if (!isUndefined(directory)) {
-            assertNonEmptyString(directory, 'StaticFileStore directory must be a non-empty string when provided');
-        }
+        assertNonEmptyString(directory, 'StaticFileStore requires a directory');
         this.#logger = logger.createChild('StaticFileStore');
-        // Resolve explicit constructor roots once; request-config roots are
-        // resolved in read() because the request context owns that configuration.
-        this.#rootDirectory = isUndefined(directory) ? null : path.resolve(directory);
+        this.#rootDirectory = path.resolve(directory);
     }
 
     /**
      * Reads one file by its key within an optional Build ID namespace.
      *
-     * @param {RequestContext} context - Request context used to resolve Node request config
+     * @param {RequestContext} _context - Request context accepted for runtime-agnostic callers
      * @param {Object} options - Lookup options
      * @param {string} options.key - File key relative to the namespace root, such as `css/main.css`
      * @param {string|null} options.namespace - Build ID namespace, or null for the flat root
      * @param {boolean} options.computeEtag - Whether to hash the file for an ETag when the metadata sidecar has none
      * @returns {Promise<StaticFileResult|null>} The file parts, or `null` when no file exists
      */
-    async read(context, options) {
+    async read(_context, options) {
         const { key, namespace, computeEtag } = options ?? {};
         assertNonEmptyString(key, 'StaticFileStore read requires a key');
 
@@ -105,7 +90,7 @@ export default class StaticFileStore {
             return null;
         }
 
-        const rootDirectory = this.#resolveRootDirectory(context);
+        const rootDirectory = this.#rootDirectory;
 
         // Namespace (Build ID) selects a subtree; an absent namespace serves from
         // the flat root, supporting out-of-band deploys with no Build ID.
@@ -144,7 +129,7 @@ export default class StaticFileStore {
             return null;
         }
 
-        const metadataEntry = await this.#getMetadataStore(rootDirectory).lookup(namespace, key);
+        const metadataEntry = await this.#getMetadataStore().lookup(namespace, key);
 
         // A stored Content-Type wins (it was resolved at write time); fall back to
         // extension-based detection for out-of-band deploys.
@@ -178,7 +163,7 @@ export default class StaticFileStore {
      * degrades to the read-time fallback (on-the-fly hashing, extension content
      * type, file mtime) rather than losing the asset.
      *
-     * @param {RequestContext} context - Request context used to resolve Node request config
+     * @param {RequestContext} _context - Request context accepted for runtime-agnostic callers
      * @param {Object} options - Write options
      * @param {string} options.key - File key relative to the namespace root, such as `css/main.css`
      * @param {string|null} options.namespace - Build ID namespace, or null for the flat root
@@ -187,7 +172,7 @@ export default class StaticFileStore {
      * @returns {Promise<import('../../../kixx/static-file-server/static-file-server-store-interface.js').StaticFileWriteResult>} The written file's parts
      * @throws {AssertionError} When `key` is missing or resolves outside the namespace root
      */
-    async write(context, options) {
+    async write(_context, options) {
         const {
             key,
             namespace,
@@ -204,7 +189,7 @@ export default class StaticFileStore {
             );
         }
 
-        const rootDirectory = this.#resolveRootDirectory(context);
+        const rootDirectory = this.#rootDirectory;
 
         // Namespace (Build ID) selects a subtree; an absent namespace writes to the
         // flat root, matching how read() resolves a missing Build ID.
@@ -241,7 +226,7 @@ export default class StaticFileStore {
         // Record the validators so reads serve a replica-stable ETag/Content-Type/
         // Last-Modified without re-hashing. Done after the byte write so a metadata
         // failure leaves a servable file rather than losing the asset.
-        await this.#getMetadataStore(rootDirectory).write(namespace, key, {
+        await this.#getMetadataStore().write(namespace, key, {
             etag,
             contentType: resolvedContentType,
             lastModified: lastModified.toISOString(),
@@ -256,56 +241,13 @@ export default class StaticFileStore {
         };
     }
 
-    #resolveRootDirectory(context) {
-        // An explicit constructor root is fixed and never read from config.
-        if (this.#rootDirectory) {
-            return this.#rootDirectory;
-        }
-
-        const rootDirectory = this.#resolveRootDirectoryFromConfig(context);
-
-        if (this.#resolvedRootDirectory === null) {
-            // First read locks the root directory for the lifetime of the store.
-            this.#resolvedRootDirectory = rootDirectory;
-        } else if (rootDirectory !== this.#resolvedRootDirectory) {
-            // The configured root is expected to be constant; a change means the
-            // application is misconfigured, which is a programmer error.
-            throw new AssertionError(
-                `StaticFileStore root directory must not change after it is set (was "${ this.#resolvedRootDirectory }", got "${ rootDirectory }")`,
-            );
-        }
-
-        return this.#resolvedRootDirectory;
-    }
-
-    #resolveRootDirectoryFromConfig(context) {
-        const config = context?.config;
-        const storeConfig = config?.env?.STATIC_FILE_STORE;
-        assertNonEmptyString(
-            storeConfig?.directory,
-            'StaticFileStore requires context.config.env.STATIC_FILE_STORE.directory',
-        );
-        assertFunction(
-            config?.resolveFilepath,
-            'StaticFileStore requires context.config.resolveFilepath',
-        );
-
-        const rootDirectory = config.resolveFilepath(storeConfig.directory);
-        assertNonEmptyString(
-            rootDirectory,
-            'StaticFileStore context.config.resolveFilepath() must return a non-empty string',
-        );
-
-        return path.resolve(rootDirectory);
-    }
-
-    #getMetadataStore(rootDirectory) {
+    #getMetadataStore() {
         // The root directory is fixed for the store's lifetime, so a single
         // metadata store is created lazily on first use and reused thereafter.
         if (!this.#metadataStore) {
             this.#metadataStore = new AssetMetadataStore({
                 logger: this.#logger,
-                directory: rootDirectory,
+                directory: this.#rootDirectory,
             });
         }
         return this.#metadataStore;
