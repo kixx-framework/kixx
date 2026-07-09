@@ -1,17 +1,31 @@
 /* -----------------------------------------------------------------------------
+    Form Field Stack
+
+    Compose .field-stack with .flow on a <form> or form-like container to use
+    the shared field rhythm between direct children. Individual .field blocks
+    still own their internal label / control / message gap.
+----------------------------------------------------------------------------- */
+
+.field-stack {
+    --flow-space: var(--form-field-gap);
+}
+
+/* -----------------------------------------------------------------------------
     Text Fields (single-line inputs)
 
-    .field wraps a label, the <input>, and optional hint / error text in a
-    column stack. Gap-based spacing — no .flow nesting needed.
+    .field wraps a label, the <input>, optional persistent hint text, and
+    optional validation error text in a column stack. Gap-based spacing — no
+    .flow nesting needed.
 
     Expected structure:
         .field
           .field__label
           .field__input
           .field__hint
+          .field__error
 
     Modifier:
-      .field--error    — error-colored border and hint text
+      .field--error    — error-colored input border
 ----------------------------------------------------------------------------- */
 
 .field {
@@ -91,25 +105,28 @@
     color: var(--color-ink-muted);
 }
 
-/* Error state — applied to the .field wrapper so all three parts respond. */
+.field__error {
+    font-size: var(--text-caption);
+    line-height: var(--leading-normal);
+    color: var(--color-status-danger);
+}
+
+/* Error state — applied to the .field wrapper to mark the invalid control. */
 .field--error .field__input {
     border-color: var(--color-field-border-error);
     /* Error takes precedence over readonly's dashed affordance. */
     border-style: solid;
 }
 
-.field--error .field__hint {
-    color: var(--color-field-border-error);
-}
-
 /* -----------------------------------------------------------------------------
     Text Area Fields (multi-line inputs)
 
     A <textarea> reuses the .field wrapper and the .field__input class outright,
-    so label, hint, .field--error, and every hover / focus / disabled / readonly
-    state carry over untouched. These rules add only the multi-line specifics:
-    a taller default, a reading-comfortable line-height, and a vertical-only
-    resize grip (horizontal resize would break the column layout).
+    so label, hint, error text, .field--error, and every hover / focus /
+    disabled / readonly state carry over untouched. These rules add only the
+    multi-line specifics: a taller default, a reading-comfortable line-height,
+    and a vertical-only resize grip (horizontal resize would break the column
+    layout).
 ----------------------------------------------------------------------------- */
 
 textarea.field__input {

@@ -1,0 +1,160 @@
+<header class="admin-content-section__header">
+    <h2>Copy Fields</h2>
+    <p>A labeled, read-only value paired with a one-click copy button.</p>
+</header>
+
+<div class="doc-prose">
+    <p class="type-body-lg">A copy field is the display primitive for any value someone needs to take away verbatim &mdash; a one-time secret, a shareable link, an identifier. It reuses the <a href="/admin/style-guide/text-fields">text field</a>&rsquo;s input treatment so the value looks like a real form control, then adds a copy button beside it and a small status line below to confirm the copy.</p>
+
+    <p>It is deliberately progressive. Without JavaScript the value is a plain <code>readonly</code> input &mdash; selectable and copyable by hand. With JavaScript, the delegated <code>data-js-behavior="copy-field"</code> script adds click-to-select on the value, a one-click clipboard write on the button, and status feedback that clears itself after a moment.</p>
+
+    <p><strong>When to use:</strong> a copy field is for a value the user will paste somewhere else &mdash; an API token, an invite URL, an account ID, a recovery code. Reach for it whenever getting the value out cleanly matters more than editing it. For a value the user types, use a <a href="/admin/style-guide/text-fields">text field</a>. For a value that is only displayed, plain text is enough.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Anatomy</h3>
+<p class="doc-lede">A label above, then a row pairing the read-only value with its copy button, and a status line below that speaks only after a copy.</p>
+<div class="anatomy flow">
+    <div class="demo-stage">
+        <div class="copy-field">
+            <label class="copy-field__label" for="anatomy-copy">Invite link</label>
+            <div class="copy-field__row">
+                <input class="field__input copy-field__value" id="anatomy-copy" type="text" value="https://kixx.dev/admin/users/new?invite=aa11bb22cc33" readonly>
+                <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="anatomy-copy" aria-label="Copy invite link">
+                    <span class="copy-field__icon" aria-hidden="true">copy</span>
+                </button>
+            </div>
+            <p class="copy-field__status" role="status" aria-live="polite"></p>
+        </div>
+    </div>
+    <ol class="parts-list">
+        <li><strong>Label</strong> &mdash; mono, uppercase, muted; tied to the value input with a matching <code>for</code>/<code>id</code> pair, exactly like a field label.</li>
+        <li><strong>Value</strong> &mdash; a <code>readonly</code> <code>.field__input</code> so it carries the field&rsquo;s border, fill, font, and dashed read-only border; it scrolls long values natively and selects on click.</li>
+        <li><strong>Button</strong> &mdash; a square control matched to the input height; it copies the value and swaps its text icon to a success mark when the clipboard write succeeds.</li>
+        <li><strong>Status</strong> &mdash; an <code>aria-live</code> line that stays empty until a copy, then announces <code>Copied.</code> or the manual-copy fallback. Its height is reserved so the row never shifts.</li>
+    </ol>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Examples</h3>
+<p class="doc-lede">One shape, no class modifiers. It is the same component holding each kind of copy-once value &mdash; the label and the value are all that change.</p>
+<div class="example-grid grid-auto">
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="copy-field">
+                <label class="copy-field__label" for="ex-secret">API token</label>
+                <div class="copy-field__row">
+                    <input class="field__input copy-field__value" id="ex-secret" type="text" value="sk_live_8Qx2Rf9Lm4Tv7Kp1Wd6Zn3" readonly>
+                    <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="ex-secret" aria-label="Copy API token">
+                        <span class="copy-field__icon" aria-hidden="true">copy</span>
+                    </button>
+                </div>
+                <p class="copy-field__status" role="status" aria-live="polite"></p>
+            </div>
+        </div>
+        <div class="example__label"><code>.copy-field</code><span class="example__note">One-time secret</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="copy-field">
+                <label class="copy-field__label" for="ex-url">Share link</label>
+                <div class="copy-field__row">
+                    <input class="field__input copy-field__value" id="ex-url" type="text" value="https://kixx.dev/p/9f3ac1" readonly>
+                    <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="ex-url" aria-label="Copy share link">
+                        <span class="copy-field__icon" aria-hidden="true">copy</span>
+                    </button>
+                </div>
+                <p class="copy-field__status" role="status" aria-live="polite"></p>
+            </div>
+        </div>
+        <div class="example__label"><code>.copy-field</code><span class="example__note">Shareable URL</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="copy-field">
+                <label class="copy-field__label" for="ex-id">Account ID</label>
+                <div class="copy-field__row">
+                    <input class="field__input copy-field__value" id="ex-id" type="text" value="usr_01HZ3F9JK7QW" readonly>
+                    <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="ex-id" aria-label="Copy account ID">
+                        <span class="copy-field__icon" aria-hidden="true">copy</span>
+                    </button>
+                </div>
+                <p class="copy-field__status" role="status" aria-live="polite"></p>
+            </div>
+        </div>
+        <div class="example__label"><code>.copy-field</code><span class="example__note">Identifier</span></div>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">States</h3>
+<p class="doc-lede">Click the value to select it, or press the button to copy. This is a live control &mdash; the status line and icon respond in real time.</p>
+<div class="states flow">
+    <div class="demo-stage">
+        <div class="copy-field">
+            <label class="copy-field__label" for="states-copy">Recovery code</label>
+            <div class="copy-field__row">
+                <input class="field__input copy-field__value" id="states-copy" type="text" value="R7K2-9QMD-4XTP-1BVN" readonly>
+                <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="states-copy" aria-label="Copy recovery code">
+                    <span class="copy-field__icon" aria-hidden="true">copy</span>
+                </button>
+            </div>
+            <p class="copy-field__status" role="status" aria-live="polite"></p>
+        </div>
+        <p class="demo-stage__hint">This is a real control &mdash; press the button to copy, or click into the value.</p>
+    </div>
+    <dl class="state-list">
+        <div><dt>Idle</dt><dd>Value in an input with a dashed <code>readonly</code> border; the button sits quiet beside it. The status line is empty.</dd></div>
+        <div><dt>Value hover / focus</dt><dd>Clicking the value selects the whole string; focusing it shows the standard field focus ring.</dd></div>
+        <div><dt>Button hover</dt><dd>The button inverts to a solid <code>--color-ink</code> fill &mdash; a clear, contained affordance without moving anything.</dd></div>
+        <div><dt>Button focus</dt><dd>A 2px <code>--color-focus-outline</code> ring on <code>:focus-visible</code> for keyboard users.</dd></div>
+        <div><dt>Copied</dt><dd>On success the icon becomes a success mark and the status reads <code>Copied.</code>, then both reset after two seconds.</dd></div>
+        <div><dt>No clipboard</dt><dd>Where the Clipboard API is unavailable or denied, the value is selected and the status falls back to <code>Press Ctrl+C or Cmd+C to copy.</code></dd></div>
+    </dl>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Usage</h3>
+<p class="doc-lede">Wire the button to the value with <code>data-copy-target</code> pointing at the input&rsquo;s <code>id</code>. The behavior binds itself; there is no per-page script to add.</p>
+<pre class="code-block"><code>&lt;div class="copy-field"&gt;
+&lt;label class="copy-field__label" for="invite-url"&gt;Invite link&lt;/label&gt;
+&lt;div class="copy-field__row"&gt;
+&lt;input class="field__input copy-field__value" id="invite-url"
+type="text" value="https://kixx.dev/..." readonly&gt;
+&lt;button class="copy-field__button" type="button"
+data-js-behavior="copy-field" data-copy-target="invite-url"
+aria-label="Copy invite link"&gt;
+&lt;span class="copy-field__icon" aria-hidden="true"&gt;copy&lt;/span&gt;
+&lt;/button&gt;
+&lt;/div&gt;
+&lt;p class="copy-field__status" role="status" aria-live="polite"&gt;&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+
+<h3 class="type-h3 doc-section-heading">Accessibility</h3>
+<div class="doc-prose">
+    <ul>
+        <li>Connect the <code>&lt;label&gt;</code> to the value input with a matching <code>for</code>/<code>id</code> pair &mdash; the value is a real, labeled control, not decoration.</li>
+        <li>Give the button an <code>aria-label</code> that names what it copies, such as <code>Copy invite link</code>, because its only visible content is an icon.</li>
+        <li>Mark the copy icon <code>aria-hidden="true"</code> so it is not announced separately from the button&rsquo;s label.</li>
+        <li>Keep the status line as an <code>aria-live="polite"</code> region so copy feedback is announced without stealing focus; its reserved height also prevents a layout shift.</li>
+        <li>Leave the value <code>readonly</code> rather than <code>disabled</code> &mdash; a disabled input is skipped by assistive technology and cannot be selected or copied by hand.</li>
+    </ul>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Guidelines</h3>
+<div class="guidelines grid-auto">
+    <div class="card card--accent-secondary guideline guideline--do">
+        <p class="type-label guideline__label">Do</p>
+        <ul>
+            <li>Use it for any value the user needs to paste elsewhere &mdash; tokens, links, IDs, recovery codes.</li>
+            <li>Pair a one-time secret with a <a href="/admin/style-guide/callouts">callout</a> that says it is shown only once and cannot be retrieved again.</li>
+            <li>Label the value by what it is, so a screen reader announces <code>Invite link</code>, not just <code>text field</code>.</li>
+            <li>Trust the progressive fallback: the plain <code>readonly</code> input is still selectable when scripting is off.</li>
+        </ul>
+    </div>
+    <div class="card card--accent-primary guideline guideline--dont">
+        <p class="type-label guideline__label">Don&rsquo;t</p>
+        <ul>
+            <li>Use <code>disabled</code> on the value &mdash; it can no longer be selected or copied by hand.</li>
+            <li>Drop the <code>aria-label</code> and leave the button an unlabeled icon.</li>
+            <li>Reuse the same <code>id</code> for two copy fields on one page; each value needs a unique target.</li>
+            <li>Use a copy field for a value the user is meant to edit &mdash; that is a <a href="/admin/style-guide/text-fields">text field</a>.</li>
+        </ul>
+    </div>
+</div>

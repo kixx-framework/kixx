@@ -1,0 +1,178 @@
+<header class="admin-content-section__header">
+    <h2>Forms</h2>
+    <p>Assembling fields, spacing, feedback, and submits into one working flow.</p>
+</header>
+
+<div class="doc-prose">
+    <p class="type-body-lg">A form is not its own component. It is a composition of primitives: stack <a href="/admin/style-guide/text-fields">fields</a> in a <code>.flow</code>, give that flow the form rhythm with <code>.field-stack</code>, and sit the submit in a <code>.cluster</code>. On a standalone form page, cap the column with <code>.center--form</code>. The form-specific decision is rhythm, not a new wrapper vocabulary.</p>
+
+    <p>Fields need more air between them than the default <code>.flow</code> gap gives. <code>.field-stack</code> binds that spacing to <code>--form-field-gap</code>, so every form can move together when the rhythm is retuned.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Anatomy</h3>
+<p class="doc-lede">A stack of fields with a generous gap, closed by a submit in a cluster. The form element is the flow container; its direct children are the rows.</p>
+<div class="anatomy flow">
+    <div class="demo-stage">
+        <form class="flow field-stack">
+            <div class="field">
+                <label class="field__label" for="anatomy-email">Email address</label>
+                <input class="field__input" id="anatomy-email" type="email" placeholder="you@example.com" aria-describedby="anatomy-email-hint">
+                <p class="field__hint" id="anatomy-email-hint">We&rsquo;ll only use this to sign you in.</p>
+            </div>
+            <div class="field">
+                <label class="field__label" for="anatomy-password">Password</label>
+                <input class="field__input" id="anatomy-password" type="password">
+            </div>
+            <div class="cluster">
+                <button class="button button--primary" type="button">Create account</button>
+            </div>
+        </form>
+        <p class="demo-stage__hint">A live layout &mdash; tab through the fields to the button. The submit is inert here.</p>
+    </div>
+    <ol class="parts-list">
+        <li><strong>Form flow</strong> &mdash; <code>&lt;form class="flow field-stack"&gt;</code>. The form is the flow container; each field, callout, and submit cluster is a direct child spaced by the flow gap.</li>
+        <li><strong>Field</strong> &mdash; a standard <code>.field</code> with label, control, optional hint, and optional error text.</li>
+        <li><strong>Field gap</strong> &mdash; the rhythm between rows, set by <code>.field-stack</code> to <code>--form-field-gap</code> so fields never crowd each other.</li>
+        <li><strong>Submit</strong> &mdash; the primary action in a <code>.cluster</code>, so secondary actions can sit beside it and wrap cleanly on narrow screens.</li>
+    </ol>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Field Rhythm</h3>
+<p class="doc-lede">Compose <code>.field-stack</code> onto a <code>.flow</code> form to swap the default gap for the roomier form gap. Same fields, different breathing room.</p>
+<div class="example-grid grid-auto">
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="flow">
+                <div class="field">
+                    <label class="field__label" for="tight-name">Name</label>
+                    <input class="field__input" id="tight-name" type="text" placeholder="Ada Lovelace">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="tight-email">Email</label>
+                    <input class="field__input" id="tight-email" type="email" placeholder="ada@example.com">
+                </div>
+            </div>
+        </div>
+        <div class="example__label"><code>.flow</code><span class="example__note">Default gap &mdash; too tight for a form</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="flow field-stack">
+                <div class="field">
+                    <label class="field__label" for="stack-name">Name</label>
+                    <input class="field__input" id="stack-name" type="text" placeholder="Ada Lovelace">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="stack-email">Email</label>
+                    <input class="field__input" id="stack-email" type="email" placeholder="ada@example.com">
+                </div>
+            </div>
+        </div>
+        <div class="example__label"><code>.flow.field-stack</code><span class="example__note">Form gap via <code>--form-field-gap</code></span></div>
+    </div>
+</div>
+<div class="doc-prose">
+    <p><code>.field-stack</code> only rebinds the flow gap:</p>
+    <pre class="code-block"><code>.field-stack {
+--flow-space: var(--form-field-gap);
+}</code></pre>
+    <p><code>--form-field-gap</code> sits intentionally between <code>--space-lg</code> and <code>--space-xl</code>. It is roomier than ordinary document flow, but still part of the same measured, utilitarian rhythm.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Hints and Errors</h3>
+<p class="doc-lede">Standing guidance and validation feedback are two different messages, so they are two different elements.</p>
+<div class="example-grid grid-auto">
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field">
+                <label class="field__label" for="fe-hint">Password</label>
+                <input class="field__input" id="fe-hint" type="password" aria-describedby="fe-hint-text">
+                <p class="field__hint" id="fe-hint-text">At least 8 characters, including a number.</p>
+            </div>
+        </div>
+        <div class="example__label"><code>.field__hint</code><span class="example__note">Persistent guidance, muted</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field field--error">
+                <label class="field__label" for="fe-error">Password</label>
+                <input class="field__input" id="fe-error" type="password" value="ab12" aria-describedby="fe-error-hint fe-error-msg" aria-invalid="true">
+                <p class="field__hint" id="fe-error-hint">At least 8 characters, including a number.</p>
+                <p class="field__error" id="fe-error-msg" role="alert">Password must be at least 8 characters.</p>
+            </div>
+        </div>
+        <div class="example__label"><code>.field__hint</code> + <code>.field__error</code><span class="example__note">Guidance and correction, together</span></div>
+    </div>
+</div>
+<div class="doc-prose">
+    <p>Put persistent advice in <code>.field__hint</code>; it stays muted even beside an error. Put corrective validation feedback in <code>.field__error</code>; it carries the danger color and <code>role="alert"</code> when rendered after a failed submit.</p>
+    <p>Add <code>.field--error</code> to the wrapper to turn the control border red, set <code>aria-invalid="true"</code> on the control, and reference every rendered message id in <code>aria-describedby</code>. When a field has no standing guidance, render <code>.field__error</code> alone.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Standalone Form Pages</h3>
+<p class="doc-lede">A form that is the page &mdash; login, signup, settings &mdash; sits in a centered column capped to the form measure so its lines never stretch too wide to scan.</p>
+<div class="doc-prose">
+    <p>Wrap the page content in <code>.center.center--form.flow</code>: <code>.center--form</code> caps the column to <code>--measure-form</code>, and the outer <code>.flow</code> spaces the header, the form, and any trailing links. Keep <code>.field-stack</code> on the inner <code>&lt;form&gt;</code>, not on the wrapper. Page rhythm and field rhythm are different jobs.</p>
+    <p>A form embedded in a wider page can skip <code>.center--form</code>, but should still use <code>.field-stack</code> so its fields breathe like every other form.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Usage</h3>
+<p class="doc-lede">A standalone form page. The wrapper owns the column and page rhythm; the form owns the field rhythm.</p>
+<pre class="code-block"><code>&lt;div class="center center--form flow"&gt;
+&lt;header class="admin-content-section__header"&gt;
+&lt;h2&gt;Log in&lt;/h2&gt;
+&lt;p&gt;Sign in to the admin panel.&lt;/p&gt;
+&lt;/header&gt;
+
+&lt;form class="flow field-stack" method="post" action="/login" novalidate&gt;
+&lt;div class="field field--error"&gt;
+&lt;label class="field__label" for="email"&gt;Email address&lt;/label&gt;
+&lt;input class="field__input" id="email" name="email" type="email"
+aria-describedby="email-hint email-error" aria-invalid="true"&gt;
+&lt;p class="field__hint" id="email-hint"&gt;Use the email from your invite.&lt;/p&gt;
+&lt;p class="field__error" id="email-error" role="alert"&gt;Enter a valid email address.&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;div class="field"&gt;
+&lt;label class="field__label" for="password"&gt;Password&lt;/label&gt;
+&lt;input class="field__input" id="password" name="password" type="password"&gt;
+&lt;/div&gt;
+
+&lt;div class="cluster"&gt;
+&lt;button class="button button--primary" type="submit"&gt;Log in&lt;/button&gt;
+&lt;/div&gt;
+&lt;/form&gt;
+&lt;/div&gt;</code></pre>
+
+<h3 class="type-h3 doc-section-heading">Accessibility</h3>
+<div class="doc-prose">
+    <ul>
+        <li>Every control keeps a visible <code>&lt;label&gt;</code> tied with <code>for</code>/<code>id</code>. Never use placeholder text as the only label.</li>
+        <li>Put a form-level failure in a <a href="/admin/style-guide/callouts">callout</a> with <code>role="alert"</code> as a direct child of the form flow, above the fields.</li>
+        <li>Put field-level errors in a dedicated <code>.field__error</code> with <code>role="alert"</code>, beside any persistent <code>.field__hint</code>.</li>
+        <li>Reference every rendered hint and error message with <code>aria-describedby</code>, and mark invalid controls with <code>aria-invalid="true"</code>.</li>
+        <li>Let the submit be a real <code>type="submit"</code> button so the form posts on <kbd>Enter</kbd> from any field.</li>
+    </ul>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Guidelines</h3>
+<div class="guidelines grid-auto">
+    <div class="card card--accent-secondary guideline guideline--do">
+        <p class="type-label guideline__label">Do</p>
+        <ul>
+            <li>Put <code>.field-stack</code> on the <code>&lt;form&gt;</code> so every form shares one rhythm.</li>
+            <li>Stack fields in a single column; the eye moves straight down and never hunts across a row.</li>
+            <li>Group submit and secondary actions in a <code>.cluster</code> so they wrap gracefully.</li>
+            <li>Keep standing guidance in <code>.field__hint</code> and validation feedback in <code>.field__error</code>.</li>
+        </ul>
+    </div>
+    <div class="card card--accent-primary guideline guideline--dont">
+        <p class="type-label guideline__label">Don&rsquo;t</p>
+        <ul>
+            <li>Leave a form on the bare <code>.flow</code> default when it is collecting multiple fields.</li>
+            <li>Hard-code a one-off gap with inline styles or page-local overrides; retune <code>--form-field-gap</code> instead.</li>
+            <li>Put <code>.field-stack</code> on the outer <code>.center--form</code> wrapper; it would widen header and footer gaps too.</li>
+            <li>Use <code>.field__hint</code> as the error-message slot; render <code>.field__error</code> for validation feedback.</li>
+        </ul>
+    </div>
+</div>

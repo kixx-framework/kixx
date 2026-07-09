@@ -1,0 +1,13 @@
+/* Page-local styles for the Forms style-guide page. */
+
+/* Rhythm-comparison tiles — give each mini form room so the gap difference
+   between .flow and .flow.field-stack is the obvious thing being shown. */
+.example-grid {
+    --grid-min: 16rem;
+}
+
+/* Anatomy demo: cap the live form so it reads as a real form column rather
+   than stretching the full stage width. */
+.demo-stage form {
+    width: min(100%, 24rem);
+}

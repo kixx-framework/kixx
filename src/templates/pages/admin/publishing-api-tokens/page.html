@@ -29,7 +29,7 @@
         </div>
         {{/if}}
 
-        <form class="flow" method="{{ form.method }}" action="{{ form.url }}">
+        <form class="flow field-stack" method="{{ form.method }}" action="{{ form.url }}">
             {{#if form.csrf}}
             <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
             {{/if}}
@@ -42,23 +42,29 @@
                     name="description"
                     type="text"
                     value="{{ form.fields.description.value }}"
-                    aria-describedby="description-hint"
+                    aria-describedby="description-hint{{#if form.fields.description.error}} description-error{{/if}}"
                     {{#if form.fields.description.error}}aria-invalid="true"{{/if}}
                 >
-                <p class="field__hint" id="description-hint">
-                    {{#if form.fields.description.error}}{{ form.fields.description.error }}{{else}}{{ form.fields.description.hint }}{{/if}}
-                </p>
+                <p class="field__hint" id="description-hint">{{ form.fields.description.hint }}</p>
+                {{#if form.fields.description.error}}
+                <p class="field__error" id="description-error" role="alert">{{ form.fields.description.error }}</p>
+                {{/if}}
             </div>
 
             <div class="field{{#if form.fields.time_to_live_seconds.error}} field--error{{/if}}">
                 <label class="field__label" for="time_to_live_seconds">{{ form.fields.time_to_live_seconds.label }}</label>
-                <select class="field__input" id="time_to_live_seconds" name="time_to_live_seconds">
+                <select
+                    class="field__input"
+                    id="time_to_live_seconds"
+                    name="time_to_live_seconds"
+                    {{#if form.fields.time_to_live_seconds.error}}aria-describedby="time_to_live_seconds-error" aria-invalid="true"{{/if}}
+                >
                 {{#each form.fields.time_to_live_seconds.options as |option| }}
                     <option value="{{ option.value }}" {{#ifEqual option.value form.fields.time_to_live_seconds.value}}selected{{/ifEqual}}>{{ option.label }}</option>
                 {{/each}}
                 </select>
                 {{#if form.fields.time_to_live_seconds.error}}
-                <p class="field__hint" id="time_to_live_seconds-hint">{{ form.fields.time_to_live_seconds.error }}</p>
+                <p class="field__error" id="time_to_live_seconds-error" role="alert">{{ form.fields.time_to_live_seconds.error }}</p>
                 {{/if}}
             </div>
 

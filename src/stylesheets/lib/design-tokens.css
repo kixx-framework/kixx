@@ -126,6 +126,7 @@
     /* Reading measures in CHARACTER units — the aesthetic's grid material. */
     --measure-prose: 72ch;
     --measure-form: 42ch;
+    --form-field-gap: 2.5rem;
 
     /* Vertical spacing scale — fixed rem steps, consumed by the .flow primitive
        (and anywhere a gap is needed). */

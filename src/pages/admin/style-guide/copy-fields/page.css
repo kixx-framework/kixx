@@ -1,0 +1,17 @@
+/* Page-local styles for the Copy Fields style-guide page. */
+
+/* Example tiles: tune the auto-fit track floor for copy-field examples. */
+.example-grid {
+    --grid-min: 18rem;
+}
+
+/* Anatomy and States demos: cap the live copy field so it reads as a real
+   control rather than stretching the full stage width. */
+.demo-stage .copy-field {
+    width: min(100%, 26rem);
+}
+
+/* Example previews: let the copy field fill its tile. */
+.example__preview .copy-field {
+    width: 100%;
+}

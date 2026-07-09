@@ -1,0 +1,9 @@
+{
+    "subpage": {
+        "title": "Forms"
+    },
+    "includes": {
+        "body": { "filename": "body.html" },
+        "page_stylesheet": { "filename": "page.css" }
+    }
+}

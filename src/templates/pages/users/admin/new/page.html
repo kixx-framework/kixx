@@ -43,7 +43,7 @@
     </div>
     {{/if}}
 
-    <form class="flow" method="{{ form.method }}" action="{{ form.url }}" novalidate>
+    <form class="flow field-stack" method="{{ form.method }}" action="{{ form.url }}" novalidate>
         {{#if form.csrf}}
         <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
         {{/if}}
@@ -61,13 +61,14 @@
                 type="{{ form.fields.email_address.inputType }}"
                 autocomplete="{{ form.fields.email_address.autocomplete }}"
                 value="{{ form.fields.email_address.value }}"
-                aria-describedby="email_address-hint"
+                aria-describedby="email_address-hint{{#if form.fields.email_address.error}} email_address-error{{/if}}"
                 {{#if form.fields.email_address.error}}aria-invalid="true"{{/if}}
                 required
             >
-            <p class="field__hint" id="email_address-hint">
-                {{#if form.fields.email_address.error}}{{ form.fields.email_address.error }}{{else}}{{ form.fields.email_address.hint }}{{/if}}
-            </p>
+            <p class="field__hint" id="email_address-hint">{{ form.fields.email_address.hint }}</p>
+            {{#if form.fields.email_address.error}}
+            <p class="field__error" id="email_address-error" role="alert">{{ form.fields.email_address.error }}</p>
+            {{/if}}
         </div>
 
         <div class="field{{#if form.fields.password.error}} field--error{{/if}}">
@@ -79,13 +80,14 @@
                 name="password"
                 type="{{ form.fields.password.inputType }}"
                 autocomplete="{{ form.fields.password.autocomplete }}"
-                aria-describedby="password-hint"
+                aria-describedby="password-hint{{#if form.fields.password.error}} password-error{{/if}}"
                 {{#if form.fields.password.error}}aria-invalid="true"{{/if}}
                 required
             >
-            <p class="field__hint" id="password-hint">
-                {{#if form.fields.password.error}}{{ form.fields.password.error }}{{else}}{{ form.fields.password.hint }}{{/if}}
-            </p>
+            <p class="field__hint" id="password-hint">{{ form.fields.password.hint }}</p>
+            {{#if form.fields.password.error}}
+            <p class="field__error" id="password-error" role="alert">{{ form.fields.password.error }}</p>
+            {{/if}}
         </div>
 
         <div class="cluster">
