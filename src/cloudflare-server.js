@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import sourceConfig from './cloudflare-config.js';
-import { readConfig } from './plugins/cloudflare-config/lib/config.js';
+import { readConfig } from './kixx/config/read-config.js';
 import Logger from './kixx/logger/logger.js';
 import ApplicationContext from './kixx/context/application-context.js';
 import AppRuntime from './kixx/context/app-runtime.js';

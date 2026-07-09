@@ -5,7 +5,7 @@ import http from 'node:http';
 import util from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
-import { isFunction, isNonEmptyString } from './kixx/assertions/mod.js';
+import { assertNonEmptyString, isFunction, isNonEmptyString } from './kixx/assertions/mod.js';
 import { OperationalError } from './kixx/errors/mod.js';
 import Logger from './kixx/logger/logger.js';
 import ApplicationContext from './kixx/context/application-context.js';
@@ -18,7 +18,7 @@ import sourceConfig from './node-config.js';
 import * as app from './app/app.js';
 import generalPlugins from './plugins/general.js';
 import nodePlugins from './plugins/node.js';
-import { readConfig } from './plugins/node-config/lib/config.js';
+import { readConfig } from './kixx/config/read-config.js';
 import virtualHosts from './virtual-hosts.js';
 
 
@@ -64,7 +64,9 @@ try {
     }
 }
 
-const serverConfig = readConfig(sourceConfig, environment, THIS_DIRECTORY);
+const serverConfig = readConfig(sourceConfig, environment, {
+    resolveFilepath,
+});
 
 const DEFAULT_PORT = '2026';
 
@@ -355,4 +357,12 @@ function parseDotEnvFile(filepath) {
     } catch (cause) {
         throw new OperationalError(`Unable to parse dotenv file from ${ filepath }`, { cause });
     }
+}
+
+function resolveFilepath(relativeFilepath) {
+    assertNonEmptyString(relativeFilepath, 'resolveFilepath requires a relative filepath');
+
+    // Config file paths are POSIX-style so deployment config stays portable.
+    // Rejoin the pieces with node:path to return an OS-native absolute path.
+    return path.join(THIS_DIRECTORY, ...relativeFilepath.split('/'));
 }
