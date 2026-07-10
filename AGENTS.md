@@ -125,7 +125,7 @@ Run the development server with:
 node tools/devserver.js --port 2026
 ```
 
-Use this wrapper for normal development instead of running `src/node-server.js` directly. It keeps `--port` as the public browser-facing port, starts the app server child on a temporary internal port, and forwards `--environment` and `--dotenv` to the child process.
+Use this wrapper for normal development instead of running `src/node-server.js` directly. It keeps `--port` as the public browser-facing port, starts the app server child on a temporary internal port, and forwards `--environment` and `--secrets` to the child process.
 
 Change the --port option to avoid port conflicts if needed.
 

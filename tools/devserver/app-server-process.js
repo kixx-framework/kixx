@@ -46,7 +46,7 @@ export default class AppServerProcess {
 
     /**
      * @param {Object} args
-     * @param {string[]} [args.forwardedArgs] - Extra CLI arguments passed through to every spawned src/node-server.js child, such as --environment and --dotenv.
+     * @param {string[]} [args.forwardedArgs] - Extra CLI arguments passed through to every spawned src/node-server.js child, such as --environment and --secrets.
      */
     constructor(args) {
         const { forwardedArgs = [] } = args ?? {};

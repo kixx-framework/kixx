@@ -16,7 +16,7 @@ const { values: cliOptions } = util.parseArgs({
     options: {
         environment: { type: 'string', short: 'e' },
         port: { type: 'string', short: 'p' },
-        dotenv: { type: 'string' },
+        secrets: { type: 'string' },
     },
     strict: false,
     allowPositionals: true,
@@ -42,8 +42,8 @@ if (isNonEmptyString(cliOptions.environment)) {
     forwardedAppServerArgs.push('--environment', cliOptions.environment);
 }
 
-if (isNonEmptyString(cliOptions.dotenv)) {
-    forwardedAppServerArgs.push('--dotenv', cliOptions.dotenv);
+if (isNonEmptyString(cliOptions.secrets)) {
+    forwardedAppServerArgs.push('--secrets', cliOptions.secrets);
 }
 
 const appServerProcess = new AppServerProcess({ forwardedArgs: forwardedAppServerArgs });
