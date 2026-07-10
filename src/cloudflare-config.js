@@ -31,12 +31,12 @@ export default {
             DOCUMENT_STORE: {
                 type: 'd1',
                 bindingName: 'DOCUMENT_STORE',
-                database_id: 'a-d1-database-uuid',
+                databaseId: 'a-d1-database-uuid',
             },
             KEY_VALUE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'KEY_VALUE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             OBJECT_STORE: {
                 type: 'r2_bucket',
@@ -52,17 +52,17 @@ export default {
             HYPERVIEW_PAGE_DATA_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             HYPERVIEW_TEMPLATE_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'STATIC_FILE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
         },
         staging: {
@@ -94,12 +94,12 @@ export default {
             DOCUMENT_STORE: {
                 type: 'd1',
                 bindingName: 'DOCUMENT_STORE',
-                database_id: 'a-d1-database-uuid',
+                databaseId: 'a-d1-database-uuid',
             },
             KEY_VALUE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'KEY_VALUE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             OBJECT_STORE: {
                 type: 'r2_bucket',
@@ -115,17 +115,17 @@ export default {
             HYPERVIEW_PAGE_DATA_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             HYPERVIEW_TEMPLATE_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'STATIC_FILE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
         },
         production: {
@@ -157,12 +157,12 @@ export default {
             DOCUMENT_STORE: {
                 type: 'd1',
                 bindingName: 'DOCUMENT_STORE',
-                database_id: 'a-d1-database-uuid',
+                databaseId: 'a-d1-database-uuid',
             },
             KEY_VALUE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'KEY_VALUE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             OBJECT_STORE: {
                 type: 'r2_bucket',
@@ -178,17 +178,17 @@ export default {
             HYPERVIEW_PAGE_DATA_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             HYPERVIEW_TEMPLATE_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'STATIC_FILE_STORE',
-                namespace_id: 'a-kv-namespace-uuid',
+                namespaceId: 'a-kv-namespace-uuid',
             },
         },
     },
