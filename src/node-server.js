@@ -31,7 +31,7 @@ const { values: cliOptions } = util.parseArgs({
     options: {
         environment: { type: 'string', short: 'e' },
         port: { type: 'string', short: 'p' },
-        secrets: { type: 'string' },
+        dotenv: { type: 'string' },
     },
     strict: false,
     allowPositionals: true,
@@ -47,17 +47,17 @@ if (!environment) {
     environment = 'development';
 }
 
-const secretsFile = isNonEmptyString(cliOptions.secrets)
-    ? path.resolve(cliOptions.secrets)
-    : path.join(THIS_DIRECTORY, `.secrets.${ environment }`);
+const dotenvFile = isNonEmptyString(cliOptions.dotenv)
+    ? path.resolve(cliOptions.dotenv)
+    : path.join(THIS_DIRECTORY, `.env.${ environment }`);
 
 let env;
 
 try {
-    env = parseDotEnvFile(secretsFile);
+    env = parseDotEnvFile(dotenvFile);
 } catch (error) {
     if (error.code === 'ENOENT') {
-        // If the secrets file does not exist, use the env vars read at startup.
+        // If the dotenv file does not exist, use the env vars read at startup.
         env = process.env;
     } else {
         throw error;
@@ -350,13 +350,13 @@ function parseDotEnvFile(filepath) {
     try {
         source = fs.readFileSync(filepath, 'utf8');
     } catch (cause) {
-        throw new OperationalError(`Unable to read secrets file from ${ filepath }`, { cause });
+        throw new OperationalError(`Unable to read dotenv file from ${ filepath }`, { cause });
     }
 
     try {
         return util.parseEnv(source);
     } catch (cause) {
-        throw new OperationalError(`Unable to parse secrets file from ${ filepath }`, { cause });
+        throw new OperationalError(`Unable to parse dotenv file from ${ filepath }`, { cause });
     }
 }
 

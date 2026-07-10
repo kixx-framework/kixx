@@ -6,10 +6,10 @@ Build `tools/devserver.js` as a Node-only CLI tool (outside `src/app/`, so it is
 
 - [x] **Add CLI argument parsing and option resolution**
   - **Story**: `node tools/devserver.js` accepts the same flags as `src/node-server.js` and stands in for it directly.
-  - **What**: Use `util.parseArgs` to parse `--port` (the devserver's own public listen port, default `2026`, matching `src/node-server.js`'s default) and pass `--config`, `--environment`, and `--secrets` through unchanged as forwarded child argv. Do not forward the devserver's own `--port` to the child.
+  - **What**: Use `util.parseArgs` to parse `--port` (the devserver's own public listen port, default `2026`, matching `src/node-server.js`'s default) and pass `--config`, `--environment`, and `--dotenv` through unchanged as forwarded child argv. Do not forward the devserver's own `--port` to the child.
   - **Where**: `tools/devserver.js`
   - **Documentation**: `src/node-server.js` (CLI parsing block), `src/docs/code-style-guide.md`
-  - **Acceptance criteria**: Running with no flags listens on `2026`; `--port` changes only the devserver's listen port; `--config`/`--environment`/`--secrets` reach the child's argv unmodified.
+  - **Acceptance criteria**: Running with no flags listens on `2026`; `--port` changes only the devserver's listen port; `--config`/`--environment`/`--dotenv` reach the child's argv unmodified.
   - **Depends on**: none
 
 - [x] **Implement AppServerProcess: spawn, free-port discovery, readiness polling**

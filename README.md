@@ -40,7 +40,7 @@ The dev server listens on the public `--port` and proxies requests to a child `s
 
 The dev server also serves CSS files directly from `src/stylesheets/`, allowing you to skip a build process for CSS bundles.
 
-The wrapper accepts the same `--environment` and `--secrets` options as `src/node-server.js`. Change `--port` to avoid local port conflicts.
+The wrapper accepts the same `--environment` and `--dotenv` options as `src/node-server.js`. Change `--port` to avoid local port conflicts.
 
 ### Linting
 
