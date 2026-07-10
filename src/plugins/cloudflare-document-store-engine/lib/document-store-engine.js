@@ -780,7 +780,7 @@ export default class DocumentStoreEngine {
      * each triggering a separate migration. On failure the promise is cleared so
      * the next request can retry.
      */
-    #ensurePrepared(context) {
+    async #ensurePrepared(context) {
         if (!this.#preparePromise) {
             this.#preparePromise = this.prepareDatabase(context).catch((err) => {
                 // Clear on failure so the next request gets a fresh attempt.
@@ -788,7 +788,7 @@ export default class DocumentStoreEngine {
                 throw err;
             });
         }
-        return this.#preparePromise;
+        return await this.#preparePromise;
     }
 
     /**

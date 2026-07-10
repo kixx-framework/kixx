@@ -36,7 +36,7 @@ const STATUS_HEADINGS = {
  * @param {string} [scope] - Optional scope label appended to the page title, e.g. `'Admin'`.
  * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>|false} Rendered response, or false for JSON requests.
  */
-export function renderHtmlErrorPage(context, request, response, error, pathname, scope) {
+export async function renderHtmlErrorPage(context, request, response, error, pathname, scope) {
     assertNonEmptyString(pathname, 'renderHtmlErrorPage: pathname');
 
     if (request.isJSONRequest()) {
@@ -64,7 +64,19 @@ export function renderHtmlErrorPage(context, request, response, error, pathname,
         },
     });
 
-    return HyperviewDynamicPageHandler({ pathname, allowJSON: false })(context, request, response);
+    try {
+        return await HyperviewDynamicPageHandler({ pathname, allowJSON: false })(context, request, response);
+    } catch (cause) {
+        context.logger.warn(
+            'error rendering html error page',
+            { request: request.id, pathname },
+            cause,
+        );
+        if (cause.expected) {
+            return false;
+        }
+        throw cause;
+    }
 }
 
 

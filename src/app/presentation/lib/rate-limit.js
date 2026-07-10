@@ -77,7 +77,7 @@ export async function clearLoginThrottle(context, request, email) {
  */
 export async function checkSignupThrottle(context, request) {
     const rateLimits = context.getCollection('RateLimit');
-    return rateLimits.getState(context, signupScope(request));
+    return await rateLimits.getState(context, signupScope(request));
 }
 
 /**
@@ -88,7 +88,7 @@ export async function checkSignupThrottle(context, request) {
  */
 export async function recordSignupFailure(context, request) {
     const rateLimits = context.getCollection('RateLimit');
-    return rateLimits.recordFailure(context, signupScope(request), getPolicy(context, 'ADMIN_SIGNUP'));
+    return await rateLimits.recordFailure(context, signupScope(request), getPolicy(context, 'ADMIN_SIGNUP'));
 }
 
 /**
@@ -110,7 +110,7 @@ export async function clearSignupThrottle(context, request) {
  */
 export async function checkInviteThrottle(context, request) {
     const rateLimits = context.getCollection('RateLimit');
-    return rateLimits.getState(context, inviteScope(request));
+    return await rateLimits.getState(context, inviteScope(request));
 }
 
 /**
@@ -125,7 +125,7 @@ export async function checkInviteThrottle(context, request) {
  */
 export async function recordInviteGuess(context, request) {
     const rateLimits = context.getCollection('RateLimit');
-    return rateLimits.recordFailure(context, inviteScope(request), getPolicy(context, 'ADMIN_INVITE'));
+    return await rateLimits.recordFailure(context, inviteScope(request), getPolicy(context, 'ADMIN_INVITE'));
 }
 
 /**

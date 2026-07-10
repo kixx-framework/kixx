@@ -169,14 +169,14 @@ export default class AppServerProcess {
     // arriving in the same burst, or a crash respawn racing an idle trigger)
     // collapse into the one cutover already in flight instead of each
     // spawning their own replacement child.
-    #restart() {
+    async #restart() {
         if (!this.#restartPromise) {
             this.#restartPromise = this.#cutover().finally(() => {
                 this.#restartPromise = null;
             });
         }
 
-        return this.#restartPromise;
+        return await this.#restartPromise;
     }
 
     // Cutover: bring up a replacement child and only swap it in once it is

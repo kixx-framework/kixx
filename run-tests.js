@@ -188,14 +188,13 @@ async function dynamicallyImportFile({ filepath }) {
 async function readDirectory(dirpath) {
     const entries = await fsp.readdir(dirpath);
 
-    const promises = entries.map((entry) => {
+    const promises = entries.map(async (entry) => {
         const filepath = path.join(dirpath, entry);
-        return fsp.stat(filepath).then((stats) => {
-            return { filepath, stats };
-        });
+        const stats = await fsp.stat(filepath);
+        return { filepath, stats };
     });
 
-    return Promise.all(promises);
+    return await Promise.all(promises);
 }
 
 function isSkippedPath(filepath, skipPaths) {

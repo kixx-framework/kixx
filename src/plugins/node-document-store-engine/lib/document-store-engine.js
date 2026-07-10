@@ -789,10 +789,10 @@ export default class DocumentStoreEngine {
      * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @returns {Promise<void>}
      */
-    #ensurePrepared(context) {
+    async #ensurePrepared(context) {
         this.#getDatabase();
         if (this.#prepared) {
-            return Promise.resolve();
+            return;
         }
         if (!this.#preparePromise) {
             this.#preparePromise = this.prepareDatabase(context).catch((err) => {
@@ -800,7 +800,7 @@ export default class DocumentStoreEngine {
                 throw err;
             });
         }
-        return this.#preparePromise;
+        return await this.#preparePromise;
     }
 
     /**
