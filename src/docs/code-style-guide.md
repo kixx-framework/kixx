@@ -339,6 +339,31 @@ Choose the relative import path from the file you are editing. Do not add a new 
 - `doesMatch(matcher, value)`: RegExp.test(), isEqual(), String.includes(), or ISO date matching; curryable
 - `toFriendlyString(value)`: human-readable value formatter for diagnostics
 
+## Async Code
+
+Rule: When an async function or method delegates its return value to another Promise-returning operation, await that operation before returning. Do not return the delegated Promise directly.
+
+Awaiting the Promise causes a rejection to pass through the current function, preserving that function as an async frame in the error stack. Accordingly, Promise-forwarding wrappers should generally be declared `async` and use `return await`.
+
+This is correct:
+
+```js
+import { renderHtmlErrorPage } from '../lib/html-error-page.js';
+
+export async function siteErrorHandler(context, request, response, error) {
+    return await renderHtmlErrorPage(context, request, response, error, '/errors', 'Kixx');
+}
+```
+
+This is incorrect because `siteErrorHandler()` may be omitted from the error stack if the delegated Promise rejects:
+
+```js
+import { renderHtmlErrorPage } from '../lib/html-error-page.js';
+
+export async function siteErrorHandler(context, request, response, error) {
+    return renderHtmlErrorPage(context, request, response, error, '/errors', 'Kixx');
+}
+```
 
 ## Inline Code Comments
 
