@@ -2,7 +2,12 @@
 <html lang="en-US">
     <head>
         {{>common-site-meta.html}}
+
+        {{#if build_id}}
+        <link href="/assets/stylesheets/{{ build_id }}/admin.css" rel="stylesheet">
+        {{ else }}
         <link href="/stylesheets/admin.css" rel="stylesheet">
+        {{/if}}
 
         {{#if includes.page_stylesheet }}
         <style>{{{ includes.page_stylesheet }}}</style>
@@ -19,6 +24,10 @@
         <main class="admin-main center">No content.</main>
         {{/if}}{{/if}}
 
+        {{#if build_id}}
+        <script type="module" src="/assets/javascript/{{ build_id }}/site.js"></script>
+        {{ else }}
         <script type="module" src="/javascript/site.js"></script>
+        {{/if}}
     </body>
 </html>
