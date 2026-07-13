@@ -4,6 +4,9 @@
         {{>common-site-meta.html}}
         {{>common-seo-meta.html}}
 
+        {{!--
+            In remote environments we use the static asset path and the build_id
+            namespace to enable long lived caching of static assets. }}
         {{#if build_id}}
         <link href="/assets/stylesheets/{{ build_id }}/stylesheet.css" rel="stylesheet">
         {{ else }}
@@ -23,6 +26,9 @@
             <p>No content.</p>
         {{/if}}{{/if}}
 
+        {{!--
+            In remote environments we use the static asset path and the build_id
+            namespace to enable long lived caching of static assets. }}
         {{#if build_id}}
         <script type="module" src="/assets/javascript/{{ build_id }}/site.js"></script>
         {{ else }}
