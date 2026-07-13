@@ -21,6 +21,7 @@ const protoToString = Object.prototype.toString;
 /**
  * Builds the structured JSON log entry shared by platform logger writers.
  * @param {Object} options - Log entry options
+ * @param {string} options.timestamp - ISO 8601 timestamp for the log event
  * @param {string} options.name - Logger name
  * @param {number} options.level - Numeric severity constant from `Logger.LEVELS`
  * @param {string} options.levelName - Human-readable level name
@@ -31,6 +32,7 @@ const protoToString = Object.prototype.toString;
  */
 export function createJSONLogEntry(options) {
     const {
+        timestamp,
         name,
         level,
         levelName,
@@ -40,6 +42,7 @@ export function createJSONLogEntry(options) {
     } = options ?? {};
 
     const entry = {
+        timestamp,
         levelName,
         level,
         name,
@@ -75,6 +78,7 @@ function stringifyJSONLogEntrySafely(entry, nativeError) {
         return JSON.stringify(makeJSONSafeValue(entry, new WeakSet()));
     } catch (safeError) {
         return JSON.stringify({
+            timestamp: toSafeString(entry.timestamp),
             levelName: toSafeString(entry.levelName),
             level: makeJSONSafeValue(entry.level, new WeakSet()),
             name: toSafeString(entry.name),
