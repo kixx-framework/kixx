@@ -31,7 +31,9 @@ export default class LoggerWriter {
      * @param {Error} [error] - Optional error object
      */
     write(name, level, levelName, message, info, error) {
+        const now = new Date();
         const entry = createJSONLogEntry({
+            timestamp: now.toISOString(),
             levelName,
             level,
             name,

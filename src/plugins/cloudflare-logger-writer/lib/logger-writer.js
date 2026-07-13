@@ -28,7 +28,12 @@ export default class LoggerWriter {
      * @param {Error} [error] - Optional error object
      */
     write(name, level, levelName, message, info, error) {
+        // Cloudflare prepends a timestamp when adding logs to the dashboard,
+        // but it does not follow the same JSON format when we forward to
+        // other log aggregators, so we add our own here.
+        const now = new Date();
         const entry = createJSONLogEntry({
+            timestamp: now.toISOString(),
             levelName,
             level,
             name,
