@@ -202,6 +202,7 @@ export default class HyperviewService {
      */
     mergePageMetadata(url, metadata) {
         const page = metadata.page ?? {};
+        metadata.page = page;
         page.pathname = url.pathname;
 
         // Set canonical URL from request URL if not already defined in page data
@@ -277,8 +278,8 @@ export default class HyperviewService {
         let cacheKey;
         if (useCache && version) {
             cacheKey = `${ buildId }:${ pathname }:${ version }`;
-            const cachedIncludes = this.#includesCache.get(cacheKey);
-            if (cachedIncludes) {
+            if (this.#includesCache.has(cacheKey)) {
+                const cachedIncludes = this.#includesCache.get(cacheKey);
                 this.#logger.debug('page includes cache hit', { pathname, key: cacheKey });
                 return renderIncludes(cachedIncludes, metadata);
             }
@@ -413,8 +414,8 @@ export default class HyperviewService {
         let template;
         const cacheKey = `${ buildId }:base:${ templateId }`;
         if (useCache) {
-            template = this.#templateCache.get(cacheKey);
-            if (template) {
+            if (this.#templateCache.has(cacheKey)) {
+                template = this.#templateCache.get(cacheKey);
                 this.#logger.debug('base template cache hit', { templateId, key: cacheKey });
                 return template;
             }
@@ -428,7 +429,7 @@ export default class HyperviewService {
         }
 
         if (useCache) {
-            this.#templateCache.set(cacheKey, template);
+            this.#templateCache.set(cacheKey, template ?? null);
         }
 
         return template ?? null;
@@ -449,8 +450,8 @@ export default class HyperviewService {
         let template;
         const cacheKey = `${ buildId }:page:${ templateId }`;
         if (useCache) {
-            template = this.#templateCache.get(cacheKey);
-            if (template) {
+            if (this.#templateCache.has(cacheKey)) {
+                template = this.#templateCache.get(cacheKey);
                 this.#logger.debug('page template cache hit', { templateId, key: cacheKey });
                 return template;
             }
@@ -464,7 +465,7 @@ export default class HyperviewService {
         }
 
         if (useCache) {
-            this.#templateCache.set(cacheKey, template);
+            this.#templateCache.set(cacheKey, template ?? null);
         }
 
         return template ?? null;
