@@ -34,6 +34,8 @@ export function register(context) {
 export function initialize(context) {
     const documentStore = context.getService('DocumentStore');
     const documentStoreEngine = context.getService('DocumentStoreEngine');
+
+    // Signs and verifies public pagination cursors returned from the DocumentStore.
     const cursorSigningSecret = context.getEnvString(DOCUMENT_STORE_CURSOR_SIGNING_SECRET, {
         required: true,
     });
