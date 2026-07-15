@@ -36,3 +36,7 @@ tmp/
 # Databases
 src/data/
 
+# Secrets
+.env
+.env.*
+
