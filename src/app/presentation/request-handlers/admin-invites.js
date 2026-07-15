@@ -3,6 +3,7 @@ import { createAdminInvite } from '../../transaction-scripts/admin-invites/creat
 import { listAdminInvites } from '../../transaction-scripts/admin-invites/list-admin-invites.js';
 import { revokeAdminInvite } from '../../transaction-scripts/admin-invites/revoke-admin-invite.js';
 import { getCsrfFormContext, validateCsrfFormData } from '../lib/csrf.js';
+import { getCursorQueryParam } from '../lib/pagination.js';
 
 
 function getRevokeInviteLink(context) {
@@ -44,7 +45,7 @@ function buildSignupInviteUrl(context, request, token) {
 }
 
 export async function getAdminInvites(context, request, response) {
-    const { cursor: requestCursor } = request.queryParams;
+    const requestCursor = getCursorQueryParam(request.queryParams);
     const history = parseInviteListHistory(request.queryParams.history);
 
     const { items, cursor: nextCursor } = await listAdminInvites(context, { cursor: requestCursor });
