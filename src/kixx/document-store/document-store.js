@@ -16,11 +16,6 @@ import InvalidCursorError from './invalid-cursor-error.js';
 const TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 // deno-lint-ignore no-control-regex
 const CONTROL_CHAR_PATTERN = /[\x00-\x1F]/; // eslint-disable-line no-control-regex
-// Version 2 moved the cursor scope and the engine continuation into this
-// envelope. Tokens issued under version 1 fail the check below and surface as
-// InvalidCursorError, so a deploy retires them as expected input rather than
-// as an internal fault.
-const CURSOR_ENVELOPE_VERSION = 2;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 const CURSOR_RANGE_OPTION_KEYS = [
     'equalTo',
@@ -64,9 +59,9 @@ export const MAX_SORT_KEY_CHAR = '\uFFFF';
  * envelope also binds each cursor to the query that produced it, so engines
  * receive only their own private continuation value, for the query that issued
  * it, and never encode or scope-check a cursor themselves. Invalid public
- * tokens — unsigned, tampered, superseded by an envelope version, or replayed
- * against a different query — reject with `InvalidCursorError`, allowing the
- * calling transport layer to classify them as expected input failures.
+ * tokens — unsigned, tampered, or replayed against a different query — reject
+ * with `InvalidCursorError`, allowing the calling transport layer to classify
+ * them as expected input failures.
  *
  * @see DocumentStoreEngineInterface in ./document-store-engine-interface.js for the engine contract
  * @see DocumentStoreEngine in ../../plugins/cloudflare-document-store-engine/lib/document-store-engine.js for the Cloudflare D1 implementation
@@ -154,11 +149,7 @@ export default class DocumentStore {
     // pre-encoded string, so it is serialized once here instead of being
     // base64'd by the engine and then base64'd again inside this payload.
     async #sealCursor(scope, cursor) {
-        const payload = new TextEncoder().encode(JSON.stringify({
-            version: CURSOR_ENVELOPE_VERSION,
-            scope,
-            cursor,
-        }));
+        const payload = new TextEncoder().encode(JSON.stringify({ scope, cursor }));
         const key = await this.#cursorSigningKey;
         const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, payload));
 
@@ -195,7 +186,6 @@ export default class DocumentStore {
 
         if (!isObjectNotNull(envelope)
             || Array.isArray(envelope)
-            || envelope.version !== CURSOR_ENVELOPE_VERSION
             || !isPlainObject(envelope.cursor)) {
             throw new InvalidCursorError();
         }
