@@ -7,6 +7,7 @@ import {
     isBoolean,
     isUndefined,
     isNonEmptyString,
+    isPlainObject,
     assert,
     assertArray,
     assertNonEmptyString,
@@ -274,13 +275,13 @@ export default class DocumentStoreEngine {
      * @param {string} options.index - Name of the configured index key to query
      * @param {boolean} [options.descending=false] - Sort in descending order when true
      * @param {number} [options.limit=100] - Positive integer maximum number of records per page
-     * @param {string} [options.cursor] - Non-empty opaque pagination token returned by a previous call
+     * @param {Object} [options.cursor] - Private continuation value returned by a previous call, replayed by the DocumentStore facade
      * @param {string} [options.equalTo] - Exact match on the index value; mutually exclusive with range bounds
      * @param {string} [options.greaterThan] - Exclusive lower bound on the index value
      * @param {string} [options.greaterThanOrEqualTo] - Inclusive lower bound on the index value
      * @param {string} [options.lessThan] - Exclusive upper bound on the index value
      * @param {string} [options.lessThanOrEqualTo] - Inclusive upper bound on the index value
-     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and an opaque next-page cursor, or null on the last page
+     * @returns {Promise<{records: Object[], cursor: Object|null}>} Page of records and a private next-page continuation value, or null on the last page
      * @throws {AssertionError} When `options.index`, `options.limit`, or `options.cursor` are invalid, or when `equalTo` is combined with range bounds
      * @throws {Error} When the D1 query fails
      */
@@ -319,7 +320,7 @@ export default class DocumentStoreEngine {
             // We fetched one extra record to determine whether a next page exists.
             results.pop();
             const last = results[results.length - 1];
-            nextCursor = this.#encodeCursor(last.key, last.id);
+            nextCursor = { key: last.key, id: last.id };
         }
 
         const records = results.map((row) => {
@@ -348,13 +349,13 @@ export default class DocumentStoreEngine {
      * @param {Object} [options]
      * @param {boolean} [options.descending=false] - Sort in descending order when true
      * @param {number} [options.limit=100] - Positive integer maximum number of records per page
-     * @param {string} [options.cursor] - Non-empty opaque pagination token returned by a previous call
+     * @param {Object} [options.cursor] - Private continuation value returned by a previous call, replayed by the DocumentStore facade
      * @param {string} [options.equalTo] - Exact match on sort_key; mutually exclusive with range bounds
      * @param {string} [options.greaterThan] - Exclusive lower bound on sort_key
      * @param {string} [options.greaterThanOrEqualTo] - Inclusive lower bound on sort_key
      * @param {string} [options.lessThan] - Exclusive upper bound on sort_key
      * @param {string} [options.lessThanOrEqualTo] - Inclusive upper bound on sort_key
-     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and an opaque next-page cursor, or null on the last page
+     * @returns {Promise<{records: Object[], cursor: Object|null}>} Page of records and a private next-page continuation value, or null on the last page
      * @throws {AssertionError} When `options.limit` or `options.cursor` are invalid, or when `equalTo` is combined with range bounds
      * @throws {Error} When the D1 query fails
      */
@@ -388,7 +389,7 @@ export default class DocumentStoreEngine {
             // We fetched one extra record to determine whether a next page exists.
             results.pop();
             const last = results[results.length - 1];
-            nextCursor = this.#encodeCursor(last.key, last.id);
+            nextCursor = { key: last.key, id: last.id };
         }
 
         const records = results.map((row) => {
@@ -847,7 +848,7 @@ export default class DocumentStoreEngine {
         }
 
         if (options.cursor) {
-            const { v: cursorValue, id: cursorId } = this.#decodeCursor(options.cursor);
+            const { key: cursorValue, id: cursorId } = options.cursor;
 
             // Null index values need special handling because SQL comparison operators against
             // NULL always evaluate to NULL (never true), so standard `col > ?` does not work.
@@ -894,17 +895,6 @@ export default class DocumentStoreEngine {
         return { sql, params };
     }
 
-    #encodeCursor(indexValue, id) {
-        return btoa(JSON.stringify({ v: indexValue, id }));
-    }
-
-    #decodeCursor(cursor) {
-        try {
-            return JSON.parse(atob(cursor));
-        } catch (cause) {
-            throw new AssertionError('DocumentStoreEngine: invalid cursor token', { cause });
-        }
-    }
 }
 
 function getPaginationLimit(options, methodName) {
@@ -919,13 +909,21 @@ function getPaginationLimit(options, methodName) {
     return options.limit;
 }
 
+// The continuation is this engine's own private shape, handed back by the
+// DocumentStore facade exactly as it was issued. The facade verifies the token
+// signature and query scope, so anything reaching here that does not match the
+// shape is a broken internal invariant rather than bad client input.
 function getPaginationCursor(options, methodName) {
     if (isUndefined(options.cursor)) {
         return undefined;
     }
 
-    if (!isNonEmptyString(options.cursor)) {
-        throw new AssertionError(`${ methodName } options.cursor must be a non-empty string when present`);
+    if (!isPlainObject(options.cursor)
+        || !('key' in options.cursor)
+        || !isNonEmptyString(options.cursor.id)) {
+        throw new AssertionError(
+            `${ methodName } options.cursor must be a continuation object issued by this engine`,
+        );
     }
 
     return options.cursor;

@@ -3,6 +3,7 @@ import {
     isString,
     isBoolean,
     isObjectNotNull,
+    isPlainObject,
     isUndefined,
     isNonEmptyString,
     assert,
@@ -15,8 +16,19 @@ import InvalidCursorError from './invalid-cursor-error.js';
 const TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 // deno-lint-ignore no-control-regex
 const CONTROL_CHAR_PATTERN = /[\x00-\x1F]/; // eslint-disable-line no-control-regex
-const CURSOR_ENVELOPE_VERSION = 1;
+// Version 2 moved the cursor scope and the engine continuation into this
+// envelope. Tokens issued under version 1 fail the check below and surface as
+// InvalidCursorError, so a deploy retires them as expected input rather than
+// as an internal fault.
+const CURSOR_ENVELOPE_VERSION = 2;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
+const CURSOR_RANGE_OPTION_KEYS = [
+    'equalTo',
+    'greaterThan',
+    'greaterThanOrEqualTo',
+    'lessThan',
+    'lessThanOrEqualTo',
+];
 
 
 /**
@@ -48,10 +60,13 @@ export const MAX_SORT_KEY_CHAR = '\uFFFF';
  * used. Pagination cursors exposed by `scan()` and `query()` are public,
  * signed tokens issued and verified by this facade. `initialize()` requires a
  * runtime cursor-signing secret; its HMAC-SHA-256 envelope uses Web Crypto so
- * the same public token works across Node.js and Cloudflare Workers. Engines
- * receive only their private continuation cursors. Invalid public tokens reject
- * with `InvalidCursorError`, allowing the calling transport layer to classify
- * them as expected input failures.
+ * the same public token works across Node.js and Cloudflare Workers. The
+ * envelope also binds each cursor to the query that produced it, so engines
+ * receive only their own private continuation value, for the query that issued
+ * it, and never encode or scope-check a cursor themselves. Invalid public
+ * tokens — unsigned, tampered, superseded by an envelope version, or replayed
+ * against a different query — reject with `InvalidCursorError`, allowing the
+ * calling transport layer to classify them as expected input failures.
  *
  * @see DocumentStoreEngineInterface in ./document-store-engine-interface.js for the engine contract
  * @see DocumentStoreEngine in ../../plugins/cloudflare-document-store-engine/lib/document-store-engine.js for the Cloudflare D1 implementation
@@ -135,9 +150,13 @@ export default class DocumentStore {
         }
     }
 
-    async #sealCursor(cursor) {
+    // The engine continuation is embedded as a JSON value rather than a
+    // pre-encoded string, so it is serialized once here instead of being
+    // base64'd by the engine and then base64'd again inside this payload.
+    async #sealCursor(scope, cursor) {
         const payload = new TextEncoder().encode(JSON.stringify({
             version: CURSOR_ENVELOPE_VERSION,
+            scope,
             cursor,
         }));
         const key = await this.#cursorSigningKey;
@@ -146,7 +165,7 @@ export default class DocumentStore {
         return `${ bytesToBase64Url(payload) }.${ bytesToBase64Url(signature) }`;
     }
 
-    async #unsealCursor(cursor) {
+    async #unsealCursor(cursor, expectedScope) {
         const [ encodedPayload, encodedSignature, ...extraSegments ] = cursor.split('.');
         if (extraSegments.length > 0 || !encodedPayload || !encodedSignature) {
             throw new InvalidCursorError();
@@ -177,23 +196,40 @@ export default class DocumentStore {
         if (!isObjectNotNull(envelope)
             || Array.isArray(envelope)
             || envelope.version !== CURSOR_ENVELOPE_VERSION
-            || !isNonEmptyString(envelope.cursor)) {
+            || !isPlainObject(envelope.cursor)) {
+            throw new InvalidCursorError();
+        }
+
+        // A cursor marks a position in one specific ordering, so replaying it
+        // against different bounds, a different index, or a flipped sort would
+        // resume from a meaningless offset. The signature proves we issued the
+        // token but not that it belongs to this query, so the scope is compared
+        // here. Mismatches arrive as ordinary request input — a stale page link
+        // after a filter change — and are rejected as expected input, not as a
+        // broken internal invariant.
+        if (!areCursorScopesEqual(envelope.scope, expectedScope)) {
             throw new InvalidCursorError();
         }
 
         return envelope.cursor;
     }
 
-    async #sealPaginationResult(result) {
+    async #sealPaginationResult(scope, result) {
         if (result.cursor === null) {
             return result;
         }
 
-        assertNonEmptyString(result.cursor, 'DocumentStore engine result cursor must be a non-empty string or null');
+        // The continuation is opaque to this facade but must survive JSON, so
+        // the shape contract is asserted here rather than failing later inside
+        // an unrelated encode step.
+        assert(
+            isPlainObject(result.cursor),
+            'DocumentStore engine result cursor must be a plain object or null',
+        );
 
         return {
             records: result.records,
-            cursor: await this.#sealCursor(result.cursor),
+            cursor: await this.#sealCursor(scope, result.cursor),
         };
     }
 
@@ -385,8 +421,10 @@ export default class DocumentStore {
     /**
      * Returns a keyset-paginated page of documents ordered by their built-in sort key.
      *
-     * The cursor is an opaque signed public token and should only be reused with
-     * the same method, type, sort direction, and range options that produced it.
+     * The cursor is an opaque signed public token. It is bound to the method,
+     * type, sort direction, and range options that produced it, and reusing it
+     * with any of those changed throws `InvalidCursorError`. `limit` is not
+     * bound and may vary between pages.
      *
      * @param {Object} context - Request or execution context consumed by the configured engine
      * @param {string} type - Document type used to scope the scan
@@ -401,7 +439,7 @@ export default class DocumentStore {
      * @param {*} [options.lessThanOrEqualTo] - Inclusive upper bound on the sort key
      * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and a signed public next-page cursor, or null on the last page
      * @throws {AssertionError} When the store is not initialized or the arguments are invalid
-     * @throws {InvalidCursorError} When options.cursor is not a valid public cursor issued by this facade
+     * @throws {InvalidCursorError} When options.cursor was not issued by this facade, or was issued for a different query
      */
     async scan(context, type, options) {
         this.#assertInitialized(this.scan);
@@ -411,7 +449,10 @@ export default class DocumentStore {
         const limit = getPaginationLimit(options, 'DocumentStore#scan()');
         const descending = isBoolean(options.descending) ? options.descending : false;
         const publicCursor = getPaginationCursor(options, 'DocumentStore#scan()');
-        const cursor = isUndefined(publicCursor) ? undefined : await this.#unsealCursor(publicCursor);
+        const scope = buildCursorScope({ method: 'scan', type, descending, options });
+        const cursor = isUndefined(publicCursor)
+            ? undefined
+            : await this.#unsealCursor(publicCursor, scope);
 
         const result = await this.#engine.scan(context, type, {
             descending,
@@ -424,15 +465,16 @@ export default class DocumentStore {
             lessThanOrEqualTo: options.lessThanOrEqualTo,
         });
 
-        return await this.#sealPaginationResult(result);
+        return await this.#sealPaginationResult(scope, result);
     }
 
     /**
      * Returns a keyset-paginated page of documents ordered by a named secondary index.
      *
-     * The cursor is an opaque signed public token and should only be reused with
-     * the same method, type, index, sort direction, and range options that
-     * produced it.
+     * The cursor is an opaque signed public token. It is bound to the method,
+     * type, index, sort direction, and range options that produced it, and
+     * reusing it with any of those changed throws `InvalidCursorError`. `limit`
+     * is not bound and may vary between pages.
      *
      * @param {Object} context - Request or execution context consumed by the configured engine
      * @param {string} type - Document type used to scope the query
@@ -448,7 +490,7 @@ export default class DocumentStore {
      * @param {*} [options.lessThanOrEqualTo] - Inclusive upper bound on the index value
      * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and a signed public next-page cursor, or null on the last page
      * @throws {AssertionError} When the arguments are invalid or the index is not configured
-     * @throws {InvalidCursorError} When options.cursor is not a valid public cursor issued by this facade
+     * @throws {InvalidCursorError} When options.cursor was not issued by this facade, or was issued for a different query
      */
     async query(context, type, options) {
         this.#assertInitialized(this.query);
@@ -459,7 +501,16 @@ export default class DocumentStore {
         const limit = getPaginationLimit(options, 'DocumentStore#query()');
         const descending = isBoolean(options.descending) ? options.descending : false;
         const publicCursor = getPaginationCursor(options, 'DocumentStore#query()');
-        const cursor = isUndefined(publicCursor) ? undefined : await this.#unsealCursor(publicCursor);
+        const scope = buildCursorScope({
+            method: 'query',
+            type,
+            index: options.index,
+            descending,
+            options,
+        });
+        const cursor = isUndefined(publicCursor)
+            ? undefined
+            : await this.#unsealCursor(publicCursor, scope);
 
         const result = await this.#engine.query(context, type, {
             index: options.index,
@@ -473,7 +524,7 @@ export default class DocumentStore {
             lessThanOrEqualTo: options.lessThanOrEqualTo,
         });
 
-        return await this.#sealPaginationResult(result);
+        return await this.#sealPaginationResult(scope, result);
     }
 }
 
@@ -521,6 +572,44 @@ function getPaginationCursor(options, methodName) {
     }
 
     return options.cursor;
+}
+
+// Captures every option that fixes a page's position in the result set, so a
+// cursor can be rejected when replayed against a different query. `limit` is
+// deliberately excluded: page size does not move a key position, so a caller
+// may vary it while paging. Key order is fixed by construction here because
+// areCursorScopesEqual() compares the serialized form.
+function buildCursorScope(args) {
+    const {
+        method,
+        type,
+        index,
+        descending,
+        options,
+    } = args;
+
+    const scope = {
+        method,
+        type,
+        descending,
+        range: [],
+    };
+
+    if (!isUndefined(index)) {
+        scope.index = index;
+    }
+
+    for (const optionName of CURSOR_RANGE_OPTION_KEYS) {
+        if (!isUndefined(options[optionName])) {
+            scope.range.push([ optionName, options[optionName] ]);
+        }
+    }
+
+    return scope;
+}
+
+function areCursorScopesEqual(actualScope, expectedScope) {
+    return JSON.stringify(actualScope) === JSON.stringify(expectedScope);
 }
 
 function bytesToBase64Url(bytes) {
