@@ -17,6 +17,7 @@ const INVITES_PER_PAGE = 10;
  * @param {Object} [params] - Listing parameters.
  * @param {string} [params.cursor] - Opaque cursor from a previous page.
  * @returns {Promise<{ items: Object[], cursor: string|null }>} Status-annotated invites and the next-page cursor.
+ * @throws {InvalidCursorError} When cursor is not a valid signed document-store cursor.
  * @throws {AssertionError} When an unexpected storage failure occurs while listing invites.
  */
 export async function listAdminInvites(context, params) {
@@ -30,6 +31,9 @@ export async function listAdminInvites(context, params) {
         page = await invites.listPage(context, { cursor, limit: INVITES_PER_PAGE });
         createdByEmailsById = await getCreatedByEmailsById(context, adminUsers, page.items);
     } catch (cause) {
+        if (cause.name === 'InvalidCursorError') {
+            throw cause;
+        }
         throw new AssertionError('Unexpected error while listing admin invites', { cause });
     }
 

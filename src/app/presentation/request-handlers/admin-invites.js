@@ -3,22 +3,15 @@ import { createAdminInvite } from '../../transaction-scripts/admin-invites/creat
 import { listAdminInvites } from '../../transaction-scripts/admin-invites/list-admin-invites.js';
 import { revokeAdminInvite } from '../../transaction-scripts/admin-invites/revoke-admin-invite.js';
 import { getCsrfFormContext, validateCsrfFormData } from '../lib/csrf.js';
-import { getCursorQueryParam } from '../lib/pagination.js';
+import {
+    getCursorQueryParam,
+    getInviteListHistoryQueryParam,
+    rethrowInvalidCursorAsBadRequest,
+} from '../lib/pagination.js';
 
 
 function getRevokeInviteLink(context) {
     return context.getHttpTarget('admin-panel/invites-revoke/revoke').compilePathname().pathname;
-}
-
-// The document store's scan cursor only ever points forward, so a "previous page"
-// link has no server-side equivalent to ask for. Instead the chain of ancestor
-// cursors is carried in the URL itself (oldest first) as repeated `history` params,
-// letting each page link back to the one before it without any session state.
-function parseInviteListHistory(historyParam) {
-    if (historyParam === undefined) {
-        return [];
-    }
-    return Array.isArray(historyParam) ? historyParam : [ historyParam ];
 }
 
 function getInviteListLink(context, cursor, history) {
@@ -46,9 +39,15 @@ function buildSignupInviteUrl(context, request, token) {
 
 export async function getAdminInvites(context, request, response) {
     const requestCursor = getCursorQueryParam(request.queryParams);
-    const history = parseInviteListHistory(request.queryParams.history);
+    const history = getInviteListHistoryQueryParam(request.queryParams);
 
-    const { items, cursor: nextCursor } = await listAdminInvites(context, { cursor: requestCursor });
+    let page;
+    try {
+        page = await listAdminInvites(context, { cursor: requestCursor });
+    } catch (cause) {
+        rethrowInvalidCursorAsBadRequest(cause);
+    }
+    const { items, cursor: nextCursor } = page;
     const form = new AdminInviteCreateForm();
 
     const links = {

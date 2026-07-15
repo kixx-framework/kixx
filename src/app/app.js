@@ -14,6 +14,8 @@ const DOCUMENT_STORE_INDEXES = [
     ...AdminUserCollection.INDEXES,
 ];
 
+const DOCUMENT_STORE_CURSOR_SIGNING_SECRET = 'DOCUMENT_STORE_CURSOR_SIGNING_SECRET';
+
 
 export function register(context) {
     const documentStore = new DocumentStore();
@@ -32,9 +34,13 @@ export function register(context) {
 export function initialize(context) {
     const documentStore = context.getService('DocumentStore');
     const documentStoreEngine = context.getService('DocumentStoreEngine');
+    const cursorSigningSecret = context.getEnvString(DOCUMENT_STORE_CURSOR_SIGNING_SECRET, {
+        required: true,
+    });
 
     documentStore.initialize({
         engine: documentStoreEngine,
         indexes: DOCUMENT_STORE_INDEXES,
+        cursorSigningSecret,
     });
 }

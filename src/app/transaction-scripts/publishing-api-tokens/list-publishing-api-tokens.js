@@ -12,6 +12,7 @@ import { AssertionError } from '../../../kixx/errors/mod.js';
  * @param {Object} [params] - Listing parameters.
  * @param {string} [params.cursor] - Opaque cursor from a previous page.
  * @returns {Promise<{ items: Object[], cursor: string|null }>} Status-annotated tokens and the next-page cursor.
+ * @throws {InvalidCursorError} When cursor is not a valid signed document-store cursor.
  * @throws {AssertionError} When an unexpected storage failure occurs while listing tokens.
  */
 export async function listPublishingApiTokens(context, params) {
@@ -22,6 +23,9 @@ export async function listPublishingApiTokens(context, params) {
     try {
         page = await publishingApiTokens.listPage(context, { cursor });
     } catch (cause) {
+        if (cause.name === 'InvalidCursorError') {
+            throw cause;
+        }
         throw new AssertionError('Unexpected error while listing publishing API tokens', { cause });
     }
 

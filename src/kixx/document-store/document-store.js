@@ -2,17 +2,21 @@ import {
     AssertionError,
     isString,
     isBoolean,
+    isObjectNotNull,
     isUndefined,
     isNonEmptyString,
     assert,
     assertArray,
     assertNonEmptyString,
 } from '../assertions/mod.js';
+import InvalidCursorError from './invalid-cursor-error.js';
 
 
 const TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 // deno-lint-ignore no-control-regex
 const CONTROL_CHAR_PATTERN = /[\x00-\x1F]/; // eslint-disable-line no-control-regex
+const CURSOR_ENVELOPE_VERSION = 1;
+const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 
 /**
@@ -41,7 +45,13 @@ export const MAX_SORT_KEY_CHAR = '\uFFFF';
  * document `type` values must be identifier-like strings, document `id` values
  * must be non-empty strings without control characters, and optional `sortKey`
  * values must be strings. `initialize()` must be called before the store is
- * used.
+ * used. Pagination cursors exposed by `scan()` and `query()` are public,
+ * signed tokens issued and verified by this facade. `initialize()` requires a
+ * runtime cursor-signing secret; its HMAC-SHA-256 envelope uses Web Crypto so
+ * the same public token works across Node.js and Cloudflare Workers. Engines
+ * receive only their private continuation cursors. Invalid public tokens reject
+ * with `InvalidCursorError`, allowing the calling transport layer to classify
+ * them as expected input failures.
  *
  * @see DocumentStoreEngineInterface in ./document-store-engine-interface.js for the engine contract
  * @see DocumentStoreEngine in ../../plugins/cloudflare-document-store-engine/lib/document-store-engine.js for the Cloudflare D1 implementation
@@ -51,6 +61,7 @@ export const MAX_SORT_KEY_CHAR = '\uFFFF';
 export default class DocumentStore {
 
     #engine;
+    #cursorSigningKey;
 
     /**
      * Configures the engine and secondary indexes used by this store.
@@ -62,17 +73,22 @@ export default class DocumentStore {
      * @param {Object} config - Store configuration
      * @param {Object} config.engine - DocumentStoreEngineInterface-compatible engine
      * @param {Object[]} config.indexes - Secondary index definitions
+     * @param {string} config.cursorSigningSecret - Non-empty runtime secret used to sign public pagination cursors
      * @param {string} config.indexes[].name - Query index name, limited to lowercase letters, numbers, and underscores
      * @param {string} config.indexes[].jsonPath - JSON path beginning with `$.`
      * @param {boolean} [config.indexes[].unique=false] - When true, the engine enforces uniqueness on
      *   `(type, indexed-value)` and rejects conflicting writes with `DocumentUniqueIndexViolationError`.
      * @returns {void}
-     * @throws {AssertionError} When the engine or index definitions are invalid
+     * @throws {AssertionError} When the engine, cursor-signing secret, or index definitions are invalid
      */
     initialize(config) {
-        const { engine, indexes } = config ?? {};
+        const { engine, indexes, cursorSigningSecret } = config ?? {};
         assert(engine, 'DocumentStore#initialize() requires a DocumentStoreEngine as "engine"');
         assertArray(indexes, 'DocumentStore#initialize() requires an Array as "indexes"');
+        assertNonEmptyString(
+            cursorSigningSecret,
+            'DocumentStore#initialize() requires a non-empty cursorSigningSecret',
+        );
 
         for (let i = 0; i < indexes.length; i += 1) {
             const def = indexes[i];
@@ -97,6 +113,16 @@ export default class DocumentStore {
         }
 
         this.#engine = engine;
+        this.#cursorSigningKey = crypto.subtle.importKey(
+            'raw',
+            new TextEncoder().encode(cursorSigningSecret),
+            {
+                name: 'HMAC',
+                hash: 'SHA-256',
+            },
+            false,
+            [ 'sign', 'verify' ],
+        );
         this.#engine.setIndexDefinitions(indexes);
     }
 
@@ -104,9 +130,71 @@ export default class DocumentStore {
      * Ensures callers receive the public method as the AssertionError stack source.
      */
     #assertInitialized(method) {
-        if (!this.#engine) {
+        if (!this.#engine || !this.#cursorSigningKey) {
             throw new AssertionError('DocumentStore has not been initialized', null, method);
         }
+    }
+
+    async #sealCursor(cursor) {
+        const payload = new TextEncoder().encode(JSON.stringify({
+            version: CURSOR_ENVELOPE_VERSION,
+            cursor,
+        }));
+        const key = await this.#cursorSigningKey;
+        const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, payload));
+
+        return `${ bytesToBase64Url(payload) }.${ bytesToBase64Url(signature) }`;
+    }
+
+    async #unsealCursor(cursor) {
+        const [ encodedPayload, encodedSignature, ...extraSegments ] = cursor.split('.');
+        if (extraSegments.length > 0 || !encodedPayload || !encodedSignature) {
+            throw new InvalidCursorError();
+        }
+
+        let payload;
+        let signature;
+        try {
+            payload = base64UrlToBytes(encodedPayload);
+            signature = base64UrlToBytes(encodedSignature);
+        } catch {
+            throw new InvalidCursorError();
+        }
+
+        const key = await this.#cursorSigningKey;
+        const isValidSignature = await crypto.subtle.verify('HMAC', key, signature, payload);
+        if (!isValidSignature) {
+            throw new InvalidCursorError();
+        }
+
+        let envelope;
+        try {
+            envelope = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload));
+        } catch {
+            throw new InvalidCursorError();
+        }
+
+        if (!isObjectNotNull(envelope)
+            || Array.isArray(envelope)
+            || envelope.version !== CURSOR_ENVELOPE_VERSION
+            || !isNonEmptyString(envelope.cursor)) {
+            throw new InvalidCursorError();
+        }
+
+        return envelope.cursor;
+    }
+
+    async #sealPaginationResult(result) {
+        if (result.cursor === null) {
+            return result;
+        }
+
+        assertNonEmptyString(result.cursor, 'DocumentStore engine result cursor must be a non-empty string or null');
+
+        return {
+            records: result.records,
+            cursor: await this.#sealCursor(result.cursor),
+        };
     }
 
     /**
@@ -297,22 +385,23 @@ export default class DocumentStore {
     /**
      * Returns a keyset-paginated page of documents ordered by their built-in sort key.
      *
-     * The cursor is opaque and should only be reused with the same method, type,
-     * sort direction, and range options that produced it.
+     * The cursor is an opaque signed public token and should only be reused with
+     * the same method, type, sort direction, and range options that produced it.
      *
      * @param {Object} context - Request or execution context consumed by the configured engine
      * @param {string} type - Document type used to scope the scan
      * @param {Object} [options] - Scan options
      * @param {boolean} [options.descending=false] - Sort in descending order when true
      * @param {number} [options.limit=100] - Positive integer maximum number of records per page
-     * @param {string} [options.cursor] - Non-empty opaque pagination token returned by a previous call
+     * @param {string} [options.cursor] - Non-empty signed public pagination token returned by a previous call
      * @param {*} [options.equalTo] - Exact match on the sort key; mutually exclusive with range bounds
      * @param {*} [options.greaterThan] - Exclusive lower bound on the sort key
      * @param {*} [options.greaterThanOrEqualTo] - Inclusive lower bound on the sort key
      * @param {*} [options.lessThan] - Exclusive upper bound on the sort key
      * @param {*} [options.lessThanOrEqualTo] - Inclusive upper bound on the sort key
-     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and an opaque next-page cursor, or null on the last page
+     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and a signed public next-page cursor, or null on the last page
      * @throws {AssertionError} When the store is not initialized or the arguments are invalid
+     * @throws {InvalidCursorError} When options.cursor is not a valid public cursor issued by this facade
      */
     async scan(context, type, options) {
         this.#assertInitialized(this.scan);
@@ -321,9 +410,10 @@ export default class DocumentStore {
         options = options ??  {};
         const limit = getPaginationLimit(options, 'DocumentStore#scan()');
         const descending = isBoolean(options.descending) ? options.descending : false;
-        const cursor = getPaginationCursor(options, 'DocumentStore#scan()');
+        const publicCursor = getPaginationCursor(options, 'DocumentStore#scan()');
+        const cursor = isUndefined(publicCursor) ? undefined : await this.#unsealCursor(publicCursor);
 
-        return await this.#engine.scan(context, type, {
+        const result = await this.#engine.scan(context, type, {
             descending,
             limit,
             cursor,
@@ -333,13 +423,16 @@ export default class DocumentStore {
             lessThan: options.lessThan,
             lessThanOrEqualTo: options.lessThanOrEqualTo,
         });
+
+        return await this.#sealPaginationResult(result);
     }
 
     /**
      * Returns a keyset-paginated page of documents ordered by a named secondary index.
      *
-     * The cursor is opaque and should only be reused with the same method, type,
-     * index, sort direction, and range options that produced it.
+     * The cursor is an opaque signed public token and should only be reused with
+     * the same method, type, index, sort direction, and range options that
+     * produced it.
      *
      * @param {Object} context - Request or execution context consumed by the configured engine
      * @param {string} type - Document type used to scope the query
@@ -347,14 +440,15 @@ export default class DocumentStore {
      * @param {string} options.index - Name of the configured index key to query
      * @param {boolean} [options.descending=false] - Sort in descending order when true
      * @param {number} [options.limit=100] - Positive integer maximum number of records per page
-     * @param {string} [options.cursor] - Non-empty opaque pagination token returned by a previous call
+     * @param {string} [options.cursor] - Non-empty signed public pagination token returned by a previous call
      * @param {*} [options.equalTo] - Exact match on the index value; mutually exclusive with range bounds
      * @param {*} [options.greaterThan] - Exclusive lower bound on the index value
      * @param {*} [options.greaterThanOrEqualTo] - Inclusive lower bound on the index value
      * @param {*} [options.lessThan] - Exclusive upper bound on the index value
      * @param {*} [options.lessThanOrEqualTo] - Inclusive upper bound on the index value
-     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and an opaque next-page cursor, or null on the last page
+     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and a signed public next-page cursor, or null on the last page
      * @throws {AssertionError} When the arguments are invalid or the index is not configured
+     * @throws {InvalidCursorError} When options.cursor is not a valid public cursor issued by this facade
      */
     async query(context, type, options) {
         this.#assertInitialized(this.query);
@@ -364,9 +458,10 @@ export default class DocumentStore {
         assertNonEmptyString(options.index, 'DocumentStore#query() requires an index');
         const limit = getPaginationLimit(options, 'DocumentStore#query()');
         const descending = isBoolean(options.descending) ? options.descending : false;
-        const cursor = getPaginationCursor(options, 'DocumentStore#query()');
+        const publicCursor = getPaginationCursor(options, 'DocumentStore#query()');
+        const cursor = isUndefined(publicCursor) ? undefined : await this.#unsealCursor(publicCursor);
 
-        return await this.#engine.query(context, type, {
+        const result = await this.#engine.query(context, type, {
             index: options.index,
             descending,
             limit,
@@ -377,6 +472,8 @@ export default class DocumentStore {
             lessThan: options.lessThan,
             lessThanOrEqualTo: options.lessThanOrEqualTo,
         });
+
+        return await this.#sealPaginationResult(result);
     }
 }
 
@@ -424,4 +521,39 @@ function getPaginationCursor(options, methodName) {
     }
 
     return options.cursor;
+}
+
+function bytesToBase64Url(bytes) {
+    let binary = '';
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+
+    return btoa(binary)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
+
+function base64UrlToBytes(value) {
+    if (!BASE64URL_PATTERN.test(value)) {
+        throw new Error('Invalid base64url value');
+    }
+
+    const paddedValue = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(
+        Math.ceil(value.length / 4) * 4,
+        '=',
+    );
+    const binary = atob(paddedValue);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+
+    // Reject permissive atob() decodes so each cursor has one canonical form.
+    if (bytesToBase64Url(bytes) !== value) {
+        throw new Error('Invalid base64url value');
+    }
+
+    return bytes;
 }

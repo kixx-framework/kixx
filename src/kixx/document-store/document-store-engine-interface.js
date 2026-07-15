@@ -24,9 +24,12 @@
  *   expected version.
  * - `query()` MUST return custom index values as `record.key`.
  * - `scan()` MUST return built-in sort key values as `record.sortKey`.
- * - Pagination cursors MUST be opaque to callers and only reused with the same
- *   method, document type, index, sort direction, and range options that
- *   produced them.
+ * - Pagination cursors received and returned by engines are private opaque
+ *   continuation tokens. The DocumentStore facade wraps them in signed public
+ *   cursors using its runtime signing secret, so engines MUST NOT depend on or
+ *   validate the public envelope.
+ * - Private cursors MUST only be reused with the same method, document type,
+ *   index, sort direction, and range options that produced them.
  * - `close()` MUST be safe to call more than once.
  *
  * ## Context pass-through
@@ -81,7 +84,7 @@
  * @property {string} index - Name of the configured secondary index to query.
  * @property {boolean} [descending=false] - Sort in descending order when true.
  * @property {number} [limit=100] - Positive integer maximum number of records to return.
- * @property {string} [cursor] - Non-empty opaque pagination cursor from a previous page.
+ * @property {string} [cursor] - Non-empty private continuation cursor supplied by the DocumentStore facade.
  * @property {*} [equalTo] - Exact match on the index value; mutually exclusive with range bounds.
  * @property {*} [greaterThan] - Exclusive lower bound on the index value.
  * @property {*} [greaterThanOrEqualTo] - Inclusive lower bound on the index value.
@@ -93,7 +96,7 @@
  * @typedef {Object} DocumentStoreScanOptions
  * @property {boolean} [descending=false] - Sort in descending order when true.
  * @property {number} [limit=100] - Positive integer maximum number of records to return.
- * @property {string} [cursor] - Non-empty opaque pagination cursor from a previous page.
+ * @property {string} [cursor] - Non-empty private continuation cursor supplied by the DocumentStore facade.
  * @property {*} [equalTo] - Exact match on the sort key; mutually exclusive with range bounds.
  * @property {*} [greaterThan] - Exclusive lower bound on the sort key.
  * @property {*} [greaterThanOrEqualTo] - Inclusive lower bound on the sort key.
@@ -104,13 +107,13 @@
 /**
  * @typedef {Object} DocumentStoreQueryResult
  * @property {DocumentStoreQueryRecord[]} records - Page of matching records.
- * @property {string|null} cursor - Opaque cursor for the next page, or null.
+ * @property {string|null} cursor - Private continuation cursor for the next page, or null.
  */
 
 /**
  * @typedef {Object} DocumentStoreScanResult
  * @property {DocumentStoreScanRecord[]} records - Page of matching records.
- * @property {string|null} cursor - Opaque cursor for the next page, or null.
+ * @property {string|null} cursor - Private continuation cursor for the next page, or null.
  */
 
 /**

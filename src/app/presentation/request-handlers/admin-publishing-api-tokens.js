@@ -5,7 +5,10 @@ import { createPublishingApiToken } from '../../transaction-scripts/publishing-a
 import { listPublishingApiTokens } from '../../transaction-scripts/publishing-api-tokens/list-publishing-api-tokens.js';
 import { revokePublishingApiToken } from '../../transaction-scripts/publishing-api-tokens/revoke-publishing-api-token.js';
 import { getCsrfFormContext, validateCsrfFormData } from '../lib/csrf.js';
-import { getCursorQueryParam } from '../lib/pagination.js';
+import {
+    getCursorQueryParam,
+    rethrowInvalidCursorAsBadRequest,
+} from '../lib/pagination.js';
 
 
 function getRevokeTokenLink(context) {
@@ -26,7 +29,13 @@ function getTokenListLink(context, cursor) {
 
 export async function getPublishingApiTokens(context, request, response) {
     const requestCursor = getCursorQueryParam(request.queryParams);
-    const { items, cursor } = await listPublishingApiTokens(context, { cursor: requestCursor });
+    let page;
+    try {
+        page = await listPublishingApiTokens(context, { cursor: requestCursor });
+    } catch (cause) {
+        rethrowInvalidCursorAsBadRequest(cause);
+    }
+    const { items, cursor } = page;
     const form = new PublishingApiTokenCreateForm();
 
     return response.updateProps({
