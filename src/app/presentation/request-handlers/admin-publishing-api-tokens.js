@@ -6,7 +6,8 @@ import { listPublishingApiTokens } from '../../transaction-scripts/publishing-ap
 import { revokePublishingApiToken } from '../../transaction-scripts/publishing-api-tokens/revoke-publishing-api-token.js';
 import { getCsrfFormContext, validateCsrfFormData } from '../lib/csrf.js';
 import {
-    getCursorQueryParam,
+    createCursorPaginationLinks,
+    getCursorPaginationQueryParams,
     rethrowInvalidCursorAsBadRequest,
 } from '../lib/pagination.js';
 
@@ -15,37 +16,35 @@ function getRevokeTokenLink(context) {
     return context.getHttpTarget('admin-panel/publishing-api-tokens-revoke/revoke').compilePathname().pathname;
 }
 
-function getTokenListLink(context, cursor) {
-    const pathname = context.getHttpTarget('admin-panel/publishing-api-tokens/render-token-list').compilePathname().pathname;
-
-    if (!cursor) {
-        return pathname;
-    }
-
-    const url = new URL(pathname, 'http://localhost');
-    url.searchParams.set('cursor', cursor);
-    return `${ url.pathname }${ url.search }`;
+function getTokenListPathname(context) {
+    return context.getHttpTarget('admin-panel/publishing-api-tokens/render-token-list').compilePathname().pathname;
 }
 
 export async function getPublishingApiTokens(context, request, response) {
-    const requestCursor = getCursorQueryParam(request.queryParams);
+    const pagination = getCursorPaginationQueryParams(request.queryParams);
     let page;
     try {
-        page = await listPublishingApiTokens(context, { cursor: requestCursor });
+        page = await listPublishingApiTokens(context, { cursor: pagination.cursor });
     } catch (cause) {
         rethrowInvalidCursorAsBadRequest(cause);
     }
-    const { items, cursor } = page;
+    const { items, cursor: nextCursor } = page;
     const form = new PublishingApiTokenCreateForm();
+    const links = {
+        revokeToken: getRevokeTokenLink(context),
+        ...createCursorPaginationLinks({
+            pathname: getTokenListPathname(context),
+            cursor: pagination.cursor,
+            history: pagination.history,
+            nextCursor,
+        }),
+    };
 
     return response.updateProps({
         tokens: items,
-        nextCursor: cursor,
+        showPagination: Boolean(links.nextPage || links.previousPage),
         form: await getCsrfFormContext(context, request, response, form),
-        links: {
-            nextPage: getTokenListLink(context, cursor),
-            revokeToken: getRevokeTokenLink(context),
-        },
+        links,
     });
 }
 
@@ -60,16 +59,20 @@ export async function postCreatePublishingApiToken(context, request, response) {
             throw error;
         }
 
-        const { items, cursor } = await listPublishingApiTokens(context, {});
+        const { items, cursor: nextCursor } = await listPublishingApiTokens(context, {});
+        const links = {
+            revokeToken: getRevokeTokenLink(context),
+            ...createCursorPaginationLinks({
+                pathname: getTokenListPathname(context),
+                nextCursor,
+            }),
+        };
 
         return response.updateProps({
             tokens: items,
-            nextCursor: cursor,
+            showPagination: Boolean(links.nextPage),
             form: await getCsrfFormContext(context, request, response, form, error),
-            links: {
-                nextPage: getTokenListLink(context, cursor),
-                revokeToken: getRevokeTokenLink(context),
-            },
+            links,
         });
     }
 
@@ -78,18 +81,22 @@ export async function postCreatePublishingApiToken(context, request, response) {
     // Render the list directly instead of redirecting (a deliberate exception to
     // post-redirect-get): the plaintext token exists only on this response, so the
     // freshly minted value must be shown now and can never be retrieved again.
-    const { items, cursor } = await listPublishingApiTokens(context, {});
+    const { items, cursor: nextCursor } = await listPublishingApiTokens(context, {});
     const freshForm = new PublishingApiTokenCreateForm();
+    const links = {
+        revokeToken: getRevokeTokenLink(context),
+        ...createCursorPaginationLinks({
+            pathname: getTokenListPathname(context),
+            nextCursor,
+        }),
+    };
 
     return response.updateProps({
         tokens: items,
-        nextCursor: cursor,
+        showPagination: Boolean(links.nextPage),
         newToken: created.token,
         form: await getCsrfFormContext(context, request, response, freshForm),
-        links: {
-            nextPage: getTokenListLink(context, cursor),
-            revokeToken: getRevokeTokenLink(context),
-        },
+        links,
     });
 }
 
@@ -103,5 +110,5 @@ export async function postRevokePublishingApiToken(context, request, response, s
     // Revocation carries no one-time secret, so use post-redirect-get back to the
     // list to avoid a duplicate revoke on refresh.
     skip();
-    return response.respondWithRedirect(303, getTokenListLink(context));
+    return response.respondWithRedirect(303, getTokenListPathname(context));
 }

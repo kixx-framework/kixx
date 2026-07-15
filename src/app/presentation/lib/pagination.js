@@ -1,17 +1,11 @@
-import { isNonEmptyString, isString, isUndefined } from '../../../kixx/assertions/mod.js';
+import { isNonEmptyString, isUndefined } from '../../../kixx/assertions/mod.js';
 import { BadRequestError } from '../../../kixx/errors/mod.js';
 
-// Query-string cardinality and invite-history structure are HTTP concerns.
+// Query-string cardinality and cursor-history structure are HTTP concerns.
 // DocumentStore separately verifies the signed cursor token after this module
 // passes one validated cursor value to the transaction script.
 
-/**
- * Reads and validates the `cursor` query parameter for a paginated list page.
- * @param {Object} queryParams - Parsed request query parameters
- * @returns {string|undefined} The cursor value, or undefined when absent
- * @throws {BadRequestError} When cursor is present but is not a single non-empty value
- */
-export function getCursorQueryParam(queryParams) {
+function getCursorQueryParam(queryParams) {
     const { cursor } = queryParams;
 
     if (isUndefined(cursor)) {
@@ -29,17 +23,7 @@ export function getCursorQueryParam(queryParams) {
     return cursor;
 }
 
-/**
- * Reads and validates the `history` query parameters used for invite-list
- * previous-page navigation.
- *
- * The first empty value is the explicit page-one sentinel; every later value
- * must be a non-empty signed cursor.
- * @param {Object} queryParams - Parsed request query parameters.
- * @returns {string[]} Validated ancestor cursor stack, oldest first.
- * @throws {BadRequestError} When history has an invalid shape or cursor value.
- */
-export function getInviteListHistoryQueryParam(queryParams) {
+function getCursorHistoryQueryParam(queryParams) {
     const { history } = queryParams;
 
     if (isUndefined(history)) {
@@ -53,13 +37,77 @@ export function getInviteListHistoryQueryParam(queryParams) {
         if (!isPageOneSentinel && !isNonEmptyString(cursor)) {
             throw new BadRequestError('The history query parameters must be valid cursor values.');
         }
-
-        if (!isString(cursor)) {
-            throw new BadRequestError('The history query parameters must be valid cursor values.');
-        }
     }
 
     return cursors;
+}
+
+function createCursorPaginationLink(pathname, cursor, history) {
+    const url = new URL(pathname, 'http://localhost');
+
+    if (cursor) {
+        url.searchParams.set('cursor', cursor);
+    }
+
+    for (const ancestorCursor of history) {
+        url.searchParams.append('history', ancestorCursor);
+    }
+
+    return `${ url.pathname }${ url.search }`;
+}
+
+/**
+ * Reads the current cursor and ancestor cursor history for a paginated list.
+ *
+ * History is ordered oldest first. An empty first value represents page one;
+ * every other history value must be a non-empty cursor.
+ * @param {Object} queryParams - Parsed request query parameters
+ * @returns {{ cursor: string|undefined, history: string[] }} Validated cursor pagination state
+ * @throws {BadRequestError} When cursor or history has an invalid shape or value
+ */
+export function getCursorPaginationQueryParams(queryParams) {
+    return {
+        cursor: getCursorQueryParam(queryParams),
+        history: getCursorHistoryQueryParam(queryParams),
+    };
+}
+
+/**
+ * Builds forward and backward links for a forward-only cursor-paginated list.
+ * @param {Object} args - Pagination link arguments
+ * @param {string} args.pathname - Reverse-compiled pathname for the list route
+ * @param {string} [args.cursor] - Cursor used to load the current page
+ * @param {string[]} [args.history] - Ancestor cursor stack, oldest first
+ * @param {string|null} args.nextCursor - Cursor returned for the next page, or null
+ * @returns {{ nextPage?: string, previousPage?: string }} Available pagination links
+ */
+export function createCursorPaginationLinks(args) {
+    const {
+        pathname,
+        cursor,
+        history = [],
+        nextCursor,
+    } = args ?? {};
+    const links = {};
+
+    if (nextCursor) {
+        links.nextPage = createCursorPaginationLink(
+            pathname,
+            nextCursor,
+            [ ...history, cursor ?? '' ],
+        );
+    }
+
+    if (history.length) {
+        const previousCursor = history[history.length - 1];
+        links.previousPage = createCursorPaginationLink(
+            pathname,
+            previousCursor || undefined,
+            history.slice(0, -1),
+        );
+    }
+
+    return links;
 }
 
 /**
