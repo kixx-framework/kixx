@@ -16,6 +16,25 @@ const CONTROL_CHAR_PATTERN = /[\x00-\x1F]/; // eslint-disable-line no-control-re
 
 
 /**
+ * Highest-sorting sentinel character (U+FFFF) for upper-bounding sort key and
+ * secondary index range queries.
+ *
+ * U+FFFF is a Unicode noncharacter — permanently guaranteed never to be
+ * assigned — so it cannot collide with real document content. Both engines
+ * compare sort keys and index values as UTF-8 bytes (SQLite BINARY collation),
+ * where U+FFFF (EF BF BF) sorts above every Basic Multilingual Plane character
+ * but below supplementary-plane characters (F0 ...). The bound is therefore
+ * exhaustive only when key content is known to be BMP-only (ASCII identifiers,
+ * DNS labels, ISO timestamps, etc.).
+ *
+ * No lower-bound counterpart exists because the minimal key under a prefix is
+ * the bare prefix itself, directly expressible as `greaterThanOrEqualTo`.
+ * @type {string}
+ */
+export const MAX_SORT_KEY_CHAR = '\uFFFF';
+
+
+/**
  * Validating facade for a configured document store engine.
  *
  * The store enforces the public document contract shared by collection callers:
@@ -359,6 +378,28 @@ export default class DocumentStore {
             lessThanOrEqualTo: options.lessThanOrEqualTo,
         });
     }
+}
+
+/**
+ * Builds the range bounds for scanning or querying every key beneath a prefix.
+ *
+ * Spread the result into the options for `scan()` or `query()`. The inclusive
+ * lower bound is the bare prefix, and the exclusive upper bound appends
+ * MAX_SORT_KEY_CHAR so only keys belonging to the next prefix are excluded
+ * (see MAX_SORT_KEY_CHAR for the BMP-only caveat). Because the engines compare
+ * with SQL, the bounded range also excludes documents whose sort key or
+ * indexed value is missing or NULL.
+ * @param {string} prefix - Sort key or index value prefix, including any trailing separator character
+ * @returns {{greaterThanOrEqualTo: string, lessThan: string}} Range bounds for scan() or query() options
+ * @throws {AssertionError} When prefix is not a non-empty string
+ */
+export function sortKeyPrefixRange(prefix) {
+    assertNonEmptyString(prefix, 'sortKeyPrefixRange() prefix must be a non-empty string');
+
+    return {
+        greaterThanOrEqualTo: prefix,
+        lessThan: `${ prefix }${ MAX_SORT_KEY_CHAR }`,
+    };
 }
 
 function getPaginationLimit(options, methodName) {
