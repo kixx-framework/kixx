@@ -173,8 +173,10 @@ function unquoteEtag(etag) {
     return etag.replace(/^"/, '').replace(/"$/, '');
 }
 
-function cancelBody(body) {
+async function cancelBody(body) {
     // A 304 or HEAD response sends no body; cancel the source stream so the
     // underlying file handle or KV binding stream is not left open.
-    return body ? body.cancel() : Promise.resolve();
+    if (body) {
+        await body.cancel();
+    }
 }
