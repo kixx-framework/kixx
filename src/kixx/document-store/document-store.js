@@ -55,12 +55,12 @@ export const MAX_SORT_KEY_CHAR = '\uFFFF';
  * used. Pagination cursors exposed by `scan()` and `query()` are public,
  * signed tokens issued and verified by this facade. `initialize()` requires a
  * runtime cursor-signing secret; its HMAC-SHA-256 envelope uses Web Crypto so
- * the same public token works across Node.js and Cloudflare Workers. The
- * envelope also binds each cursor to the query that produced it, so engines
- * receive only their own private continuation value, for the query that issued
- * it, and never encode or scope-check a cursor themselves. Invalid public
- * tokens — unsigned, tampered, or replayed against a different query — reject
- * with `InvalidCursorError`, allowing the calling transport layer to classify
+ * the same public token works across supported platforms. The envelope also
+ * binds each cursor to the query that produced it, so engines receive only
+ * their own private continuation value, for the query that issued it, and
+ * never encode or scope-check a cursor themselves. Invalid public tokens —
+ * unsigned, tampered, or replayed against a different query — reject with
+ * `InvalidCursorError`, allowing the calling transport layer to classify
  * them as expected input failures.
  *
  * @see DocumentStoreEngineInterface in ./document-store-engine-interface.js for the engine contract
