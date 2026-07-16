@@ -24,12 +24,18 @@
  *   expected version.
  * - `query()` MUST return custom index values as `record.key`.
  * - `scan()` MUST return built-in sort key values as `record.sortKey`.
- * - Pagination cursors received and returned by engines are private opaque
- *   continuation tokens. The DocumentStore facade wraps them in signed public
- *   cursors using its runtime signing secret, so engines MUST NOT depend on or
- *   validate the public envelope.
- * - Private cursors MUST only be reused with the same method, document type,
- *   index, sort direction, and range options that produced them.
+ * - Pagination cursors received and returned by engines are private
+ *   continuation values: JSON-serializable plain objects of the engine's own
+ *   choosing, describing only the position to resume from. Engines MUST NOT
+ *   encode, sign, or otherwise serialize them. The DocumentStore facade owns
+ *   the public token: it embeds the continuation in a signed envelope using its
+ *   runtime signing secret, so engines MUST NOT depend on or validate that
+ *   envelope.
+ * - The facade binds each public cursor to the method, document type, index,
+ *   sort direction, and range options that produced it, and rejects a cursor
+ *   replayed against a different query with `InvalidCursorError`. Engines
+ *   therefore receive a continuation only for the query that issued it and MUST
+ *   NOT re-validate that scope.
  * - `close()` MUST be safe to call more than once.
  *
  * ## Context pass-through
@@ -84,7 +90,7 @@
  * @property {string} index - Name of the configured secondary index to query.
  * @property {boolean} [descending=false] - Sort in descending order when true.
  * @property {number} [limit=100] - Positive integer maximum number of records to return.
- * @property {string} [cursor] - Non-empty private continuation cursor supplied by the DocumentStore facade.
+ * @property {Object} [cursor] - Private continuation value previously returned by this engine, replayed by the DocumentStore facade.
  * @property {*} [equalTo] - Exact match on the index value; mutually exclusive with range bounds.
  * @property {*} [greaterThan] - Exclusive lower bound on the index value.
  * @property {*} [greaterThanOrEqualTo] - Inclusive lower bound on the index value.
@@ -96,7 +102,7 @@
  * @typedef {Object} DocumentStoreScanOptions
  * @property {boolean} [descending=false] - Sort in descending order when true.
  * @property {number} [limit=100] - Positive integer maximum number of records to return.
- * @property {string} [cursor] - Non-empty private continuation cursor supplied by the DocumentStore facade.
+ * @property {Object} [cursor] - Private continuation value previously returned by this engine, replayed by the DocumentStore facade.
  * @property {*} [equalTo] - Exact match on the sort key; mutually exclusive with range bounds.
  * @property {*} [greaterThan] - Exclusive lower bound on the sort key.
  * @property {*} [greaterThanOrEqualTo] - Inclusive lower bound on the sort key.
@@ -107,13 +113,13 @@
 /**
  * @typedef {Object} DocumentStoreQueryResult
  * @property {DocumentStoreQueryRecord[]} records - Page of matching records.
- * @property {string|null} cursor - Private continuation cursor for the next page, or null.
+ * @property {Object|null} cursor - Private JSON-serializable continuation value for the next page, or null on the last page.
  */
 
 /**
  * @typedef {Object} DocumentStoreScanResult
  * @property {DocumentStoreScanRecord[]} records - Page of matching records.
- * @property {string|null} cursor - Private continuation cursor for the next page, or null.
+ * @property {Object|null} cursor - Private JSON-serializable continuation value for the next page, or null on the last page.
  */
 
 /**
