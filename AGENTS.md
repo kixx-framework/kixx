@@ -138,109 +138,6 @@ Add `.json` to the end of any URL to get the template context object as JSON (ec
 `http://localhost:2026/index.json` -> context object for `http://localhost:2026/`
 `http://localhost:2026/users/admin/new.json` -> context object for `http://localhost:2026/users/admin/new`
 
-## Linting
-
-Linting is configured in `./eslint.config.js`.
-
-You should always run the linter on changed source code files after making changes.
-
-Run linting with:
-
-```bash
-# Run the linter on all JavaScript files in the current working directory which are not ignored in eslint.config.js
-node run-linter.js
-
-# Run the linter on specified files or directories.
-node run-linter.js [pathname ...]
-```
-Pathname arguments are optional. If omitted, the CLI uses the current working directory.
-
-The eslint.config.js file is always loaded from the current working directory.
-
-When a target pathname is a directory, linting walks it recursively and only lints .js files. Other file extensions are ignored during directory traversal. Multiple targets are linted in argument order, and files selected through overlapping targets are linted only once.
-
-The `files` and `ignores` matching in eslint.config.js is literal path-segment matching (no glob support).
-
-Diagnostic output is written to stderr, grouped by file.
-
-Exit behavior:
-
-- Exits 1 when any lint error is present (or when CLI/config loading fails).
-- Exits 0 when results are warnings-only or fully clean.
-
-## Unit Testing
-
-Run tests with:
-
-```bash
-# Run all test files (*.test.js) in the ./test/ directory
-node run-tests.js
-
-# Run all test files (*.test.js) in the files and directories passed into run-tests.js
-node run-tests.js [pathname ...]
-```
-
-Pathname arguments are optional. If omitted, the CLI uses `./test/`.
-
-When a target pathname is a directory, the test script walks it recursively and only runs `*.test.js` files. Other file extensions are ignored during directory traversal.
-
-Diagnostic output is written to stderr, grouped by file.
-
-Exit behavior:
-
-- Exits 1 when any test error is present (or when CLI/config loading fails).
-- Exits 0 when results are warnings-only or fully clean.
-
-DO NOT write new tests OR update existing tests without being explicitly asked to by the user.
-
-DO NOT run tests without being explicitly asked by the user.
-
-Remind the user that you can write or run tests after making source code changes.
-
-## Planning
-
-When the user makes a request for a new feature or significant refactoring:
-
-You WILL NOT immediately begin writing code or making changes.
-
-FIRST: Have a conversation with the user so you both have a shared understanding of the work to be done.
-
-**Make sure you are clear on these points:**
-
-1. **User Story** - What user or system behavior is changing? Define the observable behavior: URL, request/response shape, UI state, generated HTML, deployment effect, command behavior, or data mutation.
-2. **Read the Documentation** - Which existing docs apply? Review [Developer Documentation](#developer-documentation) above, to find applicable documentation.
-3. **What** - What are the runtime constraints? For Worker code, consider Cloudflare Workers limitations: no Node filesystem, no native Node modules, request-scoped execution, bindings, caches, KV/R2/D1 behavior, and fetch semantics.
-4. **Where** - Where does the code belong? `collections/`, `transaction-scripts/`, `gateways/` `errors/`, `forms/`, `request-handlers/`, `middleware/`, `error-handlers/`, or somewhere else?
-5. **Dependencies** - What dependency stories will we need to implement first in order to achieve the subsequent user stories in the most maintainable way?
-
-Ask the user if you should create an implementation plan or continue discussing the feature.
-
-NEXT: When the user prompts you to create an implementation plan:
-
-Considering the conversation with the user, create an implementation plan document.
-
-Think hard to imagine all the user stories which would encapsulate the discussion.
-
-Review all user stories you can think of and then plan to implement them cohesively for your implementation plan document.
-
-The plan should begin with a brief Implementation Approach section (3–5 sentences) summarizing the overall strategy and any cross-cutting concerns across the stories.
-
-The rest of the document is a TODO list. Break each user story into discrete technical tasks — one task per file change, component, route, or logical unit of work. Each TODO item must follow this exact format:
-
-```
-- [ ] **<Short title>**
-  - **Story**: <User story ID or title>
-  - **What**: <What to build or change, in concrete terms>
-  - **Where**: <File path(s) or module(s) to create or modify>
-  - **Documentation**: <File path(s) to relevant documentation or source modules for reference>
-  - **Acceptance criteria**: <Which AC items this task satisfies>
-  - **Depends on**: <Item titles this must come after, or "none">
-```
-
-Order items so that dependencies come first. Do not group items by story — sequence them by the order they should be implemented.
-
-When completed, put the plan document in the prompts/plans/ directory.
-
 ## Dependencies
 
 This project uses vendored dependencies. They live in the `src/kixx/vendor/` tree and are imported using relative paths directly in project files — not as package names. Do not use `npm install` or bare package name imports for vendored deps.
@@ -248,6 +145,78 @@ This project uses vendored dependencies. They live in the `src/kixx/vendor/` tre
 NEVER install dependencies without explicitly being asked to install them by the user.
 
 If you think you need a dependency that is not already vendored, stop working on that task and ask the user to install it.
+
+## Planning Work
+
+When the user makes a request for a new feature or significant refactoring:
+
+Do NOT begin writing code or making changes.
+
+FIRST: Ensure you have a conversation to elicit information from the user so that you have a complete understanding of the work to be done, tradeoffs made, etc. Pose as many questions as you need to fill in the gaps and avoid confusion.
+
+You and the user may mutually decide that the work can be done without an implementation plan. However, if you do decide to create an Implementation plan, or the user requests one, then follow this guide:
+
+An implementation plan is durable project state, not a disposable checklist or a copy of one agent's intended call sequence. Write it so an agent with no conversation history can understand the intended outcome, verify the completed work, and continue from the exact point where another agent stopped.
+
+Each task must be a logical, reviewable partition of the implementation. It should produce one coherent outcome, have explicit boundaries, and be independently verifiable where practical. Prefer tasks aligned with behavior or an owned invariant over arbitrary file-by-file tasks. If a task cannot reasonably fit in one agent's context window, split it before implementation.
+
+Use stable task IDs and record dependencies by ID.
+
+Use this template for every implementation task:
+
+```markdown
+### Task <ID>: <outcome-oriented title>
+
+**Status:** Not started
+**Depends on:** <task IDs, or "None">
+**Documentation:** <specification or document sections, or "None">
+
+**Objective**
+
+<Describe the observable outcome and why this task is a coherent partition of the plan. This should remain true even if the implementation details change.>
+
+**Scope**
+
+- In: <behavior, packages, interfaces, migrations, or documentation owned by this task>
+- Out: <nearby work intentionally deferred to other task IDs>
+
+**Design and invariants**
+
+- <Constraints the implementation must preserve.>
+- <Important API, ownership, concurrency, security, or error-handling choices.>
+- <Known decisions that a later agent should not have to rediscover.>
+
+**Expected touch points**
+
+- `<anticipated file or package>` — <purpose of the change>
+
+Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
+
+**Acceptance criteria**
+
+- [ ] <Specific, observable behavior or artifact.>
+- [ ] <Required success and failure behavior.>
+- [ ] <Tests and documentation required for this task.>
+
+**Validation**
+
+- `<exact command>` — <what it proves>
+- <Manual or integration check that cannot be expressed as a command, if any.>
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: None yet.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+```
+
+An Implementation Plan should begin with an Implementation Approach section summarizing the overall strategy and any cross-cutting concerns across the tasks.
+
+Write implementation plans into the agents/plans/ directory.
 
 ## Explanatory Output
 
@@ -258,3 +227,25 @@ You should provide insightful explanations about how you are approaching a task 
 ─────────────────────────────────────────────────"
 
 These insights should be included in the conversation, not in the codebase. Focus on interesting insights that are specific to the codebase or the code you are writing, rather than general programming concepts. Do not wait until the end to provide insights. Provide them as you think about changes and write code.
+
+## Work Verification
+
+Do *not* attempt to verify your work in this project, with these exceptions: 
+
+- Always run the linter when you change JavaScript files (see [Linting](#linting) below).
+- The user may ask you to run or write unit tests, fix broken unit tests, or update unit tests to match new behavior. *Only* run and write unit tests when you are explicity asked to by the user.
+
+Do not run the dev server, call remote servers, or write specialized code for the purpose of work verification or smoke testing.
+
+### Linting
+
+Run the linter according to the instructions in the `README.md` for every JavaScript source file you changed during your task. Fix any linting errors you find for the code you have written during your task before you are done.
+
+### Testing
+
+- **DO NOT write new tests OR update existing tests** without being explicitly asked to by the user.
+- **DO NOT run the tests** without being explicitly asked to by the user.
+
+Instead of writing unit tests, include manual testing overview and procedures in your handoff notes.
+
+When you are asked to run the tests, follow the instructions in `README.md` for running unit tests.
