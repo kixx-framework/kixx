@@ -106,6 +106,26 @@ describe('DocumentStore', ({ describe }) => {
             tracker.reset();
         });
 
+        it('normalizes boxed unique booleans before configuring the engine', () => {
+            const tracker = new MockTracker();
+            const engine = makeEngine(tracker);
+            const store = new DocumentStore();
+
+            store.initialize({
+                engine,
+                indexes: [
+                    { name: 'by_email', jsonPath: '$.email', unique: Object(true) },
+                    { name: 'by_name', jsonPath: '$.name', unique: Object(false) },
+                ],
+                cursorSigningSecret: CURSOR_SIGNING_SECRET,
+            });
+            const configuredIndexes = engine.setIndexDefinitions.mock.getCall(0).arguments[0];
+
+            assertEqual(true, configuredIndexes[0].unique);
+            assertEqual(false, configuredIndexes[1].unique);
+            tracker.reset();
+        });
+
         it('rejects missing configuration values before configuring the engine', () => {
             const cases = [
                 {
@@ -192,6 +212,81 @@ describe('DocumentStore', ({ describe }) => {
                 assertEqual(0, engine.setIndexDefinitions.mock.callCount());
                 tracker.reset();
             }
+        });
+
+        it('rejects duplicate index names before configuring the engine', () => {
+            const tracker = new MockTracker();
+            const engine = makeEngine(tracker);
+            const store = new DocumentStore();
+            const caught = catchError(() => store.initialize({
+                engine,
+                indexes: [
+                    { name: 'by_name', jsonPath: '$.name' },
+                    { name: 'by_name', jsonPath: '$.display_name' },
+                ],
+                cursorSigningSecret: CURSOR_SIGNING_SECRET,
+            }));
+
+            assertAssertionError(caught, 'index name "by_name" must be unique');
+            assertEqual(0, engine.setIndexDefinitions.mock.callCount());
+            tracker.reset();
+        });
+
+        it('remains uninitialized when engine configuration fails', async () => {
+            const tracker = new MockTracker();
+            const engine = makeEngine(tracker, {
+                setIndexDefinitions() {
+                    throw new Error('engine configuration failed');
+                },
+            });
+            const store = new DocumentStore();
+            const initializationError = catchError(() => store.initialize({
+                engine,
+                indexes: INDEXES,
+                cursorSigningSecret: CURSOR_SIGNING_SECRET,
+            }));
+
+            assertEqual('engine configuration failed', initializationError.message);
+
+            const operationError = await catchAsyncError(() => store.put(
+                {},
+                { type: 'Note', id: 'note-1' },
+            ));
+
+            assertAssertionError(operationError, 'DocumentStore has not been initialized');
+            assertEqual(0, engine.put.mock.callCount());
+            tracker.reset();
+        });
+
+        it('preserves the active signing key when reinitialization fails', async () => {
+            let configurationCount = 0;
+            const { store, engine, tracker } = makeStore({
+                implementations: {
+                    setIndexDefinitions() {
+                        configurationCount += 1;
+                        if (configurationCount > 1) {
+                            throw new Error('engine configuration failed');
+                        }
+                    },
+                    scan: async () => {
+                        return { records: [], cursor: { key: 'a', id: 'note-1' } };
+                    },
+                },
+            });
+            const firstPage = await store.scan({}, 'Note');
+
+            const initializationError = catchError(() => store.initialize({
+                engine,
+                indexes: INDEXES,
+                cursorSigningSecret: 'replacement-signing-secret',
+            }));
+
+            assertEqual('engine configuration failed', initializationError.message);
+
+            await store.scan({}, 'Note', { cursor: firstPage.cursor });
+
+            assertEqual(2, engine.scan.mock.callCount());
+            tracker.reset();
         });
     });
 
@@ -526,6 +621,17 @@ describe('DocumentStore', ({ describe }) => {
             tracker.reset();
         });
 
+        it('normalizes boxed descending booleans before calling the engine', async () => {
+            const { store, engine, tracker } = makeStore();
+
+            await store.scan({}, 'Note', { descending: Object(false) });
+            await store.scan({}, 'Note', { descending: Object(true) });
+
+            assertEqual(false, engine.scan.mock.getCall(0).arguments[2].descending);
+            assertEqual(true, engine.scan.mock.getCall(1).arguments[2].descending);
+            tracker.reset();
+        });
+
         it('signs an engine continuation and unseals it for the next page', async () => {
             const engineCursor = { sortKey: '2026-07-17', id: 'note-1' };
             let callCount = 0;
@@ -722,6 +828,23 @@ describe('DocumentStore', ({ describe }) => {
             assertEqual(20, options.limit);
             assertEqual('a@example.com', options.equalTo);
             assertUndefined(options.cursor);
+            tracker.reset();
+        });
+
+        it('normalizes boxed descending booleans before calling the engine', async () => {
+            const { store, engine, tracker } = makeStore();
+
+            await store.query({}, 'User', {
+                index: 'by_name',
+                descending: Object(false),
+            });
+            await store.query({}, 'User', {
+                index: 'by_name',
+                descending: Object(true),
+            });
+
+            assertEqual(false, engine.query.mock.getCall(0).arguments[2].descending);
+            assertEqual(true, engine.query.mock.getCall(1).arguments[2].descending);
             tracker.reset();
         });
 

@@ -100,6 +100,9 @@ export default class DocumentStore {
             'DocumentStore#initialize() requires a non-empty cursorSigningSecret',
         );
 
+        const indexNames = new Set();
+        let configuredIndexes = indexes;
+
         for (let i = 0; i < indexes.length; i += 1) {
             const def = indexes[i];
             assertNonEmptyString(def.name, `indexes[${ i }].name must be a non-empty string`);
@@ -112,18 +115,35 @@ export default class DocumentStore {
             if (!/^[a-z0-9_]+$/.test(def.name)) {
                 throw new AssertionError(`indexes[${ i }].name may only contain characters from a-z, 0-9, and _`);
             }
+            const indexName = def.name.valueOf();
+            if (indexNames.has(indexName)) {
+                throw new AssertionError(`DocumentStore#initialize() index name "${ indexName }" must be unique`);
+            }
+            indexNames.add(indexName);
+
             assertNonEmptyString(def.jsonPath, `indexes[${ i }].jsonPath must be a non-empty string`);
             // jsonPath must be at least "$.x" (3 chars) to reference a field.
             if (!def.jsonPath.startsWith('$.') || def.jsonPath.length <= 2) {
                 throw new AssertionError(`indexes[${ i }].jsonPath must start with "$." followed by at least one character`);
             }
-            if ('unique' in def && !isBoolean(def.unique)) {
-                throw new AssertionError(`indexes[${ i }].unique must be a boolean when present`);
+            if ('unique' in def) {
+                if (!isBoolean(def.unique)) {
+                    throw new AssertionError(`indexes[${ i }].unique must be a boolean when present`);
+                }
+
+                const unique = toPrimitiveBoolean(def.unique);
+                if (unique !== def.unique) {
+                    // Preserve the original array and definition objects unless
+                    // a boxed boolean actually requires normalization.
+                    if (configuredIndexes === indexes) {
+                        configuredIndexes = indexes.slice();
+                    }
+                    configuredIndexes[i] = Object.assign({}, def, { unique });
+                }
             }
         }
 
-        this.#engine = engine;
-        this.#cursorSigningKey = crypto.subtle.importKey(
+        const cursorSigningKey = crypto.subtle.importKey(
             'raw',
             new TextEncoder().encode(cursorSigningSecret),
             {
@@ -133,7 +153,12 @@ export default class DocumentStore {
             false,
             [ 'sign', 'verify' ],
         );
-        this.#engine.setIndexDefinitions(indexes);
+        engine.setIndexDefinitions(configuredIndexes);
+
+        // Publish the replacement only after the engine accepts its one-shot
+        // configuration, leaving any active facade intact when setup fails.
+        this.#engine = engine;
+        this.#cursorSigningKey = cursorSigningKey;
     }
 
     /**
@@ -437,7 +462,9 @@ export default class DocumentStore {
         assertNonEmptyString(type, 'DocumentStore#scan() requires a type string');
         options = options ??  {};
         const limit = getPaginationLimit(options, 'DocumentStore#scan()');
-        const descending = isBoolean(options.descending) ? options.descending : false;
+        const descending = isBoolean(options.descending)
+            ? toPrimitiveBoolean(options.descending)
+            : false;
         const publicCursor = getPaginationCursor(options, 'DocumentStore#scan()');
         const scope = buildCursorScope({ method: 'scan', type, descending, options });
         const cursor = isUndefined(publicCursor)
@@ -489,7 +516,9 @@ export default class DocumentStore {
         options = options ??  {};
         assertNonEmptyString(options.index, 'DocumentStore#query() requires an index');
         const limit = getPaginationLimit(options, 'DocumentStore#query()');
-        const descending = isBoolean(options.descending) ? options.descending : false;
+        const descending = isBoolean(options.descending)
+            ? toPrimitiveBoolean(options.descending)
+            : false;
         const publicCursor = getPaginationCursor(options, 'DocumentStore#query()');
         const scope = buildCursorScope({
             method: 'query',
@@ -538,6 +567,10 @@ export function sortKeyPrefixRange(prefix) {
         greaterThanOrEqualTo: prefix,
         lessThan: `${ prefix }${ MAX_SORT_KEY_CHAR }`,
     };
+}
+
+function toPrimitiveBoolean(value) {
+    return Boolean.prototype.valueOf.call(value);
 }
 
 function getPaginationLimit(options, methodName) {
