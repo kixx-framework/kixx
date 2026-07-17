@@ -117,6 +117,20 @@ Use this documentation index to identify which linked documents are relevant to 
 
 **What this document provides:** The frontend conventions for this project — how to use the live style guide as the design reference, the no-inline-styles resolution order, how `src/stylesheets/` is organized into shared vs. admin-only files, BEM class naming, the three-tier design token system, the Every Layout–style layout primitives, and the page-local `page_stylesheet` include pattern.
 
+### Plugins and Cross-Platform Architecture
+
+@src/plugins/README.md
+
+**When to use this document:** Apply this guide whenever you are working on the ports-and-adapters layer that lets one application run across deploy targets (Node.js, Cloudflare Workers, and future Deno/AWS Lambda). This includes:
+
+- Writing or modifying a platform adapter under `plugins/`, or its `plugin.js` lifecycle module.
+- Adding, changing, or reviewing an interface contract (`kixx/**/*-interface.js`).
+- Registering a service through a plugin, or wiring dependencies between services.
+- Editing an entry point (`node-server.js`, `cloudflare-server.js`) or a source config module.
+- Adding support for a new deploy target, or deciding whether a new capability needs a port at all.
+
+**What this document provides:** The cross-platform design reference — the three roles (ports, adapters, and entry-points), the plugin module contract and its two-phase `register()`/`initialize()` lifecycle, plugin-registry merge semantics, where platform differences live, the rules interface contracts are written by, and checklists for adding a new port or a new platform.
+
 ## Development Server
 
 Run the development server with:
