@@ -4,6 +4,7 @@ import { adminErrorHandler } from './app/presentation/error-handlers/admin-error
 import { adminAuthErrorHandler } from './app/presentation/error-handlers/admin-auth-error-handler.js';
 import { jsonApiErrorHandler } from './app/presentation/error-handlers/json-api-error-handler.js';
 import { authenticateAdminUser } from './app/presentation/middleware/admin-authentication.js';
+import { authenticateAdminApiRequest } from './app/presentation/middleware/admin-api-authentication.js';
 import { authenticatePublishingToken } from './app/presentation/middleware/publishing-authentication.js';
 import * as AdminUsers from './app/presentation/request-handlers/admin-users.js';
 import * as AdminInvites from './app/presentation/request-handlers/admin-invites.js';
@@ -186,6 +187,41 @@ export default [
                     jsonApiErrorHandler,
                 ],
                 routes: [
+                    {
+                        pattern: '/migrations',
+                        name: 'migrations',
+                        inboundMiddleware: [
+                            authenticateAdminApiRequest,
+                        ],
+                        routes: [
+                            {
+                                pattern: '{/}',
+                                name: 'list',
+                                targets: [
+                                    {
+                                        name: 'get',
+                                        methods: [ 'GET' ],
+                                        requestHandlers: [
+                                            AdminAPI.listMigrations,
+                                        ],
+                                    },
+                                ],
+                            },
+                            {
+                                pattern: '/:id/run',
+                                name: 'run',
+                                targets: [
+                                    {
+                                        name: 'post',
+                                        methods: [ 'POST' ],
+                                        requestHandlers: [
+                                            AdminAPI.runMigration,
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
                     {
                         pattern: '/users/invite{/}',
                         name: 'accept-invite',
