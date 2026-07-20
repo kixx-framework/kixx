@@ -446,7 +446,7 @@ export default class DocumentStore {
      * @param {Object} [options] - Scan options
      * @param {boolean} [options.descending=false] - Sort in descending order when true
      * @param {number} [options.limit=100] - Positive integer maximum number of records per page
-     * @param {string} [options.cursor] - Non-empty signed public pagination token returned by a previous call
+     * @param {string} [options.cursor] - Non-empty signed public pagination token returned by a previous call; null or undefined starts from the first page
      * @param {*} [options.equalTo] - Exact match on the sort key; mutually exclusive with range bounds
      * @param {*} [options.greaterThan] - Exclusive lower bound on the sort key
      * @param {*} [options.greaterThanOrEqualTo] - Inclusive lower bound on the sort key
@@ -499,7 +499,7 @@ export default class DocumentStore {
      * @param {string} options.index - Name of the configured index key to query
      * @param {boolean} [options.descending=false] - Sort in descending order when true
      * @param {number} [options.limit=100] - Positive integer maximum number of records per page
-     * @param {string} [options.cursor] - Non-empty signed public pagination token returned by a previous call
+     * @param {string} [options.cursor] - Non-empty signed public pagination token returned by a previous call; null or undefined starts from the first page
      * @param {*} [options.equalTo] - Exact match on the index value; mutually exclusive with range bounds
      * @param {*} [options.greaterThan] - Exclusive lower bound on the index value
      * @param {*} [options.greaterThanOrEqualTo] - Inclusive lower bound on the index value
@@ -586,7 +586,12 @@ function getPaginationLimit(options, methodName) {
 }
 
 function getPaginationCursor(options, methodName) {
-    if (isUndefined(options.cursor)) {
+    // Treat null like undefined: null is the value scan()/query() emit as the
+    // "no next page" sentinel, so a caller who feeds the previous result's
+    // cursor back — or initializes their cursor variable to null — is asking to
+    // start from the first page, not committing a programmer error. An empty
+    // string is never emitted by this API and stays an assertion error.
+    if (isUndefined(options.cursor) || options.cursor === null) {
         return undefined;
     }
 

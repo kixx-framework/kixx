@@ -752,7 +752,7 @@ describe('DocumentStore', ({ describe }) => {
         });
 
         it('rejects non-string public cursors and invalid engine continuations', async () => {
-            const invalidPublicCursors = [ null, '', {} ];
+            const invalidPublicCursors = [ '', {} ];
 
             for (const cursor of invalidPublicCursors) {
                 const { store, engine, tracker } = makeStore();
@@ -776,6 +776,18 @@ describe('DocumentStore', ({ describe }) => {
                 assertAssertionError(caught, 'engine result cursor must be a plain object or null');
                 tracker.reset();
             }
+        });
+
+        it('treats a null cursor like an absent cursor and starts from the first page', async () => {
+            const { store, engine, tracker } = makeStore();
+
+            const result = await store.scan({}, 'Note', { cursor: null });
+            const options = engine.scan.mock.getCall(0).arguments[2];
+
+            assertEqual(1, engine.scan.mock.callCount());
+            assertUndefined(options.cursor);
+            assertEqual(null, result.cursor);
+            tracker.reset();
         });
 
         it('rejects missing context, type, and invalid limits before calling the engine', async () => {
@@ -941,6 +953,18 @@ describe('DocumentStore', ({ describe }) => {
             assertEqual(0, second.engine.query.mock.callCount());
             first.tracker.reset();
             second.tracker.reset();
+        });
+
+        it('treats a null cursor like an absent cursor and starts from the first page', async () => {
+            const { store, engine, tracker } = makeStore();
+
+            const result = await store.query({}, 'User', { index: 'by_name', cursor: null });
+            const options = engine.query.mock.getCall(0).arguments[2];
+
+            assertEqual(1, engine.query.mock.callCount());
+            assertUndefined(options.cursor);
+            assertEqual(null, result.cursor);
+            tracker.reset();
         });
 
         it('rejects missing arguments and invalid pagination options before calling the engine', async () => {
