@@ -7,7 +7,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Code Style Guide
 
-@src/docs/code-style-guide.md
+src/docs/code-style-guide.md
 
 **When to use this document:** Apply this guide whenever you are writing or modifying any server-side JavaScript source file in this project. This includes:
 
@@ -22,7 +22,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Code Documentation Guide
 
-@src/docs/code-documentation-guide.md
+src/docs/code-documentation-guide.md
 
 **When to use this document:** Apply this guide whenever you are writing, reviewing, or improving JSDoc block comments in any JavaScript source file in this project. This includes:
 
@@ -33,7 +33,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Server Error Handling
 
-@src/docs/server-error-handling.md
+src/docs/server-error-handling.md
 
 **When to use this document:** Apply this guide whenever you are writing, reviewing, or refactoring server-side JavaScript error handling. This includes throwing application errors, handling errors, validating request input, asserting internal invariants, writing route error handlers, and deciding whether an error should propagate as expected or unexpected.
 
@@ -41,7 +41,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Unit Testing Guide
 
-@test/README.md
+test/README.md
 
 **When to use this document:** Apply this guide only when you have been explicitly asked to write new tests or update existing tests. Consult it whenever you are:
 
@@ -53,7 +53,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Collections
 
-@src/app/collections/README.md
+src/app/collections/README.md
 
 **When to use this document:** Apply this guide whenever you are creating, modifying, or reviewing Collections, Records, document store access, secondary indexes, KV store access, custom storage gateways, or any code that reads from or writes to a persistence layer.
 
@@ -61,7 +61,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Transaction Scripts
 
-@src/app/transaction-scripts/README.md
+src/app/transaction-scripts/README.md
 
 **When to use this document:** Apply this guide whenever you are writing, modifying, or reviewing Transaction Scripts — the procedures that enforce business rules, read or write data, translate storage errors, and return results to the presentation layer.
 
@@ -69,7 +69,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Presentation Layer Guide
 
-@src/app/presentation/README.md
+src/app/presentation/README.md
 
 **When to use this document:** Apply this guide whenever you are adding, modifying, or reviewing application web presentation behavior. This includes:
 
@@ -82,7 +82,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Kixx Hyperview Templating Guide
 
-@src/templates/README.md
+src/templates/README.md
 
 **When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging Hyperview templates. This includes:
 
@@ -94,7 +94,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Static File Server Guide
 
-@src/kixx/static-file-server/README.md
+src/kixx/static-file-server/README.md
 
 **When to use this document:** Apply this guide whenever you are serving, configuring, or reviewing static file delivery (favicons, images, fonts). This includes:
 
@@ -107,7 +107,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Frontend Development Guide
 
-@src/docs/frontend-development-guide.md
+src/docs/frontend-development-guide.md
 
 **When to use this document:** Apply this guide whenever you are writing or reviewing any HTML template markup or CSS in this project. This includes:
 
@@ -119,7 +119,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 ### Plugins and Cross-Platform Architecture
 
-@src/plugins/README.md
+src/plugins/README.md
 
 **When to use this document:** Apply this guide whenever you are working on the ports-and-adapters layer that lets one application run across deploy targets (Node.js, Cloudflare Workers, and future Deno/AWS Lambda). This includes:
 

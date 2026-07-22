@@ -1,9 +1,7 @@
 # Role-Based Permission System Specification
 
-This document specifies the role-based permission system for the Kixx platform,
-introduced in PR #3 ("Migrate permissions to principle roles") and extended to
-the admin domain in PR #4 ("Role based permissions for Admins"). It serves two
-audiences:
+This document specifies the role-based permission system for the Kixx platform.
+It serves two audiences:
 
 1. **Maintainers of this application**, as the authoritative description of how
    authorization works here. Sections 3–10 describe contracts this codebase
@@ -16,24 +14,6 @@ audiences:
 Normative language ("must", "must not", "should") marks requirements an
 implementation has to satisfy to be compatible with this design. Everything
 else is description or rationale.
-
-**Adoption status in this application (as of 2026-07):** Two principal types
-carry roles. Publishing API tokens hold publishing-category roles and are
-enforced across the Publishing API. Admin Users hold admin-category roles,
-derived at authentication time by both the session-cookie and HTTP Basic
-authentication middleware, and every admin panel and `/admin-api/v1` route is
-gated by `requirePermission`. The admin adoption followed the sequencing
-described in Section 12.2, including a one-time role-name backfill migration.
-
-**Revision history:**
-
-- 2026-07 (PR #3): initial system — evaluator, registry, `requirePermission`,
-  Publishing API token roles.
-- 2026-07 (PR #4 + follow-up fix): admin domain adoption — role categories,
-  four admin roles, admin route gating, Basic-auth principal derivation,
-  role-conferring invites, delegation (`canGrantRole`), domain bounding
-  (`areRoleGrantsWithinDomain`), Root Admin backfill migration, array-action
-  normalization in registry helpers.
 
 ## 1. Overview
 
