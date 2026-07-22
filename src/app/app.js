@@ -2,6 +2,7 @@ import DocumentStore from '../kixx/document-store/document-store.js';
 import AdminInviteCollection from './collections/admin-invite-collection.js';
 import AdminUserCollection from './collections/admin-user-collection.js';
 import CsrfTokenCollection from './collections/csrf-token-collection.js';
+import MigrationCollection from './collections/migration-collection.js';
 import PublishingApiTokenCollection from './collections/publishing-api-token-collection.js';
 import RateLimitCollection from './collections/rate-limit-collection.js';
 import UserSessionCollection from './collections/user-session-collection.js';
@@ -25,6 +26,7 @@ export function register(context) {
 
     context.registerCollection('AdminUser', new AdminUserCollection({ db: documentStore }));
     context.registerCollection('AdminInvite', new AdminInviteCollection({ db: documentStore }));
+    context.registerCollection('Migration', new MigrationCollection({ db: documentStore }));
     context.registerCollection('PublishingApiToken', new PublishingApiTokenCollection({ db: documentStore }));
     context.registerCollection('CsrfToken', new CsrfTokenCollection({ db: keyValueStore }));
     context.registerCollection('RateLimit', new RateLimitCollection({ db: keyValueStore }));

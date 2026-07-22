@@ -81,6 +81,7 @@
  * Runtime adapters are implemented separately by design, because their backing
  * stores and access models differ.
  * @see TemplateFileStore in ../../plugins/cloudflare-hyperview-template-file-store/lib/template-file-store.js for the Cloudflare KV implementation
+ * @see TemplateFileStore in ../../plugins/node-hyperview-template-file-store/lib/template-file-store.js for the Node.js filesystem implementation
  */
 
 /**
