@@ -110,10 +110,6 @@ const { messageId } = await mailer.send(context, 'password-reset', {
 
 ## Error Handling
 
-Error
-
-### Expected vs. Unexpected Errors
-
 Every error a transaction script encounters must be classified into one of two buckets:
 
 - **Expected errors** - also known as "operational errors" - are errors the Transaction Script logic is prepared for and will handle internally.
@@ -121,7 +117,7 @@ Every error a transaction script encounters must be classified into one of two b
 
 A Transaction Script should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Transaction Script may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging. A TransactionScript MUST wrap the unexpected error and rethrow it as an AssertionError if the cause.expected flag is truthy.
 
-A Transaction Script can act with discretion when expected operational errors occur. Depending on the context:
+A Transaction Script should act with discretion when expected operational errors occur. Depending on the context:
 
 - **Wrap the cause and rethrow with a new error.name or error.code** - when the caught error does not have a name or code which is meaningful to the caller, or to standardize the error signature from the Transaction Script.
 - **Wrap the cause and rethrow as an AssertionError** - when the operational error is coming from a code path the Transaction Script is not accounting for.

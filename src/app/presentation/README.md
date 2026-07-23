@@ -2,9 +2,9 @@
 
 This project is a Hypermedia Driven Application, which means the presentation layer is a web presentation, primarily following the Representational State Transfer (REST) and Hypermedia As The Engine Of Application State (HATEOAS) patterns.
 
-For information about Kixx Hyperview templates, the template syntax, template partials, and template helpers see the Kixx Hyperview Templating guide at `templates/README.md`.
+The primary view layer for the presentation is provided by mustache style templates called "Hyperview templates". For information about the template syntax, partials, and helpers see the template guide at `templates/README.md`.
 
-The Kixx Hyperview component and plugin is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `/templates/`.
+The Kixx Hyperview plugin is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `/templates/`.
 
 ### Hyperview File Layout
 
@@ -32,14 +32,13 @@ templates/
 │           └── page.html
 └── partials/
     └── website/
-        └── styles.css
+        └── header.html
 ```
 
 Use `pages/` for route-specific page metadata and text based content:
 
 - `page.json` contains root or directory-level page data.
 - Other files in the same page directory can be loaded with `includes`.
-
 
 Use `templates/` for page specific and shared templates.
 
@@ -106,21 +105,6 @@ Hyperview can return the assembled page metadata as JSON when JSON responses are
 - the `Accept` header includes `application/json`.
 
 This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data for development and debugging, but it is not the contract for application API endpoints.
-
-### HyperviewRequestHandler Options
-
-```js
-/*
- * @param {string} [options.indexFilePattern] - Regex pattern string matching index filenames to strip from the URL pathname. Defaults to matching an `index.html`, `index.json`, `index.xml`, or `index.md` path segment at the end of the path.
- * @param {string} [options.formatExtensionPattern] - Regex pattern string matching format extensions to strip from the URL pathname last segment for content negotiation. Defaults to `\.json$`, so `/platform.json` resolves page data from `/platform`.
- * @param {boolean} [options.allowJSON] - Allow JSON responses when the client requests them. Falls back to `config.env.HYPERVIEW.ALLOW_JSON_RESPONSE`.
- * @param {boolean} [options.usePageCache] - Enable full page (rendered HTML) caching. Static pages only. Falls back to `config.env.HYPERVIEW.USE_PAGE_CACHE`.
- * @param {boolean} [options.useTemplateCache] - Reuse compiled templates, partials, and includes. Falls back to `config.env.HYPERVIEW.USE_TEMPLATE_CACHE`.
- * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden per-page via `metadata.baseTemplate`.
- * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`. Can be overridden per-page via `metadata.pageTemplate`.
- * @param {string} [options.pathname] - Override the pathname derived from the request URL.
- */
-```
 
 ## Dynamic Routes
 
@@ -239,7 +223,7 @@ Execution order for a matched target runs in two phases — a **request phase** 
 2. Target `requestHandlers` (in order) — request phase
 3. Route outbound middleware (child-first) — outbound phase
 
-When middleware or a request handler throws, the router emits an `error` event; for logging and, for unexpected errors, to trigger the platform server's graceful shutdown. Separately, the router runs the error-handler cascade: target, then route, then the router's built-in fallback, stopping at the first one that returns a response. The router error event fires for every failure regardless of what the cascade produces, so a target or route handler is free to render a normal-looking response even for an unexpected error without delaying or preventing the shutdown. Only when every cascade level returns `false` does the error propagate out of the router for the platform server's last-resort fallback. See `src/docs/error-handling.md#router-error-propagation-and-the-platform-fatal-error-policy` for the full mechanics. A throw skips the outbound phase for that request.
+When middleware or a request handler throws, the router emits an `error` event; for logging and, for unexpected errors, to trigger the platform server's graceful shutdown. Separately, the router runs the error-handler cascade: target, then route, then the router's built-in fallback, stopping at the first one that returns a response. The router error event fires for every failure regardless of what the cascade produces, so a target or route handler is free to render a normal-looking response even for an unexpected error without delaying or preventing the shutdown. Only when every cascade level returns `false` does the error propagate out of the router for the platform server's last-resort fallback. A throw skips the outbound phase for that request.
 
 **The `skip()` callback** ends the **request phase** early: when called, no further inbound middleware or request handlers run. The **outbound phase still runs to completion**, so response post-processing such as formatting, shared headers, and logging is never bypassed by `skip()`. Use `skip()` when a request handler has committed a terminal response (a redirect or JSON document) and you want to stop a later request handler — such as a Hyperview render handler — from running. Do not reach for `skip()` merely because you committed a response; if no later request handler needs to be bypassed, just return the response. Outbound middleware is not passed `skip()` and cannot short-circuit the chain.
 
@@ -308,7 +292,7 @@ const { pathname } = loginTarget.compilePathname();
 const location = `${ pathname }?notice=session_create_failed`;
 ```
 
-### Use Cases
+### Use Cases for Reverse Routing
 
 - **Form action URLs.** `BaseForm#getFormContext()` resolves `static target` through `getHttpTarget()` and compiles the form's `action` pathname, so a form never hardcodes where it posts. See [Forms](#forms).
 - **Redirect targets after a write.** After a successful form submission, compile the destination target's pathname for the `303` `Location` rather than writing a literal string:
@@ -348,7 +332,7 @@ Request handlers may:
 
 - Read `request.pathnameParams`, query string values, headers, cookies, and request body data.
 - Parse `FormData` or JSON:API payloads into form classes.
-- Validate forms and translate validation errors into response props.
+- Validate forms and translate validation errors into response props, setting the response status on inline error re-renders (see [Response Status on Re-rendered Errors](#response-status-on-re-rendered-errors)).
 - Call Transaction Scripts in `app/transaction-scripts/` to load or mutate data.
 - Call `response.updateProps({ ... })` to pass render data to `HyperviewRequestHandler`.
 - Return redirects, JSON:API responses, or rendered HTML responses through Hyperview or error handlers.
@@ -356,7 +340,7 @@ Request handlers may:
 Request handlers should not:
 
 - Put business rules or domain mutations directly in the handler.
-- Use native Node.js modules or filesystem access.
+- Use native Node.js modules, filesystem access, or native Cloudflare bindings.
 - Build HTML strings when the response should be rendered by Hyperview templates.
 - Own browser application state that should instead be represented by links, forms, redirects, and server-rendered HTML.
 
@@ -401,6 +385,30 @@ export async function handleCreateBugTicket(context, request, response, skip) {
 ```
 
 When validation failure should re-render a page, `HyperviewDynamicPageHandler(...)` after this handler in the target chain will run automatically (since `skip()` was not called). When success returns a redirect, `skip()` prevents the Hyperview handler from running and needlessly rendering a page.
+
+### Error Handling
+
+Every error a request handler or middlware encounters must be classified into one of two buckets:
+
+- **Expected errors** - also known as "operational errors" - are errors the Requset Handler logic is prepared for and will handle internally.
+- **Unexpected errors** - also known as "programmer errors" - are errors which come from code paths the Request Handler logic assumes should be unreachable, or should not be present in a healthy system.
+
+A Request Handler should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Request Handler may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging. A RequestHandler MUST wrap the unexpected error and rethrow it as an AssertionError if the cause.expected flag is truthy. This will result in an HTTP 500 status code for the response and a sever crash, which is the intended outcome.
+
+A Request Handler should act with discretion when expected operational errors occur. Depending on the context:
+
+- **When the caught error is not a defined HTTP error** - When the `error.httpError` flag is falsy - Wrap the error in an HTTP error class from app/kixx/errors/ or set the `error.httpStatusCode` property so that the status code is properly returned to the client
+- **When the error comes from a code path that is not accounted for** - Wrap the cause in an AssertionError and rethrow.
+
+Use error properties like `error.name`, `error.code`, and `error.expected` instead of `instanceof` to drive logical code branches.
+
+### Response Status on Re-rendered Errors
+
+A request handler that catches an expected error and re-renders the page inline — rather than letting the error reach the route error handler — owns the response status for that outcome. A caught `ValidationError` or `ConflictError` that only calls `updateProps()` goes out as the default `200` even though the page reports an error.
+
+Be sure to set the status yourself in each inline error re-render branch in a request handler. Set `response.status` from `error.httpStatusCode`, falling back to `500` only when a more appropriate error code cannot be determined. Pass the original caught error even when it has been reclassified for display, so the status describes the error that actually occurred (a name conflict stays `409` even when shown as a field message).
+
+Enumeration-sensitive re-renders — throttled, invalid-invite/verification, and invalid-credentials states — should stay `200` on purpose so the status line does not become an identity or rate-limit oracle. These flows collapse valid, unknown, expired, and throttled outcomes into one indistinguishable response; a distinct `403`/`404`/`429` status would leak exactly the signal the identical HTML bodies work to hide.
 
 ## Request and Response Objects
 
@@ -506,56 +514,156 @@ response.clearCookie('session', { path: '/' });
 return response.updateProps({ page: { title: ticket.title }, ticket });
 ```
 
-# Forms
+## Forms
 
-Forms are the primary organizing logic for getting data into the application. Any data input into the system — HTML form submissions, JSON:API requests, webhooks, external APIs — should go through a form.
+Forms are the primary organizing logic for getting data into the application. Any data input into the system — HTML form submissions, JSON:API requests, webhooks, external APIs — should go through a form. A form owns one responsibility: turn an untrusted payload into a normalized, validated value object that a Transaction Script can consume. Keep domain logic, storage access, and CSRF handling out of the form.
 
-Forms which are expected to back HTML pages have static `method`, `target`, and `schema` properties. The `target` is the registered `HttpTarget` name used to compile the browser form action URL. The `schema` extends JSON Schema with HTML form control metadata (`label`, `fieldType`, etc.) that templates can use to render the form. Forms not intended for HTML pages should still provide a `schema` and should still implement `validate()`, `toJSON()`, and an appropriate `from*()` constructor.
+Form files live in `app/presentation/forms/`, grouped into a subdirectory per feature (`admin-users/`, `publishing-api-tokens/`, `pages/`, `migrations/`). A single file may export more than one form when the forms belong to the same UI — for example a create form as the `default` export and a companion revoke form as a named export.
 
-*ALL forms SHOULD include a schema definition as best practice.*
+### Anatomy of a Form
+
+Every form, HTML-backed or API-only, is built from the same parts:
+
+- **`static schema`** — JSON Schema describing the accepted fields. *ALL forms SHOULD include a schema definition as best practice.* The schema is the single source of truth: `validate()` reads its bounds (`minLength`, `maxLength`, `enum`) rather than duplicating literals, and HTML forms render controls from its metadata.
+- **A normalizing `constructor(attributes)`** — destructures the raw payload (guarding with `?? {}`) and assigns one normalized value per field. Normalization and validation are deliberately separate: the constructor cleans up shape (trim, lowercase, coerce absent-to-null) but **preserves invalid input** so `validate()` can still report a field error instead of silently coercing bad data away.
+- **`validate()`** — accumulates field errors on a single `ValidationError` via `error.push(message, source)` and throws only when `error.length` is non-zero. Never throw on the first bad field; collect them all so the re-rendered form can show every problem at once.
+- **`from*()` static constructor(s)** — `fromFormData(formData)` for browser submissions (provided by `BaseForm`), `fromJsonApi(resource)` for JSON:API payloads, or both when one form backs two entry points.
+- **`toJSON()`** — returns the plain, server-consumable value object handed to the Transaction Script. This is also where a form maps its UI-facing fields onto the domain shape (for example, injecting a default permission grant the UI does not expose).
+
+### HTML Forms Extend `BaseForm`
+
+Forms that back HTML pages extend `BaseForm` (`app/presentation/forms/base-form.js`) and add three static properties:
+
+- **`static target`** — the registered `HttpTarget` name used to compile the browser form action URL through reverse routing (see [Reverse Routing](#reverse-routing)). A form never hardcodes where it posts.
+- **`static method`** — the HTTP method for the submission, almost always `'POST'`.
+- **`static schema`** — JSON Schema extended with HTML render metadata per property.
+
+`BaseForm` provides the two pieces every HTML form would otherwise duplicate:
+
+- **`getFormContext(context, error)`** builds the template render context: it resolves `static target` to an `HttpTarget`, compiles the action `url` (passing the form instance so any route params are hydrated), and projects each schema property into a `fields` map carrying the current value, render metadata, and any per-field error message. Pass it the `ValidationError` caught in the request handler to re-render with inline field errors, or a domain error code string for a form-level message.
+- **`static fromFormData(formData)`** hydrates the subclass from submitted `FormData`, treating each field as a scalar (last value wins on duplicates). Override it when a form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
+
+### Schema HTML Metadata
+
+`getFormContext()` copies each property's schema keys onto the rendered field, so templates read whatever metadata you declare. Conventions used across the codebase:
+
+- **`label`** — human label for the control.
+- **`fieldType`** — the control kind the template should render (`'text'`, `'textarea'`, `'select'`, `'hidden'`).
+- **`inputType`** — the HTML `<input type>` (`'email'`, `'password'`), kept distinct from `fieldType` so a template can choose the control independently of the input type.
+- **`autocomplete`** — the browser autofill hint (`'email'`, `'new-password'`, `'current-password'`).
+- **`hint`** — help text shown near the field.
+- **`options`** — value/label pairs for `select` controls.
+- **`writeOnly: true`** — a security convention, not decoration: `getFormContext()` omits the field's `value` from the render context so a submitted secret (a password) is never echoed back into a re-rendered form after a validation error.
+
+### Normalization Helpers
+
+Constructors normalize with the shared helpers in `app/presentation/forms/utils.js` rather than re-implementing trimming inline. Each helper returns the original value unchanged when it is not usable, which is what keeps invalid input intact for `validate()`:
+
+- **`normalizeStringAttribute(value)`** — trims a required string.
+- **`normalizeLowerCaseStringAttribute(value)`** — trims and lowercases; use for email addresses so lookups are case-insensitive.
+- **`normalizeSecretStringAttribute(value)`** — coerces to a primitive string but does **not** trim, preserving a password exactly as entered.
+- **`normalizeOptionalStringAttribute(value)`** — trims and collapses absent or blank input to `null`.
+- **`validateEmailAddressField(error, value, name)`** — pushes a field error when an email value is missing or malformed; call it from `validate()`.
+
+Prefer these to hand-written normalization so behavior stays consistent, and add a new shared helper here when a normalization pattern appears in more than one form.
+
+The subclass declares its shape and rules; `BaseForm` supplies `getFormContext()` and `fromFormData()`. Do not re-implement them in a subclass unless you need to override `fromFormData()` for multi-value fields.
 
 ```js
-import { ValidationError } from '../../kixx/errors/mod.js';
-import { isString } from '../../kixx/assertions/mod.js';
+import { isString } from '../../../../kixx/assertions/mod.js';
+import { ValidationError } from '../../../../kixx/errors/mod.js';
+import BaseForm from '../base-form.js';
+import {
+    normalizeStringAttribute,
+    normalizeSecretStringAttribute,
+    normalizeLowerCaseStringAttribute,
+    validateEmailAddressField,
+} from '../utils.js';
 
-export default class CreateBugTicketForm {
+
+/**
+ * Normalizes and validates the bug ticket creation fields.
+ * @extends BaseForm
+ */
+export default class CreateBugTicketForm extends BaseForm {
 
     /**
-     * HTTP method used by the bug ticket creation endpoint.
+     * HttpTarget name used to compile the form action path.
+     * @type {string}
+     * @static
+     * @readonly
+     */
+    static target = 'bugs/submit';
+
+    /**
+     * HTTP method used for browser form submissions.
+     * @type {string}
+     * @static
+     * @readonly
      */
     static method = 'POST';
 
     /**
-     * HttpTarget name used to compile the form action URL.
+     * JSON Schema extended with HTML render metadata (label, fieldType, etc.).
+     * @type {Object}
+     * @static
+     * @readonly
      */
-    static target = 'bugs/submit'; // References the HttpTarget "bugs/submit"
-
-    // JSON Schema extended with HTML rendering metadata (label, fieldType, etc.).
     static schema = {
         type: 'object',
         properties: {
-            title: { type: 'string', label: 'Title', fieldType: 'text' },
-            description: { type: 'string', label: 'Description', fieldType: 'textarea' },
-            priority: { type: 'string', enum: [ 'critical', 'high', 'medium', 'low' ], fieldType: 'select' },
+            title: {
+                type: 'string',
+                label: 'Title',
+                fieldType: 'text',
+            },
+            description: {
+                type: 'string',
+                label: 'Description',
+                fieldType: 'textarea',
+            },
+            priority: {
+                type: 'string',
+                enum: [ 'critical', 'high', 'medium', 'low' ],
+                fieldType: 'select',
+                label: 'Priority',
+            },
         },
         required: [ 'title', 'description' ],
     };
 
-    constructor(values) {
-        Object.assign(this, values);
+    /**
+     * @param {Object} [attributes] - Raw submitted ticket attributes.
+     * @param {*} [attributes.title] - Ticket title input value.
+     * @param {*} [attributes.description] - Ticket description input value.
+     * @param {*} [attributes.priority] - Selected priority.
+     */
+    constructor(attributes) {
+        super();
+
+        const { title, description, priority } = attributes ?? {};
+
+        // Normalize shape only; keep invalid input intact for validate().
+        this.title = normalizeStringAttribute(title);
+        this.description = normalizeStringAttribute(description);
+        this.priority = normalizeLowerCaseStringAttribute(priority);
     }
 
+    /**
+     * Validates the normalized ticket fields.
+     * @returns {void}
+     * @throws {ValidationError} When a field is missing or invalid.
+     */
     validate() {
         const error = new ValidationError('The bug ticket form contains invalid fields');
+        // Read the allowed values from the schema rather than duplicating them.
         const priorities = this.constructor.schema.properties.priority.enum;
 
-        // Accumulate errors on the ValidationError instance before throwing
-
-        if (!this.title) {
+        if (!isString(this.title) || this.title.length === 0) {
             error.push('Title is required', 'title');
         }
 
-        if (!this.description) {
+        if (!isString(this.description) || this.description.length === 0) {
             error.push('Description is required', 'description');
         }
 
@@ -568,97 +676,83 @@ export default class CreateBugTicketForm {
         }
     }
 
-    toJSON() {
-        const data = {};
-        for (const name of Object.keys(this.constructor.schema.properties)) {
-            data[name] = this[name];
-        }
-        return data;
-    }
-
     /**
-     * Builds template render data for the bug ticket form, merging field
-     * values and any validation errors from a previous submit attempt.
-     * @param {import('../../kixx/context/request-context.js').default} context - Current request context.
-     * @param {Error|string|null} [error] - ValidationError or error code string.
+     * Returns the normalized fields consumed by the Transaction Script.
+     * @returns {{ title: *, description: *, priority: * }} Plain JSON form values.
      */
-    getFormContext(context, error) {
-        const fields = {};
-        const fieldErrors = new Map();
-
-        let errorCode = null;
-
-        if (error && error.name === 'ValidationError' && Array.isArray(error.errors)) {
-            errorCode = 'field_error';
-            for (const { message, source } of error.errors) {
-                fieldErrors.set(source, message);
-            }
-        } else if (isString(error)) {
-            errorCode = error;
-        }
-
-        for (const [ name, field ] of Object.entries(this.constructor.schema.properties)) {
-            fields[name] = Object.assign({}, field, { name });
-
-            if (fieldErrors.has(name)) {
-                fields[name].error = fieldErrors.get(name);
-            }
-        }
-
-        const target = context.getHttpTarget(this.constructor.target);
-
+    toJSON() {
         return {
-            name: this.constructor.name,
-            method: this.constructor.method,
-            // The `this` value should include all parameters needed to hydrate the
-            // HttpRoute pathname pattern.
-            url: target.compilePathname(this).pathname,
-            errorCode,
-            fields,
+            title: this.title,
+            description: this.description,
+            priority: this.priority,
         };
-    }
-
-    static fromFormData(formData) {
-        return new CreateBugTicketForm(Object.fromEntries(formData.entries()));
-    }
-
-    static fromJsonApi(resource) {
-        return new CreateBugTicketForm(resource.data?.attributes ?? {});
     }
 }
 ```
 
-## API-Only Forms
+The `validateEmailAddressField` and `normalizeSecretStringAttribute` helpers imported above are unused in this minimal example; a real form pulls in only the helpers its fields need (login and registration forms use both for email and password fields).
 
-Forms used only by JSON:API endpoints do not need `method`, `target`, or `getFormContext()` because they are never rendered as HTML and do not compile a browser form action. They should still define `schema`, normalize input in the constructor, validate field-level errors with `ValidationError`, expose a `fromJsonApi()` constructor, and return server-consumable data from `toJSON()`.
+### Companion Forms in One File
+
+When a feature UI needs a paired action — such as a create form and a per-row revoke form — co-locate them in one file: the primary form as the `default` export, the companion as a named export. A revoke form typically declares its own `static target` (the revoke route shares one action URL across rows) and a single hidden id field, so each rendered row submits exactly one record id:
 
 ```js
-import { isNonEmptyString } from '../../kixx/assertions/mod.js';
-import { ValidationError } from '../../kixx/errors/mod.js';
+static schema = {
+    type: 'object',
+    properties: {
+        token_id: { type: 'string', fieldType: 'hidden' },
+    },
+    required: [ 'token_id' ],
+};
+```
+
+A form that mints a record from server-derived data only — no operator-entered fields — still exists to carry the CSRF token and compile its reverse-routed action URL, and declares an empty `properties: {}` schema.
+
+## API-Only Forms
+
+Forms used only by JSON:API endpoints do **not** extend `BaseForm` and do not declare `method`, `target`, or `getFormContext()`, because they are never rendered as HTML and never compile a browser form action. They keep the rest of the anatomy: a `schema`, a normalizing constructor (reuse the `utils.js` helpers), a `validate()` that accumulates field errors on a `ValidationError`, a `fromJsonApi(resource)` static constructor that reads `resource.attributes`, and a `toJSON()` that returns server-consumable data. Because these forms have no `BaseForm` to inherit `fromFormData()` from, `fromJsonApi()` is their only entry point.
+
+```js
+import { ValidationError } from '../../../../kixx/errors/mod.js';
+import { normalizeOptionalStringAttribute } from '../utils.js';
 
 export default class CreateApiTokenForm {
 
+    /**
+     * JSON Schema for accepted token-creation attributes.
+     * @type {Object}
+     * @static
+     * @readonly
+     */
     static schema = {
         type: 'object',
         properties: {
             description: {
-                type: 'string',
-                description: 'Operator-facing token description',
+                type: [ 'string', 'null' ],
+                description: 'Optional operator-facing token description',
             },
         },
-        required: [ 'description' ],
     };
 
+    /**
+     * @param {Object} [attributes] - JSON:API token-creation attributes.
+     * @param {*} [attributes.description] - Operator-facing token description.
+     */
     constructor(attributes) {
         const { description } = attributes ?? {};
-        this.description = isNonEmptyString(description) ? description.trim() : description;
+        this.description = normalizeOptionalStringAttribute(description);
     }
 
+    /**
+     * Validates the normalized token-creation fields.
+     * @returns {void}
+     * @throws {ValidationError} When a field is invalid.
+     */
     validate() {
         const error = new ValidationError('The API token form contains invalid fields');
 
-        if (!isNonEmptyString(this.description)) {
-            error.push('Description is required', 'description');
+        if (this.description !== null && typeof this.description !== 'string') {
+            error.push('Description must be a string or null', 'description');
         }
 
         if (error.length) {
@@ -666,17 +760,29 @@ export default class CreateApiTokenForm {
         }
     }
 
+    /**
+     * Returns the normalized fields consumed by the Transaction Script.
+     * @returns {{ description: string|null }} Plain JSON form values.
+     */
     toJSON() {
         return {
             description: this.description,
         };
     }
 
-    static fromJsonApi(attributes) {
+    /**
+     * Creates the form from a parsed JSON:API resource.
+     * @param {{ attributes: Object }} resource - Parsed resource from parseJsonApiResource().
+     * @returns {CreateApiTokenForm} Hydrated token-creation form.
+     */
+    static fromJsonApi(resource) {
+        const { attributes } = resource ?? {};
         return new CreateApiTokenForm(attributes);
     }
 }
 ```
+
+A form can serve both entry points when the same fields arrive over HTML and JSON:API — extend `BaseForm` for the HTML side and add a `fromJsonApi()` that maps the API attribute names onto the constructor's field names (the new-admin-user form does this, accepting `emailAddress` from JSON:API and a separate bearer invite token).
 
 ## CSRF-Protected HTML Forms
 
