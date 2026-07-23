@@ -14,13 +14,14 @@ Each Transaction Script lives in its own file. Files are named after the action 
 
 ```
 app/transaction-scripts/
-├── bugs/
-│   ├── create-bug-ticket.js
-│   ├── get-bug-ticket.js
-│   └── list-bug-tickets.js
-└── users/
-    ├── create-user.js
-    └── get-user.js
+├── admin-users/
+│   ├── authenticate-admin-session.js
+│   ├── create-admin-user.js
+│   └── verify-amdin-credentials.js
+└── publishing-api-tokens/
+    ├── authenticate-publishing-token.js
+    ├── create-publishing-api-token.js
+    └── list-publishing-api-tokens.js
 ```
 
 Each file exports one named async function whose name matches the file in camelCase:
@@ -67,7 +68,16 @@ return record.toDocument();
 return { items: records.map((r) => r.toDocument()), cursor };
 ```
 
-Return `null` or `undefined` only from scripts where no data is needed by the caller (e.g. a delete operation). For everything else, return a plain object. For read scripts that fetch one required resource, throw `NotFoundError` when the resource is absent unless the caller explicitly handles absence as an allowed result.
+For transaction scripts that fetch a single resource, like fetching a product by ID, return the document or `null` and document it explicitly in the JSDoc (`@returns {Promise<Object|null>}`) so every caller is obligated to handle it. A pure read reports the *fact* that a resource is absent; deciding how to represent that to the user (a 404, an empty state, a default) is presentation policy and belongs to the caller, not the domain script
+
+Otherwise, return `null` or `undefined` only from scripts where the caller needs no data back (e.g. a delete operation).
+
+Do throw instead of returning `null` in two cases:
+
+- **Mutations whose precondition is that the target exists** — revoke, update, delete-strict — where absence means the requested action cannot be performed. Throw `NotFoundError` if that is an operational error or an `AssertionError` if it is an unexpected code path.
+- **Reads where absence carries a specific domain meaning** — for example, a missing or orphaned session is an authentication failure, so `authenticateAdminSession` throws `UnauthenticatedError` rather than leaking whether the id ever existed.
+
+For everything else, return a plain object.
 
 ## Input to Transaction Scripts
 
@@ -86,27 +96,38 @@ Transaction Scripts access stored data through registered Collections on the `Re
 When a Transaction Script needs to call an external service — a Cloudflare binding such as the email service, R2 object store, or any other platform API — it does so through a registered gateway. Retrieve gateways via `context.getService()`:
 
 ```js
-const emailGateway = context.getService('EmailGateway');
-const { messageId } = await emailGateway.send(context, message);
-
-const objectStore = context.getService('ObjectStoreGateway');
+const objectStore = context.getService('ObjectStore');
 const { tempKey, contentHash } = await objectStore.streamToTemp(context, body, { contentType });
+
+const mailer = context.getService('Mailer');
+const { messageId } = await mailer.send(context, 'password-reset', {
+    to: user.email_address,
+    data: { user, resetUrl },
+});
 ```
 
 **Do not put business rules inside a gateway.** A gateway's sole responsibility is to hide the shape of one external resource: its binding API, key formats, error codes, and wire protocol. Business rules, cross-field validation, and conditional branching based on domain state belong in the Transaction Script.
 
-To author and register a new gateway for an external resource, see the "External Service Gateways" section of @application/docs/data-source-layer.md.
-
 ## Error Handling
 
-Follow `app/docs/error-handling.md` for the project-wide error taxonomy, assertion rules, wrapping rules, and HTTP serialization behavior. This section only covers how those rules apply at the Transaction Script boundary.
+Error
 
 ### Expected vs. Unexpected Errors
 
 Every error a transaction script encounters must be classified into one of two buckets:
 
-- **Expected (operational) errors** are errors the Transaction Script logic is prepared for and describes an outcome the caller is allowed to see: a violated business rule, a missing resource, a conflicting write. In this case you should throw the operational error class from @application/src/kixx/errors/mod.js (`ValidationError`, `NotFoundError`, `ConflictError`, `ForbiddenError`, etc.) which makes the most sense for the case you are handling. Each of these operational error classes carries an HTTP status and a client-safe `message`, and the router serializes it into the corresponding 4xx response.
-- **Unexpected (programmer) errors** are bugs and infrastructure failures: a broken invariant, a record the code should never have produced, an unreachable binding, an unrecognized storage failure. These must reach the router as a **non-operational** error so its fallback produces a 500 and the underlying defect is logged instead of hidden. Rethrow these errors as an `AssertionError` with the original error set as the cause.
+- **Expected errors** - also known as "operational errors" - are errors the Transaction Script logic is prepared for and will handle internally.
+- **Unexpected errors** - also known as "programmer errors" - are errors which come from code paths the Transaction Script logic assumes should be unreachable, or should not be present in a healthy system.
+
+A Transaction Script should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Transaction Script may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging. A TransactionScript MUST wrap the unexpected error and rethrow it as an AssertionError if the cause.expected flag is truthy.
+
+A Transaction Script can act with discretion when expected operational errors occur. Depending on the context:
+
+- **Wrap the cause and rethrow with a new error.name or error.code** - when the caught error does not have a name or code which is meaningful to the caller, or to standardize the error signature from the Transaction Script.
+- **Wrap the cause and rethrow as an AssertionError** - when the operational error is coming from a code path the Transaction Script is not accounting for.
+- **Pass the error through or rethrow without wrapping** - when the error is documented by the Transaction Script so callers know to expect it.
+
+Use error properties like `error.name`, `error.code`, and `error.expected` instead of `instanceof` to drive logical code branches:
 
 ```js
 import {
@@ -114,6 +135,8 @@ import {
     ConflictError,
     NotFoundError,
 } from '../../../kixx/errors/mod.js';
+
+// Update a record we expect to exist:
 
 try {
     record = await tickets.update(context, record);
@@ -131,53 +154,5 @@ try {
         );
     }
     throw new AssertionError('Unexpected error while updating bug ticket', { cause });
-}
-```
-
-When the Transaction Script itself detects the violated business rule or missing resource, throw the operational error directly:
-
-```js
-// Throw when a business rule is violated:
-throw new ConflictError('A bug ticket with this title already exists in the project');
-
-// Throw when a required entity is absent:
-throw new NotFoundError(`Bug ticket "${ id }" was not found`);
-```
-
-## Complete Example: Write Script
-
-```js
-import { AssertionError, ConflictError } from '../../../kixx/errors/mod.js';
-
-/**
- * Creates a new bug ticket from a validated form submission.
- * @param {import('../../../kixx/context/request-context.js').default} context
- * @param {import('../../forms/create-bug-ticket-form.js').default} form
- * @returns {Promise<Object>} The created ticket document
- * @throws {ConflictError} When a ticket with the same ID already exists
- */
-export async function createBugTicket(context, form) {
-    const tickets = context.getCollection('BugTicket');
-
-    let record;
-    try {
-        record = await tickets.create(context, {
-            id: form.id,
-            title: form.title,
-            description: form.description,
-            priority: form.priority ?? 'medium',
-            screenshots: form.screenshots ?? [],
-        });
-    } catch (cause) {
-        if (cause.name === 'DocumentAlreadyExistsError') {
-            throw new ConflictError(
-                'A bug ticket with this ID already exists',
-                { cause, code: 'BugTicketConflictError' },
-            );
-        }
-        throw new AssertionError('Unexpected error in createBugTicket', { cause });
-    }
-
-    return record.toDocument();
 }
 ```
