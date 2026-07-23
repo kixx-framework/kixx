@@ -229,6 +229,21 @@ try {
 }
 ```
 
+**Exception: cursor validation is translated at the presentation boundary, not the Transaction Script boundary.** `DocumentStore#scan()`/`query()` (`kixx/document-store/document-store.js`) issue and verify signed public pagination cursors. A cursor that is malformed, tampered with, foreign-signed, unsigned-legacy, or **replayed against a different query** (a different method, type, index, sort direction, or range bound than the one that issued it) raises `InvalidCursorError` from `kixx/document-store/invalid-cursor-error.js`. Every one of those cases is **expected** input: a stale bookmarked page link is the ordinary way the replay case arrives, not a sign of a bug. Because `InvalidCursorError` is not one of the `kixx/errors/mod.js` HTTP classes in the table above, list Transaction Scripts re-throw it unchanged — ahead of their usual catch-all `AssertionError` wrap — instead of translating it themselves:
+
+```js
+} catch (cause) {
+    if (cause.name === 'InvalidCursorError') {
+        throw cause;
+    }
+    throw new AssertionError('Unexpected error while listing admin invites', { cause });
+}
+```
+
+The presentation layer's `rethrowInvalidCursorAsBadRequest()` (`app/presentation/lib/pagination.js`) is what finally converts it to a client-safe `BadRequestError` (400). This two-layer split matters: query-string *shape* (a non-empty `cursor`, well-formed `history` params) is an HTTP concern validated by `pagination.js`, while cursor *authenticity and scope* (the HMAC signature and the query it was issued for) are storage concerns validated by the facade — see the Collections guide's "Reading and Listing" section for the full contract, including that rotating the signing secret invalidates every cursor in flight.
+
+Getting this classification right is what keeps a bad cursor from taking the process down. `InvalidCursorError` carries `expected`, so the router logs a warning and serves a 400. Were the same condition to surface as an `AssertionError` instead, the router's `error` event would classify it as a programmer error and **trigger the fatal-error policy** — a stale page link would shut the server down. This is why engines must not raise assertion failures for cursor scope: the facade owns that check and owns the expected-error classification with it.
+
 ## Router Error Propagation and the Platform Fatal-Error Policy
 
 Two separate mechanisms run whenever a middleware or request handler throws. Keeping them separate in your head is the key to understanding this section: one produces the **response**, the other decides whether the **process** crashes. They share the same error object, but neither one waits on the other.
