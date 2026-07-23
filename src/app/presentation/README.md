@@ -402,6 +402,10 @@ A Request Handler should act with discretion when expected operational errors oc
 
 Use error properties like `error.name`, `error.code`, and `error.expected` instead of `instanceof` to drive logical code branches.
 
+Messages on HTTP errors are serialized by the router fallback, so they must be safe to show to clients. Do not put secrets, raw upstream payloads, stack details, KV keys, or internal identifiers in an HTTP error message.
+
+Use a custom `code` when callers or templates need to distinguish a domain-specific outcome while keeping the HTTP status generic.
+
 ### Response Status on Re-rendered Errors
 
 A request handler that catches an expected error and re-renders the page inline — rather than letting the error reach the route error handler — owns the response status for that outcome. A caught `ValidationError` or `ConflictError` that only calls `updateProps()` goes out as the default `200` even though the page reports an error.
