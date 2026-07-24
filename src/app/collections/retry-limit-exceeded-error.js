@@ -1,8 +1,20 @@
+import { WrappedError } from '../../kixx/errors/mod.js';
+
+
 /**
  * Error thrown when a bounded data-source retry loop cannot complete.
- * @extends Error
+ * @extends WrappedError
  */
-export default class RetryLimitExceededError extends Error {
+export default class RetryLimitExceededError extends WrappedError {
+
+    /**
+     * Stable application error code for exhausted retry loops.
+     * @type {string}
+     * @static
+     * @readonly
+     */
+    static CODE = 'RetryLimitExceededError';
+
     /**
      * @param {string} type - Document type namespace.
      * @param {string} id - Document identifier within the type namespace.
@@ -11,30 +23,15 @@ export default class RetryLimitExceededError extends Error {
      * @param {Error} [options.cause] - Last conflict error observed before the limit was exceeded.
      */
     constructor(type, id, retryLimit, options) {
+        // WrappedError derives `name` from the constructor name and `code` from
+        // the static CODE, so only `cause` is forwarded through options here.
         super(
             `Retry limit exceeded: ${ type }/${ id } could not be updated after ${ retryLimit } retries`,
             { cause: options?.cause },
+            RetryLimitExceededError,
         );
 
         Object.defineProperties(this, {
-            /**
-             * Error class name used by serializers and diagnostics.
-             * @name name
-             * @type {string}
-             */
-            name: {
-                value: 'RetryLimitExceededError',
-                enumerable: true,
-            },
-            /**
-             * Stable application error code for exhausted retry loops.
-             * @name code
-             * @type {string}
-             */
-            code: {
-                value: 'RetryLimitExceededError',
-                enumerable: true,
-            },
             /**
              * Document type namespace used in the failed operation.
              * @name type

@@ -68,6 +68,9 @@ export async function postCreatePublishingApiToken(context, request, response) {
             }),
         };
 
+        // This inline re-render owns its status: a field-invalid submission is a
+        // 422, not the default 200, even though the list page renders normally.
+        response.status = error.httpStatusCode || 500;
         return response.updateProps({
             tokens: items,
             showPagination: Boolean(links.nextPage),
