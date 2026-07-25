@@ -1,4 +1,4 @@
-import { assertNonEmptyString, isString } from '../../kixx/assertions/mod.js';
+import { assert, assertNonEmptyString, isString } from '../../kixx/assertions/mod.js';
 import { evaluatePermissions } from './permissions.js';
 
 
@@ -32,20 +32,23 @@ export const ROLE_PLATFORM_ADMIN = 'Platform Admin';
 export const ROLE_EDITOR = 'Editor';
 
 // Role names are a single namespace shared across every category; each name
-// below is unique across the whole registry, not just within its category.
+// below is unique across the whole registry, not just within its categories.
+// A role may belong to more than one category when the same grants should be
+// attachable to more than one kind of principal — the categories a role
+// declares govern only where it may be attached, never what it can do.
 const ROLE_DEFINITIONS = Object.freeze([
-    defineRole(ROLE_ROOT_ADMIN, 'admin', [
+    defineRole(ROLE_ROOT_ADMIN, [ 'admin' ], [
         { action: '*', resource: '*' },
     ]),
-    defineRole(ROLE_SUPER_ADMIN, 'admin', [
+    defineRole(ROLE_SUPER_ADMIN, [ 'admin' ], [
         { action: 'urn:kixx:admin:admin-user-invites:*', resource: 'urn:kixx:admin:admin-user-invites' },
         { action: 'urn:kixx:admin:publishing-api-tokens:*', resource: 'urn:kixx:admin:publishing-api-tokens' },
         { action: 'urn:kixx:admin:migrations:*', resource: 'urn:kixx:admin:migrations' },
     ]),
-    defineRole(ROLE_PLATFORM_ADMIN, 'admin', [
+    defineRole(ROLE_PLATFORM_ADMIN, [ 'admin' ], [
         { action: 'urn:kixx:admin:publishing-api-tokens:*', resource: 'urn:kixx:admin:publishing-api-tokens' },
     ]),
-    defineRole(ROLE_EDITOR, 'publishing', [
+    defineRole(ROLE_EDITOR, [ 'publishing' ], [
         { action: 'urn:kixx:publishing:page-metadata:put', resource: 'urn:kixx:publishing:page-metadata:*' },
         { action: 'urn:kixx:publishing:include:put', resource: 'urn:kixx:publishing:include:*' },
         { action: 'urn:kixx:publishing:asset:put', resource: 'urn:kixx:publishing:asset' },
@@ -66,7 +69,8 @@ export function isRegisteredRoleName(name) {
 }
 
 /**
- * Reports whether a name is a registered role within a specific category.
+ * Reports whether a name is a registered role within a specific category. A
+ * role belonging to several categories matches every one of them.
  * @param {string} name - Candidate role name.
  * @param {string} category - Required role category, such as 'admin' or 'publishing'.
  * @returns {boolean} True when the name is registered and belongs to the category.
@@ -75,18 +79,19 @@ export function isRoleName(name, category) {
     assertNonEmptyString(category, 'isRoleName: category');
 
     const role = ROLE_REGISTRY.get(name);
-    return Boolean(role) && role.category === category;
+    return Boolean(role) && role.categories.includes(category);
 }
 
 /**
- * Lists registered roles within a category, in definition order.
+ * Lists registered roles within a category, in definition order. A role
+ * belonging to several categories is listed under each of them.
  * @param {string} category - Required role category, such as 'admin' or 'publishing'.
  * @returns {Object[]} Frozen role definitions belonging to the category.
  */
 export function listRoles(category) {
     assertNonEmptyString(category, 'listRoles: category');
 
-    return ROLE_DEFINITIONS.filter((role) => role.category === category);
+    return ROLE_DEFINITIONS.filter((role) => role.categories.includes(category));
 }
 
 /**
@@ -186,7 +191,16 @@ export function filterGrantableRoles(permissions, category) {
     });
 }
 
-function defineRole(name, category, permissions) {
+function defineRole(name, categories, permissions) {
+    // A bare string would silently pass every category check downstream,
+    // because String#includes() matches substrings: 'admin'.includes('admin')
+    // and even 'admin'.includes('admi') are both true. Reject it at module
+    // load rather than let a definition typo widen a role's reach.
+    assert(
+        Array.isArray(categories) && categories.length > 0,
+        `defineRole: categories for role '${ name }' must be a non-empty array`,
+    );
+
     const grants = permissions.map((grant) => {
         return Object.freeze({
             effect: ALLOW,
@@ -197,7 +211,7 @@ function defineRole(name, category, permissions) {
 
     return Object.freeze({
         name,
-        category,
+        categories: Object.freeze(categories.slice()),
         permissions: Object.freeze(grants),
     });
 }
