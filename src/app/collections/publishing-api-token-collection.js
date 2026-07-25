@@ -2,6 +2,7 @@ import { generateSecretToken, sha256Hex } from '../../kixx/utils/crypto.js';
 import Collection from './base-document-store-collection.js';
 import PublishingApiTokenRecord from './publishing-api-token-record.js';
 import { assert, assertNonEmptyString } from '../../kixx/assertions/mod.js';
+import { areRoleGrantsWithinDomain, isRegisteredRoleName } from '../lib/roles.js';
 
 
 const PUBLISHING_API_TOKEN_PREFIX = 'kxpat_';
@@ -31,17 +32,18 @@ export default class PublishingApiTokenCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {Object} args - Creation arguments.
      * @param {string} args.createdBy - Admin user id that minted the token.
-     * @param {Object[]} args.permissions - Permission grants attached to this token.
+     * @param {string[]} args.roles - Role names granted to this token.
      * @param {string|null} [args.description] - Operator-facing token description.
      * @param {number} args.ttlSeconds - Positive token lifetime in seconds.
      * @returns {Promise<{ token: string, record: PublishingApiTokenRecord }>} The raw token and stored record.
-     * @throws {AssertionError} When required creation arguments are invalid.
+     * @throws {AssertionError} When required creation arguments are invalid, a role name is
+     *   unregistered, or a role's grants are not confined to the publishing domain.
      * @throws {ValidationError} When the generated record fails validation.
      */
     async createToken(context, args) {
         const {
             createdBy,
-            permissions,
+            roles,
             description = null,
             ttlSeconds,
         } = args ?? {};
@@ -51,16 +53,28 @@ export default class PublishingApiTokenCollection extends Collection {
             Number.isInteger(ttlSeconds) && ttlSeconds > 0,
             'PublishingApiTokenCollection#createToken() ttlSeconds must be a positive integer',
         );
+        assert(
+            Array.isArray(roles) && roles.length > 0,
+            'PublishingApiTokenCollection#createToken() roles must be a non-empty array',
+        );
+        assert(
+            roles.every(isRegisteredRoleName),
+            'PublishingApiTokenCollection#createToken() roles must be registered role names',
+        );
+        assert(
+            roles.every((name) => areRoleGrantsWithinDomain(name, 'publishing')),
+            'PublishingApiTokenCollection#createToken() roles must be confined to the publishing domain',
+        );
 
         const nowMs = Date.now();
         const token = generateSecretToken(PUBLISHING_API_TOKEN_PREFIX);
         const tokenHash = await sha256Hex(token);
 
-        // Clone permission grants before persistence so later caller mutation
-        // cannot change what this write intended to store.
+        // Clone roles before persistence so later caller mutation cannot
+        // change what this write intended to store.
         const record = await this.create(context, {
             id: tokenHash,
-            permissions: structuredClone(permissions),
+            roles: roles.slice(),
             description,
             createdBy,
             tokenCreationDate: new Date(nowMs).toISOString(),

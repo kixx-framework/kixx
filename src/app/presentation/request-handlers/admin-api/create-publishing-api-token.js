@@ -3,29 +3,22 @@ import {
     JSON_API_CONTENT_TYPE,
     assertJsonApiContentType,
     jsonApiResource,
-    parseBasicAuthCredentials,
     parseJsonApiResource,
 } from '../../lib/json-api.js';
-import { verifyAdminCredentials } from '../../../transaction-scripts/admin-users/verify-admin-credentials.js';
 import { createPublishingApiToken as createToken } from '../../../transaction-scripts/publishing-api-tokens/create-publishing-api-token.js';
 
 
 export async function createPublishingApiToken(context, request, response) {
     assertJsonApiContentType(request);
 
-    const { username, password } = parseBasicAuthCredentials(request);
-    // verifyAdminCredentials() canonicalizes the email before lookup, so the raw
-    // Basic-auth username does not need to be normalized here.
-    const admin = await verifyAdminCredentials(context, {
-        emailAddress: username,
-        password,
-    });
-
+    // Authentication (Basic credentials → context.user) and authorization
+    // (publishing-api-tokens:write) already ran in this route's
+    // inboundMiddleware and target-head gate, respectively.
     const resource = await parseJsonApiResource(request, 'PublishingApiToken');
     const form = CreatePublishingApiTokenForm.fromJsonApi(resource);
     form.validate();
 
-    const token = await createToken(context, form, admin.id);
+    const token = await createToken(context, form, context.user.id);
 
     // This target's chain has no Hyperview handler after it, so the committed
     // JSON response is terminal without skip(). Returning normally lets any
@@ -37,7 +30,7 @@ export async function createPublishingApiToken(context, request, response) {
             id: token.id,
             attributes: {
                 token: token.token,
-                permissions: token.permissions,
+                roles: token.roles,
                 description: token.description,
                 createdBy: token.createdBy,
                 tokenCreationDate: token.tokenCreationDate,

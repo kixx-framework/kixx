@@ -56,17 +56,21 @@ export async function getAdminInvites(context, request, response) {
 }
 
 export async function postCreateAdminInvite(context, request, response) {
-    // CSRF is validated before any mutation; the create form carries no other fields.
-    await validateCsrfFormData(context, request);
+    const formData = await validateCsrfFormData(context, request);
+    const form = AdminInviteCreateForm.fromFormData(formData);
+    form.validate();
 
-    const created = await createAdminInvite(context, { createdBy: context.user.id });
+    const created = await createAdminInvite(context, {
+        createdBy: context.user.id,
+        rolePreset: form.role_preset,
+    });
     const inviteUrl = buildSignupInviteUrl(context, request, created.token);
 
     // Render the list directly instead of redirecting (a deliberate exception to
     // post-redirect-get): the plaintext token exists only on this response, so the
     // freshly minted link must be shown now and can never be retrieved again.
     const { items, cursor: nextCursor } = await listAdminInvites(context, {});
-    const form = new AdminInviteCreateForm();
+    const renderForm = new AdminInviteCreateForm();
     const links = {
         revokeInvite: getRevokeInviteLink(context),
         ...createCursorPaginationLinks({
@@ -79,7 +83,7 @@ export async function postCreateAdminInvite(context, request, response) {
         invites: items,
         newInviteUrl: inviteUrl,
         showPagination: Boolean(links.nextPage),
-        form: await getCsrfFormContext(context, request, response, form),
+        form: await getCsrfFormContext(context, request, response, renderForm),
         links,
     });
 }

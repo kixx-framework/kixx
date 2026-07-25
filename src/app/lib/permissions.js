@@ -2,7 +2,7 @@ import {
     isPlainObject,
     isString,
 } from '../../kixx/assertions/mod.js';
-import { ValidationError } from '../../kixx/errors/mod.js';
+import { ForbiddenError } from '../../kixx/errors/mod.js';
 
 
 const WILDCARD = '*';
@@ -10,52 +10,21 @@ const ALLOW = 'allow';
 const DENY = 'deny';
 const VALID_EFFECTS = new Set([ ALLOW, DENY ]);
 
-/**
- * The canonical allow-all permission grant shape accepted by
- * {@link validatePermissions}. Callers that need to mint a new allow-all
- * grant (rather than validate one) should reference this constant instead of
- * re-writing the literal grant shape.
- * @type {ReadonlyArray<Object>}
- */
-export const ALLOW_ALL_PUBLISHING_PERMISSIONS = Object.freeze([
-    Object.freeze({
-        effect: ALLOW,
-        action: Object.freeze([ WILDCARD ]),
-        resource: WILDCARD,
-    }),
-]);
+const DEFAULT_FORBIDDEN_MESSAGE = 'You are not authorized to perform this request.';
 
 // Scoped grants use stable URNs for both sides of the decision: actions as
-// `urn:kixx:publishing:<capability>:<verb>` and resources as
-// `urn:kixx:publishing:<resource-kind>:<scope>`, where the trailing scope is a
-// concrete value or a '*' wildcard (see doesPatternMatch). Resource URNs do not
-// encode the target build id — template and page-metadata authorization is
-// independent of which build the write targets.
+// `urn:kixx:<domain>:<capability>:<verb>` and resources as
+// `urn:kixx:<domain>:<resource-kind>:<scope>`, where the trailing scope is a
+// concrete value or a '*' wildcard (see doesPatternMatch). URNs are an
+// internal authorization contract only — they are never persisted or
+// serialized to clients.
 
 
 /**
- * Validates the supported Publishing API permission grammar.
- * @param {*} permissions - Candidate permission grants from a request body.
- * @returns {void}
- * @throws {ValidationError} When the permission grants are missing or unsupported.
- */
-export function validatePermissions(permissions) {
-    const error = new ValidationError('The publishing API token permissions are invalid');
-
-    if (!Array.isArray(permissions) || permissions.length === 0) {
-        error.push('Permissions must be a non-empty array', 'permissions');
-    } else if (!isWildcardAllowAllGrant(permissions)) {
-        error.push('Only the allow-all publishing permission grant is supported', 'permissions');
-    }
-
-    if (error.length) {
-        throw error;
-    }
-}
-
-/**
- * Evaluates Publishing API permission grants for one action and resource.
- * @param {Object[]} permissions - Permission grants stored on a token.
+ * Evaluates permission grants for one action and resource. Deny grants
+ * override allow grants, and a decision with no matching allow grant is
+ * denied by default.
+ * @param {Object[]} permissions - Permission grants derived onto a principal.
  * @param {Object} request - Authorization decision request.
  * @param {string} request.action - Action being attempted.
  * @param {string} request.resource - Resource being accessed.
@@ -91,20 +60,36 @@ export function evaluatePermissions(permissions, request) {
     return isAllowed;
 }
 
-function isWildcardAllowAllGrant(permissions) {
-    if (permissions.length !== 1) {
-        return false;
+/**
+ * Asserts that the authenticated principal on a request context is
+ * authorized for a decision, evaluating `context.user.permissions`.
+ * @param {Object} context - Active request context carrying `context.user`.
+ * @param {Object} decision - Authorization decision request.
+ * @param {string} decision.action - Action being attempted.
+ * @param {string} decision.resource - Resource being accessed.
+ * @param {Object} [options] - Error override options.
+ * @param {string} [options.message] - Overrides the default forbidden message.
+ * @param {string} [options.code] - Overrides the default ForbiddenError code.
+ * @returns {void}
+ * @throws {ForbiddenError} When the principal's permissions do not authorize the decision.
+ */
+export function assertPermission(context, decision, options) {
+    const isAllowed = evaluatePermissions(context.user?.permissions, decision);
+
+    if (isAllowed) {
+        return;
     }
 
-    const grant = permissions[0];
-    const keys = isPlainObject(grant) ? Object.keys(grant) : [];
+    const { message, code } = options ?? {};
 
-    return keys.length === 3 &&
-        grant.effect === ALLOW &&
-        Array.isArray(grant.action) &&
-        grant.action.length === 1 &&
-        grant.action[0] === WILDCARD &&
-        grant.resource === WILDCARD;
+    // Only forward code when the caller supplied one; ForbiddenError falls
+    // back to its class default when the key is omitted entirely.
+    const errorOptions = {};
+    if (typeof code !== 'undefined') {
+        errorOptions.code = code;
+    }
+
+    throw new ForbiddenError(message || DEFAULT_FORBIDDEN_MESSAGE, errorOptions);
 }
 
 function isGrantShapeSupportedByEvaluator(grant) {

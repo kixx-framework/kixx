@@ -1,11 +1,19 @@
 import { isString } from '../../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../../kixx/errors/mod.js';
-import { validatePermissions } from '../../../lib/publishing-permissions.js';
+import { isRoleName } from '../../../lib/roles.js';
 import { normalizeOptionalStringAttribute } from '../utils.js';
 
 
 export const DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 export const MAX_PUBLISHING_API_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 365;
+
+// 'Editor' is the only publishing role today, so an omitted or empty roles
+// submission defaults to it rather than requiring every JSON:API caller to
+// spell it out. A live role picker is deferred until a second publishing
+// role exists (see roles.js).
+export const DEFAULT_PUBLISHING_API_TOKEN_ROLE = 'Editor';
+
+const PUBLISHING_ROLE_CATEGORY = 'publishing';
 
 
 /**
@@ -25,10 +33,10 @@ export default class CreatePublishingApiTokenForm {
     static schema = {
         type: 'object',
         properties: {
-            permissions: {
+            roles: {
                 type: 'array',
-                minItems: 1,
-                description: 'Permission grants for the minted token',
+                items: { type: 'string' },
+                description: 'Publishing role names for the minted token; defaults to ["Editor"] when omitted or empty.',
             },
             timeToLiveSeconds: {
                 type: 'integer',
@@ -42,23 +50,22 @@ export default class CreatePublishingApiTokenForm {
                 description: 'Optional operator-facing description',
             },
         },
-        required: [ 'permissions' ],
     };
 
     /**
      * @param {Object} [attributes] - JSON:API token-creation attributes.
-     * @param {*} [attributes.permissions] - Permission grants for the minted token.
+     * @param {*} [attributes.roles] - Publishing role names for the minted token.
      * @param {*} [attributes.timeToLiveSeconds] - Optional token lifetime in seconds.
      * @param {*} [attributes.description] - Optional operator-facing description.
      */
     constructor(attributes) {
         const {
-            permissions,
+            roles,
             timeToLiveSeconds,
             description,
         } = attributes ?? {};
 
-        this.permissions = permissions;
+        this.roles = normalizeRoles(roles);
         this.timeToLiveSeconds = normalizeTimeToLiveSeconds(timeToLiveSeconds);
         this.description = normalizeOptionalStringAttribute(description);
     }
@@ -66,21 +73,17 @@ export default class CreatePublishingApiTokenForm {
     /**
      * Validates the normalized token creation fields.
      * @returns {void}
-     * @throws {ValidationError} When permissions, TTL, or description are invalid.
+     * @throws {ValidationError} When roles, TTL, or description are invalid.
      */
     validate() {
         const error = new ValidationError('The publishing API token form contains invalid fields');
 
-        try {
-            validatePermissions(this.permissions);
-        } catch (cause) {
-            if (cause.name !== 'ValidationError') {
-                throw cause;
-            }
-
-            for (const fieldError of cause.errors) {
-                error.push(fieldError.message, fieldError.source);
-            }
+        if (
+            !Array.isArray(this.roles) ||
+            this.roles.length === 0 ||
+            !this.roles.every((name) => isRoleName(name, PUBLISHING_ROLE_CATEGORY))
+        ) {
+            error.push('Roles must be one or more registered publishing role names', 'roles');
         }
 
         if (!Number.isInteger(this.timeToLiveSeconds)) {
@@ -105,11 +108,11 @@ export default class CreatePublishingApiTokenForm {
 
     /**
      * Returns the normalized token-creation fields.
-     * @returns {{ permissions: *, timeToLiveSeconds: number, description: string|null }} Plain JSON form values.
+     * @returns {{ roles: string[], timeToLiveSeconds: number, description: string|null }} Plain JSON form values.
      */
     toJSON() {
         return {
-            permissions: this.permissions,
+            roles: this.roles,
             timeToLiveSeconds: this.timeToLiveSeconds,
             description: this.description,
         };
@@ -129,6 +132,14 @@ export default class CreatePublishingApiTokenForm {
 function normalizeTimeToLiveSeconds(value) {
     if (value === null || value === undefined) {
         return DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS;
+    }
+
+    return value;
+}
+
+function normalizeRoles(value) {
+    if (!Array.isArray(value) || value.length === 0) {
+        return [ DEFAULT_PUBLISHING_API_TOKEN_ROLE ];
     }
 
     return value;

@@ -30,11 +30,39 @@
         </div>
         {{/if}}
 
-        <form class="cluster" method="{{ form.method }}" action="{{ form.url }}">
+        <form class="flow field-stack" method="{{ form.method }}" action="{{ form.url }}">
             {{#if form.csrf}}
             <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
             {{/if}}
-            <button class="button button--primary" type="submit">Create invite link</button>
+
+            <div class="field{{#if form.fields.role_preset.error}} field--error{{/if}}">
+                <label class="field__label" for="role-preset">{{ form.fields.role_preset.label }}</label>
+                <select
+                    class="field__input"
+                    id="role-preset"
+                    name="role_preset"
+                    {{#if form.fields.role_preset.error}}aria-describedby="role-preset-error" aria-invalid="true"{{/if}}
+                >
+                {{!--
+                    The placeholder must lead the list. Without it the browser
+                    preselects the first real option, so an untouched submit would
+                    silently mint the most capable preset. An empty submission
+                    instead hits the form's required-field error. It yields its
+                    `selected` state when the form re-renders with a prior choice.
+                --}}
+                    <option value="" disabled {{#unless form.fields.role_preset.value}}selected{{/unless}}>Choose a role preset</option>
+                {{#each form.fields.role_preset.options as |option| }}
+                    <option value="{{ option.value }}" {{#ifEqual option.value form.fields.role_preset.value}}selected{{/ifEqual}}>{{ option.label }}</option>
+                {{/each}}
+                </select>
+                {{#if form.fields.role_preset.error}}
+                <p class="field__error" id="role-preset-error" role="alert">{{ form.fields.role_preset.error }}</p>
+                {{/if}}
+            </div>
+
+            <div class="cluster">
+                <button class="button button--primary" type="submit">Create invite link</button>
+            </div>
         </form>
 
         {{#if invites}}
@@ -42,6 +70,13 @@
         {{#each invites as |invite| }}
             <li class="card flow">
                 <p class="type-label">{{ invite.status }}</p>
+                {{!-- Bootstrap markers carry no preset, so the line is omitted rather than
+                      rendered empty. --}}
+                {{#if invite.rolePreset}}
+                <p class="type-body-sm">
+                    Grants: <span class="type-label">{{ invite.rolePreset }}</span>
+                </p>
+                {{/if}}
                 <p class="type-body-sm">
                     Created {{ formatDate invite.createdAt format="DATETIME_MED" }} by {{ invite.createdBy }}
                 </p>

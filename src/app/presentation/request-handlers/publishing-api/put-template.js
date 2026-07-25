@@ -7,7 +7,6 @@ import {
     JSON_API_CONTENT_TYPE,
     jsonApiResource,
 } from '../../lib/json-api.js';
-import { assertPublishingPermission } from '../../middleware/publishing-authentication.js';
 import { putTemplate } from '../../../transaction-scripts/publishing/put-template.js';
 import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
@@ -24,14 +23,7 @@ function createPutTemplateHandler(kind) {
     return async (context, request, response) => {
         assertTemplateContentType(request);
 
-        // Template writes are gated by a single coarse-grained capability: a token
-        // either may write templates or it may not. The decision does not depend on
-        // the kind, build, or filepath, so it runs before those are read — an
-        // unauthorized token gets a 403 rather than filepath-validation feedback.
-        assertPublishingPermission(context, {
-            action: 'urn:kixx:publishing:template:put',
-            resource: 'urn:kixx:publishing:template',
-        });
+        // Authorization already ran in requireTemplatePermission (route head).
 
         // buildId is validated downstream by putTemplate(), which is the single
         // authority that enforces it (required, and must differ from the current build).

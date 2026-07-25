@@ -18,7 +18,7 @@ const INVALID_CREDENTIALS_CODE = 'InvalidCredentials';
  * @param {Object} credentials - Credentials to verify.
  * @param {string} credentials.emailAddress - Normalized admin email address.
  * @param {string} credentials.password - Plaintext password to verify.
- * @returns {Promise<{ id: string, type: string, emailAddress: string, userCreationDate: string }>}
+ * @returns {Promise<{ id: string, type: string, emailAddress: string, userCreationDate: string, roles: string[] }>}
  *   Safe authenticated-user object.
  * @throws {UnauthorizedError} When the email is unknown or the password does not match (code `'InvalidCredentials'`).
  * @throws {AssertionError} When an unexpected storage failure occurs while loading the user.

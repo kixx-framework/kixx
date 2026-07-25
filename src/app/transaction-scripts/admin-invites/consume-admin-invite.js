@@ -1,6 +1,7 @@
 import { sha256Hex } from '../../../kixx/utils/crypto.js';
 import { resolveAdminInvite } from './resolve-admin-invite.js';
 import { AssertionError, ForbiddenError } from '../../../kixx/errors/mod.js';
+import { ROLE_ROOT_ADMIN } from '../../lib/roles.js';
 
 
 // Client-safe, non-enumerating message: the same text covers invalid, expired,
@@ -20,7 +21,7 @@ const INVALID_INVITE_CODE = 'InvalidInvite';
  *
  * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
  * @param {string} token - Raw bearer token presented by the signup request.
- * @returns {Promise<void>} Resolves when the token has been spent.
+ * @returns {Promise<{ roles: string[] }>} The role names the redeemed token confers.
  * @throws {ForbiddenError} With code `InvalidInvite` when the token is not redeemable or was spent concurrently.
  * @throws {AssertionError} When an unexpected storage failure occurs while consuming the token.
  */
@@ -46,7 +47,8 @@ export async function consumeAdminInvite(context, token) {
             }
             throw new AssertionError('Unexpected error while consuming the admin bootstrap token', { cause });
         }
-        return;
+        // The bootstrap token is the only way Root Admin is ever assigned.
+        return { roles: [ ROLE_ROOT_ADMIN ] };
     }
 
     // Stored invite path: mark the pending invite consumed under optimistic
@@ -60,4 +62,6 @@ export async function consumeAdminInvite(context, token) {
         }
         throw new AssertionError('Unexpected error while consuming an admin invite', { cause });
     }
+
+    return { roles: resolution.record.get('roles') };
 }

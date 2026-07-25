@@ -32,9 +32,20 @@ export default class AdminUserCollection extends Collection {
         return doc?.userCreationDate;
     }
 
+    /**
+     * @param {Object} context - Request or execution context passed through to the document store.
+     * @param {Object} attributes - New admin user attributes.
+     * @param {string[]} [attributes.roles=[]] - Role names granted to the new admin user.
+     * @returns {Promise<AdminUserRecord>} The stored admin user record.
+     */
     async createNewAdminUser(context, attributes) {
         const userCreationDate = new Date().toISOString();
-        const attrs = Object.assign({}, attributes, { userCreationDate });
+        // Default missing roles to [] at this create-call boundary (not in
+        // AdminUserRecord#validate()) so callers that do not yet assign a
+        // role — and any future caller — get an empty-but-valid roles array
+        // rather than a validation failure.
+        const { roles = [] } = attributes ?? {};
+        const attrs = Object.assign({}, attributes, { userCreationDate, roles });
         const item = await this.create(context, attrs);
         return item;
     }

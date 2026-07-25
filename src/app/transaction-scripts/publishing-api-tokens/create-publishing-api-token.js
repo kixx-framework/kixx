@@ -12,7 +12,7 @@ import { AssertionError } from '../../../kixx/errors/mod.js';
 export async function createPublishingApiToken(context, form, grantingUserId) {
     const publishingApiTokens = context.getCollection('PublishingApiToken');
     const {
-        permissions,
+        roles,
         description,
         timeToLiveSeconds,
     } = form.toJSON();
@@ -21,7 +21,7 @@ export async function createPublishingApiToken(context, form, grantingUserId) {
     try {
         result = await publishingApiTokens.createToken(context, {
             createdBy: grantingUserId,
-            permissions,
+            roles,
             description,
             ttlSeconds: timeToLiveSeconds,
         });
@@ -34,7 +34,7 @@ export async function createPublishingApiToken(context, form, grantingUserId) {
     return {
         id: record.id,
         token,
-        permissions: record.get('permissions'),
+        roles: record.get('roles'),
         description: record.get('description'),
         createdBy: record.get('createdBy'),
         tokenCreationDate: record.get('tokenCreationDate'),

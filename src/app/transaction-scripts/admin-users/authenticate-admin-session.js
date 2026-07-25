@@ -18,7 +18,7 @@ function isSessionExpired(session) {
  * Authenticates an admin user from a stored session id.
  * @param {import('../../../kixx/context/request-context.js').default} context - Active request context
  * @param {string} sessionId - UserSession record id read from the admin session cookie
- * @returns {Promise<{ id: string, type: string, emailAddress: string, userCreationDate: string }>} Safe authenticated-user object
+ * @returns {Promise<{ id: string, type: string, emailAddress: string, userCreationDate: string, roles: string[] }>} Safe authenticated-user object
  * @throws {UnauthenticatedError} When the session is missing, expired, invalid, or orphaned
  * @throws {AssertionError} When an unexpected storage failure occurs while loading authentication records
  */
