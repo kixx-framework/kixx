@@ -11,6 +11,20 @@ import * as AdminInvites from './app/presentation/request-handlers/admin-invites
 import * as AdminPublishingApiTokens from './app/presentation/request-handlers/admin-publishing-api-tokens.js';
 import * as AdminAPI from './app/presentation/request-handlers/admin-api/mod.js';
 import * as PublishingAPI from './app/presentation/request-handlers/publishing-api/mod.js';
+import {
+    requireAssetPermission,
+    requireIncludePermission,
+    requirePageMetadataPermission,
+    requireTemplatePermission,
+} from './app/presentation/request-handlers/publishing-api/authorization.js';
+import {
+    requireAdminUserInvitesRead,
+    requireAdminUserInvitesWrite,
+    requireMigrationsRead,
+    requireMigrationsWrite,
+    requirePublishingApiTokensRead,
+    requirePublishingApiTokensWrite,
+} from './app/presentation/request-handlers/admin-authorization.js';
 
 
 export default [
@@ -51,6 +65,7 @@ export default [
                                 name: 'revoke',
                                 methods: [ 'POST' ],
                                 requestHandlers: [
+                                    requireAdminUserInvitesWrite,
                                     AdminInvites.postRevokeAdminInvite,
                                 ],
                             },
@@ -64,6 +79,7 @@ export default [
                                 name: 'render-invite-list',
                                 methods: [ 'GET', 'HEAD' ],
                                 requestHandlers: [
+                                    requireAdminUserInvitesRead,
                                     AdminInvites.getAdminInvites,
                                     HyperviewDynamicPageHandler(),
                                 ],
@@ -72,6 +88,7 @@ export default [
                                 name: 'create-invite',
                                 methods: [ 'POST' ],
                                 requestHandlers: [
+                                    requireAdminUserInvitesWrite,
                                     AdminInvites.postCreateAdminInvite,
                                     HyperviewDynamicPageHandler(),
                                 ],
@@ -88,6 +105,7 @@ export default [
                                 name: 'revoke',
                                 methods: [ 'POST' ],
                                 requestHandlers: [
+                                    requirePublishingApiTokensWrite,
                                     AdminPublishingApiTokens.postRevokePublishingApiToken,
                                 ],
                             },
@@ -101,6 +119,7 @@ export default [
                                 name: 'render-token-list',
                                 methods: [ 'GET', 'HEAD' ],
                                 requestHandlers: [
+                                    requirePublishingApiTokensRead,
                                     AdminPublishingApiTokens.getPublishingApiTokens,
                                     HyperviewDynamicPageHandler(),
                                 ],
@@ -109,6 +128,7 @@ export default [
                                 name: 'create-token',
                                 methods: [ 'POST' ],
                                 requestHandlers: [
+                                    requirePublishingApiTokensWrite,
                                     AdminPublishingApiTokens.postCreatePublishingApiToken,
                                     HyperviewDynamicPageHandler(),
                                 ],
@@ -202,6 +222,7 @@ export default [
                                         name: 'get',
                                         methods: [ 'GET' ],
                                         requestHandlers: [
+                                            requireMigrationsRead,
                                             AdminAPI.listMigrations,
                                         ],
                                     },
@@ -215,6 +236,7 @@ export default [
                                         name: 'post',
                                         methods: [ 'POST' ],
                                         requestHandlers: [
+                                            requireMigrationsWrite,
                                             AdminAPI.runMigration,
                                         ],
                                     },
@@ -238,11 +260,15 @@ export default [
                     {
                         pattern: '/publishing-api-tokens{/}',
                         name: 'publishing-api-tokens',
+                        inboundMiddleware: [
+                            authenticateAdminApiRequest,
+                        ],
                         targets: [
                             {
                                 name: 'create',
                                 methods: [ 'POST' ],
                                 requestHandlers: [
+                                    requirePublishingApiTokensWrite,
                                     AdminAPI.createPublishingApiToken,
                                 ],
                             },
@@ -268,6 +294,7 @@ export default [
                                 name: 'put',
                                 methods: [ 'PUT' ],
                                 requestHandlers: [
+                                    requireTemplatePermission,
                                     PublishingAPI.putBaseTemplate,
                                 ],
                             },
@@ -281,6 +308,7 @@ export default [
                                 name: 'put',
                                 methods: [ 'PUT' ],
                                 requestHandlers: [
+                                    requireTemplatePermission,
                                     PublishingAPI.putPageTemplate,
                                 ],
                             },
@@ -294,6 +322,7 @@ export default [
                                 name: 'put',
                                 methods: [ 'PUT' ],
                                 requestHandlers: [
+                                    requireTemplatePermission,
                                     PublishingAPI.putPartialTemplate,
                                 ],
                             },
@@ -312,6 +341,7 @@ export default [
                                 name: 'put-metadata',
                                 methods: [ 'PUT' ],
                                 requestHandlers: [
+                                    requirePageMetadataPermission,
                                     PublishingAPI.putPageMetadata,
                                 ],
                             },
@@ -325,6 +355,7 @@ export default [
                                 name: 'put',
                                 methods: [ 'PUT' ],
                                 requestHandlers: [
+                                    requireIncludePermission,
                                     PublishingAPI.putPageInclude,
                                 ],
                             },
@@ -338,6 +369,7 @@ export default [
                                 name: 'put',
                                 methods: [ 'PUT' ],
                                 requestHandlers: [
+                                    requireAssetPermission,
                                     PublishingAPI.putStaticAsset,
                                 ],
                             },

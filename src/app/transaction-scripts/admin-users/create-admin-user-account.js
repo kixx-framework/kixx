@@ -48,13 +48,14 @@ export async function createAdminUserAccount(context, form) {
     // Spend the invite after the duplicate-email check but before writing the
     // user: a recoverable email conflict must not consume the token, and a
     // successful consume must gate the account so one token creates one admin.
-    await consumeAdminInvite(context, form.invite_token);
+    const { roles } = await consumeAdminInvite(context, form.invite_token);
 
     let user;
     try {
         user = await adminUsers.createNewAdminUser(context, {
             emailAddress: email_address,
             passwordHash,
+            roles,
         });
     } catch (cause) {
         if (cause.name === 'DocumentUniqueIndexViolationError') {

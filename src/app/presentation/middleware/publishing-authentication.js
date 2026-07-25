@@ -1,9 +1,6 @@
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
-import {
-    ForbiddenError,
-    UnauthenticatedError,
-} from '../../../kixx/errors/mod.js';
-import { evaluatePermissions } from '../../lib/publishing-permissions.js';
+import { UnauthenticatedError } from '../../../kixx/errors/mod.js';
+import { deriveRolePermissions } from '../../lib/roles.js';
 import { authenticatePublishingToken as authenticatePublishingTokenScript } from '../../transaction-scripts/publishing-api-tokens/authenticate-publishing-token.js';
 
 
@@ -26,34 +23,20 @@ export async function authenticatePublishingToken(context, request, response) {
     }
 
     const record = await authenticatePublishingTokenScript(context, token);
+    const roles = record.get('roles');
 
     context.setUser({
         id: record.id,
         type: record.type,
-        permissions: structuredClone(record.get('permissions')),
+        roles,
+        // Derived fresh on every request from the stored role names, never
+        // persisted; editing a role's grants in code changes every holder's
+        // capabilities on the next deploy with no data migration.
+        permissions: deriveRolePermissions(roles),
         createdBy: record.get('createdBy'),
         tokenCreationDate: record.get('tokenCreationDate'),
         tokenExpirationDate: record.get('tokenExpirationDate'),
     });
 
     return response;
-}
-
-/**
- * Verifies the authenticated publishing principal can perform an action.
- * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
- * @param {Object} decision - Authorization decision request.
- * @param {string} decision.action - Action being attempted.
- * @param {string} decision.resource - Resource being accessed.
- * @returns {void}
- * @throws {ForbiddenError} When the publishing token is not authorized.
- */
-export function assertPublishingPermission(context, decision) {
-    const isAllowed = evaluatePermissions(context.user?.permissions, decision);
-
-    if (!isAllowed) {
-        throw new ForbiddenError('The publishing API token is not authorized for this request.', {
-            code: 'PublishingApiTokenForbidden',
-        });
-    }
 }

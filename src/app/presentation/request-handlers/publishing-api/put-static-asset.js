@@ -4,7 +4,6 @@ import {
     JSON_API_CONTENT_TYPE,
     jsonApiResource,
 } from '../../lib/json-api.js';
-import { assertPublishingPermission } from '../../middleware/publishing-authentication.js';
 import { bufferRequestBodyWithLimit } from '../../lib/read-request-body.js';
 import { putStaticAsset as putStaticAssetScript } from '../../../transaction-scripts/publishing/put-static-asset.js';
 import validatePathname from '../../../../kixx/utils/validate-pathname.js';
@@ -20,14 +19,7 @@ const MAX_ASSET_BYTES = 24 * 1024 * 1024;
 export async function putStaticAsset(context, request, response) {
     const filepath = getWildcardFilepath(request, 'filepath');
 
-    // Asset writes are gated by a single coarse-grained capability: a token either
-    // may write assets or it may not. The decision depends on neither the filepath
-    // nor the build, so it runs before the request body is read — an unauthorized
-    // token gets a 403 rather than having its (possibly large) upload buffered.
-    assertPublishingPermission(context, {
-        action: 'urn:kixx:publishing:asset:put',
-        resource: 'urn:kixx:publishing:asset',
-    });
+    // Authorization already ran in requireAssetPermission (route head).
 
     // buildId is validated downstream by putStaticAsset(), which is the single
     // authority that enforces it (required, and must differ from the current build).

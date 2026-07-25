@@ -61,8 +61,13 @@ export default class AdminInviteRecord extends Record {
                 format: 'date-time',
                 description: 'ISO timestamp when the invite was revoked, or null while not revoked',
             },
+            roles: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Role name(s) this invite confers on redemption',
+            },
         },
-        required: [ 'kind', 'createdBy', 'inviteCreationDate', 'inviteExpirationDate' ],
+        required: [ 'kind', 'createdBy', 'inviteCreationDate', 'inviteExpirationDate', 'roles' ],
     };
 
     validate() {
@@ -72,9 +77,16 @@ export default class AdminInviteRecord extends Record {
         const inviteExpirationDate = parseDate(this.get('inviteExpirationDate'));
         const consumedAt = this.get('consumedAt');
         const revokedAt = this.get('revokedAt');
+        const roles = this.get('roles');
 
         if (!INVITE_KINDS.has(kind)) {
             error.push('AdminInvite kind must be "invite" or "bootstrap"', 'kind');
+        }
+        // Empty roles is valid, and membership in the role registry is not
+        // checked here so a retired role name does not brick an existing
+        // record (see roles.js: unknown names simply derive no permissions).
+        if (!Array.isArray(roles) || !roles.every(isNonEmptyString)) {
+            error.push('AdminInvite roles must be an array of non-empty strings', 'roles');
         }
         if (!isNonEmptyString(this.get('createdBy'))) {
             error.push('AdminInvite createdBy is required', 'createdBy');

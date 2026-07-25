@@ -47,12 +47,16 @@ export default class AdminInviteCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {Object} args - Creation arguments.
      * @param {string} args.createdBy - Admin user id that authored the invite.
+     * @param {string[]} [args.roles=[]] - Role name(s) the invite confers on redemption.
      * @returns {Promise<{ token: string, record: AdminInviteRecord }>} The raw token (shown once) and stored record.
      * @throws {AssertionError} When createdBy is not a non-empty string.
      * @throws {ValidationError} When the generated record fails validation.
      */
     async createInvite(context, args) {
-        const { createdBy } = args ?? {};
+        // Default missing roles to [] at this create-call boundary (not in
+        // AdminInviteRecord#validate()); the delegation-checked role name is
+        // assigned by the calling Transaction Script.
+        const { createdBy, roles = [] } = args ?? {};
         assertNonEmptyString(createdBy, 'AdminInviteCollection#createInvite() createdBy');
 
         const nowMs = Date.now();
@@ -69,6 +73,7 @@ export default class AdminInviteCollection extends Collection {
             inviteExpirationDate: new Date(nowMs + (ADMIN_INVITE_TTL_SECONDS * 1000)).toISOString(),
             consumedAt: null,
             revokedAt: null,
+            roles,
         });
 
         return { token, record };
@@ -123,6 +128,9 @@ export default class AdminInviteCollection extends Collection {
             inviteExpirationDate: now,
             consumedAt: now,
             revokedAt: null,
+            // The bootstrap marker never carries a chosen role — bootstrap
+            // redemption confers Root Admin directly, not from this record.
+            roles: [],
         });
     }
 

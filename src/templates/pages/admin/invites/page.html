@@ -30,11 +30,31 @@
         </div>
         {{/if}}
 
-        <form class="cluster" method="{{ form.method }}" action="{{ form.url }}">
+        <form class="flow field-stack" method="{{ form.method }}" action="{{ form.url }}">
             {{#if form.csrf}}
             <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
             {{/if}}
-            <button class="button button--primary" type="submit">Create invite link</button>
+
+            <div class="field{{#if form.fields.role.error}} field--error{{/if}}">
+                <label class="field__label" for="role">{{ form.fields.role.label }}</label>
+                <select
+                    class="field__input"
+                    id="role"
+                    name="role"
+                    {{#if form.fields.role.error}}aria-describedby="role-error" aria-invalid="true"{{/if}}
+                >
+                {{#each form.fields.role.options as |option| }}
+                    <option value="{{ option.value }}" {{#ifEqual option.value form.fields.role.value}}selected{{/ifEqual}}>{{ option.label }}</option>
+                {{/each}}
+                </select>
+                {{#if form.fields.role.error}}
+                <p class="field__error" id="role-error" role="alert">{{ form.fields.role.error }}</p>
+                {{/if}}
+            </div>
+
+            <div class="cluster">
+                <button class="button button--primary" type="submit">Create invite link</button>
+            </div>
         </form>
 
         {{#if invites}}

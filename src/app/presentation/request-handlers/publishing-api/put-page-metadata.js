@@ -6,26 +6,18 @@ import {
     jsonApiResource,
     parseJsonApiResource,
 } from '../../lib/json-api.js';
-import { assertPublishingPermission } from '../../middleware/publishing-authentication.js';
+import { getWildcardPathname } from './route-params.js';
 import { putPageMetadata as putPageMetadataScript } from '../../../transaction-scripts/publishing/put-page-metadata.js';
-import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
 export async function putPageMetadata(context, request, response) {
     assertJsonApiContentType(request);
 
     const buildId = request.headers.get(BUILD_ID_HEADER);
+    // Authorization already ran in requirePageMetadataPermission (route head)
+    // using this same helper, so the URN that was authorized describes this
+    // pathname.
     const pathname = getWildcardPathname(request, 'pathname');
-
-    // Authorization is scoped per page pathname and is independent of the target
-    // build, so it runs before the request body is parsed and validated — an
-    // unauthorized token gets a 403 rather than body-parsing or validation errors.
-    // A grant may use a '*' pathname (urn:kixx:publishing:page-metadata:*) to
-    // authorize writes to any page.
-    assertPublishingPermission(context, {
-        action: 'urn:kixx:publishing:page-metadata:put',
-        resource: `urn:kixx:publishing:page-metadata:${ pathname }`,
-    });
 
     const resource = await parseJsonApiResource(request, 'PageMetadata');
     const form = PutPageMetadataForm.fromJsonApi(resource);
@@ -52,19 +44,4 @@ export async function putPageMetadata(context, request, response) {
         }),
         { contentType: JSON_API_CONTENT_TYPE },
     );
-}
-
-function getWildcardPathname(request, name) {
-    const segments = request.pathnameParams[name];
-
-    // The optional `{/*pathname}` route group omits the param entirely for the
-    // site root, so an absent or empty wildcard means the root page ('/') rather
-    // than a malformed request.
-    if (!Array.isArray(segments) || segments.length === 0) {
-        return '/';
-    }
-
-    // Reject path traversal and out-of-whitelist characters at the edge (400)
-    // rather than relying on a downstream store assertion (500).
-    return validatePathname(`/${ segments.join('/') }`);
 }

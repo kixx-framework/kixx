@@ -21,12 +21,18 @@ export default class AdminUserRecord extends Record {
                 format: 'date-time',
                 description: 'ISO timestamp when the admin user record was created',
             },
+            roles: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Role names granted to this admin user',
+            },
         },
-        required: [ 'emailAddress', 'passwordHash', 'userCreationDate' ],
+        required: [ 'emailAddress', 'passwordHash', 'userCreationDate', 'roles' ],
     };
 
     validate() {
         const error = new ValidationError('Invalid admin user record');
+        const roles = this.get('roles');
 
         if (!isNonEmptyString(this.get('emailAddress'))) {
             error.push('AdminUser emailAddress is required', 'emailAddress');
@@ -36,6 +42,12 @@ export default class AdminUserRecord extends Record {
         }
         if (!isNonEmptyString(this.get('userCreationDate'))) {
             error.push('AdminUser userCreationDate is required', 'userCreationDate');
+        }
+        // Empty roles is valid, and membership in the role registry is not
+        // checked here so a retired role name does not brick an existing
+        // record (see roles.js: unknown names simply derive no permissions).
+        if (!Array.isArray(roles) || !roles.every(isNonEmptyString)) {
+            error.push('AdminUser roles must be an array of non-empty strings', 'roles');
         }
 
         if (error.length) {
@@ -58,8 +70,10 @@ export default class AdminUserRecord extends Record {
     /**
      * Projects the record into a safe authenticated-user object for the request
      * context and session. Deliberately omits the password hash so the credential
-     * never leaves the data source layer.
-     * @returns {{ id: string, type: string, emailAddress: string, userCreationDate: string }}
+     * never leaves the data source layer. Carries raw role names only —
+     * deriving grants from those names is authentication middleware's job, not
+     * this projection's.
+     * @returns {{ id: string, type: string, emailAddress: string, userCreationDate: string, roles: string[] }}
      */
     toAuthenticatedUser() {
         return {
@@ -67,6 +81,7 @@ export default class AdminUserRecord extends Record {
             type: this.type,
             emailAddress: this.get('emailAddress'),
             userCreationDate: this.get('userCreationDate'),
+            roles: this.get('roles'),
         };
     }
 }

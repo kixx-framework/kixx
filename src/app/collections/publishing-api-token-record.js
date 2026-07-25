@@ -21,9 +21,10 @@ export default class PublishingApiTokenRecord extends Record {
     static schema = {
         type: 'object',
         properties: {
-            permissions: {
+            roles: {
                 type: 'array',
-                description: 'Permission grants attached to this token',
+                items: { type: 'string' },
+                description: 'Role names granted to this token',
             },
             description: {
                 type: [ 'string', 'null' ],
@@ -50,7 +51,7 @@ export default class PublishingApiTokenRecord extends Record {
             },
         },
         required: [
-            'permissions',
+            'roles',
             'description',
             'createdBy',
             'tokenCreationDate',
@@ -61,14 +62,18 @@ export default class PublishingApiTokenRecord extends Record {
 
     validate() {
         const error = new ValidationError('Invalid publishing API token record');
-        const permissions = this.get('permissions');
+        const roles = this.get('roles');
         const description = this.get('description');
         const tokenCreationDate = parseDate(this.get('tokenCreationDate'));
         const tokenExpirationDate = parseDate(this.get('tokenExpirationDate'));
         const revokedAt = this.get('revokedAt');
 
-        if (!Array.isArray(permissions) || permissions.length === 0) {
-            error.push('PublishingApiToken permissions must be a non-empty array', 'permissions');
+        // Roles may be an empty array (a token with no grants); membership in
+        // the role registry is not checked here so a retired role name does
+        // not brick an already-stored record (see roles.js: unknown names
+        // simply derive no permissions).
+        if (!Array.isArray(roles) || !roles.every(isNonEmptyString)) {
+            error.push('PublishingApiToken roles must be an array of non-empty strings', 'roles');
         }
         if (description !== null && !isString(description)) {
             error.push('PublishingApiToken description must be a string or null', 'description');
