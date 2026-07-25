@@ -124,6 +124,7 @@ describe('createAdminUserAccount Transaction Script', ({ it }) => {
             'Admin user already exists by email address; the invite was spent by the losing signup.',
             caught.message,
         );
+        assertEqual(cause, caught.cause);
         assertEqual(1, harness.calls.markConsumed.length);
         assertEqual(1, harness.calls.warnings.length);
         assertEqual('race condition while creating a new admin user', harness.calls.warnings[0].message);

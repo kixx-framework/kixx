@@ -78,7 +78,7 @@ export async function createAdminUserAccount(context, form) {
             context.logger.warn('race condition while creating a new admin user', { requestId }, cause);
             throw new ConflictError(
                 'Admin user already exists by email address; the invite was spent by the losing signup.',
-                { code: 'InviteSpentInEmailRace' },
+                { cause, code: 'InviteSpentInEmailRace' },
             );
         }
 
