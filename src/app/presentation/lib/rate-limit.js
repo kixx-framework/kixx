@@ -70,14 +70,25 @@ export async function clearLoginThrottle(context, request, email) {
 }
 
 /**
- * Checks whether signup submissions from this IP are throttled.
+ * Checks whether a signup submission from this IP is throttled.
+ *
+ * A signup POST carries a caller-supplied invite token and reveals the same
+ * valid/invalid distinction as the invite-bearing GET, so it is an invite-guessing
+ * surface too. Both scopes are checked here — the per-IP signup scope and the much
+ * stricter per-IP invite scope — so an IP locked out of guessing on GET cannot keep
+ * probing the invite namespace through POST at the looser signup rate.
+ *
  * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
  * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
- * @returns {Promise<import('../../collections/rate-limit-collection.js').RateLimitState>} Current throttle state.
+ * @returns {Promise<import('../../collections/rate-limit-collection.js').RateLimitState>} The more-restrictive state across both scopes.
  */
-export async function checkSignupThrottle(context, request) {
+export async function checkSignupSubmissionThrottle(context, request) {
     const rateLimits = context.getCollection('RateLimit');
-    return await rateLimits.getState(context, signupScope(request));
+    const states = await Promise.all([
+        rateLimits.getState(context, signupScope(request)),
+        rateLimits.getState(context, inviteScope(request)),
+    ]);
+    return mergeStates(states);
 }
 
 /**

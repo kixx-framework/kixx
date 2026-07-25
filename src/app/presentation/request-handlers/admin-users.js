@@ -16,7 +16,7 @@ import {
 import {
     checkInviteThrottle,
     checkLoginThrottle,
-    checkSignupThrottle,
+    checkSignupSubmissionThrottle,
     clearLoginThrottle,
     clearSignupThrottle,
     recordInviteGuess,
@@ -72,6 +72,19 @@ function renderAlreadyLoggedIn(response) {
 function renderInvalidInvite(context, response) {
     return response.updateProps({
         inviteValid: false,
+        links: { loginForm: getAdminLoginFormLink(context) },
+    });
+}
+
+// Renders the signup page in its "invite spent by a race" state: the no-form
+// branch with a message that names what happened. Distinct from renderInvalidInvite
+// because the invitee did nothing wrong and their link was genuinely valid — the
+// only recovery is a new invite, and saying so is what stops them from retrying
+// into the indistinguishable "invalid invite" wall.
+function renderInviteSpentByRace(context, response) {
+    return response.updateProps({
+        inviteValid: false,
+        inviteSpentByRace: true,
         links: { loginForm: getAdminLoginFormLink(context) },
     });
 }
@@ -136,7 +149,11 @@ export async function postNewAdminUserForm(context, request, response, skip) {
 
     // Reject before parsing the body or touching the invite when this IP is
     // already locked out, so abusive submissions cost nothing past the IP read.
-    const throttle = await checkSignupThrottle(context, request);
+    // This submission carries an invite token and exposes the same valid/invalid
+    // distinction as the GET, so the strict invite lock applies here as well as
+    // the looser signup lock; otherwise a guesser locked out of GET could keep
+    // probing through POST.
+    const throttle = await checkSignupSubmissionThrottle(context, request);
     if (throttle.throttled) {
         return renderSignupThrottled(context, response, throttle.retryAfterSeconds);
     }
@@ -151,6 +168,13 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     const resolution = await resolveAdminInvite(context, form.invite_token);
     if (!resolution.redeemable) {
         await recordSignupFailure(context, request);
+        // Mirrors the GET: a token that matched no known invite is a guess and
+        // must advance the strict invite counter too. A tokenless submission, or
+        // a real invite that is expired/spent/revoked (which still resolves to a
+        // stored record), is not a guess and only counts as a signup failure.
+        if (isNonEmptyString(form.invite_token) && resolution.record === null) {
+            await recordInviteGuess(context, request);
+        }
         return renderInvalidInvite(context, response);
     }
 
@@ -178,6 +202,18 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     try {
         result = await createAdminUser(context, form);
     } catch (error) {
+        // A concurrent signup took the email address after this request had
+        // already spent the invite. There is nothing to retry — the token is
+        // gone — so show the no-form explanation instead of a live form. Not
+        // counted as a signup failure: this is a collision the user could not
+        // have avoided, and there is no follow-up attempt left to throttle.
+        if (error.code === 'InviteSpentInEmailRace') {
+            // The conflict is openly reported in the body, so the status matches
+            // the outcome: a 409, not the default 200.
+            response.status = error.httpStatusCode || 500;
+            return renderInviteSpentByRace(context, response);
+        }
+
         // A duplicate email address is an expected outcome the user can correct;
         // the invite is not consumed on this path, so re-render the form to retry.
         if (error.code === 'NewUserConflictError') {

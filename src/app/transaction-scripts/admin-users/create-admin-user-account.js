@@ -15,7 +15,8 @@ import { consumeAdminInvite } from '../admin-invites/consume-admin-invite.js';
  * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
  * @param {import('../../presentation/forms/admin-users/new-admin-user-form.js').default} form - Validated signup form carrying `email_address`, `password`, and `invite_token`.
  * @returns {Promise<{ user: Object }>} The authenticated-user view of the created account.
- * @throws {ConflictError} With code `NewUserConflictError` when an admin already exists for the email.
+ * @throws {ConflictError} With code `NewUserConflictError` when an admin already exists for the email; the invite is untouched and the submission is retryable.
+ * @throws {ConflictError} With code `InviteSpentInEmailRace` when a concurrent signup claimed the email after the invite was consumed; the invite is gone and the submission is not retryable.
  * @throws {ForbiddenError} With code `InvalidInvite` when the invite token is missing, expired, revoked, or already used.
  */
 export async function createAdminUserAccount(context, form) {
@@ -60,11 +61,17 @@ export async function createAdminUserAccount(context, form) {
     } catch (cause) {
         if (cause.name === 'DocumentUniqueIndexViolationError') {
             // Another signup claimed this email address between the fast-fail
-            // check above and this write.
+            // check above and this write. Unlike the fast-fail conflict, the
+            // invite has already been spent by this point and cannot be returned,
+            // so this is NOT retryable: offering the form again would send the
+            // user into a second attempt that can only end in "invalid invite",
+            // with no way to tell that from a link they had already used. The
+            // distinct code exists so the caller can say what actually happened
+            // and tell them to ask for a new invite.
             context.logger.warn('race condition while creating a new admin user', { requestId }, cause);
             throw new ConflictError(
-                'Admin user already exists by email address.',
-                { code: 'NewUserConflictError' },
+                'Admin user already exists by email address; the invite was spent by the losing signup.',
+                { code: 'InviteSpentInEmailRace' },
             );
         }
 

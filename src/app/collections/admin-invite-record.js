@@ -173,6 +173,36 @@ export default class AdminInviteRecord extends Record {
     isRedeemable(referenceDate = new Date()) {
         return this.getStatus(referenceDate) === 'pending';
     }
+
+    /**
+     * Reports whether this invite may still be revoked.
+     *
+     * Revocation is a transition into a terminal state, so it is only legal from a
+     * non-terminal one. `pending` is the ordinary case and `expired` is allowed as a
+     * harmless tightening (an expired invite is already unredeemable, and an operator
+     * may want it recorded as deliberately withdrawn). `consumed` and `revoked` are
+     * refused: because `getStatus()` ranks revoked above consumed, stamping a consumed
+     * invite would flip it to `revoked` and erase the record that it was actually
+     * redeemed into a live admin account — while doing nothing to that account.
+     * Re-revoking would likewise overwrite the original revocation timestamp.
+     *
+     * A bootstrap marker is never revocable: it is bookkeeping that makes the env
+     * token single-use, not an invite anyone can redeem.
+     *
+     * @param {Date} [referenceDate] - Date used as the current time.
+     * @returns {boolean} True only for a non-bootstrap invite in the `pending` or `expired` state.
+     * @throws {AssertionError} When referenceDate is present and invalid.
+     */
+    isRevocable(referenceDate = new Date()) {
+        // Checked before the status so the refusal does not depend on the marker
+        // happening to derive `consumed` from its self-consumed timestamps.
+        if (this.get('kind') !== ADMIN_INVITE_KIND) {
+            return false;
+        }
+
+        const status = this.getStatus(referenceDate);
+        return status === 'pending' || status === 'expired';
+    }
 }
 
 function parseDate(value) {

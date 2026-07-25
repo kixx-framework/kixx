@@ -9,7 +9,8 @@ import { createAdminUserAccount } from './create-admin-user-account.js';
  * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
  * @param {import('../../presentation/forms/admin-users/new-admin-user-form.js').default} form - Validated signup form carrying `email_address`, `password`, and `invite_token`.
  * @returns {Promise<{ user: Object, sessionId: string }>} The authenticated-user view and new session id.
- * @throws {ConflictError} With code `NewUserConflictError` when an admin already exists for the email.
+ * @throws {ConflictError} With code `NewUserConflictError` when an admin already exists for the email; the invite is untouched and the submission is retryable.
+ * @throws {ConflictError} With code `InviteSpentInEmailRace` when a concurrent signup claimed the email after the invite was consumed; the invite is gone and the submission is not retryable.
  * @throws {ForbiddenError} With code `InvalidInvite` when the invite token is missing, expired, revoked, or already used.
  * @throws {OperationalError} With code `SignupSessionFailed` when the account is created but session creation fails.
  */

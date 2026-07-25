@@ -35,7 +35,7 @@ export default class CsrfTokenCollection extends Collection {
         const record = await this.put(
             context,
             {
-                tokenHash,
+                tokenHashes: [ tokenHash ],
                 tokenCreationDate: new Date(nowSeconds * 1000).toISOString(),
                 tokenExpirationDate: new Date(expiresAt * 1000).toISOString(),
             },
@@ -46,6 +46,40 @@ export default class CsrfTokenCollection extends Collection {
             csrfSessionId: record.id,
             token,
             record,
+        };
+    }
+
+    /**
+     * Mints an additional token inside an existing, unexpired pre-session.
+     *
+     * Every token already live in the record stays valid, so rendering a form in a
+     * second tab — or re-rendering the same page — cannot kill the forms a browser
+     * is already holding. The pre-session deadline is not extended: the rewritten
+     * entry keeps the expiration the pre-session was born with.
+     *
+     * Two renders racing on the same pre-session can lose one appended digest,
+     * because the key/value store has no compare-and-set; the loser's form then
+     * reads as expired. That is a narrow race against what is otherwise guaranteed
+     * breakage on every second render.
+     *
+     * @param {Object} context - Request or execution context passed through to the key/value store.
+     * @param {CsrfTokenRecord} record - Unexpired pre-session previously loaded from this collection.
+     * @returns {Promise<{ csrfSessionId: string, token: string, record: CsrfTokenRecord }>}
+     * @throws {ValidationError} When the updated record fails validation.
+     */
+    async issueToken(context, record) {
+        const token = generateSecretToken();
+        const tokenHash = await sha256Hex(token);
+
+        record.addTokenHash(tokenHash);
+
+        const expiresAt = Math.floor(Date.now() / 1000) + record.getSecondsUntilExpiration();
+        const saved = await this.put(context, record, { expiresAt });
+
+        return {
+            csrfSessionId: saved.id,
+            token,
+            record: saved,
         };
     }
 
@@ -70,7 +104,7 @@ export default class CsrfTokenCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the key/value store.
      * @param {string} csrfSessionId - CSRF pre-session identifier from the browser cookie.
      * @param {string} token - Plaintext token submitted from the protected form.
-     * @returns {Promise<boolean>} True only when the record exists, is not expired, and the token hash matches.
+     * @returns {Promise<boolean>} True only when the record exists, is not expired, and holds the submitted token.
      */
     async validateToken(context, csrfSessionId, token) {
         if (!isNonEmptyString(csrfSessionId) || !isNonEmptyString(token)) {
@@ -83,7 +117,45 @@ export default class CsrfTokenCollection extends Collection {
         }
 
         const tokenHash = await sha256Hex(token);
-        return record.get('tokenHash') === tokenHash;
+        return record.hasTokenHash(tokenHash);
+    }
+
+    /**
+     * Spends one token, leaving the pre-session's other live tokens usable.
+     *
+     * Deleting the whole pre-session here would defeat the point of holding several
+     * tokens, so only the submitted one is dropped. Spending the last token ends the
+     * pre-session outright, because a record with no tokens can validate nothing.
+     *
+     * @param {Object} context - Request or execution context passed through to the key/value store.
+     * @param {string} csrfSessionId - CSRF pre-session identifier from the browser cookie.
+     * @param {string} token - Plaintext token that was just accepted.
+     * @returns {Promise<void>}
+     * @throws {AssertionError} When csrfSessionId is not a non-empty string.
+     */
+    async consumeToken(context, csrfSessionId, token) {
+        assertNonEmptyString(
+            csrfSessionId,
+            'CsrfTokenCollection#consumeToken() csrfSessionId must be a non-empty string',
+        );
+
+        const record = await this.get(context, csrfSessionId);
+
+        // Already gone (expired by the store, or cleared by a concurrent request):
+        // nothing to spend, and no reason to fail the caller's request.
+        if (!record) {
+            return;
+        }
+
+        record.removeTokenHash(await sha256Hex(token));
+
+        if (record.getTokenHashes().length === 0) {
+            await this.delete(context, csrfSessionId);
+            return;
+        }
+
+        const expiresAt = Math.floor(Date.now() / 1000) + record.getSecondsUntilExpiration();
+        await this.put(context, record, { expiresAt });
     }
 
     /**

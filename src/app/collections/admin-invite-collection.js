@@ -140,6 +140,11 @@ export default class AdminInviteCollection extends Collection {
 
     /**
      * Revokes an invite using optimistic concurrency, making it permanently unredeemable.
+     *
+     * This is an unconditional stamp. Callers must confirm the transition is legal
+     * with `AdminInviteRecord#isRevocable()` first; stamping a consumed or already
+     * revoked record would overwrite terminal state that cannot be recovered.
+     *
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {AdminInviteRecord} record - Invite record previously loaded from this collection.
      * @returns {Promise<AdminInviteRecord>} The updated record.

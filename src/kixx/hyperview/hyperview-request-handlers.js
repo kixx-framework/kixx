@@ -97,9 +97,10 @@ export function HyperviewStaticPageHandler(options) {
 
         let pathname;
         if (isNonEmptyString(options.pathname)) {
-            pathname = options.pathname;
+            pathname = normalizePagePathname(options.pathname);
         } else {
-            pathname = stripIndexFile(url.pathname, indexFilePattern);
+            pathname = normalizePagePathname(url.pathname);
+            pathname = stripIndexFile(pathname, indexFilePattern);
             // Strip format extension from the last path segment so content negotiation
             // extensions like .json don't change which page data is loaded.
             // /platform.json and /platform both load from pages/platform/page.json.
@@ -134,9 +135,9 @@ export function HyperviewStaticPageHandler(options) {
         // Merge in standard open graph metadata.
         metadata.page = service.mergePageMetadata(url, metadata);
 
-        // Return JSON representation of page data if client requested JSON and JSON is allowed
+        // Return JSON representation of page data if client requested JSON and JSON is allowed.
         if (allowJSON && request.isJSONRequest()) {
-            return response.respondWithJSON(200, metadata, { whiteSpace: 4 });
+            return response.respondWithJSON(response.status, metadata, { whiteSpace: 4 });
         }
 
         let baseTemplateId = options.baseTemplate;
@@ -217,7 +218,7 @@ export function HyperviewStaticPageHandler(options) {
  * @param {boolean} [options.useTemplateCache] - Reuse compiled templates, partials, and includes.
  *   Falls back to `config.env.HYPERVIEW.USE_TEMPLATE_CACHE`.
  * @param {string} [options.pathname] - Override the pathname derived from the request URL.
- * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
+* @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
  *   per-page via `metadata.baseTemplate`.
  * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`.
  *   Can be overridden per-page via `metadata.pageTemplate`.
@@ -250,9 +251,10 @@ export function HyperviewDynamicPageHandler(options) {
 
         let pathname;
         if (isNonEmptyString(options.pathname)) {
-            pathname = options.pathname;
+            pathname = normalizePagePathname(options.pathname);
         } else {
-            pathname = stripIndexFile(url.pathname, indexFilePattern);
+            pathname = normalizePagePathname(url.pathname);
+            pathname = stripIndexFile(pathname, indexFilePattern);
             // Strip format extension from the last path segment so content negotiation
             // extensions like .json don't change which page data is loaded.
             // /platform.json and /platform both load from pages/platform/page.json.
@@ -276,9 +278,9 @@ export function HyperviewDynamicPageHandler(options) {
         // Merge in standard open graph metadata.
         metadata.page = service.mergePageMetadata(url, metadata);
 
-        // Return JSON representation of page data if client requested JSON and JSON is allowed
+        // Return JSON representation of page data if client requested JSON and JSON is allowed.
         if (allowJSON && request.isJSONRequest()) {
-            return response.respondWithJSON(200, metadata, { whiteSpace: 4 });
+            return response.respondWithJSON(response.status, metadata, { whiteSpace: 4 });
         }
 
         let baseTemplateId = options.baseTemplate;
@@ -328,6 +330,16 @@ export function HyperviewDynamicPageHandler(options) {
     };
 }
 
+
+// Page pathnames are the lookup key for page data, templates, includes, and page
+// cache entries, and those resolve to filesystem paths on some deploy targets. A
+// case-sensitive filesystem would 404 `/Platform` while a case-insensitive one
+// served it, so the same URL would behave differently per host.Folding to lower
+// case here makes Hyperview routing case-insensitive everywhere, and makes the
+// deploy target's filesystem irrelevant to which page a URL resolves to.
+function normalizePagePathname(pathname) {
+    return pathname.toLowerCase();
+}
 
 function stripIndexFile(pathname, indexFilePattern) {
     return pathname.replace(indexFilePattern, (match) => {

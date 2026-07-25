@@ -6,6 +6,21 @@
         </header>
 
         {{!--
+            form_expired means a submission was rejected because its CSRF token was
+            no longer live — typically a page left open too long, or a back-button
+            resubmit.
+        --}}
+        {{#ifEqual form.errorCode "form_expired"}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body">
+                <p class="type-label">That form had expired</p>
+                <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+
+        {{!--
             newToken is present only on the response that just minted a token. The
             raw token is never stored, so it is shown once here and cannot be
             retrieved again.
@@ -103,6 +118,16 @@
             </li>
         {{/each}}
         </ul>
+        {{else}}
+        <p class="type-body-sm">No tokens yet. Create one to authorize an external tool.</p>
+        {{/if}}
+
+        {{!--
+            Pagination sits outside the list conditional on purpose. A later page
+            whose rows were all removed concurrently renders the empty state, and
+            nesting this inside would strip the "Previous page" link along with the
+            rows — stranding the operator on an empty page with no way back.
+        --}}
         {{#if showPagination}}
         <p class="cluster">
             {{#if links.previousPage}}
@@ -112,9 +137,6 @@
             <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
             {{/if}}
         </p>
-        {{/if}}
-        {{else}}
-        <p class="type-body-sm">No tokens yet. Create one to authorize an external tool.</p>
         {{/if}}
     </article>
 </main>
