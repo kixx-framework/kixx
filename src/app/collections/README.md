@@ -178,7 +178,12 @@ All write methods call `dto.validate()` before persisting. A `ValidationError` t
 
 `scan()` uses the primary `sortKey` field on the document. `query()` uses a separate index keyed by a JSON path into the document's fields. Use `scan()` to list all documents of a type in sort-key order. Use `query()` to look up documents by a non-primary field.
 
-Pagination cursors are opaque. Reuse a cursor only with the same method, document type, index name when querying, sort direction, and range options that produced it. Without range bounds that exclude them, documents with missing or `null` sort or index values remain in the result set: they sort first in ascending order and last in descending order.
+Pagination cursors are opaque, **signed public tokens** — not raw storage cursors. The `DocumentStore` facade issues and verifies them, so a cursor that fails verification raises `InvalidCursorError` rather than reaching the engine. A cursor fails verification when it is:
+
+- **Unsigned, tampered with, or signed by a foreign secret** — the HMAC signature does not verify.
+- **Replayed against a different query** — the facade binds each cursor to the method (`scan` vs. `query`), document type, index, sort direction, and range options that produced it. A cursor is a position in one specific ordering, so resuming from it under different bounds would start from a meaningless offset.
+
+`limit` is deliberately **not** bound into the cursor: page size does not move a key position, so a caller may vary it while paging.
 
 ### Document Store Collections: ID Generation and Sort Keys
 
@@ -235,6 +240,8 @@ class UserCollection extends Collection {
 }
 ```
 
+Build a Record outside a Collection with the static factory `Record.forWrite({ type, id, attributes })`. Collections call it internally on the write path, but it is also the way to construct a Record for a domain workflow that needs to `validate()` or `toDocument()` before handing off to the Collection, and the way to exercise `validate()` in unit tests. It sets placeholder store metadata that never escapes the gateway.
+
 ### Schema
 
 Put a `static schema` property on the Record subclass to document what attributes the records in the collection will have. The schema is not automatically enforced — enforcement happens in `validate()` — but it provides a reference for readers and agents working on the collection.
@@ -263,6 +270,8 @@ class UserRecord extends Record {
 
 Override `validate()` on a Record subclass to enforce invariants before a write. The Collection calls `validate()` automatically during `create()`, `put()`, and `update()` — before the document store call — so a `ValidationError` from `validate()` propagates to the caller without touching the store.
 
+Accumulate every violation into one `ValidationError` and throw it once, instead of failing on the first. Push each field error with its source field name — `error.push(message, source)` — so callers can map errors back to individual fields. A successful `validate()` returns `undefined`.
+
 ```js
 validate() {
     const error = new ValidationError('Invalid user record');
@@ -275,7 +284,22 @@ validate() {
 }
 ```
 
-The base `validate()` is a no-op. Subclasses throw `ValidationError` from `kixx/errors/mod.js`.
+The base `validate()` is a no-op. Subclasses throw `ValidationError` from `kixx/errors/mod.js`. A thrown `ValidationError` has `name === 'ValidationError'` and an `errors` array whose entries carry a `source` field name.
+
+For records with cross-field lifecycle rules (a status that dictates which fields must be present or null), split `validate()` into two passes: a per-field shape/type check and a cross-field invariant check. Both push into the same accumulated error so a single call reports every problem:
+
+```js
+validate() {
+    const error = new ValidationError('Invalid migration ledger record');
+    validateFieldShapes(this, error); // types and per-field bounds
+    validateLifecycle(this, error);   // cross-field invariants by status
+    if (error.length) {
+        throw error;
+    }
+}
+```
+
+List every field in the schema `required` array even when it is nullable — the invariant is "present but possibly `null`", and `validate()` enforces the null/non-null rules per field.
 
 ### Serialization
 

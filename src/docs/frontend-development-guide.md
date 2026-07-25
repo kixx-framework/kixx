@@ -1,8 +1,13 @@
 # Frontend Development Guide
 
-This guide covers the frontend development conventions for this project: the live style guide, public and admin layout boundaries, source stylesheet organization, class naming, design tokens, CSS formatting, CSS comments, and the page-local stylesheet pattern. For Hyperview template syntax, see `templates/README.md`. For where presentation-layer files live and how request handlers pass render data to templates, see `app/presentation/README.md`.
+This guide covers the frontend development conventions for this project: the live style guide, public and admin layout boundaries, source stylesheet organization, class naming, design tokens, CSS formatting, CSS comments, and the page-local stylesheet pattern. For template syntax, see `templates/README.md`. For presentation-layer and HTTP middleware and request handlers, see `app/presentation/README.md`.
 
 ## Public Pages Are the Default
+
+This web application provides two different entry points for users:
+
+1. The public website - Publicly available on the Web
+2. Admin panel - Administrative and content management "backend" behind an authentication and access gate.
 
 The public website is the default presentation surface. Static public pages should use the default base template, `templates/base/default.html`, and the public stylesheet entrypoint, `/stylesheets/stylesheet.css`, through `templates/partials/common-site-styles.html`. The current homepage is the canonical example of this default path: root page metadata in `pages/page.json`, public page content in `pages/body.html`, route-level markup in `templates/pages/page.html`, and page-local CSS in `pages/page.css`.
 
@@ -31,52 +36,19 @@ This rule also applies to CSS custom properties. Do not tune a component with an
 
 ## File Organization
 
-CSS lives under `stylesheets/`, served directly by the development server. The public stylesheet bundle is the default entrypoint:
+CSS lives under `stylesheets/`, served directly by the development server. There are two style sheet bundles with a dedicated entry point for each one:
+
+- stylesheets/admin.css
+- stylesheets/stylesheet.css
 
 ```text
 stylesheets/
-├── stylesheet.css
 ├── admin.css
-└── lib/
-    ├── design-tokens.css
-    ├── reset.css
-    ├── typography.css
-    ├── layout.css
-    ├── components.css
-    ├── forms.css
-    ├── admin-shell.css
-    └── admin-style-guide.css
+├── stylesheet.css
+└── lib/             # Source library for admin.css and stylesheet.css
 ```
 
-`templates/partials/common-site-styles.html` links `/stylesheets/stylesheet.css`. That entrypoint is a flat list of imports, and import order matters because later files rely on custom properties and base rules defined earlier:
-
-```css
-@import "./lib/design-tokens.css";
-@import "./lib/reset.css";
-@import "./lib/typography.css";
-@import "./lib/layout.css";
-@import "./lib/components.css";
-@import "./lib/forms.css";
-```
-
-`templates/partials/admin-site-styles.html` links `/stylesheets/admin.css`. The admin entrypoint imports the public bundle first, then imports admin-only styles:
-
-```css
-@import "./stylesheet.css";
-@import "./lib/admin-shell.css";
-@import "./lib/admin-style-guide.css";
-```
-
-Keep the bundle ordered from low-level foundations to higher-level components:
-
-- `design-tokens.css` owns the palette, semantic tokens, component tokens, spacing, type scale, measures, radii, and border widths.
-- `reset.css` owns low-specificity browser normalization and base element behavior.
-- `typography.css` owns type roles, matching `.type-*` utilities, inline code, keyboard keys, and blockquotes.
-- `layout.css` owns reusable layout primitives and public-neutral layout helpers.
-- `components.css` owns reusable theme components such as wordmark, theme toggle, buttons, cards, and callouts.
-- `forms.css` owns form fields, text areas, and copy fields.
-- `admin-shell.css` owns admin-only layout chrome such as the admin header, sidebar navigation, admin layout wrapper, admin main region, and admin content sections.
-- `admin-style-guide.css` owns admin style-guide demo and documentation chrome such as specimen blocks, swatches, demo stages, and component reference layouts.
+When importing source files from stylesheets/lib/ into the bundle entry points, keep the bundle ordered from low-level foundations to higher-level components.
 
 Before adding a new file to `lib/`, prefer extending one of the existing files. The project favors a handful of well-documented stylesheets over many small files, so related rules stay close to the examples and comments that explain them.
 
@@ -191,22 +163,24 @@ The same tiered thinking applies to spacing (`--space-*`), measures (`--measure-
 
 Choose heading levels for document structure first. If the semantic level is correct but the visual size is wrong, apply the matching `.type-*` utility rather than changing the heading level.
 
-Do not use color, italics, negative tracking, or decoration to create hierarchy. Hierarchy comes from size, weight, spacing, and structure. Shared typography roles are fixed `rem` steps so browser zoom remains predictable. Admin pages, shared components, and reusable `.type-*` roles should not use fluid font sizing. Public marketing pages may use bounded, page-local display sizing for mastheads or heroes when the text is part of the composition; keep body copy, navigation, form text, and ordinary section headings on the shared roles.
+There are two generalized categories of typography used in this project:
+
+1. The public website - usually for marketing purposes
+2. The admin panel - purely utility
+
+### Typography for the Admin Panel
+
+Do not use color, italics, negative tracking, or decoration to create hierarchy. Hierarchy comes from size, weight, spacing, and structure. Type sizes are fixed `rem` steps from the `--text-*` scale so browser zoom stays predictable (WCAG 1.4.4 Resize Text). This is the default for all app, admin, and reading text — reach for it unless you are building a marketing page.
+
+### Typography for Public Marketing Pages
+
+Public marketing pages (the home page and its kin) may, and are encouraged to, use fluid `clamp()` sizing for the large *display* type that carries the page — a hero title, an oversized background motif, a lede — where the size should track the viewport instead of jumping at a breakpoint. Keep it to that expressive display type: body copy, reading text, and anything in app or admin UI stays on the fixed `--text-*` scale. Put the fluid rules in the page's own `page_stylesheet`, never in the shared token or stylesheet files.
+
+When you do reach for fluid type, keep it zoom-safe so it does not regress WCAG 1.4.4: give `clamp()` a `rem` minimum and a `rem` maximum, and make the preferred (middle) value include a `rem` term — e.g. `clamp(2.75rem, calc(2.125rem + 1.8vw), 3.75rem)`. The `rem` base means browser zoom still scales the text; the `vw` term only adds viewport responsiveness on top. Never use a bare `vw` preferred value: it ignores zoom.
 
 ## Layout Primitives
 
-`layout.css` defines a small family of composable, single-purpose layout primitives in the Every Layout tradition. Each is one class tuned by scoped custom properties:
-
-| Class | Purpose |
-| --- | --- |
-| `.flow` | Vertical stack with parent-owned gap between direct children, tuned by `--flow-space` |
-| `.cluster` | Horizontal group that wraps, tuned by `--cluster-space`, `--cluster-align`, and `--cluster-justify` |
-| `.grid-auto` | Auto-fit responsive grid, tuned by `--grid-min` and `--grid-space` |
-| `.switcher` | Row that flips to one item per row below `--switcher-threshold`, no media query |
-| `.with-sidebar` | Fixed-ish sidebar beside fluid content, tuned by `--sidebar-width`, `--sidebar-content-min`, and `--sidebar-space` |
-| `.center` | Measured centered column, tuned by `--center-max` |
-
-Compose these before writing a new `display: flex` or `display: grid` rule. Most page structure should be a nesting of these primitives.
+`layout.css` defines a small family of composable, single-purpose layout primitives in the Every Layout tradition. Each is one class tuned by scoped custom properties. Compose these before writing a new `display: flex` or `display: grid` rule. Most page structure should be a nesting of these primitives.
 
 Because `.flow` uses `gap`, nested `.flow` elements are safe: the outer flow controls the nested element's outside spacing, and the inner flow controls spacing between its own children. If one child needs exceptional outside spacing, make that exception explicit with a component rule or page-local style.
 
