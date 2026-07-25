@@ -49,6 +49,13 @@ export async function createAdminUserAccount(context, form) {
     // Spend the invite after the duplicate-email check but before writing the
     // user: a recoverable email conflict must not consume the token, and a
     // successful consume must gate the account so one token creates one admin.
+    //
+    // This deliberately accepts a narrow failure mode: if the user write fails
+    // after this point, the invite remains consumed and an administrator must
+    // issue a new one. Do not compensate by reopening the invite here. Without
+    // a transaction spanning both records, rollback could race another signup
+    // and allow one token to create multiple admins. Preserving single use is
+    // more important than automatically recovering the invite.
     const { roles } = await consumeAdminInvite(context, form.invite_token);
 
     let user;
