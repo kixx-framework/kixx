@@ -2,7 +2,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertFalsy, assertGreaterThan, assertUndefined } from 'kixx-assert';
 
 import { pbkdf2HashPassword } from '../../../../src/app/lib/password-hashing.js';
-import { ROLE_PLATFORM_ADMIN, deriveRolePermissions } from '../../../../src/app/lib/roles.js';
+import { ROLE_DEVELOPER_ADMIN, deriveRolePermissions } from '../../../../src/app/lib/roles.js';
 import { authenticateAdminApiRequest } from '../../../../src/app/presentation/middleware/admin-api-authentication.js';
 import VirtualHost from '../../../../src/kixx/http-router/virtual-host.js';
 import virtualHosts from '../../../../src/virtual-hosts.js';
@@ -29,7 +29,7 @@ describe('Admin API authentication middleware', ({ it }) => {
             type: 'AdminUser',
             emailAddress: 'admin@example.com',
             userCreationDate: '2026-07-17T12:00:00.000Z',
-            roles: [ ROLE_PLATFORM_ADMIN ],
+            roles: [ ROLE_DEVELOPER_ADMIN ],
         };
         const harness = makeAuthenticationHarness({ passwordHash, admin });
         const response = {};
@@ -46,7 +46,7 @@ describe('Admin API authentication middleware', ({ it }) => {
         assertEqual('admin@example.com', principal.emailAddress);
         assertEqual('2026-07-17T12:00:00.000Z', principal.userCreationDate);
         assertEqual(1, principal.roles.length);
-        assertEqual(ROLE_PLATFORM_ADMIN, principal.roles[0]);
+        assertEqual(ROLE_DEVELOPER_ADMIN, principal.roles[0]);
         assertEqual('admin@example.com', harness.loadedEmailAddress);
         assertEqual(1, harness.collectionCalls);
     });
@@ -57,7 +57,7 @@ describe('Admin API authentication middleware', ({ it }) => {
             id: 'admin-1',
             type: 'AdminUser',
             emailAddress: 'admin@example.com',
-            roles: [ ROLE_PLATFORM_ADMIN ],
+            roles: [ ROLE_DEVELOPER_ADMIN ],
         };
         const harness = makeAuthenticationHarness({ passwordHash, admin });
         await authenticateAdminApiRequest(
@@ -66,7 +66,7 @@ describe('Admin API authentication middleware', ({ it }) => {
             {},
         );
 
-        const expected = deriveRolePermissions([ ROLE_PLATFORM_ADMIN ]);
+        const expected = deriveRolePermissions([ ROLE_DEVELOPER_ADMIN ]);
         const { permissions } = harness.context.user;
 
         assertGreaterThan(0, expected.length);
@@ -84,7 +84,7 @@ describe('Admin API authentication middleware', ({ it }) => {
             id: 'admin-1',
             type: 'AdminUser',
             emailAddress: 'admin@example.com',
-            roles: [ ROLE_PLATFORM_ADMIN ],
+            roles: [ ROLE_DEVELOPER_ADMIN ],
             // A stale or forged grant reaching the middleware on the record
             // must never survive onto the principal.
             permissions: [ { effect: 'allow', action: '*', resource: '*' } ],
@@ -98,7 +98,7 @@ describe('Admin API authentication middleware', ({ it }) => {
 
         const { permissions } = harness.context.user;
 
-        assertEqual(deriveRolePermissions([ ROLE_PLATFORM_ADMIN ]).length, permissions.length);
+        assertEqual(deriveRolePermissions([ ROLE_DEVELOPER_ADMIN ]).length, permissions.length);
         assertFalsy(
             permissions.some(({ action, resource }) => action === '*' && resource === '*'),
             'expected the stored wildcard grant to be discarded',

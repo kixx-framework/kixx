@@ -72,6 +72,7 @@ function presentInvite(record, createdByEmailsById) {
         kind: record.get('kind'),
         status: record.getStatus(),
         createdBy: createdByEmailsById.get(createdBy) ?? createdBy,
+        rolePreset: record.get('rolePreset'),
         createdAt: record.get('inviteCreationDate'),
         expiresAt: record.get('inviteExpirationDate'),
         consumedAt: record.get('consumedAt'),

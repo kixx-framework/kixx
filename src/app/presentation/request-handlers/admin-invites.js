@@ -62,7 +62,7 @@ export async function postCreateAdminInvite(context, request, response) {
 
     const created = await createAdminInvite(context, {
         createdBy: context.user.id,
-        role: form.role,
+        rolePreset: form.role_preset,
     });
     const inviteUrl = buildSignupInviteUrl(context, request, created.token);
 

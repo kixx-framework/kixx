@@ -1,8 +1,8 @@
 import { assert, assertNonEmptyString, isString } from '../../kixx/assertions/mod.js';
-import { evaluatePermissions } from './permissions.js';
 
 
 const ALLOW = 'allow';
+const ADMIN_ROLE_CATEGORY = 'admin';
 
 /**
  * Persistence-contract role name for the bootstrap, unrestricted admin role.
@@ -11,18 +11,18 @@ const ALLOW = 'allow';
 export const ROLE_ROOT_ADMIN = 'Root Admin';
 
 /**
- * Persistence-contract role name for the admin role that can grant
- * `Platform Admin` and manage invites, publishing tokens, and migrations.
+ * Persistence-contract role name for the admin role scoped to inviting new
+ * admin users.
  * @type {string}
  */
 export const ROLE_SUPER_ADMIN = 'Super Admin';
 
 /**
- * Persistence-contract role name for the admin role scoped to publishing
- * API token management.
+ * Persistence-contract role name for the admin role scoped to publishing API
+ * token management and running migrations.
  * @type {string}
  */
-export const ROLE_PLATFORM_ADMIN = 'Platform Admin';
+export const ROLE_DEVELOPER_ADMIN = 'Developer Admin';
 
 /**
  * Persistence-contract role name for the publishing role that can write
@@ -42,13 +42,12 @@ const ROLE_DEFINITIONS = Object.freeze([
     ]),
     defineRole(ROLE_SUPER_ADMIN, [ 'admin' ], [
         { action: 'urn:kixx:admin:admin-user-invites:*', resource: 'urn:kixx:admin:admin-user-invites' },
+    ]),
+    defineRole(ROLE_DEVELOPER_ADMIN, [ 'admin' ], [
         { action: 'urn:kixx:admin:publishing-api-tokens:*', resource: 'urn:kixx:admin:publishing-api-tokens' },
         { action: 'urn:kixx:admin:migrations:*', resource: 'urn:kixx:admin:migrations' },
     ]),
-    defineRole(ROLE_PLATFORM_ADMIN, [ 'admin' ], [
-        { action: 'urn:kixx:admin:publishing-api-tokens:*', resource: 'urn:kixx:admin:publishing-api-tokens' },
-    ]),
-    defineRole(ROLE_EDITOR, [ 'publishing' ], [
+    defineRole(ROLE_EDITOR, [ 'admin', 'publishing' ], [
         { action: 'urn:kixx:publishing:page-metadata:put', resource: 'urn:kixx:publishing:page-metadata:*' },
         { action: 'urn:kixx:publishing:include:put', resource: 'urn:kixx:publishing:include:*' },
         { action: 'urn:kixx:publishing:asset:put', resource: 'urn:kixx:publishing:asset' },
@@ -58,6 +57,85 @@ const ROLE_DEFINITIONS = Object.freeze([
 
 const ROLE_REGISTRY = new Map(ROLE_DEFINITIONS.map((role) => [ role.name, role ]));
 
+/**
+ * Role preset conferring the full developer capability set on a new admin user.
+ * The value deliberately equals `ROLE_DEVELOPER_ADMIN`: a preset id *is* its
+ * display name, and this preset is named for its most capable member. The two
+ * constants are distinct concepts that happen to share a string — do not
+ * collapse them.
+ * @type {string}
+ */
+export const PRESET_DEVELOPER_ADMIN = 'Developer Admin';
+
+/**
+ * Role preset conferring site ownership — inviting other admins and editing
+ * published content — without developer capabilities.
+ * @type {string}
+ */
+export const PRESET_OWNER_ADMIN = 'Owner Admin';
+
+/**
+ * Role preset conferring content editing only.
+ * @type {string}
+ */
+export const PRESET_EDITOR_ADMIN = 'Editor Admin';
+
+// Membership is written out one role at a time rather than derived from the
+// role registry, so defining a new role can never silently widen an existing
+// preset. Definition order is the render order in the invite form, most
+// capable first.
+const PRESET_DEFINITIONS = Object.freeze([
+    definePreset(PRESET_DEVELOPER_ADMIN, [ ROLE_DEVELOPER_ADMIN, ROLE_SUPER_ADMIN, ROLE_EDITOR ]),
+    definePreset(PRESET_OWNER_ADMIN, [ ROLE_SUPER_ADMIN, ROLE_EDITOR ]),
+    definePreset(PRESET_EDITOR_ADMIN, [ ROLE_EDITOR ]),
+]);
+
+const PRESET_REGISTRY = new Map(PRESET_DEFINITIONS.map((preset) => [ preset.name, preset ]));
+
+// Presets are the sole authority for what an invite may confer, so the table is
+// proven safe at module load rather than re-checked per request: every member
+// must be an attachable admin role, and Root Admin must stay unreachable by
+// invite (the env bootstrap token is its only path). A definition mistake fails
+// the import, before any request is served.
+for (const preset of PRESET_DEFINITIONS) {
+    for (const roleName of preset.roles) {
+        assert(
+            roleName !== ROLE_ROOT_ADMIN,
+            `Role preset '${ preset.name }' must not include '${ ROLE_ROOT_ADMIN }'`,
+        );
+        assert(
+            isRoleName(roleName, ADMIN_ROLE_CATEGORY),
+            `Role preset '${ preset.name }' member '${ roleName }' must be a registered ${ ADMIN_ROLE_CATEGORY } role`,
+        );
+    }
+}
+
+
+/**
+ * Lists the registered role presets in definition order, most capable first.
+ * @returns {Object[]} Frozen preset definitions, each with `name` and frozen `roles`.
+ */
+export function listRolePresets() {
+    return PRESET_DEFINITIONS;
+}
+
+/**
+ * Expands a preset name into the role names it confers. Returns `null` for an
+ * unregistered name so callers fail closed by default: unlike a retired role
+ * name on a stored record, an unrecognized preset is an authorization decision
+ * that must be refused rather than treated as conferring nothing.
+ * @param {string} name - Candidate preset name.
+ * @returns {string[]|null} A fresh, mutation-safe array of member role names, or null when unregistered.
+ */
+export function resolveRolePreset(name) {
+    const preset = PRESET_REGISTRY.get(name);
+
+    if (!preset) {
+        return null;
+    }
+
+    return preset.roles.slice();
+}
 
 /**
  * Reports whether a name is registered in any category.
@@ -80,18 +158,6 @@ export function isRoleName(name, category) {
 
     const role = ROLE_REGISTRY.get(name);
     return Boolean(role) && role.categories.includes(category);
-}
-
-/**
- * Lists registered roles within a category, in definition order. A role
- * belonging to several categories is listed under each of them.
- * @param {string} category - Required role category, such as 'admin' or 'publishing'.
- * @returns {Object[]} Frozen role definitions belonging to the category.
- */
-export function listRoles(category) {
-    assertNonEmptyString(category, 'listRoles: category');
-
-    return ROLE_DEFINITIONS.filter((role) => role.categories.includes(category));
 }
 
 /**
@@ -152,45 +218,6 @@ export function areRoleGrantsWithinDomain(roleName, domain) {
     });
 }
 
-/**
- * Reports whether a granter's permissions authorize every grant a role
- * would confer. Evaluates each grant's action/resource pair independently
- * as a pattern-vs-pattern decision — deliberately conservative, with no
- * subset analysis of overlapping wildcard scopes.
- * @param {Object[]} permissions - The prospective granter's derived permissions.
- * @param {string} roleName - Candidate role name to grant.
- * @returns {boolean} True when the granter's permissions cover every grant of the role.
- */
-export function canGrantRole(permissions, roleName) {
-    const role = ROLE_REGISTRY.get(roleName);
-
-    if (!role) {
-        return false;
-    }
-
-    return role.permissions.every((grant) => {
-        const actions = Array.isArray(grant.action) ? grant.action : [ grant.action ];
-
-        return actions.every((action) => {
-            return evaluatePermissions(permissions, { action, resource: grant.resource });
-        });
-    });
-}
-
-/**
- * Lists the roles within a category that a granter's permissions allow them
- * to confer, always excluding `Root Admin` regardless of the granter's
- * permissions.
- * @param {Object[]} permissions - The prospective granter's derived permissions.
- * @param {string} category - Required role category, such as 'admin' or 'publishing'.
- * @returns {Object[]} Role definitions the granter may confer, in definition order.
- */
-export function filterGrantableRoles(permissions, category) {
-    return listRoles(category).filter((role) => {
-        return role.name !== ROLE_ROOT_ADMIN && canGrantRole(permissions, role.name);
-    });
-}
-
 function defineRole(name, categories, permissions) {
     // A bare string would silently pass every category check downstream,
     // because String#includes() matches substrings: 'admin'.includes('admin')
@@ -213,6 +240,16 @@ function defineRole(name, categories, permissions) {
         name,
         categories: Object.freeze(categories.slice()),
         permissions: Object.freeze(grants),
+    });
+}
+
+// Freezing both the definition and its member list keeps a caller from
+// reshaping the table that authorizes invites; resolveRolePreset() hands out
+// copies for the same reason cloneGrant() does.
+function definePreset(name, roles) {
+    return Object.freeze({
+        name,
+        roles: Object.freeze(roles.slice()),
     });
 }
 

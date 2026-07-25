@@ -1,19 +1,16 @@
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
 import BaseForm from '../base-form.js';
-import { filterGrantableRoles } from '../../../lib/roles.js';
+import { listRolePresets } from '../../../lib/roles.js';
 import { normalizeStringAttribute } from '../utils.js';
-
-
-const ADMIN_ROLE_CATEGORY = 'admin';
 
 
 /**
  * Backs the "create invite" control in the admin invite management UI.
  *
  * The owner is taken from the authenticated session, so the only operator
- * input is the single role to confer. Registered-name and delegation
- * checking are not this form's job: they are a security decision owned by
+ * input is the role preset to confer. Checking that the submitted name is a
+ * registered preset is not this form's job: it is a security decision owned by
  * `createAdminInvite()`, which fails closed with a 403 (not a 422 field
  * error) on anything the rendered options should never have offered. This
  * form's own `validate()` only enforces that a selection was made.
@@ -38,7 +35,7 @@ export default class AdminInviteCreateForm extends BaseForm {
     static method = 'POST';
 
     /**
-     * JSON Schema for the single grantable-role selection.
+     * JSON Schema for the single role preset selection.
      * @type {Object}
      * @static
      * @readonly
@@ -46,33 +43,33 @@ export default class AdminInviteCreateForm extends BaseForm {
     static schema = {
         type: 'object',
         properties: {
-            role: { type: 'string', fieldType: 'select' },
+            role_preset: { type: 'string', fieldType: 'select' },
         },
-        required: [ 'role' ],
+        required: [ 'role_preset' ],
     };
 
     /**
      * @param {Object} [attributes] - Raw submitted invite attributes.
-     * @param {*} [attributes.role] - Selected admin role name to confer.
+     * @param {*} [attributes.role_preset] - Selected role preset name to confer.
      */
     constructor(attributes) {
         super();
 
-        const { role } = attributes ?? {};
-        this.role = normalizeStringAttribute(role);
+        const { role_preset } = attributes ?? {};
+        this.role_preset = normalizeStringAttribute(role_preset);
     }
 
     /**
-     * Validates that a role selection was submitted. Whether the selection is
-     * a registered, grantable role is checked by `createAdminInvite()`, not here.
+     * Validates that a preset selection was submitted. Whether the selection is
+     * a registered preset is checked by `createAdminInvite()`, not here.
      * @returns {void}
-     * @throws {ValidationError} When no role was selected.
+     * @throws {ValidationError} When no role preset was selected.
      */
     validate() {
         const error = new ValidationError('The create invite request is invalid');
 
-        if (!isNonEmptyString(this.role)) {
-            error.push('A role selection is required', 'role');
+        if (!isNonEmptyString(this.role_preset)) {
+            error.push('A role preset selection is required', 'role_preset');
         }
 
         if (error.length) {
@@ -81,11 +78,12 @@ export default class AdminInviteCreateForm extends BaseForm {
     }
 
     /**
-     * Builds the form render context, filling the `role` field's options with
-     * the roles the signed-in admin may grant. Computed fresh per request from
-     * `context.user.permissions` (never a static schema enum) so a surface
-     * never offers a role the signed-in principal cannot grant; server-side
-     * enforcement in `createAdminInvite()` remains the actual guard.
+     * Builds the form render context, filling the `role_preset` field's options
+     * with every registered role preset. The options are not filtered per user:
+     * any admin who passes the invite-write authorization gate may confer any
+     * preset. Presets are read from the registry rather than duplicated as a
+     * static schema enum, so the rendered choices and what
+     * `createAdminInvite()` will accept cannot drift apart.
      * @param {import('../../../../kixx/context/request-context.js').default} context - Current request context.
      * @param {import('../../../../kixx/errors/lib/validation-error.js').default|string|null} [error] -
      * ValidationError from validate(), domain error code string, or null.
@@ -93,11 +91,10 @@ export default class AdminInviteCreateForm extends BaseForm {
      */
     getFormContext(context, error) {
         const formContext = super.getFormContext(context, error);
-        const options = filterGrantableRoles(context.user?.permissions, ADMIN_ROLE_CATEGORY)
-            .map((role) => ({ value: role.name, label: role.name }));
+        const options = listRolePresets().map((preset) => ({ value: preset.name, label: preset.name }));
 
-        formContext.fields.role = Object.assign({}, formContext.fields.role, {
-            label: 'Role',
+        formContext.fields.role_preset = Object.assign({}, formContext.fields.role_preset, {
+            label: 'Role preset',
             options,
         });
 
