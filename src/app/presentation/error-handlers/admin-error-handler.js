@@ -2,7 +2,7 @@ import { clearAdminSessionCookie } from '../lib/admin-session-cookie.js';
 import { renderHtmlErrorPage } from '../lib/html-error-page.js';
 
 
-export async function adminErrorHandler(context, request, response, error) {
+export default async function adminErrorHandler(context, request, response, error) {
     if (error.name === 'UnauthenticatedError' && !request.isJSONRequest()) {
         clearAdminSessionCookie(request, response);
         const loginTarget = context.getHttpTarget('admin-login-form/render-form');

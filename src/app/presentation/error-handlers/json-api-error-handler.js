@@ -2,7 +2,7 @@ import { mapErrorToJsonApiErrors } from '../../../kixx/http-router/json-api-erro
 import { JSON_API_CONTENT_TYPE } from '../lib/json-api.js';
 
 
-export function jsonApiErrorHandler(_context, _request, response, error) {
+export default function jsonApiErrorHandler(_context, _request, response, error) {
     if (!error.httpError && !error.expected) {
         return false;
     }

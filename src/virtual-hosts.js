@@ -1,8 +1,8 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
 import { StaticFileRequestHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
-import { adminErrorHandler } from './app/presentation/error-handlers/admin-error-handler.js';
-import { adminAuthErrorHandler } from './app/presentation/error-handlers/admin-auth-error-handler.js';
-import { jsonApiErrorHandler } from './app/presentation/error-handlers/json-api-error-handler.js';
+import adminErrorHandler from './app/presentation/error-handlers/admin-error-handler.js';
+import adminAuthErrorHandler from './app/presentation/error-handlers/admin-auth-error-handler.js';
+import jsonApiErrorHandler from './app/presentation/error-handlers/json-api-error-handler.js';
 import authenticateAdminUser from './app/presentation/middleware/authenticate-admin-user.js';
 import authenticatePublishingToken from './app/presentation/middleware/authenticate-publishing-token.js';
 import * as AdminUsers from './app/presentation/request-handlers/admin-users.js';
