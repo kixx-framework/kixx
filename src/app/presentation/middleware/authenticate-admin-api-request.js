@@ -12,7 +12,7 @@ import { verifyAdminCredentials } from '../../transaction-scripts/admin-users/ve
  * @throws {UnauthenticatedError} When Basic credentials are absent or malformed.
  * @throws {UnauthorizedError} When the credentials are rejected.
  */
-export async function authenticateAdminApiRequest(context, request, response) {
+export default async function authenticateAdminApiRequest(context, request, response) {
     const { username, password } = parseBasicAuthCredentials(request);
     const admin = await verifyAdminCredentials(context, {
         emailAddress: username,

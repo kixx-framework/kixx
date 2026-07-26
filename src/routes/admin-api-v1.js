@@ -1,4 +1,4 @@
-import { authenticateAdminApiRequest } from '../app/presentation/middleware/admin-api-authentication.js';
+import authenticateAdminApiRequest from '../app/presentation/middleware/authenticate-admin-api-request.js';
 import * as AdminAPI from '../app/presentation/request-handlers/admin-api/mod.js';
 import * as AdminAuthorization from '../app/presentation/middleware/admin-authorization.js';
 

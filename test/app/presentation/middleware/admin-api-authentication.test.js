@@ -3,7 +3,7 @@ import { assert, assertEqual, assertFalsy, assertGreaterThan, assertUndefined } 
 
 import { pbkdf2HashPassword } from '../../../../src/app/lib/password-hashing.js';
 import { ROLE_DEVELOPER_ADMIN, deriveRolePermissions } from '../../../../src/app/lib/roles.js';
-import { authenticateAdminApiRequest } from '../../../../src/app/presentation/middleware/admin-api-authentication.js';
+import authenticateAdminApiRequest from '../../../../src/app/presentation/middleware/authenticate-admin-api-request.js';
 import VirtualHost from '../../../../src/kixx/http-router/virtual-host.js';
 import virtualHosts from '../../../../src/virtual-hosts.js';
 
