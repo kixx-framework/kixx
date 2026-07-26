@@ -4,27 +4,11 @@ import { adminErrorHandler } from './app/presentation/error-handlers/admin-error
 import { adminAuthErrorHandler } from './app/presentation/error-handlers/admin-auth-error-handler.js';
 import { jsonApiErrorHandler } from './app/presentation/error-handlers/json-api-error-handler.js';
 import { authenticateAdminUser } from './app/presentation/middleware/admin-authentication.js';
-import { authenticateAdminApiRequest } from './app/presentation/middleware/admin-api-authentication.js';
 import { authenticatePublishingToken } from './app/presentation/middleware/publishing-authentication.js';
 import * as AdminUsers from './app/presentation/request-handlers/admin-users.js';
-import * as AdminInvites from './app/presentation/request-handlers/admin-invites.js';
-import * as AdminPublishingApiTokens from './app/presentation/request-handlers/admin-publishing-api-tokens.js';
-import * as AdminAPI from './app/presentation/request-handlers/admin-api/mod.js';
-import * as PublishingAPI from './app/presentation/request-handlers/publishing-api/mod.js';
-import {
-    requireAssetPermission,
-    requireIncludePermission,
-    requirePageMetadataPermission,
-    requireTemplatePermission,
-} from './app/presentation/request-handlers/publishing-api/authorization.js';
-import {
-    requireAdminUserInvitesRead,
-    requireAdminUserInvitesWrite,
-    requireMigrationsRead,
-    requireMigrationsWrite,
-    requirePublishingApiTokensRead,
-    requirePublishingApiTokensWrite,
-} from './app/presentation/request-handlers/admin-authorization.js';
+import adminPanelRoutes from './routes/admin-panel.js';
+import adminApiRoutes from './routes/admin-api-v1.js';
+import publishingApiRoutes from './routes/publishing-api-v1.js';
 
 
 export default [
@@ -41,114 +25,7 @@ export default [
                 errorHandlers: [
                     adminErrorHandler,
                 ],
-                routes: [
-                    {
-                        pattern: '/style-guide{.:suffix}',
-                        name: 'style-guide',
-                        targets: [
-                            {
-                                name: 'render-style-guide-page',
-                                methods: [ 'GET', 'HEAD' ],
-                                requestHandlers: [
-                                    HyperviewStaticPageHandler(),
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        // Revoke is its own route because it shares the POST method
-                        // with create-invite; one route cannot host two POST targets.
-                        pattern: '/invites/revoke',
-                        name: 'invites-revoke',
-                        targets: [
-                            {
-                                name: 'revoke',
-                                methods: [ 'POST' ],
-                                requestHandlers: [
-                                    requireAdminUserInvitesWrite,
-                                    AdminInvites.postRevokeAdminInvite,
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '/invites',
-                        name: 'invites',
-                        targets: [
-                            {
-                                name: 'render-invite-list',
-                                methods: [ 'GET', 'HEAD' ],
-                                requestHandlers: [
-                                    requireAdminUserInvitesRead,
-                                    AdminInvites.getAdminInvites,
-                                    HyperviewDynamicPageHandler(),
-                                ],
-                            },
-                            {
-                                name: 'create-invite',
-                                methods: [ 'POST' ],
-                                requestHandlers: [
-                                    requireAdminUserInvitesWrite,
-                                    AdminInvites.postCreateAdminInvite,
-                                    HyperviewDynamicPageHandler(),
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        // Revoke is its own route because it shares the POST method
-                        // with create-token; one route cannot host two POST targets.
-                        pattern: '/publishing-api-tokens/revoke',
-                        name: 'publishing-api-tokens-revoke',
-                        targets: [
-                            {
-                                name: 'revoke',
-                                methods: [ 'POST' ],
-                                requestHandlers: [
-                                    requirePublishingApiTokensWrite,
-                                    AdminPublishingApiTokens.postRevokePublishingApiToken,
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '/publishing-api-tokens',
-                        name: 'publishing-api-tokens',
-                        targets: [
-                            {
-                                name: 'render-token-list',
-                                methods: [ 'GET', 'HEAD' ],
-                                requestHandlers: [
-                                    requirePublishingApiTokensRead,
-                                    AdminPublishingApiTokens.getPublishingApiTokens,
-                                    HyperviewDynamicPageHandler(),
-                                ],
-                            },
-                            {
-                                name: 'create-token',
-                                methods: [ 'POST' ],
-                                requestHandlers: [
-                                    requirePublishingApiTokensWrite,
-                                    AdminPublishingApiTokens.postCreatePublishingApiToken,
-                                    HyperviewDynamicPageHandler(),
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '*',
-                        name: 'static-pages',
-                        targets: [
-                            {
-                                name: 'render-static-page',
-                                methods: [ 'GET', 'HEAD' ],
-                                requestHandlers: [
-                                    HyperviewStaticPageHandler(),
-                                ],
-                            },
-                        ],
-                    },
-                ],
+                routes: adminPanelRoutes,
             },
             {
                 pattern: '/users/admin/new{.:suffix}',
@@ -206,75 +83,7 @@ export default [
                 errorHandlers: [
                     jsonApiErrorHandler,
                 ],
-                routes: [
-                    {
-                        pattern: '/migrations',
-                        name: 'migrations',
-                        inboundMiddleware: [
-                            authenticateAdminApiRequest,
-                        ],
-                        routes: [
-                            {
-                                pattern: '{/}',
-                                name: 'list',
-                                targets: [
-                                    {
-                                        name: 'get',
-                                        methods: [ 'GET' ],
-                                        requestHandlers: [
-                                            requireMigrationsRead,
-                                            AdminAPI.listMigrations,
-                                        ],
-                                    },
-                                ],
-                            },
-                            {
-                                pattern: '/:id/run',
-                                name: 'run',
-                                targets: [
-                                    {
-                                        name: 'post',
-                                        methods: [ 'POST' ],
-                                        requestHandlers: [
-                                            requireMigrationsWrite,
-                                            AdminAPI.runMigration,
-                                        ],
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '/users/invite{/}',
-                        name: 'accept-invite',
-                        targets: [
-                            {
-                                name: 'post',
-                                methods: [ 'POST' ],
-                                requestHandlers: [
-                                    AdminAPI.acceptAdminInvite,
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '/publishing-api-tokens{/}',
-                        name: 'publishing-api-tokens',
-                        inboundMiddleware: [
-                            authenticateAdminApiRequest,
-                        ],
-                        targets: [
-                            {
-                                name: 'create',
-                                methods: [ 'POST' ],
-                                requestHandlers: [
-                                    requirePublishingApiTokensWrite,
-                                    AdminAPI.createPublishingApiToken,
-                                ],
-                            },
-                        ],
-                    },
-                ],
+                routes: adminApiRoutes,
             },
             {
                 pattern: '/publishing-api/v1',
@@ -285,97 +94,7 @@ export default [
                 errorHandlers: [
                     jsonApiErrorHandler,
                 ],
-                routes: [
-                    {
-                        pattern: '/templates/base/*filepath',
-                        name: 'base-templates',
-                        targets: [
-                            {
-                                name: 'put',
-                                methods: [ 'PUT' ],
-                                requestHandlers: [
-                                    requireTemplatePermission,
-                                    PublishingAPI.putBaseTemplate,
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '/templates/pages/*filepath',
-                        name: 'page-templates',
-                        targets: [
-                            {
-                                name: 'put',
-                                methods: [ 'PUT' ],
-                                requestHandlers: [
-                                    requireTemplatePermission,
-                                    PublishingAPI.putPageTemplate,
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '/templates/partials/*filepath',
-                        name: 'partial-templates',
-                        targets: [
-                            {
-                                name: 'put',
-                                methods: [ 'PUT' ],
-                                requestHandlers: [
-                                    requireTemplatePermission,
-                                    PublishingAPI.putPartialTemplate,
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        // Optional wildcard group so the site root page ('/') can be
-                        // published via `PUT /publishing-api/v1/pages` (or with a
-                        // trailing slash). A bare `/pages/*pathname` requires at least
-                        // one segment, so the root request would fall through to the
-                        // catch-all GET/HEAD route and return 405.
-                        pattern: '/pages{/*pathname}',
-                        name: 'pages',
-                        targets: [
-                            {
-                                name: 'put-metadata',
-                                methods: [ 'PUT' ],
-                                requestHandlers: [
-                                    requirePageMetadataPermission,
-                                    PublishingAPI.putPageMetadata,
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '/includes/*filepath',
-                        name: 'includes',
-                        targets: [
-                            {
-                                name: 'put',
-                                methods: [ 'PUT' ],
-                                requestHandlers: [
-                                    requireIncludePermission,
-                                    PublishingAPI.putPageInclude,
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        pattern: '/assets/*filepath',
-                        name: 'assets',
-                        targets: [
-                            {
-                                name: 'put',
-                                methods: [ 'PUT' ],
-                                requestHandlers: [
-                                    requireAssetPermission,
-                                    PublishingAPI.putStaticAsset,
-                                ],
-                            },
-                        ],
-                    },
-                ],
+                routes: publishingApiRoutes,
             },
             {
                 pattern: '*',
