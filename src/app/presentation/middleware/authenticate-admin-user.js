@@ -16,7 +16,7 @@ const UNAUTHENTICATED_MESSAGE = 'Admin authentication is required.';
  * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>} Response threaded to the next middleware
  * @throws {UnauthenticatedError} When the request does not carry a valid admin session
  */
-export async function authenticateAdminUser(context, request, response) {
+export default async function authenticateAdminUser(context, request, response) {
     const sessionId = request.getCookie(ADMIN_SESSION_COOKIE_NAME);
 
     if (!isNonEmptyString(sessionId)) {

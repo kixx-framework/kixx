@@ -15,7 +15,7 @@ const UNAUTHENTICATED_MESSAGE = 'Publishing API authentication is required.';
  * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>} Response threaded to the next middleware.
  * @throws {UnauthenticatedError} When the request does not carry a valid publishing token.
  */
-export async function authenticatePublishingToken(context, request, response) {
+export default async function authenticatePublishingToken(context, request, response) {
     const token = request.getAuthorizationBearer();
 
     if (!isNonEmptyString(token)) {

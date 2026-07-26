@@ -3,8 +3,8 @@ import { StaticFileRequestHandler } from './kixx/static-file-server/static-file-
 import { adminErrorHandler } from './app/presentation/error-handlers/admin-error-handler.js';
 import { adminAuthErrorHandler } from './app/presentation/error-handlers/admin-auth-error-handler.js';
 import { jsonApiErrorHandler } from './app/presentation/error-handlers/json-api-error-handler.js';
-import { authenticateAdminUser } from './app/presentation/middleware/admin-authentication.js';
-import { authenticatePublishingToken } from './app/presentation/middleware/publishing-authentication.js';
+import authenticateAdminUser from './app/presentation/middleware/authenticate-admin-user.js';
+import authenticatePublishingToken from './app/presentation/middleware/authenticate-publishing-token.js';
 import * as AdminUsers from './app/presentation/request-handlers/admin-users.js';
 import adminPanelRoutes from './routes/admin-panel.js';
 import adminApiRoutes from './routes/admin-api-v1.js';
