@@ -77,6 +77,16 @@ describe('ApplicationContext', ({ describe }) => {
             assertEqual(service, context.getService('kixx.Datastore'));
         });
 
+        it('replaces a service registered under the same name', () => {
+            const context = makeApplicationContext();
+            const replacement = { id: 'replacement' };
+
+            context.registerService('svc', { id: 'original' });
+            context.registerService('svc', replacement);
+
+            assertEqual(replacement, context.getService('svc'));
+        });
+
         it('throws an AssertionError when registering with an empty name', () => {
             const context = makeApplicationContext();
 
@@ -90,6 +100,24 @@ describe('ApplicationContext', ({ describe }) => {
             const context = makeApplicationContext();
 
             const caught = catchError(() => context.registerService('svc', undefined));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+
+        it('throws an AssertionError when registering a null service', () => {
+            const context = makeApplicationContext();
+
+            const caught = catchError(() => context.registerService('svc', null));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+
+        it('throws an AssertionError when registering a primitive service', () => {
+            const context = makeApplicationContext();
+
+            const caught = catchError(() => context.registerService('svc', 'service'));
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
@@ -124,6 +152,16 @@ describe('ApplicationContext', ({ describe }) => {
             assertEqual(collection, context.getCollection('app.User'));
         });
 
+        it('replaces a collection registered under the same name', () => {
+            const context = makeApplicationContext();
+            const replacement = { name: 'Replacement' };
+
+            context.registerCollection('app.User', { name: 'Original' });
+            context.registerCollection('app.User', replacement);
+
+            assertEqual(replacement, context.getCollection('app.User'));
+        });
+
         it('throws an AssertionError when registering with an empty name', () => {
             const context = makeApplicationContext();
 
@@ -142,6 +180,24 @@ describe('ApplicationContext', ({ describe }) => {
             assertEqual('AssertionError', caught.name);
         });
 
+        it('throws an AssertionError when registering a null collection', () => {
+            const context = makeApplicationContext();
+
+            const caught = catchError(() => context.registerCollection('app.User', null));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+
+        it('throws an AssertionError when registering a primitive collection', () => {
+            const context = makeApplicationContext();
+
+            const caught = catchError(() => context.registerCollection('app.User', 'collection'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+
         it('throws an AssertionError when getting an unregistered collection', () => {
             const context = makeApplicationContext();
 
@@ -150,6 +206,15 @@ describe('ApplicationContext', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
             assertMatches('missing', caught.message);
+        });
+
+        it('throws an AssertionError when getting with an empty name', () => {
+            const context = makeApplicationContext();
+
+            const caught = catchError(() => context.getCollection(''));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
         });
     });
 
@@ -318,6 +383,29 @@ describe('ApplicationContext', ({ describe }) => {
             assertEqual(1, errors.length);
         });
 
+        it('logs the service name and cause for a rejected async close', async () => {
+            const errors = [];
+            const logger = {
+                error(...args) {
+                    errors.push(args);
+                },
+            };
+            const context = makeApplicationContext({ logger });
+            const cause = new Error('async boom');
+            context.registerService('broken', {
+                async close() {
+                    throw cause;
+                },
+            });
+
+            await context.close();
+
+            assertEqual(1, errors.length);
+            assertEqual('error closing service during shutdown', errors[0][0]);
+            assertEqual('broken', errors[0][1].name);
+            assertEqual(cause, errors[0][2]);
+        });
+
         it('is a no-op when called more than once', async () => {
             const context = makeApplicationContext();
             let closeCount = 0;
@@ -330,114 +418,27 @@ describe('ApplicationContext', ({ describe }) => {
 
             assertEqual(1, closeCount);
         });
-    });
 
-    describe('BaseContext env accessors via ApplicationContext', ({ describe }) => {
-
-        describe('getEnvString', ({ it }) => {
-            it('returns the string value when present', () => {
-                const context = makeApplicationContext({ env: { NAME: 'kixx' } });
-
-                assertEqual('kixx', context.getEnvString('NAME'));
+        it('does not close services more than once across concurrent calls', async () => {
+            const context = makeApplicationContext();
+            let closeCount = 0;
+            let finishClose;
+            const closePromise = new Promise((resolve) => {
+                finishClose = resolve;
+            });
+            context.registerService('counter', {
+                async close() {
+                    closeCount += 1;
+                    await closePromise;
+                },
             });
 
-            it('returns undefined when missing and not required', () => {
-                const context = makeApplicationContext();
+            const firstClose = context.close();
+            const secondClose = context.close();
+            finishClose();
+            await Promise.all([ firstClose, secondClose ]);
 
-                assertUndefined(context.getEnvString('MISSING'));
-            });
-
-            it('throws an AssertionError when required and missing', () => {
-                const context = makeApplicationContext();
-
-                const caught = catchError(() => context.getEnvString('MISSING', { required: true }));
-
-                assert(caught, 'expected an error to be thrown');
-                assertEqual('AssertionError', caught.name);
-                assertMatches('required', caught.message);
-            });
-        });
-
-        describe('getEnvInteger', ({ it }) => {
-            it('parses a base-10 integer string', () => {
-                const context = makeApplicationContext({ env: { PORT: '8080' } });
-
-                assertEqual(8080, context.getEnvInteger('PORT'));
-            });
-
-            it('returns a number value already stored as an integer', () => {
-                const context = makeApplicationContext({ env: { PORT: 3000 } });
-
-                assertEqual(3000, context.getEnvInteger('PORT'));
-            });
-
-            it('throws an AssertionError for a float value', () => {
-                const context = makeApplicationContext({ env: { PORT: 1.5 } });
-
-                const caught = catchError(() => context.getEnvInteger('PORT'));
-
-                assert(caught, 'expected an error to be thrown');
-                assertEqual('AssertionError', caught.name);
-            });
-
-            it('throws an AssertionError for an unparseable string', () => {
-                const context = makeApplicationContext({ env: { PORT: 'abc' } });
-
-                const caught = catchError(() => context.getEnvInteger('PORT'));
-
-                assert(caught, 'expected an error to be thrown');
-                assertEqual('AssertionError', caught.name);
-            });
-
-            it('returns undefined when missing and not required', () => {
-                const context = makeApplicationContext();
-
-                assertUndefined(context.getEnvInteger('PORT'));
-            });
-        });
-
-        describe('getEnvFloat', ({ it }) => {
-            it('parses a float string', () => {
-                const context = makeApplicationContext({ env: { RATE: '1.5' } });
-
-                assertEqual(1.5, context.getEnvFloat('RATE'));
-            });
-
-            it('returns a number value already stored as a float', () => {
-                const context = makeApplicationContext({ env: { RATE: 2.25 } });
-
-                assertEqual(2.25, context.getEnvFloat('RATE'));
-            });
-
-            it('throws an AssertionError for an unparseable string', () => {
-                const context = makeApplicationContext({ env: { RATE: 'abc' } });
-
-                const caught = catchError(() => context.getEnvFloat('RATE'));
-
-                assert(caught, 'expected an error to be thrown');
-                assertEqual('AssertionError', caught.name);
-            });
-        });
-
-        describe('getEnvBoolean', ({ it }) => {
-            it('returns true for recognized truthy values', () => {
-                assertEqual(true, makeApplicationContext({ env: { F: true } }).getEnvBoolean('F'));
-                assertEqual(true, makeApplicationContext({ env: { F: 1 } }).getEnvBoolean('F'));
-                assertEqual(true, makeApplicationContext({ env: { F: 'true' } }).getEnvBoolean('F'));
-                assertEqual(true, makeApplicationContext({ env: { F: '1' } }).getEnvBoolean('F'));
-            });
-
-            it('returns false for recognized falsy values', () => {
-                assertEqual(false, makeApplicationContext({ env: { F: false } }).getEnvBoolean('F'));
-                assertEqual(false, makeApplicationContext({ env: { F: 0 } }).getEnvBoolean('F'));
-                assertEqual(false, makeApplicationContext({ env: { F: 'false' } }).getEnvBoolean('F'));
-                assertEqual(false, makeApplicationContext({ env: { F: '0' } }).getEnvBoolean('F'));
-            });
-
-            it('returns false for missing or unrecognized values', () => {
-                assertEqual(false, makeApplicationContext().getEnvBoolean('MISSING'));
-                assertEqual(false, makeApplicationContext({ env: { F: 'maybe' } }).getEnvBoolean('F'));
-            });
+            assertEqual(1, closeCount);
         });
     });
 });

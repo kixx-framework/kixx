@@ -42,8 +42,9 @@ export function readConfig(config, environment, options) {
         );
     }
 
+    const hasSelectedEnvironment = Object.hasOwn(config.environments, environment);
     const selectedEnvironment = config.environments[environment];
-    if (!isPlainObject(selectedEnvironment)) {
+    if (!hasSelectedEnvironment || !isPlainObject(selectedEnvironment)) {
         throw new OperationalError(
             `Config does not define the "${ environment }" environment`,
             {},
@@ -53,6 +54,7 @@ export function readConfig(config, environment, options) {
 
     const configFields = { ...config };
     delete configFields.environments;
+    delete configFields.resolveFilepath;
 
     const resolvedConfig = {
         ...configFields,

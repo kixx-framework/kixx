@@ -188,6 +188,22 @@ describe('RequestContext', ({ describe }) => {
     });
 
     describe('useRoutes', ({ it }) => {
+        it('starts with an empty route list', () => {
+            const context = makeRequestContext();
+
+            assertEqual(0, context.getAllHttpTargets().length);
+            assertEqual(0, context.getHttpTargetsByTag('api').length);
+        });
+
+        it('throws an AssertionError when routes is not an array', () => {
+            const context = makeRequestContext();
+
+            const caught = catchError(() => context.useRoutes(null));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+
         it('returns this for method chaining', () => {
             const context = makeRequestContext();
 
@@ -227,6 +243,16 @@ describe('RequestContext', ({ describe }) => {
     });
 
     describe('getHttpTarget', ({ it }) => {
+        it('throws an AssertionError when routes have not been installed', () => {
+            const context = makeRequestContext();
+
+            const caught = catchError(() => context.getHttpTarget('A/missing'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('A/missing', caught.message);
+        });
+
         it('returns the target matching the fully-qualified name', () => {
             const target = makeTarget('A/two');
             const context = makeRequestContext();
@@ -299,86 +325,4 @@ describe('RequestContext', ({ describe }) => {
         });
     });
 
-    describe('BaseContext env accessors via RequestContext', ({ describe }) => {
-
-        describe('getEnvString', ({ it }) => {
-            it('returns the string value when present', () => {
-                const context = makeRequestContext({ env: { NAME: 'kixx' } });
-
-                assertEqual('kixx', context.getEnvString('NAME'));
-            });
-
-            it('returns undefined for an empty string when not required', () => {
-                const context = makeRequestContext({ env: { NAME: '' } });
-
-                assertUndefined(context.getEnvString('NAME'));
-            });
-
-            it('throws an AssertionError when required and missing', () => {
-                const context = makeRequestContext();
-
-                const caught = catchError(() => context.getEnvString('MISSING', { required: true }));
-
-                assert(caught, 'expected an error to be thrown');
-                assertEqual('AssertionError', caught.name);
-            });
-        });
-
-        describe('getEnvInteger', ({ it }) => {
-            it('parses a base-10 integer string', () => {
-                const context = makeRequestContext({ env: { PORT: '8080' } });
-
-                assertEqual(8080, context.getEnvInteger('PORT'));
-            });
-
-            it('throws an AssertionError for a float value', () => {
-                const context = makeRequestContext({ env: { PORT: 1.5 } });
-
-                const caught = catchError(() => context.getEnvInteger('PORT'));
-
-                assert(caught, 'expected an error to be thrown');
-                assertEqual('AssertionError', caught.name);
-            });
-
-            it('returns undefined when missing and not required', () => {
-                const context = makeRequestContext();
-
-                assertUndefined(context.getEnvInteger('PORT'));
-            });
-        });
-
-        describe('getEnvFloat', ({ it }) => {
-            it('parses a float string', () => {
-                const context = makeRequestContext({ env: { RATE: '1.5' } });
-
-                assertEqual(1.5, context.getEnvFloat('RATE'));
-            });
-
-            it('throws an AssertionError for an unparseable string', () => {
-                const context = makeRequestContext({ env: { RATE: 'abc' } });
-
-                const caught = catchError(() => context.getEnvFloat('RATE'));
-
-                assert(caught, 'expected an error to be thrown');
-                assertEqual('AssertionError', caught.name);
-            });
-        });
-
-        describe('getEnvBoolean', ({ it }) => {
-            it('returns true for recognized truthy values', () => {
-                assertEqual(true, makeRequestContext({ env: { F: 'true' } }).getEnvBoolean('F'));
-                assertEqual(true, makeRequestContext({ env: { F: 1 } }).getEnvBoolean('F'));
-            });
-
-            it('returns false for recognized falsy values', () => {
-                assertEqual(false, makeRequestContext({ env: { F: 'false' } }).getEnvBoolean('F'));
-                assertEqual(false, makeRequestContext({ env: { F: 0 } }).getEnvBoolean('F'));
-            });
-
-            it('returns false for missing or unrecognized values', () => {
-                assertEqual(false, makeRequestContext().getEnvBoolean('MISSING'));
-                assertEqual(false, makeRequestContext({ env: { F: 'maybe' } }).getEnvBoolean('F'));
-            });
-        });
-    });
 });

@@ -8,10 +8,13 @@ import {
     assertNonEmptyString,
     isObjectNotNull,
 } from '../assertions/mod.js';
+import deepFreeze from '../utils/deep-freeze.js';
 
 
 /**
  * Describes whether the application is running as a CLI command or server process.
+ *
+ * The descriptor and its nested arrays and plain objects are deeply frozen.
  */
 export default class AppRuntime {
 
@@ -49,7 +52,7 @@ export default class AppRuntime {
             assertNonEmptyString(command, 'AppRuntime command must be a string');
             Object.defineProperty(this, 'command', {
                 enumerable: true,
-                value: command,
+                value: deepFreeze(command),
             });
         } else {
             if (!isObjectNotNull(server)) {
@@ -58,15 +61,17 @@ export default class AppRuntime {
 
             Object.defineProperty(this, 'server', {
                 enumerable: true,
-                value: server,
+                value: deepFreeze(server),
             });
         }
 
         if (build) {
             Object.defineProperty(this, 'build', {
                 enumerable: true,
-                value: build,
+                value: deepFreeze(build),
             });
         }
+
+        Object.freeze(this);
     }
 }

@@ -3,8 +3,8 @@ import BaseContext from './base-context.js';
 import {
     assert,
     isFunction,
+    isObjectNotNull,
     assertNonEmptyString,
-    assertDefined,
 } from '../assertions/mod.js';
 
 
@@ -60,11 +60,11 @@ export default class ApplicationContext extends BaseContext {
      * @param {Object} service - Service instance to register
      * @returns {ApplicationContext} This context instance for method chaining
      * @throws {AssertionError} When name is not a non-empty string
-     * @throws {AssertionError} When service is undefined
+     * @throws {AssertionError} When service is not a non-null object
      */
     registerService(name, service) {
         assertNonEmptyString(name, 'Service name must be a non-empty string');
-        assertDefined(service, `Service "${ name }" must be defined`);
+        assert(isObjectNotNull(service), `Service "${ name }" must be a non-null object`);
         this.#services.set(name, service);
         return this;
     }
@@ -88,11 +88,11 @@ export default class ApplicationContext extends BaseContext {
      * @param {Object} collection - Collection instance to register
      * @returns {ApplicationContext} This context instance for method chaining
      * @throws {AssertionError} When name is not a non-empty string
-     * @throws {AssertionError} When collection is undefined
+     * @throws {AssertionError} When collection is not a non-null object
      */
     registerCollection(name, collection) {
         assertNonEmptyString(name, 'Collection name must be a non-empty string');
-        assertDefined(collection, `Collection "${ name }" must be defined`);
+        assert(isObjectNotNull(collection), `Collection "${ name }" must be a non-null object`);
         this.#collections.set(name, collection);
         return this;
     }

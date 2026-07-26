@@ -1,5 +1,6 @@
 import {
     AssertionError,
+    assertArray,
     isNonEmptyString,
 } from '../assertions/mod.js';
 
@@ -37,7 +38,7 @@ export default class RequestContext extends BaseContext {
 
     #services;
     #collections;
-    #routes;
+    #routes = [];
     #user = null;
 
     /**
@@ -82,8 +83,10 @@ export default class RequestContext extends BaseContext {
      *
      * @param {Array<HttpRoute>} routes - Routes visible to the current request.
      * @returns {RequestContext} This context instance for method chaining.
+     * @throws {AssertionError} When routes is not an array.
      */
     useRoutes(routes) {
+        assertArray(routes, 'RequestContext.useRoutes: routes');
         this.#routes = routes.slice();
         return this;
     }

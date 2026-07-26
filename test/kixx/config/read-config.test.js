@@ -59,6 +59,20 @@ describe('readConfig', ({ describe }) => {
             assertUndefined(result.environments);
         });
 
+        it('uses the selected environment instead of a top-level env field', () => {
+            const config = makeConfig({
+                env: {
+                    database: {
+                        url: 'https://incorrect.example.com',
+                    },
+                },
+            });
+
+            const result = readConfig(config, 'development');
+
+            assertEqual('http://localhost:8787', result.env.database.url);
+        });
+
         it('deeply freezes the returned configuration', () => {
             const result = readConfig(makeConfig(), 'development');
 
@@ -71,16 +85,23 @@ describe('readConfig', ({ describe }) => {
         });
 
         it('includes a filepath resolver when one is provided', () => {
+            const config = makeConfig({
+                resolveFilepath: () => '/incorrect',
+            });
             const resolveFilepath = (filepath) => `/app/${ filepath }`;
 
-            const result = readConfig(makeConfig(), 'development', { resolveFilepath });
+            const result = readConfig(config, 'development', { resolveFilepath });
 
             assertEqual(resolveFilepath, result.resolveFilepath);
             assertEqual('/app/pages/index.html', result.resolveFilepath('pages/index.html'));
         });
 
-        it('leaves resolveFilepath undefined when it is omitted', () => {
-            const result = readConfig(makeConfig(), 'development');
+        it('does not expose a source config filepath resolver when the runtime option is omitted', () => {
+            const config = makeConfig({
+                resolveFilepath: () => '/incorrect',
+            });
+
+            const result = readConfig(config, 'development');
 
             assertUndefined(result.resolveFilepath);
         });
@@ -128,6 +149,23 @@ describe('readConfig', ({ describe }) => {
             assertEqual('OperationalError', caught.name);
             assertEqual('OPERATIONAL_ERROR', caught.code);
             assertMatches('"test" environment', caught.message);
+        });
+
+        it('throws an OperationalError when the selected environment is inherited', () => {
+            const environments = Object.create({
+                preview: {
+                    database: {
+                        url: 'https://database.example.com',
+                    },
+                },
+            });
+            const config = makeConfig({ environments });
+            const caught = catchError(() => readConfig(config, 'preview'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
+            assertEqual('OPERATIONAL_ERROR', caught.code);
+            assertMatches('"preview" environment', caught.message);
         });
 
         it('throws an OperationalError when the selected environment is not a plain object', () => {
