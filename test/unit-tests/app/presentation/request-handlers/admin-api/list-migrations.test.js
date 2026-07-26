@@ -1,9 +1,9 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 
-import { migrations } from '../../../../../src/app/migrations/mod.js';
-import { JSON_API_CONTENT_TYPE } from '../../../../../src/app/presentation/lib/json-api.js';
-import { listMigrations } from '../../../../../src/app/presentation/request-handlers/admin-api/list-migrations.js';
+import { migrations } from '../../../../../../src/app/migrations/mod.js';
+import { JSON_API_CONTENT_TYPE } from '../../../../../../src/app/presentation/lib/json-api.js';
+import { listMigrations } from '../../../../../../src/app/presentation/request-handlers/admin-api/list-migrations.js';
 
 
 describe('listMigrations admin API handler', ({ it }) => {

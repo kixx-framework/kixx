@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { ADMIN_SESSION_TTL_SECONDS } from '../../../../src/app/lib/admin-session.js';
-import { createAdminUser } from '../../../../src/app/transaction-scripts/admin-users/create-admin-user.js';
+import { ADMIN_SESSION_TTL_SECONDS } from '../../../../../src/app/lib/admin-session.js';
+import { createAdminUser } from '../../../../../src/app/transaction-scripts/admin-users/create-admin-user.js';
 
 
 const EMAIL_ADDRESS = 'admin@example.com';

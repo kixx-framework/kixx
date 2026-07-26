@@ -5,8 +5,8 @@ import os from 'node:os';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import TemplateFileStore from '../../../../src/plugins/node-hyperview-template-file-store/lib/template-file-store.js';
-import Logger from '../../../../src/kixx/logger/logger.js';
+import TemplateFileStore from '../../../../../src/plugins/node-hyperview-template-file-store/lib/template-file-store.js';
+import Logger from '../../../../../src/kixx/logger/logger.js';
 
 
 // Temp directories created during the run, removed together in the top-level after hook.

@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { pbkdf2HashPassword } from '../../../../src/app/lib/password-hashing.js';
-import { verifyAdminCredentials } from '../../../../src/app/transaction-scripts/admin-users/verify-admin-credentials.js';
+import { pbkdf2HashPassword } from '../../../../../src/app/lib/password-hashing.js';
+import { verifyAdminCredentials } from '../../../../../src/app/transaction-scripts/admin-users/verify-admin-credentials.js';
 
 
 const PASSWORD = 'correct horse battery staple';

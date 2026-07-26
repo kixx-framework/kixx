@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 
-import { migrations } from '../../../../src/app/migrations/mod.js';
-import { listMigrations } from '../../../../src/app/transaction-scripts/migrations/list-migrations.js';
+import { migrations } from '../../../../../src/app/migrations/mod.js';
+import { listMigrations } from '../../../../../src/app/transaction-scripts/migrations/list-migrations.js';
 
 
 const FIRST_ID = '2026-07-17-first-migration';

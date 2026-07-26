@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { revokePublishingApiToken } from '../../../../src/app/transaction-scripts/publishing-api-tokens/revoke-publishing-api-token.js';
+import { revokePublishingApiToken } from '../../../../../src/app/transaction-scripts/publishing-api-tokens/revoke-publishing-api-token.js';
 
 
 const TOKEN_ID = 'stored-token-hash';

@@ -1,9 +1,9 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 
-import MigrationRecord from '../../../../src/app/collections/migration-record.js';
-import { migrations } from '../../../../src/app/migrations/mod.js';
-import { runMigration } from '../../../../src/app/transaction-scripts/migrations/run-migration.js';
+import MigrationRecord from '../../../../../src/app/collections/migration-record.js';
+import { migrations } from '../../../../../src/app/migrations/mod.js';
+import { runMigration } from '../../../../../src/app/transaction-scripts/migrations/run-migration.js';
 
 
 const MIGRATION_ID = '2026-07-17-runner-test';

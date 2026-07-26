@@ -5,7 +5,7 @@ import {
     computeCommittedState,
     computeFailedState,
     computeRunPreparation,
-} from '../../../../../src/app/transaction-scripts/migrations/lib/migration-state.js';
+} from '../../../../../../src/app/transaction-scripts/migrations/lib/migration-state.js';
 
 
 const ORIGINAL_START = '2026-07-17T12:00:00.000Z';

@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { putTemplate } from '../../../../src/app/transaction-scripts/publishing/put-template.js';
+import { putTemplate } from '../../../../../src/app/transaction-scripts/publishing/put-template.js';
 
 
 const CURRENT_BUILD_ID = 'build-current';

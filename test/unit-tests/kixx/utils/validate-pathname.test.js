@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import validatePathname from '../../../src/kixx/utils/validate-pathname.js';
+import validatePathname from '../../../../src/kixx/utils/validate-pathname.js';
 
 
 function catchError(fn) {

@@ -1,9 +1,9 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { ROLE_ROOT_ADMIN } from '../../../../src/app/lib/roles.js';
-import { verifyPassword } from '../../../../src/app/lib/password-hashing.js';
-import { createAdminUserAccount } from '../../../../src/app/transaction-scripts/admin-users/create-admin-user-account.js';
+import { ROLE_ROOT_ADMIN } from '../../../../../src/app/lib/roles.js';
+import { verifyPassword } from '../../../../../src/app/lib/password-hashing.js';
+import { createAdminUserAccount } from '../../../../../src/app/transaction-scripts/admin-users/create-admin-user-account.js';
 
 
 const EMAIL_ADDRESS = 'admin@example.com';

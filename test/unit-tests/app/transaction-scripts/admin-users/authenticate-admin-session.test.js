@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { authenticateAdminSession } from '../../../../src/app/transaction-scripts/admin-users/authenticate-admin-session.js';
+import { authenticateAdminSession } from '../../../../../src/app/transaction-scripts/admin-users/authenticate-admin-session.js';
 
 
 const SESSION_ID = 'session-1';

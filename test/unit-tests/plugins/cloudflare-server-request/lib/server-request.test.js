@@ -7,7 +7,7 @@ import {
     assertValidDate,
 } from 'kixx-assert';
 
-import ServerRequest from '../../../../src/plugins/cloudflare-server-request/lib/server-request.js';
+import ServerRequest from '../../../../../src/plugins/cloudflare-server-request/lib/server-request.js';
 
 
 function makeNativeRequest(options) {

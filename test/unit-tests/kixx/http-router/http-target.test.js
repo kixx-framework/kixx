@@ -5,7 +5,7 @@ import {
     assertMatches,
 } from 'kixx-assert';
 
-import HttpTarget from '../../../src/kixx/http-router/http-target.js';
+import HttpTarget from '../../../../src/kixx/http-router/http-target.js';
 
 function makeTarget(overrides) {
     return new HttpTarget(Object.assign({

@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import MigrationRecord from '../../../src/app/collections/migration-record.js';
+import MigrationRecord from '../../../../src/app/collections/migration-record.js';
 
 
 const STARTED_AT = '2026-07-17T12:00:00.000Z';

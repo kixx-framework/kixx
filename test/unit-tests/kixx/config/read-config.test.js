@@ -6,7 +6,7 @@ import {
     assertUndefined,
 } from 'kixx-assert';
 
-import { readConfig } from '../../../src/kixx/config/read-config.js';
+import { readConfig } from '../../../../src/kixx/config/read-config.js';
 
 
 function makeConfig(overrides) {

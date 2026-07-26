@@ -1,9 +1,9 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { ADMIN_SESSION_TTL_SECONDS } from '../../../../src/app/lib/admin-session.js';
-import { pbkdf2HashPassword } from '../../../../src/app/lib/password-hashing.js';
-import { authenticateAdminCredentials } from '../../../../src/app/transaction-scripts/admin-users/authenticate-admin-credentials.js';
+import { ADMIN_SESSION_TTL_SECONDS } from '../../../../../src/app/lib/admin-session.js';
+import { pbkdf2HashPassword } from '../../../../../src/app/lib/password-hashing.js';
+import { authenticateAdminCredentials } from '../../../../../src/app/transaction-scripts/admin-users/authenticate-admin-credentials.js';
 
 
 const EMAIL_ADDRESS = 'admin@example.com';

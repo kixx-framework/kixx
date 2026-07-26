@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import RunMigrationForm from '../../../../../src/app/presentation/forms/migrations/run-migration-form.js';
+import RunMigrationForm from '../../../../../../src/app/presentation/forms/migrations/run-migration-form.js';
 
 
 describe('RunMigrationForm', ({ it }) => {

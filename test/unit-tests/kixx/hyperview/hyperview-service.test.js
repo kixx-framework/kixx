@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertUndefined } from 'kixx-assert';
 
-import HyperviewService from '../../../src/kixx/hyperview/hyperview-service.js';
+import HyperviewService from '../../../../src/kixx/hyperview/hyperview-service.js';
 
 
 function makeContext(buildId = 'build-1') {

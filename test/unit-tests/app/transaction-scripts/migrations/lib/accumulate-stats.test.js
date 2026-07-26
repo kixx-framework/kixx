@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertNotEqual } from 'kixx-assert';
 
-import { accumulateStats } from '../../../../../src/app/transaction-scripts/migrations/lib/accumulate-stats.js';
+import { accumulateStats } from '../../../../../../src/app/transaction-scripts/migrations/lib/accumulate-stats.js';
 
 
 describe('accumulateStats', ({ it }) => {

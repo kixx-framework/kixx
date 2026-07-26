@@ -5,8 +5,8 @@ import {
     getMigration,
     listMigrations,
     migrations,
-} from '../../../src/app/migrations/mod.js';
-import { migrate as exampleNoop } from '../../../src/app/migrations/2026-07-17-example-noop.js';
+} from '../../../../src/app/migrations/mod.js';
+import { migrate as exampleNoop } from '../../../../src/app/migrations/2026-07-17-example-noop.js';
 
 
 const EXAMPLE_ID = '2026-07-17-example-noop';

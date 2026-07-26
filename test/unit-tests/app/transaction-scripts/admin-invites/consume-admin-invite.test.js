@@ -1,9 +1,9 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { ROLE_EDITOR, ROLE_SUPER_ADMIN, ROLE_ROOT_ADMIN } from '../../../../src/app/lib/roles.js';
-import { sha256Hex } from '../../../../src/kixx/utils/crypto.js';
-import { consumeAdminInvite } from '../../../../src/app/transaction-scripts/admin-invites/consume-admin-invite.js';
+import { ROLE_EDITOR, ROLE_SUPER_ADMIN, ROLE_ROOT_ADMIN } from '../../../../../src/app/lib/roles.js';
+import { sha256Hex } from '../../../../../src/kixx/utils/crypto.js';
+import { consumeAdminInvite } from '../../../../../src/app/transaction-scripts/admin-invites/consume-admin-invite.js';
 
 
 const TOKEN = 'presented-invite-token';

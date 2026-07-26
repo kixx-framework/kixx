@@ -8,7 +8,7 @@ import {
 import {
     createJSONLogEntry,
     stringifyJSONLogEntry,
-} from '../../../src/kixx/logger/json-log-entry-serializer.js';
+} from '../../../../src/kixx/logger/json-log-entry-serializer.js';
 
 
 describe('JsonLogEntrySerializer', ({ describe }) => {

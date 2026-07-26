@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { putStaticAsset } from '../../../../src/app/transaction-scripts/publishing/put-static-asset.js';
+import { putStaticAsset } from '../../../../../src/app/transaction-scripts/publishing/put-static-asset.js';
 
 
 const CURRENT_BUILD_ID = 'build-current';

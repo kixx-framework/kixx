@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { revokeAdminInvite } from '../../../../src/app/transaction-scripts/admin-invites/revoke-admin-invite.js';
+import { revokeAdminInvite } from '../../../../../src/app/transaction-scripts/admin-invites/revoke-admin-invite.js';
 
 
 const INVITE_ID = 'stored-invite-token-hash';

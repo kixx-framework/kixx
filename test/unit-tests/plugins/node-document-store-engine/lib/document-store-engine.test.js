@@ -6,8 +6,8 @@ import os from 'node:os';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import DocumentStoreEngine from '../../../../src/plugins/node-document-store-engine/lib/document-store-engine.js';
-import Logger from '../../../../src/kixx/logger/logger.js';
+import DocumentStoreEngine from '../../../../../src/plugins/node-document-store-engine/lib/document-store-engine.js';
+import Logger from '../../../../../src/kixx/logger/logger.js';
 
 
 const tempDirs = [];

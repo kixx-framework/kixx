@@ -1,10 +1,10 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import MigrationRecord from '../../../../../src/app/collections/migration-record.js';
-import { migrations } from '../../../../../src/app/migrations/mod.js';
-import { JSON_API_CONTENT_TYPE } from '../../../../../src/app/presentation/lib/json-api.js';
-import { runMigration } from '../../../../../src/app/presentation/request-handlers/admin-api/run-migration.js';
+import MigrationRecord from '../../../../../../src/app/collections/migration-record.js';
+import { migrations } from '../../../../../../src/app/migrations/mod.js';
+import { JSON_API_CONTENT_TYPE } from '../../../../../../src/app/presentation/lib/json-api.js';
+import { runMigration } from '../../../../../../src/app/presentation/request-handlers/admin-api/run-migration.js';
 
 
 const MIGRATION_ID = '2026-07-17-handler-test';

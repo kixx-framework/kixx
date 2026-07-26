@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { listAdminInvites } from '../../../../src/app/transaction-scripts/admin-invites/list-admin-invites.js';
+import { listAdminInvites } from '../../../../../src/app/transaction-scripts/admin-invites/list-admin-invites.js';
 
 
 const NEXT_CURSOR = 'signed-next-page-cursor';

@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import TemplateFileStore from '../../../../src/plugins/cloudflare-hyperview-template-file-store/lib/template-file-store.js';
-import Logger from '../../../../src/kixx/logger/logger.js';
+import TemplateFileStore from '../../../../../src/plugins/cloudflare-hyperview-template-file-store/lib/template-file-store.js';
+import Logger from '../../../../../src/kixx/logger/logger.js';
 
 
 function makeLogger() {

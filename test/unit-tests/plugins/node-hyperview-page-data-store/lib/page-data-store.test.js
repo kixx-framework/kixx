@@ -5,8 +5,8 @@ import os from 'node:os';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import PageDataStore from '../../../../src/plugins/node-hyperview-page-data-store/lib/page-data-store.js';
-import Logger from '../../../../src/kixx/logger/logger.js';
+import PageDataStore from '../../../../../src/plugins/node-hyperview-page-data-store/lib/page-data-store.js';
+import Logger from '../../../../../src/kixx/logger/logger.js';
 
 
 // Temp directories created during the run, removed together in the top-level after hook.

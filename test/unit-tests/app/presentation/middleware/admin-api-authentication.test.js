@@ -1,11 +1,11 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertFalsy, assertGreaterThan, assertUndefined } from 'kixx-assert';
 
-import { pbkdf2HashPassword } from '../../../../src/app/lib/password-hashing.js';
-import { ROLE_DEVELOPER_ADMIN, deriveRolePermissions } from '../../../../src/app/lib/roles.js';
-import authenticateAdminApiRequest from '../../../../src/app/presentation/middleware/authenticate-admin-api-request.js';
-import VirtualHost from '../../../../src/kixx/http-router/virtual-host.js';
-import virtualHosts from '../../../../src/virtual-hosts.js';
+import { pbkdf2HashPassword } from '../../../../../src/app/lib/password-hashing.js';
+import { ROLE_DEVELOPER_ADMIN, deriveRolePermissions } from '../../../../../src/app/lib/roles.js';
+import authenticateAdminApiRequest from '../../../../../src/app/presentation/middleware/authenticate-admin-api-request.js';
+import VirtualHost from '../../../../../src/kixx/http-router/virtual-host.js';
+import virtualHosts from '../../../../../src/virtual-hosts.js';
 
 
 describe('Admin API authentication middleware', ({ it }) => {

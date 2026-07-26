@@ -6,7 +6,7 @@ import {
     assertUndefined,
 } from 'kixx-assert';
 
-import BaseContext from '../../../src/kixx/context/base-context.js';
+import BaseContext from '../../../../src/kixx/context/base-context.js';
 
 
 function makeBaseContext(options) {

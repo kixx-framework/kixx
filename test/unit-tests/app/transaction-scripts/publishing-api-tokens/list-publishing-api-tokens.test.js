@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { listPublishingApiTokens } from '../../../../src/app/transaction-scripts/publishing-api-tokens/list-publishing-api-tokens.js';
+import { listPublishingApiTokens } from '../../../../../src/app/transaction-scripts/publishing-api-tokens/list-publishing-api-tokens.js';
 
 
 const NEXT_CURSOR = 'signed-next-page-cursor';

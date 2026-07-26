@@ -5,8 +5,8 @@ import {
     PRESET_OWNER_ADMIN,
     ROLE_EDITOR,
     ROLE_SUPER_ADMIN,
-} from '../../../../src/app/lib/roles.js';
-import { createAdminInvite } from '../../../../src/app/transaction-scripts/admin-invites/create-admin-invite.js';
+} from '../../../../../src/app/lib/roles.js';
+import { createAdminInvite } from '../../../../../src/app/transaction-scripts/admin-invites/create-admin-invite.js';
 
 
 const CREATED_BY = 'admin-1';

@@ -5,8 +5,8 @@ import os from 'node:os';
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { register } from '../../../src/plugins/node-hyperview-template-file-store/plugin.js';
-import Logger from '../../../src/kixx/logger/logger.js';
+import { register } from '../../../../src/plugins/node-hyperview-template-file-store/plugin.js';
+import Logger from '../../../../src/kixx/logger/logger.js';
 
 
 const tempDirs = [];

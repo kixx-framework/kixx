@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { validateBatchResult } from '../../../../../src/app/transaction-scripts/migrations/lib/validate-batch-result.js';
+import { validateBatchResult } from '../../../../../../src/app/transaction-scripts/migrations/lib/validate-batch-result.js';
 
 
 describe('validateBatchResult', ({ it }) => {

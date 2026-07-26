@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { authenticatePublishingToken } from '../../../../src/app/transaction-scripts/publishing-api-tokens/authenticate-publishing-token.js';
+import { authenticatePublishingToken } from '../../../../../src/app/transaction-scripts/publishing-api-tokens/authenticate-publishing-token.js';
 
 
 const TOKEN = 'kxpat_test-token';

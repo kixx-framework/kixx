@@ -6,7 +6,7 @@ import {
     assertUndefined,
 } from 'kixx-assert';
 
-import AppRuntime from '../../../src/kixx/context/app-runtime.js';
+import AppRuntime from '../../../../src/kixx/context/app-runtime.js';
 
 
 function catchError(fn) {

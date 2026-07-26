@@ -6,8 +6,8 @@ import os from 'node:os';
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import KeyValueStore from '../../../../src/plugins/node-key-value-store/lib/key-value-store.js';
-import Logger from '../../../../src/kixx/logger/logger.js';
+import KeyValueStore from '../../../../../src/plugins/node-key-value-store/lib/key-value-store.js';
+import Logger from '../../../../../src/kixx/logger/logger.js';
 
 
 const tempDirs = [];

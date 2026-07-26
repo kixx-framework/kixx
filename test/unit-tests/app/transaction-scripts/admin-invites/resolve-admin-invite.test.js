@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { sha256Hex } from '../../../../src/kixx/utils/crypto.js';
-import { resolveAdminInvite } from '../../../../src/app/transaction-scripts/admin-invites/resolve-admin-invite.js';
+import { sha256Hex } from '../../../../../src/kixx/utils/crypto.js';
+import { resolveAdminInvite } from '../../../../../src/app/transaction-scripts/admin-invites/resolve-admin-invite.js';
 
 
 const TOKEN = 'presented-invite-token';

@@ -9,7 +9,7 @@ import {
 import DocumentStore, {
     MAX_SORT_KEY_CHAR,
     sortKeyPrefixRange,
-} from '../../../src/kixx/document-store/document-store.js';
+} from '../../../../src/kixx/document-store/document-store.js';
 
 
 const CURSOR_SIGNING_SECRET = 'document-store-test-signing-secret';

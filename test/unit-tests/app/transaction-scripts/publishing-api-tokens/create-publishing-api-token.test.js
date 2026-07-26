@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import { createPublishingApiToken } from '../../../../src/app/transaction-scripts/publishing-api-tokens/create-publishing-api-token.js';
+import { createPublishingApiToken } from '../../../../../src/app/transaction-scripts/publishing-api-tokens/create-publishing-api-token.js';
 
 
 const GRANTING_USER_ID = 'admin-1';
