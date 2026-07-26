@@ -1,12 +1,7 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from '../kixx/hyperview/hyperview-request-handlers.js';
 import * as AdminInvites from '../app/presentation/request-handlers/admin-invites.js';
 import * as AdminPublishingApiTokens from '../app/presentation/request-handlers/admin-publishing-api-tokens.js';
-import {
-    requireAdminUserInvitesRead,
-    requireAdminUserInvitesWrite,
-    requirePublishingApiTokensRead,
-    requirePublishingApiTokensWrite,
-} from '../app/presentation/request-handlers/admin-authorization.js';
+import * as AdminAuthorization from '../app/presentation/middleware/admin-authorization.js';
 
 
 export default [
@@ -33,7 +28,7 @@ export default [
                 name: 'revoke',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    requireAdminUserInvitesWrite,
+                    AdminAuthorization.requireAdminUserInvitesWrite,
                     AdminInvites.postRevokeAdminInvite,
                 ],
             },
@@ -47,7 +42,7 @@ export default [
                 name: 'render-invite-list',
                 methods: [ 'GET', 'HEAD' ],
                 requestHandlers: [
-                    requireAdminUserInvitesRead,
+                    AdminAuthorization.requireAdminUserInvitesRead,
                     AdminInvites.getAdminInvites,
                     HyperviewDynamicPageHandler(),
                 ],
@@ -56,7 +51,7 @@ export default [
                 name: 'create-invite',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    requireAdminUserInvitesWrite,
+                    AdminAuthorization.requireAdminUserInvitesWrite,
                     AdminInvites.postCreateAdminInvite,
                     HyperviewDynamicPageHandler(),
                 ],
@@ -73,7 +68,7 @@ export default [
                 name: 'revoke',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    requirePublishingApiTokensWrite,
+                    AdminAuthorization.requirePublishingApiTokensWrite,
                     AdminPublishingApiTokens.postRevokePublishingApiToken,
                 ],
             },
@@ -87,7 +82,7 @@ export default [
                 name: 'render-token-list',
                 methods: [ 'GET', 'HEAD' ],
                 requestHandlers: [
-                    requirePublishingApiTokensRead,
+                    AdminAuthorization.requirePublishingApiTokensRead,
                     AdminPublishingApiTokens.getPublishingApiTokens,
                     HyperviewDynamicPageHandler(),
                 ],
@@ -96,7 +91,7 @@ export default [
                 name: 'create-token',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    requirePublishingApiTokensWrite,
+                    AdminAuthorization.requirePublishingApiTokensWrite,
                     AdminPublishingApiTokens.postCreatePublishingApiToken,
                     HyperviewDynamicPageHandler(),
                 ],

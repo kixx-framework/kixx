@@ -1,10 +1,6 @@
 import { authenticateAdminApiRequest } from '../app/presentation/middleware/admin-api-authentication.js';
 import * as AdminAPI from '../app/presentation/request-handlers/admin-api/mod.js';
-import {
-    requireMigrationsRead,
-    requireMigrationsWrite,
-    requirePublishingApiTokensWrite,
-} from '../app/presentation/request-handlers/admin-authorization.js';
+import * as AdminAuthorization from '../app/presentation/middleware/admin-authorization.js';
 
 
 export default [
@@ -23,7 +19,7 @@ export default [
                         name: 'get',
                         methods: [ 'GET' ],
                         requestHandlers: [
-                            requireMigrationsRead,
+                            AdminAuthorization.requireMigrationsRead,
                             AdminAPI.listMigrations,
                         ],
                     },
@@ -37,7 +33,7 @@ export default [
                         name: 'post',
                         methods: [ 'POST' ],
                         requestHandlers: [
-                            requireMigrationsWrite,
+                            AdminAuthorization.requireMigrationsWrite,
                             AdminAPI.runMigration,
                         ],
                     },
@@ -69,7 +65,7 @@ export default [
                 name: 'create',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    requirePublishingApiTokensWrite,
+                    AdminAuthorization.requirePublishingApiTokensWrite,
                     AdminAPI.createPublishingApiToken,
                 ],
             },
