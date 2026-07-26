@@ -1,3 +1,4 @@
+import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
 import {
     BadRequestError,
     UnsupportedMediaTypeError,
@@ -38,9 +39,9 @@ function createPutTemplateHandler(kind) {
             buildId,
         });
 
-        // Report the kind-relative filepath the client supplied via the URL
-        // wildcard, not the store's logical key. The template file store returns
-        // a prefix-included key (e.g. `base/website.html`) because that is how
+        // Report the kind-relative filepath derived from the URL wildcard, not
+        // the store's logical key. The template file store returns a
+        // prefix-included key (e.g. `base/website.html`) because that is how
         // Hyperview resolves template names internally, but the publishing API
         // contract already encodes the kind in the URL path, so the response
         // filepath must stay prefix-less (e.g. `website.html`).
@@ -84,7 +85,21 @@ function getWildcardFilepath(request, name) {
         });
     }
 
+    // A wildcard route param splits on '/', so a leading, doubled, or trailing
+    // slash in the URL surfaces as an empty segment. The two template file store
+    // adapters then disagree: the Node store's path.join() absorbs the empty
+    // segment and files the template correctly, while the Cloudflare store uses
+    // the logical key as the KV key verbatim, so `base/site.html/` is written
+    // where no read will ever look. Reject the variant at the edge instead, so
+    // one template has exactly one addressable URL on every deploy target.
+    if (segments.some((segment) => !isNonEmptyString(segment))) {
+        throw new BadRequestError('Template filepath must not contain empty path segments.', {
+            code: 'EmptyPathSegment',
+        });
+    }
+
     // Reject path traversal and out-of-whitelist characters at the edge (400)
-    // rather than relying on a downstream store assertion (500).
+    // rather than relying on a downstream store assertion (500). Validate the
+    // segments as the client sent them so the error message echoes the request.
     return validatePathname(segments.join('/'));
 }

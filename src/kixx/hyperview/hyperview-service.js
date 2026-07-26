@@ -43,6 +43,26 @@ import truncate from './helpers/truncate.js';
  */
 
 /**
+ * A Map whose `get`/`has`/`set` fold string keys to lower case, so a partial
+ * referenced as `{{> Nav.html }}` resolves the entry stored under `nav.html`.
+ * Passed to the templating engine as a plain `Map` interface — the engine
+ * calls only `has`/`get` and never learns this subclass exists.
+ */
+class CaseInsensitiveMap extends Map {
+    get(key) {
+        return super.get(key.toLowerCase());
+    }
+
+    has(key) {
+        return super.has(key.toLowerCase());
+    }
+
+    set(key, value) {
+        return super.set(key.toLowerCase(), value);
+    }
+}
+
+/**
  * Renders Hyperview pages by fetching, merging, and processing hierarchical page data.
  */
 export default class HyperviewService {
@@ -401,13 +421,15 @@ export default class HyperviewService {
     /**
      * Loads and compiles a shared base template with all available partials.
      * @param {RequestContext} context - Request context passed through to the template file store
-     * @param {string} templateId - Base template identifier understood by the template file store
+     * @param {string} templateId - Base template identifier understood by the template file store.
+     *   Resolved case-insensitively.
      * @param {Object} [options] - Template loading options
      * @param {boolean} [options.useCache=false] - Reuse compiled templates from this service instance
      * @returns {Promise<Function|null>} Render function, or null when the base template does not exist
      * @throws {Error} When a template or partial cannot be compiled
      */
     async getBaseTemplate(context, templateId, options) {
+        templateId = this.#normalizeTemplateId(templateId);
         const { useCache = false } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
 
@@ -438,12 +460,14 @@ export default class HyperviewService {
     /**
      * Loads and compiles a page-specific template with all available partials.
      * @param {RequestContext} context - Request context
-     * @param {string} templateId - Template identifier understood by the template file store
+     * @param {string} templateId - Template identifier understood by the template file store.
+     *   Resolved case-insensitively.
      * @param {Object} [options] - Template loading options
      * @param {boolean} [options.useCache=false] - Reuse compiled templates from this service instance
      * @returns {Promise<Function|null>} Render function, or null when the page template does not exist
      */
     async getPageTemplate(context, templateId, options) {
+        templateId = this.#normalizeTemplateId(templateId);
         const { useCache = false } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
 
@@ -478,12 +502,13 @@ export default class HyperviewService {
      * validated at render time, not at write time.
      * @param {RequestContext} context - Request context carrying the current build id
      * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} templateId - Base template filename relative to `base/`
+     * @param {string} templateId - Base template filename relative to `base/`. Resolved case-insensitively.
      * @param {string} source - Template source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
      * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
      */
     async putBaseTemplate(context, buildId, templateId, source) {
+        templateId = this.#normalizeTemplateId(templateId);
         this.#assertWritableBuildId(context, buildId);
         return await this.#templateFileStore.putBaseTemplate(context, buildId, templateId, source);
     }
@@ -496,12 +521,13 @@ export default class HyperviewService {
      * several segments deep, delimited by `/`.
      * @param {RequestContext} context - Request context carrying the current build id
      * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} templateId - Page template filepath relative to `pages/`
+     * @param {string} templateId - Page template filepath relative to `pages/`. Resolved case-insensitively.
      * @param {string} source - Template source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
      * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
      */
     async putPageTemplate(context, buildId, templateId, source) {
+        templateId = this.#normalizeTemplateId(templateId);
         this.#assertWritableBuildId(context, buildId);
         return await this.#templateFileStore.putPageTemplate(context, buildId, templateId, source);
     }
@@ -513,12 +539,13 @@ export default class HyperviewService {
      * cross-partial references are resolved at render time, not at write time.
      * @param {RequestContext} context - Request context carrying the current build id
      * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} filepath - Partial filename relative to `partials/`
+     * @param {string} filepath - Partial filename relative to `partials/`. Resolved case-insensitively.
      * @param {string} source - Partial source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
      * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
      */
     async putPartial(context, buildId, filepath, source) {
+        filepath = this.#normalizeTemplateId(filepath);
         this.#assertWritableBuildId(context, buildId);
         return await this.#templateFileStore.putPartial(context, buildId, filepath, source);
     }
@@ -528,7 +555,9 @@ export default class HyperviewService {
      * @param {RequestContext} context - Request context
      * @param {Object} [options] - Partial loading options
      * @param {boolean} [options.useCache=false] - Reuse compiled partials from this service instance
-     * @returns {Promise<Map<string, Function>>} Partial render functions keyed by template include name
+     * @returns {Promise<Map<string, Function>>} Partial render functions keyed by template include
+     *   name. Keys resolve case-insensitively: `get`/`has` fold the lookup key, and `set` folds the
+     *   stored key to match.
      */
     async loadPartials(context, options) {
         const { useCache = false } = options ?? {};
@@ -547,7 +576,7 @@ export default class HyperviewService {
 
         const files = await this.#templateFileStore.getPartials(context, buildId);
 
-        partials = new Map();
+        partials = new CaseInsensitiveMap();
 
         for (const { filepath, source } of files) {
             const name = filepath.replace(/^\/?partials\//, '');
@@ -581,6 +610,17 @@ export default class HyperviewService {
         const tree = templating.buildSyntaxTree(null, tokens);
 
         return templating.createRenderFunction(null, helpers, partials, tree);
+    }
+
+    /**
+     * Folds a template id to the case-insensitive form used as a template file
+     * store key. `toLowerCase()` rather than `toLocaleLowerCase()`, so resolution
+     * does not depend on the server's locale.
+     * @param {string} templateId - Base, page, or partial template identifier
+     * @returns {string} The template id folded to lower case
+     */
+    #normalizeTemplateId(templateId) {
+        return templateId.toLowerCase();
     }
 
     /**

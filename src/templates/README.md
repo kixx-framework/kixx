@@ -1207,6 +1207,8 @@ In Hyperview, shared partials live under `application/templates/partials/`. A ta
 application/templates/partials/website/styles.css
 ```
 
+Partial name resolution is case-insensitive, so `{{> Website/Styles.css }}` resolves the same file.
+
 Base templates live under `application/templates/base-templates/`. Page templates live under the matching `application/pages/` directory.
 
 Base template:
@@ -1296,6 +1298,7 @@ Additional partial rules:
 
 - Missing partials render as an empty string.
 - Partial names are literal. Dynamic partial names are not supported.
+- Partial name resolution is case-insensitive.
 - A standalone partial tag propagates its indentation to every line of the partial output.
 - Partials are parsed independently, so delimiter changes in a parent do not affect partial syntax.
 

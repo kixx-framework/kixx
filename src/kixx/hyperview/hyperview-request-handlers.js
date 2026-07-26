@@ -57,7 +57,8 @@ const FORMAT_EXTENSION_PATTERN = /\.json$/;
  * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
  *   per-page via `metadata.baseTemplate`.
  * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`.
- *   Can be overridden per-page via `metadata.pageTemplate`.
+ *   Can be overridden per-page via `metadata.pageTemplate`. HyperviewService resolves
+ *   the ID case-insensitively.
  * @returns {function(RequestContext, ServerRequestInterface, ServerResponse): Promise<ServerResponse>}
  *   Async request handler for the router pipeline.
  */
@@ -221,7 +222,8 @@ export function HyperviewStaticPageHandler(options) {
 * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
  *   per-page via `metadata.baseTemplate`.
  * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`.
- *   Can be overridden per-page via `metadata.pageTemplate`.
+ *   Can be overridden per-page via `metadata.pageTemplate`. HyperviewService resolves
+ *   the ID case-insensitively.
  * @returns {function(RequestContext, ServerRequestInterface, ServerResponse): Promise<ServerResponse>}
  *   Async request handler for the router pipeline.
  */
