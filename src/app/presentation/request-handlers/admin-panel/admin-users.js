@@ -1,18 +1,18 @@
-import NewAdminUserForm from '../forms/admin-users/new-admin-user-form.js';
-import AdminUserLoginForm from '../forms/admin-users/admin-user-login-form.js';
-import { createAdminUser } from '../../transaction-scripts/admin-users/create-admin-user.js';
-import { resolveAdminInvite } from '../../transaction-scripts/admin-invites/resolve-admin-invite.js';
-import { authenticateAdminCredentials } from '../../transaction-scripts/admin-users/authenticate-admin-credentials.js';
-import { authenticateAdminSession } from '../../transaction-scripts/admin-users/authenticate-admin-session.js';
+import NewAdminUserForm from '../../forms/admin-users/new-admin-user-form.js';
+import AdminUserLoginForm from '../../forms/admin-users/admin-user-login-form.js';
+import { createAdminUser } from '../../../transaction-scripts/admin-users/create-admin-user.js';
+import { resolveAdminInvite } from '../../../transaction-scripts/admin-invites/resolve-admin-invite.js';
+import { authenticateAdminCredentials } from '../../../transaction-scripts/admin-users/authenticate-admin-credentials.js';
+import { authenticateAdminSession } from '../../../transaction-scripts/admin-users/authenticate-admin-session.js';
 import {
     ADMIN_SESSION_COOKIE_NAME,
     setAdminSessionCookie,
-} from '../lib/admin-session-cookie.js';
+} from '../../lib/admin-session-cookie.js';
 import {
     clearCsrfToken,
     getCsrfFormContext,
     validateCsrfFormData,
-} from '../lib/csrf.js';
+} from '../../lib/csrf.js';
 import {
     checkInviteThrottle,
     checkLoginThrottle,
@@ -23,8 +23,8 @@ import {
     recordLoginFailure,
     recordSignupFailure,
     throttleMessage,
-} from '../lib/rate-limit.js';
-import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
+} from '../../lib/rate-limit.js';
+import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
 
 
 const SESSION_CREATE_FAILED = 'session_create_failed';

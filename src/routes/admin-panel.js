@@ -1,6 +1,6 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from '../kixx/hyperview/hyperview-request-handlers.js';
-import * as AdminInvites from '../app/presentation/request-handlers/admin-invites.js';
-import * as AdminPublishingApiTokens from '../app/presentation/request-handlers/admin-publishing-api-tokens.js';
+import * as AdminInvites from '../app/presentation/request-handlers/admin-panel/admin-invites.js';
+import * as AdminPublishingApiTokens from '../app/presentation/request-handlers/admin-panel/admin-publishing-api-tokens.js';
 import * as AdminAuthorization from '../app/presentation/middleware/admin-authorization.js';
 
 

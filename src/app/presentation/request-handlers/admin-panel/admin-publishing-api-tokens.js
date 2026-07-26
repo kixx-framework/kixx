@@ -1,15 +1,15 @@
 import PublishingApiTokenCreateForm, {
     PublishingApiTokenRevokeForm,
-} from '../forms/publishing-api-tokens/publishing-api-token-admin-form.js';
-import { createPublishingApiToken } from '../../transaction-scripts/publishing-api-tokens/create-publishing-api-token.js';
-import { listPublishingApiTokens } from '../../transaction-scripts/publishing-api-tokens/list-publishing-api-tokens.js';
-import { revokePublishingApiToken } from '../../transaction-scripts/publishing-api-tokens/revoke-publishing-api-token.js';
-import { getCsrfFormContext, validateCsrfFormData } from '../lib/csrf.js';
+} from '../../forms/publishing-api-tokens/publishing-api-token-admin-form.js';
+import { createPublishingApiToken } from '../../../transaction-scripts/publishing-api-tokens/create-publishing-api-token.js';
+import { listPublishingApiTokens } from '../../../transaction-scripts/publishing-api-tokens/list-publishing-api-tokens.js';
+import { revokePublishingApiToken } from '../../../transaction-scripts/publishing-api-tokens/revoke-publishing-api-token.js';
+import { getCsrfFormContext, validateCsrfFormData } from '../../lib/csrf.js';
 import {
     createCursorPaginationLinks,
     getCursorPaginationQueryParams,
     rethrowInvalidCursorAsBadRequest,
-} from '../lib/pagination.js';
+} from '../../lib/pagination.js';
 
 
 // Notice code shown when a submission is rejected because its CSRF token was no

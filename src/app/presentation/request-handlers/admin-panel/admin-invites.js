@@ -1,13 +1,13 @@
-import AdminInviteCreateForm, { AdminInviteRevokeForm } from '../forms/admin-invites/admin-invite-form.js';
-import { createAdminInvite } from '../../transaction-scripts/admin-invites/create-admin-invite.js';
-import { listAdminInvites } from '../../transaction-scripts/admin-invites/list-admin-invites.js';
-import { revokeAdminInvite } from '../../transaction-scripts/admin-invites/revoke-admin-invite.js';
-import { getCsrfFormContext, validateCsrfFormData } from '../lib/csrf.js';
+import AdminInviteCreateForm, { AdminInviteRevokeForm } from '../../forms/admin-invites/admin-invite-form.js';
+import { createAdminInvite } from '../../../transaction-scripts/admin-invites/create-admin-invite.js';
+import { listAdminInvites } from '../../../transaction-scripts/admin-invites/list-admin-invites.js';
+import { revokeAdminInvite } from '../../../transaction-scripts/admin-invites/revoke-admin-invite.js';
+import { getCsrfFormContext, validateCsrfFormData } from '../../lib/csrf.js';
 import {
     createCursorPaginationLinks,
     getCursorPaginationQueryParams,
     rethrowInvalidCursorAsBadRequest,
-} from '../lib/pagination.js';
+} from '../../lib/pagination.js';
 
 
 // Notice code shown when a submission is rejected because its CSRF token was no
