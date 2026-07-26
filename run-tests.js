@@ -5,9 +5,12 @@ import path from 'node:path';
 import { EOL } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runTests } from 'kixx-test';
+import { isNonEmptyString } from './src/kixx/assertions/mod.js';
 
 
-const USAGE = 'Usage: node run-tests.js [--e2e] [--skip <path>] [pathname ...]';
+const USAGE = 'Usage: node run-tests.js [--e2e] [--skip <path>] ' +
+    '[--base-url <url> | --development | --cloudflare | --nodejs] ' +
+    '[--username <username>] [--password <password>] [pathname ...]';
 
 const ROOT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +29,40 @@ const TEST_FILE_PATTERN = /test.js$/;
 // individual describe block cannot raise it above this value.
 const END_TO_END_TIMEOUT = 10000;
 
+const END_TO_END_OPTION_NAMES = [
+    'base-url',
+    'username',
+    'password',
+    'development',
+    'cloudflare',
+    'nodejs',
+];
+
+const END_TO_END_BASE_URL_OPTION_NAMES = [
+    'base-url',
+    'development',
+    'cloudflare',
+    'nodejs',
+];
+
+const END_TO_END_STRING_OPTION_NAMES = [
+    'base-url',
+    'username',
+    'password',
+];
+
+const END_TO_END_BASE_URLS = new Map([
+    [ 'development', 'http://localhost:2026/' ],
+    [ 'cloudflare', 'https://cloudflare.kixx-testing.dev/' ],
+    [ 'nodejs', 'https://nodejs.kixx-testing.dev/' ],
+]);
+
+const END_TO_END_ENVIRONMENT_VARIABLES = new Map([
+    [ 'base-url', 'E2E_TESTS_BASE_URL' ],
+    [ 'username', 'E2E_TESTS_ROOT_USERNAME' ],
+    [ 'password', 'E2E_TESTS_ROOT_PASSWORD' ],
+]);
+
 
 // Signals an invocation problem the user can correct: a bad flag, a pathname
 // outside the active suite, or a missing target. Reported as a message on stderr
@@ -41,6 +78,8 @@ class CommandLineError extends Error {
 
 async function main() {
     const args = parseCommandLineArguments();
+
+    configureEndToEndEnvironment(args);
 
     const useEndToEnd = args.values.e2e;
     const testRoot = useEndToEnd ? END_TO_END_TEST_ROOT : UNIT_TEST_ROOT;
@@ -178,9 +217,16 @@ function parseCommandLineArguments() {
             // green pass.
             strict: true,
             allowPositionals: true,
+            tokens: true,
             options: {
                 e2e: { type: 'boolean', default: false },
                 skip: { type: 'string', multiple: true },
+                'base-url': { type: 'string' },
+                username: { type: 'string' },
+                password: { type: 'string' },
+                development: { type: 'boolean' },
+                cloudflare: { type: 'boolean' },
+                nodejs: { type: 'boolean' },
             },
         });
     } catch (cause) {
@@ -188,6 +234,127 @@ function parseCommandLineArguments() {
         // values given to boolean flags. All of those are usage mistakes, so
         // report the message rather than a Node internal stack trace.
         throw new CommandLineError(cause.message, true);
+    }
+}
+
+function configureEndToEndEnvironment(args) {
+    const suppliedOptionNames = args.tokens
+        .filter(({ kind, name }) => {
+            return kind === 'option' && END_TO_END_OPTION_NAMES.includes(name);
+        })
+        .map(({ name }) => name);
+
+    assertOptionsNotRepeated(suppliedOptionNames);
+
+    if (!args.values.e2e) {
+        if (suppliedOptionNames.length > 0) {
+            throw new CommandLineError(
+                'End-to-end configuration options can only be used with --e2e.',
+                true,
+            );
+        }
+        return;
+    }
+
+    const suppliedOptions = new Set(suppliedOptionNames);
+
+    assertBaseUrlOptionsDoNotConflict(suppliedOptions);
+    assertStringOptionsAreNotEmpty(args.values, suppliedOptions);
+    applyEndToEndEnvironmentOverrides(args.values, suppliedOptions);
+    assertEndToEndEnvironmentIsComplete();
+    assertBaseUrlIsValid(process.env.E2E_TESTS_BASE_URL);
+}
+
+function assertOptionsNotRepeated(optionNames) {
+    const seen = new Set();
+
+    for (const optionName of optionNames) {
+        if (seen.has(optionName)) {
+            throw new CommandLineError(
+                `End-to-end configuration option --${ optionName } cannot be repeated.`,
+                true,
+            );
+        }
+        seen.add(optionName);
+    }
+}
+
+function assertBaseUrlOptionsDoNotConflict(suppliedOptions) {
+    const baseUrlOptions = END_TO_END_BASE_URL_OPTION_NAMES.filter((optionName) => {
+        return suppliedOptions.has(optionName);
+    });
+
+    if (baseUrlOptions.length > 1) {
+        throw new CommandLineError(
+            'Only one base URL option may be used: ' +
+                '--base-url, --development, --cloudflare, or --nodejs.',
+            true,
+        );
+    }
+}
+
+function assertStringOptionsAreNotEmpty(values, suppliedOptions) {
+    for (const optionName of END_TO_END_STRING_OPTION_NAMES) {
+        if (suppliedOptions.has(optionName) && values[optionName] === '') {
+            throw new CommandLineError(
+                `End-to-end configuration option --${ optionName } cannot be empty.`,
+                true,
+            );
+        }
+    }
+}
+
+function applyEndToEndEnvironmentOverrides(values, suppliedOptions) {
+    for (const [ optionName, environmentVariable ] of END_TO_END_ENVIRONMENT_VARIABLES) {
+        if (suppliedOptions.has(optionName)) {
+            process.env[environmentVariable] = values[optionName];
+        }
+    }
+
+    for (const [ optionName, baseUrl ] of END_TO_END_BASE_URLS) {
+        if (suppliedOptions.has(optionName)) {
+            process.env.E2E_TESTS_BASE_URL = baseUrl;
+        }
+    }
+}
+
+function assertEndToEndEnvironmentIsComplete() {
+    const missingVariables = Array.from(END_TO_END_ENVIRONMENT_VARIABLES.values())
+        .filter((environmentVariable) => {
+            return !isNonEmptyString(process.env[environmentVariable]);
+        });
+
+    if (missingVariables.length > 0) {
+        throw new CommandLineError(
+            `Missing required end-to-end environment variables: ${ missingVariables.join(', ') }.`,
+            true,
+        );
+    }
+}
+
+function assertBaseUrlIsValid(baseUrl) {
+    if (baseUrl.trim() !== baseUrl) {
+        throw new CommandLineError(
+            'E2E_TESTS_BASE_URL cannot have leading or trailing whitespace.',
+            true,
+        );
+    }
+
+    let url;
+    try {
+        url = new URL(baseUrl);
+    } catch {
+        throw new CommandLineError(
+            'E2E_TESTS_BASE_URL must be a valid absolute HTTP(S) URL.',
+            true,
+        );
+    }
+
+    if (![ 'http:', 'https:' ].includes(url.protocol) || !isNonEmptyString(url.hostname)) {
+        throw new CommandLineError(
+            'E2E_TESTS_BASE_URL must be a valid absolute HTTP(S) URL.',
+            true,
+        );
     }
 }
 
