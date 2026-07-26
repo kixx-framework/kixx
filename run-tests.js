@@ -73,7 +73,13 @@ async function main() {
         testFiles = await readTestFilesFromDirectory(testRoot, skipPaths);
     }
 
+    // Sorting the fully collected list, rather than each directory during the
+    // walk, makes import order a pure function of the set of selected files:
+    // readdir() order and the order of the positional arguments cannot reach
+    // it. Deduplication depends on this sort to put copies side by side.
     testFiles.sort(compareFilepaths);
+    testFiles = dropDuplicateFilepaths(testFiles);
+
     for (const file of testFiles) {
         // eslint-disable-next-line no-await-in-loop
         await dynamicallyImportFile(file);
@@ -306,8 +312,26 @@ function isPathInsideDirectory(filepath, directory) {
     );
 }
 
+// Compares by UTF-16 code unit rather than with localeCompare(). Locale aware
+// collation resolves against the host ICU build and the environment locale, so
+// it can order the same pathnames differently between machines, and between
+// Node.js and Deno. A code unit comparison is a total order over pathnames on
+// every runtime, which is what makes a failing run reproduce elsewhere.
 function compareFilepaths(a, b) {
-    return a.filepath.localeCompare(b.filepath);
+    if (a.filepath === b.filepath) {
+        return 0;
+    }
+    return a.filepath < b.filepath ? -1 : 1;
+}
+
+// Overlapping positional pathnames walk the same file more than once, so the
+// sorted list can hold consecutive copies of a filepath. Reducing it to a set
+// keeps each test file imported exactly once by construction instead of
+// relying on the ESM module cache to swallow the repeated import().
+function dropDuplicateFilepaths(testFiles) {
+    return testFiles.filter(({ filepath }, index) => {
+        return index === 0 || filepath !== testFiles[index - 1].filepath;
+    });
 }
 
 function write(msg, callback) {

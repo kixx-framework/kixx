@@ -293,7 +293,7 @@ it('rejects on failure', async () => {
 
 - Name each `it` as a behavior statement, for example `'returns null when input is empty'`.
 - Keep each `it` focused on one behavior.
-- Avoid relying on test order. The runner executes tests sequentially in registration order, but tests should still be understandable in isolation.
+- Avoid relying on test order. The runner executes tests sequentially in registration order, but tests should still be understandable in isolation. Test files are loaded in a deterministic order so that a failure reproduces identically on another machine and in CI. That guarantee exists for debugging, and is not permission to let one test file depend on another having run first.
 - Prefer local setup in `it` blocks for mutable state.
 - Use file-local factories to keep required context explicit without repeating large object literals.
 - Assert observable behavior: return values, thrown errors, emitted output, state changes, or calls made through mocks.
