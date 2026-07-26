@@ -9,9 +9,9 @@ The project test runner imports test files first, which register top-level `desc
 
 ## File Conventions
 
-- Put tests under `test/`.
-- Name test files with the project convention `*.test.js`, for example `test/kixx/logger/logger.test.js`.
-- Mirror the source tree where practical: `src/kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`.
+- Put unit tests under `test/unit-tests/`. End-to-end tests live in `test/end-to-end/` and are run separately with `node run-tests.js --e2e`.
+- Name test files with the project convention `*.test.js`, for example `test/unit-tests/kixx/logger/logger.test.js`.
+- Mirror the source tree where practical: `src/kixx/logger/logger.js` is tested by `test/unit-tests/kixx/logger/logger.test.js`.
 - Use one top-level `describe` per test file, named after the module, class, or behavior under test.
 
 ## Imports

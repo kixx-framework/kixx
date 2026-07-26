@@ -73,30 +73,48 @@ Exit behavior:
 - Exits 1 when any lint error is present (or when CLI/config loading fails).
 - Exits 0 when results are warnings-only or fully clean.
 
-### Unit Testing
+### Testing
+
+Tests are split into two suites which never run in the same process:
+
+- `test/unit-tests/` is the default suite.
+- `test/end-to-end/` runs only when the `--e2e` flag is present.
 
 Run tests with:
 
 ```bash
-# Run all non-integration test files (*.test.js) in the ./test/ directory
+# Run all unit test files (*.test.js) in ./test/unit-tests/
 node run-tests.js
 
-# Run all test files (*.test.js) in the files and directories passed into run-tests.js
+# Run all end-to-end test files (*.test.js) in ./test/end-to-end/
+node run-tests.js --e2e
+
+# Run only the test files in the given files and directories
 node run-tests.js [pathname ...]
+node run-tests.js --e2e [pathname ...]
+
+# Exclude a file or directory from the run
+node run-tests.js --skip test/unit-tests/plugins
 
 # Run the tests with Deno. Use the -P flag to pull permissions from deno.json
 deno run -P run-tests.js
 ```
-Pathname arguments are optional. If omitted, the CLI uses `./test/`.
+Pathname arguments are optional. If omitted, the CLI walks the root directory of the selected suite.
+
+Every pathname argument, positional or `--skip`, is resolved relative to the current working directory and must resolve inside the root directory of the selected suite. A pathname belonging to the other suite, or to neither suite, is a usage error. This is what stops a forgotten or misspelled `--e2e` from quietly running the wrong suite.
 
 When a target pathname is a directory, the test script walks it recursively and only runs `*.test.js` files. Other file extensions are ignored during directory traversal.
 
-Diagnostic output is written to stderr, grouped by file.
+End-to-end tests run with a 10 second timeout in place of the `kixx-test` default. The runner applies it as a ceiling, so an individual `describe` block cannot raise it.
+
+`./test/end-to-end/` is not tracked by git while it is empty, so `node run-tests.js --e2e` exits 1 until the first end-to-end test file is committed.
+
+Usage and validation errors, such as an unknown flag, a pathname outside the selected suite, or a missing suite root directory, are written to stderr. Test results and the run summary are written to stdout.
 
 Exit behavior:
 
-- Exits 1 when any test error is present (or when CLI/config loading fails).
-- Exits 0 when results are warnings-only or fully clean.
+- Exits 1 when any test error is present, when a pathname argument is invalid, or when the root directory of the selected suite does not exist.
+- Exits 0 when every test passes, including when the selected suite contains no test files.
 
 Copyright and License
 ---------------------
