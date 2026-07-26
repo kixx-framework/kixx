@@ -87,36 +87,70 @@ describe('runMigration admin API handler', ({ it }) => {
         });
     });
 
-    it('rejects unsupported content, invalid form fields, and unknown ids at their boundaries', async () => {
-        const unsupported = await catchAsyncError(() => {
+    it('leaves a real-run stored cursor failure as a restart conflict', async () => {
+        const invalidCursor = makeNamedError('InvalidCursorError');
+        await withMigration(async () => {
+            throw invalidCursor;
+        }, async () => {
+            const ledger = makeLedgerHarness();
+            const caught = await catchAsyncError(() => {
+                return runMigration(
+                    makeContext(ledger.collection),
+                    makeRequest({}),
+                    makeResponse(),
+                );
+            });
+
+            // Only a dry-run cursor is client-owned, so this must stay a 409
+            // telling the operator to restart with force, not a 400.
+            assert(caught, 'expected a restart conflict to be thrown');
+            assertEqual('ConflictError', caught.name);
+            assertEqual(409, caught.httpStatusCode);
+            assertEqual('MigrationCursorConflictError', caught.code);
+            assertEqual(invalidCursor, caught.cause);
+        });
+    });
+
+    it('rejects a request body which is not JSON API', async () => {
+        const caught = await catchAsyncError(() => {
             return runMigration(
                 makeContext(null),
                 makeRequest({}, { contentType: 'application/json' }),
                 makeResponse(),
             );
         });
-        assertEqual('UnsupportedMediaTypeError', unsupported.name);
-        assertEqual(415, unsupported.httpStatusCode);
 
-        const invalidForm = await catchAsyncError(() => {
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('UnsupportedMediaTypeError', caught.name);
+        assertEqual(415, caught.httpStatusCode);
+    });
+
+    it('rejects invalid migration run form fields', async () => {
+        const caught = await catchAsyncError(() => {
             return runMigration(
                 makeContext(null),
                 makeRequest({ dryRun: 'yes' }),
                 makeResponse(),
             );
         });
-        assertEqual('ValidationError', invalidForm.name);
-        assertEqual(422, invalidForm.httpStatusCode);
 
-        const unknown = await catchAsyncError(() => {
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('ValidationError', caught.name);
+        assertEqual(422, caught.httpStatusCode);
+    });
+
+    it('rejects an unregistered migration id', async () => {
+        const caught = await catchAsyncError(() => {
             return runMigration(
                 makeContext(null),
                 makeRequest({}, { id: '2026-07-17-not-registered' }),
                 makeResponse(),
             );
         });
-        assertEqual('NotFoundError', unknown.name);
-        assertEqual(404, unknown.httpStatusCode);
+
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('NotFoundError', caught.name);
+        assertEqual(404, caught.httpStatusCode);
     });
 });
 

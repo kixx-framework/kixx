@@ -9,6 +9,8 @@ import { listMigrations } from '../../../../../../src/app/presentation/request-h
 describe('listMigrations admin API handler', ({ it }) => {
     it('returns registry-ordered Migration resources with pending and stored attributes', async () => {
         await withRegistry(async () => {
+            // Internal ledger fields are present here so the assertions below
+            // can prove the handler projection omits them.
             const storedRecord = {
                 status: 'applied',
                 stats: { scanned: 4 },
@@ -17,6 +19,8 @@ describe('listMigrations admin API handler', ({ it }) => {
                 startedAt: '2026-07-17T12:00:00.000Z',
                 completedAt: '2026-07-17T12:05:00.000Z',
                 error: null,
+                cursor: 'internal-cursor',
+                lastBatchAt: '2026-07-17T12:04:00.000Z',
             };
             const collection = {
                 async getByMigrationId(_context, id) {
@@ -46,6 +50,7 @@ describe('listMigrations admin API handler', ({ it }) => {
             assertEqual(4, response.document.data[1].attributes.stats.scanned);
             assertEqual(2, response.document.data[1].attributes.batchCount);
             assertEqual(undefined, response.document.data[1].attributes.cursor);
+            assertEqual(undefined, response.document.data[1].attributes.lastBatchAt);
         });
     });
 });
