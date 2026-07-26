@@ -1,10 +1,5 @@
 import * as PublishingAPI from '../app/presentation/request-handlers/publishing-api/mod.js';
-import {
-    requireAssetPermission,
-    requireIncludePermission,
-    requirePageMetadataPermission,
-    requireTemplatePermission,
-} from '../app/presentation/request-handlers/publishing-api/authorization.js';
+import * as Permissions from '../app/presentation/request-handlers/publishing-api/authorization.js';
 
 
 export default [
@@ -16,7 +11,7 @@ export default [
                 name: 'put',
                 methods: [ 'PUT' ],
                 requestHandlers: [
-                    requireTemplatePermission,
+                    Permissions.requireTemplatePermission,
                     PublishingAPI.putBaseTemplate,
                 ],
             },
@@ -30,7 +25,7 @@ export default [
                 name: 'put',
                 methods: [ 'PUT' ],
                 requestHandlers: [
-                    requireTemplatePermission,
+                    Permissions.requireTemplatePermission,
                     PublishingAPI.putPageTemplate,
                 ],
             },
@@ -44,7 +39,7 @@ export default [
                 name: 'put',
                 methods: [ 'PUT' ],
                 requestHandlers: [
-                    requireTemplatePermission,
+                    Permissions.requireTemplatePermission,
                     PublishingAPI.putPartialTemplate,
                 ],
             },
@@ -63,7 +58,7 @@ export default [
                 name: 'put-metadata',
                 methods: [ 'PUT' ],
                 requestHandlers: [
-                    requirePageMetadataPermission,
+                    Permissions.requirePageMetadataPermission,
                     PublishingAPI.putPageMetadata,
                 ],
             },
@@ -77,7 +72,7 @@ export default [
                 name: 'put',
                 methods: [ 'PUT' ],
                 requestHandlers: [
-                    requireIncludePermission,
+                    Permissions.requireIncludePermission,
                     PublishingAPI.putPageInclude,
                 ],
             },
@@ -91,7 +86,7 @@ export default [
                 name: 'put',
                 methods: [ 'PUT' ],
                 requestHandlers: [
-                    requireAssetPermission,
+                    Permissions.requireAssetPermission,
                     PublishingAPI.putStaticAsset,
                 ],
             },
