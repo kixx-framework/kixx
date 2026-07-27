@@ -80,26 +80,16 @@ Tests are split into two suites which never run in the same process:
 - `test/unit-tests/` is the default suite.
 - `test/end-to-end/` runs only when the `--e2e` flag is present.
 
-Run tests with:
+See the [End-to-End testing README](test/end-to-end/README.md) for more information about running end-to-end tests.
+
+Run unit tests with:
 
 ```bash
 # Run all unit test files (*.test.js) in ./test/unit-tests/
 node run-tests.js
 
-# Run all end-to-end test files (*.test.js) in ./test/end-to-end/
-node run-tests.js --e2e
-
-# Run end-to-end tests against a predefined deployment target
-node run-tests.js --e2e --development
-node run-tests.js --e2e --cloudflare
-node run-tests.js --e2e --nodejs
-
-# Override individual end-to-end configuration values
-node run-tests.js --e2e --base-url https://example.test/ --username example-user --password 'example-password'
-
 # Run only the test files in the given files and directories
 node run-tests.js [pathname ...]
-node run-tests.js --e2e [pathname ...]
 
 # Exclude a file or directory from the run
 node run-tests.js --skip test/unit-tests/plugins
@@ -116,23 +106,6 @@ When a target pathname is a directory, the test script walks it recursively and 
 Test files are loaded in ascending order of their absolute pathname, compared by UTF-16 code unit. The comparison is deliberately not locale aware, so the order does not shift with the environment locale, the host ICU build, or the choice of Node.js or Deno. Files selected through overlapping targets are loaded only once.
 
 Load order depends only on which files the run selects, never on how they were selected. Unlike the linter, the test runner ignores the order of the positional arguments: `node run-tests.js test/unit-tests/kixx test/unit-tests/app` loads the same files in the same order as the reversed invocation. A narrowed re-run therefore loads its files in the same relative order as the full run.
-
-End-to-end tests run with a 10 second timeout in place of the `kixx-test` default. The runner applies it as a ceiling, so an individual `describe` block cannot raise it.
-
-End-to-end runs require `E2E_TESTS_BASE_URL`, `E2E_TESTS_ROOT_USERNAME`, and `E2E_TESTS_ROOT_PASSWORD` to have non-empty values. The following CLI options override those environment variables for the current test process:
-
-- `--base-url <url>` sets `E2E_TESTS_BASE_URL`.
-- `--username <username>` sets `E2E_TESTS_ROOT_USERNAME`.
-- `--password <password>` sets `E2E_TESTS_ROOT_PASSWORD`.
-- `--development` sets `E2E_TESTS_BASE_URL` to `http://localhost:2026/`.
-- `--cloudflare` sets `E2E_TESTS_BASE_URL` to `https://cloudflare.kixx-testing.dev/`.
-- `--nodejs` sets `E2E_TESTS_BASE_URL` to `https://nodejs.kixx-testing.dev/`.
-
-These options are valid only with `--e2e`. Each option may appear only once, and only one of `--base-url`, `--development`, `--cloudflare`, or `--nodejs` may be used in a run. CLI overrides are independent: any required value not provided on the command line continues to come from the existing environment.
-
-The final base URL must be a valid absolute HTTP or HTTPS URL with no leading or trailing whitespace. CLI values are otherwise preserved exactly.
-
-`./test/end-to-end/` is not tracked by git while it is empty, so `node run-tests.js --e2e` exits 1 until the first end-to-end test file is committed.
 
 Usage and validation errors, such as an unknown flag, a pathname outside the selected suite, or a missing suite root directory, are written to stderr. Test results and the run summary are written to stdout.
 

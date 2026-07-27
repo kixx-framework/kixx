@@ -10,7 +10,7 @@ import { isNonEmptyString } from './src/kixx/assertions/mod.js';
 
 const USAGE = 'Usage: node run-tests.js [--e2e] [--skip <path>] ' +
     '[--base-url <url> | --development | --cloudflare | --nodejs] ' +
-    '[--username <username>] [--password <password>] [pathname ...]';
+    '[--username <username>] [--password <password>] [--build-id <id>] [pathname ...]';
 
 const ROOT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,6 +33,7 @@ const END_TO_END_OPTION_NAMES = [
     'base-url',
     'username',
     'password',
+    'build-id',
     'development',
     'cloudflare',
     'nodejs',
@@ -49,6 +50,7 @@ const END_TO_END_STRING_OPTION_NAMES = [
     'base-url',
     'username',
     'password',
+    'build-id',
 ];
 
 const END_TO_END_BASE_URLS = new Map([
@@ -61,7 +63,20 @@ const END_TO_END_ENVIRONMENT_VARIABLES = new Map([
     [ 'base-url', 'E2E_TESTS_BASE_URL' ],
     [ 'username', 'E2E_TESTS_ROOT_USERNAME' ],
     [ 'password', 'E2E_TESTS_ROOT_PASSWORD' ],
+    [ 'build-id', 'E2E_TESTS_BUILD_ID' ],
 ]);
+
+// E2E_TESTS_BUILD_ID is deliberately not required. It names the target
+// deployment's *current* build id, which only a deployed target has: the app
+// reads it from the BUILD_ID environment variable, and neither the dev server
+// nor any checked-in dotenv file sets one, so a local run has no current build
+// at all. Tests which need it disable themselves when it is absent rather than
+// failing a run that was never configured for them.
+const REQUIRED_END_TO_END_ENVIRONMENT_VARIABLES = [
+    'E2E_TESTS_BASE_URL',
+    'E2E_TESTS_ROOT_USERNAME',
+    'E2E_TESTS_ROOT_PASSWORD',
+];
 
 
 // Signals an invocation problem the user can correct: a bad flag, a pathname
@@ -224,6 +239,7 @@ function parseCommandLineArguments() {
                 'base-url': { type: 'string' },
                 username: { type: 'string' },
                 password: { type: 'string' },
+                'build-id': { type: 'string' },
                 development: { type: 'boolean' },
                 cloudflare: { type: 'boolean' },
                 nodejs: { type: 'boolean' },
@@ -319,7 +335,7 @@ function applyEndToEndEnvironmentOverrides(values, suppliedOptions) {
 }
 
 function assertEndToEndEnvironmentIsComplete() {
-    const missingVariables = Array.from(END_TO_END_ENVIRONMENT_VARIABLES.values())
+    const missingVariables = REQUIRED_END_TO_END_ENVIRONMENT_VARIABLES
         .filter((environmentVariable) => {
             return !isNonEmptyString(process.env[environmentVariable]);
         });

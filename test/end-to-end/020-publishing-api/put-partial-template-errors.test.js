@@ -8,10 +8,14 @@ import {
 } from 'kixx-assert';
 import { getBaseUrl } from '../test-helpers/lib.js';
 import { getPublishingApiToken } from '../test-helpers/authenticate.js';
-import { TEST_BUILD_ID } from '../test-helpers/publishing-api.js';
+import { TEST_BUILD_ID, getCurrentBuildId } from '../test-helpers/publishing-api.js';
 
 
 const FIXTURE_URL = new URL('../fixtures/publishing-api/partial-template.html', import.meta.url);
+
+// Null unless the run supplied E2E_TESTS_BUILD_ID or --build-id, which disables
+// the current-build conflict block below. See that block for why.
+const CURRENT_BUILD_ID = getCurrentBuildId();
 
 const TEMPLATE_FILEPATH = 'e2e/nested/partial-template.html';
 
@@ -257,6 +261,44 @@ describe('PUT /publishing-api/v1/templates/partials/*filepath with an invalid fi
         });
     });
 });
+
+// Disabled unless the run was told which build the target deployment is
+// currently serving. The id cannot be discovered over HTTP, and a local dev
+// server has no current build at all — putTemplate() reads it as null, which no
+// non-empty header value can ever equal — so without the configuration this
+// branch is unreachable rather than merely untested. Disabling reports that in
+// the run summary instead of passing quietly.
+describe('PUT /publishing-api/v1/templates/partials/*filepath targeting the current build', ({ before, it }) => {
+
+    let result;
+
+    before(async () => {
+        result = await putPartialTemplate({ buildId: CURRENT_BUILD_ID });
+    });
+
+    // A 200 here means the configured build id is not the one the deployment is
+    // serving, so the write went to an ordinary namespace. That is a
+    // misconfigured run, not a passing one.
+    it('responds with an HTTP 409 status code', () => {
+        assert(result.response);
+        assertEqual(409, result.response.status);
+        assertEqual(result.url.href, result.response.url);
+    });
+
+    // The live site renders from this namespace, so a publish which overwrote it
+    // would change the running site in place — the opposite of the atomic
+    // deployment model, where a build is staged under its own id and swapped in.
+    // putTemplate() refuses before reaching the Hyperview service, so nothing is
+    // written.
+    it('returns the error in a well formatted JSON:API payload', () => {
+        assertSingleJsonApiError(result, {
+            status: '409',
+            code: 'CurrentBuildWriteConflict',
+            title: 'ConflictError',
+            detail: 'Template writes must target a build other than the current build.',
+        });
+    });
+}, { disabled: CURRENT_BUILD_ID === null });
 
 describe('PUT /publishing-api/v1/templates/partials/*filepath with an empty path segment', ({ before, it }) => {
 
