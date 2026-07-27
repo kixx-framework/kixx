@@ -5,9 +5,9 @@ import { assert, assertNonEmptyString } from '../../kixx/assertions/mod.js';
 
 /**
  * @typedef {Object} RateLimitPolicy
- * @property {number} maxFailures - Failures within the window before the scope locks.
- * @property {number} windowSeconds - Sliding window length; the streak resets after this many seconds without a failure.
- * @property {number} cooldownSeconds - How long the scope stays locked once the threshold is reached.
+ * @property {number} maxFailures - Positive integer failure threshold that locks the scope.
+ * @property {number} windowSeconds - Positive integer sliding-window lifetime in seconds; must satisfy the store's minimum TTL.
+ * @property {number} cooldownSeconds - Positive integer lock lifetime in seconds; must satisfy the store's minimum TTL.
  */
 
 /**
@@ -18,7 +18,7 @@ import { assert, assertNonEmptyString } from '../../kixx/assertions/mod.js';
 
 
 /**
- * Table Data Gateway for fixed-window failure counters in the Key/Value Store.
+ * Table Data Gateway for sliding-window failure counters in the Key/Value Store.
  *
  * Each scope (a per-IP or per-(IP, email) key chosen by the caller) maps to one
  * counter record keyed by that scope id. The collection owns the counting and
@@ -27,6 +27,7 @@ import { assert, assertNonEmptyString } from '../../kixx/assertions/mod.js';
  * each failure refreshes the record TTL to `windowSeconds`, so a scope that
  * stops failing resets on its own, and a scope that crosses `maxFailures` is
  * locked for `cooldownSeconds` with a matching TTL so the lock self-clears.
+ * @extends Collection
  */
 export default class RateLimitCollection extends Collection {
 
@@ -60,7 +61,7 @@ export default class RateLimitCollection extends Collection {
      * @param {string} scopeId - Opaque scope key identifying the counter record.
      * @param {RateLimitPolicy} policy - Threshold, window, and cooldown for this scope.
      * @returns {Promise<RateLimitState>} Throttle state after recording the failure.
-     * @throws {AssertionError} When scopeId or any policy field is invalid.
+     * @throws {AssertionError} When scopeId or any policy field is invalid, or an expiration violates the store contract.
      */
     async recordFailure(context, scopeId, policy) {
         assertNonEmptyString(scopeId, 'RateLimitCollection#recordFailure() scopeId must be a non-empty string');

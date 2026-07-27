@@ -44,7 +44,7 @@ export default class Collection {
 
     /**
      * DTO class used to wrap raw store records. Optionally override to use a custom Record subclass.
-     * @type {Function}
+     * @type {typeof Record}
      */
     static Record = Record;
 
@@ -52,7 +52,7 @@ export default class Collection {
 
     /**
      * @param {Object} config
-     * @param {DocumentStore} config.db - Initialized DocumentStore instance
+     * @param {import('../../kixx/document-store/document-store.js').default} config.db - Initialized DocumentStore instance
      * @throws {AssertionError} When `db` is missing or `TYPE` has not been overridden from the base class
      */
     constructor(config) {
@@ -80,7 +80,7 @@ export default class Collection {
             /**
              * DTO class used to convert raw store records on every read or write.
              * @name Record
-             * @type {Function}
+             * @type {typeof Record}
              * @readonly
              */
             Record: {
@@ -154,6 +154,7 @@ export default class Collection {
      * @param {number} [options.retryLimit=3] - Maximum number of refetch-and-retry attempts after the first conflict
      * @returns {Promise<Record>} The updated document wrapped in the configured Record class
      * @throws {AssertionError} When arguments are invalid
+     * @throws {ValidationError} When the initial or retried Record fails validation
      * @throws {DocumentNotFoundError} When the document disappears during a retry
      * @throws {RetryLimitExceededError} When conflicts continue past `retryLimit`
      * @throws {DocumentUniqueIndexViolationError} When any attempted write conflicts with a configured unique secondary index
@@ -270,7 +271,7 @@ export default class Collection {
      * @param {Object} [options] - Scan options
      * @param {boolean} [options.descending=false] - Sort in descending order when true
      * @param {number} [options.limit=100] - Positive integer maximum number of records per page
-     * @param {string} [options.cursor] - Non-empty opaque pagination token returned by a previous call
+     * @param {string|null} [options.cursor] - Opaque pagination token returned by a previous call; null starts from the first page
      * @param {*} [options.equalTo] - Exact match on the sort key; mutually exclusive with range bounds
      * @param {*} [options.greaterThan] - Exclusive lower bound on the sort key
      * @param {*} [options.greaterThanOrEqualTo] - Inclusive lower bound on the sort key
@@ -278,6 +279,7 @@ export default class Collection {
      * @param {*} [options.lessThanOrEqualTo] - Inclusive upper bound on the sort key
      * @returns {Promise<{items: Record[], cursor: string|null}>} Page of Record instances and an opaque next-page cursor, or null on the last page
      * @throws {AssertionError} When arguments are invalid
+     * @throws {InvalidCursorError} When the cursor is invalid or belongs to a different scan
      */
     async scan(context, options) {
         const result = await this.#db.scan(context, this.type, options);
@@ -295,7 +297,7 @@ export default class Collection {
      * @param {string} options.index - Name of the configured secondary index to query
      * @param {boolean} [options.descending=false] - Sort in descending order when true
      * @param {number} [options.limit=100] - Positive integer maximum number of records per page
-     * @param {string} [options.cursor] - Non-empty opaque pagination token returned by a previous call
+     * @param {string|null} [options.cursor] - Opaque pagination token returned by a previous call; null starts from the first page
      * @param {*} [options.equalTo] - Exact match on the index value; mutually exclusive with range bounds
      * @param {*} [options.greaterThan] - Exclusive lower bound on the index value
      * @param {*} [options.greaterThanOrEqualTo] - Inclusive lower bound on the index value
@@ -303,6 +305,7 @@ export default class Collection {
      * @param {*} [options.lessThanOrEqualTo] - Inclusive upper bound on the index value
      * @returns {Promise<{items: Record[], cursor: string|null}>} Page of Record instances and an opaque next-page cursor, or null on the last page
      * @throws {AssertionError} When arguments are invalid or the index is not configured
+     * @throws {InvalidCursorError} When the cursor is invalid or belongs to a different query
      */
     async query(context, options) {
         const result = await this.#db.query(context, this.type, options);

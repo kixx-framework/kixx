@@ -22,7 +22,11 @@ export default class PublishingApiTokenCollection extends Collection {
 
     static Record = PublishingApiTokenRecord;
 
-    // List ordering is by creation time so admin tooling can show newest tokens first.
+    /**
+     * Orders API tokens by their creation timestamps.
+     * @param {Object} doc - Prepared Publishing API token document.
+     * @returns {string|undefined} ISO creation timestamp, or undefined when absent.
+     */
     generateSortKey(doc) {
         return doc?.tokenCreationDate;
     }
@@ -39,6 +43,7 @@ export default class PublishingApiTokenCollection extends Collection {
      * @throws {AssertionError} When required creation arguments are invalid, a role name is
      *   unregistered, or a role's grants are not confined to the publishing domain.
      * @throws {ValidationError} When the generated record fails validation.
+     * @throws {DocumentAlreadyExistsError} When the generated token hash already exists.
      */
     async createToken(context, args) {
         const {
@@ -101,9 +106,11 @@ export default class PublishingApiTokenCollection extends Collection {
      * Returns a keyset-paginated page of tokens ordered newest-first.
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {Object} [options] - Pagination options.
-     * @param {string} [options.cursor] - Opaque cursor from a previous page.
-     * @param {number} [options.limit] - Maximum tokens per page.
+     * @param {string|null} [options.cursor] - Opaque cursor from a previous page; null starts from the first page.
+     * @param {number} [options.limit=100] - Positive integer maximum number of tokens per page.
      * @returns {Promise<{ items: PublishingApiTokenRecord[], cursor: string|null }>} Page of tokens and the next cursor.
+     * @throws {AssertionError} When the pagination options are invalid.
+     * @throws {InvalidCursorError} When the cursor is invalid or belongs to a different scan.
      */
     async listPage(context, options) {
         const { cursor, limit } = options ?? {};
@@ -120,6 +127,8 @@ export default class PublishingApiTokenCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {PublishingApiTokenRecord} record - Token record previously loaded from this collection.
      * @returns {Promise<PublishingApiTokenRecord>} The updated record.
+     * @throws {AssertionError} When record is not a PublishingApiTokenRecord.
+     * @throws {ValidationError} When the revoked record violates record invariants.
      * @throws {VersionConflictError} When the token was modified concurrently.
      * @throws {DocumentNotFoundError} When the token no longer exists.
      */

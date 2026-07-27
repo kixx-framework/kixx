@@ -4,12 +4,24 @@ import CsrfTokenRecord, { MIN_REUSABLE_SECONDS } from './csrf-token-record.js';
 import { assert, assertNonEmptyString, isNonEmptyString } from '../../kixx/assertions/mod.js';
 
 
+/**
+ * Table Data Gateway for browser CSRF pre-sessions in the Key/Value Store.
+ *
+ * The pre-session id is stored in the browser cookie, while only SHA-256
+ * digests of the one-time form tokens are persisted. Record and cookie expiry
+ * share the same fixed deadline.
+ * @extends Collection
+ */
 export default class CsrfTokenCollection extends Collection {
 
     static TYPE = 'CsrfToken';
 
     static Record = CsrfTokenRecord;
 
+    /**
+     * Generates a cryptographically random browser pre-session identifier.
+     * @returns {string} Secret token used as the pre-session id.
+     */
     generateUniqueId() {
         return generateSecretToken();
     }
@@ -19,7 +31,7 @@ export default class CsrfTokenCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the key/value store.
      * @param {number} ttlSeconds - Token lifetime in seconds.
      * @returns {Promise<{ csrfSessionId: string, token: string, record: CsrfTokenRecord }>}
-     * @throws {AssertionError} When ttlSeconds is shorter than MIN_REUSABLE_SECONDS.
+     * @throws {AssertionError} When ttlSeconds is not an integer of at least MIN_REUSABLE_SECONDS.
      * @throws {ValidationError} When the generated record fails validation.
      */
     async createToken(context, ttlSeconds) {
@@ -148,7 +160,7 @@ export default class CsrfTokenCollection extends Collection {
      * @param {string} csrfSessionId - CSRF pre-session identifier from the browser cookie.
      * @param {string} token - Plaintext token that was just accepted.
      * @returns {Promise<void>}
-     * @throws {AssertionError} When csrfSessionId is not a non-empty string.
+     * @throws {AssertionError} When csrfSessionId is empty or token is not a string.
      */
     async consumeToken(context, csrfSessionId, token) {
         assertNonEmptyString(

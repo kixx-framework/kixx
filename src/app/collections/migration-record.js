@@ -19,6 +19,10 @@ const VALID_STATUSES = new Set([ 'running', 'applied', 'failed' ]);
  */
 export default class MigrationRecord extends Record {
 
+    /**
+     * Reference schema for persisted migration-ledger attributes.
+     * @type {Object}
+     */
     static schema = {
         type: 'object',
         properties: {
@@ -78,6 +82,11 @@ export default class MigrationRecord extends Record {
         ],
     };
 
+    /**
+     * Validates ledger field shapes and lifecycle-specific invariants.
+     * @returns {void}
+     * @throws {ValidationError} When one or more ledger attributes are invalid.
+     */
     validate() {
         const error = new ValidationError('Invalid migration ledger record');
 

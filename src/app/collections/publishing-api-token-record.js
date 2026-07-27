@@ -19,6 +19,10 @@ import { isIsoDateTime, parseIsoDateTime } from '../lib/iso-date-time.js';
  */
 export default class PublishingApiTokenRecord extends Record {
 
+    /**
+     * Reference schema for persisted Publishing API token attributes.
+     * @type {Object}
+     */
     static schema = {
         type: 'object',
         properties: {
@@ -61,6 +65,11 @@ export default class PublishingApiTokenRecord extends Record {
         ],
     };
 
+    /**
+     * Validates token grants, audit fields, and lifecycle timestamps.
+     * @returns {void}
+     * @throws {ValidationError} When one or more token attributes are invalid.
+     */
     validate() {
         const error = new ValidationError('Invalid publishing API token record');
         const roles = this.get('roles');

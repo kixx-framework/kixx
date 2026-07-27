@@ -22,7 +22,7 @@ export default class Record {
      * @param {Object} spec - Stored record data and user-defined attributes.
      * @param {string} spec.type - Record type managed by the owning collection.
      * @param {string} spec.id - Record identifier within the type.
-     * @param {Object} spec.attributes - Plain object containing user-defined record attributes.
+     * @param {Object} spec.attributes - Plain object containing user-defined record attributes; retained by reference.
      * @throws {AssertionError} When the spec shape is invalid.
      */
     constructor(spec) {
@@ -107,7 +107,7 @@ export default class Record {
      * Shallowly merges own enumerable attributes into this record.
      *
      * @param {Object} patch - Plain object containing attribute values to assign.
-     * @returns {Record} This record for chaining.
+     * @returns {this} This record for chaining.
      * @throws {AssertionError} When patch is not a plain object.
      */
     merge(patch) {
@@ -123,7 +123,7 @@ export default class Record {
     /**
      * Deeply merges plain-object attributes into this record.
      * @param {Object} patch - Attribute values to merge.
-     * @returns {Record} This record for chaining.
+     * @returns {this} This record for chaining.
      * @throws {TypeError} When patch is not a plain object.
      */
     deepMerge(patch) {
@@ -150,7 +150,7 @@ export default class Record {
      * Sets a user-defined attribute.
      * @param {string} name - Attribute name.
      * @param {*} value - Attribute value.
-     * @returns {Record} This record for chaining.
+     * @returns {this} This record for chaining.
      * @throws {AssertionError} When name is not a non-empty string.
      */
     set(name, value) {
@@ -165,7 +165,7 @@ export default class Record {
 
     /**
      * Reformats this record into the JSON value persisted by KeyValueStore.
-     * @returns {Object} Record attributes plus `type` and `id`.
+     * @returns {Object} Shallow copy of the attributes plus `type` and `id`.
      */
     toDocument() {
         return Object.assign({}, this.#attributes, {
@@ -176,7 +176,7 @@ export default class Record {
 
     /**
      * Reformats this record into a plain JavaScript Object.
-     * @returns {Object} Record attributes plus `type` and `id`.
+     * @returns {Object} Shallow copy of the attributes plus `type` and `id`.
      */
     toObject() {
         return Object.assign({}, this.#attributes, {
@@ -196,6 +196,7 @@ export default class Record {
      * @param {string} record.id - Record identifier.
      * @returns {Record} Record instance created from the raw stored value.
      * @throws {AssertionError} When the raw record shape is invalid.
+     * @throws {TypeError} When record is not an object.
      */
     static fromRecord(record) {
         const RecordClass = this;

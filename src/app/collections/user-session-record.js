@@ -13,6 +13,10 @@ import { isIsoDateTime, parseIsoDateTime } from '../lib/iso-date-time.js';
  */
 export default class UserSessionRecord extends Record {
 
+    /**
+     * Reference schema for persisted administrator-session attributes.
+     * @type {Object}
+     */
     static schema = {
         type: 'object',
         properties: {
@@ -34,6 +38,11 @@ export default class UserSessionRecord extends Record {
         required: [ 'userId', 'sessionCreationDate', 'sessionExpirationDate' ],
     };
 
+    /**
+     * Validates the authenticated user id and session timestamps.
+     * @returns {void}
+     * @throws {ValidationError} When one or more session attributes are invalid.
+     */
     validate() {
         const error = new ValidationError('Invalid user session record');
 

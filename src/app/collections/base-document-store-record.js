@@ -29,7 +29,7 @@ export default class Record {
      * @param {number} spec.version - Optimistic concurrency version returned by the document store.
      * @param {Date|string} spec.createdAt - Creation timestamp from the document store.
      * @param {Date|string} spec.updatedAt - Last-write timestamp from the document store.
-     * @param {Object} spec.attributes - Plain object containing user-defined document attributes.
+     * @param {Object} spec.attributes - Plain object containing user-defined document attributes; retained by reference.
      * @throws {AssertionError} When the spec shape or timestamp fields are invalid.
      */
     constructor(spec) {
@@ -190,7 +190,7 @@ export default class Record {
      * Shallowly merges own enumerable attributes into this record.
      *
      * @param {Object} patch - Plain object containing attribute values to assign.
-     * @returns {Record} This record for chaining.
+     * @returns {this} This record for chaining.
      * @throws {AssertionError} When patch is not a plain object.
      */
     merge(patch) {
@@ -206,7 +206,7 @@ export default class Record {
     /**
      * Deeply merges plain-object attributes into this record.
      * @param {Object} patch - Attribute values to merge.
-     * @returns {Record} This record for chaining.
+     * @returns {this} This record for chaining.
      * @throws {TypeError} When patch is not a plain object.
      */
     deepMerge(patch) {
@@ -233,7 +233,7 @@ export default class Record {
      * Sets a user-defined attribute.
      * @param {string} name - Attribute name.
      * @param {*} value - Attribute value.
-     * @returns {Record} This record for chaining.
+     * @returns {this} This record for chaining.
      * @throws {AssertionError} When name is not a non-empty string.
      */
     set(name, value) {
@@ -248,7 +248,7 @@ export default class Record {
 
     /**
      * Reformats this record into the document shape accepted by DocumentStore.
-     * @returns {Object} Document attributes plus `type`, `id`, and a non-null `sortKey`.
+     * @returns {Object} Shallow copy of the attributes plus `type`, `id`, and `sortKey` when non-null.
      */
     toDocument() {
         const doc = Object.assign({}, this.#attributes, {
@@ -264,7 +264,7 @@ export default class Record {
     /**
      * Reformats this record into a plain JavaScript Object, flattening the
      * attributes into top level properties, with store metadata under `meta`.
-     * @returns {Object} Document attributes plus `type`, `id`, and `meta`.
+     * @returns {Object} Shallow copy of the attributes plus `type`, `id`, and `meta`.
      */
     toObject() {
         return Object.assign({}, this.#attributes, {
@@ -295,6 +295,7 @@ export default class Record {
      * @param {Object} record.doc - Stored document payload.
      * @returns {Record} Record instance created from the raw store record.
      * @throws {AssertionError} When the raw record shape is invalid.
+     * @throws {TypeError} When record or record.doc is not an object.
      */
     static fromRecord(record) {
         const RecordClass = this;

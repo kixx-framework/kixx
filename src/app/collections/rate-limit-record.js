@@ -12,9 +12,14 @@ import { isIsoDateTime, parseIsoDateTime } from '../lib/iso-date-time.js';
  * per-IP or per-(IP, email) key); this class owns only the counter shape and
  * the lock-expiry math. Throttling policy (thresholds, window, cooldown) lives
  * with the caller, not on the record.
+ * @extends Record
  */
 export default class RateLimitRecord extends Record {
 
+    /**
+     * Reference schema for persisted rate-limit counter attributes.
+     * @type {Object}
+     */
     static schema = {
         type: 'object',
         properties: {
@@ -36,6 +41,11 @@ export default class RateLimitRecord extends Record {
         required: [ 'failureCount', 'windowStartDate', 'lockedUntilDate' ],
     };
 
+    /**
+     * Validates the failure counter and lock timestamps before persistence.
+     * @returns {void}
+     * @throws {ValidationError} When one or more counter attributes are invalid.
+     */
     validate() {
         const error = new ValidationError('Invalid rate limit record');
 
@@ -62,7 +72,7 @@ export default class RateLimitRecord extends Record {
     }
 
     /**
-     * Increments this scope's failure counter.
+     * Increments this scope's failure counter in place.
      * @returns {number} The incremented failure count.
      */
     incrementFailureCount() {

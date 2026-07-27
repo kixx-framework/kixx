@@ -3,8 +3,20 @@ import { ValidationError } from '../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../kixx/assertions/mod.js';
 
 
+/**
+ * Document-store DTO for an administrator account.
+ *
+ * Generic object projections omit the password hash, while
+ * `toAuthenticatedUser()` exposes the identity and role fields used by request
+ * authentication.
+ * @extends Record
+ */
 export default class AdminUserRecord extends Record {
 
+    /**
+     * Reference schema for persisted administrator attributes.
+     * @type {Object}
+     */
     static schema = {
         type: 'object',
         properties: {
@@ -30,6 +42,11 @@ export default class AdminUserRecord extends Record {
         required: [ 'emailAddress', 'passwordHash', 'userCreationDate', 'roles' ],
     };
 
+    /**
+     * Validates the account attributes required for persistence.
+     * @returns {void}
+     * @throws {ValidationError} When one or more account attributes are invalid.
+     */
     validate() {
         const error = new ValidationError('Invalid admin user record');
         const roles = this.get('roles');

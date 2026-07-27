@@ -29,7 +29,7 @@ export default class Collection {
 
     /**
      * DTO class used to wrap stored JSON records. Optionally override to use a custom Record subclass.
-     * @type {Function}
+     * @type {typeof Record}
      */
     static Record = Record;
 
@@ -65,7 +65,7 @@ export default class Collection {
             /**
              * DTO class used to convert stored JSON records on every read or write.
              * @name Record
-             * @type {Function}
+             * @type {typeof Record}
              * @readonly
              */
             Record: {
@@ -99,7 +99,7 @@ export default class Collection {
      * @param {Object} context - Request or execution context passed through to the key/value store
      * @param {Object|Record} input - Plain attributes object, or Record instance to persist
      * @param {import('../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Expiration options; `type` is always forced to `'json'`
-     * @returns {Promise<Record>} The persisted JSON value wrapped in the configured Record class
+     * @returns {Promise<Record>} The validated pre-persistence DTO written to the store
      * @throws {AssertionError} When arguments are invalid
      * @throws {ValidationError} When the Record subclass `validate()` rejects the input
      */

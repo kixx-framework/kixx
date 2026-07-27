@@ -7,6 +7,7 @@ import { isIsoDateTime, parseIsoDateTime } from '../lib/iso-date-time.js';
 /**
  * Invite kind for a normal admin-minted, single-use invite that can be redeemed.
  * @type {string}
+ * @readonly
  */
 export const ADMIN_INVITE_KIND = 'invite';
 
@@ -16,6 +17,7 @@ export const ADMIN_INVITE_KIND = 'invite';
  * its only job is to make the bootstrap token single-use in a runtime where the
  * env var itself cannot be mutated.
  * @type {string}
+ * @readonly
  */
 export const ADMIN_INVITE_BOOTSTRAP_KIND = 'bootstrap';
 
@@ -30,6 +32,10 @@ const INVITE_KINDS = new Set([ ADMIN_INVITE_KIND, ADMIN_INVITE_BOOTSTRAP_KIND ])
  */
 export default class AdminInviteRecord extends Record {
 
+    /**
+     * Reference schema for persisted admin invite attributes.
+     * @type {Object}
+     */
     static schema = {
         type: 'object',
         properties: {
@@ -84,6 +90,11 @@ export default class AdminInviteRecord extends Record {
         ],
     };
 
+    /**
+     * Validates invite fields and their lifecycle constraints before persistence.
+     * @returns {void}
+     * @throws {ValidationError} When one or more invite attributes are invalid.
+     */
     validate() {
         const error = new ValidationError('Invalid admin invite record');
         const kind = this.get('kind');

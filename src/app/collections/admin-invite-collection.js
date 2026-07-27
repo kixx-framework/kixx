@@ -12,6 +12,7 @@ import { assertNonEmptyString } from '../../kixx/assertions/mod.js';
  * store (not the KV store), so expiry is enforced by the `inviteExpirationDate`
  * field rather than a store TTL.
  * @type {number}
+ * @readonly
  */
 export const ADMIN_INVITE_TTL_SECONDS = 60 * 60 * 72;
 
@@ -19,6 +20,7 @@ export const ADMIN_INVITE_TTL_SECONDS = 60 * 60 * 72;
  * `createdBy` value recorded for the env-token bootstrap consumed-marker, which
  * has no authenticated admin owner.
  * @type {string}
+ * @readonly
  */
 export const ADMIN_INVITE_BOOTSTRAP_CREATED_BY = 'bootstrap';
 
@@ -37,7 +39,11 @@ export default class AdminInviteCollection extends Collection {
 
     static Record = AdminInviteRecord;
 
-    // List ordering is by creation time so the admin UI can show newest invites first.
+    /**
+     * Orders invites by their creation timestamps.
+     * @param {Object} doc - Prepared admin invite document.
+     * @returns {string|undefined} ISO creation timestamp, or undefined when absent.
+     */
     generateSortKey(doc) {
         return doc?.inviteCreationDate;
     }
@@ -52,6 +58,7 @@ export default class AdminInviteCollection extends Collection {
      * @returns {Promise<{ token: string, record: AdminInviteRecord }>} The raw token (shown once) and stored record.
      * @throws {AssertionError} When createdBy is not a non-empty string.
      * @throws {ValidationError} When the generated record fails validation.
+     * @throws {DocumentAlreadyExistsError} When the generated token hash already exists.
      */
     async createInvite(context, args) {
         // Default the optional fields at this create-call boundary (not in
@@ -98,6 +105,8 @@ export default class AdminInviteCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {AdminInviteRecord} record - Invite record previously loaded from this collection.
      * @returns {Promise<AdminInviteRecord>} The updated record.
+     * @throws {AssertionError} When record is not an AdminInviteRecord.
+     * @throws {ValidationError} When the consumed record violates record invariants.
      * @throws {VersionConflictError} When the invite was modified concurrently (e.g. a racing redemption).
      * @throws {DocumentNotFoundError} When the invite no longer exists.
      */
@@ -116,6 +125,8 @@ export default class AdminInviteCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {string} tokenHash - SHA-256 hex digest of the env bootstrap token.
      * @returns {Promise<AdminInviteRecord>} The stored consumed marker.
+     * @throws {AssertionError} When tokenHash is not a non-empty string.
+     * @throws {ValidationError} When the generated marker violates record invariants.
      * @throws {DocumentAlreadyExistsError} When the bootstrap token has already been spent.
      */
     async createConsumedBootstrapMarker(context, tokenHash) {
@@ -148,6 +159,8 @@ export default class AdminInviteCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {AdminInviteRecord} record - Invite record previously loaded from this collection.
      * @returns {Promise<AdminInviteRecord>} The updated record.
+     * @throws {AssertionError} When record is not an AdminInviteRecord.
+     * @throws {ValidationError} When the revoked record violates record invariants.
      * @throws {VersionConflictError} When the invite was modified concurrently.
      * @throws {DocumentNotFoundError} When the invite no longer exists.
      */
@@ -160,9 +173,11 @@ export default class AdminInviteCollection extends Collection {
      * Returns a keyset-paginated page of invites ordered newest-first.
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {Object} [options] - Pagination options.
-     * @param {string} [options.cursor] - Opaque cursor from a previous page.
-     * @param {number} [options.limit] - Maximum invites per page.
+     * @param {string|null} [options.cursor] - Opaque cursor from a previous page; null starts from the first page.
+     * @param {number} [options.limit=100] - Positive integer maximum number of invites per page.
      * @returns {Promise<{ items: AdminInviteRecord[], cursor: string|null }>} Page of invites and the next cursor.
+     * @throws {AssertionError} When the pagination options are invalid.
+     * @throws {InvalidCursorError} When the cursor is invalid or belongs to a different scan.
      */
     async listPage(context, options) {
         const { cursor, limit } = options ?? {};

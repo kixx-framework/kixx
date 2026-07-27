@@ -26,6 +26,7 @@ const MAX_LIVE_TOKENS = 24;
  * is not possible.
  *
  * @type {number}
+ * @readonly
  */
 export const MIN_REUSABLE_SECONDS = 120;
 
@@ -41,6 +42,10 @@ export const MIN_REUSABLE_SECONDS = 120;
  */
 export default class CsrfTokenRecord extends Record {
 
+    /**
+     * Reference schema for persisted CSRF pre-session attributes.
+     * @type {Object}
+     */
     static schema = {
         type: 'object',
         properties: {
@@ -63,6 +68,11 @@ export default class CsrfTokenRecord extends Record {
         required: [ 'tokenHashes', 'tokenCreationDate', 'tokenExpirationDate' ],
     };
 
+    /**
+     * Validates token digests and the fixed pre-session lifetime.
+     * @returns {void}
+     * @throws {ValidationError} When one or more pre-session attributes are invalid.
+     */
     validate() {
         const error = new ValidationError('Invalid CSRF token record');
         const tokenCreationDate = parseIsoDateTime(this.get('tokenCreationDate'));
@@ -173,7 +183,7 @@ export default class CsrfTokenRecord extends Record {
 
     /**
      * Live token digests held by this pre-session, oldest first.
-     * @returns {string[]} Stored digests, or an empty array when the attribute is absent or malformed.
+     * @returns {string[]} Stored array by reference, or a new empty array when the attribute is absent or malformed.
      */
     getTokenHashes() {
         const tokenHashes = this.get('tokenHashes');

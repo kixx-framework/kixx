@@ -17,6 +17,10 @@ export default class UserSessionCollection extends Collection {
 
     static Record = UserSessionRecord;
 
+    /**
+     * Generates a cryptographically random session identifier.
+     * @returns {string} Secret token used as the session id.
+     */
     generateUniqueId() {
         return generateSecretToken();
     }
