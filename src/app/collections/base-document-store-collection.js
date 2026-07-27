@@ -3,6 +3,7 @@ import RetryLimitExceededError from './retry-limit-exceeded-error.js';
 import DocumentNotFoundError from '../../kixx/document-store/document-not-found-error.js';
 import {
     assert,
+    assertEqual,
     assertFunction,
     assertNotEqual,
     assertNonEmptyString,
@@ -120,6 +121,7 @@ export default class Collection {
      * @param {Record} dto - Record whose `toDocument()` output replaces the stored document; must carry the current `version`
      * @returns {Promise<Record>} The updated document wrapped in the configured Record class
      * @throws {AssertionError} When `dto` is not an instance of `this.Record`
+     * @throws {AssertionError} When `dto` type does not match `this.type`
      * @throws {ValidationError} When the Record subclass `validate()` rejects the input
      * @throws {DocumentNotFoundError} When the target document does not exist
      * @throws {VersionConflictError} When the stored version does not match `dto.version`
@@ -129,6 +131,7 @@ export default class Collection {
             dto instanceof this.Record,
             'Collection#update() requires an instance of this.Record',
         );
+        assertEqual(this.type, dto.type, 'The Record type is expected to match the Collection type');
         dto.validate();
         const record = await this.#db.update(context, this.#toDocument(dto), dto.version);
         return this.Record.fromRecord(record);
@@ -244,6 +247,7 @@ export default class Collection {
      * @param {Record} dto - DTO carrying the `id` and `version` of the document to delete
      * @returns {Promise<boolean>} `true` when the document was deleted
      * @throws {AssertionError} When arguments are invalid
+     * @throws {AssertionError} When `dto` type does not match `this.type`
      * @throws {DocumentNotFoundError} When the target document does not exist
      * @throws {VersionConflictError} When the stored version does not match `dto.version`
      */
@@ -252,6 +256,7 @@ export default class Collection {
             dto instanceof this.Record,
             'Collection#deleteStrict() requires an instance of this.Record',
         );
+        assertEqual(this.type, dto.type, 'The Record type is expected to match the Collection type');
         return await this.#db.delete(context, this.type, dto.id, dto.version);
     }
 
@@ -364,6 +369,7 @@ export default class Collection {
 
     #toDocument(dto) {
         const doc = dto.toDocument();
+        doc.type = this.type;
         const sortKey = this.generateSortKey(doc);
 
         if (isUndefined(sortKey) || sortKey === null) {

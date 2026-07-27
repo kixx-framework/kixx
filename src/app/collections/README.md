@@ -57,8 +57,8 @@ In app/collections/user-record.js:
 
 ```js
 import Record from './base-document-store-record.js';
-import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
-import { ValidationError } from '../../../kixx/errors/mod.js';
+import { isNonEmptyString } from '../../kixx/assertions/mod.js';
+import { ValidationError } from '../../kixx/errors/mod.js';
 
 class UserRecord extends Record {
     static schema = {

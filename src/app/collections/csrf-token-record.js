@@ -15,6 +15,19 @@ import { assert, isNonEmptyString, isValidDate } from '../../kixx/assertions/mod
  */
 const MAX_LIVE_TOKENS = 24;
 
+/**
+ * Minimum remaining lifetime for a pre-session to be worth writing to again.
+ *
+ * Two rules meet at this number. A form handed to a browser with seconds left to
+ * live is broken on arrival, so reusing a nearly-dead pre-session for a fresh
+ * render is not viable. And the key/value store contract rejects any expiry
+ * less than 60 seconds out, so rewriting a pre-session below that floor
+ * is not possible.
+ *
+ * @type {number}
+ */
+export const MIN_REUSABLE_SECONDS = 120;
+
 
 /**
  * Key/value-store DTO for one browser CSRF pre-session.
@@ -114,6 +127,47 @@ export default class CsrfTokenRecord extends Record {
 
         const remainingMs = tokenExpirationDate.getTime() - referenceDate.getTime();
         return Math.max(0, Math.ceil(remainingMs / 1000));
+    }
+
+    /**
+     * This pre-session's deadline as a Unix timestamp in seconds.
+     *
+     * Rewriting the record means restating that deadline, and restating it from
+     * the stored value is what keeps reuse from extending it: deriving it from
+     * the seconds remaining instead would round the deadline a little further
+     * out on every render.
+     *
+     * @returns {number|null} Whole Unix seconds, or null when the stored timestamp is unparsable.
+     */
+    getExpirationUnixSeconds() {
+        const tokenExpirationDate = parseDate(this.get('tokenExpirationDate'));
+        if (!isValidDate(tokenExpirationDate)) {
+            return null;
+        }
+
+        return Math.floor(tokenExpirationDate.getTime() / 1000);
+    }
+
+    /**
+     * Reports whether this pre-session has enough life left to be written to again.
+     *
+     * Callers mint a token into an existing pre-session (or spend one from it)
+     * only when this returns true; see MIN_REUSABLE_SECONDS for why a pre-session
+     * in its last moments is replaced or dropped rather than rewritten.
+     *
+     * @param {Date} [referenceDate] - Date used as the current time.
+     * @returns {boolean} True when at least MIN_REUSABLE_SECONDS remain.
+     * @throws {AssertionError} When referenceDate is present and invalid.
+     */
+    isReusable(referenceDate = new Date()) {
+        assert(isValidDate(referenceDate), 'CsrfTokenRecord#isReusable() referenceDate must be a valid Date');
+
+        const expiresAt = this.getExpirationUnixSeconds();
+        if (expiresAt === null) {
+            return false;
+        }
+
+        return expiresAt - Math.floor(referenceDate.getTime() / 1000) >= MIN_REUSABLE_SECONDS;
     }
 
     /**

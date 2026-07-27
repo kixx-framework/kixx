@@ -1,6 +1,6 @@
 import { generateSecretToken, sha256Hex } from '../../kixx/utils/crypto.js';
 import Collection from './base-key-value-store-collection.js';
-import CsrfTokenRecord from './csrf-token-record.js';
+import CsrfTokenRecord, { MIN_REUSABLE_SECONDS } from './csrf-token-record.js';
 import { assert, assertNonEmptyString, isNonEmptyString } from '../../kixx/assertions/mod.js';
 
 
@@ -19,13 +19,13 @@ export default class CsrfTokenCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the key/value store.
      * @param {number} ttlSeconds - Token lifetime in seconds.
      * @returns {Promise<{ csrfSessionId: string, token: string, record: CsrfTokenRecord }>}
-     * @throws {AssertionError} When ttlSeconds is not a positive integer.
+     * @throws {AssertionError} When ttlSeconds is shorter than MIN_REUSABLE_SECONDS.
      * @throws {ValidationError} When the generated record fails validation.
      */
     async createToken(context, ttlSeconds) {
         assert(
-            Number.isInteger(ttlSeconds) && ttlSeconds > 0,
-            'CsrfTokenCollection#createToken() ttlSeconds must be a positive integer',
+            Number.isInteger(ttlSeconds) && ttlSeconds >= MIN_REUSABLE_SECONDS,
+            `CsrfTokenCollection#createToken() ttlSeconds must be an integer of at least ${ MIN_REUSABLE_SECONDS }`,
         );
 
         const nowSeconds = Math.floor(Date.now() / 1000);
@@ -62,19 +62,30 @@ export default class CsrfTokenCollection extends Collection {
      * reads as expired. That is a narrow race against what is otherwise guaranteed
      * breakage on every second render.
      *
+     * Callers must confirm the pre-session is still worth writing to with
+     * `CsrfTokenRecord#isReusable()` and start a new one otherwise. A pre-session
+     * below that threshold cannot be rewritten.
+     *
      * @param {Object} context - Request or execution context passed through to the key/value store.
-     * @param {CsrfTokenRecord} record - Unexpired pre-session previously loaded from this collection.
+     * @param {CsrfTokenRecord} record - Reusable pre-session previously loaded from this collection.
      * @returns {Promise<{ csrfSessionId: string, token: string, record: CsrfTokenRecord }>}
+     * @throws {AssertionError} When the pre-session has too little lifetime left to rewrite.
      * @throws {ValidationError} When the updated record fails validation.
      */
     async issueToken(context, record) {
+        assert(
+            record.isReusable(),
+            'CsrfTokenCollection#issueToken() requires a pre-session with remaining lifetime',
+        );
+
         const token = generateSecretToken();
         const tokenHash = await sha256Hex(token);
 
         record.addTokenHash(tokenHash);
 
-        const expiresAt = Math.floor(Date.now() / 1000) + record.getSecondsUntilExpiration();
-        const saved = await this.put(context, record, { expiresAt });
+        const saved = await this.put(context, record, {
+            expiresAt: record.getExpirationUnixSeconds(),
+        });
 
         return {
             csrfSessionId: saved.id,
@@ -127,6 +138,12 @@ export default class CsrfTokenCollection extends Collection {
      * tokens, so only the submitted one is dropped. Spending the last token ends the
      * pre-session outright, because a record with no tokens can validate nothing.
      *
+     * A pre-session too close to its deadline to rewrite is also ended rather than
+     * left alone: the store would reject the write, and skipping it would leave the
+     * token that was just spent replayable for as long as the record survives.
+     * Other tabs lose their tokens a minute or two early, which is what expiry was
+     * about to do anyway.
+     *
      * @param {Object} context - Request or execution context passed through to the key/value store.
      * @param {string} csrfSessionId - CSRF pre-session identifier from the browser cookie.
      * @param {string} token - Plaintext token that was just accepted.
@@ -149,13 +166,14 @@ export default class CsrfTokenCollection extends Collection {
 
         record.removeTokenHash(await sha256Hex(token));
 
-        if (record.getTokenHashes().length === 0) {
+        if (record.getTokenHashes().length === 0 || !record.isReusable()) {
             await this.delete(context, csrfSessionId);
             return;
         }
 
-        const expiresAt = Math.floor(Date.now() / 1000) + record.getSecondsUntilExpiration();
-        await this.put(context, record, { expiresAt });
+        await this.put(context, record, {
+            expiresAt: record.getExpirationUnixSeconds(),
+        });
     }
 
     /**

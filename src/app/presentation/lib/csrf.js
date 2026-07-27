@@ -57,8 +57,11 @@ async function issueCsrfToken(context, request) {
         const record = await csrfTokens.getBySessionId(context, csrfSessionId);
 
         // A record can outlive its store TTL by a moment, so the embedded deadline
-        // is checked too; an expired pre-session is replaced rather than extended.
-        if (record && !record.isExpired()) {
+        // is checked too; a pre-session is replaced rather than extended once it is
+        // spent. The threshold is remaining lifetime, not expiry: a pre-session in
+        // its final moments cannot be written to, and a token minted into it would
+        // die before the form it belongs to could be filled in.
+        if (record && record.isReusable()) {
             const csrf = await csrfTokens.issueToken(context, record);
             return { csrf, maxAge: record.getSecondsUntilExpiration() };
         }

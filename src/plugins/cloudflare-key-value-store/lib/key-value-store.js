@@ -15,9 +15,10 @@ const CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/; // eslint-disable-line no-contro
 const VALID_TYPES = [ 'text', 'json', 'arrayBuffer' ];
 
 // Cloudflare KV hard limits: keys are at most 512 bytes and expirations must be
-// at least 60 seconds in the future.
+// at least 60 seconds in the future. Both are also the contract's portable
+// limits, so other adapters enforces the same numbers.
 const MAX_KEY_BYTES = 512;
-const MIN_TTL_SECONDS = 60;
+const MIN_EXPIRATION_SECONDS = 60;
 const DEFAULT_BINDING_NAME = 'KEY_VALUE_STORE';
 
 /**
@@ -34,6 +35,10 @@ const DEFAULT_BINDING_NAME = 'KEY_VALUE_STORE';
  * be globally visible), expirations shorter than 60 seconds are rejected rather
  * than silently clamped, keys longer than 512 bytes are rejected, and `delete()`
  * resolves with no value because KV does not report whether the key existed.
+ *
+ * The expiry floor and the key cap are the two constraints the contract lifted
+ * from this platform and made portable, so other adapters reject the same
+ * values with the same messages.
  *
  * @implements {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueStoreInterface}
  */
@@ -189,7 +194,7 @@ export default class KeyValueStore {
     /**
      * Validates the mutually-exclusive expiry options and maps them to KV's put
      * options (`expirationTtl` for a relative TTL, `expiration` for an absolute
-     * one). Enforces Cloudflare KV's 60-second minimum rather than clamping.
+     * one). Enforces the contract's 60-second minimum rather than clamping.
      * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
      * @returns {Object} KV put options, possibly empty when no expiry was supplied
      * @throws {AssertionError} When both expiry options are present or an expiry is invalid
@@ -206,8 +211,8 @@ export default class KeyValueStore {
             if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
                 throw new AssertionError('KeyValueStore "ttlSeconds" must be a positive integer');
             }
-            if (ttlSeconds < MIN_TTL_SECONDS) {
-                throw new AssertionError(`KeyValueStore "ttlSeconds" must be at least ${ MIN_TTL_SECONDS } seconds on Cloudflare KV`);
+            if (ttlSeconds < MIN_EXPIRATION_SECONDS) {
+                throw new AssertionError(`KeyValueStore "ttlSeconds" must be at least ${ MIN_EXPIRATION_SECONDS } seconds`);
             }
             return { expirationTtl: ttlSeconds };
         }
@@ -217,8 +222,8 @@ export default class KeyValueStore {
                 throw new AssertionError('KeyValueStore "expiresAt" must be an integer Unix timestamp in seconds');
             }
             const nowSeconds = Math.floor(Date.now() / 1000);
-            if (expiresAt < nowSeconds + MIN_TTL_SECONDS) {
-                throw new AssertionError(`KeyValueStore "expiresAt" must be at least ${ MIN_TTL_SECONDS } seconds in the future on Cloudflare KV`);
+            if (expiresAt < nowSeconds + MIN_EXPIRATION_SECONDS) {
+                throw new AssertionError(`KeyValueStore "expiresAt" must be at least ${ MIN_EXPIRATION_SECONDS } seconds in the future`);
             }
             return { expiration: expiresAt };
         }

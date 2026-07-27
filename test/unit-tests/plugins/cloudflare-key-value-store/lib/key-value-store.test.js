@@ -1,4 +1,4 @@
-import { describe } from 'kixx-test';
+import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import KeyValueStore from '../../../../../src/plugins/cloudflare-key-value-store/lib/key-value-store.js';
@@ -68,6 +68,16 @@ async function catchAsyncError(fn) {
         return error;
     }
     return null;
+}
+
+async function withFixedNow(nowMilliseconds, callback) {
+    const tracker = new MockTracker();
+    tracker.method(Date, 'now', () => nowMilliseconds);
+    try {
+        return await callback();
+    } finally {
+        tracker.reset();
+    }
 }
 
 
@@ -204,12 +214,21 @@ describe('KeyValueStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.put(makeContext(), 'session', 'token', { ttlSeconds: 30 }),
+                () => store.put(makeContext(), 'session', 'token', { ttlSeconds: 59 }),
             );
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('at least 60 seconds', caught.message);
+            assertEqual('KeyValueStore "ttlSeconds" must be at least 60 seconds', caught.message);
+        });
+
+        it('accepts ttlSeconds at the 60 second minimum', async () => {
+            const kvStore = makeKVNamespace();
+            const store = makeStore();
+
+            await store.put(makeContext(kvStore), 'session', 'token', { ttlSeconds: 60 });
+
+            assertEqual(60, kvStore.puts[0].options.expirationTtl);
         });
 
         it('throws when ttlSeconds is not a positive integer', async () => {
@@ -226,15 +245,31 @@ describe('KeyValueStore', ({ describe }) => {
 
         it('throws when expiresAt is less than 60 seconds in the future', async () => {
             const store = makeStore();
-            const expiresAt = Math.floor(Date.now() / 1000) + 10;
+            const nowMilliseconds = 1_800_000_000_000;
+            const expiresAt = (nowMilliseconds / 1000) + 59;
 
-            const caught = await catchAsyncError(
-                () => store.put(makeContext(), 'session', 'token', { expiresAt }),
-            );
+            const caught = await withFixedNow(nowMilliseconds, async () => {
+                return await catchAsyncError(
+                    () => store.put(makeContext(), 'session', 'token', { expiresAt }),
+                );
+            });
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('in the future', caught.message);
+            assertEqual('KeyValueStore "expiresAt" must be at least 60 seconds in the future', caught.message);
+        });
+
+        it('accepts expiresAt exactly 60 seconds in the future', async () => {
+            const nowMilliseconds = 1_800_000_000_000;
+            const expiresAt = (nowMilliseconds / 1000) + 60;
+            const kvStore = makeKVNamespace();
+            const store = makeStore();
+
+            await withFixedNow(nowMilliseconds, async () => {
+                await store.put(makeContext(kvStore), 'session', 'token', { expiresAt });
+            });
+
+            assertEqual(expiresAt, kvStore.puts[0].options.expiration);
         });
 
         it('throws when a text value is not a string', async () => {

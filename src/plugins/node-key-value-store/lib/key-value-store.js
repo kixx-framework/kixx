@@ -24,6 +24,12 @@ const VALID_TYPES = [ 'text', 'json', 'arrayBuffer' ];
 // even though SQLite itself imposes no such limit.
 const MAX_KEY_BYTES = 512;
 
+// Expirations must be at least 60 seconds out, for the same portability reason
+// as the key cap: SQLite has no such floor, but Cloudflare KV enforces one, so
+// accepting a shorter expiry here would let a caller write a put() that passes
+// on Node and throws on Workers.
+const MIN_EXPIRATION_SECONDS = 60;
+
 // How long a write blocks waiting for another process's lock before SQLite
 // raises SQLITE_BUSY. Multiple processes share one cache file, so the busy
 // timeout lets a contended writer retry rather than fail immediately.
@@ -56,13 +62,10 @@ const textDecoder = new TextDecoder();
  * mode with a busy timeout so concurrent writers from other processes retry
  * instead of failing with `SQLITE_BUSY`.
  *
- * This adapter diverges from the Cloudflare adapter in two ways that reflect
- * SQLite's different capabilities, both compatible with the contract:
- * - There is no 60-second minimum TTL; any positive-integer `ttlSeconds` is
- *   accepted, because SQLite imposes no such floor.
- * - Reads are read-after-write consistent on the local machine — a stronger
- *   guarantee than the contract's eventual-consistency floor, and a compatible
- *   superset of it.
+ * Where the contract's limits are the portable intersection rather than
+ * SQLite's own — the 512-byte key cap and the 60-second minimum expiry — this
+ * adapter enforces them even though SQLite would accept more, so that code
+ * proven here behaves identically on Workers.
  *
  * Expired entries are filtered out lazily on every read; dead rows are reclaimed
  * by an opportunistic sweep sampled on a fraction of writes rather than a timer.
@@ -321,8 +324,9 @@ export default class KeyValueStore {
 
     /**
      * Validates the mutually-exclusive expiry options and maps them to an absolute
-     * `expires_at` Unix-seconds value, or null when no expiry was supplied. Unlike
-     * the Cloudflare adapter, no minimum TTL is imposed.
+     * `expires_at` Unix-seconds value, or null when no expiry was supplied. Enforces
+     * the contract's 60-second minimum rather than clamping, matching the Cloudflare
+     * adapter even though SQLite would accept a shorter expiry.
      * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
      * @returns {number|null} Absolute expiry in Unix seconds, or null for no expiry
      * @throws {AssertionError} When both expiry options are present or an expiry is invalid
@@ -339,6 +343,9 @@ export default class KeyValueStore {
             if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
                 throw new AssertionError('KeyValueStore "ttlSeconds" must be a positive integer');
             }
+            if (ttlSeconds < MIN_EXPIRATION_SECONDS) {
+                throw new AssertionError(`KeyValueStore "ttlSeconds" must be at least ${ MIN_EXPIRATION_SECONDS } seconds`);
+            }
             return Math.floor(Date.now() / 1000) + ttlSeconds;
         }
 
@@ -347,8 +354,8 @@ export default class KeyValueStore {
                 throw new AssertionError('KeyValueStore "expiresAt" must be an integer Unix timestamp in seconds');
             }
             const nowSeconds = Math.floor(Date.now() / 1000);
-            if (expiresAt <= nowSeconds) {
-                throw new AssertionError('KeyValueStore "expiresAt" must be a Unix timestamp in the future');
+            if (expiresAt < nowSeconds + MIN_EXPIRATION_SECONDS) {
+                throw new AssertionError(`KeyValueStore "expiresAt" must be at least ${ MIN_EXPIRATION_SECONDS } seconds in the future`);
             }
             return expiresAt;
         }

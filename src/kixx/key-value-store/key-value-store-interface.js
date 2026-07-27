@@ -43,9 +43,21 @@
  * - `expiresAt`: an absolute expiry as a Unix timestamp in seconds, in the future.
  *
  * Supplying both MUST be rejected. When neither is supplied, the entry does not
- * expire. An adapter MAY enforce a minimum TTL imposed by its backing store
- * (Cloudflare KV requires expirations to be at least 60 seconds out and rejects
- * shorter ones rather than silently clamping them).
+ * expire.
+ *
+ * An expiry MUST be at least 60 seconds out, and an adapter MUST reject a
+ * shorter one rather than silently clamping it. Like the 512-byte key cap, this
+ * floor is the portable intersection rather than any one platform's preference:
+ * Cloudflare KV imposes it as a hard limit, so an adapter that accepted a
+ * 30-second TTL would let a caller write code that passes on one deploy target
+ * and throws on another. Adapters whose backing store has no such floor adopt it
+ * anyway, and reject rather than clamp so the caller learns at the call site
+ * instead of discovering it as a premature eviction in production.
+ *
+ * A caller that recomputes an expiry from a stored deadline (rewriting an entry
+ * to add to it, for example) MUST therefore treat "less than 60 seconds left" as
+ * a case to handle — by deleting the entry or starting a new one — not as a
+ * shorter write.
  *
  * ## Consistency
  * The contract makes no read-after-write consistency guarantee. This is the
@@ -106,9 +118,10 @@
  * @typedef {Object} KeyValuePutOptions
  * @property {KeyValueType} [type='text'] - How to encode the supplied value.
  * @property {number} [ttlSeconds] - Relative time-to-live in seconds (positive
- *   integer). Mutually exclusive with `expiresAt`.
+ *   integer, at least 60). Mutually exclusive with `expiresAt`.
  * @property {number} [expiresAt] - Absolute expiry as a Unix timestamp in
- *   seconds, in the future. Mutually exclusive with `ttlSeconds`.
+ *   seconds, at least 60 seconds in the future. Mutually exclusive with
+ *   `ttlSeconds`.
  */
 
 /**

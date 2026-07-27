@@ -59,6 +59,16 @@ async function catchAsyncError(fn) {
     return null;
 }
 
+async function withFixedNow(nowMilliseconds, callback) {
+    const tracker = new MockTracker();
+    tracker.method(Date, 'now', () => nowMilliseconds);
+    try {
+        return await callback();
+    } finally {
+        tracker.reset();
+    }
+}
+
 
 describe('Node KeyValueStore', ({ after, describe }) => {
 
@@ -234,15 +244,32 @@ describe('Node KeyValueStore', ({ after, describe }) => {
             store.close();
         });
 
-        it('accepts a sub-60-second ttlSeconds (Node has no minimum TTL)', async () => {
+        it('throws when ttlSeconds is below the 60 second minimum', async () => {
             const store = makeStore();
-            const context = makeContext();
 
-            await store.put(context, 'session', 'token', { ttlSeconds: 30 });
-            const result = await store.get(context, 'session');
+            const caught = await catchAsyncError(() => {
+                return store.put(makeContext(), 'session', 'token', { ttlSeconds: 59 });
+            });
 
-            assertEqual('token', result);
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertEqual('KeyValueStore "ttlSeconds" must be at least 60 seconds', caught.message);
             store.close();
+        });
+
+        it('accepts ttlSeconds at the 60 second minimum', async () => {
+            const database = new DatabaseSync(':memory:');
+            const store = new KeyValueStore({ logger: makeLogger(), database });
+            const nowMilliseconds = 1_800_000_000_000;
+
+            await withFixedNow(nowMilliseconds, async () => {
+                await store.put(makeContext(), 'session', 'token', { ttlSeconds: 60 });
+            });
+
+            const row = database.prepare('SELECT expires_at FROM kv WHERE key = ?').get('session');
+
+            assertEqual((nowMilliseconds / 1000) + 60, row.expires_at);
+            database.close();
         });
 
         it('throws when both ttlSeconds and expiresAt are provided', async () => {
@@ -272,18 +299,37 @@ describe('Node KeyValueStore', ({ after, describe }) => {
             store.close();
         });
 
-        it('throws when expiresAt is not in the future', async () => {
+        it('throws when expiresAt is less than 60 seconds in the future', async () => {
             const store = makeStore();
-            const expiresAt = Math.floor(Date.now() / 1000) - 10;
+            const nowMilliseconds = 1_800_000_000_000;
+            const expiresAt = (nowMilliseconds / 1000) + 59;
 
-            const caught = await catchAsyncError(
-                () => store.put(makeContext(), 'session', 'token', { expiresAt }),
-            );
+            const caught = await withFixedNow(nowMilliseconds, async () => {
+                return await catchAsyncError(
+                    () => store.put(makeContext(), 'session', 'token', { expiresAt }),
+                );
+            });
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('in the future', caught.message);
+            assertEqual('KeyValueStore "expiresAt" must be at least 60 seconds in the future', caught.message);
             store.close();
+        });
+
+        it('accepts expiresAt exactly 60 seconds in the future', async () => {
+            const database = new DatabaseSync(':memory:');
+            const store = new KeyValueStore({ logger: makeLogger(), database });
+            const nowMilliseconds = 1_800_000_000_000;
+            const expiresAt = (nowMilliseconds / 1000) + 60;
+
+            await withFixedNow(nowMilliseconds, async () => {
+                await store.put(makeContext(), 'session', 'token', { expiresAt });
+            });
+
+            const row = database.prepare('SELECT expires_at FROM kv WHERE key = ?').get('session');
+
+            assertEqual(expiresAt, row.expires_at);
+            database.close();
         });
 
         it('throws when a text value is not a string', async () => {
