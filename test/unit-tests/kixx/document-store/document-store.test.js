@@ -403,25 +403,30 @@ describe('DocumentStore', ({ describe }) => {
     });
 
     describe('update', ({ it }) => {
-        it('passes optimistic concurrency arguments and adds identity fields to the engine patch', async () => {
+        it('passes optimistic concurrency arguments and returns the complete engine record unchanged', async () => {
             const context = { requestId: 'update-request' };
             const doc = { type: 'Note', id: 'note-1', title: 'Updated' };
-            const patch = {
+            const record = {
+                type: 'Note',
+                id: 'note-1',
+                sortKey: null,
                 version: 2,
+                createdAt: '2026-07-17T11:00:00.000Z',
                 updatedAt: '2026-07-17T12:00:00.000Z',
                 doc: { title: 'Updated' },
             };
             const { store, engine, tracker } = makeStore({
                 implementations: {
-                    update: async () => patch,
+                    update: async () => record,
                 },
             });
 
             const result = await store.update(context, doc, 1);
 
-            assertEqual(patch, result);
+            assertEqual(record, result);
             assertEqual('Note', result.type);
             assertEqual('note-1', result.id);
+            assertEqual(null, result.sortKey);
             assertEqual(context, engine.update.mock.getCall(0).arguments[0]);
             assertEqual(doc, engine.update.mock.getCall(0).arguments[1]);
             assertEqual(1, engine.update.mock.getCall(0).arguments[2]);

@@ -303,6 +303,7 @@ function makeRecord(overrides, version = 1) {
     return new MigrationRecord({
         type: 'Migration',
         id: MIGRATION_ID,
+        sortKey: null,
         version,
         createdAt: STARTED_AT,
         updatedAt: STARTED_AT,

@@ -259,7 +259,7 @@ export default class DocumentStore {
      * @param {string} doc.type - Document type
      * @param {string} doc.id - Document identifier within the type
      * @param {string} [doc.sortKey] - Optional sort key used by `scan()`
-     * @returns {Promise<Object>} Stored record with `type`, `id`, `version`, `createdAt`, `updatedAt`, and `doc`
+     * @returns {Promise<Object>} Stored record with `type`, `id`, `sortKey`, `version`, `createdAt`, `updatedAt`, and `doc`
      * @throws {AssertionError} When the store is not initialized or the arguments are invalid
      */
     async put(context, doc) {
@@ -295,7 +295,7 @@ export default class DocumentStore {
      * @param {string} doc.type - Document type
      * @param {string} doc.id - Document identifier within the type
      * @param {string} [doc.sortKey] - Optional sort key used by `scan()`
-     * @returns {Promise<Object>} Stored record with `type`, `id`, `version`, `createdAt`, `updatedAt`, and `doc`
+     * @returns {Promise<Object>} Stored record with `type`, `id`, `sortKey`, `version`, `createdAt`, `updatedAt`, and `doc`
      * @throws {AssertionError} When the store is not initialized or the arguments are invalid
      * @throws {DocumentAlreadyExistsError} When a document already exists for the same type and id
      */
@@ -334,7 +334,7 @@ export default class DocumentStore {
      * @param {string} doc.id - Document identifier within the type
      * @param {string} [doc.sortKey] - Optional sort key used by `scan()`
      * @param {number} version - Expected current positive integer document version
-     * @returns {Promise<Object>} Stored record with incremented `version`, `createdAt`, `updatedAt`, `type`, `id`, and `doc`
+     * @returns {Promise<Object>} Stored record with `type`, `id`, `sortKey`, incremented `version`, `createdAt`, `updatedAt`, and `doc`
      * @throws {AssertionError} When the store is not initialized or the arguments are invalid
      * @throws {DocumentNotFoundError} When the target document does not exist
      * @throws {VersionConflictError} When the stored version does not match `version`
@@ -362,12 +362,7 @@ export default class DocumentStore {
             throw new AssertionError('DocumentStore#update() version must be an integer greater than zero');
         }
 
-        const patch = await this.#engine.update(context, doc, version);
-
-        return Object.assign(patch, {
-            type: doc.type,
-            id: doc.id,
-        });
+        return await this.#engine.update(context, doc, version);
     }
 
     /**
@@ -376,7 +371,7 @@ export default class DocumentStore {
      * @param {Object} context - Request or execution context consumed by the configured engine
      * @param {string} type - Document type
      * @param {string} id - Document identifier within the type
-     * @returns {Promise<(Object|null)>} Stored record with parsed `doc` payload, or null when absent
+     * @returns {Promise<(Object|null)>} Stored record with `type`, `id`, `sortKey`, `version`, `createdAt`, `updatedAt`, and parsed `doc`, or null when absent
      * @throws {AssertionError} When the store is not initialized or the arguments are invalid
      */
     async get(context, type, id) {
@@ -452,7 +447,7 @@ export default class DocumentStore {
      * @param {*} [options.greaterThanOrEqualTo] - Inclusive lower bound on the sort key
      * @param {*} [options.lessThan] - Exclusive upper bound on the sort key
      * @param {*} [options.lessThanOrEqualTo] - Inclusive upper bound on the sort key
-     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and a signed public next-page cursor, or null on the last page
+     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records containing `type`, `id`, `sortKey`, `version`, `createdAt`, `updatedAt`, and `doc`, plus a signed public next-page cursor or null on the last page
      * @throws {AssertionError} When the store is not initialized or the arguments are invalid
      * @throws {InvalidCursorError} When options.cursor was not issued by this facade, or was issued for a different query
      */
@@ -505,7 +500,7 @@ export default class DocumentStore {
      * @param {*} [options.greaterThanOrEqualTo] - Inclusive lower bound on the index value
      * @param {*} [options.lessThan] - Exclusive upper bound on the index value
      * @param {*} [options.lessThanOrEqualTo] - Inclusive upper bound on the index value
-     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records and a signed public next-page cursor, or null on the last page
+     * @returns {Promise<{records: Object[], cursor: string|null}>} Page of records containing `type`, `id`, `sortKey`, `version`, `createdAt`, `updatedAt`, and `doc`, plus a signed public next-page cursor or null on the last page
      * @throws {AssertionError} When the arguments are invalid or the index is not configured
      * @throws {InvalidCursorError} When options.cursor was not issued by this facade, or was issued for a different query
      */

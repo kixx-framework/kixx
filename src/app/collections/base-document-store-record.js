@@ -4,6 +4,7 @@ import {
     isNonEmptyString,
     isObjectNotNull,
     isPlainObject,
+    isString,
     isValidDate,
     toFriendlyString,
 } from '../../kixx/assertions/mod.js';
@@ -24,6 +25,7 @@ export default class Record {
      * @param {Object} spec - Stored record data and user-defined attributes.
      * @param {string} spec.type - Document type managed by the owning collection.
      * @param {string} spec.id - Document identifier within the type.
+     * @param {string|null} spec.sortKey - Built-in sort key, or null when absent.
      * @param {number} spec.version - Optimistic concurrency version returned by the document store.
      * @param {Date|string} spec.createdAt - Creation timestamp from the document store.
      * @param {Date|string} spec.updatedAt - Last-write timestamp from the document store.
@@ -44,6 +46,11 @@ export default class Record {
         if (!isNonEmptyString(spec.id)) {
             throw new AssertionError(
                 `Record spec.id must be a non-empty string (got ${ toFriendlyString(spec.id) })`,
+            );
+        }
+        if (spec.sortKey !== null && !isString(spec.sortKey)) {
+            throw new AssertionError(
+                `Record spec.sortKey must be a string or null (got ${ toFriendlyString(spec.sortKey) })`,
             );
         }
         if (!Number.isInteger(spec.version)) {
@@ -92,6 +99,16 @@ export default class Record {
              */
             id: {
                 value: spec.id,
+                enumerable: true,
+            },
+            /**
+             * Built-in sort key returned by the document store.
+             * @name sortKey
+             * @type {string|null}
+             * @readonly
+             */
+            sortKey: {
+                value: spec.sortKey,
                 enumerable: true,
             },
             /**
@@ -150,6 +167,7 @@ export default class Record {
      * @param {Object} spec
      * @param {string} spec.type - Document type managed by the owning collection.
      * @param {string} spec.id - Document identifier (already derived or assigned).
+     * @param {string|null} [spec.sortKey=null] - Built-in sort key, or null when absent.
      * @param {Object} spec.attributes - User-defined document attributes.
      * @returns {Record} Instance of the receiving Record class.
      * @throws {AssertionError} When `type`, `id`, or `attributes` are invalid.
@@ -160,6 +178,7 @@ export default class Record {
         return new RecordClass({
             type: spec?.type,
             id: spec?.id,
+            sortKey: spec?.sortKey ?? null,
             version: 0,
             createdAt: placeholder,
             updatedAt: placeholder,
@@ -229,13 +248,17 @@ export default class Record {
 
     /**
      * Reformats this record into the document shape accepted by DocumentStore.
-     * @returns {Object} Document attributes plus `type` and `id`.
+     * @returns {Object} Document attributes plus `type`, `id`, and a non-null `sortKey`.
      */
     toDocument() {
-        return Object.assign({}, this.#attributes, {
+        const doc = Object.assign({}, this.#attributes, {
             type: this.type,
             id: this.id,
         });
+        if (this.sortKey !== null) {
+            doc.sortKey = this.sortKey;
+        }
+        return doc;
     }
 
     /**
@@ -248,6 +271,7 @@ export default class Record {
             type: this.type,
             id: this.id,
             meta: {
+                sortKey: this.sortKey,
                 version: this.version,
                 createdAt: this.createdAt,
                 updatedAt: this.updatedAt,
@@ -258,12 +282,13 @@ export default class Record {
     /**
      * Wraps a raw document-store record in the receiving Record class.
      *
-     * Stored `type` and `id` fields are metadata and are not copied into the
-     * mutable user-defined attributes object.
+     * Stored `type`, `id`, and `sortKey` fields are metadata and are not copied
+     * into the mutable user-defined attributes object.
      *
      * @param {Object} record - Raw record returned by DocumentStore.
      * @param {string} record.type - Document type.
      * @param {string} record.id - Document identifier.
+     * @param {string|null} record.sortKey - Built-in sort key, or null when absent.
      * @param {number} record.version - Optimistic concurrency version.
      * @param {string} record.createdAt - Creation timestamp.
      * @param {string} record.updatedAt - Last update timestamp.
@@ -278,7 +303,7 @@ export default class Record {
         const attributes = {};
 
         for (const key of Object.keys(doc)) {
-            if (key === 'type' || key === 'id') {
+            if (key === 'type' || key === 'id' || key === 'sortKey') {
                 continue;
             }
 
@@ -288,6 +313,7 @@ export default class Record {
         return new RecordClass({
             type: record.type,
             id: record.id,
+            sortKey: record.sortKey,
             version: record.version,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt,

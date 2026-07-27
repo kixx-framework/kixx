@@ -7,8 +7,11 @@
  *
  * ## Invariants
  * - `type` and `id` identify one logical document.
- * - Stored records MUST include `type`, `id`, `version`, `createdAt`,
- *   `updatedAt`, and `doc`.
+ * - Stored records MUST include `type`, `id`, `sortKey`, `version`, `createdAt`,
+ *   `updatedAt`, and `doc`, with the same shape returned by every read and write
+ *   method.
+ * - `type`, `id`, and `sortKey` are row metadata and MUST NOT be persisted in
+ *   `doc`; `doc` contains only user-defined document fields.
  * - Secondary index definitions MUST be configured exactly once before the
  *   engine is used.
  * - `create()` MUST reject when the target document already exists.
@@ -22,8 +25,8 @@
  * - `update()` MUST reject when the expected version is not a positive integer,
  *   the target document is missing, or the stored version differs from the
  *   expected version.
- * - `query()` MUST return custom index values as `record.key`.
- * - `scan()` MUST return built-in sort key values as `record.sortKey`.
+ * - `query()` and `scan()` MUST both return the built-in sort key as
+ *   `record.sortKey`, using `null` when a document has no sort key.
  * - Pagination cursors received and returned by engines are private
  *   continuation values: JSON-serializable plain objects of the engine's own
  *   choosing, describing only the position to resume from. Engines MUST NOT
@@ -71,18 +74,11 @@
  * @typedef {Object} DocumentStoreRecord
  * @property {string} type - Document type.
  * @property {string} id - Document identifier within the type.
+ * @property {string|null} sortKey - Built-in sort key, or null when the document has none.
  * @property {number} version - Current stored document version.
  * @property {string} createdAt - ISO timestamp for the original creation time.
  * @property {string} updatedAt - ISO timestamp for the most recent write.
- * @property {Object} doc - Stored JSON document payload.
- */
-
-/**
- * @typedef {DocumentStoreRecord & {key: *}} DocumentStoreQueryRecord
- */
-
-/**
- * @typedef {DocumentStoreRecord & {sortKey: string|null}} DocumentStoreScanRecord
+ * @property {Object} doc - Stored JSON payload containing only user-defined document fields.
  */
 
 /**
@@ -112,13 +108,13 @@
 
 /**
  * @typedef {Object} DocumentStoreQueryResult
- * @property {DocumentStoreQueryRecord[]} records - Page of matching records.
+ * @property {DocumentStoreRecord[]} records - Page of matching records, each including `sortKey`.
  * @property {Object|null} cursor - Private JSON-serializable continuation value for the next page, or null on the last page.
  */
 
 /**
  * @typedef {Object} DocumentStoreScanResult
- * @property {DocumentStoreScanRecord[]} records - Page of matching records.
+ * @property {DocumentStoreRecord[]} records - Page of matching records, each including `sortKey`.
  * @property {Object|null} cursor - Private JSON-serializable continuation value for the next page, or null on the last page.
  */
 
@@ -134,27 +130,28 @@
  *
  * @property {function(Object, string, DocumentStoreQueryOptions): Promise<DocumentStoreQueryResult>} query
  *   Returns a keyset-paginated page of documents filtered and sorted by a
- *   configured secondary index.
+ *   configured secondary index. Every record includes `sortKey`.
  *
  * @property {function(Object, string, DocumentStoreScanOptions=): Promise<DocumentStoreScanResult>} scan
- *   Returns a keyset-paginated page of documents sorted by the built-in sort key.
+ *   Returns a keyset-paginated page of documents sorted by the built-in sort
+ *   key. Every record includes `sortKey`.
  *
  * @property {function(Object, string, string): Promise<DocumentStoreRecord>} get
- *   Retrieves one document by type and id.
+ *   Retrieves one document by type and id, including `sortKey`.
  *
  * @property {function(Object, Object): Promise<DocumentStoreRecord>} create
  *   Creates a document and rejects when a document already exists for the same
- *   type and id.
+ *   type and id. The returned record includes `sortKey`.
  *
  * @property {function(Object, Object): Promise<DocumentStoreRecord>} put
  *   Creates or overwrites a document without optimistic concurrency control.
  *   Missing documents start at version 1; existing documents are overwritten and
- *   increment their version.
+ *   increment their version. The returned record includes `sortKey`.
  *
  * @property {function(Object, Object, number): Promise<DocumentStoreRecord>} update
  *   Updates an existing document using optimistic concurrency. The update MUST
  *   reject when the document is missing, the expected version is invalid, or the
- *   stored version differs.
+ *   stored version differs. The returned record includes `sortKey`.
  *
  * @property {function(Object, string, string, number=): Promise<boolean>} delete
  *   Deletes one document by type and id. When a version is provided, it MUST be

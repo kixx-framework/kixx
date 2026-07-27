@@ -233,6 +233,7 @@ function makeRecord(id, attributes, version) {
     return new MigrationRecord({
         type: 'Migration',
         id,
+        sortKey: null,
         version,
         createdAt: STARTED_AT,
         updatedAt: STARTED_AT,

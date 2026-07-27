@@ -164,7 +164,7 @@ Document Store Collections expose four ways to write a document. Choose based on
 
 All write methods call `dto.validate()` before persisting. A `ValidationError` thrown from `validate()` propagates to the caller without touching the store.
 
-`create()` and `put()` accept either a plain attributes object or a Record instance. When given a plain object, the Collection normalizes it: strips `type` from stored attributes, preserves a non-empty `input.id` when provided, otherwise calls `generateUniqueId(attributes)` to create the document id, strips `id` from stored attributes, and wraps the result in the configured Record class via `Record.forWrite()`.
+`create()` and `put()` accept either a plain attributes object or a Record instance. When given a plain object, the Collection normalizes it: strips `type` from stored attributes, preserves a non-empty `input.id` when provided, otherwise calls `generateUniqueId(attributes)` to create the document id, strips `id` from stored attributes, moves `input.sortKey` into Record metadata when supplied, and wraps the result in the configured Record class via `Record.forWrite()`.
 
 `update()` and `updateWithRetry()` require a Record instance — they use the instance's `version` for optimistic concurrency and run the subclass `validate()`. Passing a plain object to `update()` throws an `AssertionError`.
 
@@ -189,7 +189,7 @@ Pagination cursors are opaque, **signed public tokens** — not raw storage curs
 
 `BaseDocumentStoreCollection#generateUniqueId(attributes)` is the canonical hook for creating document ids, including derived IDs such as usernames, slugs, or content hashes. Override `generateUniqueId` on the Collection subclass when a document type needs a stable id derived from attributes, a counter-backed id, an injected id service, or any other non-default id strategy. The default `generateUniqueId` returns `crypto.randomUUID()`.
 
-Override `generateSortKey(doc)` when the Collection needs a computed sort key. The default passes through `doc.sortKey` when present, or returns `undefined` to omit one. The sort key controls the ordering returned by `scan()` and must be a string that sorts lexicographically in the desired order. `generateSortKey()` must return a string, `null`, or `undefined`; returning any other type throws an `AssertionError` during a write. Range queries in `scan()` are only meaningful when all documents have sort keys.
+Override `generateSortKey(doc)` when the Collection needs a computed sort key. The sort key is store metadata, not a user-defined attribute. Plain-object writes may still supply `sortKey`; the Collection moves it into the Record's metadata slot, and `Record#toDocument()` makes a non-null value available to the default `generateSortKey(doc)` hook as `doc.sortKey`. The default passes that value through when present, or returns `undefined` to omit one. The sort key controls the ordering returned by `scan()` and must be a string that sorts lexicographically in the desired order. `generateSortKey()` must return a string, `null`, or `undefined`; returning any other type throws an `AssertionError` during a write. Range queries in `scan()` are only meaningful when all documents have sort keys.
 
 ### Document Store Collections: Deleting
 
@@ -208,6 +208,7 @@ Store metadata properties are enumerable and read-only:
 |---|---|---|
 | `type` | `string` | Document type (e.g. `"User"`) |
 | `id` | `string` | Document identifier within the type |
+| `sortKey` | `string|null` | Built-in ordering key, or `null` when absent |
 | `version` | `number` | Optimistic concurrency version assigned by the store |
 | `createdAt` | `Date` | Creation timestamp |
 | `updatedAt` | `Date` | Last-write timestamp |
@@ -243,7 +244,7 @@ class UserCollection extends Collection {
 }
 ```
 
-Build a Record outside a Collection with the static factory `Record.forWrite({ type, id, attributes })`. Collections call it internally on the write path, but it is also the way to construct a Record for a domain workflow that needs to `validate()` or `toDocument()` before handing off to the Collection, and the way to exercise `validate()` in unit tests. It sets placeholder store metadata that never escapes the gateway.
+Build a Record outside a Collection with the static factory `Record.forWrite({ type, id, sortKey, attributes })`. `sortKey` is optional and defaults to `null`. Collections call the factory internally on the write path, but it is also the way to construct a Record for a domain workflow that needs to `validate()` or `toDocument()` before handing off to the Collection, and the way to exercise `validate()` in unit tests. It sets placeholder store metadata that never escapes the gateway.
 
 ### Schema
 
@@ -306,7 +307,7 @@ List every field in the schema `required` array even when it is nullable — the
 
 ### Serialization
 
-`record.toDocument()` returns a plain object combining attributes with `type` and `id`. This is the document payload sent to the store. `record.toObject()` returns the same but moves store metadata under a `meta` key (`version`, `createdAt`, `updatedAt`), useful for JSON responses.
+`record.toDocument()` returns a plain object combining attributes with `type`, `id`, and `sortKey` when the sort key is non-null. This is the write shape sent to the store; the store persists `type`, `id`, and `sortKey` as row metadata rather than inside the JSON payload. `record.toObject()` returns the attributes with `type` and `id`, and places store metadata under a `meta` key (`sortKey`, `version`, `createdAt`, `updatedAt`), useful for JSON responses.
 
 ### Optimistic Concurrency
 

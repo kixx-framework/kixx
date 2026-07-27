@@ -291,8 +291,9 @@ export default class DocumentStoreEngine {
     /**
      * Returns a keyset-paginated page of documents filtered and sorted by a named index.
      *
-     * The index name must correspond to an entry in `indexDefinitions`. Each record in
-     * the result exposes the matched index value as `key`.
+     * The index name must correspond to an entry in `indexDefinitions`. Each
+     * record includes its built-in sort key as `sortKey`; the matched secondary
+     * index value remains private to pagination.
      *
      * @param {Object} context - Request or execution context accepted for engine interface compatibility
      * @param {string} type - Document type used to scope the query
@@ -347,11 +348,11 @@ export default class DocumentStoreEngine {
             return {
                 type,
                 id: row.id,
+                sortKey: row.sort_key,
                 version: row.version,
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
-                key: row.key,
-                doc: JSON.parse(row.doc),
+                doc: getDocumentPayload(JSON.parse(row.doc)),
             };
         });
 
@@ -411,11 +412,11 @@ export default class DocumentStoreEngine {
             return {
                 type,
                 id: row.id,
+                sortKey: row.sort_key,
                 version: row.version,
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
-                sortKey: row.key,
-                doc: JSON.parse(row.doc),
+                doc: getDocumentPayload(JSON.parse(row.doc)),
             };
         });
 
@@ -436,7 +437,7 @@ export default class DocumentStoreEngine {
         const db = this.#getDatabase(context);
 
         const row = db
-            .prepare('SELECT doc, version, created_at, updated_at FROM documents WHERE type = ? AND id = ?')
+            .prepare('SELECT sort_key, doc, version, created_at, updated_at FROM documents WHERE type = ? AND id = ?')
             .get(type, id);
 
         if (!row) {
@@ -446,10 +447,11 @@ export default class DocumentStoreEngine {
         return {
             type,
             id,
+            sortKey: row.sort_key,
             version: row.version,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
-            doc: JSON.parse(row.doc),
+            doc: getDocumentPayload(JSON.parse(row.doc)),
         };
     }
 
@@ -472,8 +474,9 @@ export default class DocumentStoreEngine {
     async put(context, doc) {
         const { type, id } = doc;
         const sortKey = isUndefined(doc.sortKey) ? null : doc.sortKey;
+        const documentPayload = getDocumentPayload(doc);
         const now = new Date().toISOString();
-        const json = JSON.stringify(doc);
+        const json = JSON.stringify(documentPayload);
 
         await this.#ensurePrepared(context);
 
@@ -506,10 +509,11 @@ export default class DocumentStoreEngine {
         return {
             type,
             id,
+            sortKey,
             version: row.version,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
-            doc,
+            doc: documentPayload,
         };
     }
 
@@ -535,8 +539,9 @@ export default class DocumentStoreEngine {
 
         const { type, id } = doc;
         const sortKey = isUndefined(doc.sortKey) ? null : doc.sortKey;
+        const documentPayload = getDocumentPayload(doc);
         const updatedAt = new Date().toISOString();
-        const json = JSON.stringify(doc);
+        const json = JSON.stringify(documentPayload);
 
         await this.#ensurePrepared(context);
 
@@ -566,10 +571,11 @@ export default class DocumentStoreEngine {
             return {
                 type,
                 id,
+                sortKey,
                 version: row.version,
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
-                doc,
+                doc: documentPayload,
             };
         }
 
@@ -600,8 +606,9 @@ export default class DocumentStoreEngine {
     async create(context, doc) {
         const { type, id } = doc;
         const sortKey = isUndefined(doc.sortKey) ? null : doc.sortKey;
+        const documentPayload = getDocumentPayload(doc);
         const now = new Date().toISOString();
-        const json = JSON.stringify(doc);
+        const json = JSON.stringify(documentPayload);
 
         await this.#ensurePrepared(context);
 
@@ -634,10 +641,11 @@ export default class DocumentStoreEngine {
         return {
             type,
             id,
+            sortKey,
             version: row.version,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
-            doc,
+            doc: documentPayload,
         };
     }
 
@@ -857,6 +865,14 @@ function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function getDocumentPayload(doc) {
+    const payload = Object.assign({}, doc);
+    delete payload.type;
+    delete payload.id;
+    delete payload.sortKey;
+    return payload;
+}
+
 /**
  * Builds the SELECT statement and bound parameter list shared by `query()` and `scan()`.
  *
@@ -954,7 +970,7 @@ function composeQueryStatement(args) {
     }
 
     const sql = [
-        `SELECT id, version, created_at, updated_at, ${ columnName } AS key, doc`,
+        `SELECT id, sort_key, version, created_at, updated_at, ${ columnName } AS key, doc`,
         'FROM documents',
         `WHERE ${ conditions.join(' AND ') }`,
         `ORDER BY ${ columnName } ${ direction }, id ${ direction }`,

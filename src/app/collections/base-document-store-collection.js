@@ -326,8 +326,9 @@ export default class Collection {
     /**
      * Returns the sort key for a document of this type, or null/undefined to omit one.
      * Override to compute a sort key from document fields.
-     * The default passes through `doc.sortKey` when present, or returns `undefined`.
-     * @param {Object} doc - The prepared document
+     * The default passes through Record metadata emitted as `doc.sortKey` by
+     * `toDocument()`, or returns `undefined`.
+     * @param {Object} doc - The prepared document containing attributes and write metadata
      * @returns {string|null|undefined}
      */
     generateSortKey(doc) {
@@ -348,7 +349,7 @@ export default class Collection {
         const attributes = {};
 
         for (const key of Object.keys(input)) {
-            if (key === 'type' || key === 'id') {
+            if (key === 'type' || key === 'id' || key === 'sortKey') {
                 continue;
             }
 
@@ -363,6 +364,7 @@ export default class Collection {
         return this.Record.forWrite({
             type: this.type,
             id,
+            sortKey: input.sortKey ?? null,
             attributes,
         });
     }
