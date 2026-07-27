@@ -40,3 +40,6 @@ src/data/
 .env
 .env.*
 
+# End-to-End test files
+src/templates/e2e-**
+
