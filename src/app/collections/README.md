@@ -221,6 +221,9 @@ record.merge({ email, name })   // shallow Object.assign into attributes
 record.deepMerge({ address })   // deep merge into attributes
 ```
 
+Both `merge()` and `deepMerge()` require a plain-object patch. Passing `null`,
+`undefined`, an array, or another non-plain value is a programmer error.
+
 Do not read or write document fields directly off the Record instance — always use `get()`, `set()`, `merge()`, or `deepMerge()`. Document fields are not top-level properties; `record.email` will always be `undefined`.
 
 ### Subclassing Record

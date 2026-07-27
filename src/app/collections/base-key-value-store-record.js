@@ -106,11 +106,16 @@ export default class Record {
     /**
      * Shallowly merges own enumerable attributes into this record.
      *
-     * @param {Object} patch - Attribute values to assign.
+     * @param {Object} patch - Plain object containing attribute values to assign.
      * @returns {Record} This record for chaining.
-     * @throws {TypeError} When patch is null or undefined.
+     * @throws {AssertionError} When patch is not a plain object.
      */
     merge(patch) {
+        if (!isPlainObject(patch)) {
+            throw new AssertionError(
+                `Record#merge() patch must be a plain object (got ${ toFriendlyString(patch) })`,
+            );
+        }
         Object.assign(this.#attributes, patch);
         return this;
     }
