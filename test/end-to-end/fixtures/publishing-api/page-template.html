@@ -1,0 +1,18 @@
+{{!--
+    End-to-end test fixture: a minimal Kixx page template.
+
+    A page template renders as the body of a base template, so this is a
+    document fragment rather than a whole document — that is the shape
+    difference from base-template.html in this directory.
+
+    Deliberately self contained. It references no partials, so it stays valid
+    on its own if a future test publishes it and then renders it.
+--}}
+<main class="center center--site">
+    <h1>{{ title }}</h1>
+    {{#if body }}
+        {{{ body }}}
+    {{ else }}
+        <p>No content.</p>
+    {{/if}}
+</main>
