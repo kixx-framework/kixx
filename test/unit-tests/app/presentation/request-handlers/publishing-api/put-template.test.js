@@ -110,18 +110,24 @@ describe('putTemplate publishing API handlers', ({ describe, it }) => {
         assertEqual('website.html', response.document.data.attributes.filepath);
     });
 
-    it('preserves the filepath case, which template reads resolve verbatim', async () => {
+    it('folds the filepath case to the key Hyperview stores it under', async () => {
+        // HyperviewService#normalizeTemplateId folds every template id on reads
+        // *and* writes, so the store never sees the case the client sent. Folding
+        // here does not change where the template lands; it keeps the reported
+        // filepath naming the key that was actually written. Reporting the raw URL
+        // wildcard would hand the client a filepath matching no stored key.
         const service = makeHyperviewService();
         const response = makeResponse();
 
         await putPageTemplate(
             makeContext({ service }),
-            makeRequest({ filepath: [ 'Blog', 'MainPage.html' ], source: 'source' }),
+            makeRequest({ filepath: [ 'Blog', 'MainPage.HTML' ], source: 'source' }),
             response,
         );
 
-        assertEqual('Blog/MainPage.html', service.writes[0].filepath);
-        assertEqual('Blog/MainPage.html', response.document.data.id);
+        assertEqual('blog/mainpage.html', service.writes[0].filepath);
+        assertEqual('blog/mainpage.html', response.document.data.id);
+        assertEqual('blog/mainpage.html', response.document.data.attributes.filepath);
     });
 
     it('rejects a media type other than text/plain', async () => {

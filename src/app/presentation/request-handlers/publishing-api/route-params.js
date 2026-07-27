@@ -3,6 +3,12 @@ import { BadRequestError } from '../../../../kixx/errors/mod.js';
 import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
+const TEMPLATE_FILEPATH_OPTIONS = {
+    label: 'Template filepath',
+    requiredCode: 'TemplateFilepathRequired',
+};
+
+
 /**
  * Normalizes the optional wildcard page pathname param shared by the pages
  * authorization resolver and request handler, so the URN that gets
@@ -44,8 +50,8 @@ export function getWildcardPathname(request, name) {
 
 /**
  * Normalizes a required wildcard filepath param for resources whose reads
- * resolve the stored key verbatim (templates and static assets), so one
- * resource has exactly one addressable URL on every deploy target.
+ * resolve the stored key verbatim (static assets), so one resource has exactly
+ * one addressable URL on every deploy target.
  * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
  * @param {string} name - Pathname params key holding the wildcard segments.
  * @param {object} options - Error reporting options.
@@ -75,10 +81,34 @@ export function getWildcardFilepath(request, name, { label, requiredCode }) {
     // rather than relying on a downstream store assertion (500). Validate the
     // segments as the client sent them so the error message echoes the request.
     //
-    // The case is deliberately preserved: unlike page pathnames, template and
-    // asset reads resolve the key verbatim, so folding here would store the file
-    // under a name no read ever asks for.
+    // The case is deliberately preserved: unlike page pathnames, static asset
+    // reads resolve the key verbatim (StaticFileRequestHandler looks the URL
+    // pathname up as sent), so folding here would store the file under a name no
+    // read ever asks for. Template writes need the opposite and wrap this
+    // function — see getWildcardTemplateFilepath() below.
     return validatePathname(segments.join('/'));
+}
+
+/**
+ * Normalizes the required wildcard template filepath param shared by all three
+ * template kinds, folding it to the lower case key the write actually lands on.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {string} name - Pathname params key holding the wildcard segments.
+ * @returns {string} Canonical (lower case), traversal-checked filepath, without the store's kind prefix.
+ * @throws {BadRequestError} When the filepath is missing.
+ * @throws {BadRequestError} When the filepath contains an empty segment.
+ * @throws {BadRequestError} When the filepath contains traversal or out-of-whitelist characters.
+ */
+export function getWildcardTemplateFilepath(request, name) {
+    const filepath = getWildcardFilepath(request, name, TEMPLATE_FILEPATH_OPTIONS);
+
+    // HyperviewService.#normalizeTemplateId() folds every template id to lower
+    // case on reads *and* writes, so the stored key never carries the case the
+    // client sent. Storage is therefore already consistent without this fold; what
+    // it fixes is the handler's report. The response id and filepath are built
+    // from this return value, so folding here is what keeps them naming the key
+    // that was actually written instead of the raw URL wildcard.
+    return filepath.toLowerCase();
 }
 
 /**

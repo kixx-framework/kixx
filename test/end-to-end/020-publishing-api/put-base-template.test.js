@@ -34,6 +34,11 @@ const OVERWRITE_TEMPLATE_FILEPATH = 'e2e/overwrite-target.html';
 // prefix stripping rather than an incidental one.
 const PREFIXED_TEMPLATE_FILEPATH = 'base/prefix-check.html';
 
+// Mixed case in both a directory segment and the filename, plus an upper case
+// extension, so a fold applied to only part of the filepath still fails.
+const MIXED_CASE_TEMPLATE_FILEPATH = 'E2E/Case-Check.HTML';
+const FOLDED_TEMPLATE_FILEPATH = 'e2e/case-check.html';
+
 // respondWithUtf8() appends the charset to every JSON:API response.
 const JSON_API_CONTENT_TYPE = 'application/vnd.api+json; charset=utf-8';
 
@@ -196,6 +201,81 @@ describe('PUT /publishing-api/v1/templates/base/*filepath with a base-prefixed f
         assertEqual(PREFIXED_TEMPLATE_FILEPATH, body.data.attributes.filepath);
         assertEqual(PREFIXED_TEMPLATE_FILEPATH, body.data.id);
         assertEqual('base', body.data.attributes.kind);
+    });
+});
+
+describe('PUT /publishing-api/v1/templates/base/*filepath with a mixed case filepath', ({ before, it }) => {
+
+    let mixedCaseUrl;
+    let mixedCaseResponse;
+    let mixedCaseBody;
+    let foldedResponse;
+    let foldedBody;
+
+    before(async () => {
+        // Construct the URLs here so the test fails if either is invalid
+        // instead of crashing the whole test run.
+        mixedCaseUrl = new URL(`${ getBaseUrl() }/publishing-api/v1/templates/base/${ MIXED_CASE_TEMPLATE_FILEPATH }`);
+        const foldedUrl = new URL(`${ getBaseUrl() }/publishing-api/v1/templates/base/${ FOLDED_TEMPLATE_FILEPATH }`);
+
+        const token = await getPublishingApiToken();
+        const source = await fsp.readFile(FIXTURE_URL, 'utf8');
+
+        const headers = {
+            authorization: `Bearer ${ token }`,
+            'kixx-build-id': TEST_BUILD_ID,
+            'content-type': 'text/plain; charset=utf-8',
+        };
+
+        mixedCaseResponse = await fetch(mixedCaseUrl, {
+            method: 'PUT',
+            redirect: 'manual',
+            headers,
+            body: source,
+        });
+
+        mixedCaseBody = await mixedCaseResponse.json();
+
+        // Publish the already-folded spelling of the same filepath, so the two
+        // payloads can be compared below.
+        foldedResponse = await fetch(foldedUrl, {
+            method: 'PUT',
+            redirect: 'manual',
+            headers,
+            body: source,
+        });
+
+        foldedBody = await foldedResponse.json();
+    });
+
+    it('responds with an HTTP 200 status code', () => {
+        assert(mixedCaseResponse);
+        assertEqual(200, mixedCaseResponse.status);
+        // The URL is echoed back as sent; only the reported filepath is folded.
+        assertEqual(mixedCaseUrl.href, mixedCaseResponse.url);
+    });
+
+    // Hyperview folds every base, page, and partial template id to lower case
+    // before reading or writing it (HyperviewService#normalizeTemplateId), so the
+    // template is stored at `base/e2e/case-check.html` no matter which spelling
+    // was requested. Reporting the URL wildcard unchanged would hand the client a
+    // filepath naming a key that does not exist.
+    it('returns the filepath folded to lower case', () => {
+        assertEqual(FOLDED_TEMPLATE_FILEPATH, mixedCaseBody.data.attributes.filepath);
+        assertEqual(FOLDED_TEMPLATE_FILEPATH, mixedCaseBody.data.id);
+        assertEqual('base', mixedCaseBody.data.attributes.kind);
+        assertEqual(TEST_BUILD_ID, mixedCaseBody.data.attributes.buildId);
+    });
+
+    // Both spellings resolve to one stored template. That cannot be observed
+    // directly from here — templates have no GET route, and TEST_BUILD_ID is not
+    // the live build — so this pins the visible half of the contract: the two URLs
+    // are answered as the same resource.
+    it('returns an identical payload for the already-folded filepath', () => {
+        assertEqual(200, foldedResponse.status);
+        // Both payloads come from the same handler expression, so their key
+        // order is stable and serializing is a sound way to compare them whole.
+        assertEqual(JSON.stringify(mixedCaseBody), JSON.stringify(foldedBody));
     });
 });
 

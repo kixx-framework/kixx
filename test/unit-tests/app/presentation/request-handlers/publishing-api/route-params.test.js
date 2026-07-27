@@ -4,6 +4,7 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import {
     getWildcardFilepath,
     getWildcardPathname,
+    getWildcardTemplateFilepath,
     splitIncludeFilepath,
 } from '../../../../../../src/app/presentation/request-handlers/publishing-api/route-params.js';
 
@@ -94,7 +95,7 @@ describe('publishing API route params', ({ describe }) => {
             assertEqual('base/website.html', getWildcardFilepath(request, 'filepath', OPTIONS));
         });
 
-        it('preserves the filepath case, which template and asset reads resolve verbatim', () => {
+        it('preserves the filepath case, which static asset reads resolve verbatim', () => {
             const request = makeRequest({ filepath: [ 'Images', 'Logo.png' ] });
             assertEqual('Images/Logo.png', getWildcardFilepath(request, 'filepath', OPTIONS));
         });
@@ -168,6 +169,57 @@ describe('publishing API route params', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('BadRequestError', caught.name);
             assertMatches('Invalid pathname', caught.message);
+        });
+    });
+
+    describe('getWildcardTemplateFilepath()', ({ it }) => {
+
+        it('joins wildcard segments into a relative filepath', () => {
+            const request = makeRequest({ filepath: [ 'blog', 'byline.html' ] });
+            assertEqual('blog/byline.html', getWildcardTemplateFilepath(request, 'filepath'));
+        });
+
+        // HyperviewService#normalizeTemplateId folds every template id on reads and
+        // writes, so folding here does not move where the template lands. It makes
+        // the returned value — which becomes the response id and filepath — name
+        // the key that was actually written rather than the raw URL wildcard.
+        it('folds the filepath to the lower case key Hyperview stores it under', () => {
+            const request = makeRequest({ filepath: [ 'Blog', 'MainPage.HTML' ] });
+            assertEqual('blog/mainpage.html', getWildcardTemplateFilepath(request, 'filepath'));
+        });
+
+        it('reads the wildcard param under the given name', () => {
+            const request = makeRequest({ other: [ 'A.html' ], filepath: [ 'b.html' ] });
+            assertEqual('a.html', getWildcardTemplateFilepath(request, 'other'));
+        });
+
+        it('rejects a missing filepath param with the template code', () => {
+            const caught = catchError(() => getWildcardTemplateFilepath(makeRequest({}), 'filepath'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assertEqual(400, caught.httpStatusCode);
+            assertEqual('TemplateFilepathRequired', caught.code);
+            assertMatches('Template filepath', caught.message);
+        });
+
+        it('rejects an empty path segment before folding', () => {
+            const request = makeRequest({ filepath: [ 'Base', 'Site.html', '' ] });
+            const caught = catchError(() => getWildcardTemplateFilepath(request, 'filepath'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('EmptyPathSegment', caught.code);
+        });
+
+        // The error must echo the filepath as the client sent it. Folding first
+        // would report a filepath the client never wrote.
+        it('rejects invalid characters and reports the unfolded filepath', () => {
+            const request = makeRequest({ filepath: [ 'Base', 'My Site.html' ] });
+            const caught = catchError(() => getWildcardTemplateFilepath(request, 'filepath'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assertMatches('Invalid pathname: Base/My Site.html', caught.message);
         });
     });
 
