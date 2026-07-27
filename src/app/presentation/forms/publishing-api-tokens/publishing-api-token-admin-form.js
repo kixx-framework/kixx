@@ -1,5 +1,5 @@
 import { ValidationError } from '../../../../kixx/errors/mod.js';
-import { isNonEmptyString, isString } from '../../../../kixx/assertions/mod.js';
+import { isNonEmptyString, isUndefined, isString } from '../../../../kixx/assertions/mod.js';
 import BaseForm from '../base-form.js';
 import { ROLE_EDITOR } from '../../../lib/roles.js';
 import { normalizeOptionalStringAttribute, normalizeStringAttribute } from '../utils.js';
@@ -136,7 +136,7 @@ export default class PublishingApiTokenCreateForm extends BaseForm {
 }
 
 function normalizeTimeToLiveSeconds(value) {
-    if (value === null || value === undefined) {
+    if (value === null || isUndefined(value)) {
         return DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS;
     }
 

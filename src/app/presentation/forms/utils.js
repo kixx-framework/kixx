@@ -1,5 +1,6 @@
 import {
     isNonEmptyString,
+    isUndefined,
     isString,
 } from '../../../kixx/assertions/mod.js';
 
@@ -47,7 +48,7 @@ export function normalizeLowerCaseStringAttribute(value) {
  * @returns {*} Trimmed non-empty string, null when value is missing or blank, otherwise the original value.
  */
 export function normalizeOptionalStringAttribute(value) {
-    if (value === null || value === undefined) {
+    if (value === null || isUndefined(value)) {
         return null;
     }
 

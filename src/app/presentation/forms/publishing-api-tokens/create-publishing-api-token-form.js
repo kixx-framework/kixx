@@ -1,4 +1,4 @@
-import { isString } from '../../../../kixx/assertions/mod.js';
+import { isString, isUndefined } from '../../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import { isRoleName } from '../../../lib/roles.js';
 import { normalizeOptionalStringAttribute } from '../utils.js';
@@ -130,7 +130,7 @@ export default class CreatePublishingApiTokenForm {
 }
 
 function normalizeTimeToLiveSeconds(value) {
-    if (value === null || value === undefined) {
+    if (value === null || isUndefined(value)) {
         return DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS;
     }
 

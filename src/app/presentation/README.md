@@ -112,7 +112,7 @@ This response exposes the same page data object that would otherwise be rendered
 
 Routes are defined in `virtual-hosts.js` as an array of virtual host specification objects. The HTTP router resolves every request through a four-level hierarchy: **HttpRouter → VirtualHost → HttpRoute → HttpTarget**.
 
-`virtual-hosts.js` is a thin top-level shell: it declares the virtual hosts, their hostnames, and the route subtrees mounted under each one. The route subtrees themselves live in `src/routes/`, one module per API or UI surface — `admin-panel.js`, `admin-api-v1.js`, and `publishing-api-v1.js` — each default-exporting the array of routes mounted at its parent pattern. Add a route to the module that owns the surface it belongs to, and reserve edits to `virtual-hosts.js` for mounting a new subtree, adding a virtual host, or changing subtree-level middleware and error handlers.
+`virtual-hosts.js` is a thin top-level shell: it declares the virtual hosts, their hostnames, and the route subtrees mounted under each one. The route subtrees themselves live in `routes/`, one module per API or UI surface, each default-exporting the array of routes mounted at its parent pattern. Add a route to the module that owns the surface it belongs to, and reserve edits to `virtual-hosts.js` for mounting a new subtree, adding a virtual host, or changing subtree-level middleware and error handlers.
 
 - **VirtualHost** matches the request by hostname. If no hostname match is found, the first virtual configured will be used.
 - **HttpRoute** matches the URL pathname using `path-to-regexp` pattern syntax (e.g. `/users/:id`). Named segments are captured and available as `request.pathnameParams`.
@@ -252,7 +252,7 @@ Authentication and authorization sit at different levels of the route tree, and 
 
 **Authentication is route `inboundMiddleware`.** Establishing who is making the request is the same question for every target under a route, so `authenticateAdminUser`, `authenticateAdminApiRequest`, and `authenticatePublishingToken` attach once at the subtree root and set `context.user` for everything below.
 
-**Authorization is the first entry in a target's `requestHandlers`.** What a principal is allowed to do differs per target, not per route: one route can host a GET target that needs a read permission and a POST target that needs a write permission. The `/invites` route in `routes/admin-panel.js` is the canonical case — `render-invite-list` leads with `requireAdminUserInvitesRead` and `create-invite` leads with `requireAdminUserInvitesWrite`. Attaching either gate as route middleware would apply one decision to both targets, over-granting the GET or under-granting the POST.
+**Authorization is the first entry in a target's `requestHandlers`.** What a principal is allowed to do differs per target, not per route: one route can host a GET target that needs a read permission and a POST target that needs a write permission.
 
 ```js
 {
@@ -923,7 +923,7 @@ For a page that needs route parameters, records loaded through Transaction Scrip
 1. Add or update the route in `virtual-hosts.js`.
 2. Add a request handler in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
 3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
-4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewDynamicPageHandler(...)` (see [HyperviewDynamicPageHandler Options](#hyperviewrequesthandler-options) above).
+4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewDynamicPageHandler(...)`
 5. If the route pattern contains dynamic segments such as `/:id`, pass a stable Hyperview `pathname` option to HyperviewDynamicPageHandler so the handler can locate the appropriate `pages/**` and `templates/pages/**` directories, even when the path contains dynamic path segments.
 6. Add the matching `pages/<stable-pathname>/page.json` and `templates/pages/<stable-pathname>/page.html` files.
 
@@ -1032,7 +1032,7 @@ For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments,
 - `templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
 - `templates/pages/` contains templates for specific pages.
 - `virtual-hosts.js` declares the virtual hosts and mounts the route subtrees under each one.
-- `src/routes/` contains the route subtrees themselves — one module per API or UI surface — connecting patterns and HTTP methods to middleware and request handlers.
+- `routes/` contains the route subtrees themselves — one module per API or UI surface — connecting patterns and HTTP methods to middleware and request handlers.
 - `app/presentation/request-handlers/` contains application request handlers.
 - `app/presentation/middleware/` contains application inbound and outbound middleware.
 - `app/presentation/error-handlers/` contains application error handlers.
