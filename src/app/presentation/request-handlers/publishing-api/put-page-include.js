@@ -8,6 +8,19 @@ import { splitIncludeFilepath } from './route-params.js';
 import { putInclude as putIncludeScript } from '../../../transaction-scripts/publishing/put-include.js';
 
 
+/**
+ * Writes a page include file for a build.
+ *
+ * The write is namespaced by the `x-kixx-build-id` request header, so it lands in
+ * the pending build rather than the live one.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request; the body is the include source.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 200 response describing the written include.
+ * @throws {UnsupportedMediaTypeError} When the request Content-Type is not `text/*`.
+ * @throws {BadRequestError} When the wildcard filepath is missing, empty-segmented, or contains traversal characters.
+ */
 export async function putPageInclude(context, request, response) {
     assertTextContentType(request);
 

@@ -112,7 +112,14 @@ export function createCursorPaginationLinks(args) {
 
 /**
  * Converts a rejected signed cursor into a client-safe malformed-query error.
+ *
+ * This never returns: both branches throw. Callers rely on that to read the
+ * result of the `try` block after the `catch`, so the catch arm must stay
+ * exhaustive — adding a branch that falls through would leave those reads
+ * holding `undefined`.
+ *
  * @param {Error} cause - Error thrown while loading a paginated result.
+ * @returns {never} Always throws.
  * @throws {BadRequestError} When cause is an InvalidCursorError.
  * @throws {Error} Rethrows unrelated errors unchanged.
  */

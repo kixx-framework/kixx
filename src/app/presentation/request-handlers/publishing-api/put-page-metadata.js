@@ -10,6 +10,21 @@ import { getWildcardPathname } from './route-params.js';
 import { putPageMetadata as putPageMetadataScript } from '../../../transaction-scripts/publishing/put-page-metadata.js';
 
 
+/**
+ * Writes a page's metadata document for a build.
+ *
+ * The write is namespaced by the `x-kixx-build-id` request header, so it lands in
+ * the pending build rather than the live one. The pathname is folded to lower
+ * case to match how page reads resolve it.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 200 response carrying the stored metadata.
+ * @throws {UnsupportedMediaTypeError} When the request is not JSON:API.
+ * @throws {BadRequestError} When the wildcard pathname is empty-segmented or contains traversal characters.
+ * @throws {ValidationError} When the submitted metadata attributes are invalid.
+ */
 export async function putPageMetadata(context, request, response) {
     assertJsonApiContentType(request);
 

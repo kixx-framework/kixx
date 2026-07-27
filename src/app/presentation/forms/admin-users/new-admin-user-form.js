@@ -125,14 +125,16 @@ export default class NewAdminUserForm extends BaseForm {
     }
 
     /**
-     * Creates the form from JSON:API resource attributes and a bearer invite token.
-     * @param {Object} attributes - JSON:API resource attributes.
-     * @param {*} attributes.emailAddress - Admin email address input value.
-     * @param {*} attributes.password - Admin password input value.
+     * Creates the form from a parsed JSON:API resource and a bearer invite token.
+     * @param {{ attributes: Object }} resource - Parsed resource from parseJsonApiResource().
+     * @param {*} resource.attributes.emailAddress - Admin email address input value.
+     * @param {*} resource.attributes.password - Admin password input value.
      * @param {*} inviteToken - Bearer invite token from the Authorization header.
      * @returns {NewAdminUserForm} Hydrated registration form.
      */
-    static fromJsonApi(attributes, inviteToken) {
+    static fromJsonApi(resource, inviteToken) {
+        const { attributes } = resource ?? {};
+
         const {
             emailAddress,
             password,

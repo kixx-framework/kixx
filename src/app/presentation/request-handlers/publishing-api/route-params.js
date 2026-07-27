@@ -43,6 +43,45 @@ export function getWildcardPathname(request, name) {
 }
 
 /**
+ * Normalizes a required wildcard filepath param for resources whose reads
+ * resolve the stored key verbatim (templates and static assets), so one
+ * resource has exactly one addressable URL on every deploy target.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {string} name - Pathname params key holding the wildcard segments.
+ * @param {object} options - Error reporting options.
+ * @param {string} options.label - Sentence-leading name of the param, used in error messages.
+ * @param {string} options.requiredCode - BadRequestError code used when the param is missing.
+ * @returns {string} Traversal-checked, case-preserving filepath.
+ * @throws {BadRequestError} When the filepath is missing.
+ * @throws {BadRequestError} When the filepath contains an empty segment.
+ * @throws {BadRequestError} When the filepath contains traversal or out-of-whitelist characters.
+ */
+export function getWildcardFilepath(request, name, { label, requiredCode }) {
+    const segments = request.pathnameParams[name];
+
+    if (!Array.isArray(segments) || segments.length === 0) {
+        throw new BadRequestError(`${ label } is required.`, {
+            code: requiredCode,
+        });
+    }
+
+    // The two file store adapters disagree about empty segments: the Node store's
+    // path.join() absorbs one and files the resource correctly, while the
+    // Cloudflare store uses the logical key as the KV key verbatim, so
+    // `base/site.html/` is written where no read will ever look.
+    rejectEmptyPathSegments(segments, label);
+
+    // Reject path traversal and out-of-whitelist characters at the edge (400)
+    // rather than relying on a downstream store assertion (500). Validate the
+    // segments as the client sent them so the error message echoes the request.
+    //
+    // The case is deliberately preserved: unlike page pathnames, template and
+    // asset reads resolve the key verbatim, so folding here would store the file
+    // under a name no read ever asks for.
+    return validatePathname(segments.join('/'));
+}
+
+/**
  * Normalizes the required wildcard include filepath param shared by the
  * includes authorization resolver and request handler, so the URN that gets
  * authorized always describes the filepath the handler writes.

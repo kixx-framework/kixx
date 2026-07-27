@@ -101,6 +101,20 @@ function renderSignupThrottled(context, response, retryAfterSeconds) {
     });
 }
 
+/**
+ * Renders the invite-gated admin signup form.
+ *
+ * Signup is invite-only: without a redeemable `invite` query parameter there is
+ * no form to show. The invite is only resolved, never spent — the token is
+ * consumed by the POST. Per-IP throttling is checked before any token lookup, and
+ * only a token matching no stored invite advances the guess counter, so an aged
+ * or already-used real invite does not penalize a legitimate visitor.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} Response carrying the signup form, or an invalid-invite, throttled, or already-logged-in state.
+ */
 export async function getNewAdminUserForm(context, request, response) {
     // A valid admin session makes invite signup ambiguous, so stop before token
     // lookup or throttle accounting and show the operator-facing remediation.
@@ -140,6 +154,23 @@ export async function getNewAdminUserForm(context, request, response) {
     });
 }
 
+/**
+ * Redeems an invite, creates the admin account, and signs the new user in.
+ *
+ * The invite is checked for redeemability before field validation, so an invalid
+ * field cannot re-render the form on an invite that is already spent. Every
+ * recoverable outcome — invalid fields, a duplicate email, an invite spent by a
+ * concurrent signup — re-renders with its own honest status rather than the
+ * default 200. On success the session cookie is set and the CSRF pre-session is
+ * dropped, and the response is a redirect so a refresh cannot resubmit.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @param {Function} skip - Ends the request phase, so the Hyperview page handler does not render over the redirect.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 303 redirect into the admin panel, or a re-rendered form carrying the failure state.
+ * @throws {ForbiddenError} When CSRF validation fails.
+ */
 export async function postNewAdminUserForm(context, request, response, skip) {
     // Do not parse, validate, or consume invite data from a browser that already
     // has a valid admin session.
@@ -262,6 +293,17 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     return response.respondWithRedirect(303, adminTarget.compilePathname().pathname);
 }
 
+/**
+ * Renders the admin login form.
+ *
+ * An unrecognized `notice` query parameter is discarded rather than echoed, so a
+ * post-redirect notice cannot inject arbitrary text into the page.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} Response carrying the login form and any recognized notice.
+ */
 export async function getAdminUserLoginForm(context, request, response) {
     const form = new AdminUserLoginForm();
 
@@ -287,6 +329,23 @@ async function renderLoginThrottled(context, request, response, form, retryAfter
     });
 }
 
+/**
+ * Authenticates admin credentials and establishes a session.
+ *
+ * Invalid credentials and throttled attempts both re-render with a single generic
+ * message and a deliberate 200, so neither response reveals whether an account
+ * exists; only a malformed submission reports a distinguishable 422. Failures are
+ * counted per IP and per (IP, email) before the response is chosen, so the attempt
+ * that trips the lock already shows the throttled state. On success the session
+ * cookie is set and the CSRF pre-session is dropped.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @param {Function} skip - Ends the request phase, so the Hyperview page handler does not render over the redirect.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 303 redirect into the admin panel, or a re-rendered form carrying the failure state.
+ * @throws {ForbiddenError} When CSRF validation fails.
+ */
 export async function postAdminUserLoginForm(context, request, response, skip) {
     const formData = await validateCsrfFormData(context, request);
     const form = AdminUserLoginForm.fromFormData(formData);

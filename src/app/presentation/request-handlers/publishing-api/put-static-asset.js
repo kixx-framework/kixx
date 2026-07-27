@@ -5,8 +5,8 @@ import {
     jsonApiResource,
 } from '../../lib/json-api.js';
 import { bufferRequestBodyWithLimit } from '../../lib/read-request-body.js';
+import { getWildcardFilepath } from './route-params.js';
 import { putStaticAsset as putStaticAssetScript } from '../../../transaction-scripts/publishing/put-static-asset.js';
-import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
 // Cloudflare KV values cap at 25 MiB; stay safely under that so the metadata
@@ -15,9 +15,28 @@ import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 // without reading the whole body into memory.
 const MAX_ASSET_BYTES = 24 * 1024 * 1024;
 
+const ASSET_FILEPATH_OPTIONS = {
+    label: 'Static asset filepath',
+    requiredCode: 'StaticAssetFilepathRequired',
+};
 
+
+/**
+ * Writes a static asset's bytes for a build.
+ *
+ * The client must declare the asset's media type; it is never inferred from the
+ * file extension. The write is namespaced by the `x-kixx-build-id` request
+ * header, so it lands in the pending build rather than the live one.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request; the body is the asset's bytes.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 200 response describing the stored asset.
+ * @throws {BadRequestError} When the wildcard filepath is invalid, or no Content-Type was declared.
+ * @throws {PayloadTooLargeError} When the body exceeds the 24 MiB asset limit.
+ */
 export async function putStaticAsset(context, request, response) {
-    const filepath = getWildcardFilepath(request, 'filepath');
+    const filepath = getWildcardFilepath(request, 'filepath', ASSET_FILEPATH_OPTIONS);
 
     // Authorization already ran in requireAssetPermission (route head).
 
@@ -61,18 +80,4 @@ export async function putStaticAsset(context, request, response) {
         }),
         { contentType: JSON_API_CONTENT_TYPE },
     );
-}
-
-function getWildcardFilepath(request, name) {
-    const segments = request.pathnameParams[name];
-
-    if (!Array.isArray(segments) || segments.length === 0) {
-        throw new BadRequestError('Static asset filepath is required.', {
-            code: 'StaticAssetFilepathRequired',
-        });
-    }
-
-    // Reject path traversal and out-of-whitelist characters at the edge (400)
-    // rather than relying on a downstream store assertion (500).
-    return validatePathname(segments.join('/'));
 }

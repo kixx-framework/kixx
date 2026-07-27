@@ -1,22 +1,48 @@
-import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
-import {
-    BadRequestError,
-    UnsupportedMediaTypeError,
-} from '../../../../kixx/errors/mod.js';
+import { UnsupportedMediaTypeError } from '../../../../kixx/errors/mod.js';
 import {
     BUILD_ID_HEADER,
     JSON_API_CONTENT_TYPE,
     jsonApiResource,
 } from '../../lib/json-api.js';
+import { getWildcardFilepath } from './route-params.js';
 import { putTemplate } from '../../../transaction-scripts/publishing/put-template.js';
-import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
 const TEMPLATE_CONTENT_TYPE = 'text/plain';
 
+const TEMPLATE_FILEPATH_OPTIONS = {
+    label: 'Template filepath',
+    requiredCode: 'TemplateFilepathRequired',
+};
 
+
+/**
+ * Writes a base template's source for a build.
+ *
+ * The three template kinds share one handler shape, differing only in the store
+ * prefix the kind implies. The write is namespaced by the `x-kixx-build-id`
+ * request header, so it lands in the pending build rather than the live one. The
+ * response filepath is prefix-less, because the URL path already encodes the kind.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request; the body is the template source.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 200 response describing the written template.
+ * @throws {UnsupportedMediaTypeError} When the request Content-Type is not `text/plain`.
+ * @throws {BadRequestError} When the wildcard filepath is missing, empty-segmented, or contains traversal characters.
+ */
 export const putBaseTemplate = createPutTemplateHandler('base');
+
+/**
+ * Writes a page template's source for a build.
+ * @see putBaseTemplate for the shared contract.
+ */
 export const putPageTemplate = createPutTemplateHandler('page');
+
+/**
+ * Writes a partial template's source for a build.
+ * @see putBaseTemplate for the shared contract.
+ */
 export const putPartialTemplate = createPutTemplateHandler('partial');
 
 
@@ -29,7 +55,7 @@ function createPutTemplateHandler(kind) {
         // buildId is validated downstream by putTemplate(), which is the single
         // authority that enforces it (required, and must differ from the current build).
         const buildId = request.headers.get(BUILD_ID_HEADER);
-        const filepath = getWildcardFilepath(request, 'filepath');
+        const filepath = getWildcardFilepath(request, 'filepath', TEMPLATE_FILEPATH_OPTIONS);
 
         const source = await request.text();
         await putTemplate(context, {
@@ -76,30 +102,3 @@ function assertTemplateContentType(request) {
     }
 }
 
-function getWildcardFilepath(request, name) {
-    const segments = request.pathnameParams[name];
-
-    if (!Array.isArray(segments) || segments.length === 0) {
-        throw new BadRequestError('Template filepath is required.', {
-            code: 'TemplateFilepathRequired',
-        });
-    }
-
-    // A wildcard route param splits on '/', so a leading, doubled, or trailing
-    // slash in the URL surfaces as an empty segment. The two template file store
-    // adapters then disagree: the Node store's path.join() absorbs the empty
-    // segment and files the template correctly, while the Cloudflare store uses
-    // the logical key as the KV key verbatim, so `base/site.html/` is written
-    // where no read will ever look. Reject the variant at the edge instead, so
-    // one template has exactly one addressable URL on every deploy target.
-    if (segments.some((segment) => !isNonEmptyString(segment))) {
-        throw new BadRequestError('Template filepath must not contain empty path segments.', {
-            code: 'EmptyPathSegment',
-        });
-    }
-
-    // Reject path traversal and out-of-whitelist characters at the edge (400)
-    // rather than relying on a downstream store assertion (500). Validate the
-    // segments as the client sent them so the error message echoes the request.
-    return validatePathname(segments.join('/'));
-}

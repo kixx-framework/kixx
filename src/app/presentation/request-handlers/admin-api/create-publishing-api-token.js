@@ -8,6 +8,19 @@ import {
 import { createPublishingApiToken as createToken } from '../../../transaction-scripts/publishing-api-tokens/create-publishing-api-token.js';
 
 
+/**
+ * Mints a publishing API token for the authenticated admin.
+ *
+ * The plaintext token is present only on this response and is never retrievable
+ * again, so a client that discards it must mint a new one.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context; carries the authenticated user.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 201 response carrying the token, shown once.
+ * @throws {UnsupportedMediaTypeError} When the request is not JSON:API.
+ * @throws {ValidationError} When the submitted token attributes are invalid.
+ */
 export async function createPublishingApiToken(context, request, response) {
     assertJsonApiContentType(request);
 

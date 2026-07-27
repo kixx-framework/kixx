@@ -1,3 +1,16 @@
+/**
+ * Target-head authorization gates for the publishing API.
+ *
+ * Each export is a middleware function built by requirePermission(). Unlike the
+ * admin gates, several of these resolve the resource URN from the request's
+ * wildcard route params, so the URN that gets authorized must describe the same
+ * key the handler goes on to write — both sides call the same route-params
+ * helper to guarantee that.
+ *
+ * @module publishing-api/authorization
+ * @see import('../../middleware/require-permission.js').requirePermission for the gate's behavior and thrown errors.
+ */
+
 import { requirePermission } from '../../middleware/require-permission.js';
 import { getWildcardPathname, splitIncludeFilepath } from './route-params.js';
 

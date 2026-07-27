@@ -14,6 +14,7 @@ const USER_ROLES_PRESET = 'Developer Admin';
 
 let cachedRootAdmin = null;
 let cachedSuperAdmin = null;
+let cachedPublishingApiToken = null;
 
 
 export async function loginRootAdmin() {
@@ -46,6 +47,62 @@ export async function getSuperAdmin() {
     );
 
     return cachedSuperAdmin;
+}
+
+/**
+ * Creates and caches a Publishing API token for end-to-end test requests.
+ * @returns {Promise<string>} Publishing API bearer token.
+ * @throws {Error} When the token form cannot be loaded, a required token is missing, or token creation fails.
+ */
+export async function getPublishingApiToken() {
+    if (cachedPublishingApiToken) {
+        return cachedPublishingApiToken;
+    }
+
+    const userCookies = await getSuperAdmin();
+    const url = new URL(`${ getBaseUrl() }/admin/publishing-api-tokens`);
+
+    const formResponse = await fetch(url, {
+        redirect: 'manual',
+        headers: { cookie: userCookies.cookieHeader() },
+    });
+    userCookies.applyResponse(formResponse);
+
+    if (formResponse.status !== 200) {
+        throw new Error(
+            `getPublishingApiToken: GET /admin/publishing-api-tokens returned ${ formResponse.status }, expected 200`,
+        );
+    }
+
+    const formBody = await formResponse.text();
+    const csrfToken = assertHtmlCsrfToken(formBody);
+    const form = new FormData();
+    form.append('csrf_token', csrfToken);
+    form.append('description', 'test token');
+    form.append('time_to_live_seconds', '2592000');
+
+    const createTokenResponse = await fetch(url, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { cookie: userCookies.cookieHeader() },
+        body: form,
+    });
+    userCookies.applyResponse(createTokenResponse);
+
+    if (createTokenResponse.status !== 200) {
+        throw new Error(
+            `getPublishingApiToken: POST /admin/publishing-api-tokens returned ${ createTokenResponse.status }, expected 200`,
+        );
+    }
+
+    const createTokenBody = await createTokenResponse.text();
+    const document = new FastHTMLParser(createTokenBody);
+    const tokenField = document.getElementById('new-token');
+    const token = tokenField?.getAttribute('value');
+    assertNonEmptyString(token, 'getPublishingApiToken token');
+
+    cachedPublishingApiToken = token;
+    return cachedPublishingApiToken;
 }
 
 /**

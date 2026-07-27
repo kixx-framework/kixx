@@ -21,12 +21,11 @@ export default class BaseForm {
     /**
      * Builds template render data from the form schema, instance values, and optional
      * error state.
-     * @param {import('../../kixx/context/request-context.js').default} context - Current request context.
-     * @param {import('../../kixx/errors/lib/validation-error.js').default|string|null} [error] -
+     * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
+     * @param {import('../../../kixx/errors/lib/validation-error.js').default|string|null} [error] -
      * ValidationError from validate(), domain error code string, or null.
      * @returns {FormRenderContext} Form context for template rendering.
-     * @throws {import('../../kixx/assertions/mod.js').AssertionError} When the subclass
-     * target is missing or not registered.
+     * @throws {AssertionError} When the subclass target is missing or not registered.
      */
     getFormContext(context, error) {
         const fields = {};
@@ -78,7 +77,7 @@ export default class BaseForm {
      * such as getAll().
      *
      * @param {FormData} formData - Submitted browser form data.
-     * @returns {BaseForm} Form subclass instance hydrated from the submitted fields.
+     * @returns {BaseForm} Instance of the subclass this was called on, hydrated from the submitted fields.
      */
     static fromFormData(formData) {
         const Form = this;

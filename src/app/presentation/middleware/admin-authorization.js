@@ -1,3 +1,16 @@
+/**
+ * Target-head authorization gates for the admin panel and admin API.
+ *
+ * Each export is a middleware function built by requirePermission(), gating one
+ * resource/action pair against the authenticated user's derived permissions.
+ * Every gate here is a fixed decision — none depends on route params or the
+ * request body — so they are declared once and shared by every route that needs
+ * them, which is what keeps one capability from being spelled two ways.
+ *
+ * @module admin-authorization
+ * @see import('./require-permission.js').requirePermission for the gate's behavior and thrown errors.
+ */
+
 import { requirePermission } from './require-permission.js';
 
 

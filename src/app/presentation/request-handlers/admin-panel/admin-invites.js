@@ -2,7 +2,12 @@ import AdminInviteCreateForm, { AdminInviteRevokeForm } from '../../forms/admin-
 import { createAdminInvite } from '../../../transaction-scripts/admin-invites/create-admin-invite.js';
 import { listAdminInvites } from '../../../transaction-scripts/admin-invites/list-admin-invites.js';
 import { revokeAdminInvite } from '../../../transaction-scripts/admin-invites/revoke-admin-invite.js';
-import { getCsrfFormContext, validateCsrfFormData } from '../../lib/csrf.js';
+import {
+    INVALID_CSRF_TOKEN_CODE,
+    getCsrfFormContext,
+    renderWithFreshCsrf,
+    validateCsrfFormData,
+} from '../../lib/csrf.js';
 import {
     createCursorPaginationLinks,
     getCursorPaginationQueryParams,
@@ -16,11 +21,6 @@ import {
 // inline re-render and as the redirect notice from the revoke route.
 const FORM_EXPIRED = 'form_expired';
 const ALLOWED_INVITE_NOTICES = new Set([ FORM_EXPIRED ]);
-
-// The CSRF helper reports an expired or mismatched token with this code on a
-// ForbiddenError. Left uncaught it reaches adminErrorHandler, which replaces the
-// whole invite list with a generic 403 "Access denied" page.
-const INVALID_CSRF_CODE = 'InvalidCsrfTokenError';
 
 
 function getRevokeInviteLink(context) {
@@ -60,6 +60,18 @@ async function getFirstPageListProps(context) {
     };
 }
 
+/**
+ * Renders the paginated admin invite list with a create form.
+ *
+ * An unrecognized `notice` query parameter is discarded rather than echoed, so
+ * the redirect notice cannot be used to inject arbitrary text into the page.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} Response carrying the list, form, and pagination props.
+ * @throws {BadRequestError} When the `cursor` query parameter is not a valid signed cursor.
+ */
 export async function getAdminInvites(context, request, response) {
     const pagination = getCursorPaginationQueryParams(request.queryParams);
 
@@ -72,6 +84,8 @@ export async function getAdminInvites(context, request, response) {
     try {
         page = await listAdminInvites(context, { cursor: pagination.cursor });
     } catch (cause) {
+        // Never returns — it either translates an InvalidCursorError into a 400 or
+        // rethrows, so `page` is always assigned by the time it is read below.
         rethrowInvalidCursorAsBadRequest(cause);
     }
     const { items, cursor: nextCursor } = page;
@@ -94,12 +108,26 @@ export async function getAdminInvites(context, request, response) {
     });
 }
 
+/**
+ * Mints an admin invite and re-renders the list showing its signup link.
+ *
+ * This deliberately renders instead of redirecting: the invite's plaintext token
+ * exists only on this response, so the link must be shown now and can never be
+ * rebuilt. An expired CSRF token or an invalid field re-renders the page with a
+ * fresh token rather than failing the request outright.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} Response carrying the list and the one-time invite URL.
+ * @throws {ForbiddenError} When CSRF validation fails for a reason other than an expired token.
+ */
 export async function postCreateAdminInvite(context, request, response) {
     let formData;
     try {
         formData = await validateCsrfFormData(context, request);
     } catch (error) {
-        if (error.code !== INVALID_CSRF_CODE) {
+        if (error.code !== INVALID_CSRF_TOKEN_CODE) {
             throw error;
         }
         // An expired form is a recoverable mistake, not an access-control failure
@@ -120,14 +148,13 @@ export async function postCreateAdminInvite(context, request, response) {
             throw error;
         }
 
-        const props = await getFirstPageListProps(context);
-
-        response.status = error.httpStatusCode || 500;
-        return response.updateProps(Object.assign(props, {
-            // Passing the caught error back through the form context is what
-            // populates fields.role_preset.error for the template.
-            form: await getCsrfFormContext(context, request, response, form, error),
-        }));
+        // Passing the caught error back through the form context is what
+        // populates fields.role_preset.error for the template.
+        return await renderWithFreshCsrf(context, request, response, {
+            form,
+            props: await getFirstPageListProps(context),
+            error,
+        });
     }
 
     const created = await createAdminInvite(context, {
@@ -149,22 +176,38 @@ export async function postCreateAdminInvite(context, request, response) {
 }
 
 // Re-renders the invite list with a fresh CSRF token and the expired-form notice.
+// The notice code replaces the caught error in the form context, so the template
+// shows the recoverable "form expired" message rather than a field error, while
+// the response still carries the rejection's status.
 async function renderFormExpired(context, request, response, error) {
-    const props = await getFirstPageListProps(context);
-    const form = new AdminInviteCreateForm();
-
-    response.status = error.httpStatusCode || 500;
-    return response.updateProps(Object.assign(props, {
-        form: await getCsrfFormContext(context, request, response, form, FORM_EXPIRED),
-    }));
+    return renderWithFreshCsrf(context, request, response, {
+        form: new AdminInviteCreateForm(),
+        props: await getFirstPageListProps(context),
+        error: FORM_EXPIRED,
+        status: error.httpStatusCode,
+    });
 }
 
+/**
+ * Revokes an admin invite and redirects back to the list.
+ *
+ * Always redirects (post-redirect-get), so a refresh cannot repeat the revoke.
+ * An expired CSRF token redirects with a notice instead of rendering an error.
+ *
+ * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
+ * @param {Function} skip - Ends the request phase, so the Hyperview page handler does not render over the redirect.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 303 redirect to the invite list.
+ * @throws {ForbiddenError} When CSRF validation fails for a reason other than an expired token.
+ * @throws {ValidationError} When the submitted invite id is missing or malformed.
+ */
 export async function postRevokeAdminInvite(context, request, response, skip) {
     let formData;
     try {
         formData = await validateCsrfFormData(context, request);
     } catch (error) {
-        if (error.code !== INVALID_CSRF_CODE) {
+        if (error.code !== INVALID_CSRF_TOKEN_CODE) {
             throw error;
         }
         // This route renders no page of its own; it only ever redirects.

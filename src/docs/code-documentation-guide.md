@@ -143,6 +143,23 @@ Prefer the error class that callers can reasonably catch or that the framework
 will translate. Do not document every assertion in a deeply private helper
 unless it changes how the public API is used.
 
+Name error classes in `@throws` with a bare class name, not an `import()` path,
+even though `@param` and `@returns` in the same block use paths:
+
+```javascript
+/**
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request
+ * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>} Response threaded to the next middleware
+ * @throws {UnauthenticatedError} When the request does not carry a valid admin session
+ */
+```
+
+The two tags are doing different jobs. A `@param` or `@returns` type identifies a
+structural contract the reader may need to look up, so the path earns its length.
+An error class is named for the condition it signals, and the whole application
+shares one error module (`src/kixx/errors/`), so the bare name is already
+unambiguous and reads better in a list of failure modes.
+
 ## Do Not Use JSDoc for Module-Private Functions
 
 JSDoc documents a module's public contract — the exported functions, classes, and types that other modules call. Functions that are private to a module (those that are not exported) must not have JSDoc block comments. They have no external callers, and a JSDoc block above an internal helper only adds ceremony that drifts out of sync with the code.

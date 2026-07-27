@@ -2,6 +2,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import {
+    getWildcardFilepath,
     getWildcardPathname,
     splitIncludeFilepath,
 } from '../../../../../../src/app/presentation/request-handlers/publishing-api/route-params.js';
@@ -78,6 +79,95 @@ describe('publishing API route params', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertMatches('/Blog/Hello World', caught.message);
+        });
+    });
+
+    describe('getWildcardFilepath()', ({ it }) => {
+
+        const OPTIONS = {
+            label: 'Template filepath',
+            requiredCode: 'TemplateFilepathRequired',
+        };
+
+        it('joins wildcard segments into a relative filepath', () => {
+            const request = makeRequest({ filepath: [ 'base', 'website.html' ] });
+            assertEqual('base/website.html', getWildcardFilepath(request, 'filepath', OPTIONS));
+        });
+
+        it('preserves the filepath case, which template and asset reads resolve verbatim', () => {
+            const request = makeRequest({ filepath: [ 'Images', 'Logo.png' ] });
+            assertEqual('Images/Logo.png', getWildcardFilepath(request, 'filepath', OPTIONS));
+        });
+
+        it('reads the wildcard param under the given name', () => {
+            const request = makeRequest({ other: [ 'a.html' ], filepath: [ 'b.html' ] });
+            assertEqual('a.html', getWildcardFilepath(request, 'other', OPTIONS));
+        });
+
+        it('rejects a missing filepath param with the caller-supplied code', () => {
+            const caught = catchError(() => getWildcardFilepath(makeRequest({}), 'filepath', OPTIONS));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assertEqual(400, caught.httpStatusCode);
+            assertEqual('TemplateFilepathRequired', caught.code);
+            assertMatches('Template filepath', caught.message);
+        });
+
+        it('rejects an empty filepath param', () => {
+            const request = makeRequest({ filepath: [] });
+            const caught = catchError(() => getWildcardFilepath(request, 'filepath', OPTIONS));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('TemplateFilepathRequired', caught.code);
+        });
+
+        it('rejects a leading slash, which arrives as a leading empty segment', () => {
+            const request = makeRequest({ filepath: [ '', 'logo.png' ] });
+            const caught = catchError(() => getWildcardFilepath(request, 'filepath', OPTIONS));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assertEqual(400, caught.httpStatusCode);
+            assertEqual('EmptyPathSegment', caught.code);
+            assertMatches('Template filepath', caught.message);
+        });
+
+        it('rejects a trailing slash, which arrives as a trailing empty segment', () => {
+            const request = makeRequest({ filepath: [ 'base', 'site.html', '' ] });
+            const caught = catchError(() => getWildcardFilepath(request, 'filepath', OPTIONS));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('EmptyPathSegment', caught.code);
+        });
+
+        it('labels the empty segment error with the caller-supplied label', () => {
+            const request = makeRequest({ filepath: [ '', 'logo.png' ] });
+            const caught = catchError(() => getWildcardFilepath(request, 'filepath', {
+                label: 'Static asset filepath',
+                requiredCode: 'StaticAssetFilepathRequired',
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertMatches('Static asset filepath', caught.message);
+        });
+
+        it('rejects path traversal segments', () => {
+            const request = makeRequest({ filepath: [ '..', 'site.html' ] });
+            const caught = catchError(() => getWildcardFilepath(request, 'filepath', OPTIONS));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assertMatches('Invalid pathname', caught.message);
+        });
+
+        it('rejects characters outside the path whitelist', () => {
+            const request = makeRequest({ filepath: [ 'base', 'my site.html' ] });
+            const caught = catchError(() => getWildcardFilepath(request, 'filepath', OPTIONS));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assertMatches('Invalid pathname', caught.message);
         });
     });
 

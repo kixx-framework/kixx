@@ -141,6 +141,39 @@ describe('putStaticAsset publishing API handler', ({ it }) => {
         assertEqual(0, store.writes.length);
     });
 
+    it('rejects an empty path segment, which would alias one asset to two store keys', async () => {
+        const store = makeStaticFileStore();
+        const caught = await catchAsyncError(() => {
+            return putStaticAsset(
+                makeContext({ store }),
+                makeRequest({ filepath: [ '', 'logo.png' ], body: bytes([ 1 ]) }),
+                makeResponse(),
+            );
+        });
+
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('BadRequestError', caught.name);
+        assertEqual(400, caught.httpStatusCode);
+        assertEqual('EmptyPathSegment', caught.code);
+        assertMatches('Static asset filepath', caught.message);
+        assertEqual(0, store.writes.length);
+    });
+
+    it('rejects a trailing slash, which arrives as a trailing empty segment', async () => {
+        const store = makeStaticFileStore();
+        const caught = await catchAsyncError(() => {
+            return putStaticAsset(
+                makeContext({ store }),
+                makeRequest({ filepath: [ 'images', 'logo.png', '' ], body: bytes([ 1 ]) }),
+                makeResponse(),
+            );
+        });
+
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('EmptyPathSegment', caught.code);
+        assertEqual(0, store.writes.length);
+    });
+
     it('rejects a missing Content-Type as a malformed request, not an unsupported type', async () => {
         const caught = await catchAsyncError(() => {
             return putStaticAsset(

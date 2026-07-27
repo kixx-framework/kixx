@@ -34,7 +34,7 @@ const STATUS_HEADINGS = {
  * @param {Error} error - Error being handled by the router cascade.
  * @param {string} pathname - Fixed Hyperview pathname for the error page template.
  * @param {string} [scope] - Optional scope label appended to the page title, e.g. `'Admin'`.
- * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>|false} Rendered response, or false for JSON requests.
+ * @returns {Promise<import('../../../kixx/http-router/server-response.js').default|false>} Rendered response, or false to continue the error cascade for JSON requests.
  */
 export async function renderHtmlErrorPage(context, request, response, error, pathname, scope) {
     assertNonEmptyString(pathname, 'renderHtmlErrorPage: pathname');

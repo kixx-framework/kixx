@@ -61,7 +61,7 @@ export function normalizeOptionalStringAttribute(value) {
 
 /**
  * Adds a field error when an email address value is missing or malformed.
- * @param {import('../../kixx/errors/lib/validation-error.js').default} error - Validation error collector.
+ * @param {import('../../../kixx/errors/lib/validation-error.js').default} error - Validation error collector.
  * @param {*} value - Normalized field value.
  * @param {string} name - Field name used as the error source.
  * @returns {void}

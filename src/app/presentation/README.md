@@ -112,6 +112,8 @@ This response exposes the same page data object that would otherwise be rendered
 
 Routes are defined in `virtual-hosts.js` as an array of virtual host specification objects. The HTTP router resolves every request through a four-level hierarchy: **HttpRouter → VirtualHost → HttpRoute → HttpTarget**.
 
+`virtual-hosts.js` is a thin top-level shell: it declares the virtual hosts, their hostnames, and the route subtrees mounted under each one. The route subtrees themselves live in `src/routes/`, one module per API or UI surface — `admin-panel.js`, `admin-api-v1.js`, and `publishing-api-v1.js` — each default-exporting the array of routes mounted at its parent pattern. Add a route to the module that owns the surface it belongs to, and reserve edits to `virtual-hosts.js` for mounting a new subtree, adding a virtual host, or changing subtree-level middleware and error handlers.
+
 - **VirtualHost** matches the request by hostname. If no hostname match is found, the first virtual configured will be used.
 - **HttpRoute** matches the URL pathname using `path-to-regexp` pattern syntax (e.g. `/users/:id`). Named segments are captured and available as `request.pathnameParams`.
 - **HttpTarget** declares which HTTP methods it handles and runs a chain of middleware functions to produce the response. When a route matches but no target handles the request method, the router responds `405 Method Not Allowed`.
@@ -191,10 +193,16 @@ Use braces to mark part of a pattern as optional. Optional groups can contain st
 {
     pattern: '/files/:file{.:ext}',
     targets: [ ... ],
+},
+{
+    pattern: '/users/invite{/}',
+    targets: [ ... ],
 }
 ```
 
 Both `/` and `/index.json` match the first route, while `/users` and `/users.json` match the second route. The third route matches both `/files/report` and `/files/report.pdf`; the `ext` parameter is present only when the extension is present.
+
+The fourth route uses the optional group to make a trailing slash optional: `/users/invite` and `/users/invite/` both match one route, without a redirect or a duplicate route entry. Use `{/}` on API endpoints where clients may or may not send the trailing slash. A nested route can also use the bare pattern `'{/}'` to mean "the parent pattern itself, with or without a trailing slash" — `routes/admin-api-v1.js` mounts its migrations list that way under the `/migrations` parent.
 
 Do not use older `path-to-regexp` modifier syntax in new routes:
 
@@ -216,7 +224,7 @@ Pathname compilation encodes values for safe URL output, so non-ASCII text and r
 ### Middleware vs. Request Handlers vs. Error Handlers
 
 - **Route middleware** (`inboundMiddleware`, `outboundMiddleware`) applies to every target in a route subtree. Use it for capabilities like authentication, session loading, request normalization, and shared response headers.
-- **Target `requestHandlers`** applies to one endpoint. Use them for loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect/JSON response.
+- **Target `requestHandlers`** applies to one endpoint. Use them for loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect/JSON response — and, as the first entry in the chain, for authorization (see [Authentication Middleware vs. Authorization Gates](#authentication-middleware-vs-authorization-gates)).
 - **Route error handlers** (`errorHandlers`) when an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
 
 Execution order for a matched target runs in two phases — a **request phase** followed by an **outbound (response) phase**:
@@ -237,6 +245,47 @@ export async function redirectAfterSuccess(context, request, response, skip) {
     return response.respondWithRedirect(303, '/account');
 }
 ```
+
+### Authentication Middleware vs. Authorization Gates
+
+Authentication and authorization sit at different levels of the route tree, and the split is deliberate.
+
+**Authentication is route `inboundMiddleware`.** Establishing who is making the request is the same question for every target under a route, so `authenticateAdminUser`, `authenticateAdminApiRequest`, and `authenticatePublishingToken` attach once at the subtree root and set `context.user` for everything below.
+
+**Authorization is the first entry in a target's `requestHandlers`.** What a principal is allowed to do differs per target, not per route: one route can host a GET target that needs a read permission and a POST target that needs a write permission. The `/invites` route in `routes/admin-panel.js` is the canonical case — `render-invite-list` leads with `requireAdminUserInvitesRead` and `create-invite` leads with `requireAdminUserInvitesWrite`. Attaching either gate as route middleware would apply one decision to both targets, over-granting the GET or under-granting the POST.
+
+```js
+{
+    pattern: '/invites',
+    name: 'invites',
+    targets: [
+        {
+            name: 'render-invite-list',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [
+                AdminAuthorization.requireAdminUserInvitesRead,
+                AdminInvites.getAdminInvites,
+                HyperviewDynamicPageHandler(),
+            ],
+        },
+        {
+            name: 'create-invite',
+            methods: [ 'POST' ],
+            requestHandlers: [
+                AdminAuthorization.requireAdminUserInvitesWrite,
+                AdminInvites.postCreateAdminInvite,
+                HyperviewDynamicPageHandler(),
+            ],
+        },
+    ],
+}
+```
+
+Gates are built by `requirePermission({ action, resource })` in `app/presentation/middleware/require-permission.js`, which returns a `(context, request, response)` function and asserts the authenticated principal's permissions, throwing `ForbiddenError` when the decision fails. `resource` may be a static URN string or a `(context, request) => string` resolver when the resource depends on a route param; a resolver that throws (a `BadRequestError` for a malformed pathname, say) propagates untouched rather than being reframed as a 403. The spec is validated when the factory runs at route-module load time, so a misconfigured gate crashes at startup instead of on the first request that reaches it.
+
+`require-permission.js` lives in `middleware/` even though it is used in `requestHandlers`. Route middleware and request handlers share one signature, so the same function is valid in either position; the file sits with the middleware because authorization is a route-level concern in the same family as authentication, and only the *decision point* is per-target.
+
+Declare each action/resource pair once as a named export in `app/presentation/middleware/admin-authorization.js` and reuse it across every target that needs it, rather than calling `requirePermission()` inline in a route module. That is what keeps a single capability from being spelled two slightly different ways in two places.
 
 ## Reverse Routing
 
@@ -336,7 +385,7 @@ Request handlers may:
 - Parse `FormData` or JSON:API payloads into form classes.
 - Validate forms and translate validation errors into response props, setting the response status on inline error re-renders (see [Response Status on Re-rendered Errors](#response-status-on-re-rendered-errors)).
 - Call Transaction Scripts in `app/transaction-scripts/` to load or mutate data.
-- Call `response.updateProps({ ... })` to pass render data to `HyperviewRequestHandler`.
+- Call `response.updateProps({ ... })` to pass render data to `HyperviewDynamicPageHandler` or `HyperviewStaticPageHandler`.
 - Return redirects, JSON:API responses, or rendered HTML responses through Hyperview or error handlers.
 
 Request handlers should not:
@@ -399,7 +448,7 @@ A Request Handler should never attempt to handle unexpected errors, other than b
 
 A Request Handler should act with discretion when expected operational errors occur. Depending on the context:
 
-- **When the caught error is not a defined HTTP error** - When the `error.httpError` flag is falsy - Wrap the error in an HTTP error class from app/kixx/errors/ or set the `error.httpStatusCode` property so that the status code is properly returned to the client
+- **When the caught error is not a defined HTTP error** - When the `error.httpError` flag is falsy - Wrap the error in an HTTP error class from `src/kixx/errors/` (imported as `kixx/errors/mod.js`) or set the `error.httpStatusCode` property so that the status code is properly returned to the client
 - **When the error comes from a code path that is not accounted for** - Wrap the cause in an AssertionError and rethrow.
 
 Use error properties like `error.name`, `error.code`, and `error.expected` instead of `instanceof` to drive logical code branches.
@@ -534,7 +583,7 @@ Every form, HTML-backed or API-only, is built from the same parts:
 - **A normalizing `constructor(attributes)`** — destructures the raw payload (guarding with `?? {}`) and assigns one normalized value per field. Normalization and validation are deliberately separate: the constructor cleans up shape (trim, lowercase, coerce absent-to-null) but **preserves invalid input** so `validate()` can still report a field error instead of silently coercing bad data away.
 - **`validate()`** — accumulates field errors on a single `ValidationError` via `error.push(message, source)` and throws only when `error.length` is non-zero. Never throw on the first bad field; collect them all so the re-rendered form can show every problem at once.
 - **`from*()` static constructor(s)** — `fromFormData(formData)` for browser submissions (provided by `BaseForm`), `fromJsonApi(resource)` for JSON:API payloads, or both when one form backs two entry points.
-- **`toJSON()`** — returns the plain, server-consumable value object handed to the Transaction Script. This is also where a form maps its UI-facing fields onto the domain shape (for example, injecting a default permission grant the UI does not expose).
+- **`toJSON()`** — returns the plain, server-consumable value object handed to the Transaction Script. This is also where a form maps its UI-facing fields onto the domain shape (for example, injecting a default permission grant the UI does not expose). `toJSON()` is required for API forms and for any form whose UI-facing field names differ from the domain shape; otherwise the validated form instance is passed to the Transaction Script directly, and adding a pass-through `toJSON()` is unnecessary ceremony.
 
 ### HTML Forms Extend `BaseForm`
 
@@ -573,7 +622,21 @@ Constructors normalize with the shared helpers in `app/presentation/forms/utils.
 
 Prefer these to hand-written normalization so behavior stays consistent, and add a new shared helper here when a normalization pattern appears in more than one form.
 
-The subclass declares its shape and rules; `BaseForm` supplies `getFormContext()` and `fromFormData()`. Do not re-implement them in a subclass unless you need to override `fromFormData()` for multi-value fields.
+The subclass declares its shape and rules; `BaseForm` supplies `getFormContext()` and `fromFormData()`. Do not re-implement either from scratch in a subclass. There are two reasons to override:
+
+- **`fromFormData()`** — when the form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
+- **`getFormContext()`** — when a field's render metadata is sourced dynamically at request time rather than declared statically in the schema. The canonical case is a `select` whose `options` come from a registry (`AdminInviteCreateForm` fills `role_preset` from the role-preset registry) so the rendered choices cannot drift from what the Transaction Script accepts. An override must call `super.getFormContext(context, error)` first and only decorate the returned context — never rebuild it — so action-URL compilation, per-field errors, and the `writeOnly` value omission stay intact.
+
+```js
+getFormContext(context, error) {
+    const formContext = super.getFormContext(context, error);
+    const options = listRolePresets().map((preset) => ({ value: preset.name, label: preset.name }));
+
+    formContext.fields.role_preset = Object.assign({}, formContext.fields.role_preset, { options });
+
+    return formContext;
+}
+```
 
 ```js
 import { isString } from '../../../../kixx/assertions/mod.js';
@@ -719,6 +782,7 @@ A form that mints a record from server-derived data only — no operator-entered
 Forms used only by JSON:API endpoints do **not** extend `BaseForm` and do not declare `method`, `target`, or `getFormContext()`, because they are never rendered as HTML and never compile a browser form action. They keep the rest of the anatomy: a `schema`, a normalizing constructor (reuse the `utils.js` helpers), a `validate()` that accumulates field errors on a `ValidationError`, a `fromJsonApi(resource)` static constructor that reads `resource.attributes`, and a `toJSON()` that returns server-consumable data. Because these forms have no `BaseForm` to inherit `fromFormData()` from, `fromJsonApi()` is their only entry point.
 
 ```js
+import { isString } from '../../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import { normalizeOptionalStringAttribute } from '../utils.js';
 
@@ -757,7 +821,7 @@ export default class CreateApiTokenForm {
     validate() {
         const error = new ValidationError('The API token form contains invalid fields');
 
-        if (this.description !== null && typeof this.description !== 'string') {
+        if (this.description !== null && !isString(this.description)) {
             error.push('Description must be a string or null', 'description');
         }
 
@@ -878,7 +942,7 @@ For an application API endpoint that accepts or returns JSON:API documents:
 
 1. Add a route subtree or leaf route in `virtual-hosts.js` and attach `jsonApiErrorHandler` from `app/presentation/error-handlers/json-api-error-handler.js` at the route level. This keeps expected HTTP errors serialized as JSON:API `errors` documents for the whole API surface while unexpected errors continue to propagate to the router fallback.
 2. In the request handler, call `assertJsonApiContentType(request)` before parsing a JSON:API request body. JSON:API requests must use `Content-Type: application/vnd.api+json`; optional media-type parameters are ignored by the helper.
-3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the returned `attributes` into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script.
+3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the whole returned resource into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script. `fromJsonApi(resource)` always takes the resource and reads `resource.attributes` itself — the form owns the mapping from wire shape to domain shape, so a handler never destructures on its behalf.
 4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
 5. Do not add a Hyperview request handler after an API handler that commits a JSON response, so the committed JSON response is terminal for the target. Just return the JSON response — the outbound phase still runs either way.
 
@@ -895,8 +959,8 @@ import { createExample } from '../../transaction-scripts/examples/create-example
 export async function exampleJsonApiHandler(context, request, response) {
     assertJsonApiContentType(request);
 
-    const { attributes } = await parseJsonApiResource(request, 'Example');
-    const form = ExampleApiForm.fromJsonApi(attributes);
+    const resource = await parseJsonApiResource(request, 'Example');
+    const form = ExampleApiForm.fromJsonApi(resource);
     form.validate();
 
     const example = await createExample(context, form);
@@ -967,8 +1031,10 @@ For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments,
 - `templates/base/` contains shared HTML document frames.
 - `templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
 - `templates/pages/` contains templates for specific pages.
-- `virtual-hosts.js` registers Worker routes and connects HTTP methods to middleware and request handlers.
+- `virtual-hosts.js` declares the virtual hosts and mounts the route subtrees under each one.
+- `src/routes/` contains the route subtrees themselves — one module per API or UI surface — connecting patterns and HTTP methods to middleware and request handlers.
 - `app/presentation/request-handlers/` contains application request handlers.
 - `app/presentation/middleware/` contains application inbound and outbound middleware.
 - `app/presentation/error-handlers/` contains application error handlers.
 - `app/presentation/forms/` contains form classes used to parse and validate inbound payloads.
+- `app/presentation/lib/` contains cross-cutting presentation helpers that are neither handlers, middleware, error handlers, nor forms — CSRF token handling, rate limiting, JSON:API parsing and serialization, session cookies, pagination, request body reading, and HTML error page rendering. Put a module here when more than one handler or middleware needs it and it belongs to the presentation layer rather than to a Transaction Script.

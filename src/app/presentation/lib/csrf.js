@@ -1,11 +1,27 @@
 import { ForbiddenError } from '../../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
+import { isSecureRequest } from './admin-session-cookie.js';
 
 
 export const CSRF_COOKIE_NAME = 'kixx_csrf_session';
 export const CSRF_FIELD_NAME = 'csrf_token';
 export const CSRF_TOKEN_TTL_SECONDS = 60 * 30;
 
+// The `code` validateCsrfFormData() reports an expired or mismatched token with.
+// Handlers that can recover — by re-rendering their page with a fresh token, or
+// by redirecting with a notice — match on this to separate a stale form from a
+// real access-control failure. Left uncaught it reaches adminErrorHandler, which
+// replaces the whole page with a generic 403 "Access denied".
+export const INVALID_CSRF_TOKEN_CODE = 'InvalidCsrfTokenError';
+
+
+/**
+ * A form render context carrying the hidden CSRF field the template must emit.
+ * Without the `csrf` property the rendered form cannot be submitted, because
+ * validateCsrfFormData() rejects a submission with no token.
+ *
+ * @typedef {import('../forms/base-form.js').FormRenderContext & {csrf: {fieldName: string, token: string}}} CsrfFormRenderContext
+ */
 
 /**
  * Builds a form render context with a fresh synchronizer CSRF token.
@@ -19,7 +35,7 @@ export const CSRF_TOKEN_TTL_SECONDS = 60 * 30;
  * @param {import('../../../kixx/http-router/server-response.js').default} response - Response being built.
  * @param {import('../forms/base-form.js').default} form - Form instance to render.
  * @param {import('../../../kixx/errors/lib/validation-error.js').default|string|null} [error] - Optional validation or domain error.
- * @returns {Promise<Object>} Form context including `csrf.fieldName` and `csrf.token`.
+ * @returns {Promise<CsrfFormRenderContext>} Form context including `csrf.fieldName` and `csrf.token`.
  */
 export async function getCsrfFormContext(context, request, response, form, error) {
     const formContext = form.getFormContext(context, error);
@@ -42,6 +58,37 @@ export async function getCsrfFormContext(context, request, response, form, error
             token: csrf.token,
         },
     });
+}
+
+/**
+ * Re-renders a page whose submission was rejected, with a fresh CSRF token.
+ *
+ * Rejecting a submission does not end the interaction: an expired form and a
+ * failed field validation are both mistakes the user can correct, so the page
+ * comes back with its data intact rather than being replaced by an error page.
+ * The re-render must carry a new token, because validateCsrfFormData() spends the
+ * submitted one — without this the corrected resubmission would be rejected too,
+ * trapping the user in a loop.
+ *
+ * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
+ * @param {import('../../../kixx/http-router/server-response.js').default} response - Response being built.
+ * @param {object} options - Render options.
+ * @param {import('../forms/base-form.js').default} options.form - Form instance to re-render.
+ * @param {Object} options.props - Page props to render alongside the form.
+ * @param {Error|string} [options.error] - Validation error, or a notice code for the template.
+ * @param {number} [options.status] - Response status; required when `error` is a notice code.
+ * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>} The updated response.
+ */
+export async function renderWithFreshCsrf(context, request, response, { form, props, error, status }) {
+    // A notice code carries no status of its own, so callers recovering from a
+    // rejected submission pass the caught error's status explicitly. The response
+    // keeps reporting the rejection honestly even though the page renders.
+    response.status = status || error?.httpStatusCode || 500;
+
+    return response.updateProps(Object.assign({}, props, {
+        form: await getCsrfFormContext(context, request, response, form, error),
+    }));
 }
 
 // Mints this render's token into the browser's existing pre-session when one is
@@ -87,7 +134,7 @@ export async function validateCsrfFormData(context, request) {
 
     if (!isValidToken) {
         throw new ForbiddenError('The form has expired. Please reload and try again.', {
-            code: 'InvalidCsrfTokenError',
+            code: INVALID_CSRF_TOKEN_CODE,
         });
     }
 
@@ -129,8 +176,4 @@ export async function clearCsrfToken(context, request, response) {
         httpOnly: true,
         sameSite: 'Lax',
     });
-}
-
-function isSecureRequest(request) {
-    return request.url.protocol === 'https:';
 }
