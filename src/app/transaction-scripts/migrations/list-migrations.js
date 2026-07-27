@@ -46,12 +46,12 @@ function presentMigration(entry, record) {
     return {
         id: entry.id,
         description: entry.description,
-        status: record.status,
-        stats: record.stats,
-        batchCount: record.batchCount,
-        startedBy: record.startedBy,
-        startedAt: record.startedAt,
-        completedAt: record.completedAt,
-        error: record.error,
+        status: record.get('status'),
+        stats: record.get('stats'),
+        batchCount: record.get('batchCount'),
+        startedBy: record.get('startedBy'),
+        startedAt: record.get('startedAt'),
+        completedAt: record.get('completedAt'),
+        error: record.get('error'),
     };
 }

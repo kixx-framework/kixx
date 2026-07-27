@@ -6,6 +6,7 @@ import {
     isString,
     isValidDate,
 } from '../../kixx/assertions/mod.js';
+import { isIsoDateTime, parseIsoDateTime } from '../lib/iso-date-time.js';
 
 
 /**
@@ -64,8 +65,8 @@ export default class PublishingApiTokenRecord extends Record {
         const error = new ValidationError('Invalid publishing API token record');
         const roles = this.get('roles');
         const description = this.get('description');
-        const tokenCreationDate = parseDate(this.get('tokenCreationDate'));
-        const tokenExpirationDate = parseDate(this.get('tokenExpirationDate'));
+        const tokenCreationDate = parseIsoDateTime(this.get('tokenCreationDate'));
+        const tokenExpirationDate = parseIsoDateTime(this.get('tokenExpirationDate'));
         const revokedAt = this.get('revokedAt');
 
         // Roles may be an empty array (a token with no grants); membership in
@@ -81,18 +82,18 @@ export default class PublishingApiTokenRecord extends Record {
         if (!isNonEmptyString(this.get('createdBy'))) {
             error.push('PublishingApiToken createdBy is required', 'createdBy');
         }
-        if (!isValidDate(tokenCreationDate)) {
+        if (!tokenCreationDate) {
             error.push('PublishingApiToken tokenCreationDate is required', 'tokenCreationDate');
         }
-        if (!isValidDate(tokenExpirationDate)) {
+        if (!tokenExpirationDate) {
             error.push('PublishingApiToken tokenExpirationDate is required', 'tokenExpirationDate');
         }
-        if (revokedAt !== null && !isValidDate(parseDate(revokedAt))) {
+        if (revokedAt !== null && !isIsoDateTime(revokedAt)) {
             error.push('PublishingApiToken revokedAt must be a valid date or null', 'revokedAt');
         }
 
-        if (isValidDate(tokenCreationDate) &&
-            isValidDate(tokenExpirationDate) &&
+        if (tokenCreationDate &&
+            tokenExpirationDate &&
             tokenExpirationDate.getTime() <= tokenCreationDate.getTime()) {
             error.push('PublishingApiToken tokenExpirationDate must be after tokenCreationDate', 'tokenExpirationDate');
         }
@@ -115,8 +116,8 @@ export default class PublishingApiTokenRecord extends Record {
             return 'revoked';
         }
 
-        const tokenExpirationDate = parseDate(this.get('tokenExpirationDate'));
-        if (!isValidDate(tokenExpirationDate) ||
+        const tokenExpirationDate = parseIsoDateTime(this.get('tokenExpirationDate'));
+        if (!tokenExpirationDate ||
             tokenExpirationDate.getTime() <= referenceDate.getTime()) {
             return 'expired';
         }
@@ -133,12 +134,19 @@ export default class PublishingApiTokenRecord extends Record {
     isActive(referenceDate = new Date()) {
         return this.getStatus(referenceDate) === 'active';
     }
-}
 
-function parseDate(value) {
-    if (!isNonEmptyString(value)) {
-        return null;
+    /**
+     * Reports whether this token may still be revoked.
+     *
+     * Revocation is only legal for an active token. An expired token is already
+     * unusable, while re-revoking a revoked token would overwrite its original
+     * revocation timestamp and destroy audit history.
+     *
+     * @param {Date} [referenceDate] - Date used as the current time.
+     * @returns {boolean} True only when the derived status is `active`.
+     * @throws {AssertionError} When referenceDate is present and invalid.
+     */
+    isRevocable(referenceDate = new Date()) {
+        return this.getStatus(referenceDate) === 'active';
     }
-
-    return new Date(value);
 }

@@ -1,6 +1,7 @@
 import Record from './base-document-store-record.js';
 import { ValidationError } from '../../kixx/errors/mod.js';
 import { assert, isNonEmptyString, isValidDate } from '../../kixx/assertions/mod.js';
+import { isIsoDateTime, parseIsoDateTime } from '../lib/iso-date-time.js';
 
 
 /**
@@ -71,14 +72,23 @@ export default class AdminInviteRecord extends Record {
                 description: 'Name of the role preset the invite was created from, or null when none applies',
             },
         },
-        required: [ 'kind', 'createdBy', 'inviteCreationDate', 'inviteExpirationDate', 'roles' ],
+        required: [
+            'kind',
+            'createdBy',
+            'inviteCreationDate',
+            'inviteExpirationDate',
+            'consumedAt',
+            'revokedAt',
+            'roles',
+            'rolePreset',
+        ],
     };
 
     validate() {
         const error = new ValidationError('Invalid admin invite record');
         const kind = this.get('kind');
-        const inviteCreationDate = parseDate(this.get('inviteCreationDate'));
-        const inviteExpirationDate = parseDate(this.get('inviteExpirationDate'));
+        const inviteCreationDate = parseIsoDateTime(this.get('inviteCreationDate'));
+        const inviteExpirationDate = parseIsoDateTime(this.get('inviteExpirationDate'));
         const consumedAt = this.get('consumedAt');
         const revokedAt = this.get('revokedAt');
         const roles = this.get('roles');
@@ -103,10 +113,10 @@ export default class AdminInviteRecord extends Record {
         if (!isNonEmptyString(this.get('createdBy'))) {
             error.push('AdminInvite createdBy is required', 'createdBy');
         }
-        if (!isValidDate(inviteCreationDate)) {
+        if (!inviteCreationDate) {
             error.push('AdminInvite inviteCreationDate is required', 'inviteCreationDate');
         }
-        if (!isValidDate(inviteExpirationDate)) {
+        if (!inviteExpirationDate) {
             error.push('AdminInvite inviteExpirationDate is required', 'inviteExpirationDate');
         }
 
@@ -114,18 +124,18 @@ export default class AdminInviteRecord extends Record {
         // marker is born already-consumed and carries equal creation/expiration
         // timestamps purely as bookkeeping, so it is exempt from the ordering check.
         if (kind === ADMIN_INVITE_KIND &&
-            isValidDate(inviteCreationDate) &&
-            isValidDate(inviteExpirationDate) &&
+            inviteCreationDate &&
+            inviteExpirationDate &&
             inviteExpirationDate.getTime() <= inviteCreationDate.getTime()) {
             error.push('AdminInvite inviteExpirationDate must be after inviteCreationDate', 'inviteExpirationDate');
         }
 
         // consumedAt and revokedAt are optional (null until set), but when present
         // they must be parsable timestamps so status derivation stays reliable.
-        if (consumedAt !== null && consumedAt !== undefined && !isValidDate(parseDate(consumedAt))) {
+        if (consumedAt !== null && consumedAt !== undefined && !isIsoDateTime(consumedAt)) {
             error.push('AdminInvite consumedAt must be a valid date when present', 'consumedAt');
         }
-        if (revokedAt !== null && revokedAt !== undefined && !isValidDate(parseDate(revokedAt))) {
+        if (revokedAt !== null && revokedAt !== undefined && !isIsoDateTime(revokedAt)) {
             error.push('AdminInvite revokedAt must be a valid date when present', 'revokedAt');
         }
 
@@ -155,8 +165,8 @@ export default class AdminInviteRecord extends Record {
             return 'consumed';
         }
 
-        const inviteExpirationDate = parseDate(this.get('inviteExpirationDate'));
-        if (!isValidDate(inviteExpirationDate) ||
+        const inviteExpirationDate = parseIsoDateTime(this.get('inviteExpirationDate'));
+        if (!inviteExpirationDate ||
             inviteExpirationDate.getTime() <= referenceDate.getTime()) {
             return 'expired';
         }
@@ -203,12 +213,4 @@ export default class AdminInviteRecord extends Record {
         const status = this.getStatus(referenceDate);
         return status === 'pending' || status === 'expired';
     }
-}
-
-function parseDate(value) {
-    if (!isNonEmptyString(value)) {
-        return null;
-    }
-
-    return new Date(value);
 }

@@ -1,6 +1,7 @@
 import Record from './base-key-value-store-record.js';
 import { ValidationError } from '../../kixx/errors/mod.js';
-import { assert, isNonEmptyString, isNumberNotNaN, isValidDate } from '../../kixx/assertions/mod.js';
+import { assert, isNumberNotNaN, isValidDate } from '../../kixx/assertions/mod.js';
+import { isIsoDateTime, parseIsoDateTime } from '../lib/iso-date-time.js';
 
 
 /**
@@ -32,7 +33,7 @@ export default class RateLimitRecord extends Record {
                 description: 'ISO timestamp until which the scope is throttled, or null while still under the threshold',
             },
         },
-        required: [ 'failureCount', 'windowStartDate' ],
+        required: [ 'failureCount', 'windowStartDate', 'lockedUntilDate' ],
     };
 
     validate() {
@@ -42,7 +43,7 @@ export default class RateLimitRecord extends Record {
             error.push('RateLimit failureCount is required', 'failureCount');
         }
 
-        if (!isValidDate(parseDate(this.get('windowStartDate')))) {
+        if (!isIsoDateTime(this.get('windowStartDate'))) {
             error.push('RateLimit windowStartDate is required', 'windowStartDate');
         }
 
@@ -51,13 +52,23 @@ export default class RateLimitRecord extends Record {
         const lockedUntilDate = this.get('lockedUntilDate');
         if (lockedUntilDate !== null &&
             lockedUntilDate !== undefined &&
-            !isValidDate(parseDate(lockedUntilDate))) {
+            !isIsoDateTime(lockedUntilDate)) {
             error.push('RateLimit lockedUntilDate must be an ISO date or null', 'lockedUntilDate');
         }
 
         if (error.length) {
             throw error;
         }
+    }
+
+    /**
+     * Increments this scope's failure counter.
+     * @returns {number} The incremented failure count.
+     */
+    incrementFailureCount() {
+        const failureCount = this.get('failureCount') + 1;
+        this.set('failureCount', failureCount);
+        return failureCount;
     }
 
     /**
@@ -69,8 +80,8 @@ export default class RateLimitRecord extends Record {
     isLocked(referenceDate = new Date()) {
         assert(isValidDate(referenceDate), 'RateLimitRecord#isLocked() referenceDate must be a valid Date');
 
-        const lockedUntilDate = parseDate(this.get('lockedUntilDate'));
-        return isValidDate(lockedUntilDate) &&
+        const lockedUntilDate = parseIsoDateTime(this.get('lockedUntilDate'));
+        return lockedUntilDate !== null &&
             lockedUntilDate.getTime() > referenceDate.getTime();
     }
 
@@ -83,20 +94,12 @@ export default class RateLimitRecord extends Record {
     retryAfterSeconds(referenceDate = new Date()) {
         assert(isValidDate(referenceDate), 'RateLimitRecord#retryAfterSeconds() referenceDate must be a valid Date');
 
-        const lockedUntilDate = parseDate(this.get('lockedUntilDate'));
-        if (!isValidDate(lockedUntilDate)) {
+        const lockedUntilDate = parseIsoDateTime(this.get('lockedUntilDate'));
+        if (!lockedUntilDate) {
             return 0;
         }
 
         const remainingMs = lockedUntilDate.getTime() - referenceDate.getTime();
         return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
     }
-}
-
-function parseDate(value) {
-    if (!isNonEmptyString(value)) {
-        return null;
-    }
-
-    return new Date(value);
 }

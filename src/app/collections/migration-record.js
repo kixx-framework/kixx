@@ -3,12 +3,11 @@ import { ValidationError } from '../../kixx/errors/mod.js';
 import {
     isNonEmptyString,
     isPlainObject,
-    isValidDate,
 } from '../../kixx/assertions/mod.js';
+import { isIsoDateTime } from '../lib/iso-date-time.js';
 
 
 const VALID_STATUSES = new Set([ 'running', 'applied', 'failed' ]);
-const ISO_DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 
 /**
@@ -89,42 +88,6 @@ export default class MigrationRecord extends Record {
             throw error;
         }
     }
-
-    get status() {
-        return this.get('status');
-    }
-
-    get cursor() {
-        return this.get('cursor');
-    }
-
-    get stats() {
-        return this.get('stats');
-    }
-
-    get batchCount() {
-        return this.get('batchCount');
-    }
-
-    get startedBy() {
-        return this.get('startedBy');
-    }
-
-    get startedAt() {
-        return this.get('startedAt');
-    }
-
-    get lastBatchAt() {
-        return this.get('lastBatchAt');
-    }
-
-    get completedAt() {
-        return this.get('completedAt');
-    }
-
-    get error() {
-        return this.get('error');
-    }
 }
 
 function validateFieldShapes(record, error) {
@@ -202,12 +165,4 @@ function validateLifecycle(record, error) {
             error.push('Failed migrations must have a non-empty error', 'error');
         }
     }
-}
-
-function isIsoDateTime(value) {
-    if (!isNonEmptyString(value) || !ISO_DATE_TIME_PATTERN.test(value)) {
-        return false;
-    }
-
-    return isValidDate(new Date(value));
 }

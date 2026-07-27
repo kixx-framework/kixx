@@ -1,6 +1,7 @@
 import Record from './base-key-value-store-record.js';
 import { ValidationError } from '../../kixx/errors/mod.js';
 import { assert, isNonEmptyString, isValidDate } from '../../kixx/assertions/mod.js';
+import { parseIsoDateTime } from '../lib/iso-date-time.js';
 
 
 /**
@@ -64,8 +65,8 @@ export default class CsrfTokenRecord extends Record {
 
     validate() {
         const error = new ValidationError('Invalid CSRF token record');
-        const tokenCreationDate = parseDate(this.get('tokenCreationDate'));
-        const tokenExpirationDate = parseDate(this.get('tokenExpirationDate'));
+        const tokenCreationDate = parseIsoDateTime(this.get('tokenCreationDate'));
+        const tokenExpirationDate = parseIsoDateTime(this.get('tokenExpirationDate'));
         const tokenHashes = this.get('tokenHashes');
 
         // A record with no live tokens has nothing left to validate against, so it
@@ -75,14 +76,14 @@ export default class CsrfTokenRecord extends Record {
             !tokenHashes.every(isNonEmptyString)) {
             error.push('CsrfToken tokenHashes must be a non-empty array of non-empty strings', 'tokenHashes');
         }
-        if (!isValidDate(tokenCreationDate)) {
+        if (!tokenCreationDate) {
             error.push('CsrfToken tokenCreationDate is required', 'tokenCreationDate');
         }
-        if (!isValidDate(tokenExpirationDate)) {
+        if (!tokenExpirationDate) {
             error.push('CsrfToken tokenExpirationDate is required', 'tokenExpirationDate');
         }
-        if (isValidDate(tokenCreationDate) &&
-            isValidDate(tokenExpirationDate) &&
+        if (tokenCreationDate &&
+            tokenExpirationDate &&
             tokenExpirationDate.getTime() <= tokenCreationDate.getTime()) {
             error.push('CsrfToken tokenExpirationDate must be after tokenCreationDate', 'tokenExpirationDate');
         }
@@ -101,8 +102,8 @@ export default class CsrfTokenRecord extends Record {
     isExpired(referenceDate = new Date()) {
         assert(isValidDate(referenceDate), 'CsrfTokenRecord#isExpired() referenceDate must be a valid Date');
 
-        const tokenExpirationDate = parseDate(this.get('tokenExpirationDate'));
-        return !isValidDate(tokenExpirationDate) ||
+        const tokenExpirationDate = parseIsoDateTime(this.get('tokenExpirationDate'));
+        return !tokenExpirationDate ||
             tokenExpirationDate.getTime() <= referenceDate.getTime();
     }
 
@@ -120,8 +121,8 @@ export default class CsrfTokenRecord extends Record {
     getSecondsUntilExpiration(referenceDate = new Date()) {
         assert(isValidDate(referenceDate), 'CsrfTokenRecord#getSecondsUntilExpiration() referenceDate must be a valid Date');
 
-        const tokenExpirationDate = parseDate(this.get('tokenExpirationDate'));
-        if (!isValidDate(tokenExpirationDate)) {
+        const tokenExpirationDate = parseIsoDateTime(this.get('tokenExpirationDate'));
+        if (!tokenExpirationDate) {
             return 0;
         }
 
@@ -140,8 +141,8 @@ export default class CsrfTokenRecord extends Record {
      * @returns {number|null} Whole Unix seconds, or null when the stored timestamp is unparsable.
      */
     getExpirationUnixSeconds() {
-        const tokenExpirationDate = parseDate(this.get('tokenExpirationDate'));
-        if (!isValidDate(tokenExpirationDate)) {
+        const tokenExpirationDate = parseIsoDateTime(this.get('tokenExpirationDate'));
+        if (!tokenExpirationDate) {
             return null;
         }
 
@@ -212,12 +213,4 @@ export default class CsrfTokenRecord extends Record {
         const tokenHashes = this.getTokenHashes().filter((hash) => hash !== tokenHash);
         return this.set('tokenHashes', tokenHashes);
     }
-}
-
-function parseDate(value) {
-    if (!isNonEmptyString(value)) {
-        return null;
-    }
-
-    return new Date(value);
 }

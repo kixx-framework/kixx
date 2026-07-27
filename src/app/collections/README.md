@@ -157,10 +157,10 @@ const user = await users.findByEmailAddress(context, emailAddress);
 
 Document Store Collections expose four ways to write a document. Choose based on your concurrency requirements:
 
-- **`create(context, input)`** — Inserts a new document. Throws `DocumentAlreadyExistsError` if a document already exists for the same `id`. Use this when the document must not already exist (e.g. a sign-up flow where a duplicate email means an error).
-- **`put(context, input)`** — Creates or overwrites a document without optimistic concurrency control. Use this for seeding, importing, or any case where you hold the canonical state and don't need to guard against concurrent writes.
-- **`update(context, dto)`** — Replaces an existing document only when the stored version matches `dto.version`. Throws `DocumentNotFoundError` when the document is absent and `VersionConflictError` when the version doesn't match. Use this for all user-initiated edits where a concurrent write could corrupt data.
-- **`updateWithRetry(context, dto, callback, options)`** — Tries `update()` once, then handles `VersionConflictError` by refetching the latest record, passing it to `callback(latest, { attempt, conflict })`, and retrying the returned or mutated record. Use this for recomputable mutations where automatic merge semantics are safe, such as nonce rotation, counters, timestamps, or similar server-owned values. Do not use it when the caller needs to see and resolve a conflicting user edit. Because `updateWithRetry()` absorbs `VersionConflictError` internally, callers do not catch it. Instead it throws `RetryLimitExceededError` when conflicts continue past `retryLimit`, and `DocumentNotFoundError` if the document is deleted between a conflict and the refetch. `RetryLimitExceededError` carries `name`/`code` of `'RetryLimitExceededError'` plus `type`, `id`, and `retryLimit` properties.
+- **`create(context, input)`** — Inserts a new document. Throws `DocumentAlreadyExistsError` if a document already exists for the same `id`, or `DocumentUniqueIndexViolationError` if the write conflicts with a configured unique secondary index. Use this when the document must not already exist (e.g. a sign-up flow where a duplicate email means an error).
+- **`put(context, input)`** — Creates or overwrites a document without optimistic concurrency control. Throws `DocumentUniqueIndexViolationError` if the write conflicts with a configured unique secondary index. Use this for seeding, importing, or any case where you hold the canonical state and don't need to guard against concurrent writes.
+- **`update(context, dto)`** — Replaces an existing document only when the stored version matches `dto.version`. Throws `DocumentNotFoundError` when the document is absent, `VersionConflictError` when the version doesn't match, or `DocumentUniqueIndexViolationError` if the write conflicts with a configured unique secondary index. Use this for all user-initiated edits where a concurrent write could corrupt data.
+- **`updateWithRetry(context, dto, callback, options)`** — Tries `update()` once, then handles `VersionConflictError` by refetching the latest record, passing it to `callback(latest, { attempt, conflict })`, and retrying the returned or mutated record. Use this for recomputable mutations where automatic merge semantics are safe, such as nonce rotation, counters, timestamps, or similar server-owned values. Do not use it when the caller needs to see and resolve a conflicting user edit. Because `updateWithRetry()` absorbs `VersionConflictError` internally, callers do not catch it. Instead it throws `RetryLimitExceededError` when conflicts continue past `retryLimit`, and `DocumentNotFoundError` if the document is deleted between a conflict and the refetch. It does not retry `DocumentUniqueIndexViolationError`; that error propagates immediately. `RetryLimitExceededError` carries `name`/`code` of `'RetryLimitExceededError'` plus `type`, `id`, and `retryLimit` properties.
 
 All write methods call `dto.validate()` before persisting. A `ValidationError` thrown from `validate()` propagates to the caller without touching the store.
 
@@ -324,10 +324,11 @@ await users.updateWithRetry(context, user, (latestUser) => {
 
 ## Document Store Secondary Indexes
 
-A secondary index lets `query()` look up documents by a non-primary field. Each index definition requires two fields:
+A secondary index lets `query()` look up documents by a non-primary field. Each index definition requires `name` and `jsonPath`, and accepts an optional `unique` flag:
 
 - **`name`** — A lowercase identifier (letters, digits, and underscores only, starting with a letter). Used as the `options.index` value in `query()`.
 - **`jsonPath`** — A JSON path beginning with `$.` that points to the field in the stored document to index (e.g. `$.email_address`, `$.profile.role`).
+- **`unique`** — Optional boolean, defaulting to `false`. When `true`, the document store enforces uniqueness on `(document type, indexed value)`. A conflicting `create()`, `put()`, or `update()` throws `DocumentUniqueIndexViolationError`, whose `indexName` property identifies the violated index.
 
 ### A Collection Owns Its Index Definitions
 
@@ -341,7 +342,7 @@ export default class UserCollection extends Collection {
     static Record = UserRecord;
 
     static INDEXES = [
-        { name: USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.email_address' },
+        { name: USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.email_address', unique: true },
     ];
 
     async getByEmail(context, emailAddress) {
@@ -355,7 +356,7 @@ export default class UserCollection extends Collection {
 }
 ```
 
-Co-locating the definition keeps the three coupled facts together — the index `name`, the `jsonPath` field it indexes, and the query helper that uses it. When a record's field is renamed, the `jsonPath` is updated in the same file as the query, not in a separate registration list.
+Co-locating the definition keeps the index name, the `jsonPath` field it indexes, its uniqueness policy, and the query helper that uses it together. When a record's field is renamed or its uniqueness invariant changes, the definition is updated in the same file as the query, not in a separate registration list.
 
 ### Registering Indexes
 

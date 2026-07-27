@@ -46,8 +46,7 @@ export default class AdminUserCollection extends Collection {
         // rather than a validation failure.
         const { roles = [] } = attributes ?? {};
         const attrs = Object.assign({}, attributes, { userCreationDate, roles });
-        const item = await this.create(context, attrs);
-        return item;
+        return await this.create(context, attrs);
     }
 
     async getByEmailAddress(context, emailAddress) {

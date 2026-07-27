@@ -112,6 +112,11 @@ export default class PublishingApiTokenCollection extends Collection {
 
     /**
      * Revokes a token using optimistic concurrency, making it permanently unusable.
+     *
+     * This is an unconditional stamp. Callers must confirm the transition is legal
+     * with `PublishingApiTokenRecord#isRevocable()` first; stamping an already
+     * revoked record would overwrite its original revocation timestamp.
+     *
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {PublishingApiTokenRecord} record - Token record previously loaded from this collection.
      * @returns {Promise<PublishingApiTokenRecord>} The updated record.

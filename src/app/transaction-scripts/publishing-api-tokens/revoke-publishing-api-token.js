@@ -9,7 +9,7 @@ import { assertNonEmptyString } from '../../../kixx/assertions/mod.js';
  * @param {string} tokenId - Token record id (the token hash) from the management list.
  * @returns {Promise<void>} Resolves once the token is revoked.
  * @throws {NotFoundError} With code `PublishingApiTokenNotFound` when no token exists for the id.
- * @throws {ConflictError} With code `PublishingApiTokenNotRevocable` when the token is not active.
+ * @throws {ConflictError} With code `PublishingApiTokenNotRevocable` when the token is not in a revocable state.
  * @throws {ConflictError} With code `PublishingApiTokenConflict` when the token was modified concurrently.
  * @throws {AssertionError} When tokenId is missing or an unexpected storage failure occurs.
  */
@@ -32,7 +32,7 @@ export async function revokePublishingApiToken(context, tokenId) {
     // The list UI offers revocation for active tokens only, but this boundary
     // must also reject stale or forged requests. Reapplying the mutation would
     // overwrite the original revokedAt audit timestamp.
-    if (!record.isActive()) {
+    if (!record.isRevocable()) {
         throw new ConflictError(
             `A token that is ${ record.getStatus() } can no longer be revoked.`,
             { code: 'PublishingApiTokenNotRevocable' },

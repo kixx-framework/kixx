@@ -1,8 +1,16 @@
 import Record from './base-key-value-store-record.js';
 import { ValidationError } from '../../kixx/errors/mod.js';
-import { isNonEmptyString } from '../../kixx/assertions/mod.js';
+import { assert, isNonEmptyString, isValidDate } from '../../kixx/assertions/mod.js';
+import { isIsoDateTime, parseIsoDateTime } from '../lib/iso-date-time.js';
 
 
+/**
+ * Key/value-store DTO for an authenticated admin user session.
+ *
+ * The embedded expiration timestamp remains authoritative for authentication;
+ * the store TTL independently removes expired records.
+ * @extends Record
+ */
 export default class UserSessionRecord extends Record {
 
     static schema = {
@@ -32,15 +40,29 @@ export default class UserSessionRecord extends Record {
         if (!isNonEmptyString(this.get('userId'))) {
             error.push('UserSessionRecord userId is required', 'userId');
         }
-        if (!isNonEmptyString(this.get('sessionCreationDate'))) {
+        if (!isIsoDateTime(this.get('sessionCreationDate'))) {
             error.push('UserSessionRecord sessionCreationDate is required', 'sessionCreationDate');
         }
-        if (!isNonEmptyString(this.get('sessionExpirationDate'))) {
+        if (!isIsoDateTime(this.get('sessionExpirationDate'))) {
             error.push('UserSessionRecord sessionExpirationDate is required', 'sessionExpirationDate');
         }
 
         if (error.length) {
             throw error;
         }
+    }
+
+    /**
+     * Checks the session's embedded expiration timestamp.
+     * @param {Date} [referenceDate] - Date used as the current time.
+     * @returns {boolean} True when the session has expired or its timestamp is invalid.
+     * @throws {AssertionError} When referenceDate is present and invalid.
+     */
+    isExpired(referenceDate = new Date()) {
+        assert(isValidDate(referenceDate), 'UserSessionRecord#isExpired() referenceDate must be a valid Date');
+
+        const sessionExpirationDate = parseIsoDateTime(this.get('sessionExpirationDate'));
+        return !sessionExpirationDate ||
+            sessionExpirationDate.getTime() <= referenceDate.getTime();
     }
 }

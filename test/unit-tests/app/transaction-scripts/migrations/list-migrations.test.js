@@ -1,6 +1,7 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 
+import MigrationRecord from '../../../../../src/app/collections/migration-record.js';
 import { migrations } from '../../../../../src/app/migrations/mod.js';
 import { listMigrations } from '../../../../../src/app/transaction-scripts/migrations/list-migrations.js';
 
@@ -36,7 +37,7 @@ describe('listMigrations Transaction Script', ({ it }) => {
             assertEqual(FIRST_ID, result.id);
             assertEqual('Current registry description.', result.description);
             assertEqual('failed', result.status);
-            assertEqual(record.stats, result.stats);
+            assertEqual(record.get('stats'), result.stats);
             assertEqual(3, result.batchCount);
             assertEqual('admin-1', result.startedBy);
             assertEqual('2026-07-17T12:00:00.000Z', result.startedAt);
@@ -91,17 +92,21 @@ function makeContext(records = new Map()) {
 }
 
 function makeLedgerRecord() {
-    return {
-        status: 'failed',
-        stats: { scanned: 12, updated: 3 },
-        batchCount: 3,
-        startedBy: 'admin-1',
-        startedAt: '2026-07-17T12:00:00.000Z',
-        completedAt: '2026-07-17T12:03:00.000Z',
-        error: 'The migration failed safely.',
-        cursor: 'internal-cursor',
-        lastBatchAt: '2026-07-17T12:02:00.000Z',
-    };
+    return MigrationRecord.forWrite({
+        type: 'Migration',
+        id: FIRST_ID,
+        attributes: {
+            status: 'failed',
+            stats: { scanned: 12, updated: 3 },
+            batchCount: 3,
+            startedBy: 'admin-1',
+            startedAt: '2026-07-17T12:00:00.000Z',
+            completedAt: '2026-07-17T12:03:00.000Z',
+            error: 'The migration failed safely.',
+            cursor: 'internal-cursor',
+            lastBatchAt: '2026-07-17T12:02:00.000Z',
+        },
+    });
 }
 
 function makeRegistry(entries = [

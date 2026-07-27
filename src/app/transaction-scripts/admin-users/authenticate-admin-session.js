@@ -1,4 +1,4 @@
-import { isNonEmptyString, isValidDate } from '../../../kixx/assertions/mod.js';
+import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { AssertionError, UnauthenticatedError } from '../../../kixx/errors/mod.js';
 
 
@@ -7,11 +7,6 @@ const UNAUTHENTICATED_MESSAGE = 'Admin authentication is required.';
 
 function createUnauthenticatedError(options) {
     return new UnauthenticatedError(UNAUTHENTICATED_MESSAGE, options);
-}
-
-function isSessionExpired(session) {
-    const expirationDate = new Date(session.get('sessionExpirationDate'));
-    return !isValidDate(expirationDate) || expirationDate.getTime() <= Date.now();
 }
 
 /**
@@ -37,7 +32,7 @@ export async function authenticateAdminSession(context, sessionId) {
         throw new AssertionError('Unexpected error while loading an admin session', { cause });
     }
 
-    if (!session || isSessionExpired(session)) {
+    if (!session || session.isExpired()) {
         // Missing and expired sessions collapse to the same expected auth
         // failure so callers do not learn whether a presented session id ever
         // existed.

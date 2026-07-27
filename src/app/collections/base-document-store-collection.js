@@ -103,6 +103,7 @@ export default class Collection {
      * @throws {AssertionError} When arguments are invalid
      * @throws {ValidationError} When the Record subclass `validate()` rejects the input
      * @throws {DocumentAlreadyExistsError} When a document already exists for the same id
+     * @throws {DocumentUniqueIndexViolationError} When the write conflicts with a configured unique secondary index
      */
     async create(context, input) {
         const dto = this.#coerceToRecord(input, 'Collection#create()');
@@ -125,6 +126,7 @@ export default class Collection {
      * @throws {ValidationError} When the Record subclass `validate()` rejects the input
      * @throws {DocumentNotFoundError} When the target document does not exist
      * @throws {VersionConflictError} When the stored version does not match `dto.version`
+     * @throws {DocumentUniqueIndexViolationError} When the write conflicts with a configured unique secondary index
      */
     async update(context, dto) {
         assert(
@@ -154,6 +156,7 @@ export default class Collection {
      * @throws {AssertionError} When arguments are invalid
      * @throws {DocumentNotFoundError} When the document disappears during a retry
      * @throws {RetryLimitExceededError} When conflicts continue past `retryLimit`
+     * @throws {DocumentUniqueIndexViolationError} When any attempted write conflicts with a configured unique secondary index
      */
     async updateWithRetry(context, dto, callback, options) {
         const { retryLimit = 3 } = options ?? {};
@@ -210,6 +213,7 @@ export default class Collection {
      * @returns {Promise<Record>} The stored document wrapped in the configured Record class
      * @throws {AssertionError} When arguments are invalid
      * @throws {ValidationError} When the Record subclass `validate()` rejects the input
+     * @throws {DocumentUniqueIndexViolationError} When the write conflicts with a configured unique secondary index
      */
     async put(context, input) {
         const dto = this.#coerceToRecord(input, 'Collection#put()');

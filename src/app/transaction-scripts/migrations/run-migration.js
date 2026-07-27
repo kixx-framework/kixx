@@ -61,7 +61,7 @@ export async function runMigration(context, params) {
         migrationLedger,
         { id, force, startedBy, now },
     );
-    const startCursor = preparedRecord.cursor;
+    const startCursor = preparedRecord.get('cursor');
 
     let batchResult;
     try {
@@ -77,7 +77,7 @@ export async function runMigration(context, params) {
     let committedState;
     try {
         validateBatchResult(batchResult, startCursor);
-        const accumulatedStats = accumulateStats(preparedRecord.stats, batchResult.stats);
+        const accumulatedStats = accumulateStats(preparedRecord.get('stats'), batchResult.stats);
         committedState = computeCommittedState({
             base: getRecordState(preparedRecord),
             batchResult,
@@ -275,27 +275,27 @@ function getSafeFailureMessage(error) {
 
 function getRecordState(record) {
     const state = {
-        status: record.status,
-        cursor: record.cursor,
-        stats: record.stats,
-        batchCount: record.batchCount,
-        startedBy: record.startedBy,
-        startedAt: record.startedAt,
-        lastBatchAt: record.lastBatchAt,
-        completedAt: record.completedAt,
-        error: record.error,
+        status: record.get('status'),
+        cursor: record.get('cursor'),
+        stats: record.get('stats'),
+        batchCount: record.get('batchCount'),
+        startedBy: record.get('startedBy'),
+        startedAt: record.get('startedAt'),
+        lastBatchAt: record.get('lastBatchAt'),
+        completedAt: record.get('completedAt'),
+        error: record.get('error'),
     };
 
-    assert(isPlainObject(state.stats), 'getRecordState() record.stats must be a plain object');
+    assert(isPlainObject(state.stats), 'getRecordState() stats must be a plain object');
     return state;
 }
 
 function presentRealResult(record) {
     return {
-        done: record.status === 'applied',
-        cursor: record.cursor,
-        stats: record.stats,
-        status: record.status,
+        done: record.get('status') === 'applied',
+        cursor: record.get('cursor'),
+        stats: record.get('stats'),
+        status: record.get('status'),
         dryRun: false,
     };
 }

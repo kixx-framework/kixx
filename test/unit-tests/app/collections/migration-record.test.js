@@ -36,25 +36,6 @@ describe('MigrationRecord', ({ it }) => {
         }
     });
 
-    it('exposes ledger attributes through domain getters', () => {
-        const record = makeRecord({
-            cursor: 'opaque-cursor',
-            stats: { scanned: 10 },
-            batchCount: 1,
-            lastBatchAt: LAST_BATCH_AT,
-        });
-
-        assertEqual('running', record.status);
-        assertEqual('opaque-cursor', record.cursor);
-        assertEqual(10, record.stats.scanned);
-        assertEqual(1, record.batchCount);
-        assertEqual('admin-1', record.startedBy);
-        assertEqual(STARTED_AT, record.startedAt);
-        assertEqual(LAST_BATCH_AT, record.lastBatchAt);
-        assertEqual(null, record.completedAt);
-        assertEqual(null, record.error);
-    });
-
     it('rejects an unknown status', () => {
         assertValidationError({ status: 'pending' }, 'status');
     });

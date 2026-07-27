@@ -88,7 +88,7 @@ export default class RateLimitCollection extends Collection {
             return toState(existing, now);
         }
 
-        const failureCount = (existing ? existing.get('failureCount') : 0) + 1;
+        const failureCount = existing ? existing.incrementFailureCount() : 1;
         // Preserve the start of the current streak for diagnostics only; expiry is
         // driven by the TTL set below, not by this timestamp.
         const windowStartDate = existing ? existing.get('windowStartDate') : now.toISOString();

@@ -1,6 +1,7 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 
+import MigrationRecord from '../../../../../../src/app/collections/migration-record.js';
 import { migrations } from '../../../../../../src/app/migrations/mod.js';
 import { JSON_API_CONTENT_TYPE } from '../../../../../../src/app/presentation/lib/json-api.js';
 import { listMigrations } from '../../../../../../src/app/presentation/request-handlers/admin-api/list-migrations.js';
@@ -11,17 +12,21 @@ describe('listMigrations admin API handler', ({ it }) => {
         await withRegistry(async () => {
             // Internal ledger fields are present here so the assertions below
             // can prove the handler projection omits them.
-            const storedRecord = {
-                status: 'applied',
-                stats: { scanned: 4 },
-                batchCount: 2,
-                startedBy: 'admin-1',
-                startedAt: '2026-07-17T12:00:00.000Z',
-                completedAt: '2026-07-17T12:05:00.000Z',
-                error: null,
-                cursor: 'internal-cursor',
-                lastBatchAt: '2026-07-17T12:04:00.000Z',
-            };
+            const storedRecord = MigrationRecord.forWrite({
+                type: 'Migration',
+                id: '2026-07-17-second-test',
+                attributes: {
+                    status: 'applied',
+                    stats: { scanned: 4 },
+                    batchCount: 2,
+                    startedBy: 'admin-1',
+                    startedAt: '2026-07-17T12:00:00.000Z',
+                    completedAt: '2026-07-17T12:05:00.000Z',
+                    error: null,
+                    cursor: 'internal-cursor',
+                    lastBatchAt: '2026-07-17T12:04:00.000Z',
+                },
+            });
             const collection = {
                 async getByMigrationId(_context, id) {
                     return id === '2026-07-17-second-test' ? storedRecord : null;

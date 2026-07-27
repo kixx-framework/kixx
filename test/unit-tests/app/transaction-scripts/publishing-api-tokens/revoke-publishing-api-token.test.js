@@ -50,7 +50,7 @@ describe('revokePublishingApiToken Transaction Script', ({ it }) => {
 
     it('refuses expired and revoked tokens without rewriting terminal state', async () => {
         for (const status of [ 'expired', 'revoked' ]) {
-            const record = makeRecord({ status, isActive: false });
+            const record = makeRecord({ status, isRevocable: false });
             const harness = makeHarness({ record });
             const caught = await catchAsyncError(() => {
                 return revokePublishingApiToken(harness.context, TOKEN_ID);
@@ -61,7 +61,7 @@ describe('revokePublishingApiToken Transaction Script', ({ it }) => {
             assertEqual('PublishingApiTokenNotRevocable', caught.code);
             assertEqual(409, caught.httpStatusCode);
             assertEqual(`A token that is ${ status } can no longer be revoked.`, caught.message);
-            assertEqual(1, record.calls.isActive);
+            assertEqual(1, record.calls.isRevocable);
             assertEqual(1, record.calls.getStatus);
             assertEqual(0, harness.calls.revoke.length);
         }
@@ -79,7 +79,7 @@ describe('revokePublishingApiToken Transaction Script', ({ it }) => {
         assertEqual('PublishingApiToken', harness.calls.collectionNames[0]);
         assertEqual(harness.context, lookupCall.context);
         assertEqual(TOKEN_ID, lookupCall.tokenId);
-        assertEqual(1, record.calls.isActive);
+        assertEqual(1, record.calls.isRevocable);
         assertEqual(0, record.calls.getStatus);
         assertEqual(1, harness.calls.revoke.length);
         assertEqual(harness.context, revokeCall.context);
@@ -180,11 +180,11 @@ function makeHarness(options) {
 function makeRecord(options) {
     const {
         status = 'active',
-        isActive = true,
+        isRevocable = true,
     } = options ?? {};
     const calls = {
         getStatus: 0,
-        isActive: 0,
+        isRevocable: 0,
     };
 
     return {
@@ -193,9 +193,9 @@ function makeRecord(options) {
             calls.getStatus += 1;
             return status;
         },
-        isActive() {
-            calls.isActive += 1;
-            return isActive;
+        isRevocable() {
+            calls.isRevocable += 1;
+            return isRevocable;
         },
     };
 }

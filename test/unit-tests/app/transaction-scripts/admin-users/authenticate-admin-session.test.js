@@ -46,17 +46,15 @@ describe('authenticateAdminSession Transaction Script', ({ it }) => {
         assertEqual(0, harness.calls.userGet.length);
     });
 
-    it('rejects expired and malformed session expiration dates', async () => {
-        for (const expirationDate of [ '2000-01-01T00:00:00.000Z', 'not-a-date' ]) {
-            const session = makeSession({ expirationDate });
-            const harness = makeHarness({ session });
-            const caught = await catchAsyncError(() => {
-                return authenticateAdminSession(harness.context, SESSION_ID);
-            });
+    it('rejects an expired session', async () => {
+        const session = makeSession({ isExpired: true });
+        const harness = makeHarness({ session });
+        const caught = await catchAsyncError(() => {
+            return authenticateAdminSession(harness.context, SESSION_ID);
+        });
 
-            assertUnauthenticated(caught);
-            assertEqual(0, harness.calls.userGet.length);
-        }
+        assertUnauthenticated(caught);
+        assertEqual(0, harness.calls.userGet.length);
     });
 
     it('rejects a session without a valid user id', async () => {
@@ -181,15 +179,15 @@ function makeHarness(options) {
 function makeSession(options) {
     const values = options ?? {};
     const userId = Object.hasOwn(values, 'userId') ? values.userId : USER_ID;
-    const expirationDate = values.expirationDate ?? '2099-01-01T00:00:00.000Z';
+    const isExpired = values.isExpired ?? false;
 
     return {
+        isExpired() {
+            return isExpired;
+        },
         get(name) {
             if (name === 'userId') {
                 return userId;
-            }
-            if (name === 'sessionExpirationDate') {
-                return expirationDate;
             }
             throw new Error(`Unexpected session attribute: ${ name }`);
         },
