@@ -1,5 +1,6 @@
 import process from 'node:process';
-import { assertEqual, assertNonEmptyString } from 'kixx-assert';
+import { FastHTMLParser } from 'fast-html-dom-parser';
+import { assert, assertEqual, assertNonEmptyString } from 'kixx-assert';
 
 
 export function getBaseUrl() {
@@ -15,5 +16,15 @@ export function assertCsrfCookie(cookieJar) {
     assertEqual(1800, cookie.maxAge);
     assertEqual(true, cookie.httpOnly);
     assertEqual('lax', cookie.sameSite.toLowerCase());
+    assertNonEmptyString(cookie.value);
     return cookie.value;
+}
+
+export function assertHtmlCsrfToken(html) {
+    const document = new FastHTMLParser(html);
+    const [ field ] = document.getElementsByName('csrf_token');
+    assert(field);
+    const token = field.getAttribute('value');
+    assertNonEmptyString(token);
+    return token;
 }

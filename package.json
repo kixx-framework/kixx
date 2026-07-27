@@ -34,6 +34,7 @@
     },
     "homepage": "https://www.kixx.dev",
     "devDependencies": {
+        "fast-html-dom-parser": "1.0.5",
         "kixx-assert": "2.1.1",
         "kixx-linting": "1.1.1",
         "kixx-test": "3.0.0"
