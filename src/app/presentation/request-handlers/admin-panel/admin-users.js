@@ -313,17 +313,17 @@ export async function getAdminUserLoginForm(context, request, response) {
     const raw = request.queryParams.notice;
     const noticeCode = ALLOWED_LOGIN_NOTICES.has(raw) ? raw : null;
 
-    return response.updateProps({
-        form: await getCsrfFormContext(context, request, response, form, noticeCode),
-    });
+    const newForm = await getCsrfFormContext(context, request, response, form, noticeCode);
+    return response.updateProps({ form: newForm });
 }
 
 // Re-renders the login form in its throttled state: a fresh CSRF token plus a
 // non-enumerating "try again later" callout. Used both for the pre-auth check
 // and when a failed attempt is the one that trips the lock.
 async function renderLoginThrottled(context, request, response, form, retryAfterSeconds) {
+    const newForm = await getCsrfFormContext(context, request, response, form);
     return response.updateProps({
-        form: await getCsrfFormContext(context, request, response, form),
+        form: newForm,
         throttled: true,
         throttleMessage: throttleMessage(retryAfterSeconds),
     });
@@ -354,7 +354,7 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
     // pair is already locked out, so a throttled attacker cannot keep probing.
     const throttle = await checkLoginThrottle(context, request, form.email_address);
     if (throttle.throttled) {
-        return renderLoginThrottled(context, request, response, form, throttle.retryAfterSeconds);
+        return await renderLoginThrottled(context, request, response, form, throttle.retryAfterSeconds);
     }
 
     // Server-side validation. On failure, fall through to the page renderer with
@@ -386,7 +386,7 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
             // which input was wrong.
             const state = await recordLoginFailure(context, request, form.email_address);
             if (state.throttled) {
-                return renderLoginThrottled(context, request, response, form, state.retryAfterSeconds);
+                return await renderLoginThrottled(context, request, response, form, state.retryAfterSeconds);
             }
             return response.updateProps({
                 form: await getCsrfFormContext(context, request, response, form),

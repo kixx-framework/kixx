@@ -1,9 +1,10 @@
 import {
     assert,
     assertNonEmptyString,
-    isFunction,
-    isNonEmptyString,
     isString,
+    isFunction,
+    isUndefined,
+    isNonEmptyString,
 } from '../../../kixx/assertions/mod.js';
 import { assertPermission } from '../../lib/permissions.js';
 
@@ -31,21 +32,17 @@ export function requirePermission(spec) {
         'requirePermission: resource must be a non-empty string or a resolver function',
     );
 
-    if (typeof code !== 'undefined') {
-        assert(isString(code), 'requirePermission: code must be a string when provided');
-    }
-    if (typeof message !== 'undefined') {
-        assert(isString(message), 'requirePermission: message must be a string when provided');
-    }
-
     // Only forward keys the caller actually supplied so assertPermission()'s
     // defaults (generic message, ForbiddenError's class-default code) apply
     // when this route did not override them.
     const assertionOptions = {};
-    if (typeof code !== 'undefined') {
+
+    if (!isUndefined(code)) {
+        assert(isString(code), 'requirePermission: code must be a string when provided');
         assertionOptions.code = code;
     }
-    if (typeof message !== 'undefined') {
+    if (!isUndefined(message)) {
+        assert(isString(message), 'requirePermission: message must be a string when provided');
         assertionOptions.message = message;
     }
 
