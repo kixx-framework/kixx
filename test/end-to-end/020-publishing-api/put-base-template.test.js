@@ -25,6 +25,15 @@ const TEMPLATE_FILEPATH = 'e2e/base-template.html';
 // rejected for containing `%` instead.
 const INVALID_TEMPLATE_FILEPATH = 'e2e/.hidden.html';
 
+// Each block writes its own filepath so the blocks stay independent within the
+// shared build namespace and none of them overwrites another's target.
+const OVERWRITE_TEMPLATE_FILEPATH = 'e2e/overwrite-target.html';
+
+// A filepath whose first segment is literally `base` collides with the store's
+// own `base/` key prefix, which is what makes it a direct test of the response's
+// prefix stripping rather than an incidental one.
+const PREFIXED_TEMPLATE_FILEPATH = 'base/prefix-check.html';
+
 // respondWithUtf8() appends the charset to every JSON:API response.
 const JSON_API_CONTENT_TYPE = 'application/vnd.api+json; charset=utf-8';
 
@@ -83,6 +92,110 @@ describe('PUT /publishing-api/v1/templates/base/*filepath with happy path', ({ b
         assertEqual(TEST_BUILD_ID, body.data.attributes.buildId);
         // The resource id restates the filepath derived from the URL wildcard.
         assertEqual(TEMPLATE_FILEPATH, body.data.id);
+    });
+});
+
+describe('PUT /publishing-api/v1/templates/base/*filepath twice for the same filepath', ({ before, it }) => {
+
+    let url;
+    let firstResponse;
+    let firstBody;
+    let secondResponse;
+    let secondBody;
+
+    before(async () => {
+        // Construct the URL here so the test fails if it is invalid
+        // instead of crashing the whole test run.
+        url = new URL(`${ getBaseUrl() }/publishing-api/v1/templates/base/${ OVERWRITE_TEMPLATE_FILEPATH }`);
+
+        const token = await getPublishingApiToken();
+        const source = await fsp.readFile(FIXTURE_URL, 'utf8');
+
+        const headers = {
+            authorization: `Bearer ${ token }`,
+            'kixx-build-id': TEST_BUILD_ID,
+            'content-type': 'text/plain; charset=utf-8',
+        };
+
+        firstResponse = await fetch(url, {
+            method: 'PUT',
+            redirect: 'manual',
+            headers,
+            body: source,
+        });
+
+        firstBody = await firstResponse.json();
+
+        // Republish changed source to the same filepath and build. Re-running a
+        // publish must be safe, so the store overwrites rather than conflicting.
+        secondResponse = await fetch(url, {
+            method: 'PUT',
+            redirect: 'manual',
+            headers,
+            body: `${ source }\n{{!-- republished --}}\n`,
+        });
+
+        secondBody = await secondResponse.json();
+    });
+
+    it('responds with an HTTP 200 status code both times', () => {
+        assert(firstResponse);
+        assert(secondResponse);
+        assertEqual(200, firstResponse.status);
+        assertEqual(200, secondResponse.status);
+    });
+
+    it('returns an identical JSON:API payload both times', () => {
+        // Both payloads come from the same handler expression, so their key
+        // order is stable and serializing is a sound way to compare them whole.
+        assertEqual(JSON.stringify(firstBody), JSON.stringify(secondBody));
+        assertEqual(OVERWRITE_TEMPLATE_FILEPATH, secondBody.data.attributes.filepath);
+        assertEqual(TEST_BUILD_ID, secondBody.data.attributes.buildId);
+    });
+});
+
+describe('PUT /publishing-api/v1/templates/base/*filepath with a base-prefixed filepath', ({ before, it }) => {
+
+    let url;
+    let response;
+    let body;
+
+    before(async () => {
+        // Construct the URL here so the test fails if it is invalid
+        // instead of crashing the whole test run.
+        url = new URL(`${ getBaseUrl() }/publishing-api/v1/templates/base/${ PREFIXED_TEMPLATE_FILEPATH }`);
+
+        const token = await getPublishingApiToken();
+        const source = await fsp.readFile(FIXTURE_URL, 'utf8');
+
+        response = await fetch(url, {
+            method: 'PUT',
+            redirect: 'manual',
+            headers: {
+                authorization: `Bearer ${ token }`,
+                'kixx-build-id': TEST_BUILD_ID,
+                'content-type': 'text/plain; charset=utf-8',
+            },
+            body: source,
+        });
+
+        body = await response.json();
+    });
+
+    it('responds with an HTTP 200 status code', () => {
+        assert(response);
+        assertEqual(200, response.status);
+        assertEqual(url.href, response.url);
+    });
+
+    // The template file store's logical key includes the kind prefix
+    // (`base/base/prefix-check.html` here), but the URL path already encodes the
+    // kind, so the response must report the prefix-less filepath taken from the
+    // wildcard. Reporting the store key instead would double the prefix.
+    it('returns the filepath without the store key prefix', () => {
+        assertEqual(PREFIXED_TEMPLATE_FILEPATH, body.data.attributes.filepath);
+        assertEqual(PREFIXED_TEMPLATE_FILEPATH, body.data.id);
+        assertEqual('base', body.data.attributes.kind);
     });
 });
 
