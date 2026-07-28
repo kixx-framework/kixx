@@ -16,10 +16,7 @@ APFS path is not; a Linux ext4 path is. So an identifier that is not reduced to 
 canonical form makes the *same site* behave differently on different deploy targets —
 and, worse, behave correctly on the developer's machine while failing in production.
 
-A previous plan (`case-insensitive-template-ids-implementation-plan.md`, complete)
-solved this for template ids by folding them to lower case inside `HyperviewService`.
-Page pathnames are folded separately, in the page request handlers and in the publishing
-API route params. Two gaps remain:
+These are the gaps:
 
 - **Include filenames are never folded and never validated.** `getIncludes()` joins
   `includes[name].filename` out of `page.json` verbatim (`hyperview-service.js:332`), and
@@ -43,12 +40,7 @@ already valid (`validatePathname()` charset, no traversal, no leading-dot segmen
 it arrives, and the service asserts that rather than fixing it.** Callers normalize;
 the service enforces.
 
-### Deliberate reversal of the previous plan
-
-The completed template-ids plan aimed for *"neither the publishing API request handlers
-nor the page request handlers know anything about case"* (that plan, lines 24-25) by
-folding silently inside the service. This plan reverses that specific choice, and the
-reversal is the central design decision here:
+### Deliberate reversal of the previous implementation
 
 **Silent folding cannot distinguish a sloppy caller from wrong stored content.** When
 the service folds, `page.json` declaring `"filename": "Body.md"` is quietly rewritten to
@@ -57,8 +49,7 @@ asserts, that same `page.json` is reported as the broken build it is. Because th
 includes gap showed that content-sourced identifiers are the dangerous ones, the value
 of a loud failure outweighs the convenience of handlers that know nothing about case.
 
-Handlers therefore regain responsibility for normalization. This is not a regression to
-the old per-kind table the previous plan removed: there is still exactly **one** rule
+Handlers therefore regain responsibility for normalization. There is still exactly **one** rule
 and **one** implementation of it, shared by every layer via a new module. What changes
 is that the service's copy of the rule is an assertion instead of a rewrite.
 
@@ -85,8 +76,7 @@ is that the service's copy of the rule is an assertion instead of a rewrite.
   The one exception is the **partial reference** in template source. `{{> Nav.html }}`
   continues to resolve `nav.html`, because a partial reference is a name written into
   markup, not an address, and because the Mustache spec renders a missing partial as an
-  empty string with no error (`create-render-function.js:439`) — the previous plan's
-  Task T2 exists specifically so that failure mode is impossible. See the
+  empty string with no error (`create-render-function.js:439`). See the
   `CaseInsensitiveMap` note in Task T2.
 
 - **One rule, two error policies.** The validity rule already lives in
@@ -116,15 +106,16 @@ is that the service's copy of the rule is an assertion instead of a rewrite.
   addresses. Folding them would make template data resolution inconsistent with every
   other metadata property. Only the `filename` *values* are identifiers.
 
-- **Adapters must never fold.** The previous plan established that folding belongs in the
-  service and not in the two store plugins, but left that decision undocumented in the
+- **Adapters must never fold.** Folding belongs in the
+  service and not in the two store plugins, but that decision has been left undocumented in the
   interface contracts. A future Deno or AWS Lambda adapter author has no way to discover
   it. Task T5 writes it into both interface files.
 
-- **Red/green, test-first.** This reverses the previous plan's "no unit tests" rule at
-  the user's explicit request. Every task writes failing tests that express the new
+- **Red/green, test-first.** Every task writes failing tests that express the new
   behavior *before* the implementation, confirms they fail for the intended reason, then
   implements until they pass. Test conventions are in `test/unit-tests/README.md`.
+  DO NOT write or run end-to-end tests, but updating explanatory comments in end-to-end
+  tests is ok.
 
   Verification cannot rely on running the app locally: macOS APFS is case-insensitive by
   default, so a dev-server smoke test passes whether or not the change works. Assertions
