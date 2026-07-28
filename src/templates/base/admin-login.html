@@ -19,6 +19,10 @@
     <body>
         {{>admin-site-header.html}}
 
+        {{!--
+            "body" will exist if a page template was found and rendered. Otherwise, we
+            expect page content to be defined in the page "includes.body" file
+        --}}
         {{#if body }}
         <main class="admin-main center">{{{ body }}}</main>
         {{ else }}{{#if includes.body }}

@@ -18,6 +18,10 @@
         {{/if}}
     </head>
     <body>
+        {{!--
+            "body" will exist if a page template was found and rendered. Otherwise, we
+            expect page content to be defined in the page "includes.body" file
+        --}}
         {{#if body }}
             {{{ body }}}
         {{ else }}{{#if includes.body }}
