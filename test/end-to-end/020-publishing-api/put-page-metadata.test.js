@@ -204,13 +204,9 @@ describe('PUT /publishing-api/v1/pages/*pathname with a mixed case pathname', ({
         assertEqual(mixedCaseUrl.href, mixedCaseResult.response.url);
     });
 
-    // Page reads fold the URL pathname to lower case (normalizePagePathname() in
-    // hyperview-request-handlers.js), so a page published with any upper case
-    // character and stored unfolded is written where no request can ever read it —
-    // a silent 404 on Cloudflare KV or Linux, hidden entirely by a case-insensitive
-    // dev filesystem. getWildcardPathname() folds *every* segment, unlike
-    // splitIncludeFilepath(), which deliberately preserves the include filename; a
-    // fold applied only to the directory segments would fail here.
+    // Page pathnames are normalized at the publishing edge before authorization
+    // and the storage write. Folding every segment makes any case variant name
+    // the same resource on both case-sensitive and case-insensitive stores.
     it('returns the pathname folded to lower case', () => {
         assertEqual(FOLDED_PAGE_PATHNAME, mixedCaseResult.body.data.id);
         assertEqual(TEST_BUILD_ID, mixedCaseResult.body.data.meta.buildId);
@@ -225,6 +221,39 @@ describe('PUT /publishing-api/v1/pages/*pathname with a mixed case pathname', ({
     it('returns an identical payload for the already-folded pathname', () => {
         assertEqual(200, foldedResult.response.status);
         assertEqual(JSON.stringify(mixedCaseResult.body), JSON.stringify(foldedResult.body));
+    });
+});
+
+describe('PUT /publishing-api/v1/pages/*pathname with a non-canonical include filename', ({ before, it }) => {
+
+    let result;
+
+    before(async () => {
+        const url = new URL(`${ getBaseUrl() }/publishing-api/v1/pages/e2e/nested/non-canonical-include`);
+        const metadata = await readFixtureMetadata();
+
+        metadata.includes.body.filename = 'Body.MD';
+        result = await putPageMetadata(url, metadata, TEST_BUILD_ID);
+    });
+
+    it('responds with an HTTP 400 status code', () => {
+        assert(result.response);
+        assertEqual(400, result.response.status);
+    });
+
+    it('identifies the non-canonical include key in the JSON:API error', () => {
+        assertEqual(JSON_API_RESPONSE_CONTENT_TYPE, result.response.headers.get('content-type'));
+        assert(Array.isArray(result.body.errors));
+        assertEqual(1, result.body.errors.length);
+
+        const [ error ] = result.body.errors;
+        assertEqual('400', error.status);
+        assertEqual('InvalidIncludeFilename', error.code);
+        assertEqual('BadRequestError', error.title);
+        assertEqual(
+            'Page metadata includes[body].filename must be a valid, lower-case Hyperview identifier.',
+            error.detail,
+        );
     });
 });
 

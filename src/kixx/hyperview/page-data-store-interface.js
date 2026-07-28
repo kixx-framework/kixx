@@ -69,6 +69,10 @@
  * - Construction MUST accept an options object containing a `logger` and MUST
  *   throw when the logger is missing. Implementations create a child logger for
  *   their own diagnostics.
+ * - Caller-supplied page-data filepaths arrive already validated and canonical
+ *   (lower case). Adapters MUST NOT apply case folding or other identifier
+ *   normalization; they only apply the namespace and leading-slash address
+ *   mappings defined by this contract.
  * - A write `filepath` MUST be a non-empty string and MUST be rejected when it
  *   contains `..` path segments, so a client cannot escape the namespace.
  * - `putJSONFile()` `json` MUST be a non-null object.

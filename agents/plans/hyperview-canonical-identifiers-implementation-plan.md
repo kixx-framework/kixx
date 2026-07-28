@@ -135,7 +135,7 @@ is that the service's copy of the rule is an assertion instead of a rewrite.
 
 ### Task T1: Establish one shared definition of a canonical Hyperview identifier
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/docs/code-style-guide.md` (module sizing, naming); `src/docs/server-error-handling.md` (assert vs. validate); `test/unit-tests/README.md`
 
@@ -191,19 +191,19 @@ the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] `normalizeIdentifier()` folds with `toLowerCase()`; a test pins that
+- [x] `normalizeIdentifier()` folds with `toLowerCase()`; a test pins that
       `toLocaleLowerCase()` semantics are not used.
-- [ ] `assertCanonicalIdentifier()` throws `AssertionError` for: a non-string, an empty
+- [x] `assertCanonicalIdentifier()` throws `AssertionError` for: a non-string, an empty
       string, a traversal segment, a leading-dot segment, an out-of-charset character,
       and a correctly-formed but mixed-case value.
-- [ ] `assertCanonicalIdentifier()` accepts a canonical multi-segment value
+- [x] `assertCanonicalIdentifier()` accepts a canonical multi-segment value
       (e.g. `blog/posts/welcome.html`), so nested page templates and nested include
       filenames both pass.
-- [ ] An invalid *and* mixed-case value reports the validity failure, not the case one.
-- [ ] The assertion message includes the caller-supplied prefix.
-- [ ] `validatePathname()` still throws `BadRequestError` with the same message and still
+- [x] An invalid *and* mixed-case value reports the validity failure, not the case one.
+- [x] The assertion message includes the caller-supplied prefix.
+- [x] `validatePathname()` still throws `BadRequestError` with the same message and still
       returns its input unchanged; existing consumers are unaffected.
-- [ ] No call site outside this task changed.
+- [x] No call site outside this task changed.
 
 **Validation**
 
@@ -216,19 +216,19 @@ the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Extracted `isValidPathname()` without changing `validatePathname()`'s public behavior; added the shared canonical identifier normalizer, predicate, and assertion; added focused coverage for validity, canonical case, error ordering, message prefixes, nested identifiers, and locale-independent folding.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing for T1. T2 is the next unblocked task.
+- Decisions and discoveries: `normalizeIdentifier()` validates through `validatePathname()` before folding, while `assertCanonicalIdentifier()` applies the same `isValidPathname()` rule with assertion semantics. The locale-independence test makes `String.prototype.toLocaleLowerCase()` throw, proving normalization does not call it.
+- Actual files changed: `src/kixx/hyperview/canonical-identifiers.js` (new), `src/kixx/utils/validate-pathname.js`, `test/unit-tests/kixx/hyperview/canonical-identifiers.test.js` (new), `test/unit-tests/kixx/utils/validate-pathname.test.js`, `agents/plans/hyperview-canonical-identifiers-implementation-plan.md`.
+- Validation run: Red phase: focused tests failed with `ERR_MODULE_NOT_FOUND` for the intentionally absent canonical-identifiers module. Green phase: focused tests passed (27 tests, 0 disabled); changed JavaScript files passed `node run-linter.js`; full unit suite passed (1,319 tests, 0 disabled); `git diff --check` passed.
 - Blockers: None.
 
 ---
 
 ### Task T2: `HyperviewService` asserts canonical identifiers at every storage boundary
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `src/docs/server-error-handling.md`; `src/app/collections/README.md` is *not* relevant; `test/unit-tests/README.md` (MockTracker, thrown-error assertions)
 
@@ -288,21 +288,21 @@ the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Each of the eleven methods throws `AssertionError` when handed a mixed-case
+- [x] Each of the eleven methods throws `AssertionError` when handed a mixed-case
       identifier, and the message names that method and parameter.
-- [ ] A canonical identifier reaches the mock store as the **exact** expected key string
+- [x] A canonical identifier reaches the mock store as the **exact** expected key string
       — assertions are on the key, not on "it did not throw".
-- [ ] `getIncludes()` throws when any `includes[*].filename` is non-canonical or invalid,
+- [x] `getIncludes()` throws when any `includes[*].filename` is non-canonical or invalid,
       and the message identifies the include key and the page pathname.
-- [ ] `getIncludes()` still returns rendered content for a valid includes map, and still
+- [x] `getIncludes()` still returns rendered content for a valid includes map, and still
       omits an include whose file is genuinely absent from the store.
-- [ ] `putPageMetadata()` rejects a metadata object containing a non-canonical include
+- [x] `putPageMetadata()` rejects a metadata object containing a non-canonical include
       filename, and stores metadata byte-verbatim when it accepts.
-- [ ] `getBaseTemplate`/`getPageTemplate` create no `#templateCache` entry for a rejected
+- [x] `getBaseTemplate`/`getPageTemplate` create no `#templateCache` entry for a rejected
       id.
-- [ ] `{{> Nav.html }}` still resolves a stored `partials/nav.html`.
-- [ ] `loadPartials()` throws when the store lists a non-canonical partial filepath.
-- [ ] `#normalizeTemplateId()` no longer exists.
+- [x] `{{> Nav.html }}` still resolves a stored `partials/nav.html`.
+- [x] `loadPartials()` throws when the store lists a non-canonical partial filepath.
+- [x] `#normalizeTemplateId()` no longer exists.
 
 **Validation**
 
@@ -313,19 +313,19 @@ the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added canonical identifier assertions before every page-data, template-store, and cache-key boundary; added direct-write and render-time include filename gates; removed service-side template folding; made partial insertion strict while retaining case-insensitive partial-reference lookup; expanded unit coverage for all acceptance criteria and exact store/cache behavior.
+- Current state: Complete; every T2 acceptance criterion is satisfied.
+- Remaining: Nothing for T2. T3 is the next unblocked task.
+- Decisions and discoveries: `getIncludes()` validates pathname and filenames before consulting its compiled-includes cache, so invalid metadata cannot be hidden by a cache hit. `putPageMetadata()` validates include filenames without cloning or rewriting metadata. `CaseInsensitiveMap` now inherits native `Map#set()` and folds only `get()`/`has()`.
+- Actual files changed: `src/kixx/hyperview/hyperview-service.js`, `test/unit-tests/kixx/hyperview/hyperview-service.test.js`, `agents/plans/hyperview-canonical-identifiers-implementation-plan.md` (in addition to retained T1 changes).
+- Validation run: Red phase: focused service tests ran 25 tests and failed in 10 expected assertion-gap cases. Green phase: focused service tests passed (25 tests, 0 disabled); full unit suite passed (1,331 tests, 0 disabled); changed T2 JavaScript files passed `node run-linter.js`; `git diff --check` passed.
 - Blockers: None.
 
 ---
 
 ### Task T3: Public page requests normalize at the edge and emit one canonical URL
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1, T2
 **Documentation:** `src/app/presentation/README.md` (page handler behavior)
 
@@ -377,16 +377,16 @@ the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] A request for `/Platform` resolves page data from `/platform` and hits the same
+- [x] A request for `/Platform` resolves page data from `/platform` and hits the same
       page cache key as `/platform`.
-- [ ] `page.canonical_url` and `og:url` are the folded pathname for a mixed-case request.
-- [ ] `page.pathname` is the folded pathname.
-- [ ] `page.href` still reflects the request URL as sent, including query string.
-- [ ] A mixed-case URL combined with an index file and a `.json` format extension still
+- [x] `page.canonical_url` and `og:url` are the folded pathname for a mixed-case request.
+- [x] `page.pathname` is the folded pathname.
+- [x] `page.href` still reflects the request URL as sent, including query string.
+- [x] A mixed-case URL combined with an index file and a `.json` format extension still
       resolves the same page as its canonical form.
-- [ ] Both the static and dynamic handlers behave identically, including via
+- [x] Both the static and dynamic handlers behave identically, including via
       `options.pathname`.
-- [ ] An invalid pathname still produces `BadRequestError` (400), not `AssertionError`.
+- [x] An invalid pathname still produces `BadRequestError` (400), not `AssertionError`.
 
 **Validation**
 
@@ -398,19 +398,19 @@ the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Replaced both handlers' private pathname fold with the shared validated normalizer; preserved mixed-case index/format stripping and canonical cache keys; folded `page.pathname`, derived `page.canonical_url`, and default Open Graph URL while retaining the literal request in `page.href`; added focused handler and service coverage.
+- Current state: Complete; every T3 acceptance criterion is satisfied.
+- Remaining: Nothing for T3. T4 is the next unblocked task.
+- Decisions and discoveries: `normalizeIdentifier()` validates before folding, after which index and format stripping only remove valid characters. `mergePageMetadata()` computes one normalized pathname and reuses it for both page identity fields; an explicit authored `canonical_url` remains an override. The handler option documentation was corrected to reflect T2's canonical-ID assertion contract.
+- Actual files changed: `src/kixx/hyperview/hyperview-request-handlers.js`, `src/kixx/hyperview/hyperview-service.js`, `test/unit-tests/kixx/hyperview/hyperview-request-handlers.test.js`, `test/unit-tests/kixx/hyperview/hyperview-service.test.js`, `agents/plans/hyperview-canonical-identifiers-implementation-plan.md`.
+- Validation run: Red phase: focused handler/service tests ran 98 tests and failed only because `mergePageMetadata()` still emitted mixed-case canonical fields. Green phase: the same 98 focused tests passed; full unit suite passed (1,334 tests, 0 disabled); all four changed T3 JavaScript files passed lint; `git diff --check` passed.
 - Blockers: None.
 
 ---
 
 ### Task T4: The publishing API canonicalizes and validates client input at the edge
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1, T2
 **Documentation:** `src/docs/server-error-handling.md` (400 vs. 500); `src/app/presentation/README.md`; `src/app/transaction-scripts/README.md`
 
@@ -468,16 +468,16 @@ the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] `splitIncludeFilepath()` folds the filename; `filepath`, `pathname`, and `filename`
+- [x] `splitIncludeFilepath()` folds the filename; `filepath`, `pathname`, and `filename`
       are all canonical.
-- [ ] The include authorization URN and the handler's echoed response `id` are identical
+- [x] The include authorization URN and the handler's echoed response `id` are identical
       for a mixed-case request.
-- [ ] A page metadata PUT whose `includes` map contains a non-canonical or invalid
+- [x] A page metadata PUT whose `includes` map contains a non-canonical or invalid
       filename is rejected with `BadRequestError` (400) naming the include key.
-- [ ] A page metadata PUT with a valid includes map stores the metadata byte-verbatim.
-- [ ] Static asset publishing still preserves case (`Images/Logo.png` round-trips).
-- [ ] Empty-segment and traversal rejections still produce their existing codes.
-- [ ] No comment anywhere describes the superseded preserve-the-filename-case behavior.
+- [x] A page metadata PUT with a valid includes map stores the metadata byte-verbatim.
+- [x] Static asset publishing still preserves case (`Images/Logo.png` round-trips).
+- [x] Empty-segment and traversal rejections still produce their existing codes.
+- [x] No comment anywhere describes the superseded preserve-the-filename-case behavior.
 
 **Validation**
 
@@ -488,19 +488,19 @@ the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Routed page, template, and include publishing identifiers through the shared validated normalizer; made include filepath decomposition canonical across pathname, filename, authorization URN, service write, and response id; added HTTP-edge rejection for invalid/non-canonical include addresses in page metadata; retained case-preserving static asset behavior and existing malformed-path errors; updated focused tests and stale comments.
+- Current state: Complete; every T4 acceptance criterion is satisfied.
+- Remaining: Nothing for T4. T5 and T6 are now unblocked.
+- Decisions and discoveries: Include-map canonical validation lives in the publishing request handler immediately after `PutPageMetadataForm.validate()`. This preserves the form's established structural `ValidationError` (422) contract while applying the required address-policy `BadRequestError` (400) at the HTTP edge. The service assertion remains the backstop for direct/non-HTTP callers, so the transaction script does not duplicate the rule or HTTP policy. Accepted metadata is checked with `isCanonicalIdentifier()` and never rewritten.
+- Actual files changed: `src/app/presentation/request-handlers/publishing-api/route-params.js`, `src/app/presentation/request-handlers/publishing-api/put-page-metadata.js`, `test/unit-tests/app/presentation/request-handlers/publishing-api/route-params.test.js`, `test/unit-tests/app/presentation/request-handlers/publishing-api/authorization.test.js`, `test/unit-tests/app/presentation/request-handlers/publishing-api/put-page-include.test.js`, `test/unit-tests/app/presentation/request-handlers/publishing-api/put-page-metadata.test.js`, `test/unit-tests/app/presentation/request-handlers/publishing-api/put-template.test.js`, `agents/plans/hyperview-canonical-identifiers-implementation-plan.md`.
+- Validation run: Red phase: the publishing request-handler suite ran 117 tests and failed in six expected canonicalization/metadata-validation cases. Green phase: the same 117 tests passed; full unit suite passed (1,337 tests, 0 disabled); all seven changed T4 JavaScript files passed lint; `git diff --check` passed; source/unit comment search found no superseded filename-case or deleted-normalizer descriptions.
 - Blockers: None.
 
 ---
 
 ### Task T5: Write the invariant into the store contracts and the author documentation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1, T2, T3, T4
 **Documentation:** `src/docs/code-documentation-guide.md`; `src/plugins/README.md` (interface contract rules)
 
@@ -548,13 +548,13 @@ the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Both interface files state that keys arrive canonical and that adapters must not
+- [x] Both interface files state that keys arrive canonical and that adapters must not
       fold.
-- [ ] `src/app/presentation/README.md` documents the rule for all five file types,
+- [x] `src/app/presentation/README.md` documents the rule for all five file types,
       including include filenames.
-- [ ] The README states the failure mode an author will actually encounter.
-- [ ] `src/templates/README.md`'s partial-reference statements are verified accurate.
-- [ ] No documentation describes the superseded behavior.
+- [x] The README states the failure mode an author will actually encounter.
+- [x] `src/templates/README.md`'s partial-reference statements are verified accurate.
+- [x] No documentation describes the superseded behavior.
 
 **Validation**
 
@@ -564,19 +564,19 @@ the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added the canonical caller-key/no-adapter-folding invariant to both Hyperview store contracts; rewrote the presentation author guidance to cover all five file types, authored page-data addresses, publishing and render-time failure modes, and the strict-stored/lenient-partial-reference distinction; corrected the page identity defaults to reflect T3.
+- Current state: Complete; every T5 acceptance criterion is satisfied.
+- Remaining: Nothing for T5. T6 is the only remaining task.
+- Decisions and discoveries: Adapter addressing mechanics (namespace, fixed kind prefix, and documented leading-slash handling) remain permitted and are explicitly distinguished from forbidden identifier normalization. The two `src/templates/README.md` partial-resolution statements remain accurate because `CaseInsensitiveMap#get()`/`has()` still fold lookup references; the file was verified and intentionally not changed.
+- Actual files changed: `src/kixx/hyperview/template-file-store-interface.js`, `src/kixx/hyperview/page-data-store-interface.js`, `src/app/presentation/README.md`, `agents/plans/hyperview-canonical-identifiers-implementation-plan.md`.
+- Validation run: `node run-linter.js src/kixx/hyperview/` passed; `git diff --check` passed; manual comparison against the plan's five file types confirmed each is named in the presentation guide, along with the publishing 400 and checked-in/store `AssertionError` failure modes.
 - Blockers: None.
 
 ---
 
 ### Task T6: Reconcile the end-to-end suite with the new invariant
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1, T2, T3, T4
 **Documentation:** `test/end-to-end/README.md`
 
@@ -621,12 +621,12 @@ the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] A mixed-case include published via the API is readable by a page whose `page.json`
+- [x] A mixed-case include published via the API is readable by a page whose `page.json`
       names it canonically, and its content appears in the rendered page.
-- [ ] A `page.json` with a non-canonical include filename is rejected with a 400 naming
+- [x] A `page.json` with a non-canonical include filename is rejected with a 400 naming
       the include key.
-- [ ] The four files' comments describe the current rule only.
-- [ ] The existing template and static-asset e2e expectations still pass unchanged.
+- [x] The four files' comments describe the current rule only.
+- [x] The existing template and static-asset e2e expectations still pass unchanged.
 
 **Validation**
 
@@ -637,10 +637,10 @@ the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added a live-build round-trip which publishes an include through a mixed-case filepath, publishes canonical page metadata with a fresh cache version, and asserts the include content appears in the rendered page; added JSON:API coverage for a 400 naming a non-canonical include key; inverted the mixed-case include response expectations; reconciled every stale e2e explanation of service-side normalization or filename-case preservation.
+- Current state: Complete; every T6 acceptance criterion is represented by an end-to-end assertion, and the deployment-dependent validation exception is documented below.
+- Remaining: Nothing in the implementation. The e2e commands should be re-run when a target URL, publishing credentials, and current build id are available.
+- Decisions and discoveries: The render round-trip is gated on `E2E_TESTS_BUILD_ID` and explicitly writes both include content and page metadata to that known live build, because normal page requests cannot read the throwaway `TEST_BUILD_ID` namespace. A random metadata `version` prevents a prior live-build cache entry from hiding the newly published include. Two additional stale comments were found and corrected in the base-template and static-asset e2e files.
+- Actual files changed: `test/end-to-end/020-publishing-api/put-page-include.test.js`, `test/end-to-end/020-publishing-api/put-page-metadata.test.js`, `test/end-to-end/020-publishing-api/put-page-template.test.js`, `test/end-to-end/020-publishing-api/put-partial-template.test.js`, `test/end-to-end/020-publishing-api/put-base-template.test.js`, `test/end-to-end/020-publishing-api/put-static-asset.test.js`, `agents/plans/hyperview-canonical-identifiers-implementation-plan.md`.
+- Validation run: All six changed e2e JavaScript files passed `node run-linter.js`; `node run-tests.js` passed (1,337 tests, 0 disabled); `git diff --check` passed; the stale-behavior comment search returned no matches. `node run-tests.js --e2e test/end-to-end/020-publishing-api/` and `node run-tests.js --e2e` were both attempted but exited before loading tests because `E2E_TESTS_BASE_URL`, `E2E_TESTS_ROOT_USERNAME`, and `E2E_TESTS_ROOT_PASSWORD` are not configured. The new live-build round-trip also requires `E2E_TESTS_BUILD_ID`, which is not configured. This is the explicit validation exception permitted by the task status contract; no e2e result is represented as passing.
 - Blockers: None.

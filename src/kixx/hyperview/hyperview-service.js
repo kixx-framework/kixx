@@ -1,7 +1,6 @@
 import * as templating from '../templating/mod.js';
 import deepMerge from '../utils/deep-merge.js';
 import {
-    AssertionError,
     assert,
     assertNonEmptyString,
     isUndefined,
@@ -12,6 +11,10 @@ import {
 import formatDate from './helpers/format-date.js';
 import markup from './helpers/markup.js';
 import truncate from './helpers/truncate.js';
+import {
+    assertCanonicalIdentifier,
+    normalizeIdentifier,
+} from './canonical-identifiers.js';
 
 
 /**
@@ -43,9 +46,10 @@ import truncate from './helpers/truncate.js';
  */
 
 /**
- * A Map whose `get`/`has`/`set` fold string keys to lower case, so a partial
- * referenced as `{{> Nav.html }}` resolves the entry stored under `nav.html`.
- * Passed to the templating engine as a plain `Map` interface — the engine
+ * A Map with case-insensitive string-key lookup, so a partial referenced as
+ * `{{> Nav.html }}` resolves the canonical entry stored under `nav.html`.
+ * Insertion deliberately preserves the key: stored partial names must already
+ * be canonical rather than being silently corrected here. The templating engine
  * calls only `has`/`get` and never learns this subclass exists.
  */
 class CaseInsensitiveMap extends Map {
@@ -55,10 +59,6 @@ class CaseInsensitiveMap extends Map {
 
     has(key) {
         return super.has(key.toLowerCase());
-    }
-
-    set(key, value) {
-        return super.set(key.toLowerCase(), value);
     }
 }
 
@@ -116,8 +116,13 @@ export default class HyperviewService {
      * @param {RequestContext} context - Request context passed through to the page data store.
      * @param {string} pathname - Normalized page pathname, such as `/` or `/blog/post`.
      * @returns {Promise<HyperviewPageContent|null>} Merged page content, or null when the leaf page is missing.
+     * @throws {AssertionError} When pathname is not canonical
      */
     async getPageMetadata(context, pathname) {
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService.getPageMetadata: pathname',
+        );
         const buildId = context.runtime.build?.id ?? null;
 
         // We need to get the page data for this page - the page at `pathname` - and
@@ -183,10 +188,14 @@ export default class HyperviewService {
      * @param {string} pathname - Normalized page pathname.
      * @param {string} version - Page content version used to isolate cache entries.
      * @returns {Promise<string|null>} Cached HTML, or null when absent.
-     * @throws {AssertionError} When no key/value store was configured.
+     * @throws {AssertionError} When no key/value store was configured or pathname is not canonical.
      */
     async getCachedPage(context, pathname, version) {
         assert(this.#kvStore, 'HyperviewService requires a kvStore to cache full pages');
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService.getCachedPage: pathname',
+        );
         const buildId = context.runtime.build?.id || '';
         const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
         const page = await this.#kvStore.get(context, key, { type: 'text' });
@@ -205,10 +214,14 @@ export default class HyperviewService {
      * @param {string} version - Page content version used to isolate cache entries.
      * @param {string} page - Rendered HTML page.
      * @returns {Promise<void>}
-     * @throws {AssertionError} When no key/value store was configured.
+     * @throws {AssertionError} When no key/value store was configured or pathname is not canonical.
      */
     async setCachedPage(context, pathname, version, page) {
         assert(this.#kvStore, 'HyperviewService requires a kvStore to cache full pages');
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService.setCachedPage: pathname',
+        );
         const buildId = context.runtime.build?.id || '';
         const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
         await this.#kvStore.put(context, key, page, { type: 'text' });
@@ -223,13 +236,16 @@ export default class HyperviewService {
     mergePageMetadata(url, metadata) {
         const page = metadata.page ?? {};
         metadata.page = page;
-        page.pathname = url.pathname;
+        const pathname = normalizeIdentifier(url.pathname);
+        page.pathname = pathname;
 
         // Set canonical URL from request URL if not already defined in page data
         // Canonical URL excludes query string and hash to provide a stable reference
         if (!page.canonical_url) {
-            page.canonical_url = this.#urlToCanonicalURLString(url);
+            page.canonical_url = this.#urlToCanonicalURLString(url, pathname);
         }
+        // href records the literal request, while pathname and canonical_url identify
+        // every case variant as one canonical page.
         if (!page.href) {
             page.href = url.href;
         }
@@ -281,10 +297,16 @@ export default class HyperviewService {
      * @param {string} [options.version] - Page content version used to isolate compiled include cache entries.
      * @param {Object} [options.metadata] - Page metadata used when rendering templated includes.
      * @returns {Promise<Object<string, string>>} Rendered include content keyed by include name.
+     * @throws {AssertionError} When pathname or an include filename is not canonical
      */
     async getIncludes(context, pathname, includes, options) {
         const { useCache = false, version, metadata = {} } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
+
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService.getIncludes: pathname',
+        );
 
         // Process included files. Example:
         // const data = {
@@ -294,17 +316,6 @@ export default class HyperviewService {
         //         body: { filename: 'body.md', template: true },
         //     },
         // };
-
-        let cacheKey;
-        if (useCache && version) {
-            cacheKey = `${ buildId }:${ pathname }:${ version }`;
-            if (this.#includesCache.has(cacheKey)) {
-                const cachedIncludes = this.#includesCache.get(cacheKey);
-                this.#logger.debug('page includes cache hit', { pathname, key: cacheKey });
-                return renderIncludes(cachedIncludes, metadata);
-            }
-            this.#logger.debug('page includes cache miss', { pathname, key: cacheKey });
-        }
 
         // Build a flat list without mutating metadata.includes; the name is
         // carried separately so each loaded file can be assigned to its public key.
@@ -321,16 +332,24 @@ export default class HyperviewService {
         let usesTemplate = false;
 
         const includedFilepaths = includesList.map(({ name, filename, template }) => {
-            if (!isNonEmptyString(filename)) {
-                throw new AssertionError(
-                    `Missing includes[${ name }].filename in metadata for ${ pathname }`,
-                    null,
-                    this.getIncludes,
-                );
-            }
+            assertCanonicalIdentifier(
+                filename,
+                `HyperviewService.getIncludes: includes[${ name }].filename for ${ pathname }`,
+            );
             if (template) usesTemplate = true;
             return joinPageFilepath(pathname, filename);
         });
+
+        let cacheKey;
+        if (useCache && version) {
+            cacheKey = `${ buildId }:${ pathname }:${ version }`;
+            if (this.#includesCache.has(cacheKey)) {
+                const cachedIncludes = this.#includesCache.get(cacheKey);
+                this.#logger.debug('page includes cache hit', { pathname, key: cacheKey });
+                return renderIncludes(cachedIncludes, metadata);
+            }
+            this.#logger.debug('page includes cache miss', { pathname, key: cacheKey });
+        }
 
         const files = await this.#pageDataStore.getTextFiles(context, buildId, includedFilepaths);
 
@@ -386,11 +405,20 @@ export default class HyperviewService {
      * @param {string} pathname - Normalized page pathname, such as `/` or `/blog/post`
      * @param {Object} metadata - The complete page metadata to store as `page.json`
      * @returns {Promise<import('./page-data-store-interface.js').PageDataFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When buildId or pathname is not a non-empty string
+     * @throws {AssertionError} When buildId is empty, pathname is not canonical, or an
+     *   include filename in metadata is not canonical
      */
     async putPageMetadata(context, buildId, pathname, metadata) {
         assertNonEmptyString(buildId, 'HyperviewService page data writes require a buildId');
-        assertNonEmptyString(pathname, 'HyperviewService.putPageMetadata requires a pathname');
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService.putPageMetadata: pathname',
+        );
+        assertIncludeFilenames(
+            metadata.includes,
+            pathname,
+            'HyperviewService.putPageMetadata',
+        );
         const filepath = joinPageFilepath(pathname, 'page.json');
         return await this.#pageDataStore.putJSONFile(context, buildId, filepath, metadata);
     }
@@ -408,12 +436,18 @@ export default class HyperviewService {
      * @param {string} filename - Include filename relative to the page pathname, such as `body.md`
      * @param {string} source - Include source text to store
      * @returns {Promise<import('./page-data-store-interface.js').PageDataFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When buildId, pathname, or filename is not a non-empty string
+     * @throws {AssertionError} When buildId is empty, or pathname or filename is not canonical
      */
     async putIncludeContent(context, buildId, pathname, filename, source) {
         assertNonEmptyString(buildId, 'HyperviewService page data writes require a buildId');
-        assertNonEmptyString(pathname, 'HyperviewService.putIncludeContent requires a pathname');
-        assertNonEmptyString(filename, 'HyperviewService.putIncludeContent requires a filename');
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService.putIncludeContent: pathname',
+        );
+        assertCanonicalIdentifier(
+            filename,
+            'HyperviewService.putIncludeContent: filename',
+        );
         const filepath = joinPageFilepath(pathname, filename);
         return await this.#pageDataStore.putTextFile(context, buildId, filepath, source);
     }
@@ -421,15 +455,18 @@ export default class HyperviewService {
     /**
      * Loads and compiles a shared base template with all available partials.
      * @param {RequestContext} context - Request context passed through to the template file store
-     * @param {string} templateId - Base template identifier understood by the template file store.
-     *   Resolved case-insensitively.
+     * @param {string} templateId - Canonical base template identifier understood by the template file store.
      * @param {Object} [options] - Template loading options
      * @param {boolean} [options.useCache=false] - Reuse compiled templates from this service instance
      * @returns {Promise<Function|null>} Render function, or null when the base template does not exist
+     * @throws {AssertionError} When templateId is not canonical
      * @throws {Error} When a template or partial cannot be compiled
      */
     async getBaseTemplate(context, templateId, options) {
-        templateId = this.#normalizeTemplateId(templateId);
+        assertCanonicalIdentifier(
+            templateId,
+            'HyperviewService.getBaseTemplate: templateId',
+        );
         const { useCache = false } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
 
@@ -460,14 +497,17 @@ export default class HyperviewService {
     /**
      * Loads and compiles a page-specific template with all available partials.
      * @param {RequestContext} context - Request context
-     * @param {string} templateId - Template identifier understood by the template file store.
-     *   Resolved case-insensitively.
+     * @param {string} templateId - Canonical template identifier understood by the template file store.
      * @param {Object} [options] - Template loading options
      * @param {boolean} [options.useCache=false] - Reuse compiled templates from this service instance
      * @returns {Promise<Function|null>} Render function, or null when the page template does not exist
+     * @throws {AssertionError} When templateId is not canonical
      */
     async getPageTemplate(context, templateId, options) {
-        templateId = this.#normalizeTemplateId(templateId);
+        assertCanonicalIdentifier(
+            templateId,
+            'HyperviewService.getPageTemplate: templateId',
+        );
         const { useCache = false } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
 
@@ -502,13 +542,17 @@ export default class HyperviewService {
      * validated at render time, not at write time.
      * @param {RequestContext} context - Request context carrying the current build id
      * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} templateId - Base template filename relative to `base/`. Resolved case-insensitively.
+     * @param {string} templateId - Canonical base template filename relative to `base/`
      * @param {string} source - Template source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
+     * @throws {AssertionError} When templateId is not canonical, buildId is empty, or
+     *   buildId matches the current build id
      */
     async putBaseTemplate(context, buildId, templateId, source) {
-        templateId = this.#normalizeTemplateId(templateId);
+        assertCanonicalIdentifier(
+            templateId,
+            'HyperviewService.putBaseTemplate: templateId',
+        );
         this.#assertWritableBuildId(context, buildId);
         return await this.#templateFileStore.putBaseTemplate(context, buildId, templateId, source);
     }
@@ -521,13 +565,17 @@ export default class HyperviewService {
      * several segments deep, delimited by `/`.
      * @param {RequestContext} context - Request context carrying the current build id
      * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} templateId - Page template filepath relative to `pages/`. Resolved case-insensitively.
+     * @param {string} templateId - Canonical page template filepath relative to `pages/`
      * @param {string} source - Template source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
+     * @throws {AssertionError} When templateId is not canonical, buildId is empty, or
+     *   buildId matches the current build id
      */
     async putPageTemplate(context, buildId, templateId, source) {
-        templateId = this.#normalizeTemplateId(templateId);
+        assertCanonicalIdentifier(
+            templateId,
+            'HyperviewService.putPageTemplate: templateId',
+        );
         this.#assertWritableBuildId(context, buildId);
         return await this.#templateFileStore.putPageTemplate(context, buildId, templateId, source);
     }
@@ -539,13 +587,17 @@ export default class HyperviewService {
      * cross-partial references are resolved at render time, not at write time.
      * @param {RequestContext} context - Request context carrying the current build id
      * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} filepath - Partial filename relative to `partials/`. Resolved case-insensitively.
+     * @param {string} filepath - Canonical partial filename relative to `partials/`
      * @param {string} source - Partial source text to store
      * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When buildId is not a non-empty string, or buildId matches the current build id
+     * @throws {AssertionError} When filepath is not canonical, buildId is empty, or
+     *   buildId matches the current build id
      */
     async putPartial(context, buildId, filepath, source) {
-        filepath = this.#normalizeTemplateId(filepath);
+        assertCanonicalIdentifier(
+            filepath,
+            'HyperviewService.putPartial: filepath',
+        );
         this.#assertWritableBuildId(context, buildId);
         return await this.#templateFileStore.putPartial(context, buildId, filepath, source);
     }
@@ -555,9 +607,9 @@ export default class HyperviewService {
      * @param {RequestContext} context - Request context
      * @param {Object} [options] - Partial loading options
      * @param {boolean} [options.useCache=false] - Reuse compiled partials from this service instance
-     * @returns {Promise<Map<string, Function>>} Partial render functions keyed by template include
-     *   name. Keys resolve case-insensitively: `get`/`has` fold the lookup key, and `set` folds the
-     *   stored key to match.
+     * @returns {Promise<Map<string, Function>>} Partial render functions keyed by canonical
+     *   template include name. `get`/`has` fold reference-side lookup keys.
+     * @throws {AssertionError} When the store returns a non-canonical partial filepath
      */
     async loadPartials(context, options) {
         const { useCache = false } = options ?? {};
@@ -580,6 +632,10 @@ export default class HyperviewService {
 
         for (const { filepath, source } of files) {
             const name = filepath.replace(/^\/?partials\//, '');
+            assertCanonicalIdentifier(
+                name,
+                `HyperviewService.loadPartials: partial filepath ${ filepath }`,
+            );
             const template = this.compileTemplate(filepath, source, this.#customHelpers, partials);
             partials.set(name, template);
         }
@@ -610,17 +666,6 @@ export default class HyperviewService {
         const tree = templating.buildSyntaxTree(null, tokens);
 
         return templating.createRenderFunction(null, helpers, partials, tree);
-    }
-
-    /**
-     * Folds a template id to the case-insensitive form used as a template file
-     * store key. `toLowerCase()` rather than `toLocaleLowerCase()`, so resolution
-     * does not depend on the server's locale.
-     * @param {string} templateId - Base, page, or partial template identifier
-     * @returns {string} The template id folded to lower case
-     */
-    #normalizeTemplateId(templateId) {
-        return templateId.toLowerCase();
     }
 
     /**
@@ -667,11 +712,12 @@ export default class HyperviewService {
      *
      * Builds a stable reference URL that doesn't change with request parameters or fragments.
      * Used for canonical URLs and Open Graph metadata.
-     * @param {URL} url - URL object with protocol, host, and pathname properties
+     * @param {URL} url - URL object with protocol and host properties
+     * @param {string} pathname - Canonical page pathname
      * @returns {string} Canonical URL string (e.g., 'https://example.com/blog/post')
      */
-    #urlToCanonicalURLString(url) {
-        return `${ url.protocol }//${ url.host }${ url.pathname }`;
+    #urlToCanonicalURLString(url, pathname) {
+        return `${ url.protocol }//${ url.host }${ pathname }`;
     }
 }
 
@@ -688,4 +734,15 @@ function renderIncludes(compiledIncludes, metadata) {
 
 function joinPageFilepath(pathname, filename) {
     return `${ pathname.replace(/\/$/, '') }/${ filename }`;
+}
+
+function assertIncludeFilenames(includes, pathname, messagePrefix) {
+    if (!includes) return;
+
+    for (const name of Object.keys(includes)) {
+        assertCanonicalIdentifier(
+            includes[name]?.filename,
+            `${ messagePrefix }: includes[${ name }].filename for ${ pathname }`,
+        );
+    }
 }

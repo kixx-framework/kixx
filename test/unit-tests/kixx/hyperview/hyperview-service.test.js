@@ -81,6 +81,14 @@ async function catchAsyncError(fn) {
     return null;
 }
 
+async function assertIdentifierRejected(fn, message) {
+    const caught = await catchAsyncError(fn);
+
+    assert(caught, 'expected an error to be thrown');
+    assertEqual('AssertionError', caught.name);
+    assertMatches(message, caught.message);
+}
+
 function assertJSONEqual(expected, actual) {
     assertEqual(JSON.stringify(expected), JSON.stringify(actual));
 }
@@ -143,6 +151,22 @@ describe('HyperviewService', ({ describe }) => {
 
             assertEqual(null, result);
         });
+
+        it('rejects a non-canonical pathname before reading the store', async () => {
+            const stores = makeStores();
+            let reads = 0;
+            stores.pageDataStore.getJSONFiles = async () => {
+                reads += 1;
+                return [];
+            };
+            const service = makeService(stores);
+
+            await assertIdentifierRejected(
+                () => service.getPageMetadata(makeContext(), '/Blog'),
+                'HyperviewService.getPageMetadata: pathname',
+            );
+            assertEqual(0, reads);
+        });
     });
 
     describe('page caching', ({ it }) => {
@@ -167,6 +191,32 @@ describe('HyperviewService', ({ describe }) => {
                 [ 'put', context, 'hyperview_page_cache:build-3:/blog:v4', '<p>new</p>', { type: 'text' } ],
             ], calls);
         });
+
+        it('rejects non-canonical pathnames before building cache entries', async () => {
+            const stores = makeStores();
+            let reads = 0;
+            let writes = 0;
+            stores.kvStore.get = async () => {
+                reads += 1;
+                return null;
+            };
+            stores.kvStore.put = async () => {
+                writes += 1;
+            };
+            const service = makeService(stores);
+
+            await assertIdentifierRejected(
+                () => service.getCachedPage(makeContext(), '/Blog', 'v1'),
+                'HyperviewService.getCachedPage: pathname',
+            );
+            await assertIdentifierRejected(
+                () => service.setCachedPage(makeContext(), '/Blog', 'v1', '<p/>'),
+                'HyperviewService.setCachedPage: pathname',
+            );
+
+            assertEqual(0, reads);
+            assertEqual(0, writes);
+        });
     });
 
     describe('mergePageMetadata', ({ it }) => {
@@ -177,13 +227,16 @@ describe('HyperviewService', ({ describe }) => {
                 page: undefined,
             };
 
-            const page = service.mergePageMetadata(new URL('https://example.test/blog?ref=feed#top'), metadata);
+            const page = service.mergePageMetadata(
+                new URL('https://example.test/Blog?ref=feed#top'),
+                metadata,
+            );
 
             assertEqual(page, metadata.page);
             assertJSONEqual({
                 pathname: '/blog',
                 canonical_url: 'https://example.test/blog',
-                href: 'https://example.test/blog?ref=feed#top',
+                href: 'https://example.test/Blog?ref=feed#top',
                 open_graph: {
                     url: 'https://example.test/blog',
                     type: 'website',
@@ -220,8 +273,10 @@ describe('HyperviewService', ({ describe }) => {
         it('renders templated includes with current metadata while caching their compiled form', async () => {
             const stores = makeStores();
             let reads = 0;
-            stores.pageDataStore.getTextFiles = async () => {
+            let receivedFilepaths;
+            stores.pageDataStore.getTextFiles = async (_context, _buildId, filepaths) => {
                 reads += 1;
+                receivedFilepaths = filepaths;
                 return [
                     { filepath: 'blog/summary.html', source: 'Hello {{ person }}' },
                     { filepath: 'blog/body.md', source: 'Static body' },
@@ -246,10 +301,27 @@ describe('HyperviewService', ({ describe }) => {
 
             assertJSONEqual({ summary: 'Hello Ada', body: 'Static body' }, first);
             assertJSONEqual({ summary: 'Hello Lin', body: 'Static body' }, second);
+            assertJSONEqual([ '/blog/summary.html', '/blog/body.md' ], receivedFilepaths);
             assertEqual(1, reads);
         });
 
-        it('rejects include declarations without a filename', async () => {
+        it('omits an include whose canonical file is absent', async () => {
+            const stores = makeStores();
+            stores.pageDataStore.getTextFiles = async () => [
+                { filepath: 'blog/body.md', source: 'Body' },
+                null,
+            ];
+            const service = makeService(stores);
+
+            const result = await service.getIncludes(makeContext(), '/blog', {
+                body: { filename: 'body.md' },
+                missing: { filename: 'missing.md' },
+            });
+
+            assertJSONEqual({ body: 'Body' }, result);
+        });
+
+        it('rejects include declarations without a filename and identifies the page and key', async () => {
             const service = makeService();
             const caught = await catchAsyncError(() => service.getIncludes(
                 makeContext(),
@@ -259,7 +331,44 @@ describe('HyperviewService', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('Missing includes[body].filename', caught.message);
+            assertMatches('HyperviewService.getIncludes: includes[body].filename for /blog', caught.message);
+        });
+
+        it('rejects non-canonical and invalid include filenames', async () => {
+            const service = makeService();
+
+            await assertIdentifierRejected(
+                () => service.getIncludes(
+                    makeContext(),
+                    '/blog',
+                    { hero: { filename: 'Hero.md' } },
+                ),
+                'HyperviewService.getIncludes: includes[hero].filename for /blog',
+            );
+            await assertIdentifierRejected(
+                () => service.getIncludes(
+                    makeContext(),
+                    '/blog',
+                    { body: { filename: '../body.md' } },
+                ),
+                'HyperviewService.getIncludes: includes[body].filename for /blog',
+            );
+        });
+
+        it('rejects a non-canonical pathname before reading includes', async () => {
+            const stores = makeStores();
+            let reads = 0;
+            stores.pageDataStore.getTextFiles = async () => {
+                reads += 1;
+                return [];
+            };
+            const service = makeService(stores);
+
+            await assertIdentifierRejected(
+                () => service.getIncludes(makeContext(), '/Blog', {}),
+                'HyperviewService.getIncludes: pathname',
+            );
+            assertEqual(0, reads);
         });
     });
 
@@ -287,15 +396,78 @@ describe('HyperviewService', ({ describe }) => {
 
         it('loads and renders page templates', async () => {
             const stores = makeStores();
-            stores.templateFileStore.getPageTemplate = async () => ({
-                filepath: 'pages/blog.html',
-                source: '<article>{{ page.title }}</article>',
-            });
+            let receivedTemplateId;
+            stores.templateFileStore.getPageTemplate = async (_context, _buildId, templateId) => {
+                receivedTemplateId = templateId;
+                return {
+                    filepath: 'pages/blog.html',
+                    source: '<article>{{ page.title }}</article>',
+                };
+            };
             const service = makeService(stores);
 
             const template = await service.getPageTemplate(makeContext(), 'blog.html');
 
+            assertEqual('blog.html', receivedTemplateId);
             assertEqual('<article>Notes</article>', template({ page: { title: 'Notes' } }));
+        });
+
+        it('rejects non-canonical template ids before reading or populating the cache', async () => {
+            const stores = makeStores();
+            let baseReads = 0;
+            let pageReads = 0;
+            stores.templateFileStore.getBaseTemplate = async () => {
+                baseReads += 1;
+                return null;
+            };
+            stores.templateFileStore.getPageTemplate = async () => {
+                pageReads += 1;
+                return null;
+            };
+            const service = makeService(stores);
+
+            await assertIdentifierRejected(
+                () => service.getBaseTemplate(makeContext(), 'Site.html', { useCache: true }),
+                'HyperviewService.getBaseTemplate: templateId',
+            );
+            await assertIdentifierRejected(
+                () => service.getPageTemplate(makeContext(), 'Blog.html', { useCache: true }),
+                'HyperviewService.getPageTemplate: templateId',
+            );
+
+            assertEqual(null, await service.getBaseTemplate(makeContext(), 'site.html', { useCache: true }));
+            assertEqual(null, await service.getPageTemplate(makeContext(), 'blog.html', { useCache: true }));
+            assertEqual(1, baseReads);
+            assertEqual(1, pageReads);
+        });
+
+        it('resolves mixed-case partial references against canonical stored names', async () => {
+            const stores = makeStores();
+            stores.templateFileStore.getBaseTemplate = async () => ({
+                filepath: 'base/site.html',
+                source: '<main>{{> Nav.html }}</main>',
+            });
+            stores.templateFileStore.getPartials = async () => [
+                { filepath: 'partials/nav.html', source: 'Navigation' },
+            ];
+            const service = makeService(stores);
+
+            const template = await service.getBaseTemplate(makeContext(), 'site.html');
+
+            assertEqual('<main>Navigation</main>', template({}));
+        });
+
+        it('rejects non-canonical partial filepaths returned by the store', async () => {
+            const stores = makeStores();
+            stores.templateFileStore.getPartials = async () => [
+                { filepath: 'partials/Nav.html', source: 'Navigation' },
+            ];
+            const service = makeService(stores);
+
+            await assertIdentifierRejected(
+                () => service.loadPartials(makeContext()),
+                'HyperviewService.loadPartials: partial filepath',
+            );
         });
     });
 
@@ -324,6 +496,59 @@ describe('HyperviewService', ({ describe }) => {
             ], writes);
         });
 
+        it('rejects non-canonical page data identifiers before writing', async () => {
+            const stores = makeStores();
+            let jsonWrites = 0;
+            let textWrites = 0;
+            stores.pageDataStore.putJSONFile = async () => {
+                jsonWrites += 1;
+            };
+            stores.pageDataStore.putTextFile = async () => {
+                textWrites += 1;
+            };
+            const service = makeService(stores);
+
+            await assertIdentifierRejected(
+                () => service.putPageMetadata(makeContext(), 'next', '/Blog', {}),
+                'HyperviewService.putPageMetadata: pathname',
+            );
+            await assertIdentifierRejected(
+                () => service.putIncludeContent(makeContext(), 'next', '/Blog', 'body.md', 'Body'),
+                'HyperviewService.putIncludeContent: pathname',
+            );
+            await assertIdentifierRejected(
+                () => service.putIncludeContent(makeContext(), 'next', '/blog', 'Body.md', 'Body'),
+                'HyperviewService.putIncludeContent: filename',
+            );
+
+            assertEqual(0, jsonWrites);
+            assertEqual(0, textWrites);
+        });
+
+        it('rejects invalid include metadata and stores valid metadata without rewriting it', async () => {
+            const stores = makeStores();
+            let storedMetadata;
+            stores.pageDataStore.putJSONFile = async (_context, _buildId, _filepath, metadata) => {
+                storedMetadata = metadata;
+            };
+            const service = makeService(stores);
+
+            await assertIdentifierRejected(
+                () => service.putPageMetadata(makeContext(), 'next', '/blog', {
+                    includes: { hero: { filename: 'Hero.md' } },
+                }),
+                'HyperviewService.putPageMetadata: includes[hero].filename for /blog',
+            );
+
+            const metadata = {
+                version: 'v1',
+                includes: { body: { filename: 'body.md', template: true } },
+            };
+            await service.putPageMetadata(makeContext(), 'next', '/blog', metadata);
+
+            assertEqual(metadata, storedMetadata);
+        });
+
         it('rejects template writes to the current build and forwards writes to a new build', async () => {
             const stores = makeStores();
             const writes = [];
@@ -339,6 +564,62 @@ describe('HyperviewService', ({ describe }) => {
             assertEqual('AssertionError', caught.name);
             await service.putBaseTemplate(context, 'next', 'site.html', '<main/>');
             assertJSONEqual([ [ context, 'next', 'site.html', '<main/>' ] ], writes);
+        });
+
+        it('rejects non-canonical template identifiers before writing', async () => {
+            const stores = makeStores();
+            let writes = 0;
+            stores.templateFileStore.putBaseTemplate = async () => {
+                writes += 1;
+            };
+            stores.templateFileStore.putPageTemplate = async () => {
+                writes += 1;
+            };
+            stores.templateFileStore.putPartial = async () => {
+                writes += 1;
+            };
+            const service = makeService(stores);
+
+            await assertIdentifierRejected(
+                () => service.putBaseTemplate(makeContext(), 'next', 'Site.html', '<main/>'),
+                'HyperviewService.putBaseTemplate: templateId',
+            );
+            await assertIdentifierRejected(
+                () => service.putPageTemplate(makeContext(), 'next', 'Blog.html', '<main/>'),
+                'HyperviewService.putPageTemplate: templateId',
+            );
+            await assertIdentifierRejected(
+                () => service.putPartial(makeContext(), 'next', 'Nav.html', 'Navigation'),
+                'HyperviewService.putPartial: filepath',
+            );
+
+            assertEqual(0, writes);
+        });
+
+        it('forwards canonical template identifiers unchanged', async () => {
+            const stores = makeStores();
+            const writes = [];
+            stores.templateFileStore.putBaseTemplate = async (...args) => {
+                writes.push([ 'base', ...args ]);
+            };
+            stores.templateFileStore.putPageTemplate = async (...args) => {
+                writes.push([ 'page', ...args ]);
+            };
+            stores.templateFileStore.putPartial = async (...args) => {
+                writes.push([ 'partial', ...args ]);
+            };
+            const service = makeService(stores);
+            const context = makeContext();
+
+            await service.putBaseTemplate(context, 'next', 'site.html', 'Base');
+            await service.putPageTemplate(context, 'next', 'blog/post.html', 'Page');
+            await service.putPartial(context, 'next', 'shared/nav.html', 'Partial');
+
+            assertJSONEqual([
+                [ 'base', context, 'next', 'site.html', 'Base' ],
+                [ 'page', context, 'next', 'blog/post.html', 'Page' ],
+                [ 'partial', context, 'next', 'shared/nav.html', 'Partial' ],
+            ], writes);
         });
     });
 });

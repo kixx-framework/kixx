@@ -48,7 +48,9 @@ Use `templates/` for page specific and shared templates.
 
 For a request to `/blog/hello-world`, the default page template is `templates/pages/blog/hello-world/page.html`. If the page data sets `"pageTemplate": "article.html"`, Hyperview loads `templates/pages/blog/hello-world/article.html`.
 
-The page handlers lower-case the request pathname before resolving anything from it, and Hyperview lower-cases every base, page, and partial template id before reading or writing it. Together this makes routing and template resolution case-insensitive: `/Blog/Hello-World` and `/blog/hello-world` load the same page data, templates, includes, and page cache entry, and a base template or partial referenced as `Site.html` resolves the file stored under `site.html`. **Name every directory and file under `pages/`, `templates/pages/`, `templates/base/`, and `templates/partials/` in lower case anyway** — a store listing shows the folded lower-case names, and matching what you see there is less confusing. Folding is also what keeps behavior identical across deploy targets: a case-sensitive filesystem and a case-sensitive Cloudflare KV store would otherwise resolve a differently-cased request to a different key than a case-insensitive one.
+Every identifier Hyperview turns into a storage key must be valid and canonical (lower case). This rule covers all five file types: base templates under `templates/base/`, page templates under `templates/pages/`, partial templates under `templates/partials/`, page data `page.json` files under `pages/`, and text files named by `includes[*].filename`. It also applies to the `baseTemplate` and `pageTemplate` addresses authored inside `page.json`.
+
+Public request pathnames and publishing-API wildcard filepaths are validated and folded at the HTTP edge, so `/Blog/Hello-World` and `/blog/hello-world` resolve the same page data, templates, includes, and page cache entry. Authored addresses inside `page.json` and files discovered in a store listing are not silently corrected: the publishing API rejects an invalid or non-canonical include filename with a 400 response naming the include key, while invalid checked-in page data or a non-canonical stored template produces an `AssertionError` when Hyperview loads it. Partial references inside template markup remain case-insensitive, so `{{> Website/Header.html }}` can resolve the canonically stored `website/header.html`; this does not relax the lower-case rule for the stored filename.
 
 ### Page Context Data
 
@@ -81,9 +83,9 @@ Included files can be used as raw text or rendered as mini templates against the
 
 When a `page` object exists, Hyperview fills several metadata defaults:
 
-- `page.pathname` is the request URL pathname.
-- `page.canonical_url` defaults to the request URL without query string or hash.
-- `page.href` defaults to the full request URL.
+- `page.pathname` is the canonical lower-case request URL pathname.
+- `page.canonical_url` defaults to the canonical lower-case request URL without query string or hash.
+- `page.href` defaults to the full request URL exactly as requested.
 - `page.open_graph.url` defaults to `page.canonical_url`.
 - `page.open_graph.type` defaults to `website`.
 - `page.open_graph.title`, `description`, and `locale` default to the corresponding `page` values.

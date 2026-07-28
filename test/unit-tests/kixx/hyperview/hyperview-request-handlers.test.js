@@ -128,6 +128,22 @@ describe('Hyperview request handlers', ({ describe }) => {
                 assertEqual('version-1', args[2]);
             });
 
+            it('uses one page cache key for mixed-case URL variants', async () => {
+                const service = makeService();
+                const handler = HyperviewStaticPageHandler({
+                    usePageCache: true,
+                    baseTemplate: 'base.html',
+                });
+
+                await handler(makeContext(service), makeRequest('/Platform'), makeResponse());
+                await handler(makeContext(service), makeRequest('/platform'), makeResponse());
+
+                assertEqual('/platform', service.getCachedPage.mock.getCall(0).arguments[1]);
+                assertEqual('/platform', service.getCachedPage.mock.getCall(1).arguments[1]);
+                assertEqual('/platform', service.setCachedPage.mock.getCall(0).arguments[1]);
+                assertEqual('/platform', service.setCachedPage.mock.getCall(1).arguments[1]);
+            });
+
             it('caches the rendered page after a cache miss', async () => {
                 const service = makeService();
                 const handler = HyperviewStaticPageHandler({
@@ -274,6 +290,16 @@ function describeSharedPageHandlerBehavior(describe, { createHandler, handlerNam
             await handler(makeContext(service), makeRequest('/platform.json'), makeResponse());
 
             assertEqual('/platform', service.getPageMetadata.mock.getCall(0).arguments[1]);
+        });
+
+        it('normalizes a mixed-case index JSON pathname', async () => {
+            const service = makeService();
+            const handler = createHandler({ baseTemplate: 'base.html' });
+
+            await handler(makeContext(service), makeRequest('/Blog/Index.json'), makeResponse());
+
+            assertEqual('/blog/', service.getPageMetadata.mock.getCall(0).arguments[1]);
+            assertEqual('/blog/page.html', service.getPageTemplate.mock.getCall(0).arguments[1]);
         });
 
         it('uses the pathname option instead of the request URL', async () => {

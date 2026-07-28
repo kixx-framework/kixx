@@ -1,5 +1,6 @@
 import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
 import { BadRequestError } from '../../../../kixx/errors/mod.js';
+import { normalizeIdentifier } from '../../../../kixx/hyperview/canonical-identifiers.js';
 import validatePathname from '../../../../kixx/utils/validate-pathname.js';
 
 
@@ -32,20 +33,9 @@ export function getWildcardPathname(request, name) {
 
     rejectEmptyPathSegments(segments, 'Page pathname');
 
-    // Reject path traversal and out-of-whitelist characters at the edge (400)
-    // rather than relying on a downstream store assertion (500). Validate the
-    // segments as the client sent them so the error message echoes the request.
-    const pathname = validatePathname(`/${ segments.join('/') }`);
-
-    // Page reads fold the URL pathname to lower case (normalizePagePathname() in
-    // hyperview-request-handlers.js) so a page resolves to one key whether the
-    // deploy target's store is case-sensitive or not. Writes must fold to the
-    // same key: without this, a page published with any upper case character is
-    // stored where no request can read it (a silent 404 on Cloudflare KV or
-    // Linux), while a case-insensitive dev filesystem hides the bug entirely.
-    // Folding before the caller builds its URN also keeps case variants from
-    // addressing one stored page under several authorization URNs.
-    return pathname.toLowerCase();
+    // Validate before folding so errors report the client-supplied pathname.
+    // The canonical result is shared by authorization and the write handler.
+    return normalizeIdentifier(`/${ segments.join('/') }`);
 }
 
 /**
@@ -102,13 +92,9 @@ export function getWildcardFilepath(request, name, { label, requiredCode }) {
 export function getWildcardTemplateFilepath(request, name) {
     const filepath = getWildcardFilepath(request, name, TEMPLATE_FILEPATH_OPTIONS);
 
-    // HyperviewService.#normalizeTemplateId() folds every template id to lower
-    // case on reads *and* writes, so the stored key never carries the case the
-    // client sent. Storage is therefore already consistent without this fold; what
-    // it fixes is the handler's report. The response id and filepath are built
-    // from this return value, so folding here is what keeps them naming the key
-    // that was actually written instead of the raw URL wildcard.
-    return filepath.toLowerCase();
+    // HyperviewService asserts that template identifiers are canonical, so the
+    // publishing edge must fold before authorization reports or writes the key.
+    return normalizeIdentifier(filepath);
 }
 
 /**
@@ -138,25 +124,13 @@ export function splitIncludeFilepath(request, name) {
     // actually is.
     rejectEmptyPathSegments(segments, 'Include filepath');
 
-    // Reject path traversal and out-of-whitelist characters at the edge (400)
-    // rather than relying on a downstream store assertion (500). Validate the
-    // segments as the client sent them so the error message echoes the request.
-    validatePathname(segments.join('/'));
-
-    // Only the directory segments fold to lower case. They become the page
-    // pathname, which Hyperview lower-cases on every read, so an unfolded write
-    // is unreadable — see getWildcardPathname() above. The filename must keep its
-    // case: reads resolve it verbatim from the owning page's
-    // `includes[name].filename` metadata value (HyperviewService.getIncludes),
-    // so folding it here would store the file under a name the metadata that
-    // references it never names.
-    const filename = segments[segments.length - 1];
-    const pathnameSegments = segments.slice(0, -1).map((segment) => segment.toLowerCase());
+    const filepath = normalizeIdentifier(segments.join('/'));
+    const canonicalSegments = filepath.split('/');
+    const filename = canonicalSegments[canonicalSegments.length - 1];
+    const pathnameSegments = canonicalSegments.slice(0, -1);
 
     return {
-        // Recombine from the folded segments so the authorization URN and the
-        // response id both describe the key that actually gets written.
-        filepath: pathnameSegments.concat(filename).join('/'),
+        filepath,
         pathname: pathnameSegments.length > 0 ? `/${ pathnameSegments.join('/') }` : '/',
         filename,
     };

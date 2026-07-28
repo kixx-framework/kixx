@@ -154,10 +154,10 @@ describe('publishing API authorization middleware', ({ describe }) => {
             assertEqual('ok', requireIncludePermission(context, request, 'ok'));
         });
 
-        it('resolves the URN with folded directories and a verbatim filename', () => {
+        it('resolves the URN from the fully canonical include filepath', () => {
             const context = makeContext([ allow(
                 'urn:kixx:publishing:include:put',
-                'urn:kixx:publishing:include:blog/MainBody.md',
+                'urn:kixx:publishing:include:blog/mainbody.md',
             ) ]);
             const request = makeRequest({ filepath: [ 'Blog', 'MainBody.md' ] });
 

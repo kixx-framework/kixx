@@ -68,6 +68,76 @@ describe('putPageMetadata publishing API handler', ({ it }) => {
         assertEqual('/blog/hello', response.document.data.id);
     });
 
+    it('stores a canonical includes map without rewriting the metadata', async () => {
+        const service = makeHyperviewService();
+        const attributes = {
+            version: '1',
+            includes: {
+                hero: {
+                    filename: 'content/hero.md',
+                    template: true,
+                },
+            },
+        };
+        const response = makeResponse();
+
+        await putPageMetadata(
+            makeContext({ service }),
+            makeRequest({ pathname: [ 'Blog' ], attributes }),
+            response,
+        );
+
+        assertEqual('content/hero.md', service.writes[0].metadata.includes.hero.filename);
+        assertEqual(true, service.writes[0].metadata.includes.hero.template);
+        assertEqual('content/hero.md', response.document.data.attributes.includes.hero.filename);
+    });
+
+    it('rejects a non-canonical include filename as a client error naming the include key', async () => {
+        const service = makeHyperviewService();
+        const caught = await catchAsyncError(() => {
+            return putPageMetadata(
+                makeContext({ service }),
+                makeRequest({
+                    pathname: [ 'blog' ],
+                    attributes: {
+                        version: '1',
+                        includes: { hero: { filename: 'Hero.md' } },
+                    },
+                }),
+                makeResponse(),
+            );
+        });
+
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('BadRequestError', caught.name);
+        assertEqual(400, caught.httpStatusCode);
+        assertMatches('includes[hero].filename', caught.message);
+        assertEqual(0, service.writes.length);
+    });
+
+    it('rejects an invalid include filename as a client error naming the include key', async () => {
+        const service = makeHyperviewService();
+        const caught = await catchAsyncError(() => {
+            return putPageMetadata(
+                makeContext({ service }),
+                makeRequest({
+                    pathname: [ 'blog' ],
+                    attributes: {
+                        version: '1',
+                        includes: { body: { filename: '../body.md' } },
+                    },
+                }),
+                makeResponse(),
+            );
+        });
+
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('BadRequestError', caught.name);
+        assertEqual(400, caught.httpStatusCode);
+        assertMatches('includes[body].filename', caught.message);
+        assertEqual(0, service.writes.length);
+    });
+
     it('writes the site root when the wildcard pathname is absent', async () => {
         const service = makeHyperviewService();
         const response = makeResponse();

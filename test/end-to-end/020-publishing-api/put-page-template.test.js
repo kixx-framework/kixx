@@ -258,14 +258,9 @@ describe('PUT /publishing-api/v1/templates/pages/*filepath with a mixed case fil
         assertEqual(mixedCaseUrl.href, mixedCaseResponse.url);
     });
 
-    // Hyperview folds every base, page, and partial template id to lower case
-    // before reading or writing it (HyperviewService#normalizeTemplateId), so the
-    // template is stored at `pages/e2e/nested/case-check.html` no matter which
-    // spelling was requested. Reporting the URL wildcard unchanged would hand the
-    // client a filepath naming a key that does not exist. Every segment carries
-    // upper case here, so folding only the directory segments and preserving the
-    // filename — the rule splitIncludeFilepath() applies to includes — would fail
-    // this, which is the mistake a nested filepath makes possible.
+    // The publishing edge normalizes every template filepath segment before
+    // authorization and the storage write. Reporting that canonical filepath
+    // gives the client the same address the service asserts and the store uses.
     it('returns the filepath folded to lower case', () => {
         assertEqual(FOLDED_TEMPLATE_FILEPATH, mixedCaseBody.data.attributes.filepath);
         assertEqual(FOLDED_TEMPLATE_FILEPATH, mixedCaseBody.data.id);

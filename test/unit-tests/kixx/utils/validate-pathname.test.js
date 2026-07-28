@@ -1,7 +1,9 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import validatePathname from '../../../../src/kixx/utils/validate-pathname.js';
+import validatePathname, {
+    isValidPathname,
+} from '../../../../src/kixx/utils/validate-pathname.js';
 
 
 function catchError(fn) {
@@ -41,6 +43,10 @@ describe('validatePathname', ({ describe }) => {
         it('accepts an empty string', () => {
             assertEqual('', validatePathname(''));
         });
+
+        it('exposes the pathname rule as a predicate', () => {
+            assert(isValidPathname('/Assets/file_name-v2.0.min.js'));
+        });
     });
 
     describe('path traversal', ({ it }) => {
@@ -58,6 +64,7 @@ describe('validatePathname', ({ describe }) => {
 
             assert(error, 'expected an error to be thrown');
             assertEqual('BadRequestError', error.name);
+            assertEqual(false, isValidPathname('/pages/a..b'));
         });
 
         it('rejects a pathname containing "//"', () => {
@@ -75,6 +82,7 @@ describe('validatePathname', ({ describe }) => {
 
             assert(error, 'expected an error to be thrown');
             assertEqual('BadRequestError', error.name);
+            assertEqual(false, isValidPathname('/pages/.env'));
         });
 
         it('rejects a single-dot segment', () => {
@@ -91,6 +99,7 @@ describe('validatePathname', ({ describe }) => {
 
             assert(error, 'expected an error to be thrown');
             assertEqual('BadRequestError', error.name);
+            assertEqual(false, isValidPathname('/pages/my file.html'));
         });
 
         it('rejects URL query and fragment metacharacters', () => {

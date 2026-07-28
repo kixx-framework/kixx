@@ -67,7 +67,7 @@ describe('putPageInclude publishing API handler', ({ it }) => {
         assertEqual('body.md', response.document.data.id);
     });
 
-    it('folds directory segments but writes the filename verbatim', async () => {
+    it('writes and echoes the fully canonical filepath', async () => {
         const service = makeHyperviewService();
         const response = makeResponse();
 
@@ -78,8 +78,9 @@ describe('putPageInclude publishing API handler', ({ it }) => {
         );
 
         assertEqual('/blog', service.writes[0].pathname);
-        assertEqual('MainBody.md', service.writes[0].filename);
-        assertEqual('blog/MainBody.md', response.document.data.id);
+        assertEqual('mainbody.md', service.writes[0].filename);
+        assertEqual('blog/mainbody.md', response.document.data.id);
+        assertEqual('mainbody.md', response.document.data.attributes.filename);
     });
 
     it('accepts any text/* media type', async () => {

@@ -179,11 +179,7 @@ describe('publishing API route params', ({ describe }) => {
             assertEqual('blog/byline.html', getWildcardTemplateFilepath(request, 'filepath'));
         });
 
-        // HyperviewService#normalizeTemplateId folds every template id on reads and
-        // writes, so folding here does not move where the template lands. It makes
-        // the returned value — which becomes the response id and filepath — name
-        // the key that was actually written rather than the raw URL wildcard.
-        it('folds the filepath to the lower case key Hyperview stores it under', () => {
+        it('folds the filepath to the canonical key Hyperview requires', () => {
             const request = makeRequest({ filepath: [ 'Blog', 'MainPage.HTML' ] });
             assertEqual('blog/mainpage.html', getWildcardTemplateFilepath(request, 'filepath'));
         });
@@ -243,20 +239,21 @@ describe('publishing API route params', ({ describe }) => {
             assertEqual('body.md', result.filename);
         });
 
-        it('folds directory segments to lower case', () => {
-            const request = makeRequest({ filepath: [ 'Blog', 'Hello', 'body.md' ] });
+        it('folds every filepath segment to lower case', () => {
+            const request = makeRequest({ filepath: [ 'Blog', 'Hello', 'Body.md' ] });
             const result = splitIncludeFilepath(request, 'filepath');
 
             assertEqual('blog/hello/body.md', result.filepath);
             assertEqual('/blog/hello', result.pathname);
+            assertEqual('body.md', result.filename);
         });
 
-        it('preserves the filename case, because reads resolve it verbatim from page metadata', () => {
+        it('returns a canonical filename for a mixed-case request', () => {
             const request = makeRequest({ filepath: [ 'Blog', 'MainBody.md' ] });
             const result = splitIncludeFilepath(request, 'filepath');
 
-            assertEqual('MainBody.md', result.filename);
-            assertEqual('blog/MainBody.md', result.filepath);
+            assertEqual('mainbody.md', result.filename);
+            assertEqual('blog/mainbody.md', result.filepath);
         });
 
         it('rejects a missing filepath param', () => {

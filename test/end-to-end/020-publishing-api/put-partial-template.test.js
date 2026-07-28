@@ -269,14 +269,9 @@ describe('PUT /publishing-api/v1/templates/partials/*filepath with a mixed case 
         assertEqual(mixedCaseUrl.href, mixedCaseResponse.url);
     });
 
-    // Hyperview folds every base, page, and partial template id to lower case
-    // before reading or writing it (HyperviewService#normalizeTemplateId), so the
-    // partial is stored at `partials/e2e/nested/case-check.html` no matter which
-    // spelling was requested. Reporting the URL wildcard unchanged would hand the
-    // client a filepath naming a key that does not exist. Every segment carries
-    // upper case here, so folding only the directory segments and preserving the
-    // filename — the rule splitIncludeFilepath() applies to includes — would fail
-    // this, which is the mistake a nested filepath makes possible.
+    // The publishing edge normalizes every partial filepath segment before
+    // authorization and the storage write. Reporting that canonical filepath
+    // gives the client the same address the service asserts and the store uses.
     it('returns the filepath folded to lower case', () => {
         assertEqual(FOLDED_TEMPLATE_FILEPATH, mixedCaseBody.data.attributes.filepath);
         assertEqual(FOLDED_TEMPLATE_FILEPATH, mixedCaseBody.data.id);
@@ -287,9 +282,9 @@ describe('PUT /publishing-api/v1/templates/partials/*filepath with a mixed case 
     // Both spellings resolve to one stored partial. That cannot be observed
     // directly from here — templates have no GET route, and TEST_BUILD_ID is not
     // the live build — so this pins the visible half of the contract: the two URLs
-    // are answered as the same resource. Include names resolve case-insensitively
-    // too (loadPartials() keys a CaseInsensitiveMap), so the folded filepath
-    // reported here is the name a template would use to include it.
+    // are answered as the same resource. Partial references in template source
+    // resolve case-insensitively, while the stored filepath reported here remains
+    // canonical.
     it('returns an identical payload for the already-folded filepath', () => {
         assertEqual(200, foldedResponse.status);
         // Both payloads come from the same handler expression, so their key

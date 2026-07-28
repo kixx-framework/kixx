@@ -7,7 +7,9 @@ import {
 } from '../assertions/mod.js';
 import deepMerge from '../utils/deep-merge.js';
 
-import validatePathname from '../utils/validate-pathname.js';
+import {
+    normalizeIdentifier,
+} from './canonical-identifiers.js';
 
 
 const INDEX_FILE_PATTERN = /(?:^|\/)index\.(html|json|xml|md)$/;
@@ -57,8 +59,7 @@ const FORMAT_EXTENSION_PATTERN = /\.json$/;
  * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
  *   per-page via `metadata.baseTemplate`.
  * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`.
- *   Can be overridden per-page via `metadata.pageTemplate`. HyperviewService resolves
- *   the ID case-insensitively.
+ *   Can be overridden per-page via `metadata.pageTemplate`. The ID must be canonical.
  * @returns {function(RequestContext, ServerRequestInterface, ServerResponse): Promise<ServerResponse>}
  *   Async request handler for the router pipeline.
  */
@@ -98,17 +99,15 @@ export function HyperviewStaticPageHandler(options) {
 
         let pathname;
         if (isNonEmptyString(options.pathname)) {
-            pathname = normalizePagePathname(options.pathname);
+            pathname = normalizeIdentifier(options.pathname);
         } else {
-            pathname = normalizePagePathname(url.pathname);
+            pathname = normalizeIdentifier(url.pathname);
             pathname = stripIndexFile(pathname, indexFilePattern);
             // Strip format extension from the last path segment so content negotiation
             // extensions like .json don't change which page data is loaded.
             // /platform.json and /platform both load from pages/platform/page.json.
             pathname = pathname.replace(formatExtensionPattern, '');
         }
-
-        pathname = validatePathname(pathname);
 
         const service = context.getService('Hyperview');
 
@@ -219,11 +218,10 @@ export function HyperviewStaticPageHandler(options) {
  * @param {boolean} [options.useTemplateCache] - Reuse compiled templates, partials, and includes.
  *   Falls back to `config.env.HYPERVIEW.USE_TEMPLATE_CACHE`.
  * @param {string} [options.pathname] - Override the pathname derived from the request URL.
-* @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
+ * @param {string} [options.baseTemplate] - Default base template ID. Can be overridden
  *   per-page via `metadata.baseTemplate`.
  * @param {string} [options.pageTemplate] - Default page template ID. Defaults to `[pathname]/page.html`.
- *   Can be overridden per-page via `metadata.pageTemplate`. HyperviewService resolves
- *   the ID case-insensitively.
+ *   Can be overridden per-page via `metadata.pageTemplate`. The ID must be canonical.
  * @returns {function(RequestContext, ServerRequestInterface, ServerResponse): Promise<ServerResponse>}
  *   Async request handler for the router pipeline.
  */
@@ -253,9 +251,9 @@ export function HyperviewDynamicPageHandler(options) {
 
         let pathname;
         if (isNonEmptyString(options.pathname)) {
-            pathname = normalizePagePathname(options.pathname);
+            pathname = normalizeIdentifier(options.pathname);
         } else {
-            pathname = normalizePagePathname(url.pathname);
+            pathname = normalizeIdentifier(url.pathname);
             pathname = stripIndexFile(pathname, indexFilePattern);
             // Strip format extension from the last path segment so content negotiation
             // extensions like .json don't change which page data is loaded.
@@ -263,7 +261,6 @@ export function HyperviewDynamicPageHandler(options) {
             pathname = pathname.replace(formatExtensionPattern, '');
         }
 
-        pathname = validatePathname(pathname);
         const service = context.getService('Hyperview');
 
         const pageContent = await service.getPageMetadata(context, pathname);
@@ -332,16 +329,6 @@ export function HyperviewDynamicPageHandler(options) {
     };
 }
 
-
-// Page pathnames are the lookup key for page data, templates, includes, and page
-// cache entries, and those resolve to filesystem paths on some deploy targets. A
-// case-sensitive filesystem would 404 `/Platform` while a case-insensitive one
-// served it, so the same URL would behave differently per host.Folding to lower
-// case here makes Hyperview routing case-insensitive everywhere, and makes the
-// deploy target's filesystem irrelevant to which page a URL resolves to.
-function normalizePagePathname(pathname) {
-    return pathname.toLowerCase();
-}
 
 function stripIndexFile(pathname, indexFilePattern) {
     return pathname.replace(indexFilePattern, (match) => {

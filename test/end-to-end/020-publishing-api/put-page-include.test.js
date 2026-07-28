@@ -3,6 +3,7 @@ import { describe } from 'kixx-test';
 import {
     assert,
     assertEqual,
+    assertMatches,
     isNonEmptyString,
     isPlainObject,
 } from 'kixx-assert';
@@ -30,13 +31,18 @@ const INCLUDE_FILENAME = 'body.md';
 const ROOT_INCLUDE_FILEPATH = 'e2e-root-include.md';
 
 // Mixed case in both directory segments and in the filename, including the
-// extension. Only the directory segments may be folded, so a filepath with upper
-// case on both sides of the split is the only shape that fails a fold applied to
-// all of it or to none of it.
+// extension, so a fold applied to only part of the filepath still fails.
 const MIXED_CASE_INCLUDE_FILEPATH = 'E2E/Nested/Body-Copy.MD';
 const MIXED_CASE_INCLUDE_PATHNAME = '/e2e/nested';
-const MIXED_CASE_INCLUDE_FILENAME = 'Body-Copy.MD';
-const MIXED_CASE_REPORTED_FILEPATH = 'e2e/nested/Body-Copy.MD';
+const MIXED_CASE_INCLUDE_FILENAME = 'body-copy.md';
+const MIXED_CASE_REPORTED_FILEPATH = 'e2e/nested/body-copy.md';
+
+// Includes and page metadata may be written to the live build, unlike
+// templates. This page owns the round-trip resources which prove a mixed-case
+// include write and a canonical metadata reference resolve to the same key.
+const ROUND_TRIP_PAGE_PATHNAME = 'e2e/nested/canonical-include-round-trip';
+const ROUND_TRIP_INCLUDE_FILEPATH = 'E2E/Nested/Canonical-Include-Round-Trip/Body.MD';
+const ROUND_TRIP_INCLUDE_FILENAME = 'body.md';
 
 // Each block writes its own filepath so the blocks stay independent within the
 // shared build namespace and none of them overwrites another's target.
@@ -88,6 +94,28 @@ async function putPageInclude(url, source, options) {
 
 async function readFixtureSource() {
     return await fsp.readFile(FIXTURE_URL, 'utf8');
+}
+
+async function putPageMetadata(url, metadata, buildId) {
+    const token = await getPublishingApiToken();
+
+    const response = await fetch(url, {
+        method: 'PUT',
+        redirect: 'manual',
+        headers: {
+            authorization: `Bearer ${ token }`,
+            'content-type': 'application/vnd.api+json',
+            'kixx-build-id': buildId,
+        },
+        body: JSON.stringify({
+            data: {
+                type: 'PageMetadata',
+                attributes: metadata,
+            },
+        }),
+    });
+
+    return { response, body: await response.json() };
 }
 
 
@@ -190,34 +218,88 @@ describe('PUT /publishing-api/v1/includes/*filepath with a mixed case filepath',
         assertEqual(url.href, result.response.url);
     });
 
-    // The two halves of the filepath follow opposite case rules, which is what
-    // makes this the one test that separates the include rule from the template
-    // rule:
-    //
-    // - The directory segments become the page pathname, and Hyperview folds
-    //   every page pathname to lower case on reads, so an unfolded write is
-    //   stored where no request can find it.
-    // - The filename is resolved verbatim from the owning page's
-    //   `includes[name].filename` metadata value (HyperviewService.getIncludes),
-    //   so folding it would store the file under a name the metadata that
-    //   references it never names.
-    //
-    // The template endpoints fold the whole filepath, so a change that
-    // harmonized the two would fold the filename here and pass every other test
-    // in this file.
-    it('folds the directory segments and preserves the filename case', () => {
+    // The filepath is one Hyperview address even though the response decomposes
+    // it into the owning page pathname and page-relative filename. Both values
+    // must therefore report the same canonical spelling used for authorization
+    // and the storage write.
+    it('folds the pathname and filename to lower case', () => {
         assertEqual(MIXED_CASE_INCLUDE_PATHNAME, result.body.data.attributes.pathname);
         assertEqual(MIXED_CASE_INCLUDE_FILENAME, result.body.data.attributes.filename);
         assertEqual(TEST_BUILD_ID, result.body.data.attributes.buildId);
     });
 
-    // The id recombines the folded directory segments with the unfolded
-    // filename, so it names the key that was actually written rather than the
-    // wildcard as sent.
+    // The id recombines the two canonical values, so it names the key that was
+    // authorized and written rather than echoing the wildcard as sent.
     it('returns the recombined filepath as the resource id', () => {
         assertEqual(MIXED_CASE_REPORTED_FILEPATH, result.body.data.id);
     });
 });
+
+// This block writes into the deployment's live build because a normal page
+// request cannot render TEST_BUILD_ID. The configured current build id is
+// required both to address the two writes explicitly and to avoid mutating an
+// unknown deployment namespace.
+describe('PUT a mixed case include and render it through canonical page metadata', ({ before, it }) => {
+
+    let includeResult;
+    let metadataResult;
+    let pageUrl;
+    let pageResponse;
+    let pageBody;
+
+    before(async () => {
+        const includeUrl = new URL(
+            `${ getBaseUrl() }/publishing-api/v1/includes/${ ROUND_TRIP_INCLUDE_FILEPATH }`,
+        );
+        const metadataUrl = new URL(
+            `${ getBaseUrl() }/publishing-api/v1/pages/${ ROUND_TRIP_PAGE_PATHNAME }`,
+        );
+        pageUrl = new URL(`${ getBaseUrl() }/${ ROUND_TRIP_PAGE_PATHNAME }`);
+
+        includeResult = await putPageInclude(
+            includeUrl,
+            await readFixtureSource(),
+            { buildId: CURRENT_BUILD_ID },
+        );
+
+        metadataResult = await putPageMetadata(metadataUrl, {
+            version: crypto.randomUUID(),
+            baseTemplate: 'default.html',
+            pageTemplate: 'default.html',
+            page: {
+                title: 'Canonical Include Round-Trip',
+                description: 'End-to-end canonical include identifier coverage',
+            },
+            includes: {
+                body: { filename: ROUND_TRIP_INCLUDE_FILENAME },
+            },
+        }, CURRENT_BUILD_ID);
+
+        pageResponse = await fetch(pageUrl);
+        pageBody = await pageResponse.text();
+    });
+
+    it('publishes both resources to the same canonical live-build address', () => {
+        assertEqual(200, includeResult.response.status);
+        assertEqual(
+            `${ ROUND_TRIP_PAGE_PATHNAME }/${ ROUND_TRIP_INCLUDE_FILENAME }`,
+            includeResult.body.data.id,
+        );
+        assertEqual(CURRENT_BUILD_ID, includeResult.body.data.attributes.buildId);
+
+        assertEqual(200, metadataResult.response.status);
+        assertEqual(`/${ ROUND_TRIP_PAGE_PATHNAME }`, metadataResult.body.data.id);
+        assertEqual(CURRENT_BUILD_ID, metadataResult.body.data.meta.buildId);
+    });
+
+    it('renders the canonical include content from the mixed case publish URL', () => {
+        assert(pageResponse);
+        assertEqual(200, pageResponse.status);
+        assertEqual(pageUrl.href, pageResponse.url);
+        assertEqual('text/html; charset=utf-8', pageResponse.headers.get('content-type'));
+        assertMatches('End-to-End Test Include', pageBody);
+    });
+}, { disabled: CURRENT_BUILD_ID === null });
 
 describe('PUT /publishing-api/v1/includes/*filepath with a text/markdown content type', ({ before, it }) => {
 

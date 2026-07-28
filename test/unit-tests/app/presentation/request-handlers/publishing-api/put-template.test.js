@@ -111,11 +111,9 @@ describe('putTemplate publishing API handlers', ({ describe, it }) => {
     });
 
     it('folds the filepath case to the key Hyperview stores it under', async () => {
-        // HyperviewService#normalizeTemplateId folds every template id on reads
-        // *and* writes, so the store never sees the case the client sent. Folding
-        // here does not change where the template lands; it keeps the reported
-        // filepath naming the key that was actually written. Reporting the raw URL
-        // wildcard would hand the client a filepath matching no stored key.
+        // The publishing edge folds before calling HyperviewService, whose
+        // canonical-identifier assertion prevents a differently-cased key from
+        // reaching the store.
         const service = makeHyperviewService();
         const response = makeResponse();
 

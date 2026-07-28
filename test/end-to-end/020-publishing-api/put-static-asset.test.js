@@ -244,10 +244,9 @@ describe('PUT /publishing-api/v1/assets/*filepath with a mixed case filepath', (
     // Assets are the one publishing resource whose filepath is case-preserving,
     // and the reason is the read path: StaticFileRequestHandler looks the URL
     // pathname up in the store verbatim, so an asset published under a folded key
-    // is unreachable at the URL that names it. The template endpoints fold the
-    // whole filepath and the include endpoint folds its directory segments, so
-    // this assertion is what keeps a change that harmonized the three from
-    // reaching the one place the fold is wrong.
+    // is unreachable at the URL that names it. Hyperview template, page, and
+    // include addresses are canonicalized instead, so this assertion keeps that
+    // intentionally narrower policy from reaching static assets.
     it('preserves the filepath case exactly as sent', () => {
         assertEqual(MIXED_CASE_ASSET_FILEPATH, result.body.data.attributes.filepath);
         assertEqual(MIXED_CASE_ASSET_FILEPATH, result.body.data.id);
