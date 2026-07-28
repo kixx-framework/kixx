@@ -139,11 +139,9 @@ Use `@throws` for meaningful caller-visible failure modes.
  */
 ```
 
-Prefer the error class that callers can reasonably catch or that the framework
-will translate. Do not document every assertion in a deeply private helper
-unless it changes how the public API is used.
+Prefer the error class that callers can reasonably catch or that the framework will translate. Do not document every assertion in a deeply private helper unless it changes how the public API is used.
 
-Name error classes in `@throws` with a bare class name, not an `import()` path,
+Error classes from `kixx/errors/` shoud be named with a bare class name in `@throws`; not an `import()` path,
 even though `@param` and `@returns` in the same block use paths:
 
 ```javascript
@@ -154,11 +152,7 @@ even though `@param` and `@returns` in the same block use paths:
  */
 ```
 
-The two tags are doing different jobs. A `@param` or `@returns` type identifies a
-structural contract the reader may need to look up, so the path earns its length.
-An error class is named for the condition it signals, and the whole application
-shares one error module (`src/kixx/errors/`), so the bare name is already
-unambiguous and reads better in a list of failure modes.
+The two tags are doing different jobs. A `@param` or `@returns` type identifies a structural contract the reader may need to look up, so the path earns its length. An error class is named for the condition it signals.
 
 ## Do Not Use JSDoc for Module-Private Functions
 
