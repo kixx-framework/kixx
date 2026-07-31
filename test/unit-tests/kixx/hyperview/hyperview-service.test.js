@@ -2,6 +2,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertUndefined } from 'kixx-assert';
 
 import HyperviewService from '../../../../src/kixx/hyperview/hyperview-service.js';
+import { NO_BUILD_ID_SEGMENT } from '../../../../src/kixx/utils/build-id.js';
 
 
 function makeContext(buildId = 'build-1') {
@@ -10,6 +11,10 @@ function makeContext(buildId = 'build-1') {
             build: { id: buildId },
         },
     };
+}
+
+function makeContextWithoutBuild() {
+    return { runtime: {} };
 }
 
 function makeLogger() {
@@ -150,6 +155,26 @@ describe('HyperviewService', ({ describe }) => {
             const result = await service.getPageMetadata(makeContext(), '/missing');
 
             assertEqual(null, result);
+        });
+
+        it('uses the no-build placeholder in metadata when the runtime Build ID is null', async () => {
+            const stores = makeStores();
+            stores.pageDataStore.getJSONFiles = async () => [ { json: { version: 'root' } } ];
+            const service = makeService(stores);
+
+            const result = await service.getPageMetadata(makeContext(null), '/');
+
+            assertEqual(NO_BUILD_ID_SEGMENT, result.metadata.build_id);
+        });
+
+        it('uses the no-build placeholder in metadata when the runtime has no build', async () => {
+            const stores = makeStores();
+            stores.pageDataStore.getJSONFiles = async () => [ { json: { version: 'root' } } ];
+            const service = makeService(stores);
+
+            const result = await service.getPageMetadata(makeContextWithoutBuild(), '/');
+
+            assertEqual(NO_BUILD_ID_SEGMENT, result.metadata.build_id);
         });
 
         it('rejects a non-canonical pathname before reading the store', async () => {

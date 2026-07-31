@@ -101,6 +101,49 @@ export default [
 ];
 ```
 
+## Serving Immutable Build Assets
+
+Use `StaticAssetRequestHandler` for assets whose URL carries the Build ID: `/assets/:build_id/*pathname`. Unlike `StaticFileRequestHandler`, it takes both the namespace and key from the route params. A file stored under an older Build ID remains reachable at its original URL until that namespace is pruned, which lets cached HTML continue to load the exact assets it named after a deployment.
+
+```js
+import { StaticAssetRequestHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+
+{
+    pattern: '/assets/:build_id/*pathname',
+    name: 'build-assets',
+    targets: [
+        {
+            name: 'serve-asset',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [ StaticAssetRequestHandler() ],
+        },
+    ],
+}
+```
+
+`buildIdParam` and `pathnameParam` default to `build_id` and `pathname`, so the route above needs no handler options. When a route uses different parameter names, pass them explicitly to keep the handler aligned with that route:
+
+```js
+{
+    pattern: '/releases/:release/*file',
+    name: 'release-assets',
+    targets: [
+        {
+            name: 'serve-asset',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [
+                StaticAssetRequestHandler({
+                    buildIdParam: 'release',
+                    pathnameParam: 'file',
+                }),
+            ],
+        },
+    ],
+}
+```
+
+This handler uses `public, max-age=31536000, immutable` by default while still supplying ETag and Last-Modified validators for force reloads. It validates the Build ID and wildcard path before reading the store: malformed input is a 400, and a well-formed asset absent from the named namespace is a 404. Asset upload keys must omit the URL prefix and Build ID — for example, publishing `stylesheets/stylesheet.css` produces the URL `/assets/<build-id>/stylesheets/stylesheet.css`.
+
 ## How Static File Serving Works
 
 The `StaticFileRequestHandler` delegates to an internal Kixx component called the `StaticFileStore` which stores files by key. The `StaticFileRequestHandler` uses the request pathname, excluding query parameters and hashes, as the file key along with the current Build ID as the namespace to support Atomic Deployments. The `StaticFileStore` then looks up the file by key and namespace and returns a result.

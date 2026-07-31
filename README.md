@@ -38,7 +38,7 @@ node tools/devserver.js --port 2026
 
 The dev server listens on the public `--port` and proxies requests to a child `src/node-server.js` process on a temporary port. It restarts the child after the app has been idle for a few seconds, so JavaScript source changes are picked up on the next request without manually restarting the command. Template, page data, and source stylesheet changes are read directly on reload.
 
-The dev server also serves CSS files directly from `src/stylesheets/`, allowing you to skip a build process for CSS bundles.
+The dev server also serves CSS and JavaScript directly from `src/stylesheets/` and `src/javascript/`, allowing you to skip an asset build process. It recognizes `/assets/<build-id>/stylesheets/**` and `/assets/<build-id>/javascript/**` as source-file URLs in development, ignores the Build ID segment, and sends `Cache-Control: no-cache` so edits appear on reload. The bare `/stylesheets/**` and `/javascript/**` source-file URLs remain available too.
 
 The wrapper accepts the same `--environment` and `--dotenv` options as `src/node-server.js`. Change `--port` to avoid local port conflicts.
 

@@ -1,5 +1,6 @@
 import * as templating from '../templating/mod.js';
 import deepMerge from '../utils/deep-merge.js';
+import { NO_BUILD_ID_SEGMENT } from '../utils/build-id.js';
 import {
     assert,
     assertNonEmptyString,
@@ -177,7 +178,9 @@ export default class HyperviewService {
 
         const metadata = deepMerge(...mergeItems);
 
-        metadata.build_id = buildId;
+        // Templates need a non-empty segment for one stable asset URL shape; the
+        // asset handler maps this placeholder back to the flat store root.
+        metadata.build_id = buildId ?? NO_BUILD_ID_SEGMENT;
 
         return { version, metadata };
     }

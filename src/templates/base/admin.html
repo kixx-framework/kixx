@@ -4,13 +4,9 @@
         {{>common-site-meta.html}}
 
         {{!--
-            In remote environments we use the static asset path and the build_id
-            namespace to enable long lived caching of static assets. --}}
-        {{#if build_id}}
-        <link href="/assets/stylesheets/{{ build_id }}/admin.css" rel="stylesheet">
-        {{ else }}
-        <link href="/stylesheets/admin.css" rel="stylesheet">
-        {{/if}}
+            The Build ID namespaces this asset URL, so it can use an immutable
+            cache policy without changing the asset named by this page. --}}
+        <link href="/assets/{{ build_id }}/stylesheets/admin.css" rel="stylesheet">
 
         {{#if includes.page_stylesheet }}
         <style>{{{ includes.page_stylesheet }}}</style>
@@ -32,12 +28,8 @@
         {{/if}}{{/if}}
 
         {{!--
-            In remote environments we use the static asset path and the build_id
-            namespace to enable long lived caching of static assets. --}}
-        {{#if build_id}}
-        <script type="module" src="/assets/javascript/{{ build_id }}/site.js"></script>
-        {{ else }}
-        <script type="module" src="/javascript/site.js"></script>
-        {{/if}}
+            The Build ID namespaces this asset URL, so it can use an immutable
+            cache policy without changing the asset named by this page. --}}
+        <script type="module" src="/assets/{{ build_id }}/javascript/site.js"></script>
     </body>
 </html>

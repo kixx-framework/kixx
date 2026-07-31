@@ -1,7 +1,8 @@
 import { isNonEmptyString } from '../assertions/mod.js';
-import { NotFoundError } from '../errors/mod.js';
+import { BadRequestError, NotFoundError } from '../errors/mod.js';
 
 import validatePathname from '../utils/validate-pathname.js';
+import { NO_BUILD_ID_SEGMENT } from '../utils/build-id.js';
 
 
 /**
@@ -21,6 +22,7 @@ import validatePathname from '../utils/validate-pathname.js';
 // (via ETag/If-None-Match) before reusing the asset. Callers override per route
 // for long-lived, fingerprinted assets.
 const DEFAULT_CACHE_CONTROL = 'public, max-age=0, must-revalidate';
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 
 /**
@@ -93,36 +95,63 @@ export function StaticFileRequestHandler(options) {
             skip();
         }
 
-        const contentType = isNonEmptyString(contentTypeOverride)
-            ? contentTypeOverride
-            : result.contentType;
+        return respondWithStaticFile(request, response, result, {
+            cacheControl,
+            contentTypeOverride,
+        });
+    };
+}
 
-        // Cache-Control and the validators apply to both the 200 and the 304 below.
-        response.setHeader('cache-control', cacheControl);
-        if (result.etag) {
-            response.setHeader('etag', result.etag);
-        }
-        if (result.lastModified) {
-            response.setHeader('last-modified', result.lastModified.toUTCString());
+/**
+ * Creates a request handler for immutable Build-ID-namespaced static assets.
+ *
+ * The handler reads both the namespace and file key from route pathname params,
+ * so an asset URL can reach any Build ID that remains in the store rather than
+ * only the runtime's current build. Its default cache policy permits browsers
+ * and CDNs to keep a build asset for one year without revalidation.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.contentType] - Force the `Content-Type` header instead
+ *   of using the store's value.
+ * @param {string} [options.cacheControl] - Force the `Cache-Control` header.
+ *   Defaults to `public, max-age=31536000, immutable`.
+ * @param {boolean} [options.computeEtag=true] - When the store has no precomputed
+ *   ETag, compute one. Set `false` to skip ETag work.
+ * @param {string} [options.buildIdParam='build_id'] - Name of the pathname param
+ *   carrying the Build ID namespace.
+ * @param {string} [options.pathnameParam='pathname'] - Name of the wildcard
+ *   pathname param carrying the file key segments.
+ * @returns {function(RequestContext, ServerRequestInterface, ServerResponse): Promise<ServerResponse>}
+ *   Async request handler for a dedicated static-asset route.
+ * @throws {BadRequestError} When a required pathname param is absent or unsafe.
+ * @throws {NotFoundError} When the requested asset is absent from the store.
+ */
+export function StaticAssetRequestHandler(options) {
+    options = options ?? {};
+
+    const {
+        contentType: contentTypeOverride,
+        cacheControl = IMMUTABLE_CACHE_CONTROL,
+        computeEtag = true,
+        buildIdParam = 'build_id',
+        pathnameParam = 'pathname',
+    } = options;
+
+    return async function staticAssetRequestHandler(context, request, response) {
+        const { namespace, key } = resolveAssetLocation(request, {
+            buildIdParam,
+            pathnameParam,
+        });
+        const store = context.getService('StaticFileStore');
+        const result = await store.read(context, { key, namespace, computeEtag });
+
+        if (!result) {
+            throw new NotFoundError(`Static asset not found: ${ request.url.pathname }`);
         }
 
-        if (isNotModified(request, result)) {
-            await cancelBody(result.body);
-            // 304 carries validators but no body or body-describing headers.
-            return response.respondWithStream(304, null);
-        }
-
-        // A HEAD response carries the same headers (including Content-Length) as the
-        // GET, but no body. Cancel the file body so the opened stream/binding does
-        // not leak, then respond with headers only.
-        if (request.isHeadRequest()) {
-            await cancelBody(result.body);
-            return response.respondWithStream(200, null, { contentType, contentLength: result.contentLength });
-        }
-
-        return response.respondWithStream(200, result.body, {
-            contentType,
-            contentLength: result.contentLength,
+        return respondWithStaticFile(request, response, result, {
+            cacheControl,
+            contentTypeOverride,
         });
     };
 }
@@ -143,6 +172,68 @@ function handleMiss(throwNotFound, request, response) {
     }
     // Defer to the next request handler in the target chain.
     return response;
+}
+
+function resolveAssetLocation(request, options) {
+    const { buildIdParam, pathnameParam } = options;
+    const pathnameParams = request.pathnameParams;
+    const buildId = pathnameParams?.[buildIdParam];
+    const pathname = pathnameParams?.[pathnameParam];
+
+    if (!isNonEmptyString(buildId)) {
+        throw new BadRequestError(`Missing Build ID pathname param: ${ buildIdParam }`);
+    }
+    validatePathname(buildId);
+
+    if (!Array.isArray(pathname) || pathname.length === 0) {
+        throw new BadRequestError(`Missing asset pathname param: ${ pathnameParam }`);
+    }
+
+    const key = pathname.join('/');
+    if (!isNonEmptyString(key)) {
+        throw new BadRequestError(`Missing asset pathname param: ${ pathnameParam }`);
+    }
+    validatePathname(key);
+
+    return {
+        key,
+        namespace: buildId === NO_BUILD_ID_SEGMENT ? null : buildId,
+    };
+}
+
+async function respondWithStaticFile(request, response, result, options) {
+    const { cacheControl, contentTypeOverride } = options;
+    const contentType = isNonEmptyString(contentTypeOverride)
+        ? contentTypeOverride
+        : result.contentType;
+
+    // Cache-Control and the validators apply to both the 200 and the 304 below.
+    response.setHeader('cache-control', cacheControl);
+    if (result.etag) {
+        response.setHeader('etag', result.etag);
+    }
+    if (result.lastModified) {
+        response.setHeader('last-modified', result.lastModified.toUTCString());
+    }
+
+    if (isNotModified(request, result)) {
+        await cancelBody(result.body);
+        // 304 carries validators but no body or body-describing headers.
+        return response.respondWithStream(304, null);
+    }
+
+    // A HEAD response carries the same headers (including Content-Length) as the
+    // GET, but no body. Cancel the file body so the opened stream/binding does
+    // not leak, then respond with headers only.
+    if (request.isHeadRequest()) {
+        await cancelBody(result.body);
+        return response.respondWithStream(200, null, { contentType, contentLength: result.contentLength });
+    }
+
+    return response.respondWithStream(200, result.body, {
+        contentType,
+        contentLength: result.contentLength,
+    });
 }
 
 function isNotModified(request, result) {

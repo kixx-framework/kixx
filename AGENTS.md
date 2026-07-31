@@ -92,19 +92,6 @@ src/templates/README.md
 
 **What this document provides:** The Kixx template syntax and behavior reference used by Hyperview — compilation stages, supported Mustache-style features, expression resolution, section semantics, built-in helpers, Hyperview helpers, escaping rules, partial usage, helper authoring, public APIs, and error behavior.
 
-### Static File Server Guide
-
-src/kixx/static-file-server/README.md
-
-**When to use this document:** Apply this guide whenever you are serving, configuring, or reviewing static file delivery (favicons, images, fonts). This includes:
-
-- Wiring `StaticFileRequestHandler` into routes in `virtual-hosts.js`, including the root-served catch-all pattern.
-- Choosing handler options for `Content-Type`, `Cache-Control`, ETag computation, not-found behavior, handler skipping, or pathname rewriting.
-- Working on the `StaticFileStore` contract or its Node.js (filesystem + `manifest.json`) and Cloudflare (dedicated KV binding) adapters.
-- Understanding Build ID namespacing for Atomic Deployments and how ETags are computed.
-
-**What this document provides:** The static file serving reference — `StaticFileRequestHandler` usage and options, the `StaticFileStore` keyed/namespaced lookup contract, the parts-object return shape, per-runtime adapter behavior, ETag and conditional-request handling, and the Atomic Deployment / Build ID model. For request-handler wiring in the application presentation layer, see the Presentation Layer Guide above.
-
 ### Frontend Development Guide
 
 src/docs/frontend-development-guide.md
@@ -145,7 +132,7 @@ Change the --port option to avoid port conflicts if needed.
 
 The wrapper restarts the child app server after the site has been idle for a few seconds, so JavaScript source changes are picked up on the next request without manually restarting the command. Server restarts are not needed for changes to `templates/`, `pages/` data, or source stylesheets under `src/stylesheets/`.
 
-The dev server also serves CSS files directly from `src/stylesheets/`, allowing you to skip a build process for CSS bundles.
+The dev server also serves CSS and JavaScript directly from `src/stylesheets/` and `src/javascript/`, allowing you to skip an asset build process. It recognizes `/assets/<build-id>/stylesheets/**` and `/assets/<build-id>/javascript/**` as source-file URLs in development, ignores the Build ID segment, and sends `Cache-Control: no-cache` so edits appear on reload. The bare `/stylesheets/**` and `/javascript/**` source-file URLs remain available too.
 
 Add `.json` to the end of any URL to get the template context object as JSON (ecluding includes content):
 
