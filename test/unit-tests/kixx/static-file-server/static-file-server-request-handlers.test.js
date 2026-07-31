@@ -325,14 +325,24 @@ describe('static-file-server-request-handlers', ({ describe }) => {
         });
 
         it('rejects unsafe Build ID params before reading the store', async () => {
-            for (const buildId of [ '..', '.hidden', 'bad id', 'bad@id' ]) {
+            for (const buildId of [ '..', '.hidden', 'bad id', 'bad@id', 'build/child' ]) {
                 const { store } = makeStore(null);
                 const error = await catchAsyncError(() => StaticAssetRequestHandler()(makeContext(store), makeRequest('/assets', {
                     pathnameParams: { build_id: buildId, pathname: [ 'site.css' ] },
                 }), makeResponse()));
-                assertError(error, 'BadRequestError', 'BAD_REQUEST_ERROR');
+                assertError(error, 'BadRequestError', 'InvalidBuildId');
                 assertEqual(0, store.read.mock.callCount());
             }
+        });
+
+        it('rejects a decoded multi-segment Build ID before reading the store', async () => {
+            const { store } = makeStore(null);
+            const error = await catchAsyncError(() => StaticAssetRequestHandler()(makeContext(store), makeRequest('/assets', {
+                pathnameParams: { build_id: 'dev/child', pathname: [ 'site.css' ] },
+            }), makeResponse()));
+
+            assertError(error, 'BadRequestError', 'InvalidBuildId');
+            assertEqual(0, store.read.mock.callCount());
         });
 
         it('rejects missing, empty, and unsafe asset pathname params before reading the store', async () => {

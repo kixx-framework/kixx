@@ -142,7 +142,7 @@ import { StaticAssetRequestHandler } from './kixx/static-file-server/static-file
 }
 ```
 
-This handler uses `public, max-age=31536000, immutable` by default while still supplying ETag and Last-Modified validators for force reloads. It validates the Build ID and wildcard path before reading the store: malformed input is a 400, and a well-formed asset absent from the named namespace is a 404. Asset upload keys must omit the URL prefix and Build ID — for example, publishing `stylesheets/stylesheet.css` produces the URL `/assets/<build-id>/stylesheets/stylesheet.css`.
+This handler uses `public, max-age=31536000, immutable` by default while still supplying ETag and Last-Modified validators for force reloads. It serves any stored Build ID namespace — staged, current, or historical — rather than only the runtime's current build. A real Build ID is one safe URL segment and cannot equal the reserved lowercase `dev` placeholder, which maps only asset reads to the flat no-build root. Malformed input is a 400, and a well-formed asset absent from the named namespace is a 404. Asset upload keys must omit the URL prefix and Build ID — for example, publishing `stylesheets/stylesheet.css` produces the URL `/assets/<build-id>/stylesheets/stylesheet.css`.
 
 ## How Static File Serving Works
 
@@ -168,9 +168,11 @@ When deploying to Cloudflare, Kixx will always use Atomic Deployments with a Bui
 
 In addition to the read path above, the `StaticFileStore` has a single deploy-time write method, `write()`, which allows writing binary static assets (favicons, images, fonts, CSS) to a build.
 
-### Staged-build-only writes
+### Staged-build-only, write-once publishing
 
-Asset writes must target a **staged** build: the request's `Kixx-Build-Id` is required and must differ from the current (live) build. This keeps the live asset set immutable until an atomic promotion, and it means the running server never serves a written namespace's assets until a later deploy promotes that build and restarts the process — which is why the Node read-time metadata cache (each asset's sidecar read once and held for the process lifetime) stays correct alongside the write path. Hot-patching a single live asset is intentionally not supported.
+Asset writes must target a **staged** build: the request's `Kixx-Build-Id` is required, must be a real Build ID, and must differ from the current (live) build. The first sequential PUT to a `(Build ID, key)` fixes that public address. An identical retry returns the existing asset resource without rewriting it; changed bytes, byte length, or content type return `409 StaticAssetImmutableConflict` and must be published under a new Build ID. Hot-patching a live asset is intentionally not supported.
+
+The guarantee is sequential only. Clients must serialize PUTs to the same `(Build ID, key)`: two concurrent first writers can both observe an absent asset, and neither the Node filesystem adapter nor Cloudflare KV supplies an atomic create-only operation here.
 
 ### Server-computed validators
 
@@ -183,4 +185,4 @@ The store is the source of truth for cache validators. Given the buffered bytes 
 
 ### Per-asset metadata sidecars (Node.js)
 
-The Node store records each asset's validators in its own JSON sidecar under a reserved `.meta/` subtree that mirrors the asset key (`<buildId>/.meta/css/main.css.json` for asset `css/main.css`). Because every asset owns a separate file, there is no shared index to serialize: concurrent asset PUTs to the same staged build write disjoint sidecars, and two writers of the same asset write byte-identical validators (the ETag is derived from the content), so a last-writer-wins atomic rename is safe. Each sidecar is written atomically (temp file + `rename`), and the `.meta/` subtree is kept out of the servable key space so sidecars are never served as assets.
+The Node store records each asset's validators in its own JSON sidecar under a reserved `.meta/` subtree that mirrors the asset key (`<buildId>/.meta/css/main.css.json` for asset `css/main.css`). Because every asset owns a separate file, there is no shared index to serialize for different keys. Each sidecar is written atomically (temp file + `rename`), and the `.meta/` subtree is kept out of the servable key space so sidecars are never served as assets.

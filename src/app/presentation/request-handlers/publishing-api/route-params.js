@@ -72,7 +72,7 @@ export function getWildcardFilepath(request, name, { label, requiredCode }) {
     // segments as the client sent them so the error message echoes the request.
     //
     // The case is deliberately preserved: unlike page pathnames, static asset
-    // reads resolve the key verbatim (StaticFileRequestHandler looks the URL
+    // reads resolve the key verbatim (StaticAssetRequestHandler looks the URL
     // pathname up as sent), so folding here would store the file under a name no
     // read ever asks for. Template writes need the opposite and wrap this
     // function — see getWildcardTemplateFilepath() below.

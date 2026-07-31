@@ -43,6 +43,23 @@ describe('putPageMetadata Transaction Script', ({ it }) => {
         assertEqual(TARGET_BUILD_ID, result.buildId);
     });
 
+    it('rejects invalid and reserved effective Build IDs before accessing Hyperview', async () => {
+        for (const [ buildId, code ] of [ [ 'build/child', 'InvalidBuildId' ], [ 'dev', 'ReservedBuildId' ] ]) {
+            const harness = makeHarness();
+            const caught = await catchAsyncError(() => putPageMetadata(harness.context, {
+                pathname: '/',
+                metadata: { version: 'page-v2' },
+                buildId,
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assertEqual(code, caught.code);
+            assertEqual(0, harness.calls.serviceAccess);
+            assertEqual(0, harness.calls.putPageMetadata.length);
+        }
+    });
+
     it('reports a missing effective build id before accessing Hyperview', async () => {
         const harness = makeHarness({ currentBuildId: null });
         const caught = await catchAsyncError(() => putPageMetadata(harness.context, {

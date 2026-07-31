@@ -4,6 +4,8 @@ import {
     BadRequestError,
     ConflictError,
 } from '../../../kixx/errors/mod.js';
+import { validateBuildId } from '../../../kixx/utils/build-id.js';
+import { computeStaticFileEtag } from '../../../kixx/static-file-server/static-file-etag.js';
 
 
 /**
@@ -17,8 +19,8 @@ import {
  * @returns {Promise<{ filepath: string, buildId: string, contentType: string, contentLength: number, etag: string }>}
  *   The written asset's parts.
  * @throws {BadRequestError} When the body is empty or the buildId is missing.
- * @throws {ConflictError} When buildId targets the current build.
- * @throws {AssertionError} When the store write unexpectedly fails.
+ * @throws {ConflictError} When buildId targets the current build or an existing asset differs.
+ * @throws {AssertionError} When static-file store access unexpectedly fails.
  */
 export async function putStaticAsset(context, args) {
     const {
@@ -42,6 +44,8 @@ export async function putStaticAsset(context, args) {
         });
     }
 
+    validateBuildId(buildId);
+
     // Asset writes are staged-only: they must target a build other than the live
     // one so the current asset set stays immutable until an atomic promotion. A
     // missing current build id (site never deployed) lets the first deploy stage
@@ -55,7 +59,45 @@ export async function putStaticAsset(context, args) {
         });
     }
 
+    const etag = await computeStaticFileEtag(body);
     const store = context.getService('StaticFileStore');
+
+    let existing;
+    try {
+        existing = await store.read(context, {
+            key: filepath,
+            namespace: buildId,
+            computeEtag: true,
+        });
+    } catch (cause) {
+        throw new AssertionError('Unexpected error while reading an existing static asset', { cause });
+    }
+
+    if (existing) {
+        try {
+            await cancelBody(existing.body);
+        } catch (cause) {
+            throw new AssertionError('Unexpected error while cancelling an existing static asset body', { cause });
+        }
+
+        if (existing.etag === etag
+            && existing.contentLength === body.byteLength
+            && existing.contentType === contentType) {
+            return {
+                filepath,
+                buildId,
+                contentType: existing.contentType,
+                contentLength: existing.contentLength,
+                etag: existing.etag,
+            };
+        }
+
+        // This is only a sequential guarantee: concurrent first writers can both
+        // observe a miss, so publishing clients must serialize one asset address.
+        throw new ConflictError('Static asset address already exists with different content or content type.', {
+            code: 'StaticAssetImmutableConflict',
+        });
+    }
 
     let written;
     try {
@@ -76,4 +118,10 @@ export async function putStaticAsset(context, args) {
         contentLength: written.contentLength,
         etag: written.etag,
     };
+}
+
+async function cancelBody(body) {
+    if (body) {
+        await body.cancel();
+    }
 }

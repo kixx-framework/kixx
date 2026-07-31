@@ -59,7 +59,7 @@ with error code `StaticAssetImmutableConflict`.
 
 ### Task 1: Enforce one real Build ID contract at runtime, publishing, and asset-read boundaries
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/docs/code-style-guide.md`, `src/docs/code-documentation-guide.md`, `src/docs/server-error-handling.md`, `src/app/transaction-scripts/README.md`, `src/app/presentation/README.md`, `src/kixx/static-file-server/README.md`, `test/unit-tests/README.md`
 
@@ -185,19 +185,19 @@ actual files changed in the handoff notes.
 **Progress and handoff**
 
 - Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Current state: Complete.
+- Remaining: Nothing.
 - Decisions and discoveries: The exact lowercase `dev` value is reserved; Build IDs remain
   case-preserving. No compatibility migration is required.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Actual files changed: `agents/plans/static-asset-publishing-immutability-and-build-id-validation-plan.md`, `src/kixx/utils/build-id.js`, `src/kixx/context/app-runtime.js`, `src/kixx/static-file-server/static-file-server-request-handlers.js`, `src/app/transaction-scripts/publishing/put-static-asset.js`, `src/app/transaction-scripts/publishing/put-template.js`, `src/app/transaction-scripts/publishing/put-page-metadata.js`, `src/app/transaction-scripts/publishing/put-include.js`, `test/unit-tests/kixx/utils/build-id.test.js`, `test/unit-tests/kixx/context/app-runtime.test.js`, `test/unit-tests/kixx/static-file-server/static-file-server-request-handlers.test.js`, `test/unit-tests/app/transaction-scripts/publishing/put-static-asset.test.js`, `test/unit-tests/app/transaction-scripts/publishing/put-template.test.js`, `test/unit-tests/app/transaction-scripts/publishing/put-page-metadata.test.js`, `test/unit-tests/app/transaction-scripts/publishing/put-include.test.js`.
+- Validation run: `node run-linter.js src/kixx/utils/build-id.js src/kixx/context/app-runtime.js src/kixx/static-file-server/static-file-server-request-handlers.js src/app/transaction-scripts/publishing test/unit-tests/kixx/utils test/unit-tests/kixx/context/app-runtime.test.js test/unit-tests/kixx/static-file-server test/unit-tests/app/transaction-scripts/publishing` (passed); `node run-tests.js test/unit-tests/kixx/utils/build-id.test.js test/unit-tests/kixx/context/app-runtime.test.js test/unit-tests/kixx/static-file-server test/unit-tests/app/transaction-scripts/publishing` (69 passed); `node run-tests.js` (1376 passed).
 - Blockers: None.
 
 ---
 
 ### Task 2: Make sequential static-asset PUTs write-once and idempotent
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 1
 **Documentation:** `src/docs/code-style-guide.md`, `src/docs/code-documentation-guide.md`, `src/docs/server-error-handling.md`, `src/app/transaction-scripts/README.md`, `src/kixx/static-file-server/README.md`, `src/plugins/README.md`, `test/unit-tests/README.md`
 
@@ -334,19 +334,19 @@ actual files changed in the handoff notes.
 **Progress and handoff**
 
 - Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Current state: Complete.
+- Remaining: Nothing.
 - Decisions and discoveries: Sequential equality is defined by ETag, byte length, and
   normalized content type. No concurrent-write guarantee is in scope.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Actual files changed: `agents/plans/static-asset-publishing-immutability-and-build-id-validation-plan.md`, `src/kixx/static-file-server/static-file-etag.js`, `src/plugins/node-static-file-server/lib/static-file-server-store.js`, `src/plugins/cloudflare-static-file-server/lib/static-file-server-store.js`, `src/app/transaction-scripts/publishing/put-static-asset.js`, `test/unit-tests/kixx/static-file-server/static-file-etag.test.js`, `test/unit-tests/app/transaction-scripts/publishing/put-static-asset.test.js`, `test/unit-tests/app/presentation/request-handlers/publishing-api/put-static-asset.test.js`.
+- Validation run: `node run-linter.js src/kixx/static-file-server src/plugins/node-static-file-server/lib/static-file-server-store.js src/plugins/cloudflare-static-file-server/lib/static-file-server-store.js src/app/transaction-scripts/publishing/put-static-asset.js test/unit-tests/kixx/static-file-server test/unit-tests/app/transaction-scripts/publishing/put-static-asset.test.js test/unit-tests/app/presentation/request-handlers/publishing-api/put-static-asset.test.js` (passed); `node run-tests.js test/unit-tests/kixx/static-file-server test/unit-tests/app/transaction-scripts/publishing/put-static-asset.test.js test/unit-tests/app/presentation/request-handlers/publishing-api/put-static-asset.test.js` (58 passed); `node run-tests.js` (1381 passed).
 - Blockers: None.
 
 ---
 
 ### Task 3: Publish the corrected API contract in end-to-end coverage and documentation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 1, Task 2
 **Documentation:** `src/app/presentation/README.md`, `src/kixx/static-file-server/README.md`, `src/plugins/README.md`, `test/end-to-end/README.md`
 
@@ -445,10 +445,10 @@ actual files changed in the handoff notes.
 **Progress and handoff**
 
 - Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Current state: Complete, with end-to-end execution explicitly deferred pending user authorization to start a development server or target a configured deployment.
+- Remaining: No implementation work. Run the listed focused end-to-end commands only when expressly authorized and configured.
 - Decisions and discoveries: The API route and success schema remain stable. End-to-end tests
   may now read staged test assets through the public Build-ID route.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Actual files changed: `agents/plans/static-asset-publishing-immutability-and-build-id-validation-plan.md`, `test/end-to-end/020-publishing-api/put-static-asset.test.js`, `test/end-to-end/020-publishing-api/put-static-asset-errors.test.js`, `src/kixx/static-file-server/README.md`, `src/kixx/static-file-server/static-file-server-store-interface.js`, `src/app/presentation/request-handlers/publishing-api/route-params.js`.
+- Validation run: `node run-linter.js src/kixx/static-file-server/static-file-server-store-interface.js src/app/presentation/request-handlers/publishing-api/route-params.js test/end-to-end/020-publishing-api/put-static-asset.test.js test/end-to-end/020-publishing-api/put-static-asset-errors.test.js` (passed); `node run-tests.js` (1381 passed). Focused end-to-end commands were not run: the plan and repository instructions require explicit user authorization to start the development server or exercise configured targets.
+- Blockers: End-to-end execution awaits explicit user authorization and, for deployed targets, credentials and target configuration.

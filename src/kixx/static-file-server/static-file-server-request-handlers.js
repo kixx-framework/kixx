@@ -2,7 +2,7 @@ import { isNonEmptyString } from '../assertions/mod.js';
 import { BadRequestError, NotFoundError } from '../errors/mod.js';
 
 import validatePathname from '../utils/validate-pathname.js';
-import { NO_BUILD_ID_SEGMENT } from '../utils/build-id.js';
+import { NO_BUILD_ID_SEGMENT, validateBuildId } from '../utils/build-id.js';
 
 
 /**
@@ -183,7 +183,9 @@ function resolveAssetLocation(request, options) {
     if (!isNonEmptyString(buildId)) {
         throw new BadRequestError(`Missing Build ID pathname param: ${ buildIdParam }`);
     }
-    validatePathname(buildId);
+    const namespace = buildId === NO_BUILD_ID_SEGMENT
+        ? null
+        : validateBuildId(buildId);
 
     if (!Array.isArray(pathname) || pathname.length === 0) {
         throw new BadRequestError(`Missing asset pathname param: ${ pathnameParam }`);
@@ -197,7 +199,7 @@ function resolveAssetLocation(request, options) {
 
     return {
         key,
-        namespace: buildId === NO_BUILD_ID_SEGMENT ? null : buildId,
+        namespace,
     };
 }
 

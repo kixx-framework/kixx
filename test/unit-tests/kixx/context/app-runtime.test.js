@@ -61,6 +61,14 @@ describe('AppRuntime', ({ describe }) => {
 
             assertUndefined(runtime.build);
         });
+
+        it('allows missing and null Build IDs', () => {
+            const missing = new AppRuntime({ server: {}, build: {} });
+            const nullId = new AppRuntime({ server: {}, build: { id: null } });
+
+            assertEqual(undefined, missing.build.id);
+            assertEqual(null, nullId.build.id);
+        });
     });
 
     describe('immutability', ({ it }) => {
@@ -131,6 +139,19 @@ describe('AppRuntime', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
             assertMatches('server', caught.message);
+        });
+
+        it('throws an AssertionError for malformed or reserved Build IDs', () => {
+            for (const buildId of [ '', 'build/child', 'dev' ]) {
+                const caught = catchError(() => new AppRuntime({
+                    server: {},
+                    build: { id: buildId },
+                }));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+                assertMatches('build id', caught.message);
+            }
         });
     });
 });
