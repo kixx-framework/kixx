@@ -5,7 +5,9 @@ assets into a Kixx build. This reference describes the HTTP contract for
 developers implementing a client or SDK.
 
 The API is write-only. Version 1 does not expose operations to read, list,
-delete, or promote published resources.
+delete, or promote published resources. Published static assets are served
+publicly at build-addressed URLs outside this API — see
+[Reading a published asset](#reading-a-published-asset).
 
 ## Base path
 
@@ -27,10 +29,17 @@ Examples in this document use `https://example.com` as the deployment origin.
 | `PUT` | `/pages/{pathname}` | JSON:API page metadata | Named build or current build |
 | `PUT` | `/pages` or `/pages/` | JSON:API root-page metadata | Named build or current build |
 | `PUT` | `/includes/{filepath}` | Page include source | Named build or current build |
-| `PUT` | `/assets/{filepath}` | Raw asset bytes | Staged build only |
+| `PUT` | `/assets/{filepath}` | Raw asset bytes | Staged build only, write-once |
 
-Every endpoint uses replacement semantics. Repeating a successful request for
-the same resource and build replaces the previous value and returns `200 OK`.
+Template, page metadata, and include writes use replacement semantics. Repeating
+a successful request for the same resource and build replaces the previous value
+and returns `200 OK`.
+
+Static asset writes are write-once instead. The first successful `PUT` fixes the
+bytes and stored media type at a given build ID and filepath. Repeating that
+request unchanged returns `200 OK` without rewriting anything, while publishing
+different content at the same address returns
+`409 StaticAssetImmutableConflict`. See [Write-once addresses](#write-once-addresses).
 
 ## Authentication and authorization
 
@@ -60,8 +69,10 @@ The optional or required build header is:
 Kixx-Build-Id: <build-id>
 ```
 
-Header names are case-insensitive. Client libraries should treat build IDs as
-opaque strings.
+Header names are case-insensitive. A client should treat the *meaning* of a
+build ID as opaque, but its form is not free-form: a build ID appears as a path
+segment in public asset URLs and as a storage namespace, so it must satisfy the
+format rules below.
 
 The endpoints use two different build policies:
 
@@ -78,6 +89,38 @@ The endpoints use two different build policies:
   its first staged build.
 
 The effective build ID is returned in every successful response.
+
+### Build ID format
+
+A build ID must be a single, safe URL path segment. It must:
+
+- be a non-empty string;
+- contain only the characters `A-Z a-z 0-9 _ . -`;
+- contain no `/`, so a build ID is never more than one segment;
+- not begin with `.`, and not contain `..`;
+- not be exactly the lowercase value `dev`.
+
+Build IDs are case-sensitive and are stored and echoed back exactly as supplied.
+Only the exact lowercase `dev` is reserved; `DEV` is an ordinary valid build ID.
+The reserved value names the flat, un-namespaced asset root used by deployments
+that run without a build ID, so no build may publish into it.
+
+| Status | Code | Condition |
+|---|---|---|
+| `400` | `ReservedBuildId` | Build ID is exactly `dev` |
+| `400` | `InvalidBuildId` | Build ID is not one safe, non-empty path segment |
+
+Every endpoint applies these rules, including those that do not require the
+header. For page metadata and includes the rules are applied to the *effective*
+build ID, so a supplied header is validated identically whether or not the
+endpoint required one. A deployment's own current build ID is validated when the
+server starts, so the omitted-header fallback cannot produce these errors
+against a running deployment.
+
+These checks run after the endpoint's existing requiredness check. A missing
+header still reports `BuildIdRequired` on templates and assets, and still
+reports `CurrentBuildIdRequired` on pages and includes when the deployment has
+no current build.
 
 ### Live include visibility
 
@@ -227,6 +270,8 @@ Status: `200 OK`
 | Status | Code | Condition |
 |---|---|---|
 | `400` | `BuildIdRequired` | `Kixx-Build-Id` is missing or empty |
+| `400` | `ReservedBuildId` | `Kixx-Build-Id` is the reserved value `dev` |
+| `400` | `InvalidBuildId` | `Kixx-Build-Id` is not one safe path segment |
 | `400` | `TemplateSourceRequired` | Body text is empty |
 | `400` | `EmptyPathSegment` | Filepath contains an empty segment |
 | `400` | `BAD_REQUEST_ERROR` | Filepath violates the path character or traversal rules |
@@ -341,6 +386,8 @@ build ID appears in resource-level `meta`, not in `attributes`.
 |---|---|---|
 | `400` | `BAD_REQUEST_ERROR` | Invalid JSON, malformed JSON:API envelope, or invalid pathname |
 | `400` | `EmptyPathSegment` | Non-root pathname contains an empty segment |
+| `400` | `ReservedBuildId` | `Kixx-Build-Id` is the reserved value `dev` |
+| `400` | `InvalidBuildId` | `Kixx-Build-Id` is not one safe path segment |
 | `400` | `InvalidPageIncludes` | `attributes.includes` is present but is not an object |
 | `400` | `InvalidIncludeFilename` | An include filename is missing, invalid, or not lowercase |
 | `409` | `JsonApiResourceTypeMismatch` | `data.type` is not `PageMetadata` |
@@ -424,6 +471,8 @@ Status: `200 OK`
 | `400` | `IncludeSourceRequired` | Body text is empty |
 | `400` | `EmptyPathSegment` | Filepath contains an empty segment |
 | `400` | `BAD_REQUEST_ERROR` | Filepath violates the path character or traversal rules |
+| `400` | `ReservedBuildId` | `Kixx-Build-Id` is the reserved value `dev` |
+| `400` | `InvalidBuildId` | `Kixx-Build-Id` is not one safe path segment |
 | `409` | `CurrentBuildIdRequired` | Header is omitted and the deployment has no current build |
 | `415` | `UNSUPPORTED_MEDIA_TYPE_ERROR` | Media type does not begin with `text/` |
 
@@ -480,7 +529,71 @@ Status: `200 OK`
 ```
 
 `contentLength` is the number of stored bytes. `etag` is a strong, quoted ETag
-derived from the SHA-256 digest of those bytes.
+derived from the SHA-256 digest of those bytes. An identical retry returns this
+same document describing the already-stored asset.
+
+### Write-once addresses
+
+A static asset address is the pair of build ID and filepath. The first
+successful `PUT` fixes that address for the life of the build. A later `PUT` to
+the same address is compared against the stored asset on three values:
+
+- the strong ETag of the request body — the quoted SHA-256 digest of the bytes;
+- the byte length of the request body;
+- the normalized media type, lowercased and with parameters removed.
+
+When all three match, the request is an identical retry: the API returns
+`200 OK` with the stored asset's parts and does not rewrite it. This is what
+makes replaying a request after a network failure safe.
+
+When any of them differs — or the stored asset carries no strong ETag for the
+server to compare against — the API returns `409 StaticAssetImmutableConflict`
+and leaves the stored asset untouched. Changed output must be published under a
+new build ID.
+
+Immutability is a **sequential** guarantee only. The server reads the address
+before writing, but performs no atomic create-only operation, so two concurrent
+first writes to the same address can both observe an absent asset and race.
+Clients must serialize writes to a single build ID and filepath. Concurrent
+writes to *different* addresses are supported.
+
+The comparison is reached only after every earlier check passes. A `PUT`
+targeting the current build still returns `CurrentBuildWriteConflict` even when
+its bytes match what is stored.
+
+### Reading a published asset
+
+Published assets are served outside the Publishing API at:
+
+```http
+GET /assets/{build-id}/{filepath}
+```
+
+`{filepath}` is exactly the filepath used to publish the asset. The published
+filepath never includes the `/assets/` prefix or the build ID; the read URL adds
+both:
+
+```text
+PUT /publishing-api/v1/assets/stylesheets/stylesheet.css
+Kixx-Build-Id: build-2026-07-29
+
+GET /assets/build-2026-07-29/stylesheets/stylesheet.css
+```
+
+The URL carries the build ID, so an asset staged for a build that has not been
+promoted is publicly readable as soon as it is written, and an asset belonging
+to a previous build stays readable while that build's files remain in the store.
+Reads never consult the deployment's current build.
+
+Responses use `Cache-Control: public, max-age=31536000, immutable` alongside
+`ETag` and `Last-Modified` validators. That cache policy is the reason the write
+path is write-once: a URL already handed to a browser or CDN must never change
+its bytes.
+
+The filepath is used exactly as published, including case. The reserved `dev`
+segment (`GET /assets/dev/{filepath}`) reads the flat, un-namespaced root used
+by deployments running without a build ID; it is not a build and cannot be
+published to.
 
 ### Asset-specific errors
 
@@ -488,11 +601,19 @@ derived from the SHA-256 digest of those bytes.
 |---|---|---|
 | `400` | `ContentTypeRequired` | `Content-Type` is missing or empty |
 | `400` | `BuildIdRequired` | `Kixx-Build-Id` is missing or empty |
+| `400` | `ReservedBuildId` | `Kixx-Build-Id` is the reserved value `dev` |
+| `400` | `InvalidBuildId` | `Kixx-Build-Id` is not one safe path segment |
 | `400` | `StaticAssetSourceRequired` | Body has zero bytes |
 | `400` | `EmptyPathSegment` | Filepath contains an empty segment |
 | `400` | `BAD_REQUEST_ERROR` | Filepath violates the path character or traversal rules |
 | `409` | `CurrentBuildWriteConflict` | Build ID is the current build |
+| `409` | `StaticAssetImmutableConflict` | Address already holds different bytes or a different content type |
 | `413` | `PAYLOAD_TOO_LARGE_ERROR` | Body exceeds 24 MiB |
+
+Asset checks run in a fixed order, so a request with more than one problem
+reports the first one reached: filepath, `Content-Type`, body size, body bytes,
+build ID presence, build ID format, current-build conflict, and finally the
+write-once comparison.
 
 ## Error documents
 
@@ -572,13 +693,22 @@ over time.
 - Require a build ID in the SDK method signature for templates and assets.
 - Make the build ID optional for page metadata and includes, while clearly
   labeling omission as a live-build edit.
+- Validate build IDs locally against the single-safe-segment rule, and reject
+  `dev`, before sending a request. A generated build ID that fails these rules
+  fails every publish in a deploy, so catching it once at the source is cheaper
+  than reading `InvalidBuildId` off each response.
 - Canonicalize template, page, and include paths to lowercase before using them
   as local cache keys. Do not lowercase asset paths.
 - Serialize page metadata as JSON:API and omit request `data.id`; use the URL as
   the resource identity.
 - Preserve response build IDs instead of assuming the requested ID, especially
   when a page or include request omitted the header.
-- Model every operation as an idempotent replacement, not a patch or create.
+- Model template, page metadata, and include operations as idempotent
+  replacements, never as patches or creates.
+- Model asset operations as idempotent write-once publishes. Serialize uploads
+  to the same build ID and filepath, treat an identical retry as success, and
+  treat `StaticAssetImmutableConflict` as a signal that the build ID must change
+  rather than as a transient failure worth retrying.
 - Parse JSON:API error arrays even when most failures contain only one error.
 - Do not automatically retry `401`, `403`, `409`, `413`, `415`, or `422`
   responses. A retry requires changed credentials, request data, or build state.
