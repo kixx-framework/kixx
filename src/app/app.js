@@ -1,7 +1,7 @@
 import DocumentStore from '../kixx/document-store/document-store.js';
+import CsrfTokenSigner from './presentation/lib/csrf-token-signer.js';
 import AdminInviteCollection from './collections/admin-invite-collection.js';
 import AdminUserCollection from './collections/admin-user-collection.js';
-import CsrfTokenCollection from './collections/csrf-token-collection.js';
 import MigrationCollection from './collections/migration-collection.js';
 import PublishingApiTokenCollection from './collections/publishing-api-token-collection.js';
 import RateLimitCollection from './collections/rate-limit-collection.js';
@@ -16,6 +16,7 @@ const DOCUMENT_STORE_INDEXES = [
 ];
 
 const DOCUMENT_STORE_CURSOR_SIGNING_SECRET = 'DOCUMENT_STORE_CURSOR_SIGNING_SECRET';
+const CSRF_TOKEN_SIGNING_SECRET = 'CSRF_TOKEN_SIGNING_SECRET';
 
 
 export function register(context) {
@@ -28,7 +29,6 @@ export function register(context) {
     context.registerCollection('AdminInvite', new AdminInviteCollection({ db: documentStore }));
     context.registerCollection('Migration', new MigrationCollection({ db: documentStore }));
     context.registerCollection('PublishingApiToken', new PublishingApiTokenCollection({ db: documentStore }));
-    context.registerCollection('CsrfToken', new CsrfTokenCollection({ db: keyValueStore }));
     context.registerCollection('RateLimit', new RateLimitCollection({ db: keyValueStore }));
     context.registerCollection('UserSession', new UserSessionCollection({ db: keyValueStore }));
 }
@@ -47,4 +47,13 @@ export function initialize(context) {
         indexes: DOCUMENT_STORE_INDEXES,
         cursorSigningSecret,
     });
+
+    // Signs and verifies stateless CSRF tokens. Read here rather than deferred
+    // to first use, so a missing secret fails boot loudly instead of leaving a
+    // silently unsigned CSRF subsystem running.
+    const csrfTokenSigningSecret = context.getEnvString(CSRF_TOKEN_SIGNING_SECRET, {
+        required: true,
+    });
+
+    context.registerService('CsrfTokenSigner', new CsrfTokenSigner(csrfTokenSigningSecret));
 }

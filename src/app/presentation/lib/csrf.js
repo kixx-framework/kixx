@@ -1,5 +1,6 @@
 import { ForbiddenError } from '../../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
+import { generateSecretToken } from '../../../kixx/utils/crypto.js';
 import { isSecureRequest } from './admin-session-cookie.js';
 
 
@@ -26,9 +27,11 @@ export const INVALID_CSRF_TOKEN_CODE = 'InvalidCsrfTokenError';
 /**
  * Builds a form render context with a fresh synchronizer CSRF token.
  *
- * The token is new on every render, but the browser's pre-session is not: the
- * cookie is browser-wide, so replacing the pre-session would silently kill the
- * forms every other open tab is holding. See `issueCsrfToken()`.
+ * The token is a stateless HMAC envelope binding the browser's `sid` cookie
+ * value and an expiration, verified without any storage lookup. The token is
+ * new on every render, but the `sid` is not: the cookie is browser-wide, so
+ * replacing it would silently invalidate the forms every other open tab is
+ * holding. See `mintCsrfToken()`.
  *
  * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
  * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
@@ -39,14 +42,14 @@ export const INVALID_CSRF_TOKEN_CODE = 'InvalidCsrfTokenError';
  */
 export async function getCsrfFormContext(context, request, response, form, error) {
     const formContext = form.getFormContext(context, error);
-    const { csrf, maxAge } = await issueCsrfToken(context, request);
+    const { sid, token } = await mintCsrfToken(context, request);
 
-    response.setCookie(CSRF_COOKIE_NAME, csrf.csrfSessionId, {
+    // Refresh the cookie on every render with the full TTL so it always
+    // outlives a token minted in this same response; the sid itself is not a
+    // credential; without the signing secret it cannot be turned into a token.
+    response.setCookie(CSRF_COOKIE_NAME, sid, {
         path: '/',
-        // Track the pre-session's own remaining lifetime rather than restating the
-        // full TTL: reuse does not extend the deadline, so a cookie carrying the
-        // full TTL would outlive the record it names.
-        maxAge,
+        maxAge: CSRF_TOKEN_TTL_SECONDS,
         secure: isSecureRequest(request),
         httpOnly: true,
         sameSite: 'Lax',
@@ -55,7 +58,7 @@ export async function getCsrfFormContext(context, request, response, form, error
     return Object.assign({}, formContext, {
         csrf: {
             fieldName: CSRF_FIELD_NAME,
-            token: csrf.token,
+            token,
         },
     });
 }
@@ -66,9 +69,6 @@ export async function getCsrfFormContext(context, request, response, form, error
  * Rejecting a submission does not end the interaction: an expired form and a
  * failed field validation are both mistakes the user can correct, so the page
  * comes back with its data intact rather than being replaced by an error page.
- * The re-render must carry a new token, because validateCsrfFormData() spends the
- * submitted one — without this the corrected resubmission would be rejected too,
- * trapping the user in a loop.
  *
  * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
  * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
@@ -91,31 +91,18 @@ export async function renderWithFreshCsrf(context, request, response, { form, pr
     }));
 }
 
-// Mints this render's token into the browser's existing pre-session when one is
-// still live, and starts a new pre-session otherwise. Reusing the record is what
-// keeps a second tab (or a reload) from invalidating forms already on screen;
-// each render still gets its own single-use token, so nothing is shared between
-// pages beyond the pre-session itself.
-async function issueCsrfToken(context, request) {
-    const csrfTokens = context.getCollection('CsrfToken');
-    const csrfSessionId = request.getCookie(CSRF_COOKIE_NAME);
+// Reuses the browser's existing sid when the cookie carries one, and mints a
+// new one otherwise. Reusing sid is what keeps a second tab (or a reload)
+// from invalidating forms already on screen: every render signs a fresh
+// token, but all of them verify against the same sid until the cookie is
+// cleared or the secret rotates.
+async function mintCsrfToken(context, request) {
+    const signer = context.getService('CsrfTokenSigner');
+    const existingSid = request.getCookie(CSRF_COOKIE_NAME);
+    const sid = isNonEmptyString(existingSid) ? existingSid : generateSecretToken();
+    const token = await signer.sign(sid, CSRF_TOKEN_TTL_SECONDS);
 
-    if (isNonEmptyString(csrfSessionId)) {
-        const record = await csrfTokens.getBySessionId(context, csrfSessionId);
-
-        // A record can outlive its store TTL by a moment, so the embedded deadline
-        // is checked too; a pre-session is replaced rather than extended once it is
-        // spent. The threshold is remaining lifetime, not expiry: a pre-session in
-        // its final moments cannot be written to, and a token minted into it would
-        // die before the form it belongs to could be filled in.
-        if (record && record.isReusable()) {
-            const csrf = await csrfTokens.issueToken(context, record);
-            return { csrf, maxAge: record.getSecondsUntilExpiration() };
-        }
-    }
-
-    const csrf = await csrfTokens.createToken(context, CSRF_TOKEN_TTL_SECONDS);
-    return { csrf, maxAge: CSRF_TOKEN_TTL_SECONDS };
+    return { sid, token };
 }
 
 /**
@@ -123,14 +110,17 @@ async function issueCsrfToken(context, request) {
  * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
  * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
  * @returns {Promise<FormData>} Parsed form data after CSRF validation succeeds.
- * @throws {ForbiddenError} When the CSRF cookie or submitted token is missing, expired, or mismatched.
+ * @throws {ForbiddenError} When the CSRF cookie or submitted token is missing, forged, expired, or bound to a different sid.
  */
 export async function validateCsrfFormData(context, request) {
     const formData = await request.formData();
-    const csrfSessionId = request.getCookie(CSRF_COOKIE_NAME);
+    const sid = request.getCookie(CSRF_COOKIE_NAME);
     const token = formData.get(CSRF_FIELD_NAME);
-    const csrfTokens = context.getCollection('CsrfToken');
-    const isValidToken = await csrfTokens.validateToken(context, csrfSessionId, token);
+    const signer = context.getService('CsrfTokenSigner');
+
+    const isValidToken = isNonEmptyString(sid)
+        && isNonEmptyString(token)
+        && await signer.verify(token, sid);
 
     if (!isValidToken) {
         throw new ForbiddenError('The form has expired. Please reload and try again.', {
@@ -138,37 +128,23 @@ export async function validateCsrfFormData(context, request) {
         });
     }
 
-    // Consume the submitted token immediately so it cannot be replayed in a
-    // concurrent or retried request. Only this token is spent — the pre-session
-    // and the tokens other open pages are holding survive. If the handler later
-    // re-renders the form (e.g. on validation failure), getCsrfFormContext mints
-    // a new token into the same pre-session.
-    await csrfTokens.consumeToken(context, csrfSessionId, token);
-
     return formData;
 }
 
 /**
- * Deletes the current CSRF pre-session and clears its browser cookie.
+ * Clears the browser's CSRF cookie.
  *
- * Unlike consuming a single token, this drops every token the browser holds. That
- * is deliberate at the login and signup boundary: the pre-session has served its
- * purpose once a real session exists, and any pre-auth form still open should not
- * remain submittable.
+ * Unlike a stored pre-session, there is nothing server-side to delete: the
+ * token's validity lives entirely in its signature, so clearing the cookie
+ * only removes the sid the browser would otherwise keep resubmitting for
+ * reuse. This is deliberate at the login and signup boundary: the CSRF cookie
+ * has served its purpose once a real session exists.
  *
- * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
  * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
  * @param {import('../../../kixx/http-router/server-response.js').default} response - Response being built.
- * @returns {Promise<void>}
+ * @returns {void}
  */
-export async function clearCsrfToken(context, request, response) {
-    const csrfSessionId = request.getCookie(CSRF_COOKIE_NAME);
-
-    if (isNonEmptyString(csrfSessionId)) {
-        const csrfTokens = context.getCollection('CsrfToken');
-        await csrfTokens.deleteToken(context, csrfSessionId);
-    }
-
+export function clearCsrfToken(request, response) {
     response.setCookie(CSRF_COOKIE_NAME, '', {
         path: '/',
         maxAge: 0,
