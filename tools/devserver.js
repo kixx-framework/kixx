@@ -4,8 +4,7 @@ import util from 'node:util';
 import { isNonEmptyString } from '../src/kixx/assertions/mod.js';
 import { OperationalError } from '../src/kixx/errors/mod.js';
 import AppServerProcess from './devserver/app-server-process.js';
-import { isStylesheetRequest, serveStylesheetFile } from './devserver/stylesheet-file-handler.js';
-import { isJavascriptRequest, serveJavascriptFile } from './devserver/javascript-file-handler.js';
+import { serveSourceFile } from './devserver/source-file-handler.js';
 
 
 // Mirrors src/node-server.js's CLI surface so this script is a drop-in
@@ -70,21 +69,9 @@ async function handleRequest(request, response) {
     const assetPathname = pathname.replace(/^\/assets\/[^/]+(?=\/)/, '');
     const sourcePathname = assetPathname === pathname ? pathname : assetPathname;
 
-    // CSS source files live in src/stylesheets/ and are not copied into the
-    // app server's served public/ directory by any build step, so serve them
-    // straight from source here rather than proxying to (and possibly
-    // restarting) the app server child process. Asset URLs use the same source
-    // path after their Build ID segment has been stripped above.
-    if (isStylesheetRequest(sourcePathname)) {
-        await serveStylesheetFile(request, response, sourcePathname);
-        return;
-    }
-
-    // Browser JavaScript modules live in src/javascript/ and, like the
-    // stylesheets above, are not copied into the app server's served public/
-    // directory by any build step, so serve them straight from source here.
-    if (isJavascriptRequest(sourcePathname)) {
-        await serveJavascriptFile(request, response, sourcePathname);
+    // Browser CSS and JavaScript are not copied into public/ by a development
+    // build step, so serve recognized paths directly from their source roots.
+    if (await serveSourceFile(request, response, sourcePathname)) {
         return;
     }
 
