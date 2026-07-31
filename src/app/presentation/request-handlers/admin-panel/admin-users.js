@@ -286,7 +286,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     // A completed signup clears the per-IP counter so a legitimate user isn't
     // penalized by their own earlier validation stumbles.
     await clearSignupThrottle(context, request);
-    await clearCsrfToken(context, request, response);
+    clearCsrfToken(request, response);
 
     const adminTarget = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
     skip();
@@ -401,7 +401,7 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
     setAdminSessionCookie(request, response, result.sessionId);
     // A clean login clears the throttle so earlier failures don't haunt the user.
     await clearLoginThrottle(context, request, form.email_address);
-    await clearCsrfToken(context, request, response);
+    clearCsrfToken(request, response);
 
     const adminTarget = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
     skip();

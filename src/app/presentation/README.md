@@ -860,7 +860,9 @@ A form can serve both entry points when the same fields arrive over HTML and JSO
 
 Use `app/presentation/lib/csrf.js` for browser HTML forms that mutate state or establish authentication. CSRF validation belongs in request handlers before constructing a Form and before calling any Transaction Script. Transaction Scripts should continue to receive already-validated Forms and should not be concerned with CSRF cookies or hidden fields.
 
-On GET handlers, render the form through `getCsrfFormContext()`. The helper calls `form.getFormContext(context, error)`, mints a fresh single-use CSRF token, sets the browser CSRF pre-session cookie, and returns the usual form context with `form.csrf.fieldName` and `form.csrf.token` added:
+CSRF tokens are stateless: `app/presentation/lib/csrf-token-signer.js` signs and verifies an HMAC envelope binding a browser-side `sid` cookie value and an expiration, so validating a submission touches no storage. Renders set the `sid` on every response; the value is not sensitive on its own since forging a token for it still requires the deploy-time signing secret.
+
+On GET handlers, render the form through `getCsrfFormContext()`. The helper calls `form.getFormContext(context, error)`, mints a fresh CSRF token, sets the browser CSRF cookie, and returns the usual form context with `form.csrf.fieldName` and `form.csrf.token` added:
 
 ```js
 import { getCsrfFormContext } from '../lib/csrf.js';
@@ -891,11 +893,11 @@ export async function postCreateBugForm(context, request, response, skip) {
 }
 ```
 
-On validation or domain errors that re-render the form, call `getCsrfFormContext(context, request, response, form, error)` again so the response carries a fresh token. After successful signup, login, or another flow that should end the pre-session, call `clearCsrfToken(context, request, response)` after setting the real session cookie.
+On validation or domain errors that re-render the form, call `getCsrfFormContext(context, request, response, form, error)` again so the response carries a fresh token. After successful signup, login, or another flow that should end the CSRF cookie's usefulness, call `clearCsrfToken(request, response)` after setting the real session cookie.
 
-The pre-session cookie is browser-wide, so a render does not replace it: each render mints its own single-use token into the existing pre-session, and each accepted submission spends only the token it was given. Opening a second tab, reloading, or rendering several forms on one page therefore leaves every other open form submittable. Tokens are still bounded — the pre-session holds a capped number of them and expires on its original deadline, which reuse does not extend.
+The CSRF cookie is browser-wide, so a render does not replace its `sid`: each render mints a fresh token bound to the existing `sid`, and a submission remains valid for as long as the token's expiration allows — it is not spent on use. Opening a second tab, reloading, or rendering several forms on one page therefore leaves every other open form submittable, and a resubmission (e.g. a back-button retry) is accepted rather than rejected. Rotating the signing secret invalidates every form currently open.
 
-A token can still be rejected: the pre-session expired, the token was already spent (a back-button resubmit), or the cap evicted it. Left uncaught, that `ForbiddenError` reaches the route error handler and replaces the whole page with a generic error page, costing the operator their place. Where the surface can recover, catch `error.code === 'InvalidCsrfTokenError'` and hand back a usable page instead: re-render inline with a fresh token when the route owns a page, or redirect to the page that does and carry a notice code (see `admin-invites.js`, which does both).
+A token can still be rejected: the cookie is missing, the submitted field is missing, the token is forged, it is expired, or it was minted for a different `sid` (for example after the cookie was cleared or replaced). Left uncaught, that `ForbiddenError` reaches the route error handler and replaces the whole page with a generic error page, costing the operator their place. Where the surface can recover, catch `error.code === 'InvalidCsrfTokenError'` and hand back a usable page instead: re-render inline with a fresh token when the route owns a page, or redirect to the page that does and carry a notice code (see `admin-invites.js`, which does both).
 
 Templates render the hidden field directly inside the protected `<form>`:
 

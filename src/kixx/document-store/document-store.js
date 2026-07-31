@@ -11,12 +11,12 @@ import {
     assertNonEmptyString,
 } from '../assertions/mod.js';
 import InvalidCursorError from './invalid-cursor-error.js';
+import { bytesToBase64Url, base64UrlToBytes } from '../utils/base64url.js';
 
 
 const TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 // deno-lint-ignore no-control-regex
 const CONTROL_CHAR_PATTERN = /[\x00-\x1F]/; // eslint-disable-line no-control-regex
-const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 const CURSOR_RANGE_OPTION_KEYS = [
     'equalTo',
     'greaterThan',
@@ -633,39 +633,4 @@ function buildCursorScope(args) {
 
 function areCursorScopesEqual(actualScope, expectedScope) {
     return JSON.stringify(actualScope) === JSON.stringify(expectedScope);
-}
-
-function bytesToBase64Url(bytes) {
-    let binary = '';
-    for (const byte of bytes) {
-        binary += String.fromCharCode(byte);
-    }
-
-    return btoa(binary)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-}
-
-function base64UrlToBytes(value) {
-    if (!BASE64URL_PATTERN.test(value)) {
-        throw new Error('Invalid base64url value');
-    }
-
-    const paddedValue = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(
-        Math.ceil(value.length / 4) * 4,
-        '=',
-    );
-    const binary = atob(paddedValue);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-        bytes[i] = binary.charCodeAt(i);
-    }
-
-    // Reject permissive atob() decodes so each cursor has one canonical form.
-    if (bytesToBase64Url(bytes) !== value) {
-        throw new Error('Invalid base64url value');
-    }
-
-    return bytes;
 }

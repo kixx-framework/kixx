@@ -86,8 +86,8 @@ async function matchesBootstrapToken(context, token) {
         return false;
     }
 
-    // Compare digests rather than raw values, matching the CsrfToken precedent of
-    // checking SHA-256 hashes; the env secret is never compared in plaintext.
+    // Compare SHA-256 digests rather than raw values, so the env secret is
+    // never compared in plaintext.
     const presentedHash = await sha256Hex(token);
     const bootstrapHash = await sha256Hex(bootstrapToken);
     return presentedHash === bootstrapHash;

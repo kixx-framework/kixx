@@ -191,7 +191,7 @@ not write a case asserting that a replayed token is accepted.
 
 ### Task 1: HMAC-signed CSRF token envelope
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** Token format and distributed-system notes above; `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`; `test/unit-tests/README.md`; `src/plugins/README.md` (service registration lifecycle)
 
@@ -301,19 +301,51 @@ Per cross-cutting decision 8, do not add a case asserting a token verifies twice
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Extracted `bytesToBase64Url()`/`base64UrlToBytes()` (and `BASE64URL_PATTERN`) out
+  of `document-store.js` verbatim into `src/kixx/utils/base64url.js`; `document-store.js` now
+  imports them. Wrote `CsrfTokenSigner` with `sign(sid, ttlSeconds)` and `verify(token, sid)`,
+  holding the imported `CryptoKey` promise in a private field. Wrote both new test files per
+  the plan's coverage list.
+- Current state: All acceptance criteria met. Lint clean. New tests pass (104 tests across
+  `test/unit-tests/kixx/utils` + `test/unit-tests/app/presentation/lib`). The existing
+  `test/unit-tests/kixx/document-store` suite (40 tests) passes unmodified, confirming the
+  extraction was behavior-neutral.
+- Remaining: Nothing for this task.
+- Decisions and discoveries:
+  - `base64UrlToBytes('')` throws (the alphabet pattern requires 1+ chars) — this is
+    pre-existing behavior carried over unchanged, not a regression. The round-trip test for
+    empty input was adjusted to only assert the encode direction; `document-store.js` never
+    exercised the decode side with an empty string either.
+  - The non-canonical-decode test uses a single zero byte (canonical form `"AA"`) versus the
+    hand-crafted `"AB"`, since a 3-byte example leaves no unused padding bits to tamper with —
+    only inputs whose base64 length includes padding have "don't care" bits a permissive
+    `atob()` accepts but the canonical round-trip rejects.
+  - `MockTracker.method(crypto.subtle, 'importKey')` needed no explicit implementation
+    argument; it defaults to calling through to the original bound method, which is enough to
+    just count calls for the CryptoKey-imported-once assertion.
+  - Per this repo's `AGENTS.md` ("Do not run the dev server... for the purpose of work
+    verification or smoke testing"), the plan's manual dev-server check (paging
+    `/admin/invites` forward and back) was intentionally skipped. The automated regression
+    suite (`document-store.test.js`, unmodified and passing) is the verification for this
+    task instead.
+- Actual files changed:
+  - `src/kixx/utils/base64url.js` (new)
+  - `src/kixx/document-store/document-store.js` (removed the two private functions and
+    `BASE64URL_PATTERN`; added the import)
+  - `src/app/presentation/lib/csrf-token-signer.js` (new)
+  - `test/unit-tests/kixx/utils/base64url.test.js` (new)
+  - `test/unit-tests/app/presentation/lib/csrf-token-signer.test.js` (new)
+- Validation run:
+  - `node run-linter.js src/kixx/utils/base64url.js src/kixx/document-store/document-store.js src/app/presentation/lib/csrf-token-signer.js test/unit-tests/kixx/utils/base64url.test.js test/unit-tests/app/presentation/lib/csrf-token-signer.test.js` — clean.
+  - `node run-tests.js test/unit-tests/kixx/utils test/unit-tests/app/presentation/lib` — 104 tests, passed.
+  - `node run-tests.js test/unit-tests/kixx/document-store` — 40 tests, passed unmodified.
 - Blockers: None.
 
 ---
 
 ### Task 2: Rewire the CSRF helpers onto the signer
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 1
 **Documentation:** Cookie lifetime and cross-cutting decisions above; `src/app/presentation/README.md` §"CSRF-Protected HTML Forms" (lines ~859-905); `src/docs/server-error-handling.md`; `test/unit-tests/README.md`
 
@@ -450,19 +482,64 @@ both succeed.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Rewrote `src/app/presentation/lib/csrf.js` end to end onto `CsrfTokenSigner`:
+  `getCsrfFormContext()` now reuses an existing `sid` cookie value (or mints one via
+  `generateSecretToken()`), always signs a fresh token, and always re-sets the cookie with
+  `maxAge: CSRF_TOKEN_TTL_SECONDS`. `validateCsrfFormData()` verifies the submitted token
+  against the cookie's `sid` via `signer.verify()` and no longer consumes anything.
+  `clearCsrfToken()` dropped its `context` parameter and is now synchronous (it only clears a
+  cookie — there is no longer any awaited storage call). Updated both call sites in
+  `admin-users.js` (lines ~289 and ~404) to the new two-argument, non-awaited form. Rewrote
+  the CSRF-Protected HTML Forms section of `src/app/presentation/README.md` to describe the
+  stateless model (dropped "single-use", "pre-session", added the resubmission-is-now-accepted
+  and secret-rotation notes). Rewrote
+  `test/unit-tests/app/presentation/lib/csrf.test.js` from scratch using a real
+  `CsrfTokenSigner` built on a fixed test secret behind a stub `context.getService()`.
+- Current state: All acceptance criteria met. Lint clean on all changed files. New/rewritten
+  test file passes (48 tests in `test/unit-tests/app/presentation/lib`), and the full repo
+  suite passes (1412 tests), confirming no other caller depended on the old signatures. Grepped
+  the whole `src/` tree for `clearCsrfToken`/`getCsrfFormContext`/`validateCsrfFormData`/
+  `renderWithFreshCsrf` — every other call site (`admin-invites.js`,
+  `admin-publishing-api-tokens.js`) already used the unchanged three-argument
+  `getCsrfFormContext`/`validateCsrfFormData`/`renderWithFreshCsrf` signatures and needed no
+  edits.
+- Remaining: Nothing for this task. Task 3's service registration is what makes
+  `context.getService('CsrfTokenSigner')` resolve at runtime — until that lands, calling any
+  of these helpers against a live `context` will throw, which is expected and documented in
+  the plan.
+- Decisions and discoveries:
+  - `clearCsrfToken()` no longer performs any `await`-worthy work, so it was made synchronous
+    rather than kept `async` for its own sake; both call sites in `admin-users.js` were updated
+    to call it without `await` accordingly. This is slightly beyond the plan's literal
+    "loses the unused context parameter" wording but keeps the function's signature honest
+    about what it actually does now, per the code style guide's stance on encapsulation.
+  - Per this repo's `AGENTS.md` policy against running the dev server for verification, the
+    manual validation sequence in this task (steps 1-8, including the two-tab multi-tab check
+    and the one-time "same token submitted twice now succeeds" confirmation) was **not** run.
+    That sequence requires Task 3's service registration to be wired up anyway (the plan notes
+    this task's code throws at runtime on the service lookup until then), so it is deferred to
+    whoever performs manual acceptance testing after Task 3 lands, or to the user directly.
+  - The rewritten test's "performs no storage access" case asserts `context.getCollection` is
+    `undefined` on the stub context (rather than mocking a throwing `getCollection`), which is
+    sufficient: `lib/csrf.js` no longer references `getCollection` anywhere, confirmed by a
+    full-file read of the rewritten module.
+- Actual files changed:
+  - `src/app/presentation/lib/csrf.js` (rewritten)
+  - `src/app/presentation/request-handlers/admin-panel/admin-users.js` (two `clearCsrfToken()` call sites)
+  - `src/app/presentation/README.md` (CSRF-Protected HTML Forms section)
+  - `test/unit-tests/app/presentation/lib/csrf.test.js` (rewritten)
+- Validation run:
+  - `node run-linter.js src/app/presentation/lib/csrf.js src/app/presentation/request-handlers/admin-panel/admin-users.js test/unit-tests/app/presentation/lib/csrf.test.js` — clean.
+  - `node run-tests.js test/unit-tests/app/presentation/lib` — 48 tests, passed.
+  - `node run-tests.js` (full suite) — 1412 tests, passed.
+  - Manual steps 1-8: **not run**, deferred (see discoveries above).
+- Blockers: None. Manual acceptance steps are deferred to after Task 3, as the plan itself anticipates.
 
 ---
 
 ### Task 3: Register the signer, remove the storage layer
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 2
 **Documentation:** `src/plugins/README.md` (two-phase `register()`/`initialize()` lifecycle); `src/app/collections/README.md`; cross-cutting decision 5 above
 
@@ -555,10 +632,63 @@ contract under `test/unit-tests/kixx/`.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: In `src/app/app.js`, added the `CsrfTokenSigner` import, a `CSRF_TOKEN_SIGNING_SECRET`
+  constant, and — in `initialize()`, right after the existing `DOCUMENT_STORE_CURSOR_SIGNING_SECRET`
+  read — a `context.getEnvString(CSRF_TOKEN_SIGNING_SECRET, { required: true })` read followed by
+  `context.registerService('CsrfTokenSigner', new CsrfTokenSigner(csrfTokenSigningSecret))`.
+  Removed the `CsrfTokenCollection` import and its `registerCollection('CsrfToken', ...)` line from
+  `register()`. Deleted `src/app/collections/csrf-token-collection.js` and
+  `src/app/collections/csrf-token-record.js`. Added `CSRF_TOKEN_SIGNING_SECRET` to
+  `src/example.env` with a rotation-consequence comment matching the cursor-secret one. Also
+  fixed a now-stale comment in
+  `src/app/transaction-scripts/admin-invites/resolve-admin-invite.js` (line ~89) that referenced
+  "the CsrfToken precedent" of hash-comparison, since that collection no longer exists to be a
+  precedent for anything — reworded to state the SHA-256-digest-comparison rationale directly.
+- Current state: All acceptance criteria met. Full unit suite passes (1412 tests). Repo-wide
+  grep for `CsrfToken` returns only `CsrfTokenSigner` hits and unrelated compound identifiers
+  (`csrf_token` form field name, `formCsrfToken`/`assertHtmlCsrfToken` test-helper names) — no
+  reference to the deleted collection or record remains anywhere, including `test/end-to-end/`.
+- Remaining: Nothing for this task. The deferred Task 2 manual acceptance sequence (dev server
+  with `CSRF_TOKEN_SIGNING_SECRET` set, the two-tab multi-tab check, the same-token-twice
+  confirmation, and the "boot fails loudly on a missing secret" check) is still outstanding —
+  see the note below.
+- Decisions and discoveries:
+  - `CsrfTokenSigner`'s constructor (from Task 1) takes the secret directly rather than
+    exposing a separate `initialize(config)` method the way `DocumentStore` does. Given that,
+    "register() constructs and registers, initialize() supplies configuration" was followed in
+    spirit rather than literally: both the `getEnvString()` read *and* the
+    `registerService('CsrfTokenSigner', ...)` call happen inside `initialize()`, since the
+    constructor cannot run before the secret is available. `register()` stays pure wiring with
+    no `CsrfTokenSigner` involvement at all. `registerService()` has no phase restriction
+    (confirmed by reading `ApplicationContext#registerService()` — it is an unconditional `Map`
+    write), so calling it from `initialize()` is safe and nothing else in this codebase calls
+    `context.getService('CsrfTokenSigner')` before `app.initialize()` completes.
+  - `context.getEnvString()` is available in both `register()` and `initialize()` (it reads
+    from `BaseContext`, not the service registry), so reading the secret in `initialize()` was
+    a deliberate placement choice to mirror the cursor-secret pattern exactly, not a
+    requirement of the phase system itself.
+  - Per this repo's `AGENTS.md` policy against running the dev server for verification, this
+    task's manual validation (boot-failure-on-missing-secret check, and the full Task 2 manual
+    sequence) was **not** run. Both the missing-secret behavior (`getEnvString({ required: true })`
+    throwing) and the service-registration wiring are exercised structurally by the full unit
+    suite passing with the real `app.js` module loaded transitively through existing tests, but
+    an actual process-boot check was not performed. This should be done by the user, or by
+    whoever runs the deferred Task 2 manual sequence, before deploying.
+- Actual files changed:
+  - `src/app/app.js` (service registration and `initialize()` secret read)
+  - `src/app/collections/csrf-token-collection.js` (deleted)
+  - `src/app/collections/csrf-token-record.js` (deleted)
+  - `src/example.env` (new documented secret)
+  - `src/app/transaction-scripts/admin-invites/resolve-admin-invite.js` (stale comment fix)
+- Validation run:
+  - `node run-linter.js src/app/app.js src/app/transaction-scripts/admin-invites/resolve-admin-invite.js` — clean.
+  - `node run-tests.js` (full suite) — 1412 tests, passed.
+  - `node --check src/app/app.js` — syntax-valid.
+  - Repo-wide `grep -rn "CsrfToken"` across `src/` and `test/` — only `CsrfTokenSigner` and
+    unrelated compound-name hits remain.
+  - Manual boot-failure check and the full Task 2/3 manual acceptance sequence: **not run**,
+    deferred per `AGENTS.md` policy (see discoveries above).
+- Blockers: None. The three-task implementation is functionally complete and unit-tested; the
+  only outstanding item across the whole plan is the manual dev-server acceptance pass
+  (Task 2's 8-step sequence plus Task 3's boot-failure check), which requires running the
+  dev server and was intentionally left to the user per this repo's verification policy.
