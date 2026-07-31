@@ -212,6 +212,50 @@ describe('PUT /publishing-api/v1/assets/*filepath without a build id header', ({
     });
 });
 
+describe('PUT /publishing-api/v1/assets/*filepath with a reserved build id', ({ before, it }) => {
+
+    let result;
+
+    before(async () => {
+        result = await putStaticAsset({ buildId: 'dev' });
+    });
+
+    it('responds with an HTTP 400 status code', () => {
+        assertEqual(400, result.response.status);
+    });
+
+    it('returns the reserved Build ID JSON:API error', () => {
+        assertSingleJsonApiError(result, {
+            status: '400',
+            code: 'ReservedBuildId',
+            title: 'BadRequestError',
+            detail: 'The Build ID "dev" is reserved for no-build asset URLs.',
+        });
+    });
+});
+
+describe('PUT /publishing-api/v1/assets/*filepath with a malformed build id', ({ before, it }) => {
+
+    let result;
+
+    before(async () => {
+        result = await putStaticAsset({ buildId: 'build/child' });
+    });
+
+    it('responds with an HTTP 400 status code', () => {
+        assertEqual(400, result.response.status);
+    });
+
+    it('returns the malformed Build ID JSON:API error', () => {
+        assertSingleJsonApiError(result, {
+            status: '400',
+            code: 'InvalidBuildId',
+            title: 'BadRequestError',
+            detail: 'Build ID must be one safe, non-empty URL path segment.',
+        });
+    });
+});
+
 describe('PUT /publishing-api/v1/assets/*filepath with an empty request body', ({ before, it }) => {
 
     let result;

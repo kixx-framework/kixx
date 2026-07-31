@@ -63,22 +63,28 @@ const devServer = http.createServer((request, response) => {
 });
 
 async function handleRequest(request, response) {
-    const pathname = new URL(request.url, 'http://localhost').pathname;
+    // Retain dot segments for the source-file handlers' validation rather than
+    // letting URL normalization collapse a traversal attempt before it reaches
+    // their shared path-safety guard.
+    const pathname = request.url.split(/[?#]/)[0];
+    const assetPathname = pathname.replace(/^\/assets\/[^/]+(?=\/)/, '');
+    const sourcePathname = assetPathname === pathname ? pathname : assetPathname;
 
     // CSS source files live in src/stylesheets/ and are not copied into the
     // app server's served public/ directory by any build step, so serve them
     // straight from source here rather than proxying to (and possibly
-    // restarting) the app server child process.
-    if (isStylesheetRequest(pathname)) {
-        await serveStylesheetFile(request, response, pathname);
+    // restarting) the app server child process. Asset URLs use the same source
+    // path after their Build ID segment has been stripped above.
+    if (isStylesheetRequest(sourcePathname)) {
+        await serveStylesheetFile(request, response, sourcePathname);
         return;
     }
 
     // Browser JavaScript modules live in src/javascript/ and, like the
     // stylesheets above, are not copied into the app server's served public/
     // directory by any build step, so serve them straight from source here.
-    if (isJavascriptRequest(pathname)) {
-        await serveJavascriptFile(request, response, pathname);
+    if (isJavascriptRequest(sourcePathname)) {
+        await serveJavascriptFile(request, response, sourcePathname);
         return;
     }
 

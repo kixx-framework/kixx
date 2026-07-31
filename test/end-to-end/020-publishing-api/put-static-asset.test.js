@@ -35,10 +35,10 @@ const ASSET_FILEPATH = 'e2e/nested/static-asset.png';
 const DECLARED_TYPE_ASSET_FILEPATH = 'e2e/nested/declared-type.css';
 const PARAMETERIZED_TYPE_ASSET_FILEPATH = 'e2e/nested/parameterized-type.css';
 
-// A single-segment filepath, the shape a root-served asset such as a favicon
-// takes. Carried by the republish block so it is covered without a block of
-// its own.
-const REPUBLISH_ASSET_FILEPATH = 'e2e-republish-target.css';
+// Single-segment filepaths cover the shape a root-served asset such as a favicon
+// takes. Each retry scenario owns an address so the blocks stay independent.
+const IDEMPOTENT_ASSET_FILEPATH = 'e2e-identical-retry.css';
+const IMMUTABLE_CONFLICT_ASSET_FILEPATH = 'e2e-immutable-conflict.css';
 
 // Mixed case in every directory segment, the filename, and the extension, so a
 // fold applied to any part of the filepath still fails.
@@ -110,11 +110,6 @@ describe('PUT /publishing-api/v1/assets/*filepath with happy path', ({ before, i
 
         result = await putStaticAsset(url, bytes, 'image/png');
     });
-
-    // The write cannot be read back. Asset writes are staged-only — putStaticAsset()
-    // refuses the current build with a 409 — so by construction the bytes always land
-    // in a namespace the running site is not serving. These tests pin the response
-    // contract only.
 
     it('responds with an HTTP 200 status code', () => {
         assert(result.response);
@@ -242,7 +237,7 @@ describe('PUT /publishing-api/v1/assets/*filepath with a mixed case filepath', (
     });
 
     // Assets are the one publishing resource whose filepath is case-preserving,
-    // and the reason is the read path: StaticFileRequestHandler looks the URL
+    // and the reason is the read path: StaticAssetRequestHandler looks the URL
     // pathname up in the store verbatim, so an asset published under a folded key
     // is unreachable at the URL that names it. Hyperview template, page, and
     // include addresses are canonicalized instead, so this assertion keeps that
@@ -254,28 +249,21 @@ describe('PUT /publishing-api/v1/assets/*filepath with a mixed case filepath', (
     });
 });
 
-describe('PUT /publishing-api/v1/assets/*filepath twice with different bytes', ({ before, it }) => {
+describe('PUT /publishing-api/v1/assets/*filepath with an identical retry', ({ before, it }) => {
 
     let url;
-    let secondBytes;
     let firstResult;
     let secondResult;
 
     before(async () => {
         // Construct the URL here so the test fails if it is invalid
         // instead of crashing the whole test run.
-        url = new URL(`${ getBaseUrl() }/publishing-api/v1/assets/${ REPUBLISH_ASSET_FILEPATH }`);
+        url = new URL(`${ getBaseUrl() }/publishing-api/v1/assets/${ IDEMPOTENT_ASSET_FILEPATH }`);
 
-        const firstBytes = await fsp.readFile(CSS_FIXTURE_URL);
+        const bytes = await fsp.readFile(CSS_FIXTURE_URL);
 
-        // Republish changed bytes to the same filepath and build. Re-running a
-        // publish must be safe, so the store overwrites rather than conflicting.
-        secondBytes = new TextEncoder().encode(
-            `${ new TextDecoder().decode(firstBytes) }.e2e-republished { color: #c0ffee; }\n`,
-        );
-
-        firstResult = await putStaticAsset(url, firstBytes, 'text/css');
-        secondResult = await putStaticAsset(url, secondBytes, 'text/css');
+        firstResult = await putStaticAsset(url, bytes, 'text/css');
+        secondResult = await putStaticAsset(url, bytes, 'text/css');
     });
 
     it('responds with an HTTP 200 status code both times', () => {
@@ -285,30 +273,51 @@ describe('PUT /publishing-api/v1/assets/*filepath twice with different bytes', (
         assertEqual(200, secondResult.response.status);
     });
 
-    // This block also carries the single-segment filepath, the shape a root-served
-    // asset such as a favicon takes. The wildcard has to match one segment as
-    // readily as the three the happy path sends.
-    it('returns the same filepath and build for both writes', () => {
-        assertEqual(REPUBLISH_ASSET_FILEPATH, firstResult.body.data.attributes.filepath);
-        assertEqual(REPUBLISH_ASSET_FILEPATH, secondResult.body.data.attributes.filepath);
-        assertEqual(REPUBLISH_ASSET_FILEPATH, secondResult.body.data.id);
+    it('returns the existing resource parts for both writes', () => {
+        assertEqual(IDEMPOTENT_ASSET_FILEPATH, firstResult.body.data.attributes.filepath);
+        assertEqual(IDEMPOTENT_ASSET_FILEPATH, secondResult.body.data.attributes.filepath);
+        assertEqual(IDEMPOTENT_ASSET_FILEPATH, secondResult.body.data.id);
         assertEqual(TEST_BUILD_ID, secondResult.body.data.attributes.buildId);
+        assertEqual(firstResult.body.data.attributes, secondResult.body.data.attributes);
+    });
+});
+
+describe('PUT /publishing-api/v1/assets/*filepath with conflicting bytes', ({ before, it }) => {
+
+    let assetUrl;
+    let firstBytes;
+    let firstResult;
+    let secondResult;
+    let assetResponse;
+
+    before(async () => {
+        const url = new URL(`${ getBaseUrl() }/publishing-api/v1/assets/${ IMMUTABLE_CONFLICT_ASSET_FILEPATH }`);
+        firstBytes = await fsp.readFile(CSS_FIXTURE_URL);
+        const secondBytes = new TextEncoder().encode(
+            `${ new TextDecoder().decode(firstBytes) }.e2e-republished { color: #c0ffee; }\n`,
+        );
+
+        firstResult = await putStaticAsset(url, firstBytes, 'text/css');
+        secondResult = await putStaticAsset(url, secondBytes, 'text/css');
+        assetUrl = new URL(`${ getBaseUrl() }/assets/${ TEST_BUILD_ID }/${ IMMUTABLE_CONFLICT_ASSET_FILEPATH }`);
+        assetResponse = await fetch(assetUrl);
     });
 
-    // Unlike the other publishing endpoints, where republishing changed source
-    // returns an identical payload, the asset response describes the bytes. The
-    // validators must therefore track the new content: a store that cached them
-    // per key, or a handler that reported the first write's values, would serve a
-    // stale ETag and clients would keep the superseded asset until the build id
-    // changed.
-    it('returns validators for the republished bytes', async () => {
-        assertEqual(secondBytes.byteLength, secondResult.body.data.attributes.contentLength);
-        assertEqual(await computeStrongEtag(secondBytes), secondResult.body.data.attributes.etag);
+    it('returns an immutable conflict for the second write', () => {
+        assertEqual(200, firstResult.response.status);
+        assertEqual(409, secondResult.response.status);
+        const [ error ] = secondResult.body.errors;
+        assertEqual('409', error.status);
+        assertEqual('StaticAssetImmutableConflict', error.code);
+        assertEqual('ConflictError', error.title);
+    });
 
-        assert(
-            firstResult.body.data.attributes.etag !== secondResult.body.data.attributes.etag,
-            'the republished etag must differ from the first',
-        );
+    it('continues to serve the first representation at its public asset URL', async () => {
+        assertEqual(200, assetResponse.status);
+        assertEqual('text/css', assetResponse.headers.get('content-type'));
+        assertEqual('public, max-age=31536000, immutable', assetResponse.headers.get('cache-control'));
+        assertEqual(firstResult.body.data.attributes.etag, assetResponse.headers.get('etag'));
+        assertEqual(firstBytes, new Uint8Array(await assetResponse.arrayBuffer()));
     });
 });
 

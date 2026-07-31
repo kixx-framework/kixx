@@ -10,15 +10,15 @@
  * resolves to data or to `null` when the file is absent.
  *
  * ## Keyed, namespaced lookup
- * Files are addressed by a `key` within a `namespace`. The request handler derives
- * the `key` from the request URL pathname (query string and hash excluded) and the
- * `namespace` from the deployment Build ID (`context.runtime.build?.id`). The
- * namespace is what makes Atomic Deployments possible: each build's files live
- * under their own Build ID, so a new deployment swaps the whole asset set at once
- * without overwriting the previous build's files in place. When no Build ID is
- * present (for example, a Node.js deployment that copies files out-of-band with
- * rsync or git), `namespace` is `null` and the store reads from its un-namespaced
- * root.
+ * Files are addressed by a `key` within a `namespace`. `StaticFileRequestHandler`
+ * derives both from the request URL and current runtime Build ID
+ * (`context.runtime.build?.id`), while `StaticAssetRequestHandler` takes both from
+ * its Build-ID-addressed asset route. The namespace is what makes Atomic
+ * Deployments possible: each build's files live under their own Build ID, so a new
+ * deployment swaps the whole asset set at once without overwriting the previous
+ * build's files in place. When no Build ID is present (for example, a Node.js
+ * deployment that copies files out-of-band with rsync or git), `namespace` is
+ * `null` and the store reads from its un-namespaced root.
  *
  * ## Return value: a parts object, not a Web `Response`
  * `read()` resolves to a {@link StaticFileResult} — the file body stream plus the
@@ -58,7 +58,8 @@
  * API to upload a build's static assets to a staged (non-current) Build ID
  * namespace — the static-asset analogue of how the Hyperview service accepts
  * template/page/include writes. Static files are still primarily published by the
- * out-of-band Kixx build tooling; `write()` is the in-application alternative.
+ * out-of-band Kixx build tooling; `write()` is the in-application alternative and
+ * remains overwrite-capable for those callers.
  *
  * `write()` is the store's source of truth for cache validators: given the
  * already-buffered bytes plus an optional content type, the store computes a strong
@@ -69,9 +70,12 @@
  * (Cloudflare: KV metadata; Node.js: a per-asset metadata sidecar), and returns the
  * written parts so the caller can echo them back to the publishing client.
  *
- * Enforcing that `namespace` is a staged, non-current Build ID is the *caller's*
- * concern (the transaction script), not the store's: the store writes wherever it
- * is told. The size cap that keeps a value within the platform's limits
+ * Enforcing that `namespace` is a staged, non-current Build ID and that a
+ * Publishing API address is sequentially write-once is the *caller's* concern
+ * (the transaction script), not the store's: the store writes wherever it is told.
+ * The Publishing API reads first and requires clients to serialize concurrent
+ * writes to one address; this port has no atomic create-only operation. The size
+ * cap that keeps a value within the platform's limits
  * (Cloudflare KV's 25 MiB) is likewise enforced upstream, before the body is
  * buffered and handed to `write()`.
  *
@@ -162,5 +166,6 @@
  *   metadata sidecar), and resolves to a {@link StaticFileWriteResult}. The
  *   `key` MUST be path-safety validated by the caller; adapters MUST independently
  *   refuse to write outside their namespace root, throwing rather than writing.
- *   Enforcing a staged, non-current `namespace` is the caller's concern.
+ *   Enforcing a staged, non-current `namespace` and sequential write-once
+ *   publishing is the caller's concern; this low-level method may overwrite.
  */

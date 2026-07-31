@@ -101,6 +101,49 @@ export default [
 ];
 ```
 
+## Serving Immutable Build Assets
+
+Use `StaticAssetRequestHandler` for assets whose URL carries the Build ID: `/assets/:build_id/*pathname`. Unlike `StaticFileRequestHandler`, it takes both the namespace and key from the route params. A file stored under an older Build ID remains reachable at its original URL until that namespace is pruned, which lets cached HTML continue to load the exact assets it named after a deployment.
+
+```js
+import { StaticAssetRequestHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+
+{
+    pattern: '/assets/:build_id/*pathname',
+    name: 'build-assets',
+    targets: [
+        {
+            name: 'serve-asset',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [ StaticAssetRequestHandler() ],
+        },
+    ],
+}
+```
+
+`buildIdParam` and `pathnameParam` default to `build_id` and `pathname`, so the route above needs no handler options. When a route uses different parameter names, pass them explicitly to keep the handler aligned with that route:
+
+```js
+{
+    pattern: '/releases/:release/*file',
+    name: 'release-assets',
+    targets: [
+        {
+            name: 'serve-asset',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [
+                StaticAssetRequestHandler({
+                    buildIdParam: 'release',
+                    pathnameParam: 'file',
+                }),
+            ],
+        },
+    ],
+}
+```
+
+This handler uses `public, max-age=31536000, immutable` by default while still supplying ETag and Last-Modified validators for force reloads. It serves any stored Build ID namespace — staged, current, or historical — rather than only the runtime's current build. A real Build ID is one safe URL segment and cannot equal the reserved lowercase `dev` placeholder, which maps only asset reads to the flat no-build root. Malformed input is a 400, and a well-formed asset absent from the named namespace is a 404. Asset upload keys must omit the URL prefix and Build ID — for example, publishing `stylesheets/stylesheet.css` produces the URL `/assets/<build-id>/stylesheets/stylesheet.css`.
+
 ## How Static File Serving Works
 
 The `StaticFileRequestHandler` delegates to an internal Kixx component called the `StaticFileStore` which stores files by key. The `StaticFileRequestHandler` uses the request pathname, excluding query parameters and hashes, as the file key along with the current Build ID as the namespace to support Atomic Deployments. The `StaticFileStore` then looks up the file by key and namespace and returns a result.
@@ -125,9 +168,11 @@ When deploying to Cloudflare, Kixx will always use Atomic Deployments with a Bui
 
 In addition to the read path above, the `StaticFileStore` has a single deploy-time write method, `write()`, which allows writing binary static assets (favicons, images, fonts, CSS) to a build.
 
-### Staged-build-only writes
+### Staged-build-only, write-once publishing
 
-Asset writes must target a **staged** build: the request's `Kixx-Build-Id` is required and must differ from the current (live) build. This keeps the live asset set immutable until an atomic promotion, and it means the running server never serves a written namespace's assets until a later deploy promotes that build and restarts the process — which is why the Node read-time metadata cache (each asset's sidecar read once and held for the process lifetime) stays correct alongside the write path. Hot-patching a single live asset is intentionally not supported.
+Asset writes must target a **staged** build: the request's `Kixx-Build-Id` is required, must be a real Build ID, and must differ from the current (live) build. The first sequential PUT to a `(Build ID, key)` fixes that public address. An identical retry returns the existing asset resource without rewriting it; changed bytes, byte length, or content type return `409 StaticAssetImmutableConflict` and must be published under a new Build ID. Hot-patching a live asset is intentionally not supported.
+
+The guarantee is sequential only. Clients must serialize PUTs to the same `(Build ID, key)`: two concurrent first writers can both observe an absent asset, and neither the Node filesystem adapter nor Cloudflare KV supplies an atomic create-only operation here.
 
 ### Server-computed validators
 
@@ -140,4 +185,4 @@ The store is the source of truth for cache validators. Given the buffered bytes 
 
 ### Per-asset metadata sidecars (Node.js)
 
-The Node store records each asset's validators in its own JSON sidecar under a reserved `.meta/` subtree that mirrors the asset key (`<buildId>/.meta/css/main.css.json` for asset `css/main.css`). Because every asset owns a separate file, there is no shared index to serialize: concurrent asset PUTs to the same staged build write disjoint sidecars, and two writers of the same asset write byte-identical validators (the ETag is derived from the content), so a last-writer-wins atomic rename is safe. Each sidecar is written atomically (temp file + `rename`), and the `.meta/` subtree is kept out of the servable key space so sidecars are never served as assets.
+The Node store records each asset's validators in its own JSON sidecar under a reserved `.meta/` subtree that mirrors the asset key (`<buildId>/.meta/css/main.css.json` for asset `css/main.css`). Because every asset owns a separate file, there is no shared index to serialize for different keys. Each sidecar is written atomically (temp file + `rename`), and the `.meta/` subtree is kept out of the servable key space so sidecars are never served as assets.

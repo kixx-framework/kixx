@@ -7,8 +7,10 @@ import {
     AssertionError,
     assertNonEmptyString,
     isObjectNotNull,
+    isUndefined,
 } from '../assertions/mod.js';
 import deepFreeze from '../utils/deep-freeze.js';
+import { isValidBuildId } from '../utils/build-id.js';
 
 
 /**
@@ -66,6 +68,10 @@ export default class AppRuntime {
         }
 
         if (build) {
+            if (!isUndefined(build.id) && build.id !== null && !isValidBuildId(build.id)) {
+                throw new AssertionError('AppRuntime build id must be a valid Build ID');
+            }
+
             Object.defineProperty(this, 'build', {
                 enumerable: true,
                 value: deepFreeze(build),

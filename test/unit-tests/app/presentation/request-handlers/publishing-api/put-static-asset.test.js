@@ -6,6 +6,7 @@ import {
     JSON_API_CONTENT_TYPE,
 } from '../../../../../../src/app/presentation/lib/json-api.js';
 import { putStaticAsset } from '../../../../../../src/app/presentation/request-handlers/publishing-api/put-static-asset.js';
+import { computeStaticFileEtag } from '../../../../../../src/kixx/static-file-server/static-file-etag.js';
 
 
 const CURRENT_BUILD_ID = 'build-current';
@@ -326,6 +327,28 @@ describe('putStaticAsset publishing API handler', ({ it }) => {
         assertEqual(failure, caught.cause);
         assertMatches('writing a static asset', caught.message);
     });
+
+    it('propagates an immutable asset conflict without a second write', async () => {
+        const store = makeStaticFileStore();
+        const body = bytes([ 1 ]);
+        store.readResult = {
+            body: { async cancel() {} },
+            contentType: 'image/png',
+            contentLength: 1,
+            etag: await computeStaticFileEtag(bytes([ 2 ])),
+            lastModified: null,
+        };
+        const caught = await catchAsyncError(() => putStaticAsset(
+            makeContext({ store }),
+            makeRequest({ filepath: [ 'logo.png' ], body }),
+            makeResponse(),
+        ));
+
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('ConflictError', caught.name);
+        assertEqual('StaticAssetImmutableConflict', caught.code);
+        assertEqual(0, store.writes.length);
+    });
 });
 
 function bytes(values) {
@@ -334,7 +357,13 @@ function bytes(values) {
 
 function makeStaticFileStore(onWrite) {
     const store = {
+        readResult: null,
+        reads: [],
         writes: [],
+        async read(_context, args) {
+            store.reads.push(args);
+            return store.readResult;
+        },
         async write(_context, args) {
             store.writes.push(args);
             if (onWrite) {

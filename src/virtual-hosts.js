@@ -1,5 +1,8 @@
 import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
-import { StaticFileRequestHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+import {
+    StaticAssetRequestHandler,
+    StaticFileRequestHandler,
+} from './kixx/static-file-server/static-file-server-request-handlers.js';
 import adminErrorHandler from './app/presentation/error-handlers/admin-error-handler.js';
 import adminAuthErrorHandler from './app/presentation/error-handlers/admin-auth-error-handler.js';
 import jsonApiErrorHandler from './app/presentation/error-handlers/json-api-error-handler.js';
@@ -95,6 +98,19 @@ export default [
                     jsonApiErrorHandler,
                 ],
                 routes: publishingApiRoutes,
+            },
+            {
+                pattern: '/assets/:build_id/*pathname',
+                name: 'build-assets',
+                targets: [
+                    {
+                        name: 'serve-asset',
+                        methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            StaticAssetRequestHandler(),
+                        ],
+                    },
+                ],
             },
             {
                 pattern: '*',

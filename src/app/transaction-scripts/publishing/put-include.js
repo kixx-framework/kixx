@@ -1,5 +1,6 @@
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { AssertionError, BadRequestError, ConflictError } from '../../../kixx/errors/mod.js';
+import { validateBuildId } from '../../../kixx/utils/build-id.js';
 
 
 /**
@@ -43,6 +44,8 @@ export async function putInclude(context, args) {
             code: 'CurrentBuildIdRequired',
         });
     }
+
+    validateBuildId(effectiveBuildId);
 
     const service = context.getService('Hyperview');
 

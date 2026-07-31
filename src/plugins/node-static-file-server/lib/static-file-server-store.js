@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import { Readable } from 'node:stream';
 
 import { getContentType } from '../../../kixx/static-file-server/mime-types.js';
-import { sha256Hex } from '../../../kixx/utils/crypto.js';
+import { computeStaticFileEtag } from '../../../kixx/static-file-server/static-file-etag.js';
 import {
     AssertionError,
     assert,
@@ -214,7 +214,7 @@ export default class StaticFileStore {
         // The store owns the validators: a strong (quoted) SHA-256 ETag that always
         // matches the stored bytes — byte-identical to what read() returns — plus
         // the exact length and the resolved content type (extension fallback).
-        const etag = `"${ await sha256Hex(bytes) }"`;
+        const etag = await computeStaticFileEtag(bytes);
         const contentLength = bytes.byteLength;
         const resolvedContentType = isNonEmptyString(contentType) ? contentType : getContentType(key);
         const lastModified = new Date();
@@ -284,7 +284,7 @@ export default class StaticFileStore {
         // No cached hash: read the bytes once, hash them, and serve those same
         // bytes as the body so the file is not read twice on a cache miss.
         const bytes = await fsp.readFile(resolvedPath);
-        const etag = `"${ await sha256Hex(bytes) }"`;
+        const etag = await computeStaticFileEtag(bytes);
         this.#etagCache.set(cacheKey, etag);
 
         return { etag, body: streamFromBytes(bytes) };

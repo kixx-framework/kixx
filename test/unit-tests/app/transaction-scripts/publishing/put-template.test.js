@@ -60,6 +60,24 @@ describe('putTemplate Transaction Script', ({ it }) => {
         assertEqual(0, getWriteCallCount(harness.calls));
     });
 
+    it('rejects invalid and reserved target Build IDs before accessing Hyperview', async () => {
+        for (const [ buildId, code ] of [ [ 'build/child', 'InvalidBuildId' ], [ 'dev', 'ReservedBuildId' ] ]) {
+            const harness = makeHarness();
+            const caught = await catchAsyncError(() => putTemplate(harness.context, {
+                kind: 'page',
+                filepath: 'home.html',
+                source: '<h1>Home</h1>',
+                buildId,
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assertEqual(code, caught.code);
+            assertEqual(0, harness.calls.serviceAccess);
+            assertEqual(0, getWriteCallCount(harness.calls));
+        }
+    });
+
     it('refuses to write into the current build before accessing Hyperview', async () => {
         const harness = makeHarness();
         const caught = await catchAsyncError(() => putTemplate(harness.context, {

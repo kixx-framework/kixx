@@ -4,6 +4,7 @@ import {
     BadRequestError,
     ConflictError,
 } from '../../../kixx/errors/mod.js';
+import { validateBuildId } from '../../../kixx/utils/build-id.js';
 
 
 const TEMPLATE_KINDS = new Set([ 'base', 'page', 'partial' ]);
@@ -46,6 +47,8 @@ export async function putTemplate(context, args) {
             code: 'BuildIdRequired',
         });
     }
+
+    validateBuildId(buildId);
 
     // A missing current build id means the site has never been deployed; the
     // first deploy must be able to stage its templates. The equality check below

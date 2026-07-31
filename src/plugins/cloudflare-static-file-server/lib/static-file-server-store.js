@@ -1,5 +1,5 @@
 import { getContentType } from '../../../kixx/static-file-server/mime-types.js';
-import { sha256Hex } from '../../../kixx/utils/crypto.js';
+import { computeStaticFileEtag } from '../../../kixx/static-file-server/static-file-etag.js';
 import { assert, assertNonEmptyString, isNonEmptyString, isNumberNotNaN, isValidDate } from '../../../kixx/assertions/mod.js';
 
 /**
@@ -121,7 +121,7 @@ export default class StaticFileStore {
         // The store owns the validators: a strong (quoted) SHA-256 ETag that always
         // matches the stored bytes — byte-identical to what read() returns — plus
         // the exact length and the resolved content type (extension fallback).
-        const etag = `"${ await sha256Hex(body) }"`;
+        const etag = await computeStaticFileEtag(body);
         const contentLength = body.byteLength;
         const resolvedContentType = isNonEmptyString(contentType) ? contentType : getContentType(key);
         const lastModified = new Date();
