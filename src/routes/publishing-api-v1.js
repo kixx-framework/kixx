@@ -32,7 +32,9 @@ export default [
         ],
     },
     {
-        pattern: '/templates/partials/*filepath',
+        // Exact collection route: no wildcard segment, so it cannot be shadowed
+        // by (and cannot shadow) the base/page template wildcard routes above.
+        pattern: '/templates/partials{/}',
         name: 'partial-templates',
         targets: [
             {
@@ -40,7 +42,7 @@ export default [
                 methods: [ 'PUT' ],
                 requestHandlers: [
                     Permissions.requireTemplatePermission,
-                    PublishingAPI.putPartialTemplate,
+                    PublishingAPI.putPartials,
                 ],
             },
         ],

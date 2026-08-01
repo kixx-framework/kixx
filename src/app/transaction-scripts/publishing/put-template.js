@@ -7,14 +7,16 @@ import {
 import { validateBuildId } from '../../../kixx/utils/build-id.js';
 
 
-const TEMPLATE_KINDS = new Set([ 'base', 'page', 'partial' ]);
+const TEMPLATE_KINDS = new Set([ 'base', 'page' ]);
 
 
 /**
- * Writes a template source file into a non-current build namespace.
+ * Writes a base or page template source file into a non-current build
+ * namespace. Shared partial templates are published as a complete set through
+ * `putPartials()` in `publishing/put-partials.js` instead of this script.
  * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
  * @param {Object} args - Template write arguments.
- * @param {'base'|'page'|'partial'} args.kind - Template namespace to write.
+ * @param {'base'|'page'} args.kind - Template namespace to write.
  * @param {string} args.filepath - Logical template filepath.
  * @param {string} args.source - Template source text.
  * @param {string} args.buildId - Target build id.
@@ -31,7 +33,7 @@ export async function putTemplate(context, args) {
         buildId,
     } = args ?? {};
 
-    assert(TEMPLATE_KINDS.has(kind), 'putTemplate() kind must be base, page, or partial');
+    assert(TEMPLATE_KINDS.has(kind), 'putTemplate() kind must be base or page');
 
     // An empty body is client input; reject it as a 400 here so it never reaches
     // the template file store, which treats a blank source as a broken invariant
@@ -68,10 +70,7 @@ export async function putTemplate(context, args) {
         if (kind === 'base') {
             return await service.putBaseTemplate(context, buildId, filepath, source);
         }
-        if (kind === 'page') {
-            return await service.putPageTemplate(context, buildId, filepath, source);
-        }
-        return await service.putPartial(context, buildId, filepath, source);
+        return await service.putPageTemplate(context, buildId, filepath, source);
     } catch (cause) {
         throw new AssertionError('Unexpected error while writing a template', { cause });
     }

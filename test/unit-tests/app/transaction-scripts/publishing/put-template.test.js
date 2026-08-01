@@ -12,7 +12,7 @@ describe('putTemplate Transaction Script', ({ it }) => {
     it('rejects an unsupported template kind before accessing Hyperview', async () => {
         const harness = makeHarness();
         const caught = await catchAsyncError(() => putTemplate(harness.context, {
-            kind: 'layout',
+            kind: 'partial',
             filepath: 'website.html',
             source: '<html></html>',
             buildId: TARGET_BUILD_ID,
@@ -20,7 +20,7 @@ describe('putTemplate Transaction Script', ({ it }) => {
 
         assert(caught, 'expected an error to be thrown');
         assertEqual('AssertionError', caught.name);
-        assertMatches('putTemplate() kind must be base, page, or partial', caught.message);
+        assertMatches('putTemplate() kind must be base or page', caught.message);
         assertEqual(0, harness.calls.serviceAccess);
         assertEqual(0, getWriteCallCount(harness.calls));
     });
@@ -81,7 +81,7 @@ describe('putTemplate Transaction Script', ({ it }) => {
     it('refuses to write into the current build before accessing Hyperview', async () => {
         const harness = makeHarness();
         const caught = await catchAsyncError(() => putTemplate(harness.context, {
-            kind: 'partial',
+            kind: 'page',
             filepath: 'card.html',
             source: '<article></article>',
             buildId: CURRENT_BUILD_ID,
@@ -103,7 +103,6 @@ describe('putTemplate Transaction Script', ({ it }) => {
         const scenarios = [
             { kind: 'base', method: 'putBaseTemplate' },
             { kind: 'page', method: 'putPageTemplate' },
-            { kind: 'partial', method: 'putPartial' },
         ];
 
         for (const { kind, method } of scenarios) {
@@ -166,7 +165,6 @@ function makeHarness(options) {
     const calls = {
         putBaseTemplate: [],
         putPageTemplate: [],
-        putPartial: [],
         serviceAccess: 0,
         serviceNames: [],
     };
@@ -176,9 +174,6 @@ function makeHarness(options) {
         },
         async putPageTemplate(context, buildId, filepath, source) {
             return await write('page', 'putPageTemplate', context, buildId, filepath, source);
-        },
-        async putPartial(context, buildId, filepath, source) {
-            return await write('partial', 'putPartial', context, buildId, filepath, source);
         },
     };
     const context = {
@@ -210,8 +205,7 @@ function makeHarness(options) {
 
 function getWriteCallCount(calls) {
     return calls.putBaseTemplate.length
-        + calls.putPageTemplate.length
-        + calls.putPartial.length;
+        + calls.putPageTemplate.length;
 }
 
 async function catchAsyncError(fn) {

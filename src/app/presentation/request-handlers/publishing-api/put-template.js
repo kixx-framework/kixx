@@ -14,9 +14,11 @@ const TEMPLATE_CONTENT_TYPE = 'text/plain';
 /**
  * Writes a base template's source for a build.
  *
- * The three template kinds share one handler shape, differing only in the store
- * prefix the kind implies. The write is namespaced by the `x-kixx-build-id`
- * request header, so it lands in the pending build rather than the live one.
+ * The base and page template kinds share one handler shape, differing only in
+ * the store prefix the kind implies. Shared partial templates are published as
+ * a complete set through `putPartials()` in `put-partials.js` instead of this
+ * per-file handler. The write is namespaced by the `x-kixx-build-id` request
+ * header, so it lands in the pending build rather than the live one.
  *
  * The response filepath is prefix-less, because the URL path already encodes the
  * kind, and folded to lower case, because Hyperview resolves template ids
@@ -37,12 +39,6 @@ export const putBaseTemplate = createPutTemplateHandler('base');
  * @see putBaseTemplate for the shared contract.
  */
 export const putPageTemplate = createPutTemplateHandler('page');
-
-/**
- * Writes a partial template's source for a build.
- * @see putBaseTemplate for the shared contract.
- */
-export const putPartialTemplate = createPutTemplateHandler('partial');
 
 
 function createPutTemplateHandler(kind) {

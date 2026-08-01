@@ -8,7 +8,6 @@ import {
 import {
     putBaseTemplate,
     putPageTemplate,
-    putPartialTemplate,
 } from '../../../../../../src/app/presentation/request-handlers/publishing-api/put-template.js';
 
 
@@ -20,7 +19,6 @@ const TARGET_BUILD_ID = 'build-next';
 const HANDLERS = [
     { kind: 'base', handler: putBaseTemplate, method: 'putBaseTemplate' },
     { kind: 'page', handler: putPageTemplate, method: 'putPageTemplate' },
-    { kind: 'partial', handler: putPartialTemplate, method: 'putPartial' },
 ];
 
 
@@ -81,7 +79,7 @@ describe('putTemplate publishing API handlers', ({ describe, it }) => {
         const service = makeHyperviewService();
         const response = makeResponse();
 
-        await putPartialTemplate(
+        await putPageTemplate(
             makeContext({ service }),
             makeRequest({ filepath: [ 'blog', 'byline.html' ], source: 'source' }),
             response,

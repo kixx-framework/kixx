@@ -248,4 +248,4 @@ Run the linter according to the instructions in the `README.md` for every JavaSc
 
 ### Testing
 
-Follow the unit testing guide at test/unit/README.md and follow the instructions in `README.md` for running unit tests. When you discover broken unit tests; think carefully about the correctness if the implementation. If the unit tests need to be updated to match the intended behavior of the implementation then update the unit tests. Otherwise fix the implementation to address the issue that broken tests have highlighted.
+Follow the unit testing guide at test/unit-tests/README.md and follow the instructions in `README.md` for running unit tests. When you discover broken unit tests; think carefully about the correctness if the implementation. If the unit tests need to be updated to match the intended behavior of the implementation then update the unit tests. Otherwise fix the implementation to address the issue that broken tests have highlighted.

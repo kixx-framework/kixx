@@ -42,9 +42,23 @@ export function assertJsonApiContentType(request) {
  * @throws {ConflictError} When the resource type does not match `expectedType`.
  */
 export async function parseJsonApiResource(request, expectedType) {
-    assertNonEmptyString(expectedType, 'parseJsonApiResource: expectedType');
-
     const document = await request.json();
+    return resourceFromJsonApiDocument(document, expectedType);
+}
+
+/**
+ * Validates an already-parsed JSON:API document and returns the resource id
+ * and attributes. Shared by parseJsonApiResource() and by handlers that must
+ * buffer and decode the request body themselves (for example, to enforce a
+ * byte cap before parsing), so the JSON:API envelope contract is defined once.
+ * @param {*} document - Parsed JSON:API document, typically the result of `JSON.parse()`.
+ * @param {string} expectedType - JSON:API resource type required by the endpoint.
+ * @returns {{ id: string|undefined, attributes: Object }} Parsed resource values.
+ * @throws {BadRequestError} When the JSON:API envelope is malformed.
+ * @throws {ConflictError} When the resource type does not match `expectedType`.
+ */
+export function resourceFromJsonApiDocument(document, expectedType) {
+    assertNonEmptyString(expectedType, 'resourceFromJsonApiDocument: expectedType');
 
     if (!isPlainObject(document) || !isPlainObject(document.data)) {
         throw new BadRequestError('JSON:API request body must contain a data object.');
