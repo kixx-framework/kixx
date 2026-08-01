@@ -607,9 +607,14 @@ export default class HyperviewService {
 
     /**
      * Loads and compiles shared partial templates for use by base and page templates.
+     *
+     * When `useCache` is enabled, concurrent callers for the same build share one
+     * load instead of each issuing its own; a failed load is not retained, so a
+     * later call retries. All callers of one shared load resolve to the same map
+     * instance, which they must not mutate.
      * @param {RequestContext} context - Request context
      * @param {Object} [options] - Partial loading options
-     * @param {boolean} [options.useCache=false] - Reuse compiled partials from this service instance
+     * @param {boolean} [options.useCache=false] - Reuse compiled partials, including in-flight loads, from this service instance
      * @returns {Promise<Map<string, Function>>} Partial render functions keyed by canonical
      *   template include name. `get`/`has` fold reference-side lookup keys.
      * @throws {AssertionError} When the store returns a non-canonical partial filepath
@@ -618,20 +623,55 @@ export default class HyperviewService {
         const { useCache = false } = options ?? {};
         const buildId = context.runtime.build?.id ?? null;
 
-        let partials;
         const cacheKey = buildId || 'null';
         if (useCache) {
-            partials = this.#partialsCache.get(cacheKey);
-            if (partials) {
+            const cached = this.#partialsCache.get(cacheKey);
+            if (cached) {
                 this.#logger.debug('template partials cache hit', { key: cacheKey });
-                return partials;
+                return await cached;
             }
             this.#logger.debug('template partials cache miss', { key: cacheKey });
         }
 
+        const pending = this.#compilePartials(context, buildId);
+
+        // Only retain the compiled partials when caching is enabled; otherwise the
+        // map would grow even though no reader ever consults it (the read above is
+        // guarded by useCache), matching getBaseTemplate/getPageTemplate.
+        if (useCache) {
+            // Cache the in-flight promise rather than the resolved map so that
+            // concurrent callers share one load. getBaseTemplate() and
+            // getPageTemplate() both call this and the request handlers run them
+            // through Promise.all, so caching only the resolved value let every
+            // cold-isolate render issue two identical partial loads — which on
+            // Cloudflare KV means two uncacheable list() round trips.
+            this.#partialsCache.set(cacheKey, pending);
+
+            // A rejected load must not stay cached, or one transient storage
+            // failure would be replayed to every later caller for the life of the
+            // isolate. Re-check identity first so a newer successful entry is not
+            // evicted by an older failure.
+            pending.catch(() => {
+                if (this.#partialsCache.get(cacheKey) === pending) {
+                    this.#partialsCache.delete(cacheKey);
+                }
+            });
+        }
+
+        return await pending;
+    }
+
+    /**
+     * Loads and compiles every partial for a build. Split out of loadPartials()
+     * so the cache can hold one promise per build id.
+     * @param {RequestContext} context - Request context
+     * @param {string|null} buildId - Current build id used as the store namespace
+     * @returns {Promise<Map<string, Function>>} Compiled partials keyed by include name
+     */
+    async #compilePartials(context, buildId) {
         const files = await this.#templateFileStore.getPartials(context, buildId);
 
-        partials = new CaseInsensitiveMap();
+        const partials = new CaseInsensitiveMap();
 
         for (const { filepath, source } of files) {
             const name = filepath.replace(/^\/?partials\//, '');
@@ -639,15 +679,10 @@ export default class HyperviewService {
                 name,
                 `HyperviewService.loadPartials: partial filepath ${ filepath }`,
             );
+            // The map is passed to each compile while it is still being filled, so
+            // a partial can reference another partial regardless of load order.
             const template = this.compileTemplate(filepath, source, this.#customHelpers, partials);
             partials.set(name, template);
-        }
-
-        // Only retain the compiled partials when caching is enabled; otherwise the
-        // map would grow even though no reader ever consults it (the read above is
-        // guarded by useCache), matching getBaseTemplate/getPageTemplate.
-        if (useCache) {
-            this.#partialsCache.set(cacheKey, partials);
         }
 
         return partials;

@@ -1,10 +1,30 @@
-import { assert, assertNonEmptyString, isObjectNotNull } from '../../../kixx/assertions/mod.js';
+import {
+    AssertionError,
+    assert,
+    assertNonEmptyString,
+    isObjectNotNull,
+    isUndefined,
+} from '../../../kixx/assertions/mod.js';
 
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
  */
 
 const DEFAULT_BINDING_NAME = 'HYPERVIEW_PAGE_DATA_STORE';
+
+// Page data is the one Hyperview store whose keys are mutable in place: a
+// publish may write page.json and include files into the *current* build's
+// namespace, so this TTL is the worst-case delay before a published edit
+// becomes visible in a network location which already read the key. It also
+// bounds how long a negative lookup for a not-yet-published page is cached,
+// which is the sharper constraint — a newly published page stays 404 in that
+// location until the cached miss expires. Keep it short enough to be an
+// acceptable publish latency; the cold-read savings are already large at a few
+// minutes.
+const DEFAULT_CACHE_TTL_SECONDS = 300;
+
+// Cloudflare KV rejects a cacheTtl below 30 seconds.
+const MIN_CACHE_TTL_SECONDS = 30;
 
 /**
  * Cloudflare KV-backed store for Hyperview page assets.
@@ -18,6 +38,13 @@ const DEFAULT_BINDING_NAME = 'HYPERVIEW_PAGE_DATA_STORE';
  * Callers always work with logical filepaths; the namespace prefix is applied
  * and stripped internally, and keeping the read and write namespaces consistent
  * is the caller's responsibility.
+ *
+ * Reads pass an explicit `cacheTtl` so values stay warm in the network location
+ * they were read from for longer than Cloudflare's 60 second default, which is
+ * what keeps cold-key latency off the page render path. Because a publish can
+ * write into the live build's namespace, the TTL doubles as the publish-to-
+ * visible delay and is configurable through
+ * `config.env.HYPERVIEW_PAGE_DATA_STORE.cacheTtl`.
  *
  * @implements {import('../../../kixx/hyperview/page-data-store-interface.js').PageDataStoreInterface}
  */
@@ -56,9 +83,10 @@ export default class PageDataStore {
         const resolved = filepaths.map((fp) => this.#resolveKey(namespace, fp));
         const kvKeys = resolved.map((r) => r.kvKey);
 
-        this.#logger.debug('getJSONFiles() loading keys', { keys: kvKeys });
+        const cacheTtl = this.#resolveCacheTtl(context);
+        this.#logger.debug('getJSONFiles() loading keys', { keys: kvKeys, cacheTtl });
 
-        const resultMap = await kvStore.get(kvKeys, { type: 'json' });
+        const resultMap = await kvStore.get(kvKeys, { type: 'json', cacheTtl });
 
         return resolved.map(({ logicalKey, kvKey }) => {
             const json = resultMap.get(kvKey) ?? null;
@@ -89,9 +117,10 @@ export default class PageDataStore {
         const resolved = filepaths.map((fp) => this.#resolveKey(namespace, fp));
         const kvKeys = resolved.map((r) => r.kvKey);
 
-        this.#logger.debug('getTextFiles() loading keys', { keys: kvKeys });
+        const cacheTtl = this.#resolveCacheTtl(context);
+        this.#logger.debug('getTextFiles() loading keys', { keys: kvKeys, cacheTtl });
 
-        const resultMap = await kvStore.get(kvKeys, { type: 'text' });
+        const resultMap = await kvStore.get(kvKeys, { type: 'text', cacheTtl });
 
         return resolved.map(({ logicalKey, kvKey }) => {
             const source = resultMap.get(kvKey) ?? null;
@@ -112,9 +141,10 @@ export default class PageDataStore {
     async getTextFile(context, namespace, filepath) {
         this.#logger.debug('getTextFile() loading filepath', { filepath });
         const { kvKey } = this.#resolveKey(namespace, filepath);
-        this.#logger.debug('getTextFile() loading key', { key: kvKey });
+        const cacheTtl = this.#resolveCacheTtl(context);
+        this.#logger.debug('getTextFile() loading key', { key: kvKey, cacheTtl });
         const kvStore = this.#getKVStore(context);
-        const text = await kvStore.get(kvKey, { type: 'text' });
+        const text = await kvStore.get(kvKey, { type: 'text', cacheTtl });
         return text ?? null;
     }
 
@@ -169,6 +199,34 @@ export default class PageDataStore {
         const kvStore = env[bindingName];
         assert(kvStore, `PageDataStore KV binding "${ bindingName }" is not bound on context.env`);
         return kvStore;
+    }
+
+    /**
+     * Resolves the KV read cache TTL in seconds. The namespace is deliberately
+     * not a factor: unlike template files, page data may be written into the
+     * live build's namespace, so namespaced keys are no more immutable than
+     * flat ones.
+     * @param {RequestContext} context - Request context carrying the store config
+     * @returns {number} Cache TTL in seconds
+     * @throws {AssertionError} When a configured cacheTtl is not an integer of at least 30
+     */
+    #resolveCacheTtl(context) {
+        const { config } = context;
+        const { cacheTtl } = config?.env?.HYPERVIEW_PAGE_DATA_STORE ?? {};
+
+        if (isUndefined(cacheTtl) || cacheTtl === null) {
+            return DEFAULT_CACHE_TTL_SECONDS;
+        }
+
+        // A misconfigured TTL is a source-config bug, not user input. Fail loudly
+        // here rather than letting Cloudflare reject the read mid-request.
+        if (!Number.isInteger(cacheTtl) || cacheTtl < MIN_CACHE_TTL_SECONDS) {
+            throw new AssertionError(
+                `PageDataStore "cacheTtl" must be an integer of at least ${ MIN_CACHE_TTL_SECONDS } seconds`,
+            );
+        }
+
+        return cacheTtl;
     }
 
     /**

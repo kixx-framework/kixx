@@ -14,9 +14,11 @@ function makeLogger() {
 // `{namespace}/{filepath}` encoding rather than mocking it. The double honors
 // the `{ type }` option the way Cloudflare KV does: `type: 'json'` parses the
 // stored text, matching how `PageDataStore` stores serialized JSON on write and
-// expects parsed values on read.
+// expects parsed values on read. Every read's options are recorded on
+// `readOptions` so tests can assert the cacheTtl handed to the platform.
 function makeKVNamespace(initial) {
     const store = new Map(Object.entries(initial ?? {}));
+    const readOptions = [];
 
     function decode(raw, type) {
         if (raw === null || raw === undefined) {
@@ -27,7 +29,9 @@ function makeKVNamespace(initial) {
 
     return {
         store,
+        readOptions,
         async get(key, options) {
+            readOptions.push(options);
             const type = options?.type;
             if (Array.isArray(key)) {
                 const result = new Map();
@@ -44,8 +48,18 @@ function makeKVNamespace(initial) {
     };
 }
 
-function makeContext(kvStore) {
-    return { env: { HYPERVIEW_PAGE_DATA_STORE: kvStore ?? makeKVNamespace() } };
+// `config` is optional so the majority of tests, which do not care about the
+// cache TTL, exercise the built-in default the same way an unconfigured
+// deployment would.
+function makeContext(kvStore, config) {
+    return {
+        env: { HYPERVIEW_PAGE_DATA_STORE: kvStore ?? makeKVNamespace() },
+        config,
+    };
+}
+
+function makeConfig(pageDataStoreConfig) {
+    return { env: { HYPERVIEW_PAGE_DATA_STORE: pageDataStoreConfig } };
 }
 
 function makeStore() {
@@ -360,6 +374,83 @@ describe('PageDataStore', ({ describe }) => {
             assertEqual('# Body', kvStore.store.get('body.md'));
             const result = await store.getTextFile(context, null, '/body.md');
             assertEqual('# Body', result);
+        });
+    });
+
+    describe('read cache TTL', ({ it }) => {
+        it('applies the default TTL to getJSONFiles', async () => {
+            const kvStore = makeKVNamespace();
+            const store = makeStore();
+
+            await store.getJSONFiles(makeContext(kvStore), 'v1', [ '/page.json' ]);
+
+            assertEqual(1, kvStore.readOptions.length);
+            assertEqual(300, kvStore.readOptions[0].cacheTtl);
+            assertEqual('json', kvStore.readOptions[0].type);
+        });
+
+        it('applies the default TTL to getTextFiles', async () => {
+            const kvStore = makeKVNamespace();
+            const store = makeStore();
+
+            await store.getTextFiles(makeContext(kvStore), 'v1', [ '/body.md' ]);
+
+            assertEqual(300, kvStore.readOptions[0].cacheTtl);
+            assertEqual('text', kvStore.readOptions[0].type);
+        });
+
+        it('applies the default TTL to getTextFile', async () => {
+            const kvStore = makeKVNamespace();
+            const store = makeStore();
+
+            await store.getTextFile(makeContext(kvStore), 'v1', '/body.md');
+
+            assertEqual(300, kvStore.readOptions[0].cacheTtl);
+            assertEqual('text', kvStore.readOptions[0].type);
+        });
+
+        it('uses the configured cacheTtl', async () => {
+            const kvStore = makeKVNamespace();
+            const config = makeConfig({ cacheTtl: 900 });
+            const store = makeStore();
+
+            await store.getTextFile(makeContext(kvStore, config), 'v1', '/body.md');
+
+            assertEqual(900, kvStore.readOptions[0].cacheTtl);
+        });
+
+        // Page data may be published into the live build's namespace, so unlike
+        // template files it is no more immutable when namespaced.
+        it('uses the same TTL with and without a namespace', async () => {
+            const kvStore = makeKVNamespace();
+            const context = makeContext(kvStore);
+            const store = makeStore();
+
+            await store.getTextFile(context, 'v1', '/body.md');
+            await store.getTextFile(context, null, '/body.md');
+
+            assertEqual(300, kvStore.readOptions[0].cacheTtl);
+            assertEqual(300, kvStore.readOptions[1].cacheTtl);
+        });
+
+        it('throws when the configured cacheTtl is below the Cloudflare minimum', async () => {
+            const store = makeStore();
+            const context = makeContext(null, makeConfig({ cacheTtl: 29 }));
+            const caught = await catchAsyncError(() => store.getTextFile(context, 'v1', '/body.md'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('at least 30 seconds', caught.message);
+        });
+
+        it('throws when the configured cacheTtl is not an integer', async () => {
+            const store = makeStore();
+            const context = makeContext(null, makeConfig({ cacheTtl: '300' }));
+            const caught = await catchAsyncError(() => store.getTextFile(context, 'v1', '/body.md'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('must be an integer', caught.message);
         });
     });
 });

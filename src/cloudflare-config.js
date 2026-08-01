@@ -49,15 +49,20 @@ export default {
                     },
                 },
             },
+            // Development pins both stores to Cloudflare's 30 second cacheTtl
+            // floor, matching the disabled page and template caches above: edits
+            // should show up on reload, not on a schedule.
             HYPERVIEW_PAGE_DATA_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
                 namespaceId: 'a-kv-namespace-uuid',
+                cacheTtl: 30,
             },
             HYPERVIEW_TEMPLATE_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
                 namespaceId: 'a-kv-namespace-uuid',
+                cacheTtl: 30,
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
@@ -112,15 +117,20 @@ export default {
                     },
                 },
             },
+            // Page data can be published into the live build's namespace, so its
+            // cacheTtl is the worst-case publish-to-visible delay. Template keys
+            // are immutable within a build and can be cached for a full day.
             HYPERVIEW_PAGE_DATA_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
                 namespaceId: 'a-kv-namespace-uuid',
+                cacheTtl: 300,
             },
             HYPERVIEW_TEMPLATE_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
                 namespaceId: 'a-kv-namespace-uuid',
+                cacheTtl: 86400,
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
@@ -175,15 +185,20 @@ export default {
                     },
                 },
             },
+            // Page data can be published into the live build's namespace, so its
+            // cacheTtl is the worst-case publish-to-visible delay. Template keys
+            // are immutable within a build and can be cached for a full day.
             HYPERVIEW_PAGE_DATA_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
                 namespaceId: 'a-kv-namespace-uuid',
+                cacheTtl: 300,
             },
             HYPERVIEW_TEMPLATE_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
                 namespaceId: 'a-kv-namespace-uuid',
+                cacheTtl: 86400,
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',

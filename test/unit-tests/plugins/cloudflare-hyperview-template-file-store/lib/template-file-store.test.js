@@ -12,12 +12,17 @@ function makeLogger() {
 // Minimal Cloudflare KV namespace double. Backed by a single Map so reads,
 // writes, and prefix listings all operate over the same stored keys, exercising
 // the real `{namespace}/{prefix}{filepath}` encoding rather than mocking it.
+// Every read's options are recorded on `readOptions` so tests can assert the
+// cacheTtl handed to the platform.
 function makeKVNamespace(initial) {
     const store = new Map(Object.entries(initial ?? {}));
+    const readOptions = [];
 
     return {
         store,
-        async get(key) {
+        readOptions,
+        async get(key, options) {
+            readOptions.push(options);
             if (Array.isArray(key)) {
                 const result = new Map();
                 for (const name of key) {
@@ -42,8 +47,18 @@ function makeKVNamespace(initial) {
     };
 }
 
-function makeContext(kvStore) {
-    return { env: { HYPERVIEW_TEMPLATE_FILE_STORE: kvStore ?? makeKVNamespace() } };
+// `config` is optional so the majority of tests, which do not care about the
+// cache TTL, exercise the built-in defaults the same way an unconfigured
+// deployment would.
+function makeContext(kvStore, config) {
+    return {
+        env: { HYPERVIEW_TEMPLATE_FILE_STORE: kvStore ?? makeKVNamespace() },
+        config,
+    };
+}
+
+function makeConfig(templateFileStoreConfig) {
+    return { env: { HYPERVIEW_TEMPLATE_FILE_STORE: templateFileStoreConfig } };
 }
 
 function makeStore() {
@@ -391,6 +406,102 @@ describe('TemplateFileStore', ({ describe }) => {
             const result = await store.getPartials(makeContext(kvStore), 'v2');
 
             assertEqual(0, result.length);
+        });
+    });
+
+    describe('read cache TTL', ({ it }) => {
+        // A build never rewrites its own templates, so a namespaced key can be
+        // cached for as long as the build lives.
+        it('applies the long default TTL to a namespaced read', async () => {
+            const kvStore = makeKVNamespace({ 'v1/base/home.html': '<home/>' });
+            const store = makeStore();
+
+            await store.getBaseTemplate(makeContext(kvStore), 'v1', 'home.html');
+
+            assertEqual(1, kvStore.readOptions.length);
+            assertEqual(86400, kvStore.readOptions[0].cacheTtl);
+            assertEqual('text', kvStore.readOptions[0].type);
+        });
+
+        // Flat keys carry no build-id immutability guarantee, so they must not
+        // inherit the long TTL.
+        it('caps the TTL for an un-namespaced read', async () => {
+            const kvStore = makeKVNamespace({ 'base/home.html': '<home/>' });
+            const store = makeStore();
+
+            await store.getBaseTemplate(makeContext(kvStore), null, 'home.html');
+
+            assertEqual(300, kvStore.readOptions[0].cacheTtl);
+        });
+
+        it('treats an empty-string namespace as un-namespaced for the TTL', async () => {
+            const kvStore = makeKVNamespace({ 'base/home.html': '<home/>' });
+            const store = makeStore();
+
+            await store.getBaseTemplate(makeContext(kvStore), '', 'home.html');
+
+            assertEqual(300, kvStore.readOptions[0].cacheTtl);
+        });
+
+        it('applies the TTL to page template reads', async () => {
+            const kvStore = makeKVNamespace({ 'v1/pages/blog/page.html': '<page/>' });
+            const store = makeStore();
+
+            await store.getPageTemplate(makeContext(kvStore), 'v1', 'blog/page.html');
+
+            assertEqual(86400, kvStore.readOptions[0].cacheTtl);
+        });
+
+        it('applies the TTL to the getPartials bulk read', async () => {
+            const kvStore = makeKVNamespace({ 'v1/partials/nav.html': '<nav/>' });
+            const store = makeStore();
+
+            await store.getPartials(makeContext(kvStore), 'v1');
+
+            assertEqual(1, kvStore.readOptions.length);
+            assertEqual(86400, kvStore.readOptions[0].cacheTtl);
+        });
+
+        it('uses the configured cacheTtl for a namespaced read', async () => {
+            const kvStore = makeKVNamespace({ 'v1/base/home.html': '<home/>' });
+            const config = makeConfig({ cacheTtl: 604800 });
+            const store = makeStore();
+
+            await store.getBaseTemplate(makeContext(kvStore, config), 'v1', 'home.html');
+
+            assertEqual(604800, kvStore.readOptions[0].cacheTtl);
+        });
+
+        // The cap clamps rather than substitutes, so a deployment which asks for
+        // a TTL shorter than the cap still gets the shorter value.
+        it('keeps a configured TTL shorter than the un-namespaced cap', async () => {
+            const kvStore = makeKVNamespace({ 'base/home.html': '<home/>' });
+            const config = makeConfig({ cacheTtl: 60 });
+            const store = makeStore();
+
+            await store.getBaseTemplate(makeContext(kvStore, config), null, 'home.html');
+
+            assertEqual(60, kvStore.readOptions[0].cacheTtl);
+        });
+
+        it('throws when the configured cacheTtl is below the Cloudflare minimum', async () => {
+            const store = makeStore();
+            const context = makeContext(null, makeConfig({ cacheTtl: 29 }));
+            const caught = await catchAsyncError(() => store.getBaseTemplate(context, 'v1', 'home.html'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('at least 30 seconds', caught.message);
+        });
+
+        it('throws when the configured cacheTtl is not an integer', async () => {
+            const store = makeStore();
+            const context = makeContext(null, makeConfig({ cacheTtl: 86400.5 }));
+            const caught = await catchAsyncError(() => store.getBaseTemplate(context, 'v1', 'home.html'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('must be an integer', caught.message);
         });
     });
 });
