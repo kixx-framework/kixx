@@ -44,6 +44,19 @@ function catchError(fn) {
     return null;
 }
 
+function getTableSQL(database) {
+    const row = database
+        .prepare('SELECT sql FROM sqlite_master WHERE type = ? AND name = ?')
+        .get('table', 'documents');
+    return row?.sql ?? '';
+}
+
+function makeEngine(database, indexDefinitions) {
+    const engine = new DocumentStoreEngine({ logger: makeLogger(), database });
+    engine.setIndexDefinitions(indexDefinitions);
+    return engine;
+}
+
 describe('Node DocumentStoreEngine', ({ after, describe }) => {
 
     after(async () => {
@@ -267,6 +280,87 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
             assertUndefined(documentPayload.type);
             assertUndefined(documentPayload.id);
             assertUndefined(documentPayload.sortKey);
+
+            engine.close();
+            database.close();
+        });
+    });
+
+    describe('generated column reconciliation', ({ it }) => {
+        it('rebuilds the generated column when jsonPath changes', async () => {
+            const database = new DatabaseSync(':memory:');
+
+            const before = makeEngine(database, [ { name: 'by_label', jsonPath: '$.title' } ]);
+            await before.put(null, {
+                type: 'Note',
+                id: 'n1',
+                title: 'Alpha',
+                name: 'Zulu',
+            });
+
+            // A redeploy repointing the same index at a different field. A generated
+            // column expression cannot be altered in place, so the migration drops and
+            // rebuilds it. Recovering the old path depends on matching the CREATE TABLE
+            // text SQLite stored, which is what this assertion really exercises.
+            const after = makeEngine(database, [ { name: 'by_label', jsonPath: '$.name' } ]);
+            await after.prepareDatabase(null);
+
+            const matched = await after.query(null, 'Note', {
+                index: 'by_label',
+                equalTo: 'Zulu',
+            });
+            const stale = await after.query(null, 'Note', {
+                index: 'by_label',
+                equalTo: 'Alpha',
+            });
+
+            assertEqual(1, matched.records.length);
+            assertEqual('n1', matched.records[0].id);
+            assertEqual(0, stale.records.length);
+
+            after.close();
+            database.close();
+        });
+
+        it('leaves the generated column in place when jsonPath is unchanged', async () => {
+            const database = new DatabaseSync(':memory:');
+            const indexes = [
+                { name: 'by_title', jsonPath: '$.title' },
+                { name: 'by_email', jsonPath: '$.email' },
+            ];
+
+            await makeEngine(database, indexes).prepareDatabase(null);
+            const tableSQL = getTableSQL(database);
+
+            await makeEngine(database, indexes).prepareDatabase(null);
+
+            // A path the migration failed to read back would look like a change and
+            // rebuild both columns, appending them to the stored table text in a new
+            // order. Byte equality is the cheapest proof that nothing was touched.
+            assertEqual(tableSQL, getTableSQL(database));
+
+            database.close();
+        });
+
+        it('round trips a jsonPath containing a single quote', async () => {
+            const database = new DatabaseSync(':memory:');
+            const indexes = [ { name: 'by_odd', jsonPath: '$."odd\'name"' } ];
+
+            const engine = makeEngine(database, indexes);
+            await engine.put(null, { type: 'Note', id: 'n1', 'odd\'name': 'Quoted' });
+            const page = await engine.query(null, 'Note', {
+                index: 'by_odd',
+                equalTo: 'Quoted',
+            });
+
+            assertEqual(1, page.records.length);
+
+            // The quote must survive SQL literal escaping in both directions, or the next
+            // migration reads back a different path and rebuilds the column forever.
+            const tableSQL = getTableSQL(database);
+            await makeEngine(database, indexes).prepareDatabase(null);
+
+            assertEqual(tableSQL, getTableSQL(database));
 
             engine.close();
             database.close();

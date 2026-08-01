@@ -149,7 +149,9 @@ export default class DocumentStoreEngine {
      *
      * New definitions ensure a generated column backed by `json_extract()` and
      * an accompanying composite index on `(type, col)` both exist. Definitions
-     * that have been removed drop the index then the column. Safe to call on
+     * that have been removed drop the index then the column. Uniqueness changes
+     * are reconciled by dropping and recreating the affected index, and a changed
+     * `jsonPath` by dropping and rebuilding the generated column. Safe to call on
      * every startup — DDL uses IF NOT EXISTS or is guarded by the PRAGMA pre-check.
      *
      * Structured to minimize round trips to D1, because this runs on the first
@@ -691,22 +693,30 @@ export default class DocumentStoreEngine {
      * Reads the current shape of the `documents` table from SQLite introspection.
      *
      * @param {Object} db - D1 database binding
-     * @returns {Promise<{tableExists: boolean, keyColumns: string[], indexUnique: Map<string, boolean>}>}
-     *   Existence of the table, the generated `key_*` column names present on it, and
-     *   the uniqueness flag of every index keyed by index name
-     * @throws {Error} When either PRAGMA query fails
+     * @returns {Promise<{tableExists: boolean, keyColumns: Set<string>, indexUnique: Map<string, boolean>, tableSQL: string}>}
+     *   Existence of the table, the generated `key_*` column names present on it, the
+     *   uniqueness flag of every index keyed by index name, and the stored CREATE TABLE
+     *   text used to recover each generated column's JSON path
+     * @throws {Error} When any introspection query fails
      */
     async #readSchema(db) {
         let tableInfo;
         let indexList;
+        let tableSchema;
 
         try {
-            // Both PRAGMAs are independent read-only introspection queries, so racing
-            // them overlaps their network latency without any ordering hazard. The DDL
+            // All three are independent read-only introspection queries, so racing them
+            // overlaps their network latency without any ordering hazard. The DDL
             // elsewhere in this class is ordered and goes through batch() instead.
-            [ tableInfo, indexList ] = await Promise.all([
+            [ tableInfo, indexList, tableSchema ] = await Promise.all([
                 db.prepare('PRAGMA table_xinfo(documents)').run(),
                 db.prepare('PRAGMA index_list(documents)').run(),
+                // sqlite_master rather than its modern sqlite_schema alias: both work on
+                // D1's SQLite build, but the older name is valid on every version, which
+                // matters here because this path cannot be exercised without a live D1.
+                db.prepare('SELECT sql FROM sqlite_master WHERE type = ? AND name = ?')
+                    .bind('table', 'documents')
+                    .first(),
             ]);
         } catch (cause) {
             throw new Error('Unable to introspect the D1 documents table', { cause });
@@ -729,12 +739,15 @@ export default class DocumentStoreEngine {
             // SQLite returns zero rows rather than an error for a table which does not
             // exist, so the row count doubles as the existence check and saves a query.
             tableExists: columnNames.length > 0,
-            keyColumns: columnNames.filter((name) => name.startsWith('key_')),
+            keyColumns: new Set(columnNames.filter((name) => name.startsWith('key_'))),
             // PRAGMA index_list returns rows like { seq, name, unique, origin, partial };
             // we only need the uniqueness flag keyed by index name.
             indexUnique: new Map(
                 indexList.results.map(({ name, unique }) => [ name, unique === 1 ]),
             ),
+            // SQLite rewrites this stored text as columns are added and dropped, so it is
+            // the only record of the json_extract() path behind each generated column.
+            tableSQL: tableSchema?.sql ?? '',
         };
     }
 
@@ -794,28 +807,51 @@ export default class DocumentStoreEngine {
     #composeMigrationStatements(db, schema) {
         const statements = [];
 
+        // Local copies, because a changed jsonPath removes a column and index which the
+        // checks further down then treat as absent. Mutating the caller's schema would
+        // make it disagree with what the database actually holds until the batch runs.
+        const keyColumns = new Set(schema.keyColumns);
+        const indexUnique = new Map(schema.indexUnique);
+
         for (const indexDefinition of this.#indexDefinitions) {
             const columnName = this.keyToColumnName(indexDefinition.name);
             const indexName = this.keyToIndexName(indexDefinition.name);
             const wantUnique = indexDefinition.unique === true;
             const createIndexSQL = `CREATE ${ wantUnique ? 'UNIQUE ' : '' }INDEX IF NOT EXISTS ${ indexName } ON documents (type, ${ columnName })`;
 
-            if (!schema.keyColumns.includes(columnName)) {
+            if (keyColumns.has(columnName)) {
+                // A generated column's expression cannot be altered in place, so a changed
+                // jsonPath is reconciled by dropping the column and letting the checks below
+                // rebuild it. Without this the column keeps extracting the old path and
+                // queries silently return results derived from stale definitions.
+                const existingJsonPath = getGeneratedColumnJsonPath(schema.tableSQL, columnName);
+                if (existingJsonPath !== indexDefinition.jsonPath) {
+                    statements.push(db.prepare(`DROP INDEX IF EXISTS ${ indexName }`));
+                    statements.push(db.prepare(`ALTER TABLE documents DROP COLUMN ${ columnName }`));
+                    keyColumns.delete(columnName);
+                    indexUnique.delete(indexName);
+                }
+            }
+
+            if (!keyColumns.has(columnName)) {
                 // SQLite restrictions on ALTER TABLE ADD COLUMN:
                 // - Does not support IF NOT EXISTS — so we guard with the PRAGMA check above.
                 // - STORED generated columns cannot be added to a non-empty table; VIRTUAL
                 //   generated columns have no such restriction and are equally indexable.
+                // The jsonPath is quoted as a SQL string literal so an embedded quote cannot
+                // break out of the generated-column expression.
                 statements.push(db.prepare(`
                     ALTER TABLE documents ADD COLUMN ${ columnName }
-                    TEXT GENERATED ALWAYS AS (json_extract(doc, '${ indexDefinition.jsonPath }')) VIRTUAL
+                    TEXT GENERATED ALWAYS AS (json_extract(doc, ${ quoteSqlString(indexDefinition.jsonPath) })) VIRTUAL
                 `));
+                keyColumns.add(columnName);
             }
 
-            if (!schema.indexUnique.has(indexName)) {
+            if (!indexUnique.has(indexName)) {
                 // A previous prepare can crash after adding the column but before
                 // creating the index; reconcile the index independently.
                 statements.push(db.prepare(createIndexSQL));
-            } else if (schema.indexUnique.get(indexName) !== wantUnique) {
+            } else if (indexUnique.get(indexName) !== wantUnique) {
                 // Column survives; index uniqueness flag is reconciled by drop + recreate.
                 // The PRAGMA above reports `unique = 1` for UNIQUE indexes only.
                 statements.push(db.prepare(`DROP INDEX IF EXISTS ${ indexName }`));
@@ -995,6 +1031,31 @@ export default class DocumentStoreEngine {
         return { sql, params };
     }
 
+}
+
+function quoteSqlString(value) {
+    // SQLite escapes an embedded single quote inside a string literal by doubling it.
+    return `'${ String(value).replace(/'/g, "''") }'`;
+}
+
+function unquoteSqlString(value) {
+    return value.slice(1, -1).replace(/''/g, "'");
+}
+
+// Recovers the json_extract() path from the CREATE TABLE text SQLite stores in
+// sqlite_master. The generated-column expression is the only place the path survives;
+// PRAGMA table_xinfo reports the column name and type but not what it extracts.
+function getGeneratedColumnJsonPath(tableSQL, columnName) {
+    const pattern = new RegExp(
+        `\\b${ escapeRegExp(columnName) }\\b\\s+TEXT\\s+GENERATED\\s+ALWAYS\\s+AS\\s*\\(\\s*json_extract\\s*\\(\\s*doc\\s*,\\s*('(?:''|[^'])*')\\s*\\)\\s*\\)\\s+VIRTUAL`,
+        'i',
+    );
+    const match = pattern.exec(tableSQL);
+    return match ? unquoteSqlString(match[1]) : null;
+}
+
+function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function getDocumentPayload(doc) {
