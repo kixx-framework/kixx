@@ -51,6 +51,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 **Validation**
 
 - `<exact command>` — <what it proves>
+- <Unit test coverage.>
 - <Manual or integration check that cannot be expressed as a command, if any.>
 
 **Progress and handoff**
