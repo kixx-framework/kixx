@@ -401,8 +401,8 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
         });
     });
 
-    describe('putPartial and getPartials', ({ it }) => {
-        it('returns an empty array when no partials exist', async () => {
+    describe('putPartials and getPartials', ({ it }) => {
+        it('returns an empty array for the flat namespace when no partials exist', async () => {
             const directory = await makeTempDir();
             const store = makeStore(directory);
 
@@ -411,46 +411,110 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
             assertEqual(0, result.length);
         });
 
-        it('writes a partial under the partials prefix and round-trips through getPartials', async () => {
+        it('throws when a namespaced partials directory was never published', async () => {
+            const directory = await makeTempDir();
+            const store = makeStore(directory);
+
+            const caught = await catchAsyncError(() => store.getPartials(makeContext(), 'v1'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('no published partials directory', caught.message);
+        });
+
+        it('writes a complete set under the partials prefix and round-trips through getPartials, in submitted order', async () => {
             const directory = await makeTempDir();
             const context = makeContext();
             const store = makeStore(directory);
 
-            const written = await store.putPartial(context, null, 'nav.html', '<nav/>');
-            assertEqual('partials/nav.html', written.filepath);
+            const written = await store.putPartials(context, 'v1', [
+                { filepath: 'nav.html', source: '<nav/>' },
+                { filepath: 'footer.html', source: '<footer/>' },
+            ]);
 
-            const result = await store.getPartials(context, null);
-            assertEqual(1, result.length);
-            assertEqual('partials/nav.html', result[0].filepath);
-            assertEqual('<nav/>', result[0].source);
+            assertEqual(2, written.length);
+            assertEqual('partials/nav.html', written[0].filepath);
+            assertEqual('partials/footer.html', written[1].filepath);
+
+            const result = await store.getPartials(context, 'v1');
+            const byFilepath = new Map(result.map((file) => [ file.filepath, file.source ]));
+            assertEqual(2, result.length);
+            assertEqual('<nav/>', byFilepath.get('partials/nav.html'));
+            assertEqual('<footer/>', byFilepath.get('partials/footer.html'));
         });
 
-        it('returns logical filepaths with the namespace stripped', async () => {
+        it('writes nested partials with their full logical filepath', async () => {
             const directory = await makeTempDir();
-            await seedFile(directory, 'v1/partials/nav.html', '<nav/>');
-            await seedFile(directory, 'v1/partials/footer.html', '<footer/>');
             const store = makeStore(directory);
+
+            const written = await store.putPartials(makeContext(), 'v1', [
+                { filepath: 'widgets/card.html', source: '<card/>' },
+            ]);
+
+            assertEqual('partials/widgets/card.html', written[0].filepath);
+            assertEqual('<card/>', await readBackingFile(directory, 'v1/partials/widgets/card.html'));
+        });
+
+        it('publishes an explicitly empty set that resolves to an empty array rather than failing', async () => {
+            const directory = await makeTempDir();
+            const store = makeStore(directory);
+
+            const written = await store.putPartials(makeContext(), 'v1', []);
+            assertEqual(0, written.length);
 
             const result = await store.getPartials(makeContext(), 'v1');
-
-            const filepaths = result.map((file) => file.filepath).sort();
-            assertEqual('partials/footer.html', filepaths[0]);
-            assertEqual('partials/nav.html', filepaths[1]);
+            assertEqual(0, result.length);
         });
 
-        it('returns nested partials with their full logical filepath', async () => {
+        it('replaces the complete set, removing a file omitted from a later successful batch', async () => {
             const directory = await makeTempDir();
-            await seedFile(directory, 'partials/widgets/card.html', '<card/>');
+            const context = makeContext();
             const store = makeStore(directory);
 
-            const result = await store.getPartials(makeContext(), null);
+            await store.putPartials(context, 'v1', [
+                { filepath: 'nav.html', source: '<nav/>' },
+                { filepath: 'footer.html', source: '<footer/>' },
+            ]);
+            await store.putPartials(context, 'v1', [
+                { filepath: 'nav.html', source: '<nav-2/>' },
+            ]);
+
+            const result = await store.getPartials(context, 'v1');
 
             assertEqual(1, result.length);
-            assertEqual('partials/widgets/card.html', result[0].filepath);
-            assertEqual('<card/>', result[0].source);
+            assertEqual('partials/nav.html', result[0].filepath);
+            assertEqual('<nav-2/>', result[0].source);
         });
 
-        it('does not return files from another prefix', async () => {
+        it('does not touch other template prefixes or namespaces when replacing partials', async () => {
+            const directory = await makeTempDir();
+            const context = makeContext();
+            const store = makeStore(directory);
+
+            await store.putBaseTemplate(context, 'v1', 'home.html', '<home/>');
+            await seedFile(directory, 'v2/partials/nav.html', '<nav-v2/>');
+
+            await store.putPartials(context, 'v1', [ { filepath: 'nav.html', source: '<nav/>' } ]);
+            await store.putPartials(context, 'v1', [ { filepath: 'footer.html', source: '<footer/>' } ]);
+
+            assertEqual('<home/>', await readBackingFile(directory, 'v1/base/home.html'));
+            const v2Result = await store.getPartials(context, 'v2');
+            assertEqual(1, v2Result.length);
+            assertEqual('<nav-v2/>', v2Result[0].source);
+        });
+
+        it('throws when putPartials is called without a namespace', async () => {
+            const directory = await makeTempDir();
+            const store = makeStore(directory);
+
+            const caught = await catchAsyncError(() => store.putPartials(makeContext(), null, []));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('putPartials requires a non-empty namespace', caught.message);
+        });
+
+        it('does not return files from another prefix in the flat namespace', async () => {
             const directory = await makeTempDir();
             await seedFile(directory, 'partials/nav.html', '<nav/>');
             await seedFile(directory, 'base/home.html', '<home/>');
@@ -460,16 +524,6 @@ describe('TemplateFileStore (node)', ({ after, describe }) => {
 
             assertEqual(1, result.length);
             assertEqual('partials/nav.html', result[0].filepath);
-        });
-
-        it('does not return partials written under a different namespace', async () => {
-            const directory = await makeTempDir();
-            await seedFile(directory, 'v1/partials/nav.html', '<nav/>');
-            const store = makeStore(directory);
-
-            const result = await store.getPartials(makeContext(), 'v2');
-
-            assertEqual(0, result.length);
         });
     });
 });

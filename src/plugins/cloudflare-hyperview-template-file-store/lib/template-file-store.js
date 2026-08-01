@@ -1,9 +1,13 @@
 import {
     AssertionError,
     assert,
+    assertArray,
     assertNonEmptyString,
+    isNonEmptyString,
+    isPlainObject,
     isUndefined,
 } from '../../../kixx/assertions/mod.js';
+import { OperationalError } from '../../../kixx/errors/mod.js';
 
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
@@ -12,6 +16,7 @@ import {
 const BASE_TEMPLATE_PREFIX = 'base/';
 const PAGE_TEMPLATE_PREFIX = 'pages/';
 const PARTIALS_PREFIX = 'partials/';
+const PARTIALS_MANIFEST_FILENAME = 'partials.json';
 const DEFAULT_BINDING_NAME = 'HYPERVIEW_TEMPLATE_FILE_STORE';
 
 // Namespaced template keys are immutable: HyperviewService refuses any template
@@ -53,8 +58,17 @@ const MIN_CACHE_TTL_SECONDS = 30;
  * lower. The long TTL is configurable through
  * `config.env.HYPERVIEW_TEMPLATE_FILE_STORE.cacheTtl`.
  *
- * Note that `getPartials()` still performs an uncacheable `list()` before its
- * bulk read, because Cloudflare KV's list operation accepts no `cacheTtl`.
+ * A namespaced partial set is stored as one JSON manifest value at
+ * `{namespace}/partials.json`, mapping prefix-included logical filepaths (e.g.
+ * `partials/nav.html`) to source strings, so a namespaced `getPartials()`
+ * loads the complete set through one cacheable `get()` rather than an
+ * uncacheable `list()` plus a bulk read. `putPartials()` replaces the whole
+ * manifest value in one call; it never writes or reads the individual
+ * `{namespace}/partials/...` keys used before this format existed, and does
+ * not migrate or delete them. Without a namespace, `getPartials()` still
+ * performs an uncacheable `list()` before its bulk read, because Cloudflare
+ * KV's list operation accepts no `cacheTtl` and there is no single manifest
+ * key to address in the flat, unprefixed keyspace.
  *
  * @implements {import('../../../kixx/hyperview/template-file-store-interface.js').TemplateFileStoreInterface}
  */
@@ -124,26 +138,78 @@ export default class TemplateFileStore {
     }
 
     /**
-     * Writes (creates or updates) a partial template source file in the shared
-     * template KV store under the optional namespace.
+     * Replaces the complete partial template set for the required `namespace`,
+     * storing it as one JSON manifest value rather than one KV key per partial.
+     * A successful call overwrites any previously published manifest for
+     * `namespace` in a single KV `put()`; a failed call may leave the previous
+     * manifest, a partially written value, or nothing at all, and concurrent
+     * calls for the same `namespace` are not ordered by this method.
      * @param {RequestContext} context - Request context exposing the configured KV binding
-     * @param {string|null} [namespace] - Optional namespace used to prefix the KV key
-     * @param {string} filepath - Partial filename relative to `partials/`
-     * @param {string} source - Partial source text to store
-     * @returns {Promise<{filepath: string}>} Resolves with the logical filepath that was written
+     * @param {string} namespace - Required namespace (build id) that scopes the manifest key
+     * @param {import('../../../kixx/hyperview/template-file-store-interface.js').PartialInput[]} partials - Complete partial set to publish, with filepaths relative to `partials/`
+     * @returns {Promise<{filepath: string}[]>} Resolves with the logical, `partials/`-prefixed filepaths that were written, in submitted order
+     * @throws {AssertionError} When namespace is empty or invalid, partials is not an array, or an entry's filepath or source is invalid
+     * @throws {OperationalError} When the KV write fails
      */
-    async putPartial(context, namespace, filepath, source) {
-        return await this.#putFile(context, namespace, PARTIALS_PREFIX, filepath, source);
+    async putPartials(context, namespace, partials) {
+        const safeNamespace = this.#resolveNamespace(namespace);
+        assertNonEmptyString(safeNamespace, 'TemplateFileStore putPartials requires a non-empty namespace');
+        assertArray(partials, 'TemplateFileStore putPartials requires an array of partials');
+
+        const manifest = {};
+        const refs = [];
+
+        for (const { filepath, source } of partials) {
+            assertNonEmptyString(filepath, 'TemplateFileStore putPartials requires a filepath for every entry');
+            assertNonEmptyString(source, 'TemplateFileStore putPartials requires source text for every entry');
+            // Reject path traversal so a client cannot escape its prefix or the namespace.
+            assert(
+                !filepath.split('/').includes('..'),
+                'TemplateFileStore putPartials filepath must not contain ".." segments',
+            );
+
+            const logicalKey = `${ PARTIALS_PREFIX }${ filepath.replace(/^\//, '') }`;
+            manifest[logicalKey] = source;
+            refs.push({ filepath: logicalKey });
+        }
+
+        const manifestKey = this.#manifestKey(safeNamespace);
+        const kvStore = this.#getKVStore(context);
+        this.#logger.debug('putPartials() writing manifest', { key: manifestKey, count: refs.length });
+
+        try {
+            await kvStore.put(manifestKey, JSON.stringify(manifest));
+        } catch (cause) {
+            throw new OperationalError(
+                `TemplateFileStore failed to write partial manifest "${ manifestKey }"`,
+                { cause },
+            );
+        }
+
+        return refs;
     }
 
     /**
-     * Retrieves all available partial templates from the shared template KV store.
+     * Retrieves all available partial templates from the shared template KV
+     * store. With a non-empty `namespace`, loads the complete set through one
+     * cacheable manifest `get()`; a namespace that was never published by
+     * `putPartials()` is an invariant failure, and an explicitly published
+     * empty set resolves to `[]`. Without a namespace, falls back to the flat,
+     * unprefixed `list()` plus bulk-read behavior.
      * @param {RequestContext} context - Request context exposing the configured KV binding
-     * @param {string|null} [namespace] - Optional namespace used to prefix the KV listing
-     * @returns {Promise<{filepath: string, source: string}[]>} Resolves to existing partial source files with logical filepaths in KV listing order
+     * @param {string|null} [namespace] - Optional namespace used to select the manifest or the flat listing
+     * @returns {Promise<{filepath: string, source: string}[]>} Resolves to existing partial source files with logical filepaths
+     * @throws {AssertionError} When a non-empty namespace's manifest is missing or structurally invalid
+     * @throws {OperationalError} When the KV read fails
      */
     async getPartials(context, namespace) {
-        return await this.#loadPrefixedFiles(context, namespace, PARTIALS_PREFIX);
+        const safeNamespace = this.#resolveNamespace(namespace);
+
+        if (!safeNamespace) {
+            return await this.#loadPrefixedFiles(context, namespace, PARTIALS_PREFIX);
+        }
+
+        return await this.#loadPartialsManifest(context, safeNamespace);
     }
 
     async #getFile(context, namespace, barePrefix, filepath) {
@@ -151,7 +217,16 @@ export default class TemplateFileStore {
         const cacheTtl = this.#resolveCacheTtl(context, namespace);
         this.#logger.debug('getFile() loading key', { key: kvKey, cacheTtl });
         const kvStore = this.#getKVStore(context);
-        const source = await kvStore.get(kvKey, { type: 'text', cacheTtl }) ?? null;
+
+        let source;
+        try {
+            source = await kvStore.get(kvKey, { type: 'text', cacheTtl }) ?? null;
+        } catch (cause) {
+            throw new OperationalError(
+                `TemplateFileStore failed to read KV key "${ kvKey }"`,
+                { cause },
+            );
+        }
 
         if (source !== null) {
             return { filepath: logicalKey, source };
@@ -172,7 +247,15 @@ export default class TemplateFileStore {
         const { logicalKey, kvKey } = this.#resolveKey(namespace, barePrefix, filepath);
         this.#logger.debug('putFile() writing key', { key: kvKey });
         const kvStore = this.#getKVStore(context);
-        await kvStore.put(kvKey, source);
+
+        try {
+            await kvStore.put(kvKey, source);
+        } catch (cause) {
+            throw new OperationalError(
+                `TemplateFileStore failed to write KV key "${ kvKey }"`,
+                { cause },
+            );
+        }
 
         return { filepath: logicalKey };
     }
@@ -291,4 +374,81 @@ export default class TemplateFileStore {
 
         return files;
     }
+
+    #manifestKey(namespace) {
+        return `${ namespace }/${ PARTIALS_MANIFEST_FILENAME }`;
+    }
+
+    async #loadPartialsManifest(context, namespace) {
+        const manifestKey = this.#manifestKey(namespace);
+        const cacheTtl = this.#resolveCacheTtl(context, namespace);
+        const kvStore = this.#getKVStore(context);
+        this.#logger.debug('getPartials() loading manifest', { key: manifestKey, cacheTtl });
+
+        let manifest;
+        try {
+            manifest = await kvStore.get(manifestKey, { type: 'json', cacheTtl });
+        } catch (cause) {
+            throw new OperationalError(
+                `TemplateFileStore failed to read partial manifest "${ manifestKey }"`,
+                { cause },
+            );
+        }
+
+        // A namespace is expected to have been staged by putPartials() before it
+        // is ever read; a missing manifest means that never happened, which is an
+        // invariant failure rather than "no partials published yet".
+        assert(
+            manifest !== null,
+            `TemplateFileStore found no published partial manifest for namespace "${ namespace }"`,
+        );
+
+        return this.#parsePartialsManifest(manifest, manifestKey);
+    }
+
+    /**
+     * Validates manifest structure without normalizing it: keys and values are
+     * trusted verbatim from callers of putPartials(), so any deviation here
+     * indicates the manifest was corrupted or written outside this contract.
+     */
+    #parsePartialsManifest(manifest, manifestKey) {
+        assert(
+            isPlainObject(manifest),
+            `TemplateFileStore partial manifest "${ manifestKey }" must be a JSON object`,
+        );
+
+        const files = [];
+
+        for (const filepath of Object.keys(manifest)) {
+            const source = manifest[filepath];
+            assert(
+                isValidManifestKey(filepath),
+                `TemplateFileStore partial manifest "${ manifestKey }" has an invalid key "${ filepath }"`,
+            );
+            assert(
+                isNonEmptyString(source),
+                `TemplateFileStore partial manifest "${ manifestKey }" has an invalid source for "${ filepath }"`,
+            );
+            files.push({ filepath, source });
+        }
+
+        return files;
+    }
+}
+
+/**
+ * A valid manifest key is a canonical, lower-case logical filepath beginning
+ * with the `partials/` prefix, with no empty or traversal path segments.
+ */
+function isValidManifestKey(key) {
+    if (!isNonEmptyString(key) || key !== key.toLowerCase() || !key.startsWith(PARTIALS_PREFIX)) {
+        return false;
+    }
+
+    const remainder = key.slice(PARTIALS_PREFIX.length);
+    if (!remainder) {
+        return false;
+    }
+
+    return remainder.split('/').every((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
 }

@@ -584,25 +584,33 @@ export default class HyperviewService {
     }
 
     /**
-     * Writes a partial template source file to a target build's namespace.
+     * Replaces the complete partial template set for a target build's namespace.
      *
-     * Stores the source verbatim — no compilation — so template syntax and
+     * Stores partial sources verbatim — no compilation — so template syntax and
      * cross-partial references are resolved at render time, not at write time.
+     * A successful call replaces every partial previously published under
+     * `buildId`; a failed call may leave an incomplete set, which the caller
+     * must retry or abandon. Concurrent calls for the same `buildId` are not
+     * ordered by this method — callers must serialize their own writes.
      * @param {RequestContext} context - Request context carrying the current build id
      * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} filepath - Canonical partial filename relative to `partials/`
-     * @param {string} source - Partial source text to store
-     * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When filepath is not canonical, buildId is empty, or
-     *   buildId matches the current build id
+     * @param {import('./template-file-store-interface.js').PartialInput[]} partials - Complete partial set to publish, with filepaths relative to `partials/`
+     * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef[]>} Logical, `partials/`-prefixed filepaths that were written, in submitted order
+     * @throws {AssertionError} When partials is not an array, any filepath is not
+     *   canonical, any source is empty, buildId is empty, or buildId matches the
+     *   current build id
      */
-    async putPartial(context, buildId, filepath, source) {
-        assertCanonicalIdentifier(
-            filepath,
-            'HyperviewService.putPartial: filepath',
-        );
+    async putPartials(context, buildId, partials) {
+        assert(Array.isArray(partials), 'HyperviewService.putPartials: partials must be an array');
+        for (const { filepath, source } of partials) {
+            assertCanonicalIdentifier(
+                filepath,
+                'HyperviewService.putPartials: partials[].filepath',
+            );
+            assertNonEmptyString(source, 'HyperviewService.putPartials: partials[].source');
+        }
         this.#assertWritableBuildId(context, buildId);
-        return await this.#templateFileStore.putPartial(context, buildId, filepath, source);
+        return await this.#templateFileStore.putPartials(context, buildId, partials);
     }
 
     /**

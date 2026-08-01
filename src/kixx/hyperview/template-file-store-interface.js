@@ -32,13 +32,20 @@
  *   stripped on read by the adapter; it never appears in a returned filepath.
  *
  * ## Namespace contract
- * - `namespace` is optional on every read and write method, positioned as the
- *   second argument (after `context`). Callers pass `null` to opt out.
- * - A `null`, `undefined`, or empty-string `namespace` MUST be treated as "no
- *   namespace" — the flat, unprefixed addressing.
- * - When a non-empty `namespace` is provided it MUST be validated: a non-string
- *   value MUST be rejected, and a value containing `..` path segments MUST be
- *   rejected so a caller cannot escape the namespace.
+ * - `namespace` is positioned as the second argument (after `context`) on
+ *   every read and write method.
+ * - `getBaseTemplate()`, `putBaseTemplate()`, `getPageTemplate()`,
+ *   `putPageTemplate()`, and `getPartials()` treat `namespace` as optional:
+ *   callers pass `null` to opt out, and a `null`, `undefined`, or
+ *   empty-string `namespace` MUST be treated as "no namespace" — the flat,
+ *   unprefixed addressing.
+ * - `putPartials()` requires a non-empty `namespace`. There is no flat,
+ *   unprefixed form of a partial-set write; every batch publishes to one
+ *   build's namespace.
+ * - When a non-empty `namespace` is provided (required or optional) it MUST
+ *   be validated: a non-string value MUST be rejected, and a value
+ *   containing `..` path segments MUST be rejected so a caller cannot escape
+ *   the namespace.
  * - Read and write namespace symmetry is the caller's responsibility: a file
  *   written under one `namespace` is only visible to reads using the same
  *   `namespace`.
@@ -59,15 +66,35 @@
  * - `getBaseTemplate()` and `getPageTemplate()` MUST resolve to `null` when the
  *   template does not exist, and otherwise to a `{ filepath, source }` whose
  *   `filepath` is the logical path with the `namespace` prefix stripped.
- * - The `put*()` methods MUST create or overwrite the file and resolve with the
- *   logical `{ filepath }` that was written (namespace prefix stripped).
+ * - The `putBaseTemplate()` and `putPageTemplate()` methods MUST create or
+ *   overwrite the file and resolve with the logical `{ filepath }` that was
+ *   written (namespace prefix stripped).
+ * - `putPartials(context, namespace, partials)` MUST replace the complete
+ *   partial set for `namespace` in one call: every logical file present under
+ *   `partials/` for that namespace after a successful call MUST be exactly
+ *   the submitted set, and files previously published under that namespace
+ *   but omitted from the submitted set MUST NOT remain readable. It MUST
+ *   resolve to `{ filepath }[]` — logical, `partials/`-prefixed paths with the
+ *   namespace prefix stripped — in the same order as the submitted `partials`
+ *   array. An empty `partials` array is a valid input and MUST resolve to
+ *   `[]`, and MUST still replace (clear) any previously published set for
+ *   that namespace.
+ * - `putPartials()` promises the exact replacement set only after successful
+ *   resolution. It MUST NOT promise recovery of the previous set, or any
+ *   particular intermediate state, after a failed or partial write; a caller
+ *   whose write fails must retry or abandon the namespace. Concurrent
+ *   `putPartials()` calls for the same `namespace` are outside this contract
+ *   — implementations are not required to order them, and callers MUST
+ *   serialize their own writes to one namespace.
  * - `getPartials()` MUST resolve to an array of `{ filepath, source }` for the
  *   files present under the `partials/` prefix for the given `namespace`, with
- *   logical filepaths (namespace prefix stripped). It MUST resolve to an empty
- *   array when none exist, MUST NOT return files from another prefix, and MUST
- *   NOT return files written under a different `namespace`. Listing order
- *   follows the backing store's natural listing order and is not otherwise
- *   guaranteed.
+ *   logical filepaths (namespace prefix stripped). Listing order follows the
+ *   backing store's natural listing order and is not otherwise guaranteed.
+ *   With a non-empty `namespace`, a partial set that was never published by
+ *   `putPartials()` for that namespace is an invariant failure (the namespace
+ *   is expected to have been staged before it is read), while a namespace
+ *   whose published set is explicitly empty MUST resolve to `[]`. With no
+ *   `namespace`, an absent flat partial set MUST resolve to `[]`.
  *
  * ## Context pass-through
  * Every read and write method receives a request or execution `context` as its
@@ -128,11 +155,25 @@
  *   The `filepath` may be nested several segments deep, delimited by `/`.
  *   Resolves with the logical filepath that was written.
  *
- * @property {function(Object, (string|null), string, string): Promise<TemplateFileRef>} putPartial
- *   Creates or overwrites a partial template source file under the `partials/`
- *   prefix. Resolves with the logical filepath that was written.
+ * @property {function(Object, string, PartialInput[]): Promise<TemplateFileRef[]>} putPartials
+ *   Replaces the complete partial template set under the `partials/` prefix
+ *   for the required, non-empty `namespace`. Resolves with the logical,
+ *   `partials/`-prefixed filepaths that were written, in submitted order. An
+ *   empty input replaces the set with an empty set and resolves to `[]`.
  *
  * @property {function(Object, (string|null)): Promise<TemplateFile[]>} getPartials
  *   Retrieves all available partial templates from the `partials/` prefix for
- *   the given namespace. Resolves to an empty array when none exist.
+ *   the given namespace. With a namespace, resolves to `[]` only when that
+ *   namespace's set was explicitly published empty; an unpublished namespace
+ *   is an invariant failure. Without a namespace, resolves to `[]` when none
+ *   exist.
+ */
+
+/**
+ * A partial template source file submitted for batch publication.
+ *
+ * @typedef {Object} PartialInput
+ * @property {string} filepath - Logical filepath relative to `partials/`
+ *   (e.g. `nav.html` or `shared/nav.html`).
+ * @property {string} source - The file's source text.
  */

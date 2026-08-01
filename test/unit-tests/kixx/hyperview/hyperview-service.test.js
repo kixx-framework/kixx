@@ -57,7 +57,9 @@ function makeStores() {
             },
             async putBaseTemplate() {},
             async putPageTemplate() {},
-            async putPartial() {},
+            async putPartials() {
+                return [];
+            },
         },
     };
 }
@@ -729,8 +731,9 @@ describe('HyperviewService', ({ describe }) => {
             stores.templateFileStore.putPageTemplate = async () => {
                 writes += 1;
             };
-            stores.templateFileStore.putPartial = async () => {
+            stores.templateFileStore.putPartials = async () => {
                 writes += 1;
+                return [];
             };
             const service = makeService(stores);
 
@@ -743,8 +746,8 @@ describe('HyperviewService', ({ describe }) => {
                 'HyperviewService.putPageTemplate: templateId',
             );
             await assertIdentifierRejected(
-                () => service.putPartial(makeContext(), 'next', 'Nav.html', 'Navigation'),
-                'HyperviewService.putPartial: filepath',
+                () => service.putPartials(makeContext(), 'next', [ { filepath: 'Nav.html', source: 'Navigation' } ]),
+                'HyperviewService.putPartials: partials[].filepath',
             );
 
             assertEqual(0, writes);
@@ -759,21 +762,97 @@ describe('HyperviewService', ({ describe }) => {
             stores.templateFileStore.putPageTemplate = async (...args) => {
                 writes.push([ 'page', ...args ]);
             };
-            stores.templateFileStore.putPartial = async (...args) => {
-                writes.push([ 'partial', ...args ]);
+            stores.templateFileStore.putPartials = async (...args) => {
+                writes.push([ 'partials', ...args ]);
+                return [ { filepath: 'partials/shared/nav.html' } ];
             };
             const service = makeService(stores);
             const context = makeContext();
 
             await service.putBaseTemplate(context, 'next', 'site.html', 'Base');
             await service.putPageTemplate(context, 'next', 'blog/post.html', 'Page');
-            await service.putPartial(context, 'next', 'shared/nav.html', 'Partial');
+            await service.putPartials(context, 'next', [ { filepath: 'shared/nav.html', source: 'Partial' } ]);
 
             assertJSONEqual([
                 [ 'base', context, 'next', 'site.html', 'Base' ],
                 [ 'page', context, 'next', 'blog/post.html', 'Page' ],
-                [ 'partial', context, 'next', 'shared/nav.html', 'Partial' ],
+                [ 'partials', context, 'next', [ { filepath: 'shared/nav.html', source: 'Partial' } ] ],
             ], writes);
+        });
+
+        it('delegates once and returns the store result for a batch of partials', async () => {
+            const stores = makeStores();
+            let delegations = 0;
+            stores.templateFileStore.putPartials = async (_context, _buildId, partials) => {
+                delegations += 1;
+                return partials.map(({ filepath }) => ({ filepath: `partials/${ filepath }` }));
+            };
+            const service = makeService(stores);
+            const context = makeContext();
+
+            const result = await service.putPartials(context, 'next', [
+                { filepath: 'nav.html', source: 'Nav' },
+                { filepath: 'footer.html', source: 'Footer' },
+            ]);
+
+            assertEqual(1, delegations);
+            assertJSONEqual([
+                { filepath: 'partials/nav.html' },
+                { filepath: 'partials/footer.html' },
+            ], result);
+        });
+
+        it('accepts an empty partial set and delegates it unchanged', async () => {
+            const stores = makeStores();
+            let received;
+            stores.templateFileStore.putPartials = async (_context, _buildId, partials) => {
+                received = partials;
+                return [];
+            };
+            const service = makeService(stores);
+
+            const result = await service.putPartials(makeContext(), 'next', []);
+
+            assertJSONEqual([], received);
+            assertJSONEqual([], result);
+        });
+
+        it('rejects an empty source in a partial batch entry', async () => {
+            const stores = makeStores();
+            let writes = 0;
+            stores.templateFileStore.putPartials = async () => {
+                writes += 1;
+                return [];
+            };
+            const service = makeService(stores);
+
+            const caught = await catchAsyncError(() => service.putPartials(makeContext(), 'next', [
+                { filepath: 'nav.html', source: '' },
+            ]));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('HyperviewService.putPartials: partials[].source', caught.message);
+            assertEqual(0, writes);
+        });
+
+        it('rejects a partial batch write to the current build', async () => {
+            const stores = makeStores();
+            let writes = 0;
+            stores.templateFileStore.putPartials = async () => {
+                writes += 1;
+                return [];
+            };
+            const service = makeService(stores);
+            const context = makeContext('live');
+
+            const caught = await catchAsyncError(() => service.putPartials(context, 'live', [
+                { filepath: 'nav.html', source: 'Nav' },
+            ]));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, writes);
         });
     });
 });

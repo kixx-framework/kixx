@@ -30,7 +30,13 @@ function makeKVNamespace(initial) {
                 }
                 return result;
             }
-            return store.has(key) ? store.get(key) : null;
+            if (!store.has(key)) {
+                return null;
+            }
+            const value = store.get(key);
+            // Mirror Cloudflare KV, which parses JSON values for the caller when
+            // { type: 'json' } is requested.
+            return options?.type === 'json' ? JSON.parse(value) : value;
         },
         async put(key, value) {
             store.set(key, value);
@@ -349,8 +355,8 @@ describe('TemplateFileStore', ({ describe }) => {
         });
     });
 
-    describe('putPartial and getPartials', ({ it }) => {
-        it('returns an empty array when no partials exist', async () => {
+    describe('putPartials and getPartials', ({ it }) => {
+        it('returns an empty array for the flat namespace when no partials exist', async () => {
             const store = makeStore();
 
             const result = await store.getPartials(makeContext(), null);
@@ -358,54 +364,175 @@ describe('TemplateFileStore', ({ describe }) => {
             assertEqual(0, result.length);
         });
 
-        it('writes a partial under the partials prefix and round-trips through getPartials', async () => {
+        it('throws when a namespaced partial manifest was never published', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getPartials(makeContext(), 'v1'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('no published partial manifest', caught.message);
+        });
+
+        it('writes one manifest value and round-trips through getPartials, in submitted order', async () => {
             const kvStore = makeKVNamespace();
             const context = makeContext(kvStore);
             const store = makeStore();
 
-            const written = await store.putPartial(context, null, 'nav.html', '<nav/>');
-            assertEqual('partials/nav.html', written.filepath);
+            const written = await store.putPartials(context, 'v1', [
+                { filepath: 'nav.html', source: '<nav/>' },
+                { filepath: 'footer.html', source: '<footer/>' },
+            ]);
 
-            const result = await store.getPartials(context, null);
-            assertEqual(1, result.length);
-            assertEqual('partials/nav.html', result[0].filepath);
-            assertEqual('<nav/>', result[0].source);
+            assertEqual(2, written.length);
+            assertEqual('partials/nav.html', written[0].filepath);
+            assertEqual('partials/footer.html', written[1].filepath);
+
+            assertEqual(1, kvStore.store.size);
+            assertEqual(
+                JSON.stringify({ 'partials/nav.html': '<nav/>', 'partials/footer.html': '<footer/>' }),
+                kvStore.store.get('v1/partials.json'),
+            );
+
+            const result = await store.getPartials(context, 'v1');
+            const byFilepath = new Map(result.map((file) => [ file.filepath, file.source ]));
+            assertEqual(2, result.length);
+            assertEqual('<nav/>', byFilepath.get('partials/nav.html'));
+            assertEqual('<footer/>', byFilepath.get('partials/footer.html'));
         });
 
-        it('returns logical filepaths with the namespace stripped', async () => {
+        it('reads the manifest through one cacheable JSON get() at the configured TTL', async () => {
+            const kvStore = makeKVNamespace();
+            const context = makeContext(kvStore);
+            const store = makeStore();
+
+            await store.putPartials(context, 'v1', [ { filepath: 'nav.html', source: '<nav/>' } ]);
+            await store.getPartials(context, 'v1');
+
+            assertEqual(1, kvStore.readOptions.length);
+            assertEqual('json', kvStore.readOptions[0].type);
+            assertEqual(86400, kvStore.readOptions[0].cacheTtl);
+        });
+
+        it('publishes an explicitly empty manifest that resolves to an empty array rather than failing', async () => {
+            const kvStore = makeKVNamespace();
+            const context = makeContext(kvStore);
+            const store = makeStore();
+
+            const written = await store.putPartials(context, 'v1', []);
+            assertEqual(0, written.length);
+            assertEqual('{}', kvStore.store.get('v1/partials.json'));
+
+            const result = await store.getPartials(context, 'v1');
+            assertEqual(0, result.length);
+        });
+
+        it('replaces the complete manifest, dropping a key omitted from a later successful batch', async () => {
+            const kvStore = makeKVNamespace();
+            const context = makeContext(kvStore);
+            const store = makeStore();
+
+            await store.putPartials(context, 'v1', [
+                { filepath: 'nav.html', source: '<nav/>' },
+                { filepath: 'footer.html', source: '<footer/>' },
+            ]);
+            await store.putPartials(context, 'v1', [
+                { filepath: 'nav.html', source: '<nav-2/>' },
+            ]);
+
+            const result = await store.getPartials(context, 'v1');
+
+            assertEqual(1, result.length);
+            assertEqual('partials/nav.html', result[0].filepath);
+            assertEqual('<nav-2/>', result[0].source);
+        });
+
+        it('ignores legacy per-partial keys written under the namespace', async () => {
+            const kvStore = makeKVNamespace({ 'v1/partials/legacy.html': '<legacy/>' });
+            const context = makeContext(kvStore);
+            const store = makeStore();
+
+            await store.putPartials(context, 'v1', [ { filepath: 'nav.html', source: '<nav/>' } ]);
+            const result = await store.getPartials(context, 'v1');
+
+            assertEqual(1, result.length);
+            assertEqual('partials/nav.html', result[0].filepath);
+        });
+
+        it('throws when putPartials is called without a namespace', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.putPartials(makeContext(), null, []));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('putPartials requires a non-empty namespace', caught.message);
+        });
+
+        it('throws when the stored manifest is not a JSON object', async () => {
+            const kvStore = makeKVNamespace({ 'v1/partials.json': JSON.stringify([ 'nav.html' ]) });
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getPartials(makeContext(kvStore), 'v1'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('must be a JSON object', caught.message);
+        });
+
+        it('throws when a manifest key is outside the partials prefix', async () => {
+            const kvStore = makeKVNamespace({ 'v1/partials.json': JSON.stringify({ 'base/home.html': '<home/>' }) });
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getPartials(makeContext(kvStore), 'v1'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('invalid key', caught.message);
+        });
+
+        it('throws when a manifest key is not lower case', async () => {
+            const kvStore = makeKVNamespace({ 'v1/partials.json': JSON.stringify({ 'partials/Nav.html': '<nav/>' }) });
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getPartials(makeContext(kvStore), 'v1'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('invalid key', caught.message);
+        });
+
+        it('throws when a manifest key has an empty path segment', async () => {
+            const kvStore = makeKVNamespace({ 'v1/partials.json': JSON.stringify({ 'partials//nav.html': '<nav/>' }) });
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getPartials(makeContext(kvStore), 'v1'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('invalid key', caught.message);
+        });
+
+        it('throws when a manifest value is not a non-empty string', async () => {
+            const kvStore = makeKVNamespace({ 'v1/partials.json': JSON.stringify({ 'partials/nav.html': '' }) });
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getPartials(makeContext(kvStore), 'v1'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('invalid source', caught.message);
+        });
+
+        it('does not normalize manifest keys or values on read', async () => {
             const kvStore = makeKVNamespace({
-                'v1/partials/nav.html': '<nav/>',
-                'v1/partials/footer.html': '<footer/>',
+                'v1/partials.json': JSON.stringify({ 'partials/nav.html': '  <nav/>  ' }),
             });
             const store = makeStore();
 
             const result = await store.getPartials(makeContext(kvStore), 'v1');
 
-            const filepaths = result.map((file) => file.filepath).sort();
-            assertEqual('partials/footer.html', filepaths[0]);
-            assertEqual('partials/nav.html', filepaths[1]);
-        });
-
-        it('does not return files from another prefix', async () => {
-            const kvStore = makeKVNamespace({
-                'partials/nav.html': '<nav/>',
-                'base/home.html': '<home/>',
-            });
-            const store = makeStore();
-
-            const result = await store.getPartials(makeContext(kvStore), null);
-
-            assertEqual(1, result.length);
-            assertEqual('partials/nav.html', result[0].filepath);
-        });
-
-        it('does not return partials written under a different namespace', async () => {
-            const kvStore = makeKVNamespace({ 'v1/partials/nav.html': '<nav/>' });
-            const store = makeStore();
-
-            const result = await store.getPartials(makeContext(kvStore), 'v2');
-
-            assertEqual(0, result.length);
+            assertEqual('  <nav/>  ', result[0].source);
         });
     });
 
@@ -452,8 +579,8 @@ describe('TemplateFileStore', ({ describe }) => {
             assertEqual(86400, kvStore.readOptions[0].cacheTtl);
         });
 
-        it('applies the TTL to the getPartials bulk read', async () => {
-            const kvStore = makeKVNamespace({ 'v1/partials/nav.html': '<nav/>' });
+        it('applies the TTL to the getPartials manifest read', async () => {
+            const kvStore = makeKVNamespace({ 'v1/partials.json': JSON.stringify({ 'partials/nav.html': '<nav/>' }) });
             const store = makeStore();
 
             await store.getPartials(makeContext(kvStore), 'v1');
