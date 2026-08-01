@@ -48,6 +48,11 @@ The D1ExecResult Object:
 
 const DEFAULT_BINDING_NAME = 'DOCUMENT_STORE';
 
+// The built-in index on (type, sort_key) which backs scan(). Unlike the configured
+// secondary indexes it has no generated column, so its presence is the only signal
+// that the initial migration ran to completion.
+const DEFAULT_SORT_KEY_INDEX_NAME = 'idx_type_sort_key';
+
 /**
  * Cloudflare D1 engine adapter for the document store abstraction.
  *
@@ -147,116 +152,55 @@ export default class DocumentStoreEngine {
      * that have been removed drop the index then the column. Safe to call on
      * every startup — DDL uses IF NOT EXISTS or is guarded by the PRAGMA pre-check.
      *
+     * Structured to minimize round trips to D1, because this runs on the first
+     * request served by every cold Worker isolate. Schema introspection happens
+     * first so that all DDL becomes conditional: a database already in the desired
+     * shape costs a single request. Only a database which has never been migrated,
+     * or whose index definitions changed, pays for additional round trips.
+     *
      * @param {Object} context - Cloudflare Workers execution context
      * @returns {Promise<void>}
-     * @throws {Error} When table creation or the PRAGMA introspection query fails
+     * @throws {Error} When table creation, schema reconciliation, or the PRAGMA
+     *   introspection query fails
      */
     async prepareDatabase(context) {
         assertArray(this.#indexDefinitions, 'DocumentStoreEngine#setIndexDefinitions() must be called before the database can be used');
 
         const db = this.#getDatabase(context);
 
-        const createTableSQL = `
-            CREATE TABLE IF NOT EXISTS documents (
-                type       TEXT    NOT NULL,
-                id         TEXT    NOT NULL,
-                sort_key   TEXT,
-                version    INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT    NOT NULL,
-                updated_at TEXT    NOT NULL,
-                doc        TEXT    NOT NULL,
-                PRIMARY KEY (type, id)
-            )
-        `;
+        // A failed read here is deliberately not fatal. A D1 database which has never
+        // been migrated is exactly the case where schema introspection is least
+        // trustworthy, and the create-then-read path below recovers from it. Nothing
+        // is swallowed: if the binding is genuinely unhealthy the CREATE TABLE that
+        // follows fails loudly with its own error.
+        let schema = await this.#readSchema(db).catch((error) => {
+            // The logger prints `info` verbatim, so pass undefined rather than null to
+            // keep the fallback console output clean.
+            this.#logger.debug('schema introspection failed; falling back to create-then-read', undefined, error);
+            return null;
+        });
 
-        const defaultIndexSQL = `
-            CREATE INDEX IF NOT EXISTS idx_type_sort_key
-                ON documents (type, sort_key)
-        `;
-
-        let tableInfo;
-        let indexList;
-        try {
-            await db.prepare(createTableSQL).run();
-            await db.prepare(defaultIndexSQL).run();
-            tableInfo = await db.prepare('PRAGMA table_xinfo(documents)').run();
-            indexList = await db.prepare('PRAGMA index_list(documents)').run();
-        } catch (cause) {
-            throw new Error('Unable to prepare D1 documents table', { cause });
+        // The default index is checked alongside the table because a migration
+        // interrupted between the two would otherwise leave scan() without its index
+        // forever — the table already exists, so a table-only check would skip the fix.
+        if (!schema?.tableExists || !schema.indexUnique.has(DEFAULT_SORT_KEY_INDEX_NAME)) {
+            await this.#createDocumentsTable(db);
+            schema = await this.#readSchema(db);
         }
 
-        if (!tableInfo.success) {
-            throw new Error('Preparing D1 documents table: "PRAGMA table_xinfo(documents)" failed');
-        }
-        if (!indexList.success) {
-            throw new Error('Preparing D1 documents table: "PRAGMA index_list(documents)" failed');
-        }
+        const statements = this.#composeMigrationStatements(db, schema);
 
-        // table_xinfo() is used instead of table_info() because it includes hidden and
-        // generated (VIRTUAL) columns, which table_info() silently omits in some SQLite versions.
-        // │ cid │ name │ type │ notnull │ dflt_value │ pk │ hidden │
-        // We are only interested in the "name"
-        const existingKeyColumns = tableInfo.results
-            .map(({ name }) => name)
-            .filter((name) => name.startsWith('key_'));
-
-        // PRAGMA index_list returns rows like { seq, name, unique, origin, partial };
-        // we only need the uniqueness flag keyed by index name.
-        const existingIndexUnique = new Map(
-            indexList.results.map(({ name, unique }) => [ name, unique === 1 ]),
-        );
-
-        for (const indexDefinition of this.#indexDefinitions) {
-            const columnName = this.keyToColumnName(indexDefinition.name);
-            const indexName = this.keyToIndexName(indexDefinition.name);
-            const wantUnique = indexDefinition.unique === true;
-            const createIndexSQL = `CREATE ${ wantUnique ? 'UNIQUE ' : '' }INDEX IF NOT EXISTS ${ indexName } ON documents (type, ${ columnName })`;
-
-            if (!existingKeyColumns.includes(columnName)) {
-                // SQLite restrictions on ALTER TABLE ADD COLUMN:
-                // - Does not support IF NOT EXISTS — so we guard with the PRAGMA check above.
-                // - STORED generated columns cannot be added to a non-empty table; VIRTUAL
-                //   generated columns have no such restriction and are equally indexable.
-                try {
-                    await db.prepare(`
-                        ALTER TABLE documents ADD COLUMN ${ columnName }
-                        TEXT GENERATED ALWAYS AS (json_extract(doc, '${ indexDefinition.jsonPath }')) VIRTUAL
-                    `).run();
-                } catch (cause) {
-                    throw new Error(`Unable to add index column "${ columnName }" to D1 documents table`, { cause });
-                }
-            }
-
-            if (!existingIndexUnique.has(indexName)) {
-                // A previous prepare can crash after adding the column but before
-                // creating the index; reconcile the index independently.
-                try {
-                    await db.prepare(createIndexSQL).run();
-                } catch (cause) {
-                    throw new Error(`Unable to create index "${ indexName }" on D1 documents table`, { cause });
-                }
-            } else if (existingIndexUnique.get(indexName) !== wantUnique) {
-                // Column survives; index uniqueness flag is reconciled by drop + recreate.
-                // The PRAGMA above reports `unique = 1` for UNIQUE indexes only.
-                try {
-                    await db.prepare(`DROP INDEX IF EXISTS ${ indexName }`).run();
-                    await db.prepare(createIndexSQL).run();
-                } catch (cause) {
-                    throw new Error(`Unable to reconcile uniqueness on index "${ indexName }"`, { cause });
-                }
-            }
-        }
-
-        const desiredIndexKeys = this.#indexDefinitions.map(({ name }) => name);
-        for (const columnName of existingKeyColumns) {
-            const keyName = this.columnNameToKey(columnName);
-            if (!desiredIndexKeys.includes(keyName)) {
-                try {
-                    await db.prepare(`DROP INDEX IF EXISTS ${ this.keyToIndexName(keyName) }`).run();
-                    await db.prepare(`ALTER TABLE documents DROP COLUMN ${ columnName }`).run();
-                } catch (cause) {
-                    throw new Error(`Unable to drop stale index column "${ columnName }" from D1 documents table`, { cause });
-                }
+        if (statements.length > 0) {
+            // batch() runs the statements in order inside an implicit transaction and
+            // costs one round trip for the whole migration. Ordering is load-bearing —
+            // a column must be added before the index referencing it, and an index must
+            // be dropped before its column — so these can never be run concurrently.
+            // The transaction also closes the crash window a statement-at-a-time
+            // migration leaves open, where a column exists without its index.
+            try {
+                await db.batch(statements);
+            } catch (cause) {
+                throw new Error('Unable to reconcile secondary indexes on the D1 documents table', { cause });
             }
         }
 
@@ -741,6 +685,154 @@ export default class DocumentStoreEngine {
         const db = env[bindingName];
         assert(db, `DocumentStoreEngine D1 binding "${ bindingName }" is not bound on context.env`);
         return db;
+    }
+
+    /**
+     * Reads the current shape of the `documents` table from SQLite introspection.
+     *
+     * @param {Object} db - D1 database binding
+     * @returns {Promise<{tableExists: boolean, keyColumns: string[], indexUnique: Map<string, boolean>}>}
+     *   Existence of the table, the generated `key_*` column names present on it, and
+     *   the uniqueness flag of every index keyed by index name
+     * @throws {Error} When either PRAGMA query fails
+     */
+    async #readSchema(db) {
+        let tableInfo;
+        let indexList;
+
+        try {
+            // Both PRAGMAs are independent read-only introspection queries, so racing
+            // them overlaps their network latency without any ordering hazard. The DDL
+            // elsewhere in this class is ordered and goes through batch() instead.
+            [ tableInfo, indexList ] = await Promise.all([
+                db.prepare('PRAGMA table_xinfo(documents)').run(),
+                db.prepare('PRAGMA index_list(documents)').run(),
+            ]);
+        } catch (cause) {
+            throw new Error('Unable to introspect the D1 documents table', { cause });
+        }
+
+        if (!tableInfo.success) {
+            throw new Error('Preparing D1 documents table: "PRAGMA table_xinfo(documents)" failed');
+        }
+        if (!indexList.success) {
+            throw new Error('Preparing D1 documents table: "PRAGMA index_list(documents)" failed');
+        }
+
+        // table_xinfo() is used instead of table_info() because it includes hidden and
+        // generated (VIRTUAL) columns, which table_info() silently omits in some SQLite versions.
+        // │ cid │ name │ type │ notnull │ dflt_value │ pk │ hidden │
+        // We are only interested in the "name"
+        const columnNames = tableInfo.results.map(({ name }) => name);
+
+        return {
+            // SQLite returns zero rows rather than an error for a table which does not
+            // exist, so the row count doubles as the existence check and saves a query.
+            tableExists: columnNames.length > 0,
+            keyColumns: columnNames.filter((name) => name.startsWith('key_')),
+            // PRAGMA index_list returns rows like { seq, name, unique, origin, partial };
+            // we only need the uniqueness flag keyed by index name.
+            indexUnique: new Map(
+                indexList.results.map(({ name, unique }) => [ name, unique === 1 ]),
+            ),
+        };
+    }
+
+    /**
+     * Creates the `documents` table and its built-in `(type, sort_key)` index.
+     *
+     * Both statements use IF NOT EXISTS, so this is safe to run against a database
+     * which is already partially migrated.
+     *
+     * @param {Object} db - D1 database binding
+     * @returns {Promise<void>}
+     * @throws {Error} When either statement fails
+     */
+    async #createDocumentsTable(db) {
+        const createTableSQL = `
+            CREATE TABLE IF NOT EXISTS documents (
+                type       TEXT    NOT NULL,
+                id         TEXT    NOT NULL,
+                sort_key   TEXT,
+                version    INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT    NOT NULL,
+                updated_at TEXT    NOT NULL,
+                doc        TEXT    NOT NULL,
+                PRIMARY KEY (type, id)
+            )
+        `;
+
+        const defaultIndexSQL = `
+            CREATE INDEX IF NOT EXISTS ${ DEFAULT_SORT_KEY_INDEX_NAME }
+                ON documents (type, sort_key)
+        `;
+
+        try {
+            // Ordered batch rather than Promise.all: the index references the table, so
+            // running these concurrently lets D1 attempt the CREATE INDEX first and fail
+            // with "no such table: documents" on a fresh database.
+            await db.batch([
+                db.prepare(createTableSQL),
+                db.prepare(defaultIndexSQL),
+            ]);
+        } catch (cause) {
+            throw new Error('Unable to prepare D1 documents table', { cause });
+        }
+    }
+
+    /**
+     * Builds the ordered list of DDL statements which reconciles the live schema
+     * with `indexDefinitions`.
+     *
+     * Returns an empty array when the schema already matches, which is the steady
+     * state for every isolate after the first migration.
+     *
+     * @param {Object} db - D1 database binding used to prepare the statements
+     * @param {Object} schema - Result of `#readSchema()`
+     * @returns {Object[]} Prepared statements in the order they must execute
+     */
+    #composeMigrationStatements(db, schema) {
+        const statements = [];
+
+        for (const indexDefinition of this.#indexDefinitions) {
+            const columnName = this.keyToColumnName(indexDefinition.name);
+            const indexName = this.keyToIndexName(indexDefinition.name);
+            const wantUnique = indexDefinition.unique === true;
+            const createIndexSQL = `CREATE ${ wantUnique ? 'UNIQUE ' : '' }INDEX IF NOT EXISTS ${ indexName } ON documents (type, ${ columnName })`;
+
+            if (!schema.keyColumns.includes(columnName)) {
+                // SQLite restrictions on ALTER TABLE ADD COLUMN:
+                // - Does not support IF NOT EXISTS — so we guard with the PRAGMA check above.
+                // - STORED generated columns cannot be added to a non-empty table; VIRTUAL
+                //   generated columns have no such restriction and are equally indexable.
+                statements.push(db.prepare(`
+                    ALTER TABLE documents ADD COLUMN ${ columnName }
+                    TEXT GENERATED ALWAYS AS (json_extract(doc, '${ indexDefinition.jsonPath }')) VIRTUAL
+                `));
+            }
+
+            if (!schema.indexUnique.has(indexName)) {
+                // A previous prepare can crash after adding the column but before
+                // creating the index; reconcile the index independently.
+                statements.push(db.prepare(createIndexSQL));
+            } else if (schema.indexUnique.get(indexName) !== wantUnique) {
+                // Column survives; index uniqueness flag is reconciled by drop + recreate.
+                // The PRAGMA above reports `unique = 1` for UNIQUE indexes only.
+                statements.push(db.prepare(`DROP INDEX IF EXISTS ${ indexName }`));
+                statements.push(db.prepare(createIndexSQL));
+            }
+        }
+
+        // Columns left behind by index definitions which have since been removed.
+        for (const columnName of schema.keyColumns) {
+            const keyName = this.columnNameToKey(columnName);
+            if (!this.#indexKeys.includes(keyName)) {
+                statements.push(db.prepare(`DROP INDEX IF EXISTS ${ this.keyToIndexName(keyName) }`));
+                statements.push(db.prepare(`ALTER TABLE documents DROP COLUMN ${ columnName }`));
+            }
+        }
+
+        return statements;
     }
 
     /**
