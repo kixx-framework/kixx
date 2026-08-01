@@ -202,6 +202,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 **Validation**
 
 - `<exact command>` — <what it proves>
+- <Unit test coverage.>
 - <Manual or integration check that cannot be expressed as a command, if any.>
 
 **Progress and handoff**
@@ -231,12 +232,15 @@ These insights should be included in the conversation, not in the codebase. Focu
 
 ## Work Verification
 
-Do *not* attempt to verify your work in this project, with these exceptions: 
+DO:
 
-- Always run the linter when you change JavaScript files (see [Linting](#linting) below).
-- The user may ask you to run or write unit tests, fix broken unit tests, or update unit tests to match new behavior. *Only* run and write unit tests when you are explicity asked to by the user.
+- Always run the linter when you change JavaScript files for the Node.js or Cloudflare runtimes. See [Linting](#linting) below.
+- Always run the unit tests when you change JavaScript source files for the Node.js or Cloudflare runtimes. See [Testing](#testing) below.
 
-Do not run the dev server, call remote servers, or write specialized code for the purpose of work verification or smoke testing.
+DO NOT:
+
+- Do not run the dev server, call remote servers, or write specialized code for the purpose of work verification or smoke testing.
+- Do not run or write end-to-end tests unless explicitly asked to do so.
 
 ### Linting
 
@@ -244,9 +248,4 @@ Run the linter according to the instructions in the `README.md` for every JavaSc
 
 ### Testing
 
-- **DO NOT write new tests OR update existing tests** without being explicitly asked to by the user.
-- **DO NOT run the tests** without being explicitly asked to by the user.
-
-Instead of writing unit tests, include manual testing overview and procedures in your handoff notes.
-
-When you are asked to run the tests, follow the instructions in `README.md` for running unit tests.
+Follow the unit testing guide at test/unit/README.md and follow the instructions in `README.md` for running unit tests. When you discover broken unit tests; think carefully about the correctness if the implementation. If the unit tests need to be updated to match the intended behavior of the implementation then update the unit tests. Otherwise fix the implementation to address the issue that broken tests have highlighted.
