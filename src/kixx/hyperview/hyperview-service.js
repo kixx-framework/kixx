@@ -1,3 +1,377 @@
+
+export default class HyperviewService {
+
+    constructor() {
+        this.#defaultPageMetadataTtl = DEFAULT_PAGE_METADATA_TTL;
+        this.#defaultPageCacheTtl = DEFAULT_PAGE_CACHE_TTL;
+        this.#defaultTemplateTtl = DEFAULT_TEMPLATE_TTL;
+    }
+
+    async getPageMetadata(context, pathname, options) {
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService#getPageMetadata() pathname',
+        );
+
+        const metadata = new PageMetadata(pathname);
+
+        const filepaths = metadata.getFilepaths();
+        // Attempting to fetch items which may not exist is cheap, because getBatchByPaths checks
+        // for existance in the index before attempting fetch the key. Items which do not exist
+        // are `null` in the returned array.
+        //
+        // IMPORTANT: Page data items must be returned from getBatchByPaths in the same order as
+        //            the filepaths Array we passed in. Otherwise, the
+        //            grandparent <- parent <- grandchild merging
+        //            would be incorrect.
+        const allItems = await this.#store.getBatchByFilepaths(context, filepaths, {
+            type: 'json',
+            cacheTtl: this.#resolvePageMetadataTtl(options, 'HyperviewService#getPageMetadata():'),
+        });
+
+        // Parent page.json files are optional, but the leaf node must exist.
+        if (!allItems[allItems.length - 1]) {
+            this.#logger.debug('page metadata not found', { pathname });
+            return null;
+        }
+
+        // Filter out page data entries which do not exist.
+        const sources = allItems.filter(entry => entry);
+
+        return metadata.mergeSources(sources);
+    }
+
+    /**
+     * Retrieves a cached full-page HTML response.
+     * @param {RequestContext} context - Request context passed through to the key/value store.
+     * @param {string} pathname - Normalized page pathname.
+     * @param {string[]} dependencies - A list of dependency identifiers required to compute a meaningful cache hash for this page.
+     * @param {object} [options]
+     * @param {string} [options.cacheKey] - A cache invalidation key to use; like a record or cursor hash.
+     * @param {number} [options.cacheTtl=DEFAULT_PAGE_CACHE_TTL] - The number of seconds to keep the page in the KV Store read cache.
+     * @returns {Promise<string|null>} Cached HTML, or null when absent.
+     * @throws {AssertionError} When no key/value store was configured or pathname is not canonical.
+     */
+    async getCachedPage(contex, pathname, dependencies, options) {
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService#getCachedPage() pathname',
+        );
+        assertArray(
+            dependencies,
+            'HyperviewService#getCachedPage() dependencies',
+        );
+
+        const { cacheKey = '' } = options ?? {};
+
+        // Build a list of dependencies we know exist in
+        // the content-addressable tree.
+        const provenDependencies = [];
+        for (const filepath of dependencies) {
+            // The call to statFilepath is much cheaper than it might appear.
+            // The stat information can be extracted from the index, which
+            // should be preloaded after this instance is warm.
+            const stat = await this.#store.statFilepath(context, filepath);
+            if (stat) {
+                provenDependencies.push(stat);
+            }
+        }
+
+        const hash = this.#store.digest(context, provenDependencies);
+        let key = `hyperview_page_cache#${ pathname }#${ hash }`;
+        if (cacheKey) {
+            key += `#${ cacheKey }`;
+        }
+
+        const text = await this.#kvStore.get(context, key, {
+            type: 'text',
+            cacheTtl: this.#resolvePageCacheTtl(options, 'HyperviewService#getCachedPage():'),
+        });
+
+        if (text) {
+            this.#logger.debug('cached page hit', { pathname, key });
+        } else {
+            this.#logger.debug('cached page miss', { pathname, key });
+        }
+
+        return text;
+    }
+
+    /**
+     * Stores a rendered full-page HTML response in the key/value cache.
+     * @param {RequestContext} context - Request context passed through to the key/value store.
+     * @param {string} pathname - Normalized page pathname.
+     * @param {string[]} dependencies - A list of dependency identifiers required to compute a meaningful cache hash for this page.
+     * @param {string} body - Rendered page content.
+     * @param {object} [options]
+     * @param {string} [options.cacheKey] - A cache invalidation key to use; like a record or cursor hash.
+     * @param {number} [options.ttlSeconds] - Relative time-to-live in seconds (positive integer, at least 60).
+     * @returns {Promise<void>}
+     */
+    async setCachedPage(context, pathname, dependencies, body, options) {
+        assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService#setCachedPage() pathname',
+        );
+        assertArray(
+            dependencies,
+            'HyperviewService#setCachedPage() dependencies',
+        );
+
+        const { ttlSeconds } = options ?? {};
+
+        if (!isUndefined(ttlSeconds)) {
+            assert(
+                Number.isInteger(ttlSeconds),
+                'HyperviewService#setCachedPage() ttlSeconds must be an integer when provided',
+            );
+            assertGreaterThan(
+                59,
+                ttlSeconds,
+                'HyperviewService#setCachedPage() ttlSeconds must be >= 60',
+            );
+        }
+
+        // Build a list of dependencies we know exist in
+        // the content-addressable tree.
+        const provenDependencies = [];
+        for (const filepath of dependencies) {
+            // The call to statFilepath is much cheaper than it might appear.
+            // The stat information can be extracted from the index, which
+            // should be preloaded after a cold start.
+            const stat = await this.#store.statFilepath(context, filepath);
+            if (stat) {
+                provenDependencies.push(stat);
+            }
+        }
+
+        const hash = this.#store.digest(context, provenDependencies);
+        const key = `hyperview_page_cache#${ pathname }#${ hash }`;
+
+        await this.#kvStore.put(context, key, body, {
+            type: 'text',
+            ttlSeconds,
+        });
+    }
+
+    /**
+     * Adds request path, canonical URL, current href, templated title/description, and Open Graph defaults.
+     * @param {URL} url - Request URL for the page being rendered.
+     * @param {Object} metadata - Merged page metadata. Its `page` object is mutated and returned.
+     * @returns {Object} The normalized `metadata.page` object.
+     */
+    mergePageMetadata(url, metadata) {
+        const page = metadata.page ?? {};
+        metadata.page = page;
+        const pathname = normalizeIdentifier(url.pathname);
+        page.pathname = pathname;
+
+        // Set canonical URL from request URL if not already defined in page data
+        // Canonical URL excludes query string and hash to provide a stable reference
+        if (!page.canonical_url) {
+            page.canonical_url = this.#urlToCanonicalURLString(url, pathname);
+        }
+        // href records the literal request, while pathname and canonical_url identify
+        // every case variant as one canonical page.
+        if (!page.href) {
+            page.href = url.href;
+        }
+
+        if (isNonEmptyString(page.title?.template)) {
+            const template = this.#createMiniTemplate(`${ url.pathname }/page.title`, page.title.template);
+            page.title = template(metadata);
+        }
+        if (isNonEmptyString(page.description?.template)) {
+            const template = this.#createMiniTemplate(`${ url.pathname }/page.description`, page.description.template);
+            page.description = template(metadata);
+        }
+
+        // Create the Open Graph object if it does not yet exist.
+        if (!page.open_graph) {
+            page.open_graph = {};
+        }
+
+        const { open_graph } = page;
+
+        // Let existing open_graph values override the page values
+
+        if (isUndefined(open_graph.url)) {
+            open_graph.url = page.canonical_url;
+        }
+        if (isUndefined(open_graph.type)) {
+            open_graph.type = 'website';
+        }
+        if (isUndefined(open_graph.title)) {
+            open_graph.title = page.title;
+        }
+        if (isUndefined(open_graph.description)) {
+            open_graph.description = page.description;
+        }
+        if (isUndefined(open_graph.locale)) {
+            open_graph.locale = page.locale;
+        }
+
+        return page;
+    }
+
+    async getIncludes(context) {
+        const sourceList = pageMetadata.getIncludesList();
+
+        const pointers = [];
+
+        for (const item of sourceList) {
+            // Making these stat checks incurs zero latency in most cases,
+            // except for a cold start of this process.
+            const stat = await this.#store.statFilepath(context, item.filepath);
+            assert(stat, `expected defined include ${ item.filepath } to be in content-addressable storage`);
+
+            item.hash = stat.hash;
+            pointers.push(item);
+        }
+
+        const promises = pointers.map((item) => {
+        });
+    }
+
+    async getTemplate(context, filepath, options) {
+        assertCanonicalIdentifier(
+            filepath,
+            `HyperviewService#getPageTemplate(): filepath: ${ filepath }`,
+        );
+
+        const {
+            useTemplateCache = true,
+        } = options ?? {};
+
+        const partials = await this.loadPartials(context, { useTemplateCache });
+
+        // Get the content-addressable hash for this template.
+        const hash = await this.#store.digest(context, [ filepath, TEMPLATE_PARTIALS_BUNDLE_FILEPATH ]);
+
+        // Use the hash to see if the memoized cache is up to date.
+        if (this.#templateCacheIndex.get(filepath) === hash) {
+            if (useTemplateCache) {
+                return this.#templateFunctionsCache.get(filepath);
+            }
+        } else {
+            // If the hash has changed for this template, then evict the memoized cache.
+            this.#templateCacheIndex.delete(filepath);
+            this.#templateFunctionsCache.delete(filepath);
+        }
+
+        const source = await this.#store.getByFilepath(context, filepath, {
+            type: 'text',
+            cacheTtl: this.#resolveTemplateTtl(options, 'HyperviewService#getTemplate():'),
+        });
+    }
+
+    async loadPartials(context, options) {
+        const {
+            useTemplateCache = true,
+        } = options ?? {};
+
+        // TODO: How do we avoid competing concurrent calls when caching is turned on?
+
+        // All of the partials are bundled and stored under a single key.
+        const filepath = TEMPLATE_PARTIALS_BUNDLE_FILEPATH;
+        // Get the content-addressable hash for the bundle.
+        const hash = await this.#store.digest(context, filepath);
+
+        // Use the hash to see if the memoized cache is up to date.
+        if (useTemplateCache && this.#currentPartialsHash === hash) {
+            return this.#cachedPartialsMap;
+        }
+
+        const templateBundle = await this.#store.getByHash(context, hash, {
+            type: 'json',
+            cacheTtl: this.#resolveTemplateTtl(options, 'HyperviewService#loadPartials():'),
+        });
+
+        const partials = new CaseInsensitiveMap();
+
+        for (const { id, source } of templateBundle) {
+            assertCanonicalIdentifier(
+                id,
+                `HyperviewService#loadPartials(): partial filepath ${ id }`,
+            );
+            const template = this.compileTemplate(id, source, this.#customHelpers, partials);
+            partials.set(id, template);
+        }
+
+        this.#currentPartialsHash = hash;
+        this.#cachedPartialsMap = partials;
+
+        return partials;
+    }
+
+    /**
+     * Compiles template source into a render function. Custom helpers override built-ins
+     * when they share the same key.
+     * @param {string} templateId - Unique identifier used in error reporting
+     * @param {string} source - Template source code
+     * @param {Map<string, Function>} customHelpers - Helper functions that override built-in helpers
+     * @param {Map<string, Function>} partials - Compiled partial templates keyed by partial name
+     * @returns {Function} Render function: accepts a data object and returns a rendered string
+     */
+    compileTemplate(templateId, source, customHelpers, partials) {
+        const helpers = new Map([...templating.helpers, ...customHelpers]);
+
+        const tokens = templating.tokenize(null, templateId, source);
+        const tree = templating.buildSyntaxTree(null, tokens);
+
+        return templating.createRenderFunction(null, helpers, partials, tree);
+    }
+
+    #resolvePageMetadataTtl(options, errorMessagePrefix) {
+        const { cacheTtl } = options ?? {};
+
+        if (isUndefined(cacheTtl)) {
+            return this.#defaultPageMetadataTtl;
+        }
+
+        assert(
+            Number.isInteger(cacheTtl),
+            `${ errorMessagePrefix } cacheTtl must be an integer when provided`,
+        );
+
+        return cacheTtl;
+    }
+
+    #resolveTemplateTtl(options, errorMessagePrefix) {
+        const { cacheTtl } = options ?? {};
+
+        if (isUndefined(cacheTtl)) {
+            return this.#defaultTemplateTtl;
+        }
+
+        assert(
+            Number.isInteger(cacheTtl),
+            `${ errorMessagePrefix } cacheTtl must be an integer when provided`,
+        );
+
+        return cacheTtl;
+    }
+
+    #resolvePageCacheTtl(options, errorMessagePrefix) {
+        const { cacheTtl } = options ?? {};
+
+        if (isUndefined(cacheTtl)) {
+            return this.#defaultPageCacheTtl;
+        }
+
+        assert(
+            Number.isInteger(cacheTtl),
+            `${ errorMessagePrefix } cacheTtl must be an integer when provided`,
+        );
+
+        return cacheTtl;
+    }
+}
+
+// ------------------------------------------------------------------------- //
+//     Legacy Module
+// ------------------------------------------------------------------------- //
+
 import * as templating from '../templating/mod.js';
 import deepMerge from '../utils/deep-merge.js';
 import { NO_BUILD_ID_SEGMENT } from '../utils/build-id.js';
