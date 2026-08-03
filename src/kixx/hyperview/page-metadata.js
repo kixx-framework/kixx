@@ -31,6 +31,11 @@ export default class PageMetadata {
             this.#pathname = `${ this.#pathname }/${ part }`;
             this.#filepaths.push(`pages/${ this.#pathname }/page.json`);
         }
+
+        assertCanonicalIdentifier(
+            this.#pathname,
+            `PageMetadata pathname: ${ pathname }`,
+        );
     }
 
     get pathname() {

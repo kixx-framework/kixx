@@ -8,7 +8,7 @@ export default class HyperviewService {
     }
 
     async getPageMetadata(context, pathname, options) {
-        assertCanonicalIdentifier(
+        assertCanonicalFilepath(
             pathname,
             'HyperviewService#getPageMetadata() pathname',
         );
@@ -53,7 +53,7 @@ export default class HyperviewService {
      * @throws {AssertionError} When no key/value store was configured or pathname is not canonical.
      */
     async getCachedPage(contex, pathname, dependencies, options) {
-        assertCanonicalIdentifier(
+        assertCanonicalFilepath(
             pathname,
             'HyperviewService#getCachedPage() pathname',
         );
@@ -110,7 +110,7 @@ export default class HyperviewService {
      * @returns {Promise<void>}
      */
     async setCachedPage(context, pathname, dependencies, body, options) {
-        assertCanonicalIdentifier(
+        assertCanonicalFilepath(
             pathname,
             'HyperviewService#setCachedPage() pathname',
         );
@@ -243,54 +243,107 @@ export default class HyperviewService {
         });
     }
 
-    async getPageTemplate(context, pathname, templateId, options) {
-        assertCanonicalIdentifier(
-            pathname,
-            `HyperviewService#getPageTemplate(): pathname: ${ pathname }`,
-        );
-        assertCanonicalIdentifier(
+    async getPageTemplate(context, pageMetadata, templateId, options) {
+        assertCanonicalFilepath(
             templateId,
-            `HyperviewService#getPageTemplate(): pathname: ${ templateId }`,
-        );
-    }
-
-    async getTemplate(context, filepath, options) {
-        // TODO: I don't think we're going to need this method
-        assertCanonicalIdentifier(
-            filepath,
-            `HyperviewService#getPageTemplate(): filepath: ${ filepath }`,
+            `HyperviewService#getPageTemplate(): templateId: ${ templateId }`,
         );
 
-        const {
-            useTemplateCache = true,
-        } = options ?? {};
+        const cacheTtl = this.#resolveTemplateTtl(options, 'HyperviewService#getPageTemplate():');
 
-        const partials = await this.loadPartials(context, { useTemplateCache });
+        const { pathname } = pageMetadata;
+        const { useTemplateCache = true } = options ?? {};
+
+        // Create the full path to the template.
+        const filepath = normalizeContentFilepath(`pages/${ pathname }/${ templateId }`);
 
         // Get the content-addressable hash for this template.
-        const hash = await this.#store.digest(context, [ filepath, TEMPLATE_PARTIALS_BUNDLE_FILEPATH ]);
+        const hash = await this.#store.digest(context, filepath);
 
-        // Use the hash to see if the memoized cache is up to date.
-        if (this.#templateCacheIndex.get(filepath) === hash) {
-            if (useTemplateCache) {
-                return this.#templateFunctionsCache.get(filepath);
+        await this.#loadGlobalPartials(context, { useTemplateCache });
+
+        const pagePartials = await this.#getPagePartials(context, pageMetadata, { useTemplateCache });
+
+        let wrapper;
+
+        if (useTemplateCache) {
+            wrapper = this.#pageTemplates.get(filepath);
+            if (wrapper && wrapper.hash === hash) {
+                // Merge global and page partials for this template.
+                wrapper.applyPartials(this.#globalPartials, pagePartials);
+                return wrapper.template;
             }
-        } else {
-            // If the hash has changed for this template, then evict the memoized cache.
-            this.#templateCacheIndex.delete(filepath);
-            this.#templateFunctionsCache.delete(filepath);
         }
 
-        const source = await this.#store.getByFilepath(context, filepath, {
+        const source = await this.#store.getByHash(context, hash, {
             type: 'text',
-            cacheTtl: this.#resolveTemplateTtl(options, 'HyperviewService#getTemplate():'),
+            cacheTtl,
         });
+
+        // Create a new template wrapper to close over the content-addressable
+        // hash and partials.
+        wrapper = new TemplateWrapper(hash);
+        // Merge global and page partials for this template.
+        wrapper.applyPartials(globalPartials, pagePartials);
+
+        wrapper.template = this.compileTemplate(
+            filepath,
+            source,
+            this.#customHelpers,
+            wrapper.partials,
+        );
+
+        // TODO: How do we clear out templates which have been removed?
+        this.#pageTemplates.set(filepath, wrapper);
+
+        return wrapper.template;
     }
 
-    async loadPartials(context, options) {
-        const {
-            useTemplateCache = true,
-        } = options ?? {};
+    async getBaseTemplate(context, templateId, options) {
+        assertCanonicalFilepath(
+            templateId,
+            `HyperviewService#getBaseTemplate(): templateId: ${ templateId }`,
+        );
+
+        const cacheTtl = this.#resolveTemplateTtl(options, 'HyperviewService#getBaseTemplate():');
+
+        const { useTemplateCache = true } = options ?? {};
+
+        // Create the full path to the template.
+        const filepath = normalizeContentFilepath(`templates/base/${ templateId }`);
+
+        // Get the content-addressable hash for this template.
+        const hash = await this.#store.digest(context, filepath);
+
+        await this.#loadGlobalPartials(context, { useTemplateCache });
+
+        if (useTemplateCache) {
+            const wrapper = this.#baseTemplates.get(filepath);
+            if (wrapper && wrapper.hash === hash) {
+                return wrapper.template;
+            }
+        }
+
+        const source = await this.#store.getByHash(context, hash, {
+            type: 'text',
+            cacheTtl,
+        });
+
+        const template = this.compileTemplate(
+            filepath,
+            source,
+            this.#customHelpers,
+            wrapper.partials,
+        );
+
+        // TODO: How do we clear out templates which have been removed?
+        this.#baseTemplates.set(filepath, { hash, template });
+
+        return template;
+    }
+
+    async #loadGlobalPartials(context, options) {
+        const { useTemplateCache = true } = options ?? {};
 
         // TODO: How do we avoid competing concurrent calls when caching is turned on?
 
@@ -298,30 +351,79 @@ export default class HyperviewService {
         const filepath = TEMPLATE_PARTIALS_BUNDLE_FILEPATH;
         // Get the content-addressable hash for the bundle.
         const hash = await this.#store.digest(context, filepath);
+        assertNonEmptyString(hash);
 
         // Use the hash to see if the memoized cache is up to date.
-        if (useTemplateCache && this.#currentPartialsHash === hash) {
-            return this.#cachedPartialsMap;
+        if (useTemplateCache && this.#currentGlobalPartialsHash === hash) {
+            return;
         }
 
         const templateBundle = await this.#store.getByHash(context, hash, {
             type: 'json',
-            cacheTtl: this.#resolveTemplateTtl(options, 'HyperviewService#loadPartials():'),
+            cacheTtl: this.#resolveTemplateTtl(options, 'HyperviewService#loadGlobalPartials():'),
         });
 
-        const partials = new CaseInsensitiveMap();
+        // Remove partials which no longer exist.
+        this.#globalPartials.clear();
 
         for (const { id, source } of templateBundle) {
-            assertCanonicalIdentifier(
+            assertCanonicalFilepath(
                 id,
                 `HyperviewService#loadPartials(): partial filepath ${ id }`,
             );
+
+            const template = this.compileTemplate(id, source, this.#customHelpers, partials);
+            this.#globalPartials.set(id, template);
+        }
+
+        this.#currentGlobalPartialsHash = hash;
+    }
+
+    async #getPagePartials(context, pageMetadata, options) {
+        const { useTemplateCache = true } = options ?? {};
+        const { pathname } = pageMetadata;
+
+        // All of the partials are bundled and stored under a single key.
+        const filepath = normalizeContentFilepath(`pages/${ pathname }/${ TEMPLATE_PARTIALS_BUNDLE_FILEPATH }`);
+
+        const referenceList = pageMetadata.getPartialsList();
+
+        // Get the content-addressable hash for the bundle. 
+        const hash = await this.#store.digest(context, filepath);
+
+        if (referenceList.length > 0 && !hash) {
+            throw new AssertionError(`Missing expected template partials for page ${ pathname }`);
+        }
+
+        // Use the hash to see if the memoized cache is up to date.
+        if (useTemplateCache) {
+            const wrapper = this.#pagePartials.get(filepath);
+            if (wrapper && wrapper.hash === hash) {
+                return wrapper.partials;
+            }
+        }
+
+        let templateBundle = [];
+        if (hash) {
+            templateBundle = await this.#store.getByHash(context, hash, {
+                type: 'json',
+                cacheTtl: this.#resolveTemplateTtl(options, 'HyperviewService#getPagePartials():'),
+            });
+        }
+
+        const partials = new Map();
+
+        for (const { id, source } of templateBundle) {
+            assertCanonicalFilepath(
+                id,
+                `HyperviewService#getPagePartials(): partial filepath ${ id }`,
+            );
+
             const template = this.compileTemplate(id, source, this.#customHelpers, partials);
             partials.set(id, template);
         }
 
-        this.#currentPartialsHash = hash;
-        this.#cachedPartialsMap = partials;
+        this.#pagePartials.set(filepath, { hash, partials });
 
         return partials;
     }
@@ -409,7 +511,7 @@ import formatDate from './helpers/format-date.js';
 import markup from './helpers/markup.js';
 import truncate from './helpers/truncate.js';
 import {
-    assertCanonicalIdentifier,
+    assertCanonicalFilepath,
     normalizeIdentifier,
 } from './canonical-identifiers.js';
 
