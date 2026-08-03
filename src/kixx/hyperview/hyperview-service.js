@@ -77,6 +77,7 @@ export default class HyperviewService {
             }
         }
 
+        pathname = normalizeContentFilepath(pathname);
         const hash = this.#store.digest(context, provenDependencies);
         let key = `hyperview_page_cache#${ pathname }#${ hash }`;
         if (cacheKey) {
@@ -118,7 +119,7 @@ export default class HyperviewService {
             'HyperviewService#setCachedPage() dependencies',
         );
 
-        const { ttlSeconds } = options ?? {};
+        const { cacheKey = '', ttlSeconds } = options ?? {};
 
         if (!isUndefined(ttlSeconds)) {
             assert(
@@ -145,8 +146,12 @@ export default class HyperviewService {
             }
         }
 
+        pathname = normalizeContentFilepath(pathname);
         const hash = this.#store.digest(context, provenDependencies);
         const key = `hyperview_page_cache#${ pathname }#${ hash }`;
+        if (cacheKey) {
+            key += `#${ cacheKey }`;
+        }
 
         await this.#kvStore.put(context, key, body, {
             type: 'text',
@@ -161,14 +166,17 @@ export default class HyperviewService {
      * @returns {Object} The normalized `metadata.page` object.
      */
     mergePageMetadata(url, metadata) {
+        // TODO: mergePageMetadata should probably be moved to PageMetadata
         const page = metadata.page ?? {};
         metadata.page = page;
+        // TODO: DO we need to do this?
         const pathname = normalizeIdentifier(url.pathname);
         page.pathname = pathname;
 
         // Set canonical URL from request URL if not already defined in page data
         // Canonical URL excludes query string and hash to provide a stable reference
         if (!page.canonical_url) {
+            // TODO: DO we need to do this?
             page.canonical_url = this.#urlToCanonicalURLString(url, pathname);
         }
         // href records the literal request, while pathname and canonical_url identify
@@ -229,11 +237,25 @@ export default class HyperviewService {
             pointers.push(item);
         }
 
+        // TODO: We were thinking that some includes would be templates, but that no longer
+        //       makes sense when we can have an arbitrary number of page templates.
         const promises = pointers.map((item) => {
         });
     }
 
+    async getPageTemplate(context, pathname, templateId, options) {
+        assertCanonicalIdentifier(
+            pathname,
+            `HyperviewService#getPageTemplate(): pathname: ${ pathname }`,
+        );
+        assertCanonicalIdentifier(
+            templateId,
+            `HyperviewService#getPageTemplate(): pathname: ${ templateId }`,
+        );
+    }
+
     async getTemplate(context, filepath, options) {
+        // TODO: I don't think we're going to need this method
         assertCanonicalIdentifier(
             filepath,
             `HyperviewService#getPageTemplate(): filepath: ${ filepath }`,
