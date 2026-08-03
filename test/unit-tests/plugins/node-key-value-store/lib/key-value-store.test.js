@@ -194,6 +194,39 @@ describe('Node KeyValueStore', ({ after, describe }) => {
             assertMatches('type must be one of', caught.message);
             store.close();
         });
+
+        it('accepts a valid cacheTtl as a no-op', async () => {
+            const store = makeStore();
+            const context = makeContext();
+
+            await store.put(context, 'greeting', 'hello');
+            const result = await store.get(context, 'greeting', { cacheTtl: 60 });
+
+            assertEqual('hello', result);
+            store.close();
+        });
+
+        it('throws when cacheTtl is not a positive integer', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.get(makeContext(), 'key', { cacheTtl: -1 }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('cacheTtl" must be a positive integer', caught.message);
+            store.close();
+        });
+
+        it('throws when cacheTtl is below the 60 second floor', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.get(makeContext(), 'key', { cacheTtl: 59 }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('cacheTtl" must be at least 60 seconds', caught.message);
+            store.close();
+        });
     });
 
     describe('put', ({ it }) => {

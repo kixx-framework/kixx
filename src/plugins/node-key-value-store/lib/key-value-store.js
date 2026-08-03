@@ -30,6 +30,11 @@ const MAX_KEY_BYTES = 512;
 // on Node and throws on Workers.
 const MIN_EXPIRATION_SECONDS = 60;
 
+// cacheTtl is a Cloudflare edge-cache hint this adapter has no use for, but the
+// 60-second floor is validated anyway so a get() proven here throws the same
+// way it would on Workers rather than only failing in production.
+const MIN_CACHE_TTL_SECONDS = 60;
+
 // How long a write blocks waiting for another process's lock before SQLite
 // raises SQLITE_BUSY. Multiple processes share one cache file, so the busy
 // timeout lets a contended writer retry rather than fail immediately.
@@ -127,11 +132,12 @@ export default class KeyValueStore {
      * @param {string} key - Cache key
      * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
      * @returns {Promise<string|import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|null>} The decoded value, or null when absent or expired
-     * @throws {AssertionError} When the key or `options.type` is invalid
+     * @throws {AssertionError} When the key, `options.type`, or `options.cacheTtl` is invalid
      */
     async get(_context, key, options) {
         this.#assertValidKey(key);
         const type = this.#resolveType(options);
+        this.#assertValidCacheTtl(options);
         this.#logger.debug('get() loading key', { key, type });
 
         const db = this.#getDatabase();
@@ -320,6 +326,26 @@ export default class KeyValueStore {
         }
         // type === 'arrayBuffer' — return an exact-length ArrayBuffer copy.
         return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    }
+
+    /**
+     * Validates the optional edge-cache hint. This adapter has no cache to apply
+     * it to, but still enforces Cloudflare KV's 60-second floor so a `get()`
+     * proven on Node throws the same way it would on Workers.
+     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
+     * @throws {AssertionError} When `options.cacheTtl` is not a valid TTL
+     */
+    #assertValidCacheTtl(options) {
+        const cacheTtl = options?.cacheTtl;
+        if (isUndefined(cacheTtl)) {
+            return;
+        }
+        if (!Number.isInteger(cacheTtl) || cacheTtl <= 0) {
+            throw new AssertionError('KeyValueStore "cacheTtl" must be a positive integer');
+        }
+        if (cacheTtl < MIN_CACHE_TTL_SECONDS) {
+            throw new AssertionError(`KeyValueStore "cacheTtl" must be at least ${ MIN_CACHE_TTL_SECONDS } seconds`);
+        }
     }
 
     /**

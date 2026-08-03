@@ -59,6 +59,14 @@
  * a case to handle — by deleting the entry or starting a new one — not as a
  * shorter write.
  *
+ * ## Edge cache hint on read
+ * `get()` accepts an optional `cacheTtl`: a positive integer number of seconds,
+ * at least 60, hinting how long Cloudflare may serve a cached read from an edge
+ * location before revalidating. This is a Cloudflare-only optimization — other
+ * adapters are expected to no-op on it — but every adapter MUST still validate
+ * it and reject a value under 60 seconds, for the same portability reason as
+ * the expiry floor: code that passes on one adapter must not throw on another.
+ *
  * ## Consistency
  * The contract makes no read-after-write consistency guarantee. This is the
  * portable floor: Cloudflare KV is eventually consistent and a write may take up
@@ -110,6 +118,12 @@
  *
  * @typedef {Object} KeyValueGetOptions
  * @property {KeyValueType} [type='text'] - How to decode the stored value.
+ * @property {number} [cacheTtl] - Cloudflare-only edge cache hint, in seconds
+ *   (positive integer, at least 60). Controls how long Cloudflare may serve a
+ *   cached read from an edge location before revalidating against the
+ *   namespace. Other adapters accept and ignore the value but still enforce
+ *   the 60-second floor, so a `get()` proven on one adapter behaves the same
+ *   on another.
  */
 
 /**
