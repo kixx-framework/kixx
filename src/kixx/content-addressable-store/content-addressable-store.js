@@ -31,9 +31,16 @@ export default class ContentAddressableStore {
             filepaths.push(normalizePagePath(`${ path }/page.json`));
         }
 
-        // We don't need to get the page leaf node page.json because we'll be fetching
-        // everything in the `pages/${ pathname }` directory.
-        filepaths.pop();
+        // We don't need to get the page leaf node page.json separately, because we'll
+        // be fetching everything in the `pages/${ pathname }` directory, including
+        // the leaf page.json file. But, we can do a cheap check to make sure it
+        // exists before proceeding.
+        const leafPage = filepaths.pop();
+        const leafPageStat = await statPath(context, leafPage);
+
+        if (!leafPageStat) {
+            return null;
+        }
 
         const parentStats = [];
         for (const parentFilepath of filepaths) {
@@ -46,7 +53,9 @@ export default class ContentAddressableStore {
 
         const directory = normalizePagePath(pathname);
 
-        const sourceFileStats = await listByPathPrefix(context, directory);
+        const sourceFileStats = await listByPathPrefix(context, directory, {
+            readCacheTtlSeconds,
+        });
 
         const hashesToFetch = parentStats
             .concat(sourceFileStats)
@@ -56,7 +65,7 @@ export default class ContentAddressableStore {
 
         const pageDataFiles = [];
         let partials = [];
-        let includes = [];
+        let includes = {};
 
         for (const file of files) {
             const { filepath } = file;
