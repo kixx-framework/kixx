@@ -1,13 +1,73 @@
 
 export default class HyperviewService {
 
-    async renderHypertext(context, request, response, options) {
+    async respondWithPage(context, request, response, options) {
+        const { url } = request;
+
+        const page = await this.getPage(context, url, pathname, response.props);
+
+        if (!page) {
+            throw new NotFoundError(`No page found for pathname "${ pathname }"`);
+        }
+
+        if (isJsonRequest(request)) {
+            // The optional JSON response is intended for development and debugging.
+            return response.respondWithJSON(
+                response.status,
+                page.getPageContext(),
+                { whiteSpace: 4 },
+            );
+        }
+
+        let hypertext;
+
+        // Get a digest hash of this page from the content-addressable store,
+        // optionally including a hash of the canonicalized response props.
+        const hash = await page.getDigest(this.#store, context, {
+            includeProps: includePropsInDigest,
+            propsHashFunction,
+        });
+
+        // If the caller does not provide a custom cache key, we use the
+        // URL pathname + query params as the default.
+        const pageCacheKey = isNonEmptyString(cacheKey)
+            ? cacheKey
+            : (url.pathname + url.search);
+
+        // Add the namespace prefix and digest hash for the complete KV key.
+        const key = `hyperview_page_cache#${ url.pathname }#${ hash }`;
+
+        if (usePageCache) {
+            hypertext = await this.#kvStore.get(context, key, {
+                type: 'text',
+                cacheTtl: pageCacheReadTtlSeconds,
+            });
+            if (hypertext) {
+                this.#logger.debug('cached page hit', { pathname, key });
+                return response.respondWithUtf8(response.status, hypertext, responseOptions);
+            }
+            this.#logger.debug('cached page miss', { pathname, key });
+        }
+
+        if (isNonEmptyString(page.baseTemplateId)) {
+            baseTemplateId = page.baseTemplateId;
+        }
+        if (!isNonEmptyString(baseTemplateId)) {
+            throw new AssertionError(
+                `A baseTemplate ID must be provided in HyperviewService#respondWithPage options or page data (pathname:${ pathname })`,
+            );
+        }
+
+        const pageTemplateId = `${ pathname }/page.html`;
+
+        const [ baseTemplate, pageTemplate ] = await Promise.all([
+            this.getBaseTemplate(context, baseTemplateId, { useCache: useTemplateCache }),
+            this.getPageTemplate(context, pageTemplateId, { useCache: useTemplateCache }),
+        ]);
     }
 
-    async getPage(url, pathname, options) {
-        const { strict = false } = options ?? {};
-
-        const page = new HyperviewPage(url, pathname);
+    async getPage(context, url, pathname, responseProps) {
+        const page = new HyperviewPage(url, pathname, responseProps);
 
         // Attempting to fetch items which may not exist is cheap, because
         // getBatchByFilepaths checks for existance in the index before
@@ -24,26 +84,30 @@ export default class HyperviewService {
 
         // Parent page.json files are optional, but the leaf node must exist for the
         // page to be considered to be present in strict mode.
-        if (strict && !allItems[allItems.length - 1]) {
+        const leafNode = allItems[allItems.length - 1];
+        if (!leafNode) {
             return null;
         }
 
         // Filter out page data entries which do not exist.
         const sources = allItems.filter(entry => entry);
 
-        return page.mergeSources(sources);
-    }
+        // Fold all the source metadata objects into the page context.
+        page.mergeSources(sources);
 
-    hydratePageMetadata(page) {
-        const { title, description, pathname } = page;
-
-        if (isNonEmptyString(title?.template)) {
-            const template = this.createMiniTemplate(`${ pathname }/page.title`, title.template);
-            page.useTitleTemplate(template);
+        // Compile the title template, if it exists.
+        if (isNonEmptyString(page.title?.template)) {
+            page.setMetadataTemplate('page.title', this.createMiniTemplate(
+                `${ pathname }/page.title`,
+                page.title.template,
+            ));
         }
-        if (isNonEmptyString(description?.template)) {
-            const template = this.createMiniTemplate(`${ pathname }/page.description`, description.template);
-            page.useDescriptionTemplate(template);
+        // Compile the description template, if it exists.
+        if (isNonEmptyString(page.description?.template)) {
+            page.setMetadataTemplate('page.description', this.createMiniTemplate(
+                `${ pathname }/page.description`,
+                page.description.template
+            ));
         }
 
         return page;
