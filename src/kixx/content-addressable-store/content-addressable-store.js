@@ -1,5 +1,4 @@
-// TODO: How much of the Hyperview storage structure be moved into the
-//       Content-Addressable store? Does HyperviewPage move here?
+
 export default class ContentAddressableStore {
 
     async getPage(context, pathname) {
@@ -64,28 +63,36 @@ export default class ContentAddressableStore {
         const files = await getBatchByHashes(context, hashesToFetch);
 
         const pageDataFiles = [];
-        let partials = [];
-        let includes = {};
+        let pageTemplate = null;
+        let partials = null;
+        let includes = null;
 
         for (const file of files) {
             const { filepath } = file;
-            if (filepath.startsWith('pages/') && filepathBasename(filepath) === 'page.json') {
+            if (filepathBasename(filepath) === 'page.json') {
                 pageDataFiles.push({
                     filepath: denormalizePagePath(filepath),
                     json: file.json,
                 });
-            }
-            if (filepathBasename(filepath) === PAGE_PARTIALS_MANIFEST) {
-                partials = decodeFileBundle(file.json);
-            }
-            if (filepathBasename(filepath) === PAGE_INCLUDES_MANIFEST) {
-                includes = decodeFileBundle(file.json);
+            } else if (filepathBasename(filepath) === PAGE_PARTIALS_MANIFEST) {
+                // TODO: Need to return the hash and files with names as an Array.
+                partials = decodeFileBundle(file);
+            } else if (filepathBasename(filepath) === PAGE_INCLUDES_MANIFEST) {
+                // TODO: Need to return the hash and files with names as an Object.
+                includes = decodeFileBundle(file);
+            } else {
+                // Whatever is left must be the page template.
+                pageTemplate = {
+                    filepath: denormalizePagePath(filepath),
+                    basename: filepathBasename(filepath),
+                    text: file.text,
+                };
             }
         }
 
         const directoryStat = await statPath(context, directory);
         // Include the page leaf directory with the parent page.json filepaths to
-        // accumulate the dependencies list.
+        // accumulate the full dependencies list.
         const dependencies = parentStats.concat([ directoryStat ]);
 
         const digest = computeDigest(dependencies);
@@ -93,6 +100,7 @@ export default class ContentAddressableStore {
         return {
             digest,
             pageDataFiles,
+            pageTemplate,
             partials,
             includes,
         };

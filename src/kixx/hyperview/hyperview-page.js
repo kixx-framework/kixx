@@ -2,8 +2,6 @@ export default class HyperviewPage {
 
     #pageContext = {};
     #responseProps = null;
-    #includes = {};
-    #partials = [];
     #pageDigest = null;
     #propsDigest = null;
     #metadataTemplates = new Map();
@@ -13,6 +11,7 @@ export default class HyperviewPage {
             url,
             pathname,
             responseProps,
+            pageTemplate,
             partials,
             includes,
             pageDigest,
@@ -20,13 +19,30 @@ export default class HyperviewPage {
         } = spec;
 
         this.#responseProps = responseProps;
-        this.#includes = includes;
-        this.#partials = partials;
         this.#pageDigest = pageDigest;
         this.#propsDigest = propsDigest;
 
         this.url = url;
-        this.pathname = path;
+        this.pathname = pathname;
+        this.pageTemplate = {
+            id: pageTemplate.basename,
+            text: pageTemplate.text,
+        };
+        this.includes = null;
+        this.partials = null;
+
+        if (includes) {
+            this.includes = {
+                hash: includes.hash,
+                includes: includes.json,
+            };
+        }
+        if (partials) {
+            this.partials = {
+                hash: partials.hash,
+                partials: partials.json,
+            };
+        }
     }
 
     get rawPageTitle() {

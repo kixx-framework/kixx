@@ -4,15 +4,20 @@ export default class HyperviewService {
     async respondWithPage(context, request, response, options) {
         const { url } = request;
 
-        assertCanonicalIdentifier(
-            baseTemplateId,
-            `A valid baseTemplate ID must be provided in HyperviewService#respondWithPage options or page data (pathname:${ pathname })`,
-        );
+        if (!partial) {
+            assertCanonicalIdentifier(
+                baseTemplateId,
+                `A valid baseTemplate ID must be provided in HyperviewService#respondWithPage options (pathname:${ url.pathname })`,
+            );
+        }
 
         const page = await this.getPage(context, url, pathname, response.props);
 
         if (!page) {
-            throw new NotFoundError(`No page found for pathname "${ pathname }"`);
+            throw new NotFoundError(`No page found for URL "${ url.href }"`, {
+                url: url.href,
+                pathname,
+            });
         }
 
         if (isJsonRequest(request)) {
@@ -23,8 +28,6 @@ export default class HyperviewService {
                 { whiteSpace: 4 },
             );
         }
-
-        let hypertext;
 
         // Get a digest hash of this page from the content-addressable store,
         // optionally including a hash of the canonicalized response props.
@@ -40,7 +43,9 @@ export default class HyperviewService {
             : (url.pathname + url.search);
 
         // Add the namespace prefix and digest hash for the complete KV key.
-        const key = `hyperview_page_cache#${ cacheKey }#${ hash }`;
+        const key = `hyperview_page_cache#${ pageCacheKey }#${ hash }`;
+
+        let hypertext;
 
         if (usePageCache) {
             hypertext = await this.#kvStore.get(context, key, {
@@ -54,10 +59,35 @@ export default class HyperviewService {
             this.#logger.debug('cached page miss', { pathname, key });
         }
 
+        // TODO: We don't want to render this partial if the intention is to render the
+        //       page, but without the base template.
+        if (partial) {
+            const template = getPartialTemplate(page, partial, { useCache: useTemplateCache });
+            assertFunction(template, `Partial template "${ partial }" does not exist in pages/${ pathname }`);
+            hypertext = template(page.getPageContext());
+            return response.respondWithUtf8(response.status, hypertext, responseOptions);
+        }
+
         const [ baseTemplate, pageTemplate ] = await Promise.all([
             this.getBaseTemplate(context, baseTemplateId, { useCache: useTemplateCache }),
             this.getPageTemplate(context, page, { useCache: useTemplateCache }),
         ]);
+
+        assertFunction(pageTemplate, `Page template "${ page.pageTemplateId }" does not exist in pages/${ pathname }`);
+        assertFunction(baseTemplate, `Base template "${ baseTemplateId }" does not exist`);
+
+        const pageContext = page.getPageContext();
+        const body = pageTemplate(pageContext);
+
+        // TODO: We need a better way to detect renderPageTemplateOnly
+        if (renderPageTemplateOnly) {
+            return response.respondWithUtf8(response.status, body, responseOptions);
+        }
+
+        pageContext.body = body;
+        hypertext = baseTemplate(pageContext);
+
+        return response.respondWithUtf8(response.status, hypertext, responseOptions);
     }
 
     async getPage(context, url, pathname, responseProps) {
@@ -67,10 +97,13 @@ export default class HyperviewService {
             return null;
         }
 
+        assert(pageContent.pageTemplate, `Missing page template in ${ pathname }`);
+
         const page = new HyperviewPage({
             url,
             pathname,
             responseProps,
+            pageTemplate: pageContent.pageTemplate,
             partials: pageContent.partials,
             includes: pageContent.includes,
             pageDigest: pageContent.digest,
@@ -102,9 +135,14 @@ export default class HyperviewService {
     }
 
     async getBaseTemplate(context, templateId, options) {
+        // TODO: getBaseTemplate
     }
 
     async getPageTemplate(context, page, options) {
+        // TODO: getPageTemplate
+    }
+
+    getPartialTemplate(page, templateId, options) {
     }
 
     /**
