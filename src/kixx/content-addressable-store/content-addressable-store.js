@@ -105,4 +105,12 @@ export default class ContentAddressableStore {
             includes,
         };
     }
+
+    hashString(_str) {
+        throw new Error('hashString() is not implemented');
+    }
+
+    canonicalObjectDigest(_obj) {
+        throw new Error('canonicalObjectDigest() is not implemented');
+    }
 }

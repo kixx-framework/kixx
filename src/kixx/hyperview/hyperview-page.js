@@ -2,8 +2,6 @@ export default class HyperviewPage {
 
     #pageContext = {};
     #responseProps = null;
-    #pageDigest = null;
-    #propsDigest = null;
     #metadataTemplates = new Map();
 
     constructor(url, pathname, responseProps) {
@@ -14,13 +12,11 @@ export default class HyperviewPage {
             pageTemplate,
             partials,
             includes,
-            pageDigest,
-            propsDigest,
+            digest,
         } = spec;
 
         this.#responseProps = responseProps;
         this.#pageDigest = pageDigest;
-        this.#propsDigest = propsDigest;
 
         this.url = url;
         this.pathname = pathname;
@@ -30,6 +26,7 @@ export default class HyperviewPage {
         };
         this.includes = null;
         this.partials = null;
+        this.digest = digest;
 
         if (includes) {
             this.includes = {
@@ -143,23 +140,5 @@ export default class HyperviewPage {
         }
 
         return this.#pageContext;
-    }
-
-    async getDigest(store, options) {
-        const {
-            includeProps,
-            propsHashFunction,
-        } = options ?? {};
-
-        // Optionally add the hash of the canonicalized props object.
-        if (includeProps) {
-            let propsDigest = this.#propsDigest;
-            if (isFunction(propsHashFunction)) {
-                propsDigest = propsHashFunction(this.pathname, this.#pageContext, this.#responseProps);
-            }
-            return store.hashString(this.#pageDigest + propsDigest);
-        }
-
-        return this.#pageDigest;
     }
 }

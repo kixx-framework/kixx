@@ -5,6 +5,8 @@ export default class HyperviewService {
         const { url } = request;
 
         if (!partial) {
+            // We need to assert the base template ID is correct and safe here, because it
+            // may not have been checked prior to reaching this routine.
             assertCanonicalIdentifier(
                 baseTemplateId,
                 `A valid baseTemplate ID must be provided in HyperviewService#respondWithPage options (pathname:${ url.pathname })`,
@@ -36,6 +38,19 @@ export default class HyperviewService {
             propsHashFunction,
         });
 
+        let hash = page.digest;
+
+        // Optionally add the hash of the canonicalized props object.
+        if (includePropsInCacheKey) {
+            let propsHash;
+            if (isFunction(propsHashFunction)) {
+                propsHash = propsHashFunction(page.pathname, page.getPageContext(), response.props);
+            } else {
+                propsHash = this.#store.canonicalObjectDigest(responseProps);
+            }
+            hash = this.#store.hashString(page.digest + propsDigest);
+        }
+
         // If the caller does not provide a custom cache key, we use the
         // URL pathname + query params as the default.
         const pageCacheKey = isNonEmptyString(cacheKey)
@@ -59,11 +74,20 @@ export default class HyperviewService {
             this.#logger.debug('cached page miss', { pathname, key });
         }
 
-        // TODO: We don't want to render this partial if the intention is to render the
-        //       page, but without the base template.
         if (partial) {
+            // Render a partial template only. This is common for making dynamic page
+            // updates from the browser with fetch().
             const template = getPartialTemplate(page, partial, { useCache: useTemplateCache });
             assertFunction(template, `Partial template "${ partial }" does not exist in pages/${ pathname }`);
+            hypertext = template(page.getPageContext());
+            return response.respondWithUtf8(response.status, hypertext, responseOptions);
+        }
+
+        if (skipBaseRender) {
+            // Render the page body, without wrapping in the base template. This is common
+            // for page transitions triggered from the browser with fetch().
+            const template = await this.getPageTemplate(context, page, { useCache: useTemplateCache });
+            assertFunction(template, `Page template "${ page.pageTemplate.id }" does not exist in pages/${ pathname }`);
             hypertext = template(page.getPageContext());
             return response.respondWithUtf8(response.status, hypertext, responseOptions);
         }
@@ -73,7 +97,7 @@ export default class HyperviewService {
             this.getPageTemplate(context, page, { useCache: useTemplateCache }),
         ]);
 
-        assertFunction(pageTemplate, `Page template "${ page.pageTemplateId }" does not exist in pages/${ pathname }`);
+        assertFunction(pageTemplate, `Page template "${ page.pageTemplate.id }" does not exist in pages/${ pathname }`);
         assertFunction(baseTemplate, `Base template "${ baseTemplateId }" does not exist`);
 
         const pageContext = page.getPageContext();
@@ -106,8 +130,7 @@ export default class HyperviewService {
             pageTemplate: pageContent.pageTemplate,
             partials: pageContent.partials,
             includes: pageContent.includes,
-            pageDigest: pageContent.digest,
-            propsDigest: this.#store.canonicalObjectDigest(responseProps),
+            digest: pageContent.digest,
         });
 
         // Fold all the source metadata objects into the page context.
