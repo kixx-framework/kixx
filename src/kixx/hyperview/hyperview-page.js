@@ -23,6 +23,7 @@ export default class HyperviewPage {
         this.pageTemplate = {
             id: pageTemplate.basename,
             text: pageTemplate.text,
+            hash: pageTemplate.hash,
         };
         this.includes = null;
         this.partials = null;

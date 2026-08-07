@@ -1,6 +1,18 @@
 
 export default class ContentAddressableStore {
 
+    async getBaseTemplatesDigest(context) {
+    }
+
+    async getBaseTemplates(context) {
+    }
+
+    async getTemplatePartialsDigest(context) {
+    }
+
+    async getTemplatePartials(context) {
+    }
+
     async getPage(context, pathname) {
         assertCanonicalPagePathname(
             pathname,
@@ -84,6 +96,7 @@ export default class ContentAddressableStore {
                 // Whatever is left must be the page template.
                 pageTemplate = {
                     filepath: denormalizePagePath(filepath),
+                    hash: file.hash,
                     basename: filepathBasename(filepath),
                     text: file.text,
                 };

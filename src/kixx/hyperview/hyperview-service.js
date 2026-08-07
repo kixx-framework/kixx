@@ -31,13 +31,6 @@ export default class HyperviewService {
             );
         }
 
-        // Get a digest hash of this page from the content-addressable store,
-        // optionally including a hash of the canonicalized response props.
-        const hash = await page.getDigest(this.#store, {
-            includeProps: includePropsInDigest,
-            propsHashFunction,
-        });
-
         let hash = page.digest;
 
         // Optionally add the hash of the canonicalized props object.
@@ -77,7 +70,8 @@ export default class HyperviewService {
         if (partial) {
             // Render a partial template only. This is common for making dynamic page
             // updates from the browser with fetch().
-            const template = await getPagePartialTemplate(page, partial, { useCache: useTemplateCache });
+            const pagePartials = await getPagePartials(context, page, { useCache: useTemplateCache });
+            const template = pagePartials.get(partial);
             assertFunction(template, `Partial template "${ partial }" does not exist in pages/${ pathname }`);
             hypertext = template(page.getPageContext());
             return response.respondWithUtf8(response.status, hypertext, responseOptions);
@@ -152,14 +146,98 @@ export default class HyperviewService {
     }
 
     async getBaseTemplate(context, templateId, options) {
-        // TODO: getBaseTemplate
+        const digest = await this.#store.getBaseTemplatesDigest(context);
+
+        // Use the digest from the content-addressable storage as
+        // the cache invalidation key.
+        if (options.useTemplateCache && this.#baseTemplates.get('_digest') === digest) {
+            return this.#baseTemplates.get(templateId);
+        }
+
+        const templates = await this.#store.getBaseTemplates(context);
+
+        if (!templates) {
+            // No template partials defined for this application.
+            this.#baseTemplates.clear();
+            return null;
+        }
+
+        // Ensure the global partials are loaded before compiling the templates.
+        const partials = await this.loadGlobalPartials(context, options);
+
+        // Reset the digest to use as a cache invalidation key.
+        this.#baseTemplates.set('_digest', digest);
+
+        for (const { id, source } of templates) {
+            assertNonEmptyString(
+                id,
+                `Missing or invalid "id" from base templates`,
+            );
+            assertNonEmptyString(
+                source,
+                `Missing or invalid "source" from base templates`,
+            );
+            const template = this.compileTemplate(id, source, this.#customHelpers, partials);
+            this.#baseTemplates.set(id, template);
+        }
+
+        return this.#baseTemplates;
     }
 
     async getPageTemplate(context, page, options) {
-        // TODO: getPageTemplate
+        assertNonEmptyString(
+            page.pageTemplate?.hash,
+            `HyperviewService#getPageTemplate() expects page.pageTemplate.hash to be present in ${ page.pathname }`,
+        );
+        assertNonEmptyString(
+            page.pageTemplate?.id,
+            `HyperviewService#getPageTemplate() expects page.pageTemplate.id to be present in ${ page.pathname }`,
+        );
+        assertNonEmptyString(
+            page.pageTemplate?.text,
+            `HyperviewService#getPageTemplate() expects page.pageTemplate.text to be present in ${ page.pathname }`,
+        );
+
+        let template;
+
+        // Try the cache first, if the cache is enabled.
+        if (options.useTemplateCache && this.#pageTemplates.has(page.pathname)) {
+            template = this.#pageTemplates.get(page.pathname);
+            // Check this template version by comparing the latest hash digest.
+            if (template.hash === page.pageTemplate.hash) {
+                return template;
+            }
+        }
+
+        this.#pageTemplates.delete(page.pathname);
+
+        // Ensure the global partials are loaded; we're going to copy and extend them.
+        const globalPartials = await this.loadGlobalPartials(context, options);
+
+        const pagePartials = await this.getPagePartials(context, page, options);
+
+        // Make a copy of the global partials and page partials so that we can
+        // safely merge them. This is the partials Map we're going
+        // to pass to the template factory.
+        const partials = new Map([...globalPartials, ...pagePartials]);
+
+        template = this.compileTemplate(
+            page.pageTemplate.id,
+            page.pageTemplate.text,
+            this.#customHelpers,
+            partials,
+        );
+
+        template.hash = page.pageTemplate.hash;
+
+        if (options.useTemplateCache) {
+            this.#pageTemplates.set(page.pageTemplate.id, template);
+        }
+
+        return template;
     }
 
-    async getPagePartialTemplate(page, partialId, options) {
+    async getPagePartials(context, page, options) {
         assertNonEmptyString(
             page.partials?.hash,
             `HyperviewService#getPagePartialTemplate() expects page.partials.hash to be present`,
@@ -176,12 +254,12 @@ export default class HyperviewService {
             pagePartials = this.#pagePartials.get(page.pathname);
             // Check this set of page partials version by comparing the latest page digest.
             if (pagePartials.get('_digest') === page.digest) {
-                return pagePartials.get(partialId);
+                return pagePartials;
             }
         }
 
         // Ensure the global partials are loaded; we're going to copy and extend them.
-        const globalPartials = await loadGlobalPartials(options);
+        const globalPartials = await loadGlobalPartials(context, options);
 
         // Make a copy of the global partials so that we can safely mutate the Map
         // without impacting the global partials Map. This is the partials Map
@@ -215,7 +293,46 @@ export default class HyperviewService {
             this.#pagePartials.set(page.pathname, pagePartials);
         }
 
-        return pagePartials.get(partialId);
+        return pagePartials;
+    }
+
+    async loadGlobalPartials(context, options) {
+        // TODO: We need to prevent loadGlobalPartials from being called more than once
+        //       in quick succession without waiting for the first promise to resolve.
+
+        const digest = await this.#store.getTemplatePartialsDigest(context);
+
+        // Use the digest from the content-addressable storage as
+        // the cache invalidation key.
+        if (options.useTemplateCache && this.#globalPartials.get('_digest') === digest) {
+            return this.#globalPartials;
+        }
+
+        const partials = await this.#store.getTemplatePartials(context);
+
+        if (!partials) {
+            // No template partials defined for this application.
+            this.#globalPartials.clear();
+            return this.#globalPartials;
+        }
+
+        // Reset the digest to use as a cache invalidation key.
+        this.#globalPartials.set('_digest', digest);
+
+        for (const { id, source } of partials) {
+            assertNonEmptyString(
+                id,
+                `Missing or invalid "id" from global template partials`,
+            );
+            assertNonEmptyString(
+                source,
+                `Missing or invalid "source" from global template partials`,
+            );
+            const template = this.compileTemplate(id, source, this.#customHelpers, this.#globalPartials);
+            this.#globalPartials.set(id, template);
+        }
+
+        return this.#globalPartials;
     }
 
     /**
