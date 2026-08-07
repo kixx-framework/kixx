@@ -1,6 +1,18 @@
 
 export default class HyperviewService {
 
+    #logger;
+    #store;
+    #kvStore;
+
+    initialize(args) {
+        const { logger, contentAddressableStore, kvStore } = args ?? {};
+
+        this.#logger = logger;
+        this.#store = contentAddressableStore;
+        this.#kvStore = kvStore;
+    }
+
     async respondWithPage(context, request, response, options) {
         const { url } = request;
 
@@ -67,9 +79,13 @@ export default class HyperviewService {
             this.#logger.debug('cached page miss', { pathname, key });
         }
 
+        // TODO: We need to provide caching for partial and body-only renders.
+
         if (partial) {
             // Render a partial template only. This is common for making dynamic page
             // updates from the browser with fetch().
+            this.#logger.debug('render partial for page', { pathname, partial });
+
             const pagePartials = await getPagePartials(context, page, { useCache: useTemplateCache });
             const template = pagePartials.get(partial);
             assertFunction(template, `Partial template "${ partial }" does not exist in pages/${ pathname }`);
