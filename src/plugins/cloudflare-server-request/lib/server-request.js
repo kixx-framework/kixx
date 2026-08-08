@@ -124,22 +124,6 @@ export default class ServerRequest {
     }
 
     /**
-     * @returns {boolean} `true` when the client explicitly requests JSON
-     */
-    isJSONRequest() {
-        // REST API convention: .json extension explicitly requests a JSON response
-        if (this.url.pathname.endsWith('.json')) {
-            return true;
-        }
-
-        if (this.headers.get('accept')?.includes('application/json')) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
      * @returns {boolean} `true` when the request body is URL-encoded form data
      */
     isFormURLEncodedRequest() {

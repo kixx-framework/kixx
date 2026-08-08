@@ -32,7 +32,7 @@
  *
  * Application conveniences (consumed by middleware, never by the router):
  * `headers`, `body`, `ip`, `queryParams`, `ifModifiedSince`, `ifNoneMatch`,
- * `isHeadRequest`, `isJSONRequest`, `isFormURLEncodedRequest`,
+ * `isHeadRequest`, `isFormURLEncodedRequest`,
  * `getContentMediaType`, `getCookie`, `getCookies`,
  * `getAuthorizationBearer`, `json`, `text`, `formData`.
  *
@@ -159,10 +159,6 @@
  * @property {function(): boolean} isHeadRequest
  *   Returns `true` when `method` is `'HEAD'`. Useful for skipping body
  *   generation while still returning correct response headers.
- *
- * @property {function(): boolean} isJSONRequest
- *   Returns `true` when the URL ends with `.json` or the `Accept` header
- *   includes `application/json`.
  *
  * @property {function(): boolean} isFormURLEncodedRequest
  *   Returns `true` when the `Content-Type` header includes
