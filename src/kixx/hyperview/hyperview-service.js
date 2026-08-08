@@ -1,9 +1,34 @@
+import * as templating from '../templating/mod.js';
+import formatDate from './helpers/format-date.js';
+import markup from './helpers/markup.js';
+import truncate from './helpers/truncate.js';
+
+// TODO: We interchangeably use "digest" and "hash" to refer to the
+//       same thing. We should probably pick one for consistency.
 
 export default class HyperviewService {
 
     #logger;
     #store;
     #kvStore;
+
+    #customHelpers = new Map([
+        [ 'formatDate', formatDate ],
+        [ 'markup', markup ],
+        [ 'truncate', truncate ],
+    ]);
+
+    // The base templates cache, indexed by template id
+    #baseTemplates = new Map();
+
+    // The global partials cache, indexed by template id
+    #globalPartials = new Map();
+
+    // The page templates cache, indexed by page pathname
+    #pageTemplates = new Map();
+
+    // The page partials templates cache, indexed by page pathname
+    #pagePartials = new Map();
 
     initialize(args) {
         const { logger, contentAddressableStore, kvStore } = args ?? {};
@@ -14,9 +39,11 @@ export default class HyperviewService {
     }
 
     async respondWithPage(context, request, response, options) {
+        options = options ?? {};
+
         const { url } = request;
 
-        if (!partial) {
+        if (!options.partial) {
             // We need to assert the base template ID is correct and safe here, because it
             // may not have been checked prior to reaching this routine.
             assertCanonicalIdentifier(
@@ -46,88 +73,94 @@ export default class HyperviewService {
         let hash = page.digest;
 
         // Optionally add the hash of the canonicalized props object.
-        if (includePropsInCacheKey) {
+        if (options.includePropsInCacheKey) {
             let propsHash;
-            if (isFunction(propsHashFunction)) {
-                propsHash = propsHashFunction(page.pathname, page.getPageContext(), response.props);
+            if (isFunction(options.propsHashFunction)) {
+                propsHash = options.propsHashFunction(
+                    page.pathname,
+                    page.getPageContext(),
+                    response.props,
+                );
             } else {
-                propsHash = this.#store.canonicalObjectDigest(responseProps);
+                propsHash = this.#store.canonicalObjectDigest(response.props);
             }
-            hash = this.#store.hashString(page.digest + propsDigest);
+            hash = this.#store.hashString(page.digest + propsHash);
         }
 
         // If the caller does not provide a custom cache key, we use the
         // URL pathname + query params as the default.
-        const pageCacheKey = isNonEmptyString(cacheKey)
-            ? cacheKey
+        const pageCacheKey = isNonEmptyString(options.cacheKey)
+            ? options.cacheKey
             : (url.pathname + url.search);
 
         // Add the namespace prefix and digest hash for the complete KV key.
         let key = `hyperview_page_cache#${ pageCacheKey }#${ hash }`;
 
-        if (partial) {
-            key = `${ key }#${ partial }`;
+        if (options.partial) {
+            key = `${ key }#${ options.partial }`;
         }
-        if (skipBaseRender) {
+        if (options.skipBaseRender) {
             key = `${ key }#_PAGE_TEMPLATE_ONLY`;
         }
 
         let hypertext;
 
-        if (usePageCache) {
+        if (options.usePageCache) {
             hypertext = await this.#kvStore.get(context, key, {
                 type: 'text',
-                cacheTtl: pageCacheReadTtlSeconds,
+                cacheTtl: options.pageCacheReadTtlSeconds,
             });
             if (hypertext) {
                 this.#logger.debug('cached page hit', { pathname, key });
-                return response.respondWithUtf8(response.status, hypertext, responseOptions);
+                return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
             }
             this.#logger.debug('cached page miss', { pathname, key });
         }
 
-        if (partial) {
+        if (options.partial) {
             // Render a partial template only. This is common for making dynamic page
             // updates from the browser with fetch().
-            this.#logger.debug('render partial for page', { pathname, partial });
+            this.#logger.debug('render partial for page', { pathname, partial: options.partial });
 
-            const pagePartials = await getPagePartials(context, page, { useCache: useTemplateCache });
-            const template = pagePartials.get(partial);
-            assertFunction(template, `Partial template "${ partial }" does not exist in pages/${ pathname }`);
+            const pagePartials = await this.getPagePartials(context, page, { useCache: options.useTemplateCache });
+            const template = pagePartials.get(options.partial);
+            assertFunction(template, `Partial template "${ options.partial }" does not exist in pages/${ pathname }`);
 
             hypertext = template(page.getPageContext());
 
-            if (usePageCache) {
+            if (options.usePageCache) {
                 await this.#kvStore.put(context, key, hypertext, {
                     type: 'text',
-                    ttlSeconds: pageCacheExpirationSeconds,
+                    ttlSeconds: options.pageCacheExpirationSeconds,
                 });
             }
 
-            return response.respondWithUtf8(response.status, hypertext, responseOptions);
+            return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
         }
 
-        if (skipBaseRender) {
+        if (options.skipBaseRender) {
             // Render the page body, without wrapping in the base template. This is common
             // for page transitions triggered from the browser with fetch().
-            const template = await this.getPageTemplate(context, page, { useCache: useTemplateCache });
+            this.#logger.debug('skip base template render for page', { pathname });
+
+            const template = await this.getPageTemplate(context, page, { useCache: options.useTemplateCache });
             assertFunction(template, `Page template "${ page.pageTemplate.id }" does not exist in pages/${ pathname }`);
 
             hypertext = template(page.getPageContext());
 
-            if (usePageCache) {
+            if (options.usePageCache) {
                 await this.#kvStore.put(context, key, hypertext, {
                     type: 'text',
-                    ttlSeconds: pageCacheExpirationSeconds,
+                    ttlSeconds: options.pageCacheExpirationSeconds,
                 });
             }
 
-            return response.respondWithUtf8(response.status, hypertext, responseOptions);
+            return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
         }
 
         const [ baseTemplate, pageTemplate ] = await Promise.all([
-            this.getBaseTemplate(context, baseTemplateId, { useCache: useTemplateCache }),
-            this.getPageTemplate(context, page, { useCache: useTemplateCache }),
+            this.getBaseTemplate(context, baseTemplateId, { useCache: options.useTemplateCache }),
+            this.getPageTemplate(context, page, { useCache: options.useTemplateCache }),
         ]);
 
         assertFunction(pageTemplate, `Page template "${ page.pageTemplate.id }" does not exist in pages/${ pathname }`);
@@ -138,18 +171,18 @@ export default class HyperviewService {
         pageContext.body = pageTemplate(pageContext);
         hypertext = baseTemplate(pageContext);
 
-        if (usePageCache) {
+        if (options.usePageCache) {
             await this.#kvStore.put(context, key, hypertext, {
                 type: 'text',
-                ttlSeconds: pageCacheExpirationSeconds,
+                ttlSeconds: options.pageCacheExpirationSeconds,
             });
         }
 
-        return response.respondWithUtf8(response.status, hypertext, responseOptions);
+        return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
     }
 
     async getPage(context, url, pathname, responseProps) {
-        const pageContent = await this.#store.getPage(pathname);
+        const pageContent = await this.#store.getPage(context, pathname);
 
         if (!pageContent) {
             return null;
@@ -184,7 +217,7 @@ export default class HyperviewService {
         if (isNonEmptyString(page.rawPageDescription?.template)) {
             page.setMetadataTemplate('page.description', this.createMiniTemplate(
                 `${ pathname }/page.description`,
-                page.description.template
+                page.description.template,
             ));
         }
 
@@ -305,7 +338,7 @@ export default class HyperviewService {
         }
 
         // Ensure the global partials are loaded; we're going to copy and extend them.
-        const globalPartials = await loadGlobalPartials(context, options);
+        const globalPartials = await this.loadGlobalPartials(context, options);
 
         // Make a copy of the global partials so that we can safely mutate the Map
         // without impacting the global partials Map. This is the partials Map
@@ -391,7 +424,7 @@ export default class HyperviewService {
      */
     createMiniTemplate(templateId, templateSource) {
         const partials = new Map();
-        return compileTemplate(templateId, templateSource, this.#customHelpers, partials);
+        return this.compileTemplate(templateId, templateSource, this.#customHelpers, partials);
     }
 
     /**
