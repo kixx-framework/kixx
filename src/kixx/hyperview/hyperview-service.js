@@ -63,7 +63,14 @@ export default class HyperviewService {
             : (url.pathname + url.search);
 
         // Add the namespace prefix and digest hash for the complete KV key.
-        const key = `hyperview_page_cache#${ pageCacheKey }#${ hash }`;
+        let key = `hyperview_page_cache#${ pageCacheKey }#${ hash }`;
+
+        if (partial) {
+            key = `${ key }#${ partial }`;
+        }
+        if (skipBaseRender) {
+            key = `${ key }#_PAGE_TEMPLATE_ONLY`;
+        }
 
         let hypertext;
 
@@ -79,8 +86,6 @@ export default class HyperviewService {
             this.#logger.debug('cached page miss', { pathname, key });
         }
 
-        // TODO: We need to provide caching for partial and body-only renders.
-
         if (partial) {
             // Render a partial template only. This is common for making dynamic page
             // updates from the browser with fetch().
@@ -89,7 +94,16 @@ export default class HyperviewService {
             const pagePartials = await getPagePartials(context, page, { useCache: useTemplateCache });
             const template = pagePartials.get(partial);
             assertFunction(template, `Partial template "${ partial }" does not exist in pages/${ pathname }`);
+
             hypertext = template(page.getPageContext());
+
+            if (usePageCache) {
+                await this.#kvStore.put(context, key, hypertext, {
+                    type: 'text',
+                    ttlSeconds: pageCacheExpirationSeconds,
+                });
+            }
+
             return response.respondWithUtf8(response.status, hypertext, responseOptions);
         }
 
@@ -98,7 +112,16 @@ export default class HyperviewService {
             // for page transitions triggered from the browser with fetch().
             const template = await this.getPageTemplate(context, page, { useCache: useTemplateCache });
             assertFunction(template, `Page template "${ page.pageTemplate.id }" does not exist in pages/${ pathname }`);
+
             hypertext = template(page.getPageContext());
+
+            if (usePageCache) {
+                await this.#kvStore.put(context, key, hypertext, {
+                    type: 'text',
+                    ttlSeconds: pageCacheExpirationSeconds,
+                });
+            }
+
             return response.respondWithUtf8(response.status, hypertext, responseOptions);
         }
 
@@ -114,6 +137,13 @@ export default class HyperviewService {
 
         pageContext.body = pageTemplate(pageContext);
         hypertext = baseTemplate(pageContext);
+
+        if (usePageCache) {
+            await this.#kvStore.put(context, key, hypertext, {
+                type: 'text',
+                ttlSeconds: pageCacheExpirationSeconds,
+            });
+        }
 
         return response.respondWithUtf8(response.status, hypertext, responseOptions);
     }
