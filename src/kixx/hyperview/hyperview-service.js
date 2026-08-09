@@ -4,10 +4,10 @@ import * as templating from '../templating/mod.js';
 import formatDate from './helpers/format-date.js';
 import markup from './helpers/markup.js';
 import truncate from './helpers/truncate.js';
-// import {
-//     normalizeIdentifier,
-//     assertCanonicalIdentifier,
-// } from '../content-addressable-store/canonical-identifiers.js';
+import {
+    normalizeIdentifier,
+    assertCanonicalIdentifier,
+} from '../content-addressable-store/canonical-identifiers.js';
 import {
     assert,
     assertArray,
