@@ -20,6 +20,10 @@ import {
 // TODO: We interchangeably use "digest" and "hash" to refer to the
 //       same thing. We should probably pick one for consistency.
 
+// NOTE: There are private methods on HyperviewService marked with the @private
+//       tag instead of prefixed by "#". This is intentional, to allow unit
+//       testing coverage to be more thorough.
+
 export default class HyperviewService {
 
     #logger;
@@ -100,10 +104,11 @@ export default class HyperviewService {
     }
 
     /**
-     * Loads the global partials from the ContentAddressableStore and compiles them
-     * into templates. If useTemplateCache is toggled on then partials will be
-     * cached in application memory using the partials digest hash from the
-     * ContentAddressableStore as a cache invalidation key.
+     * Loads the global partial templates from the ContentAddressableStore and
+     * compiles them into template functions. If useTemplateCache is toggled
+     * on then partials will be cached in application memory using the
+     * partials digest hash from the ContentAddressableStore as a
+     * cache invalidation key.
      * @private
      * @return {Map} The private #globalPartials Map
      */
@@ -146,6 +151,15 @@ export default class HyperviewService {
         return this.#globalPartials;
     }
 
+    /**
+     * Extracts page level partial templates from a HyperviewPage which has already
+     * been loaded. Also loads the global partials to be used when compiling the
+     * page partials. If useTemplateCache has been toggled on, the page partials
+     * will be cached in runtime memory using the page partials digest hash from
+     * the ContentAddressableStore as the cache invalidation key.
+     * @private
+     * @return {Map} The partial template Map for the given page.pathname
+     */
     async getPagePartials(context, page, options) {
         assertNonEmptyString(
             page.partials?.hash,
@@ -205,6 +219,15 @@ export default class HyperviewService {
         return pagePartials;
     }
 
+    /**
+     * Load the a base template by id, directly from the ContentAddressableStore.
+     * If global partials are not loaded yet, they will be loaded here. If
+     * useTemplateCache is toggled on then the template will be returned
+     * from the runtime memory cache if the cache has not been
+     * invalidated by the base templates digest hash.
+     * @private
+     * @return {Function} A Kixx template function.
+     */
     async getBaseTemplate(context, templateId, options) {
         const digest = await this.#store.getBaseTemplatesDigest(context);
 
@@ -214,10 +237,12 @@ export default class HyperviewService {
             return this.#baseTemplates.get(templateId);
         }
 
+        // Base templates are stored in a single bundle file, which
+        // we fetch here.
         const templates = await this.#store.getBaseTemplates(context);
 
         if (!templates) {
-            // No template partials defined for this application.
+            // No base templates defined for this application.
             this.#baseTemplates.clear();
             return null;
         }
@@ -241,9 +266,17 @@ export default class HyperviewService {
             this.#baseTemplates.set(id, template);
         }
 
-        return this.#baseTemplates;
+        return this.#baseTemplates.get(templateId);
     }
 
+    /**
+     * Get page template from a HyperviewPage which has already been loaded. Uses
+     * the page.pageTemplate to compile the template function. If useTemplateCache
+     * is toggled on then the template will be returned from the runtime memory
+     * cache, using the pageTemplate digest hash as the cache invalidation key.
+     * @private
+     * @return {Function} A Kixx template function.
+     */
     async getPageTemplate(context, page, options) {
         assertNonEmptyString(
             page.pageTemplate?.hash,
@@ -297,6 +330,13 @@ export default class HyperviewService {
         return template;
     }
 
+    /**
+     * Loads a HyperviewPage from the ContentAddressable store. It merges the source
+     * data cascade and hydrates the title and description mini templates if they
+     * are defined.
+     * @private
+     * @return {HyperviewPage}
+     */
     async getPage(context, url, pathname, responseProps) {
         const pageContent = await this.#store.getPage(context, pathname);
 
