@@ -42,6 +42,9 @@ export default class HyperviewService {
     // The global partials cache, indexed by template id
     #globalPartials = new Map();
 
+    // The active global partials load shared by concurrent requests
+    #globalPartialsLoadPromise = null;
+
     // The page templates cache, indexed by page pathname
     #pageTemplates = new Map();
 
@@ -113,9 +116,23 @@ export default class HyperviewService {
      * @return {Map} The private #globalPartials Map
      */
     async loadGlobalPartials(context, options) {
-        // TODO: We need to prevent loadGlobalPartials from being called more than once
-        //       in quick succession without waiting for the first promise to resolve.
+        if (this.#globalPartialsLoadPromise) {
+            return this.#globalPartialsLoadPromise;
+        }
 
+        const loadPromise = this.#loadGlobalPartials(context, options);
+        this.#globalPartialsLoadPromise = loadPromise;
+
+        try {
+            return await loadPromise;
+        } finally {
+            if (this.#globalPartialsLoadPromise === loadPromise) {
+                this.#globalPartialsLoadPromise = null;
+            }
+        }
+    }
+
+    async #loadGlobalPartials(context, options) {
         const digest = await this.#store.getTemplatePartialsDigest(context);
 
         // Use the digest from the content-addressable storage as
@@ -399,6 +416,31 @@ export default class HyperviewService {
         return false;
     }
 
+    /**
+     * Renders a Hyperview page, page template, or named partial and configures
+     * the response. Explicit JSON requests receive the merged page context.
+     *
+     * @param {import('../context/request-context.js').default} context - Context for storage and cache operations
+     * @param {import('../http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request used to select the page and response format
+     * @param {import('../http-router/server-response.js').default} response - Mutable response carrying the status and page props
+     * @param {Object} [options]
+     * @param {string} [options.pathname] - Canonical page identifier; defaults to the normalized request pathname
+     * @param {string} [options.baseTemplateId] - Canonical base template identifier required for full-page rendering
+     * @param {string} [options.partial] - Canonical partial identifier to render instead of the page and base templates
+     * @param {boolean} [options.skipBaseRender=false] - Render the page template without its base template
+     * @param {boolean} [options.useTemplateCache=false] - Reuse compiled templates while their content digests remain current
+     * @param {boolean} [options.usePageCache=false] - Read and write rendered hypertext in the page cache
+     * @param {string} [options.cacheKey] - Page-cache key component; defaults to the request pathname and query string
+     * @param {boolean} [options.includePropsInCacheKey=false] - Include a digest derived from response props in the page-cache key
+     * @param {Function} [options.propsHashFunction] - Returns the response-props digest from the page pathname, merged page context, and response props
+     * @param {number} [options.pageCacheReadTtlSeconds] - Cache TTL passed to page-cache reads
+     * @param {number} [options.pageCacheExpirationSeconds] - Expiration TTL passed to page-cache writes
+     * @param {Object} [options.responseOptions] - Options forwarded to the UTF-8 response method
+     * @param {string} [options.responseOptions.contentType='text/plain'] - Response MIME type; a UTF-8 charset is appended
+     * @param {Object|Headers|Array<[string,string]>} [options.responseOptions.headers] - Additional response headers
+     * @returns {Promise<import('../http-router/server-response.js').default>} Resolves to the configured response
+     * @throws {NotFoundError} When no page exists for the resolved pathname
+     */
     async respondWithHypertext(context, request, response, options) {
         options = options ?? {};
 
