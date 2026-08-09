@@ -1,3 +1,5 @@
+// TODO: This module is deprecated and needs to be removed. It is only here as a reference.
+
 import { NotFoundError } from '../errors/mod.js';
 import {
     AssertionError,
