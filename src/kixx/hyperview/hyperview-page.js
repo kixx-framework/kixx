@@ -1,10 +1,16 @@
+import deepMerge from '../utils/deep-merge.js';
+import {
+    isUndefined,
+    isObjectNotNull,
+} from '../assertions/mod.js';
+
 export default class HyperviewPage {
 
     #pageContext = {};
     #responseProps = null;
     #metadataTemplates = new Map();
 
-    constructor(url, pathname, responseProps) {
+    constructor(spec) {
         const {
             url,
             pathname,
@@ -16,7 +22,6 @@ export default class HyperviewPage {
         } = spec;
 
         this.#responseProps = responseProps;
-        this.#pageDigest = pageDigest;
 
         this.url = url;
         this.pathname = pathname;
@@ -100,11 +105,11 @@ export default class HyperviewPage {
         // Set canonical URL from request URL if not already defined in page data;
         // excludes query string and hash to provide a stable reference.
         if (isUndefined(page.canonical_url)) {
-            page.canonical_url = urlToCanonicalURLString(this.url);
+            page.canonical_url = `${ this.url.protocol }//${ this.url.host }${ this.url.pathname }`;
         }
         // The href records the fully qualified URL.
         if (isUndefined(page.href)) {
-            page.href = url.href;
+            page.href = this.url.href;
         }
 
         // Hydrate the title and description templates, if they exist.

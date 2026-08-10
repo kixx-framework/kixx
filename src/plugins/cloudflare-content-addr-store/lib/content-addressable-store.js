@@ -1,16 +1,47 @@
 
 export default class ContentAddressableStore {
 
+    async statPath(pathOrPrefix) {
+        const index = await getIndex();
+
+        if (pathOrPrefix === '') {
+            // Look up the root path (pathOrPrefix === '').
+            const prefix = normalizeIdentifier(pathOrPrefix);
+            const treeHash = index.dirs[prefix];
+            if (treeHash) {
+                return {
+                    kind: 'tree',
+                    filepath: prefix,
+                    hash, treeHash,
+                };
+            }
+        } else {
+            const path = normalizeIdentifier(pathOrPrefix);
+            const tuple = index.files[path];
+            if (tuple) {
+                return decodeIndexEntry(path, tuple);
+            }
+        }
+
+        return null;
+    }
+
     async getBaseTemplatesDigest(context) {
+        const stat = await statPath(context, normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
+        return stat?.hash || null;
     }
 
     async getBaseTemplates(context) {
+        return await getPath(context, normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
     }
 
     async getTemplatePartialsDigest(context) {
+        const stat = await statPath(context, normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
+        return stat?.hash || null;
     }
 
     async getTemplatePartials(context) {
+        return await getPath(context, normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
     }
 
     async getPage(context, pathname) {
@@ -85,12 +116,10 @@ export default class ContentAddressableStore {
                     filepath: denormalizePagePath(filepath),
                     json: file.json,
                 });
-            } else if (filepathBasename(filepath) === PAGE_PARTIALS_MANIFEST) {
-                // TODO: Need to return the hash and files with names as an Array.
-                partials = decodeFileBundle(file);
-            } else if (filepathBasename(filepath) === PAGE_INCLUDES_MANIFEST) {
-                // TODO: Need to return the hash and files with names as an Object.
-                includes = decodeFileBundle(file);
+            } else if (filepathBasename(filepath) === PAGE_PARTIALS_BUNDLE) {
+                partials = file.json;
+            } else if (filepathBasename(filepath) === PAGE_INCLUDES_BUNDLE) {
+                includes = file.json;
             } else {
                 // Whatever is left must be the page template.
                 pageTemplate = {
@@ -107,7 +136,7 @@ export default class ContentAddressableStore {
         // accumulate the full dependencies list.
         const dependencies = parentStats.concat([ directoryStat ]);
 
-        const digest = computeDigest(dependencies);
+        const digest = computeDigestFromStats(dependencies);
 
         return {
             digest,
@@ -119,10 +148,12 @@ export default class ContentAddressableStore {
     }
 
     hashString(_str) {
+        // Get the hash of a string.
         throw new Error('hashString() is not implemented');
     }
 
     canonicalObjectDigest(_obj) {
+        // Get the hash of a JavaScript object
         throw new Error('canonicalObjectDigest() is not implemented');
     }
 }

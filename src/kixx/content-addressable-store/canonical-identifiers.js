@@ -1,6 +1,8 @@
 import {
     assert,
     assertNonEmptyString,
+    isString,
+    isUndefined,
     isNonEmptyString,
 } from '../assertions/mod.js';
 
@@ -45,8 +47,11 @@ export function isValidPathname(pathname) {
  * @returns {string} The validated identifier folded to lower case
  */
 export function normalizeIdentifier(value) {
-    if (!isNonEmptyString()) {
-        return value;
+    if (value === '' || value === null || isUndefined(value)) {
+        return '';
+    }
+    if (!isString(value)) {
+        throw new TypeError('An identifier must be a string');
     }
 
     // Remove leading, trailing, and multiple consecutive slashes ("/") and

@@ -137,7 +137,7 @@ export default class HyperviewService {
 
         // Use the digest from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && this.#globalPartials.get('_digest') === digest) {
+        if (options.useTemplateCache && digest && this.#globalPartials.get('_digest') === digest) {
             return this.#globalPartials;
         }
 
@@ -150,9 +150,9 @@ export default class HyperviewService {
         }
 
         // Reset the digest to use as a cache invalidation key.
-        this.#globalPartials.set('_digest', digest);
+        this.#globalPartials.set('_digest', partials.hash);
 
-        for (const { id, source } of partials) {
+        for (const { id, source } of partials.json) {
             assertNonEmptyString(
                 id,
                 `Missing or invalid "id" from global template partials`,
@@ -250,7 +250,7 @@ export default class HyperviewService {
 
         // Use the digest from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && this.#baseTemplates.get('_digest') === digest) {
+        if (options.useTemplateCache && digest && this.#baseTemplates.get('_digest') === digest) {
             return this.#baseTemplates.get(templateId);
         }
 
@@ -268,9 +268,9 @@ export default class HyperviewService {
         const partials = await this.loadGlobalPartials(context, options);
 
         // Reset the digest to use as a cache invalidation key.
-        this.#baseTemplates.set('_digest', digest);
+        this.#baseTemplates.set('_digest', templates.digest);
 
-        for (const { id, source } of templates) {
+        for (const { id, source } of templates.json) {
             assertNonEmptyString(
                 id,
                 `Missing or invalid "id" from base templates`,
