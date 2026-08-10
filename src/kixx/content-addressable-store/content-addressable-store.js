@@ -14,7 +14,7 @@ export default class ContentAddressableStore {
     }
 
     async getPage(context, pathname) {
-        assertCanonicalPagePathname(
+        assertCanonicalIdentifier(
             pathname,
             'ContentAddressableStore#getPage():',
         );
@@ -27,8 +27,7 @@ export default class ContentAddressableStore {
         // /blog/reviews/page.json
         // /blog/reviews/music/page.json
         // /blog/reviews/music/led-zeppelin/page.json
-        const parts = pathname.split('/').filter((part) => part);
-
+        const parts = normalizeIdentifier(pathname).split('/');
         const filepaths = [];
         let path;
 
