@@ -5,10 +5,6 @@ import formatDate from './helpers/format-date.js';
 import markup from './helpers/markup.js';
 import truncate from './helpers/truncate.js';
 import {
-    normalizeIdentifier,
-    assertCanonicalIdentifier,
-} from '../content-addressable-store/canonical-identifiers.js';
-import {
     assert,
     assertArray,
     assertFunction,
@@ -73,6 +69,35 @@ export default class HyperviewService {
 
         this.#store = contentAddressableStore;
         this.#kvStore = kvStore;
+    }
+
+    /**
+     * Asserts that a value is a canonical ContentAddressableStore identifier.
+     * @param {*} value - Value to assert
+     * @param {string} messagePrefix - Caller context included in assertion messages
+     * @returns {void}
+     * @throws {AssertionError} When value is empty, invalid, or not lower case
+     */
+    assertCanonicalIdentifier(value, messagePrefix) {
+        assertNonEmptyString(value, messagePrefix);
+        assert(
+            this.#store.isValidIdentifier(value),
+            `${ messagePrefix } must be a valid pathname`,
+        );
+        assert(
+            value === value.toLowerCase(),
+            `${ messagePrefix } must be lower case`,
+        );
+    }
+
+    /**
+     * Reports whether a URL or logical pathname contains only safe path segments.
+     * Proxies to the underlying ContentAddressableStore.
+     * @param {string} pathname - The pathname to check
+     * @returns {boolean} True when the pathname is valid
+     */
+    isValidIdentifier(value) {
+        return this.#store.isValidIdentifier(value);
     }
 
     /**
@@ -448,10 +473,10 @@ export default class HyperviewService {
         if (isNonEmptyString(options.pathname)) {
             pathname = options.pathname;
         } else {
-            pathname = normalizeIdentifier(request.pathname);
+            pathname = this.#store.normalizeIdentifier(request.pathname);
         }
 
-        assertCanonicalIdentifier(
+        this.assertCanonicalIdentifier(
             pathname,
             'HyperviewService#respondWithHypertext: pathname',
         );
