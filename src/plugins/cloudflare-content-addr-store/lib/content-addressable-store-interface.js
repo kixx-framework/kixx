@@ -5,6 +5,7 @@ import {
     assert,
 } from '../../kixx/assertions/mod.js';
 import Store from './store.js';
+import ContentObject from './content-object.js';
 import { hashValue } from './addressing.js';
 
 
@@ -118,12 +119,11 @@ export default class ContentAddressableStore {
             return null;
         }
 
-        return new ContentObject({
+        return new ContentObject(bytes, {
             pathname: stat.pathname,
             hash: stat.hash,
             size: bytes.length,
             metadata: stat.metadata,
-            bytes,
         });
     }
 
@@ -206,7 +206,7 @@ export default class ContentAddressableStore {
 
         const directory = this.#normalizePagePath(pathname);
 
-        const sourceFileStats = await statsByPathPrefix(context, directory);
+        const sourceFileStats = await this.#store.listStats(context, directory);
 
         const hashesToFetch = parentStats
             .concat(sourceFileStats)
@@ -221,11 +221,11 @@ export default class ContentAddressableStore {
 
         for (const file of files) {
             if (this.#filepathBasename(file.pathname) === 'page.json') {
-                pageDataFiles.push(file.json);
+                pageDataFiles.push(file);
             } else if (this.#filepathBasename(file.pathname) === PAGE_PARTIALS_BUNDLE) {
-                partials = file.json;
+                partials = file;
             } else if (this.#filepathBasename(file.pathname) === PAGE_INCLUDES_BUNDLE) {
-                includes = file.json;
+                includes = file;
             } else {
                 // Whatever is left must be the page template.
                 pageTemplateFilename = this.#filepathBasename(file.pathname);

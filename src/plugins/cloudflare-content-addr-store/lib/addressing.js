@@ -48,7 +48,7 @@ export function bufferToString(bytes) {
  * sides of the ContentAddressableStore always use this one. UTF-16 code-unit
  * order (the JS default) is fine as long as it is applied consistently.
  */
-function compareStrings(a, b) {
+export function compareStrings(a, b) {
     if (a < b) {
         return -1;
     }

@@ -59,6 +59,11 @@ export default class Store {
         return index.getNode(pathname);
     }
 
+    async listStats(context, prefix) {
+        const index = await this.getIndex(context);
+        return index.listNodes(prefix);
+    }
+
     async getBlob(context, hash) {
         const kv = this.#resolveKvStore(context);
 

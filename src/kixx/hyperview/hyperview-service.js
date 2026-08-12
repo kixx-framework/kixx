@@ -170,7 +170,7 @@ export default class HyperviewService {
         // Reset the hash as the cache invalidation key.
         this.#globalPartials.set('_hash', partials.hash);
 
-        for (const { id, source } of partials.json) {
+        for (const { id, source } of partials.json()) {
             assertNonEmptyString(
                 id,
                 `Missing or invalid "id" from global template partials`,
@@ -288,7 +288,7 @@ export default class HyperviewService {
         // Reset the hash to use as a cache invalidation key.
         this.#baseTemplates.set('_hash', templates.hash);
 
-        for (const { id, source } of templates.json) {
+        for (const { id, source } of templates.json()) {
             assertNonEmptyString(
                 id,
                 `Missing or invalid "id" from base templates`,
@@ -341,7 +341,7 @@ export default class HyperviewService {
 
         this.#pageTemplates.delete(templateId);
 
-        const source = await this.#store.getPageTemplate(context, pathname, pageTemplateFilename);
+        const blob = await this.#store.getPageTemplate(context, pathname, pageTemplateFilename);
 
         // Ensure the global partials are loaded; we're going to copy and extend them.
         const globalPartials = await this.loadGlobalPartials(context, options);
@@ -355,7 +355,7 @@ export default class HyperviewService {
 
         template = this.compileTemplate(
             templateId,
-            source,
+            blob.text(),
             this.#customHelpers,
             partials,
         );
@@ -390,8 +390,8 @@ export default class HyperviewService {
             pathname,
             responseProps,
             pageTemplateFilename: pageContent.pageTemplateFilename,
-            partials: pageContent.partials,
-            includes: pageContent.includes,
+            partials: pageContent.partials.json(),
+            includes: pageContent.includes.json(),
             hash: pageContent.hash,
         });
 
@@ -399,7 +399,8 @@ export default class HyperviewService {
         // IMPORTANT: Page data files must be returned from the Content-Addressable
         // Store getPage in  the grandparent -> parent -> grandchild order,
         // otherwise this merge would be incorrect.
-        page.mergeSources(pageContent.pageDataFiles);
+        const sources = pageContent.pageDataFiles.map((file) => file.json());
+        page.mergeSources(sources);
 
         // Compile the title template, if it exists.
         if (isNonEmptyString(page.rawPageTitle?.template)) {
