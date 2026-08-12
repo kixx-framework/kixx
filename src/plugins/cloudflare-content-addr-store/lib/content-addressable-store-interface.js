@@ -1,4 +1,33 @@
+import { AssertionError } from '../../kixx/errors/mod.js';
+import {
+    isString,
+    isUndefined,
+    assert,
+} from '../../kixx/assertions/mod.js';
+import Store from './store.js';
+
+
+const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
+const TEMPLATE_PARTIALS_BUNDLE = '__template-partials-bundle';
+const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
+const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
+
+// Path segments are restricted to a conservative filename-safe set. Anything
+// outside it (path separators beyond the segment split, query/fragment
+// characters, whitespace, shell or URL metacharacters) is rejected before the
+// path reaches a storage adapter or static file store.
+const DISALLOWED_STATIC_PATH_CHARACTERS = /[^a-z0-9_.-]/i;
+
+
 export default class ContentAddressableStore {
+
+    #store;
+
+    constructor(options) {
+        const { store } = options ?? {};
+
+        this.#store = store ?? new Store();
+    }
 
     /**
      * Reports whether a URL or logical pathname contains only safe path segments.
@@ -66,10 +95,6 @@ export default class ContentAddressableStore {
         return this.normalizeIdentifier(`pages/${ pathname }`);
     }
 
-    #denormalizePagePath(pathname) {
-        return pathname.replace(/^pages\//, '');
-    }
-
     #filepathBasename(pathname) {
         return pathname.split('/').pop();
     }
@@ -86,13 +111,11 @@ export default class ContentAddressableStore {
             );
         }
 
-        const buff = await this.#store.getBlob(context, stat.hash);
+        const bytes = await this.#store.getBlob(context, stat.hash);
 
-        if (buff) {
+        if (bytes) {
             return null;
         }
-
-        const bytes = new Uint8Array(buff);
 
         return new ContentObject({
             pathname: stat.pathname,
@@ -104,34 +127,34 @@ export default class ContentAddressableStore {
     }
 
     async getTemplatePartialsHash(context) {
-        const stat = await this.#store.statPath(context, this.normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
+        const stat = await this.#store.statPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
         return stat?.hash || null;
     }
 
     async getTemplatePartials(context) {
-        return await this.#getPath(context, this.normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
+        return await this.#getPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
     }
 
     async getBaseTemplatesHash(context) {
-        const stat = await this.#store.statPath(context, this.normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
+        const stat = await this.#store.statPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
         return stat?.hash || null;
     }
 
     async getBaseTemplates(context) {
-        return await this.#getPath(context, this.normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
+        return await this.#getPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
     }
 
     async getPageTemplateHash(context, pathname, filename) {
-        const stat = await this.#store.statPath(context, this.normalizePagePath(`${ pathname }/${ filename }`));
+        const stat = await this.#store.statPath(context, this.#normalizePagePath(`${ pathname }/${ filename }`));
         return stat?.hash || null;
+    }
+
+    async getPageTemplate(context, pathname, filename) {
+        return await this.#getPath(context, this.#normalizePagePath(`${ pathname }/${ filename }`));
     }
 
     hashValue(value) {
         // TODO: Implement ContentAddressableStore#hashValue
-    }
-
-    async getPageTemplate(context, pathname, filename) {
-        return await this.#getPath(context, this.normalizePagePath(`${ pathname }/${ filename }`));
     }
 
     async getPage(context, pathname) {
@@ -153,11 +176,11 @@ export default class ContentAddressableStore {
         let path;
 
         // Always start with the root page metadata item.
-        filepaths.push(this.normalizePagePath('page.json'));
+        filepaths.push(this.#normalizePagePath('page.json'));
 
         for (const part of parts) {
             path = `${ path }/${ part }`;
-            filepaths.push(this.normalizePagePath(`${ path }/page.json`));
+            filepaths.push(this.#normalizePagePath(`${ path }/page.json`));
         }
 
         // We don't need to get the page leaf node page.json separately, because we'll
@@ -180,7 +203,7 @@ export default class ContentAddressableStore {
             }
         }
 
-        const directory = this.normalizePagePath(pathname);
+        const directory = this.#normalizePagePath(pathname);
 
         const sourceFileStats = await statsByPathPrefix(context, directory);
 

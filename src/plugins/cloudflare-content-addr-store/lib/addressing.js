@@ -1,6 +1,6 @@
 import {
     isUndefined,
-} from '../assertions/mod.js';
+} from '../../kixx/assertions/mod.js';
 
 /**
  * Wire format v1:
