@@ -14,11 +14,11 @@ import {
 export const FORMAT = 1;
 
 export const KEY = {
-  blob: `b${FORMAT}:`,
-  tree: `t${FORMAT}:`,
-  index: `i${FORMAT}:`,
-  closure: `c${FORMAT}:`,
-  roots: `r${FORMAT}:recent`,
+    blob: `b${FORMAT}:`,
+    tree: `t${FORMAT}:`,
+    index: `i${FORMAT}:`,
+    closure: `c${FORMAT}:`,
+    roots: `r${FORMAT}:recent`,
 };
 
 /** SHA-256 truncated to 128 bits; ~1e-21 collision probability at 1e9 objects. */
@@ -48,7 +48,13 @@ export function buffToString(bytes) {
  * order (the JS default) is fine as long as it is applied consistently.
  */
 function compareStrings(a, b) {
-    return a < b ? -1 : a > b ? 1 : 0;
+    if (a < b) {
+        return -1;
+    }
+    if (a > b) {
+        return 1;
+    }
+    return 0;
 }
 
 /**
