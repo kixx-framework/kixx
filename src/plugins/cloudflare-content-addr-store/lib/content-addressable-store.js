@@ -4,6 +4,7 @@ import {
     isUndefined,
     assert,
 } from '../assertions/mod.js';
+import { KEY, digestMap } from './addressing.js';
 
 
 const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
@@ -106,6 +107,17 @@ export default class ContentAddressableStore {
 
     filepathBasename(pathname) {
         return pathname.split('/').pop();
+    }
+
+    async computeDigestFromStats(stats) {
+        const pairs = new Map();
+
+        for (const entry of stats) {
+            const tuple = entry.metadata ? [ entry.hash, entry.metadata ] : [ entry.hash ];
+            pairs.set(entry.pathname, tuple);
+        }
+
+        return await digestMap(pairs);
     }
 
     async getIndex(context) {
@@ -308,7 +320,7 @@ export default class ContentAddressableStore {
         // accumulate the full dependencies list.
         const dependencies = parentStats.concat([ directoryStat ]);
 
-        const digest = computeDigestFromStats(dependencies);
+        const digest = await this.computeDigestFromStats(dependencies);
 
         return {
             digest,
