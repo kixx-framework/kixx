@@ -15,24 +15,20 @@ export default class HyperviewPage {
             url,
             pathname,
             responseProps,
-            pageTemplate,
+            pageTemplateFilename,
             partials,
             includes,
-            digest,
+            hash,
         } = spec;
 
         this.#responseProps = responseProps;
 
         this.url = url;
         this.pathname = pathname;
-        this.pageTemplate = {
-            id: pageTemplate.basename,
-            text: pageTemplate.text,
-            hash: pageTemplate.hash,
-        };
+        this.pageTemplateFilename = pageTemplateFilename;
         this.includes = null;
         this.partials = null;
-        this.digest = digest;
+        this.hash = hash;
 
         if (includes) {
             this.includes = {

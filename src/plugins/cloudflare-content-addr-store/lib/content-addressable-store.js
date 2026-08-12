@@ -330,4 +330,8 @@ export default class ContentAddressableStore {
             includes,
         };
     }
+
+    hashValue(value) {
+        // TODO: Implement ContentAddressableStore#hashValue
+    }
 }

@@ -13,9 +13,6 @@ import {
     isNonEmptyString,
 } from '../assertions/mod.js';
 
-// TODO: We interchangeably use "digest" and "hash" to refer to the
-//       same thing. We should probably pick one for consistency.
-
 // NOTE: There are private methods on HyperviewService marked with the @private
 //       tag instead of prefixed by "#". This is intentional, to allow unit
 //       testing coverage to be more thorough.
@@ -73,6 +70,7 @@ export default class HyperviewService {
 
     /**
      * Asserts that a value is a canonical ContentAddressableStore identifier.
+     * Proxies to the underlying ContentAddressableStore.
      * @param {*} value - Value to assert
      * @param {string} messagePrefix - Caller context included in assertion messages
      * @returns {void}
@@ -130,7 +128,7 @@ export default class HyperviewService {
      * Loads the global partial templates from the ContentAddressableStore and
      * compiles them into template functions. If useTemplateCache is toggled
      * on then partials will be cached in application memory using the
-     * partials digest hash from the ContentAddressableStore as a
+     * partials hash from the ContentAddressableStore as a
      * cache invalidation key.
      * @private
      * @return {Map} The private #globalPartials Map
@@ -153,11 +151,11 @@ export default class HyperviewService {
     }
 
     async #loadGlobalPartials(context, options) {
-        const digest = await this.#store.getTemplatePartialsDigest(context);
+        const hash = await this.#store.getTemplatePartialsHash(context);
 
-        // Use the digest from the content-addressable storage as
+        // Use the hash from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && digest && this.#globalPartials.get('_digest') === digest) {
+        if (options.useTemplateCache && hash && this.#globalPartials.get('_hash') === hash) {
             return this.#globalPartials;
         }
 
@@ -169,8 +167,8 @@ export default class HyperviewService {
             return this.#globalPartials;
         }
 
-        // Reset the digest to use as a cache invalidation key.
-        this.#globalPartials.set('_digest', partials.hash);
+        // Reset the hash as the cache invalidation key.
+        this.#globalPartials.set('_hash', partials.hash);
 
         for (const { id, source } of partials.json) {
             assertNonEmptyString(
@@ -192,7 +190,7 @@ export default class HyperviewService {
      * Extracts page level partial templates from a HyperviewPage which has already
      * been loaded. Also loads the global partials to be used when compiling the
      * page partials. If useTemplateCache has been toggled on, the page partials
-     * will be cached in runtime memory using the page partials digest hash from
+     * will be cached in runtime memory using the page partials hash from
      * the ContentAddressableStore as the cache invalidation key.
      * @private
      * @return {Map} The partial template Map for the given page.pathname
@@ -212,8 +210,8 @@ export default class HyperviewService {
         // Try the partials cache first, if the cache is enabled.
         if (options.useTemplateCache && this.#pagePartials.has(page.pathname)) {
             pagePartials = this.#pagePartials.get(page.pathname);
-            // Check this set of page partials version by comparing the latest page digest.
-            if (pagePartials.get('_digest') === page.digest) {
+            // Check this set of page partials version by comparing the latest page hash.
+            if (pagePartials.get('_hash') === page.hash) {
                 return pagePartials;
             }
         }
@@ -231,8 +229,8 @@ export default class HyperviewService {
             pagePartials.clear();
         }
         pagePartials = new Map();
-        // Set the special _digest key to version this set of page partials.
-        pagePartials.set('_digest', page.digest);
+        // Set the special _hash key to version this set of page partials.
+        pagePartials.set('_hash', page.hash);
 
         for (const { id, source } of page.partials.partials) {
             assertNonEmptyString(
@@ -261,16 +259,16 @@ export default class HyperviewService {
      * If global partials are not loaded yet, they will be loaded here. If
      * useTemplateCache is toggled on then the template will be returned
      * from the runtime memory cache if the cache has not been
-     * invalidated by the base templates digest hash.
+     * invalidated by the base templates hash.
      * @private
      * @return {Function} A Kixx template function.
      */
     async getBaseTemplate(context, templateId, options) {
-        const digest = await this.#store.getBaseTemplatesDigest(context);
+        const hash = await this.#store.getBaseTemplatesHash(context);
 
-        // Use the digest from the content-addressable storage as
+        // Use the hash from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && digest && this.#baseTemplates.get('_digest') === digest) {
+        if (options.useTemplateCache && hash && this.#baseTemplates.get('_hash') === hash) {
             return this.#baseTemplates.get(templateId);
         }
 
@@ -287,8 +285,8 @@ export default class HyperviewService {
         // Ensure the global partials are loaded before compiling the templates.
         const partials = await this.loadGlobalPartials(context, options);
 
-        // Reset the digest to use as a cache invalidation key.
-        this.#baseTemplates.set('_digest', templates.digest);
+        // Reset the hash to use as a cache invalidation key.
+        this.#baseTemplates.set('_hash', templates.hash);
 
         for (const { id, source } of templates.json) {
             assertNonEmptyString(
@@ -310,36 +308,40 @@ export default class HyperviewService {
      * Get page template from a HyperviewPage which has already been loaded. Uses
      * the page.pageTemplate to compile the template function. If useTemplateCache
      * is toggled on then the template will be returned from the runtime memory
-     * cache, using the pageTemplate digest hash as the cache invalidation key.
+     * cache, using the pageTemplate hash as the cache invalidation key.
      * @private
      * @return {Function} A Kixx template function.
      */
     async getPageTemplate(context, page, options) {
         assertNonEmptyString(
-            page.pageTemplate?.hash,
-            `HyperviewService#getPageTemplate() expects page.pageTemplate.hash to be present in ${ page.pathname }`,
+            page.pathname,
+            `HyperviewService#getPageTemplate() expects page.pathname to be present`,
         );
         assertNonEmptyString(
-            page.pageTemplate?.id,
-            `HyperviewService#getPageTemplate() expects page.pageTemplate.id to be present in ${ page.pathname }`,
-        );
-        assertNonEmptyString(
-            page.pageTemplate?.text,
-            `HyperviewService#getPageTemplate() expects page.pageTemplate.text to be present in ${ page.pathname }`,
+            page.pageTemplateFilename,
+            `HyperviewService#getPageTemplate() expects page.pageTemplateFilename to be present in ${ page.pathname }`,
         );
 
+        const { pathname, pageTemplateFilename } = page;
+
+        const hash = await this.#store.getPageTemplateHash(context, pathname, pageTemplateFilename);
+
+        const templateId = `${ pathname }/${ pageTemplateFilename }`;
         let template;
 
-        // Try the cache first, if the cache is enabled.
-        if (options.useTemplateCache && this.#pageTemplates.has(page.pathname)) {
-            template = this.#pageTemplates.get(page.pathname);
-            // Check this template version by comparing the latest hash digest.
-            if (template.hash === page.pageTemplate.hash) {
+        // Use the hash from the content-addressable storage as
+        // the cache invalidation key.
+        if (options.useTemplateCache && hash && this.#pageTemplates.has(templateId)) {
+            template = this.#pageTemplates.get(templateId);
+            // Check this template version by comparing the latest hash.
+            if (template.hash === hash) {
                 return template;
             }
         }
 
-        this.#pageTemplates.delete(page.pathname);
+        this.#pageTemplates.delete(templateId);
+
+        const source = await this.#store.getPageTemplate(context, pathname, pageTemplateFilename);
 
         // Ensure the global partials are loaded; we're going to copy and extend them.
         const globalPartials = await this.loadGlobalPartials(context, options);
@@ -352,16 +354,16 @@ export default class HyperviewService {
         const partials = new Map([...globalPartials, ...pagePartials]);
 
         template = this.compileTemplate(
-            page.pageTemplate.id,
-            page.pageTemplate.text,
+            templateId,
+            source,
             this.#customHelpers,
             partials,
         );
 
-        template.hash = page.pageTemplate.hash;
+        template.hash = hash;
 
         if (options.useTemplateCache) {
-            this.#pageTemplates.set(page.pageTemplate.id, template);
+            this.#pageTemplates.set(templateId, template);
         }
 
         return template;
@@ -387,10 +389,10 @@ export default class HyperviewService {
             url,
             pathname,
             responseProps,
-            pageTemplate: pageContent.pageTemplate,
+            pageTemplateFilename: pageContent.pageTemplateFilename,
             partials: pageContent.partials,
             includes: pageContent.includes,
-            digest: pageContent.digest,
+            hash: pageContent.hash,
         });
 
         // Fold all the source metadata objects into the page context.
@@ -448,11 +450,11 @@ export default class HyperviewService {
      * @param {string} [options.baseTemplateId] - Canonical base template identifier required for full-page rendering
      * @param {string} [options.partial] - Canonical partial identifier to render instead of the page and base templates
      * @param {boolean} [options.skipBaseRender=false] - Render the page template without its base template
-     * @param {boolean} [options.useTemplateCache=false] - Reuse compiled templates while their content digests remain current
+     * @param {boolean} [options.useTemplateCache=false] - Reuse compiled templates while their content hashes remain current
      * @param {boolean} [options.usePageCache=false] - Read and write rendered hypertext in the page cache
      * @param {string} [options.cacheKey] - Page-cache key component; defaults to the request pathname and query string
-     * @param {boolean} [options.includePropsInCacheKey=false] - Include a digest derived from response props in the page-cache key
-     * @param {Function} [options.propsHashFunction] - Returns the response-props digest from the page pathname, merged page context, and response props
+     * @param {boolean} [options.includePropsInCacheKey=false] - Include a hash derived from response props in the page-cache key
+     * @param {Function} [options.propsHashFunction] - Returns the response-props hash from the page pathname, merged page context, and response props
      * @param {number} [options.pageCacheReadTtlSeconds] - Cache TTL passed to page-cache reads
      * @param {number} [options.pageCacheExpirationSeconds] - Expiration TTL passed to page-cache writes
      * @param {Object} [options.responseOptions] - Options forwarded to the UTF-8 response method
@@ -510,7 +512,7 @@ export default class HyperviewService {
             );
         }
 
-        let hash = page.digest;
+        let hash = page.hash;
 
         // Optionally add the hash of the canonicalized props object.
         if (options.includePropsInCacheKey) {
@@ -522,9 +524,9 @@ export default class HyperviewService {
                     response.props,
                 );
             } else {
-                propsHash = this.#store.canonicalObjectDigest(response.props);
+                propsHash = this.#store.hashValue(response.props);
             }
-            hash = this.#store.hashString(page.digest + propsHash);
+            hash = this.#store.hashValue(page.hash + propsHash);
         }
 
         // If the caller does not provide a custom cache key, we use the
@@ -533,7 +535,7 @@ export default class HyperviewService {
             ? options.cacheKey
             : (url.pathname + url.search);
 
-        // Add the namespace prefix and digest hash for the complete KV key.
+        // Add the namespace prefix and hash for the complete KV key.
         let key = `hyperview_page_cache#${ pageCacheKey }#${ hash }`;
 
         if (options.partial) {
