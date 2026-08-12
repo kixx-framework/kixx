@@ -330,14 +330,4 @@ export default class ContentAddressableStore {
             includes,
         };
     }
-
-    hashString(_str) {
-        // Get the hash of a string.
-        throw new Error('hashString() is not implemented');
-    }
-
-    canonicalObjectDigest(_obj) {
-        // Get the hash of a JavaScript object
-        throw new Error('canonicalObjectDigest() is not implemented');
-    }
 }
