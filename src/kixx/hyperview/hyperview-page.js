@@ -52,9 +52,11 @@ export default class HyperviewPage {
         return this.#pageContext.page?.description;
     }
 
-    mergeSources(sources) {
+    mergeSources(originalSources) {
         const pageContext = {};
 
+        // Create a structured clone so that we can safely mutate the sources.
+        const sources = structuredClone(originalSources);
         const leafNode = sources[sources.length - 1];
 
         // Merge the pages together, with the more specific page data objects overriding
