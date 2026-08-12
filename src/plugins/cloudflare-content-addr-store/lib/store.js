@@ -1,7 +1,24 @@
+import { AssertionError } from '../../kixx/errors/mod.js';
 import ContentAddressableIndex from './content-addressable-index.js';
+import { KEY } from './addressing.js';
 
 
 export default class Store {
+
+    #pendingIndex = null;
+
+    constructor() {
+        // TODO: Pass in blobReadCacheTtlSeconds
+        this.blobReadCacheTtlSeconds = 60 * 60 * 36;
+    }
+
+    #resolveDurableObject() {
+        // TODO: Implement resolveDurableObject()
+    }
+
+    #resolveKvStore() {
+        // TODO: Implement resolveKvStore()
+    }
 
     async getIndex(context) {
         // We cache pending index promises for a few moments in runtime memory.
@@ -45,11 +62,11 @@ export default class Store {
     async getBlob(context, hash) {
         const kv = this.#resolveKvStore(context);
 
-        const key = `${ KEY.blob }#${ stat.hash }`;
+        const key = `${ KEY.blob }#${ hash }`;
 
         const buff = await kv.get(key, {
             type: 'arrayBuffer',
-            cacheTtl: this.blobReadCacheTtl,
+            cacheTtl: this.blobReadCacheTtlSeconds,
         });
 
         return buff ? new Uint8Array(buff) : null;

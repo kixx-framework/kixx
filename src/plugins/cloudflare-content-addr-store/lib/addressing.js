@@ -1,5 +1,6 @@
 import {
     isUndefined,
+    isPrimitive,
 } from '../../kixx/assertions/mod.js';
 
 /**
@@ -33,11 +34,11 @@ const DOMAIN_SET = 0x02;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-export function stringToBuff(str) {
+export function stringToUinit8Array(str) {
     return encoder.encode(str);
 }
 
-export function buffToString(bytes) {
+export function bufferToString(bytes) {
     return decoder.decode(bytes);
 }
 
@@ -83,18 +84,22 @@ export function base32Encode(bytes) {
     return out;
 }
 
-async function digestDomain(domain, payload) {
-    const buf = new Uint8Array(1 + payload.length);
-    buf[0] = domain;
-    buf.set(payload, 1);
-
+async function digestBuffer(buf) {
     const digest = await crypto.subtle.digest('SHA-256', buf);
     const full = new Uint8Array(digest);
     return base32Encode(full.subarray(0, DIGEST_BYTES));
 }
 
+async function digestDomain(domain, payload) {
+    const buf = new Uint8Array(1 + payload.length);
+    buf[0] = domain;
+    buf.set(payload, 1);
+
+    return await digestBuffer(buf);
+}
+
 export async function hashSet(obj) {
-    return await digestDomain(DOMAIN_SET, stringToBuff(canonicalize(obj)));
+    return await digestDomain(DOMAIN_SET, stringToUinit8Array(canonicalize(obj)));
 }
 
 export async function hashBlob(bytes) {
@@ -102,7 +107,16 @@ export async function hashBlob(bytes) {
 }
 
 export async function hashTree(obj) {
-    return await digestDomain(DOMAIN_TREE, stringToBuff(canonicalize(obj)));
+    return await digestDomain(DOMAIN_TREE, stringToUinit8Array(canonicalize(obj)));
+}
+
+export async function hashValue(value) {
+    if (isPrimitive(value)) {
+        value = `${ value }`;
+    } else {
+        value = canonicalize(value);
+    }
+    return await digestBuffer(stringToUinit8Array(value));
 }
 
 /**

@@ -5,6 +5,7 @@ import {
     assert,
 } from '../../kixx/assertions/mod.js';
 import Store from './store.js';
+import { hashValue } from './addressing.js';
 
 
 const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
@@ -154,7 +155,7 @@ export default class ContentAddressableStore {
     }
 
     hashValue(value) {
-        // TODO: Implement ContentAddressableStore#hashValue
+        return hashValue(value);
     }
 
     async getPage(context, pathname) {
