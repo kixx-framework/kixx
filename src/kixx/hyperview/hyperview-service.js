@@ -79,14 +79,9 @@ export default class HyperviewService {
      * @throws {AssertionError} When value is empty, invalid, or not lower case
      */
     assertCanonicalIdentifier(value, messagePrefix) {
-        assertNonEmptyString(value, messagePrefix);
         assert(
             this.#store.isValidIdentifier(value),
             `${ messagePrefix } must be a valid pathname`,
-        );
-        assert(
-            value === value.toLowerCase(),
-            `${ messagePrefix } must be lower case`,
         );
     }
 
@@ -486,14 +481,14 @@ export default class HyperviewService {
         // We need to assert these identifiers are correct and safe here, because they
         // may not have been checked prior to reaching this routine.
         if (options.partial) {
-            assertCanonicalIdentifier(
+            this.assertCanonicalIdentifier(
                 options.partial,
-                `A partial ID must be valid when provided in HyperviewService#respondWithHypertext options (pathname:${ url.pathname })`,
+                'HyperviewService#respondWithHypertext: options.partial',
             );
         } else {
-            assertCanonicalIdentifier(
+            this.assertCanonicalIdentifier(
                 options.baseTemplateId,
-                `A valid baseTemplate ID must be provided in HyperviewService#respondWithHypertext options (pathname:${ url.pathname })`,
+                'HyperviewService#respondWithHypertext options.baseTemplateId',
             );
         }
 
