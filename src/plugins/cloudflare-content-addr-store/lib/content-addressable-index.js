@@ -12,7 +12,14 @@ export default class ContentAddressableIndex {
         return tuple ? decodeIndexEntry(pathname, tuple) : null;
     }
 
-    listNodes(prefix) {
+    listNodes(prefix, options) {
+        const { recursive = true } = options ?? {};
+
+        // The prefix must end with a slash "/".
+        if (prefix !== '' && !prefix.endsWith('/')) {
+            prefix = `${ prefix }/`;
+        }
+
         const paths = this.#getSortedPaths();
         const start = lowerBound(paths, prefix);
 
@@ -24,6 +31,11 @@ export default class ContentAddressableIndex {
             // scanning the rest of the index.
             if (prefix !== '' && !path.startsWith(prefix)) {
                 break;
+            }
+            // If a path includes a "/" beyond the scope, then we know it is nested.
+            // Paths never end with a slash "/" -- not even directories.
+            if (!recursive && path.slice(prefix.length).includes('/')) {
+                continue;
             }
             nodes.push(decodeIndexEntry(path, this.files[path]));
         }

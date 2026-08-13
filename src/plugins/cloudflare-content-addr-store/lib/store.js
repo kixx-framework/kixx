@@ -1,6 +1,6 @@
 import { AssertionError } from '../../kixx/errors/mod.js';
 import ContentAddressableIndex from './content-addressable-index.js';
-import { KEY } from './addressing.js';
+import { KEY, compareStrings, hashSet } from './addressing.js';
 
 
 export default class Store {
@@ -59,9 +59,23 @@ export default class Store {
         return index.getNode(pathname);
     }
 
-    async listStats(context, prefix) {
+    async listStats(context, prefix, options) {
+        const { recursive = true } = options ?? {};
         const index = await this.getIndex(context);
-        return index.listNodes(prefix);
+        return index.listNodes(prefix, { recursive });
+    }
+
+    async computeHashFromStats(stats) {
+        const pairs = new Map();
+        for (const stat of stats) {
+            const tuple = [ stat.hash ];
+            if (stat.metadata) {
+                tuple.push(stat.metadata);
+            }
+            pairs.set(stat.pathname, tuple);
+        }
+        const sorted = [...pairs.entries()].sort((a, b) => compareStrings(a[0], b[0]));
+        return await hashSet(sorted);
     }
 
     async getBlob(context, hash) {
@@ -75,5 +89,24 @@ export default class Store {
         });
 
         return buff ? new Uint8Array(buff) : null;
+    }
+
+    async getBlobs(context, hashes) {
+        const kv = this.#resolveKvStore(context);
+
+        const keys = hashes.map((hash) => `${ KEY.blob }#${ hash }`);
+
+        const resultsMap = await kv.get(keys, {
+            type: 'arrayBuffer',
+            cacheTtl: this.blobReadCacheTtlSeconds,
+        });
+
+        const resultsArray = [];
+        for (const key of keys) {
+            const buff = resultsMap.get(key);
+            resultsArray.push(buff ? new Uint8Array(buff) : null);
+        }
+
+        return resultsArray;
     }
 }

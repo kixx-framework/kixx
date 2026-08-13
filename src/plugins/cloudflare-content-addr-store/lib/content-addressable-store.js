@@ -154,8 +154,8 @@ export default class ContentAddressableStore {
         return await this.#getPath(context, this.#normalizePagePath(`${ pathname }/${ filename }`));
     }
 
-    hashValue(value) {
-        return hashValue(value);
+    async hashValue(value) {
+        return await hashValue(value);
     }
 
     async getPage(context, pathname) {
@@ -206,38 +206,43 @@ export default class ContentAddressableStore {
 
         const directory = this.#normalizePagePath(pathname);
 
-        const sourceFileStats = await this.#store.listStats(context, directory);
+        const sourceFileStats = await this.#store.listStats(context, directory, { recursive: false });
 
         const hashesToFetch = parentStats
             .concat(sourceFileStats)
             .map(({ hash }) => hash);
 
-        const files = await getBlobs(context, hashesToFetch);
+        const entries = await this.#store.getBlobs(context, hashesToFetch);
 
         const pageDataFiles = [];
         let pageTemplateFilename = null;
         let partials = null;
         let includes = null;
+        const pageFiles = [];
 
-        for (const file of files) {
-            if (this.#filepathBasename(file.pathname) === 'page.json') {
-                pageDataFiles.push(file);
-            } else if (this.#filepathBasename(file.pathname) === PAGE_PARTIALS_BUNDLE) {
-                partials = file;
-            } else if (this.#filepathBasename(file.pathname) === PAGE_INCLUDES_BUNDLE) {
-                includes = file;
-            } else {
-                // Whatever is left must be the page template.
-                pageTemplateFilename = this.#filepathBasename(file.pathname);
+        for (const entry of entries) {
+            // We are not interested in including any child directories which may
+            // be listed in this page directory; so filter on 'blob'.
+            if (entry.kind === 'blob') {
+                pageFiles.push(entry);
+                if (this.#filepathBasename(entry.pathname) === 'page.json') {
+                    pageDataFiles.push(entry);
+                } else if (this.#filepathBasename(entry.pathname) === PAGE_PARTIALS_BUNDLE) {
+                    partials = entry;
+                } else if (this.#filepathBasename(entry.pathname) === PAGE_INCLUDES_BUNDLE) {
+                    includes = entry;
+                } else {
+                    // Whatever is left must be the page template.
+                    pageTemplateFilename = this.#filepathBasename(entry.pathname);
+                }
             }
         }
 
-        const directoryStat = await this.#store.statPath(context, directory);
-        // Include the page leaf directory with the parent page.json filepaths to
+        // Include the page files with the parent page.json filepaths to
         // accumulate the full dependencies list.
-        const dependencies = parentStats.concat([ directoryStat ]);
+        const dependencies = parentStats.concat(pageFiles);
 
-        const hash = await computeHashFromStats(dependencies);
+        const hash = await this.#store.computeHashFromStats(dependencies);
 
         return {
             hash,
