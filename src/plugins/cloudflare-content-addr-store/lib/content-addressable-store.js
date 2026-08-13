@@ -5,8 +5,8 @@ import {
     assert,
 } from '../../kixx/assertions/mod.js';
 import Store from './store.js';
-import ContentObject from './content-object.js';
-import { hashValue } from './addressing.js';
+import { ContentObject, StatObject } from './content-object.js';
+import { canonicalize, hashValue } from './addressing.js';
 
 
 const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
@@ -119,35 +119,79 @@ export default class ContentAddressableStore {
             return null;
         }
 
-        return new ContentObject(bytes, {
+        // A ContentObject must be finalized to get the etag.
+        return await ContentObject.create(bytes, {
             pathname: stat.pathname,
+            kind: 'blob',
             hash: stat.hash,
             size: bytes.length,
             metadata: stat.metadata,
         });
     }
 
-    async getTemplatePartialsHash(context) {
-        const stat = await this.#store.statPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
-        return stat?.hash || null;
+    async putTemplatePartials(context, bundle, integrityHash) {
+        const pathname = this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE);
+        const blob = stringToUinit8Array(canonicalize(bundle));
+        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+    }
+
+    async getTemplatePartialsEtag(context) {
+        const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
+        if (entry) {
+            const stat = await StatObject.create(entry);
+            return stat.etag;
+        }
+        return null;
     }
 
     async getTemplatePartials(context) {
         return await this.#getPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
     }
 
-    async getBaseTemplatesHash(context) {
-        const stat = await this.#store.statPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
-        return stat?.hash || null;
+    async putBaseTemplates(context, bundle, integrityHash) {
+        const pathname = this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE);
+        const blob = stringToUinit8Array(canonicalize(bundle));
+        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+    }
+
+    async getBaseTemplatesEtag(context) {
+        const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
+        if (entry) {
+            const stat = await StatObject.create(entry);
+            return stat.etag;
+        }
+        return null;
     }
 
     async getBaseTemplates(context) {
         return await this.#getPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
     }
 
-    async getPageTemplateHash(context, pathname, filename) {
-        const stat = await this.#store.statPath(context, this.#normalizePagePath(`${ pathname }/${ filename }`));
-        return stat?.hash || null;
+    async putPagePartials(context, pagePath, bundle, integrityHash) {
+        const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
+        const blob = stringToUinit8Array(canonicalize(bundle));
+        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+    }
+
+    async putPageIncludes(context, pagePath, bundle, integrityHash) {
+        const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
+        const blob = stringToUinit8Array(canonicalize(bundle));
+        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+    }
+
+    async putPageTemplate(context, filepath, sourceText, integrityHash) {
+        const pathname = this.#normalizePagePath(filepath);
+        const blob = stringToUinit8Array(sourceText);
+        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+    }
+
+    async getPageTemplateEtag(context, pathname, filename) {
+        const entry = await this.#store.statPath(context, this.#normalizePagePath(`${ pathname }/${ filename }`));
+        if (entry) {
+            const stat = await StatObject.create(entry);
+            return stat.etag;
+        }
+        return null;
     }
 
     async getPageTemplate(context, pathname, filename) {
@@ -242,10 +286,10 @@ export default class ContentAddressableStore {
         // accumulate the full dependencies list.
         const dependencies = parentStats.concat(pageFiles);
 
-        const hash = await this.#store.computeHashFromStats(dependencies);
+        const etag = await this.#store.computeHashFromStats(dependencies);
 
         return {
-            hash,
+            etag,
             pageDataFiles,
             pageTemplateFilename,
             partials,

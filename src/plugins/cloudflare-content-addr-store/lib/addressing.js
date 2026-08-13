@@ -1,19 +1,32 @@
+/**
+ * Provides deterministic serialization, hashing and encoding for the content
+ * addressable store.
+ *
+ * Wire format v1:
+ *   - digest: SHA-256 truncated to 128 bits, base32 (RFC 4648 lowercase, no pad)
+ *   - domains: blobs, trees, digest-sets and values use distinct prefix bytes
+ *   - keys: two-character format prefix so a future format can coexist
+ *
+ * @module cloudflare-content-addr-store/addressing
+ */
+
 import {
     isUndefined,
     isPrimitive,
 } from '../../kixx/assertions/mod.js';
 
 /**
- * Wire format v1:
- *   - digest:   SHA-256 truncated to 128 bits, base32 (RFC 4648 lowercase, no pad)
- *   - domains:  blobs, trees and digest-sets are hashed under distinct prefix
- *               bytes so a blob can never collide with a tree that happens to
- *               serialize to the same bytes
- *   - keys:     two-char format prefix so a future format can coexist
+ * Identifies the current storage-key and digest wire format.
+ * @type {number}
+ * @readonly
  */
-
 export const FORMAT = 1;
 
+/**
+ * Storage-key prefixes for each persisted content-addressing structure.
+ * @enum {string}
+ * @readonly
+ */
 export const KEY = {
     blob: `b${FORMAT}:`,
     tree: `t${FORMAT}:`,
@@ -22,31 +35,61 @@ export const KEY = {
     roots: `r${FORMAT}:recent`,
 };
 
-/** SHA-256 truncated to 128 bits; ~1e-21 collision probability at 1e9 objects. */
+// SHA-256 truncated to 128 bits; ~1e-21 collision probability at 1e9 objects.
 const DIGEST_BYTES = 16;
 
+// Our Base32 encoding alphabet.
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 
+// A domain byte makes the semantic type part of the hashed input. Without it,
+// a blob containing the canonical bytes of a tree, set or value would have the
+// same digest as that object. Domains separate types; they do not increase the
+// hash algorithm's resistance to random collisions within a type.
 const DOMAIN_BLOB = 0x00;
 const DOMAIN_TREE = 0x01;
 const DOMAIN_SET = 0x02;
+const DOMAIN_VALUE = 0x03;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+/**
+ * Encodes a string as UTF-8 bytes.
+ * @param {string} str - String to encode
+ * @returns {Uint8Array} UTF-8 encoded bytes
+ */
 export function stringToUinit8Array(str) {
     return encoder.encode(str);
 }
 
+/**
+ * Decodes UTF-8 bytes into a string, replacing malformed sequences.
+ * @param {Uint8Array} bytes - UTF-8 encoded bytes
+ * @returns {string} Decoded string
+ */
 export function bufferToString(bytes) {
     return decoder.decode(bytes);
 }
 
 /**
- * Single ordering comparator used for tree entries, index keys and digest sets.
- * Which order it produces matters far less than that both the read and write
- * sides of the ContentAddressableStore always use this one. UTF-16 code-unit
- * order (the JS default) is fine as long as it is applied consistently.
+ * Copies the bytes visible through an ArrayBuffer view into a standalone buffer.
+ * @param {ArrayBufferView} typedArray - View whose byte range to copy
+ * @returns {ArrayBuffer|SharedArrayBuffer} New buffer containing only the viewed bytes
+ * @throws {TypeError} When the view's backing ArrayBuffer is detached
+ */
+export function typedArrayToBuffer(typedArray) {
+    const { byteOffset, byteLength } = typedArray;
+    // Make sure we are handling cases where the allocated buffer is
+    // larger than the data in the view.
+    return typedArray.buffer.slice(byteOffset, byteLength + byteOffset);
+}
+
+/**
+ * Compares strings in the UTF-16 code-unit order shared by all address readers
+ * and writers.
+ * @param {string} a - Left operand
+ * @param {string} b - Right operand
+ * @returns {number} Negative, zero or positive when a sorts before, with or after b
  */
 export function compareStrings(a, b) {
     if (a < b) {
@@ -59,8 +102,55 @@ export function compareStrings(a, b) {
 }
 
 /**
- * RFC 4648 base32, lowercase, unpadded. Chosen over base64url because these
- * strings travel through URLs and case-insensitive intermediaries.
+ * Serializes a JSON-compatible value deterministically, sorting object keys,
+ * omitting undefined object properties and removing insignificant whitespace.
+ *
+ * This function is critical to the ContentAddressableStore: if two runs of the
+ * publisher serialize the same logical tree differently, the root hash changes
+ * when nothing changed, and every downstream cache misses.
+ *
+ * @param {null|boolean|number|string|Array<*>|Object} value - Value to serialize
+ * @returns {string} Deterministic JSON representation
+ * @throws {TypeError} When value contains a non-finite number or unsupported type
+ */
+export function canonicalize(value) {
+    if (value === null) {
+        return 'null';
+    }
+
+    const t = typeof value;
+    if (t === 'number') {
+        if (!Number.isFinite(value)) {
+            throw new TypeError(`canonicalize: non-finite number ${ value }`);
+        }
+        return JSON.stringify(value);
+    }
+    if (t === 'string' || t === 'boolean') {
+        return JSON.stringify(value);
+    }
+    if (t !== 'object') {
+        throw new TypeError(`canonicalize: unsupported type ${ t }`);
+    }
+    if (Array.isArray(value)) {
+        return `[${ value.map(canonicalize).join(',') }]`;
+    }
+
+    const keys = Object.keys(value)
+        .filter((k) => !isUndefined(value[k]))
+        .sort(compareStrings);
+
+    const parts = keys.map((k) => {
+        return `${ JSON.stringify(k) }:${ canonicalize(value[k]) }`;
+    });
+
+    return `{${ parts.join(',') }}`;
+}
+
+/**
+ * Encodes bytes as lowercase, unpadded RFC 4648 base32 suitable for URLs and
+ * case-insensitive intermediaries.
+ * @param {Uint8Array} bytes - Bytes to encode
+ * @returns {string} Lowercase, unpadded base32 text
  */
 export function base32Encode(bytes) {
     let bits = 0;
@@ -98,72 +188,46 @@ async function digestDomain(domain, payload) {
     return await digestBuffer(buf);
 }
 
+/**
+ * Hashes a canonicalizable collection under the digest-set domain.
+ * @param {Object|Array<*>} obj - Collection to canonicalize and hash
+ * @returns {Promise<string>} Content digest in the current wire format
+ * @throws {TypeError} When the collection contains a value that cannot be canonicalized
+ */
 export async function hashSet(obj) {
     return await digestDomain(DOMAIN_SET, stringToUinit8Array(canonicalize(obj)));
 }
 
+/**
+ * Hashes raw bytes under the blob domain.
+ * @param {Uint8Array} bytes - Blob content
+ * @returns {Promise<string>} Content digest in the current wire format
+ */
 export async function hashBlob(bytes) {
     return await digestDomain(DOMAIN_BLOB, bytes);
 }
 
+/**
+ * Hashes a canonicalizable tree under the tree domain.
+ * @param {Object|Array<*>} obj - Tree to canonicalize and hash
+ * @returns {Promise<string>} Content digest in the current wire format
+ * @throws {TypeError} When the tree contains a value that cannot be canonicalized
+ */
 export async function hashTree(obj) {
     return await digestDomain(DOMAIN_TREE, stringToUinit8Array(canonicalize(obj)));
 }
 
+/**
+ * Hashes a primitive or canonicalizable object under the value domain.
+ * @param {*} value - Value to hash
+ * @returns {Promise<string>} Content digest in the current wire format
+ * @throws {TypeError} When a non-primitive value cannot be canonicalized
+ */
 export async function hashValue(value) {
     if (isPrimitive(value)) {
         value = `${ value }`;
     } else {
         value = canonicalize(value);
     }
-    return await digestBuffer(stringToUinit8Array(value));
-}
-
-/**
- * Deterministic JSON. Sorted keys, no insignificant whitespace, `undefined`
- * dropped, non-finite numbers rejected.
- *
- * This function is critical to the ContentAddressableStore: if two runs of the
- * publisher serialize the same logical tree differently, the root hash changes
- * when nothing changed, and every downstream cache misses;
- * Do not "optimize" it into JSON.stringify.
- */
-export function canonicalize(value) {
-    if (value === null) {
-        return 'null';
-    }
-
-    const t = typeof value;
-    if (t === 'number') {
-        if (!Number.isFinite(value)) {
-            throw new TypeError(`canonicalize: non-finite number ${ value }`);
-        }
-        return JSON.stringify(value);
-    }
-    if (t === 'string' || t === 'boolean') {
-        return JSON.stringify(value);
-    }
-    if (t !== 'object') {
-        throw new TypeError(`canonicalize: unsupported type ${ t }`);
-    }
-    if (Array.isArray(value)) {
-        return `[${ value.map(canonicalize).join(',') }]`;
-    }
-
-    const keys = Object.keys(value)
-        .filter((k) => !isUndefined(value[k]))
-        .sort(compareStrings);
-
-    const parts = keys.map((k) => {
-        return `${ JSON.stringify(k) }:${ canonicalize(value[k]) }`;
-    });
-
-    return `{${ parts.join(',') }}`;
-}
-
-export async function digestMap(pairs) {
-    // Sort by key before hashing so the result is independent of the order
-    // callers supplied inputs in — digest(['a','b']) === digest(['b','a']).
-    const sorted = [...pairs.entries()].sort((a, b) => compareStrings(a[0], b[0]));
-    return await hashSet(sorted);
+    return await digestDomain(DOMAIN_VALUE, stringToUinit8Array(value));
 }

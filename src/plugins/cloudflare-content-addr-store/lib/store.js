@@ -1,6 +1,12 @@
 import { AssertionError } from '../../kixx/errors/mod.js';
 import ContentAddressableIndex from './content-addressable-index.js';
-import { KEY, compareStrings, hashSet } from './addressing.js';
+import {
+    KEY,
+    compareStrings,
+    typedArrayToBuffer,
+    hashBlob,
+    hashSet,
+} from './addressing.js';
 
 
 export default class Store {
@@ -74,8 +80,30 @@ export default class Store {
             }
             pairs.set(stat.pathname, tuple);
         }
+
+        // Sort by key before hashing so the result is independent of the order
+        // callers supplied inputs in — digest(['a','b']) === digest(['b','a']).
         const sorted = [...pairs.entries()].sort((a, b) => compareStrings(a[0], b[0]));
         return await hashSet(sorted);
+    }
+
+    async putBlob(context, pathname, blob, metadata, integrityHash) {
+        const hash = await hashBlob(blob);
+        if (isNonEmptyString(integrityHash) && hash !== integrityHash) {
+            throw new ValidationError(
+                `PUT blob hash integrity check failed for ${ pathname }`,
+                { code: 'CA_STORE_INTEGRITY_CHECK_FAILED' },
+            );
+        }
+
+        const kv = this.#resolveKvStore(context);
+        await kv.put(`${ KEY.blob }#${ hash }`, typedArrayToBuffer(blob));
+
+        const durableObject = this.#resolveDurableObject(context);
+
+        const size = blob.byteLength;
+        await durableObject.addFile({ pathname, hash, metadata, size });
+        return { pathname, hash, metadata, size };
     }
 
     async getBlob(context, hash) {
