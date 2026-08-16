@@ -1,5 +1,5 @@
-import { AssertionError } from '../../kixx/errors/mod.js';
-import { assert } from '../../kixx/assertions/mod.js';
+import { AssertionError } from '../../../kixx/errors/mod.js';
+import { assert } from '../../../kixx/assertions/mod.js';
 import Store from './store.js';
 import { ContentObject, StatObject } from './content-object.js';
 import {

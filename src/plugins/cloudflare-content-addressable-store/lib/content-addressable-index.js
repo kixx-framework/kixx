@@ -1,4 +1,4 @@
-import { assert, isUndefined } from '../../kixx/assertions/mod.js';
+import { assert, isUndefined } from '../../../kixx/assertions/mod.js';
 import { FORMAT, compareStrings, hashTree } from './addressing.js';
 
 
@@ -10,11 +10,22 @@ export default class ContentAddressableIndex {
         this.entries = entries;
     }
 
+    /**
+     * Get a single node from the index entries table by pathname.
+     * @param  {string} pathname - The pathname for the node, including a leading slash "/".
+     * @return {object}
+     */
     getNode(pathname) {
         const tuple = this.entries[pathname];
         return tuple ? decodeIndexEntry(pathname, tuple) : null;
     }
 
+    /**
+     * List all the nodes under a given directory (the prefix), optionally recursively.
+     * @param  {string} prefix - A prefix directory with a leading and trailing slash.
+     * @param  {object} options
+     * @return {Array}
+     */
     listNodes(prefix, options) {
         const { recursive = true } = options ?? {};
 
@@ -54,6 +65,13 @@ export default class ContentAddressableIndex {
         return this.#sortedPaths;
     }
 
+    /**
+     * Build a table of content store index entries, creating directory trees
+     * as needed, suitable for storage. A new ContentAddressableIndex
+     * can be rehydrated with the table created by buildIndex.
+     * @param  {Array} files
+     * @return {object}
+     */
     static async buildIndex(files) {
         const nodeList = buildDirectoryTree(files);
         const entries = {};

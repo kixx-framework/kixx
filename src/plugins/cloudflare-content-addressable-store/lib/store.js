@@ -1,8 +1,8 @@
-import { AssertionError, ValidationError } from '../../kixx/errors/mod.js';
+import { AssertionError, ValidationError } from '../../../kixx/errors/mod.js';
 import {
     isUndefined,
     isNonEmptyString,
-} from '../../kixx/assertions/mod.js';
+} from '../../../kixx/assertions/mod.js';
 import ContentAddressableIndex from './content-addressable-index.js';
 import {
     KEY,
