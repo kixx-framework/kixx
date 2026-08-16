@@ -1,19 +1,51 @@
 import { assert, isUndefined } from '../../../kixx/assertions/mod.js';
 import { FORMAT, compareStrings, hashTree } from './addressing.js';
 
+/**
+ * Encoded index-table value: kind, hash, size and metadata packed as a
+ * fixed-order tuple instead of an object, to keep the persisted table small.
+ * @typedef {[('tree'|'blob'), string, (number|null), (Object|null)]} IndexEntryTuple
+ */
 
+/**
+ * A decoded content-addressable index node.
+ * @typedef {Object} IndexEntry
+ * @property {string} pathname - Normalized pathname for the node, with a leading slash "/".
+ * @property {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file.
+ * @property {string} hash - Content digest of the blob's bytes, or of the tree's canonicalized child list.
+ * @property {number|null} size - Byte size of a blob, or null for a tree or an unspecified size.
+ * @property {Object|null} metadata - Caller-supplied metadata for a blob, or null.
+ */
+
+/**
+ * A file to include when building an index, before directory nodes are derived.
+ * @typedef {Object} IndexSourceFile
+ * @property {string} pathname - Normalized pathname for the file, with a leading slash "/".
+ * @property {string} hash - Content digest of the file bytes, computed by the caller (see hashBlob in addressing.js).
+ * @property {number} [size] - Byte size of the file.
+ * @property {Object} [metadata] - Caller-supplied metadata to associate with the file.
+ */
+
+/**
+ * Read-only, in-memory view over a persisted content-addressable index table.
+ * Supports point lookups and prefix listings by pathname without re-deriving
+ * the underlying directory structure.
+ */
 export default class ContentAddressableIndex {
 
     #sortedPaths;
 
+    /**
+     * @param {Object<string, IndexEntryTuple>} entries - Encoded index table, typically loaded from durable storage or produced by {@link ContentAddressableIndex.buildIndex}.
+     */
     constructor(entries) {
         this.entries = entries;
     }
 
     /**
-     * Get a single node from the index entries table by pathname.
-     * @param  {string} pathname - The pathname for the node, including a leading slash "/".
-     * @return {object}
+     * Looks up a single node by exact pathname.
+     * @param {string} pathname - The pathname for the node, including a leading slash "/".
+     * @returns {IndexEntry|null} The matching node, or null when no entry exists at that pathname.
      */
     getNode(pathname) {
         const tuple = this.entries[pathname];
@@ -21,10 +53,11 @@ export default class ContentAddressableIndex {
     }
 
     /**
-     * List all the nodes under a given directory (the prefix), optionally recursively.
-     * @param  {string} prefix - A prefix directory with a leading and trailing slash.
-     * @param  {object} options
-     * @return {Array}
+     * Lists all the nodes under a given directory (the prefix), optionally recursively.
+     * @param {string} prefix - A prefix directory with a leading slash; a trailing slash "/" is added if missing. Pass '' to list from the root.
+     * @param {Object} [options]
+     * @param {boolean} [options.recursive=true] - When false, only list the prefix's immediate children — nested nodes are skipped.
+     * @returns {IndexEntry[]} Matching nodes in pathname sort order.
      */
     listNodes(prefix, options) {
         const { recursive = true } = options ?? {};
@@ -66,11 +99,12 @@ export default class ContentAddressableIndex {
     }
 
     /**
-     * Build a table of content store index entries, creating directory trees
-     * as needed, suitable for storage. A new ContentAddressableIndex
-     * can be rehydrated with the table created by buildIndex.
-     * @param  {Array} files
-     * @return {object}
+     * Builds an encoded index table from a flat list of files, deriving and
+     * hashing the directory tree implied by their pathnames. The result is
+     * suitable for storage and can be passed to the
+     * {@link ContentAddressableIndex} constructor to rehydrate an index.
+     * @param {IndexSourceFile[]} files - Files to include in the index.
+     * @returns {Promise<Object<string, IndexEntryTuple>>} Encoded index table keyed by pathname.
      */
     static async buildIndex(files) {
         const nodeList = buildDirectoryTree(files);
