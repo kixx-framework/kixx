@@ -1,24 +1,20 @@
 import { AssertionError } from '../../kixx/errors/mod.js';
-import {
-    isString,
-    isUndefined,
-    assert,
-} from '../../kixx/assertions/mod.js';
+import { assert } from '../../kixx/assertions/mod.js';
 import Store from './store.js';
 import { ContentObject, StatObject } from './content-object.js';
-import { canonicalize, hashValue } from './addressing.js';
+import {
+    canonicalize,
+    hashValue,
+    isValidPathname,
+    normalizePathname,
+    stringToUint8Array,
+} from './addressing.js';
 
 
 const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
 const TEMPLATE_PARTIALS_BUNDLE = '__template-partials-bundle';
 const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
 const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
-
-// Path segments are restricted to a conservative filename-safe set. Anything
-// outside it (path separators beyond the segment split, query/fragment
-// characters, whitespace, shell or URL metacharacters) is rejected before the
-// path reaches a storage adapter or static file store.
-const DISALLOWED_STATIC_PATH_CHARACTERS = /[^a-z0-9_.-]/i;
 
 
 export default class ContentAddressableStore {
@@ -32,69 +28,32 @@ export default class ContentAddressableStore {
     }
 
     /**
-     * Reports whether a URL or logical pathname contains only safe path segments.
+     * Reports whether a logical pathname contains only lowercase and
+     * safe path segments.
      * @param {string} pathname - The pathname to check
      * @returns {boolean} True when the pathname is valid
      */
-    isValidIdentifier(pathname) {
-        // Must be a string.
-        if (!isString()) {
-            return false;
-        }
-
-        // Two dots or two slashes are always invalid.
-        if (pathname.includes('..') || pathname.includes('//')) {
-            return false;
-        }
-
-        // Must be a lowercase case.
-        if (pathname.toLowerCase() !== pathname) {
-            return false;
-        }
-
-        const parts = pathname.split('/');
-
-        for (const part of parts) {
-            // A leading dot on any segment (dotfiles, `.` itself) is rejected in
-            // addition to the disallowed-character check.
-            if (part.startsWith('.') || DISALLOWED_STATIC_PATH_CHARACTERS.test(part)) {
-                return false;
-            }
-        }
-
-        return true;
+    isValidPathname(pathname) {
+        return isValidPathname(pathname);
     }
 
     /**
-     * Folds a ContentAddressableStore identifier to its canonical form, removing
-     * leading, trailing, and consecutive slashes "/" before converting
-     * to lower case. If the passed value is not a non-empty string
-     * then it is simply returned without modification.
-     * @param {*} value - Identifier to normalize
+     * Folds a ContentAddressableStore pathname to its canonical form, removing
+     * trailing, and consecutive slashes "/" before converting to lower case
+     * and ensuring it starts with a slash "/".
+     * @param {string} value - Identifier to normalize
      * @returns {string} The validated identifier folded to lower case
      */
-    normalizeIdentifier(value) {
-        if (value === '' || value === null || isUndefined(value)) {
-            return '';
-        }
-        if (!isString(value)) {
-            throw new TypeError('An identifier must be a string');
-        }
-
-        // Remove leading, trailing, and multiple consecutive slashes ("/") and
-        // convert to lower case.
-        return value.split('/')
-            .filter((part) => part)
-            .join('/')
-            .toLowerCase();
+    normalizePathname(value) {
+        return normalizePathname(value);
     }
 
     #normalizeTemplatePath(pathname) {
-        return this.normalizeIdentifier(`templates/${ pathname }`);
+        return this.normalizePathname(`templates/${ pathname }`);
     }
 
     #normalizePagePath(pathname) {
-        return this.normalizeIdentifier(`pages/${ pathname }`);
+        return this.normalizePathname(`pages/${ pathname }`);
     }
 
     #filepathBasename(pathname) {
@@ -131,7 +90,7 @@ export default class ContentAddressableStore {
 
     async putTemplatePartials(context, bundle, integrityHash) {
         const pathname = this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE);
-        const blob = stringToUinit8Array(canonicalize(bundle));
+        const blob = stringToUint8Array(canonicalize(bundle));
         return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
     }
 
@@ -150,7 +109,7 @@ export default class ContentAddressableStore {
 
     async putBaseTemplates(context, bundle, integrityHash) {
         const pathname = this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE);
-        const blob = stringToUinit8Array(canonicalize(bundle));
+        const blob = stringToUint8Array(canonicalize(bundle));
         return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
     }
 
@@ -167,21 +126,27 @@ export default class ContentAddressableStore {
         return await this.#getPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
     }
 
+    async putPageMetadata(context, pagePath, obj, integrityHash) {
+        const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
+        const blob = stringToUint8Array(canonicalize(obj));
+        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+    }
+
     async putPagePartials(context, pagePath, bundle, integrityHash) {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
-        const blob = stringToUinit8Array(canonicalize(bundle));
+        const blob = stringToUint8Array(canonicalize(bundle));
         return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
     }
 
     async putPageIncludes(context, pagePath, bundle, integrityHash) {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
-        const blob = stringToUinit8Array(canonicalize(bundle));
+        const blob = stringToUint8Array(canonicalize(bundle));
         return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
     }
 
     async putPageTemplate(context, filepath, sourceText, integrityHash) {
         const pathname = this.#normalizePagePath(filepath);
-        const blob = stringToUinit8Array(sourceText);
+        const blob = stringToUint8Array(sourceText);
         return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
     }
 
@@ -216,7 +181,7 @@ export default class ContentAddressableStore {
         // /blog/reviews/page.json
         // /blog/reviews/music/page.json
         // /blog/reviews/music/led-zeppelin/page.json
-        const parts = this.normalizeIdentifier(pathname).split('/');
+        const parts = this.normalizePathname(pathname).split('/');
         const filepaths = [];
         let path;
 

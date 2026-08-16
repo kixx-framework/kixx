@@ -1,4 +1,8 @@
-import { AssertionError } from '../../kixx/errors/mod.js';
+import { AssertionError, ValidationError } from '../../kixx/errors/mod.js';
+import {
+    isUndefined,
+    isNonEmptyString,
+} from '../../kixx/assertions/mod.js';
 import ContentAddressableIndex from './content-addressable-index.js';
 import {
     KEY,
@@ -68,6 +72,9 @@ export default class Store {
     async listStats(context, prefix, options) {
         const { recursive = true } = options ?? {};
         const index = await this.getIndex(context);
+        if (!prefix.endsWith('/')) {
+            prefix = prefix + '/';
+        }
         return index.listNodes(prefix, { recursive });
     }
 
@@ -75,7 +82,7 @@ export default class Store {
         const pairs = new Map();
         for (const stat of stats) {
             const tuple = [ stat.hash ];
-            if (stat.metadata) {
+            if (!isUndefined(stat.metadata) && stat.metadata !== null) {
                 tuple.push(stat.metadata);
             }
             pairs.set(stat.pathname, tuple);

@@ -11,6 +11,7 @@
  */
 
 import {
+    isString,
     isUndefined,
     isPrimitive,
 } from '../../kixx/assertions/mod.js';
@@ -41,6 +42,12 @@ const DIGEST_BYTES = 16;
 // Our Base32 encoding alphabet.
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 
+// Path segments are restricted to a conservative filename-safe set. Anything
+// outside it (path separators beyond the segment split, query/fragment
+// characters, whitespace, shell or URL metacharacters) is rejected before the
+// path reaches a storage adapter or static file store.
+const DISALLOWED_PATHNAME_CHARACTERS = /[^a-z0-9_.-]/i;
+
 // A domain byte makes the semantic type part of the hashed input. Without it,
 // a blob containing the canonical bytes of a tree, set or value would have the
 // same digest as that object. Domains separate types; they do not increase the
@@ -58,7 +65,7 @@ const decoder = new TextDecoder();
  * @param {string} str - String to encode
  * @returns {Uint8Array} UTF-8 encoded bytes
  */
-export function stringToUinit8Array(str) {
+export function stringToUint8Array(str) {
     return encoder.encode(str);
 }
 
@@ -69,6 +76,63 @@ export function stringToUinit8Array(str) {
  */
 export function bufferToString(bytes) {
     return decoder.decode(bytes);
+}
+
+/**
+ * Reports whether a logical pathname contains only lowercase and
+ * safe path segments.
+ * @param {string} pathname - The pathname to check
+ * @returns {boolean} True when the pathname is valid
+ */
+export function isValidPathname(pathname) {
+    // Must be a string.
+    if (!isString(pathname)) {
+        return false;
+    }
+
+    // Two dots or two slashes are always invalid.
+    if (pathname.includes('..') || pathname.includes('//')) {
+        return false;
+    }
+
+    // Must be a lowercase case.
+    if (pathname.toLowerCase() !== pathname) {
+        return false;
+    }
+
+    const parts = pathname.split('/');
+
+    for (const part of parts) {
+        // A leading dot on any segment (dotfiles, `.` itself) is rejected in
+        // addition to the disallowed-character check.
+        if (part.startsWith('.') || DISALLOWED_PATHNAME_CHARACTERS.test(part)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Folds a ContentAddressableStore pathname to its canonical form, removing
+ * trailing, and consecutive slashes "/" before converting to lower case
+ * and ensuring it starts with a slash "/".
+ * @param {string} value - Identifier to normalize
+ * @returns {string} The validated identifier folded to lower case
+ */
+export function normalizePathname(value) {
+    if (!isString(value)) {
+        throw new TypeError('An identifier must be a string');
+    }
+
+    // Remove leading, trailing, and multiple consecutive slashes ("/") and
+    // convert to lower case.
+    const id = value.split('/')
+        .filter((part) => part)
+        .join('/')
+        .toLowerCase();
+
+    return '/' + id;
 }
 
 /**
@@ -195,7 +259,7 @@ async function digestDomain(domain, payload) {
  * @throws {TypeError} When the collection contains a value that cannot be canonicalized
  */
 export async function hashSet(obj) {
-    return await digestDomain(DOMAIN_SET, stringToUinit8Array(canonicalize(obj)));
+    return await digestDomain(DOMAIN_SET, stringToUint8Array(canonicalize(obj)));
 }
 
 /**
@@ -214,7 +278,7 @@ export async function hashBlob(bytes) {
  * @throws {TypeError} When the tree contains a value that cannot be canonicalized
  */
 export async function hashTree(obj) {
-    return await digestDomain(DOMAIN_TREE, stringToUinit8Array(canonicalize(obj)));
+    return await digestDomain(DOMAIN_TREE, stringToUint8Array(canonicalize(obj)));
 }
 
 /**
@@ -229,5 +293,5 @@ export async function hashValue(value) {
     } else {
         value = canonicalize(value);
     }
-    return await digestDomain(DOMAIN_VALUE, stringToUinit8Array(value));
+    return await digestDomain(DOMAIN_VALUE, stringToUint8Array(value));
 }
