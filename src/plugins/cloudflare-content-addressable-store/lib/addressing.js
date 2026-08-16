@@ -30,10 +30,6 @@ export const FORMAT = 1;
  */
 export const KEY = {
     blob: `b${FORMAT}:`,
-    tree: `t${FORMAT}:`,
-    index: `i${FORMAT}:`,
-    closure: `c${FORMAT}:`,
-    roots: `r${FORMAT}:recent`,
 };
 
 // SHA-256 truncated to 128 bits; ~1e-21 collision probability at 1e9 objects.
@@ -216,7 +212,7 @@ export function canonicalize(value) {
  * @param {Uint8Array} bytes - Bytes to encode
  * @returns {string} Lowercase, unpadded base32 text
  */
-export function base32Encode(bytes) {
+function base32Encode(bytes) {
     let bits = 0;
     let value = 0;
     let out = '';
