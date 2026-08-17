@@ -19,12 +19,19 @@ const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
 
 export default class ContentAddressableStore {
 
+    #logger;
     #store;
 
     constructor(options) {
-        const { store } = options ?? {};
+        this.#logger = options.logger.createChild('ContentAddressableStore');
 
-        this.#store = store ?? new Store();
+        this.#store = options.store ?? new Store({
+            logger: this.#logger,
+            kvBindingName: options.kvBindingName,
+            durableObjectNamespace: options.durableObjectNamespace,
+            blobReadCacheTtlSeconds: options.blobReadCacheTtlSeconds,
+            indexCacheTtlSeconds: options.indexCacheTtlSeconds,
+        });
     }
 
     /**

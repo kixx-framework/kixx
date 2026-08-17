@@ -29,7 +29,7 @@ export const FORMAT = 1;
  * @readonly
  */
 export const KEY = {
-    blob: `b${FORMAT}:`,
+    blob: `b:${FORMAT}:`,
 };
 
 // SHA-256 truncated to 128 bits; ~1e-21 collision probability at 1e9 objects.

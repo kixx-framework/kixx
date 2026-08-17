@@ -2,9 +2,11 @@ import { AssertionError, ValidationError } from '../../../kixx/errors/mod.js';
 import {
     isUndefined,
     isNonEmptyString,
+    assert,
 } from '../../../kixx/assertions/mod.js';
 import ContentAddressableIndex from './content-addressable-index.js';
 import {
+    FORMAT,
     KEY,
     compareStrings,
     typedArrayToBuffer,
@@ -13,21 +15,34 @@ import {
 } from './addressing.js';
 
 
+const DURABLE_OBJECT_NAME = `ContentAddressableStore:${ FORMAT }`;
+
+
 export default class Store {
 
+    #logger;
+    #kvBindingName;
+    #durableObjectNamespace;
     #pendingIndex = null;
 
-    constructor() {
-        // TODO: Pass in blobReadCacheTtlSeconds
-        this.blobReadCacheTtlSeconds = 60 * 60 * 36;
+    constructor(options) {
+        this.#logger = options.logger;
+        this.#kvBindingName = options.kvBindingName;
+        this.#durableObjectNamespace = options.durableObjectNamespace;
+        this.blobReadCacheTtlSeconds = options.blobReadCacheTtlSeconds;
+        this.indexCacheTtlSeconds = options.indexCacheTtlSeconds;
     }
 
-    #resolveDurableObject() {
-        // TODO: Implement resolveDurableObject()
+    #resolveDurableObject(context) {
+        const namespace = context.env[this.#durableObjectNamespace];
+        assert(namespace, `ContentAddressableStore KV DurableObject Namespace "${ this.#durableObjectNamespace }" is not bound on context.env`);
+        return namespace.getByName(DURABLE_OBJECT_NAME);
     }
 
-    #resolveKvStore() {
-        // TODO: Implement resolveKvStore()
+    #resolveKvStore(context) {
+        const kvStore = context.env[this.#kvBindingName];
+        assert(kvStore, `ContentAddressableStore KV binding "${ this.#kvBindingName }" is not bound on context.env`);
+        return kvStore;
     }
 
     async getIndex(context) {
@@ -38,6 +53,8 @@ export default class Store {
 
         const durableObject = this.#resolveDurableObject(context);
         const buildId = context.runtime.build.id;
+
+        this.#logger.info('fetching index', { buildId });
 
         const pending = durableObject.getContentAddressableIndex(buildId)
             .then((result) => {
@@ -104,7 +121,9 @@ export default class Store {
         }
 
         const kv = this.#resolveKvStore(context);
-        await kv.put(`${ KEY.blob }#${ hash }`, typedArrayToBuffer(blob));
+        const key = KEY.blob + hash;
+        this.#logger.debug('put blob', { pathname, key });
+        await kv.put(key, typedArrayToBuffer(blob));
 
         const durableObject = this.#resolveDurableObject(context);
 
@@ -116,8 +135,8 @@ export default class Store {
     async getBlob(context, hash) {
         const kv = this.#resolveKvStore(context);
 
-        const key = `${ KEY.blob }#${ hash }`;
-
+        const key = KEY.blob + hash;
+        this.#logger.debug('get blob', { key });
         const buff = await kv.get(key, {
             type: 'arrayBuffer',
             cacheTtl: this.blobReadCacheTtlSeconds,
@@ -129,8 +148,8 @@ export default class Store {
     async getBlobs(context, hashes) {
         const kv = this.#resolveKvStore(context);
 
-        const keys = hashes.map((hash) => `${ KEY.blob }#${ hash }`);
-
+        const keys = hashes.map((hash) => KEY.blob + hash);
+        this.#logger.debug('get blobs', { count: keys.length });
         const resultsMap = await kv.get(keys, {
             type: 'arrayBuffer',
             cacheTtl: this.blobReadCacheTtlSeconds,
