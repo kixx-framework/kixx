@@ -283,12 +283,32 @@ describe('addressing', ({ describe }) => {
         });
 
         describe('hashValue()', ({ it }) => {
-            it('matches a known digest for a primitive string', async () => {
-                assertEqual('bngtktkw5knjqvlruvvrqkpthu', await hashValue('hello'));
+            it('matches a known undomained digest for a primitive string', async () => {
+                assertEqual('lktwflryh65xe6xty6rw2skauu', await hashValue('hello'));
             });
 
-            it('matches a known digest for a primitive number', async () => {
-                assertEqual('5zbibqlbyb275hfrbydiswdrdy', await hashValue(42));
+            it('matches a known undomained digest for a primitive number', async () => {
+                assertEqual('ondvznakk2hi3kfaixhnceatpy', await hashValue(42));
+            });
+
+            it('preserves the type distinction between numbers and strings', async () => {
+                assertNotEqual(await hashValue(42), await hashValue('42'));
+            });
+
+            it('preserves the type distinction between booleans and strings', async () => {
+                assertNotEqual(await hashValue(true), await hashValue('true'));
+            });
+
+            it('preserves the type distinction between null and strings', async () => {
+                assertNotEqual(await hashValue(null), await hashValue('null'));
+            });
+
+            it('preserves the type distinction between undefined and strings', async () => {
+                assertNotEqual(await hashValue(undefined), await hashValue('undefined'));
+            });
+
+            it('preserves the type distinction between numbers and bigints', async () => {
+                assertNotEqual(await hashValue(42), await hashValue(42n));
             });
 
             it('canonicalizes non-primitive values before hashing', async () => {
@@ -307,16 +327,15 @@ describe('addressing', ({ describe }) => {
         });
 
         describe('domain separation', ({ it }) => {
-            it('hashes the same canonical bytes differently across blob, tree, set, and value domains', async () => {
+            it('hashes the same canonical bytes differently across blob, tree, and set domains', async () => {
                 const bytes = stringToUint8Array('[1,2,3]');
 
                 const blobDigest = await hashBlob(bytes);
                 const treeDigest = await hashTree([ 1, 2, 3 ]);
                 const setDigest = await hashSet([ 1, 2, 3 ]);
-                const valueDigest = await hashValue([ 1, 2, 3 ]);
 
-                const digests = new Set([ blobDigest, treeDigest, setDigest, valueDigest ]);
-                assertEqual(4, digests.size);
+                const digests = new Set([ blobDigest, treeDigest, setDigest ]);
+                assertEqual(3, digests.size);
             });
         });
     });

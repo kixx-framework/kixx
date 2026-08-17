@@ -4,7 +4,8 @@
  *
  * Wire format v1:
  *   - digest: SHA-256 truncated to 128 bits, base32 (RFC 4648 lowercase, no pad)
- *   - domains: blobs, trees, digest-sets and values use distinct prefix bytes
+ *   - domains: blobs, trees and digest-sets use distinct prefix bytes
+ *   - values: general-purpose hashes do not use a content-store domain byte
  *   - keys: two-character format prefix so a future format can coexist
  *
  * @module cloudflare-content-addr-store/addressing
@@ -13,7 +14,6 @@
 import {
     isString,
     isUndefined,
-    isPrimitive,
 } from '../../../kixx/assertions/mod.js';
 
 /**
@@ -51,7 +51,6 @@ const DISALLOWED_PATHNAME_CHARACTERS = /[^a-z0-9_.-]/i;
 const DOMAIN_BLOB = 0x00;
 const DOMAIN_TREE = 0x01;
 const DOMAIN_SET = 0x02;
-const DOMAIN_VALUE = 0x03;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -278,16 +277,23 @@ export async function hashTree(obj) {
 }
 
 /**
- * Hashes a primitive or canonicalizable object under the value domain.
+ * Hashes a primitive or canonicalizable object without a content-store domain
+ * byte. Unlike hashBlob(), hashTree() and hashSet(), this function exposes the
+ * underlying digest algorithm for callers outside the content-addressable
+ * store which do not share one of its domain-specific data models.
  * @param {*} value - Value to hash
  * @returns {Promise<string>} Content digest in the current wire format
  * @throws {TypeError} When a non-primitive value cannot be canonicalized
  */
 export async function hashValue(value) {
-    if (isPrimitive(value)) {
+    if (isUndefined(value)) {
+        value = 'undefined';
+    } else if (typeof value === 'bigint') {
+        value = `${ value }n`;
+    } else if (typeof value === 'symbol') {
         value = `${ value }`;
     } else {
         value = canonicalize(value);
     }
-    return await digestDomain(DOMAIN_VALUE, stringToUint8Array(value));
+    return await digestBuffer(stringToUint8Array(value));
 }
