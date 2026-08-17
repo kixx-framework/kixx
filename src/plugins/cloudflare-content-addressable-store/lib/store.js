@@ -10,7 +10,6 @@ import {
     KEY,
     compareStrings,
     typedArrayToBuffer,
-    canonicalize,
     hashBlob,
     hashEtag,
     hashSet,
@@ -24,14 +23,12 @@ export default class Store {
 
     #logger;
     #kvBindingName;
-    #d1BindingName;
     #durableObjectBindingName;
     #pendingIndex = null;
 
     constructor(options) {
         this.#logger = options.logger;
         this.#kvBindingName = options.kvBindingName;
-        this.#d1BindingName = options.d1BindingName;
         this.#durableObjectBindingName = options.durableObjectBindingName;
         this.blobReadCacheTtlSeconds = options.blobReadCacheTtlSeconds;
         this.indexCacheTtlSeconds = options.indexCacheTtlSeconds;
@@ -41,12 +38,6 @@ export default class Store {
         const kvStore = context.env[this.#kvBindingName];
         assert(kvStore, `ContentAddressableStore KV binding "${ this.#kvBindingName }" is not bound on context.env`);
         return kvStore;
-    }
-
-    #resolveD1Database(context) {
-        const db = context.env[this.#d1BindingName];
-        assert(db, `ContentAddressableStore D1 binding "${ this.#d1BindingName }" is not bound on context.env`);
-        return db;
     }
 
     #resolveDurableObject(context) {
@@ -148,77 +139,8 @@ export default class Store {
         };
     }
 
-    async touchBlob(context, stats) {
-        const {
-            pathname,
-            hash,
-            size,
-            metadata,
-        } = stats;
-
-        const db = this.#resolveD1Database(context);
-
-        const etag = await hashEtag(hash, metadata);
-
-        const now = new Date().toISOString();
-        const updatedAt = now;
-        const createdAt = now;
-
-        const sql = `
-            INSERT INTO staged_files (pathname, hash, etag, metadata, size, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(pathname) DO UPDATE SET
-                hash = EXCLUDED.hash,
-                etag = EXCLUDED.etag,
-                metadata = EXCLUDED.metadata,
-                size = EXCLUDED.size,
-                updated_at = EXCLUDED.updated_at
-            RETURNING created_at, updated_at
-        `;
-
-        const stmt = db.prepare(sql).bind(
-            pathname,
-            hash,
-            etag,
-            canonicalize(metadata),
-            size,
-            createdAt,
-            updatedAt,
-        );
-
-        const row = await stmt.first();
-
-        return {
-            pathname,
-            hash,
-            etag,
-            metadata,
-            size,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-        };
-    }
-
-    async commitChanges(context, buildId) {
-        const db = this.#resolveD1Database(context);
+    async commitChanges(context, buildId, files) {
         const durableObject = this.#resolveDurableObject(context);
-
-        const sql = 'SELECT pathname, hash, metadata, size FROM staged_files';
-        const { success, results } = await db.prepare(sql).run();
-
-        if (!success) {
-            this.#logger.error('unsuccessful query in commitChanges()', { sql });
-            throw new Error('Unsuccessful D1 query in Store#commitChanges()');
-        }
-
-        const files = results.map((row) => {
-            return {
-                pathname: row.pathname,
-                hash: row.hash,
-                size: row.size,
-                metadata: JSON.parse(row.metadata),
-            };
-        });
 
         const index = ContentAddressableIndex.buildIndex(files);
 
@@ -226,9 +148,6 @@ export default class Store {
         //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
         //       see: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
         await durableObject.commitIndex({ buildId, index });
-
-        // Clear the staged changes
-        await db.exec('DELETE FROM staged_files');
 
         return index;
     }
