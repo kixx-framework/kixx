@@ -7,13 +7,11 @@ import {
 import {
     BadRequestError,
     ConflictError,
-    UnauthenticatedError,
     UnsupportedMediaTypeError,
 } from '../../../kixx/errors/mod.js';
 
 
 export const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
-export const BUILD_ID_HEADER = 'kixx-build-id';
 
 
 /**
@@ -101,55 +99,4 @@ export function jsonApiResource(args) {
     }
 
     return { data };
-}
-
-/**
- * Parses HTTP Basic credentials from the Authorization header.
- * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
- * @returns {{ username: string, password: string }} Decoded credentials.
- * @throws {UnauthenticatedError} When Basic credentials are absent or malformed.
- */
-export function parseBasicAuthCredentials(request) {
-    const authorization = request.headers.get('authorization');
-
-    if (!isNonEmptyString(authorization)) {
-        throwBasicAuthError();
-    }
-
-    const match = /^Basic\s+(.+)$/iu.exec(authorization);
-
-    if (match === null) {
-        throwBasicAuthError();
-    }
-
-    const decoded = decodeBasicCredentials(match[1]);
-    const separatorIndex = decoded.indexOf(':');
-
-    if (separatorIndex <= 0) {
-        throwBasicAuthError();
-    }
-
-    return {
-        username: decoded.slice(0, separatorIndex),
-        password: decoded.slice(separatorIndex + 1),
-    };
-}
-
-function decodeBasicCredentials(encodedCredentials) {
-    try {
-        const binary = atob(encodedCredentials);
-        const bytes = new Uint8Array(binary.length);
-
-        for (let i = 0; i < binary.length; i += 1) {
-            bytes[i] = binary.charCodeAt(i);
-        }
-
-        return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    } catch (cause) {
-        throwBasicAuthError(cause);
-    }
-}
-
-function throwBasicAuthError(cause) {
-    throw new UnauthenticatedError('Basic authentication credentials are required.', { cause });
 }

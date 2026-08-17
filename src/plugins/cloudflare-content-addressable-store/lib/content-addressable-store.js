@@ -101,11 +101,10 @@ export default class ContentAddressableStore {
         return await this.#store.touchBlob(context, stats);
     }
 
-    async getTemplatePartialsEtag(context) {
+    async statTemplatePartials(context) {
         const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
         if (entry) {
-            const stat = new StatObject(entry);
-            return stat.etag;
+            return new StatObject(entry);
         }
         return null;
     }
@@ -121,11 +120,10 @@ export default class ContentAddressableStore {
         return await this.#store.touchBlob(context, stats);
     }
 
-    async getBaseTemplatesEtag(context) {
+    async statBaseTemplates(context) {
         const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
         if (entry) {
-            const stat = await StatObject.create(entry);
-            return stat.etag;
+            return new StatObject(entry);
         }
         return null;
     }
@@ -135,44 +133,110 @@ export default class ContentAddressableStore {
     }
 
     async putPageMetadata(context, pagePath, obj, etag) {
+        assert(
+            this.isValidPathname(pagePath),
+            'ContentAddressableStore#putPageMetadata() requires a valid page pathname',
+        );
+
         const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
         const blob = stringToUint8Array(canonicalize(obj));
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
         return await this.#store.touchBlob(context, stats);
     }
 
+    async statPageMetadata(context, pagePath) {
+        assert(
+            this.isValidPathname(pagePath),
+            'ContentAddressableStore#statPageMetadata() requires a valid page pathname',
+        );
+
+        const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
+        const entry = await this.#store.statPath(context, pathname);
+        if (entry) {
+            return new StatObject(entry);
+        }
+        return null;
+    }
+
     async putPagePartials(context, pagePath, bundle, etag) {
+        assert(
+            this.isValidPathname(pagePath),
+            'ContentAddressableStore#putPagePartials() requires a valid page pathname',
+        );
+
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
         return await this.#store.touchBlob(context, stats);
     }
 
+    async statPagePartials(context, pagePath) {
+        assert(
+            this.isValidPathname(pagePath),
+            'ContentAddressableStore#statPagePartials() requires a valid page pathname',
+        );
+
+        const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
+        const entry = await this.#store.statPath(context, pathname);
+        if (entry) {
+            return new StatObject(entry);
+        }
+        return null;
+    }
+
     async putPageIncludes(context, pagePath, bundle, etag) {
+        assert(
+            this.isValidPathname(pagePath),
+            'ContentAddressableStore#putPageIncludes() requires a valid page pathname',
+        );
+
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
         return await this.#store.touchBlob(context, stats);
     }
 
+    async statPageIncludes(context, pagePath) {
+        assert(
+            this.isValidPathname(pagePath),
+            'ContentAddressableStore#statPageIncludes() requires a valid page pathname',
+        );
+
+        const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
+        const entry = await this.#store.statPath(context, pathname);
+        if (entry) {
+            return new StatObject(entry);
+        }
+        return null;
+    }
+
     async putPageTemplate(context, filepath, sourceText, etag) {
+        assert(
+            this.isValidPathname(filepath),
+            'ContentAddressableStore#putPageTemplate() requires a valid filepath',
+        );
+
         const pathname = this.#normalizePagePath(filepath);
         const blob = stringToUint8Array(sourceText);
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
         return await this.#store.touchBlob(context, stats);
     }
 
-    async getPageTemplateEtag(context, pathname, filename) {
-        const entry = await this.#store.statPath(context, this.#normalizePagePath(`${ pathname }/${ filename }`));
+    async statPageTemplate(context, filepath) {
+        assert(
+            this.isValidPathname(filepath),
+            'ContentAddressableStore#statPageTemplate() requires a valid pathname and filename',
+        );
+
+        const entry = await this.#store.statPath(context, this.#normalizePagePath(filepath));
         if (entry) {
-            const stat = await StatObject.create(entry);
-            return stat.etag;
+            return new StatObject(entry);
         }
         return null;
     }
 
-    async getPageTemplate(context, pathname, filename) {
-        return await this.#getPath(context, this.#normalizePagePath(`${ pathname }/${ filename }`));
+    async getPageTemplate(context, filepath) {
+        return await this.#getPath(context, this.#normalizePagePath(filepath));
     }
 
     async hashValue(value) {
@@ -181,7 +245,7 @@ export default class ContentAddressableStore {
 
     async getPage(context, pathname) {
         assert(
-            this.isValidIdentifier(pathname),
+            this.isValidPathname(pathname),
             'ContentAddressableStore#getPage() requires a valid pathname',
         );
 
