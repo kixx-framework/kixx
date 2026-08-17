@@ -4,7 +4,7 @@
  *
  * Wire format v1:
  *   - digest: SHA-256 truncated to 128 bits, base32 (RFC 4648 lowercase, no pad)
- *   - domains: blobs, trees and digest-sets use distinct prefix bytes
+ *   - domains: blobs, trees, digest-sets and etags use distinct prefix bytes
  *   - values: general-purpose hashes do not use a content-store domain byte
  *   - keys: two-character format prefix so a future format can coexist
  *
@@ -51,6 +51,7 @@ const DISALLOWED_PATHNAME_CHARACTERS = /[^a-z0-9_.-]/i;
 const DOMAIN_BLOB = 0x00;
 const DOMAIN_TREE = 0x01;
 const DOMAIN_SET = 0x02;
+const DOMAIN_ETAG = 0x03;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -255,6 +256,21 @@ async function digestDomain(domain, payload) {
  */
 export async function hashSet(obj) {
     return await digestDomain(DOMAIN_SET, stringToUint8Array(canonicalize(obj)));
+}
+
+/**
+ * Hashes a blob hash and its metadata into an opaque file-version digest.
+ * @param {string} blobHash - Content digest identifying the blob bytes
+ * @param {Object|null} [metadata=null] - Metadata associated with the blob
+ * @returns {Promise<string>} Unquoted content-and-metadata digest in the current wire format
+ */
+export async function hashEtag(blobHash, metadata = null) {
+    const value = {
+        v: FORMAT,
+        blobHash,
+        metadata: metadata ?? null,
+    };
+    return await digestDomain(DOMAIN_ETAG, stringToUint8Array(canonicalize(value)));
 }
 
 /**

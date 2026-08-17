@@ -2,7 +2,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertNotEqual, assertUndefined } from 'kixx-assert';
 
 import ContentAddressableIndex from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js';
-import { FORMAT, compareStrings, hashTree } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
+import { FORMAT, compareStrings, hashEtag, hashTree } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
 
 
 async function catchAsyncError(fn) {
@@ -85,7 +85,7 @@ describe('ContentAddressableIndex', ({ describe }) => {
             }
         });
 
-        it('takes a private snapshot of entries and metadata', () => {
+        it('takes a private snapshot of entries and metadata', async () => {
             const metadata = { attributes: { language: 'en' } };
             const entries = {
                 '/file.txt': [ 'blob', 'hashabc', 10, metadata ],
@@ -96,110 +96,122 @@ describe('ContentAddressableIndex', ({ describe }) => {
             metadata.attributes.language = 'fr';
             entries['/other.txt'] = [ 'blob', 'other-hash', 1, null ];
 
-            const node = index.getNode('/file.txt');
+            const node = await index.getNode('/file.txt');
             assertEqual('hashabc', node.hash);
             assertEqual('en', node.metadata.attributes.language);
-            assertEqual(null, index.getNode('/other.txt'));
+            assertEqual(null, await index.getNode('/other.txt'));
             assertUndefined(index.entries);
         });
 
-        it('does not expose metadata which can mutate the index', () => {
+        it('does not expose metadata which can mutate the index', async () => {
             const index = new ContentAddressableIndex({
                 '/file.txt': [ 'blob', 'hashabc', 10, { attributes: { language: 'en' } } ],
             });
 
-            const node = index.getNode('/file.txt');
+            const node = await index.getNode('/file.txt');
             node.metadata.attributes.language = 'fr';
 
-            assertEqual('en', index.getNode('/file.txt').metadata.attributes.language);
+            assertEqual('en', (await index.getNode('/file.txt')).metadata.attributes.language);
         });
     });
 
     describe('getNode()', ({ it }) => {
-        it('returns the decoded node for an existing pathname', () => {
+        it('returns the decoded node for an existing pathname', async () => {
             const index = new ContentAddressableIndex({
                 '/a/b.txt': [ 'blob', 'hash123', 42, { type: 'text' } ],
             });
 
-            const node = index.getNode('/a/b.txt');
+            const node = await index.getNode('/a/b.txt');
 
             assertEqual('/a/b.txt', node.pathname);
             assertEqual('blob', node.kind);
             assertEqual('hash123', node.hash);
             assertEqual(42, node.size);
             assertEqual('text', node.metadata.type);
+            assertEqual(await hashEtag('hash123', { type: 'text' }), node.etag);
         });
 
-        it('decodes a compact tree entry with null size and metadata', () => {
+        it('decodes a compact tree entry with null size, metadata, and etag', async () => {
             const index = new ContentAddressableIndex({
                 '/a': [ 'tree', 'hashabc' ],
             });
 
-            const node = index.getNode('/a');
+            const node = await index.getNode('/a');
 
             assertEqual('tree', node.kind);
             assertEqual(null, node.size);
             assertEqual(null, node.metadata);
+            assertEqual(null, node.etag);
         });
 
-        it('returns null when no entry exists at the pathname', () => {
+        it('returns null when no entry exists at the pathname', async () => {
             const index = new ContentAddressableIndex({});
-            assertEqual(null, index.getNode('/missing'));
+            assertEqual(null, await index.getNode('/missing'));
         });
     });
 
     describe('listNodes()', ({ it }) => {
-        it('lists every node when the prefix is empty', () => {
+        it('lists every node when the prefix is empty', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
-            const nodes = index.listNodes('', { recursive: true });
+            const nodes = await index.listNodes('', { recursive: true });
             assertEqual(6, nodes.length);
         });
 
-        it('lists nodes in pathname sort order', () => {
+        it('lists nodes in pathname sort order', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
-            const nodes = index.listNodes('', { recursive: true });
+            const nodes = await index.listNodes('', { recursive: true });
             const pathnames = nodes.map((node) => node.pathname);
             const sorted = pathnames.slice().sort(compareStrings);
             assertEqual(sorted.join(','), pathnames.join(','));
         });
 
-        it('recursively lists all nodes nested under a prefix, excluding the directory node itself', () => {
+        it('includes etags for blobs and null etags for trees', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
-            const nodes = index.listNodes('/dir', { recursive: true });
+            const nodes = await index.listNodes('/dir', { recursive: false });
+            const blob = nodes.find((node) => node.pathname === '/dir/b.txt');
+            const tree = nodes.find((node) => node.pathname === '/dir/sub');
+
+            assertEqual(await hashEtag('h-b', null), blob.etag);
+            assertEqual(null, tree.etag);
+        });
+
+        it('recursively lists all nodes nested under a prefix, excluding the directory node itself', async () => {
+            const index = new ContentAddressableIndex(makeListingEntries());
+            const nodes = await index.listNodes('/dir', { recursive: true });
             const pathnames = nodes.map((node) => node.pathname).sort(compareStrings);
             assertEqual('/dir/b.txt,/dir/sub,/dir/sub/c.txt', pathnames.join(','));
         });
 
-        it('treats a prefix without a trailing slash the same as one with it', () => {
+        it('treats a prefix without a trailing slash the same as one with it', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
-            const withSlash = index.listNodes('/dir/', { recursive: true }).map((node) => node.pathname).sort(compareStrings);
-            const withoutSlash = index.listNodes('/dir', { recursive: true }).map((node) => node.pathname).sort(compareStrings);
+            const withSlash = (await index.listNodes('/dir/', { recursive: true })).map((node) => node.pathname).sort(compareStrings);
+            const withoutSlash = (await index.listNodes('/dir', { recursive: true })).map((node) => node.pathname).sort(compareStrings);
             assertEqual(withSlash.join(','), withoutSlash.join(','));
         });
 
-        it('does not match a different directory that merely shares the prefix text', () => {
+        it('does not match a different directory that merely shares the prefix text', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
-            const pathnames = index.listNodes('/dir', { recursive: true }).map((node) => node.pathname);
+            const pathnames = (await index.listNodes('/dir', { recursive: true })).map((node) => node.pathname);
             assert(!pathnames.includes('/dirbar.txt'));
         });
 
-        it('lists only immediate children when recursive is false', () => {
+        it('lists only immediate children when recursive is false', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
-            const nodes = index.listNodes('/dir', { recursive: false });
+            const nodes = await index.listNodes('/dir', { recursive: false });
             const pathnames = nodes.map((node) => node.pathname).sort(compareStrings);
             assertEqual('/dir/b.txt,/dir/sub', pathnames.join(','));
         });
 
-        it('defaults to a recursive listing when options are omitted', () => {
+        it('defaults to a recursive listing when options are omitted', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
-            const nodes = index.listNodes('/dir');
+            const nodes = await index.listNodes('/dir');
             const pathnames = nodes.map((node) => node.pathname).sort(compareStrings);
             assertEqual('/dir/b.txt,/dir/sub,/dir/sub/c.txt', pathnames.join(','));
         });
 
-        it('returns an empty array for a prefix with no matching nodes', () => {
+        it('returns an empty array for a prefix with no matching nodes', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
-            assertEqual(0, index.listNodes('/missing').length);
+            assertEqual(0, (await index.listNodes('/missing')).length);
         });
     });
 
@@ -210,7 +222,7 @@ describe('ContentAddressableIndex', ({ describe }) => {
             ]);
             const index = new ContentAddressableIndex(entries);
 
-            const node = index.getNode('/a.txt');
+            const node = await index.getNode('/a.txt');
             assertEqual('blob', node.kind);
             assertEqual('hash-a', node.hash);
             assertEqual(10, node.size);
@@ -223,7 +235,7 @@ describe('ContentAddressableIndex', ({ describe }) => {
             ]);
             const index = new ContentAddressableIndex(entries);
 
-            const node = index.getNode('/a.txt');
+            const node = await index.getNode('/a.txt');
             assertEqual(null, node.size);
             assertEqual(null, node.metadata);
         });
@@ -233,7 +245,7 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual(1, Object.keys(entries).length);
 
             const index = new ContentAddressableIndex(entries);
-            assertEqual('tree', index.getNode('/').kind);
+            assertEqual('tree', (await index.getNode('/')).kind);
         });
 
         it('creates a tree entry for every directory implied by the file pathnames', async () => {
@@ -242,10 +254,10 @@ describe('ContentAddressableIndex', ({ describe }) => {
             ]);
             const index = new ContentAddressableIndex(entries);
 
-            assertEqual('tree', index.getNode('/').kind);
-            assertEqual('tree', index.getNode('/dir').kind);
-            assertEqual('tree', index.getNode('/dir/sub').kind);
-            assertEqual('blob', index.getNode('/dir/sub/file.txt').kind);
+            assertEqual('tree', (await index.getNode('/')).kind);
+            assertEqual('tree', (await index.getNode('/dir')).kind);
+            assertEqual('tree', (await index.getNode('/dir/sub')).kind);
+            assertEqual('blob', (await index.getNode('/dir/sub/file.txt')).kind);
         });
 
         it('encodes tree entries as kind and hash tuples', async () => {

@@ -5,7 +5,7 @@ import {
     isPlainObject,
     isUndefined,
 } from '../../../kixx/assertions/mod.js';
-import { FORMAT, compareStrings, hashTree } from './addressing.js';
+import { FORMAT, compareStrings, hashEtag, hashTree } from './addressing.js';
 
 /**
  * Encoded directory entry containing only the fields which apply to trees.
@@ -28,6 +28,7 @@ import { FORMAT, compareStrings, hashTree } from './addressing.js';
  * @property {string} pathname - Normalized pathname for the node, with a leading slash "/".
  * @property {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file.
  * @property {string} hash - Content digest of the blob's bytes, or of the tree's canonicalized child list.
+ * @property {string|null} etag - Digest of a blob's content hash and canonicalized metadata, or null for a tree.
  * @property {number|null} size - Byte size of a blob, or null for a tree or an unspecified size.
  * @property {Object|null} metadata - Caller-supplied metadata for a blob, or null.
  */
@@ -49,6 +50,7 @@ import { FORMAT, compareStrings, hashTree } from './addressing.js';
 export default class ContentAddressableIndex {
 
     #entries;
+    #etagPromises = new Map();
     #sortedPaths;
 
     /**
@@ -67,11 +69,11 @@ export default class ContentAddressableIndex {
     /**
      * Looks up a single node by exact pathname.
      * @param {string} pathname - The pathname for the node, including a leading slash "/".
-     * @returns {IndexEntry|null} The matching node, or null when no entry exists at that pathname.
+     * @returns {Promise<IndexEntry|null>} The matching node, or null when no entry exists at that pathname.
      */
-    getNode(pathname) {
+    async getNode(pathname) {
         const tuple = this.#entries[pathname];
-        return tuple ? decodeIndexEntry(pathname, tuple) : null;
+        return tuple ? await this.#decodeNode(pathname, tuple) : null;
     }
 
     /**
@@ -79,9 +81,9 @@ export default class ContentAddressableIndex {
      * @param {string} prefix - A prefix directory with a leading slash; a trailing slash "/" is added if missing. Pass '' to list from the root.
      * @param {Object} [options]
      * @param {boolean} [options.recursive=true] - When false, only list the prefix's immediate children — nested nodes are skipped.
-     * @returns {IndexEntry[]} Matching nodes in pathname sort order.
+     * @returns {Promise<IndexEntry[]>} Matching nodes in pathname sort order.
      */
-    listNodes(prefix, options) {
+    async listNodes(prefix, options) {
         const { recursive = true } = options ?? {};
 
         // The prefix must end with a slash "/".
@@ -92,7 +94,7 @@ export default class ContentAddressableIndex {
         const paths = this.#getSortedPaths();
         const start = lowerBound(paths, prefix);
 
-        const nodes = [];
+        const matchingPaths = [];
         for (let i = start; i < paths.length; i += 1) {
             const path = paths[i];
             // Sorted order guarantees every path matching path is contiguous, so the first
@@ -106,10 +108,34 @@ export default class ContentAddressableIndex {
             if (!recursive && path.slice(prefix.length).includes('/')) {
                 continue;
             }
-            nodes.push(decodeIndexEntry(path, this.#entries[path]));
+            matchingPaths.push(path);
         }
 
-        return nodes;
+        return await Promise.all(matchingPaths.map((path) => {
+            return this.#decodeNode(path, this.#entries[path]);
+        }));
+    }
+
+    async #decodeNode(pathname, tuple) {
+        const [ kind, hash, size = null, metadata = null ] = tuple;
+        const etag = kind === 'blob' ? await this.#getEtag(pathname, hash, metadata) : null;
+        return {
+            pathname,
+            kind,
+            hash,
+            etag,
+            size,
+            metadata: metadata === null ? null : structuredClone(metadata),
+        };
+    }
+
+    async #getEtag(pathname, hash, metadata) {
+        let promise = this.#etagPromises.get(pathname);
+        if (!promise) {
+            promise = hashEtag(hash, metadata);
+            this.#etagPromises.set(pathname, promise);
+        }
+        return await promise;
     }
 
     #getSortedPaths() {
@@ -145,17 +171,6 @@ export default class ContentAddressableIndex {
 
         return entries;
     }
-}
-
-function decodeIndexEntry(pathname, tuple) {
-    const [ kind, hash, size = null, metadata = null ] = tuple;
-    return {
-        pathname,
-        kind,
-        hash,
-        size,
-        metadata: metadata === null ? null : structuredClone(metadata),
-    };
 }
 
 function assertValidIndexEntryTuple(pathname, tuple) {

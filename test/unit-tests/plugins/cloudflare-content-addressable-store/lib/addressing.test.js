@@ -14,6 +14,7 @@ import {
     hashBlob,
     hashTree,
     hashSet,
+    hashEtag,
     hashValue,
 } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
 
@@ -282,6 +283,38 @@ describe('addressing', ({ describe }) => {
             });
         });
 
+        describe('hashEtag()', ({ it }) => {
+            it('returns an unquoted raw digest', async () => {
+                const etag = await hashEtag('blob-hash', { language: 'en' });
+                assertMatches(DIGEST_PATTERN, etag);
+            });
+
+            it('canonicalizes metadata before hashing', async () => {
+                const a = await hashEtag('blob-hash', { a: 1, b: 2 });
+                const b = await hashEtag('blob-hash', { b: 2, a: 1 });
+                assertEqual(a, b);
+            });
+
+            it('changes when the blob hash changes', async () => {
+                const a = await hashEtag('blob-hash-a', { language: 'en' });
+                const b = await hashEtag('blob-hash-b', { language: 'en' });
+                assertNotEqual(a, b);
+            });
+
+            it('changes when metadata changes', async () => {
+                const a = await hashEtag('blob-hash', { language: 'en' });
+                const b = await hashEtag('blob-hash', { language: 'fr' });
+                assertNotEqual(a, b);
+            });
+
+            it('treats omitted and null metadata identically', async () => {
+                assertEqual(
+                    await hashEtag('blob-hash'),
+                    await hashEtag('blob-hash', null),
+                );
+            });
+        });
+
         describe('hashValue()', ({ it }) => {
             it('matches a known undomained digest for a primitive string', async () => {
                 assertEqual('lktwflryh65xe6xty6rw2skauu', await hashValue('hello'));
@@ -327,15 +360,16 @@ describe('addressing', ({ describe }) => {
         });
 
         describe('domain separation', ({ it }) => {
-            it('hashes the same canonical bytes differently across blob, tree, and set domains', async () => {
+            it('hashes the same canonical bytes differently across content domains', async () => {
                 const bytes = stringToUint8Array('[1,2,3]');
 
                 const blobDigest = await hashBlob(bytes);
                 const treeDigest = await hashTree([ 1, 2, 3 ]);
                 const setDigest = await hashSet([ 1, 2, 3 ]);
+                const etagDigest = await hashEtag('blob-hash', [ 1, 2, 3 ]);
 
-                const digests = new Set([ blobDigest, treeDigest, setDigest ]);
-                assertEqual(3, digests.size);
+                const digests = new Set([ blobDigest, treeDigest, setDigest, etagDigest ]);
+                assertEqual(4, digests.size);
             });
         });
     });
