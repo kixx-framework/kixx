@@ -118,7 +118,7 @@ export default class Store {
         if (isNonEmptyString(etag) && etag !== computedEtag) {
             throw new ValidationError(
                 `PUT blob hash integrity check failed for ${ pathname }`,
-                { code: 'CA_STORE_INTEGRITY_CHECK_FAILED', etag: computedEtag },
+                { code: 'INTEGRITY_CHECK_FAILED', etag: computedEtag },
             );
         }
 

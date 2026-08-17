@@ -1,5 +1,5 @@
 import { AssertionError } from '../../../kixx/errors/mod.js';
-import { assert } from '../../../kixx/assertions/mod.js';
+import { assert, isUndefined } from '../../../kixx/assertions/mod.js';
 import Store from './store.js';
 import { ContentObject, StatObject } from './content-object.js';
 import {
@@ -32,6 +32,10 @@ export default class ContentAddressableStore {
             blobReadCacheTtlSeconds: options.blobReadCacheTtlSeconds,
             indexCacheTtlSeconds: options.indexCacheTtlSeconds,
         });
+    }
+
+    async hashValue(value) {
+        return await hashValue(value);
     }
 
     /**
@@ -239,8 +243,75 @@ export default class ContentAddressableStore {
         return await this.#getPath(context, this.#normalizePagePath(filepath));
     }
 
-    async hashValue(value) {
-        return await hashValue(value);
+    async commitChanges(context, buildId, manifest) {
+        const files = [];
+
+        if (!isUndefined(manifest.templatePartials)) {
+            const { hash, size } = manifest.templatePartials;
+            files.push({
+                pathname: this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE),
+                hash,
+                size,
+            });
+        }
+        if (!isUndefined(manifest.baseTemplates)) {
+            const { hash, size } = manifest.baseTemplates;
+            files.push({
+                pathname: this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE),
+                hash,
+                size,
+            });
+        }
+        if (!Array.isArray(manifest.pageMetadata)) {
+            for (const file of manifest.pageMetadata) {
+                const { pathname, hash, size } = file;
+                files.push({
+                    pathname: this.#normalizePagePath(`${ pathname }/page.json`),
+                    hash,
+                    size,
+                });
+            }
+        }
+        if (!Array.isArray(manifest.pagePartials)) {
+            for (const file of manifest.pagePartials) {
+                const { pathname, hash, size } = file;
+                files.push({
+                    pathname: this.#normalizePagePath(`${ pathname }/${ PAGE_PARTIALS_BUNDLE }`),
+                    hash,
+                    size,
+                });
+            }
+        }
+        if (!Array.isArray(manifest.pageIncludes)) {
+            for (const file of manifest.pageIncludes) {
+                const { pathname, hash, size } = file;
+                files.push({
+                    pathname: this.#normalizePagePath(`${ pathname }/${ PAGE_INCLUDES_BUNDLE }`),
+                    hash,
+                    size,
+                });
+            }
+        }
+        if (!Array.isArray(manifest.pageTemplates)) {
+            for (const file of manifest.pageTemplates) {
+                const { filename, hash, size } = file;
+                files.push({
+                    pathname: this.#normalizePagePath(filename),
+                    hash,
+                    size,
+                });
+            }
+        }
+
+        const index = await this.#store.commitChanges(context, buildId, files);
+
+        const entries = Object.keys(index);
+
+        return {
+            // Return the root hash.
+            hash: index['/'][1],
+            count: entries.length,
+        };
     }
 
     async getPage(context, pathname) {
