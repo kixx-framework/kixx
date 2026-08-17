@@ -28,7 +28,7 @@ export default class ContentAddressableStore {
         this.#store = options.store ?? new Store({
             logger: this.#logger,
             kvBindingName: options.kvBindingName,
-            durableObjectNamespace: options.durableObjectNamespace,
+            durableObjectBindingName: options.durableObjectBindingName,
             blobReadCacheTtlSeconds: options.blobReadCacheTtlSeconds,
             indexCacheTtlSeconds: options.indexCacheTtlSeconds,
         });

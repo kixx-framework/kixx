@@ -22,20 +22,20 @@ export default class Store {
 
     #logger;
     #kvBindingName;
-    #durableObjectNamespace;
+    #durableObjectBindingName;
     #pendingIndex = null;
 
     constructor(options) {
         this.#logger = options.logger;
         this.#kvBindingName = options.kvBindingName;
-        this.#durableObjectNamespace = options.durableObjectNamespace;
+        this.#durableObjectBindingName = options.durableObjectBindingName;
         this.blobReadCacheTtlSeconds = options.blobReadCacheTtlSeconds;
         this.indexCacheTtlSeconds = options.indexCacheTtlSeconds;
     }
 
     #resolveDurableObject(context) {
-        const namespace = context.env[this.#durableObjectNamespace];
-        assert(namespace, `ContentAddressableStore KV DurableObject Namespace "${ this.#durableObjectNamespace }" is not bound on context.env`);
+        const namespace = context.env[this.#durableObjectBindingName];
+        assert(namespace, `ContentAddressableStore KV DurableObject Namespace "${ this.#durableObjectBindingName }" is not bound on context.env`);
         return namespace.getByName(DURABLE_OBJECT_NAME);
     }
 
