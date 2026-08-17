@@ -1,8 +1,62 @@
-import * as PublishingAPI from '../app/presentation/request-handlers/publishing-api/mod.js';
-import * as Permissions from '../app/presentation/request-handlers/publishing-api/authorization.js';
-
+import {
+    StatResource,
+    PutResource,
+    CommitChanges,
+} from '../app/presentation/request-handlers/publishing-api/mod.js';
 
 export default [
+    {
+        pattern: '/template-partials',
+        name: 'template-partials',
+        routes: [
+        ],
+    },
+    {
+        pattern: '/base-templates',
+        name: 'base-templates',
+        routes: [
+        ],
+    },
+    {
+        // Optional wildcard group so the root page ('/') can be accessed via
+        // `/publishing-api/v1/page-metadata/`
+        // A bare `/page-metadata/*pathname` requires at least one path segment, so
+        // the root request would fall through.
+        pattern: '/page-metadata{/*path}',
+        name: 'page-metadata',
+        routes: [
+        ],
+    },
+    {
+        pattern: '/page-partials/*path',
+        name: 'page-partials',
+        routes: [
+        ],
+    },
+    {
+        pattern: '/page-includes/*path',
+        name: 'page-includes',
+        routes: [
+        ],
+    },
+    {
+        pattern: '/page-templates/*path',
+        name: 'page-templates',
+        routes: [
+        ],
+    },
+    {
+        pattern: '/stats',
+        name: 'stats',
+        routes: [
+        ],
+    },
+    {
+        pattern: '/resources',
+        name: 'stats',
+        routes: [
+        ],
+    },
     {
         pattern: '/templates/base/*filepath',
         name: 'base-templates',
