@@ -28,6 +28,7 @@ export default class ContentAddressableStore {
         this.#store = options.store ?? new Store({
             logger: this.#logger,
             kvBindingName: options.kvBindingName,
+            d1BindingName: options.d1BindingName,
             durableObjectBindingName: options.durableObjectBindingName,
             blobReadCacheTtlSeconds: options.blobReadCacheTtlSeconds,
             indexCacheTtlSeconds: options.indexCacheTtlSeconds,
@@ -94,10 +95,11 @@ export default class ContentAddressableStore {
         });
     }
 
-    async putTemplatePartials(context, bundle, integrityHash) {
+    async putTemplatePartials(context, bundle, etag) {
         const pathname = this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE);
         const blob = stringToUint8Array(canonicalize(bundle));
-        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return await this.#store.touchBlob(context, stats);
     }
 
     async getTemplatePartialsEtag(context) {
@@ -113,10 +115,11 @@ export default class ContentAddressableStore {
         return await this.#getPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
     }
 
-    async putBaseTemplates(context, bundle, integrityHash) {
+    async putBaseTemplates(context, bundle, etag) {
         const pathname = this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE);
         const blob = stringToUint8Array(canonicalize(bundle));
-        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return await this.#store.touchBlob(context, stats);
     }
 
     async getBaseTemplatesEtag(context) {
@@ -132,28 +135,32 @@ export default class ContentAddressableStore {
         return await this.#getPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
     }
 
-    async putPageMetadata(context, pagePath, obj, integrityHash) {
+    async putPageMetadata(context, pagePath, obj, etag) {
         const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
         const blob = stringToUint8Array(canonicalize(obj));
-        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return await this.#store.touchBlob(context, stats);
     }
 
-    async putPagePartials(context, pagePath, bundle, integrityHash) {
+    async putPagePartials(context, pagePath, bundle, etag) {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
-        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return await this.#store.touchBlob(context, stats);
     }
 
-    async putPageIncludes(context, pagePath, bundle, integrityHash) {
+    async putPageIncludes(context, pagePath, bundle, etag) {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
-        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return await this.#store.touchBlob(context, stats);
     }
 
-    async putPageTemplate(context, filepath, sourceText, integrityHash) {
+    async putPageTemplate(context, filepath, sourceText, etag) {
         const pathname = this.#normalizePagePath(filepath);
         const blob = stringToUint8Array(sourceText);
-        return await this.#store.putBlob(context, pathname, blob, null, integrityHash);
+        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return await this.#store.touchBlob(context, stats);
     }
 
     async getPageTemplateEtag(context, pathname, filename) {

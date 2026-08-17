@@ -10,7 +10,9 @@ import {
     KEY,
     compareStrings,
     typedArrayToBuffer,
+    canonicalize,
     hashBlob,
+    hashEtag,
     hashSet,
 } from './addressing.js';
 
@@ -22,27 +24,35 @@ export default class Store {
 
     #logger;
     #kvBindingName;
+    #d1BindingName;
     #durableObjectBindingName;
     #pendingIndex = null;
 
     constructor(options) {
         this.#logger = options.logger;
         this.#kvBindingName = options.kvBindingName;
+        this.#d1BindingName = options.d1BindingName;
         this.#durableObjectBindingName = options.durableObjectBindingName;
         this.blobReadCacheTtlSeconds = options.blobReadCacheTtlSeconds;
         this.indexCacheTtlSeconds = options.indexCacheTtlSeconds;
-    }
-
-    #resolveDurableObject(context) {
-        const namespace = context.env[this.#durableObjectBindingName];
-        assert(namespace, `ContentAddressableStore KV DurableObject Namespace "${ this.#durableObjectBindingName }" is not bound on context.env`);
-        return namespace.getByName(DURABLE_OBJECT_NAME);
     }
 
     #resolveKvStore(context) {
         const kvStore = context.env[this.#kvBindingName];
         assert(kvStore, `ContentAddressableStore KV binding "${ this.#kvBindingName }" is not bound on context.env`);
         return kvStore;
+    }
+
+    #resolveD1Database(context) {
+        const db = context.env[this.#d1BindingName];
+        assert(db, `ContentAddressableStore D1 binding "${ this.#d1BindingName }" is not bound on context.env`);
+        return db;
+    }
+
+    #resolveDurableObject(context) {
+        const namespace = context.env[this.#durableObjectBindingName];
+        assert(namespace, `ContentAddressableStore KV DurableObject Namespace "${ this.#durableObjectBindingName }" is not bound on context.env`);
+        return namespace.getByName(DURABLE_OBJECT_NAME);
     }
 
     async getIndex(context) {
@@ -111,25 +121,82 @@ export default class Store {
         return await hashSet(sorted);
     }
 
-    async putBlob(context, pathname, blob, metadata, integrityHash) {
+    async putBlob(context, pathname, blob, metadata, etag) {
         const hash = await hashBlob(blob);
-        if (isNonEmptyString(integrityHash) && hash !== integrityHash) {
+        const computedEtag = await hashEtag(hash, metadata);
+        if (isNonEmptyString(etag) && etag !== computedEtag) {
             throw new ValidationError(
                 `PUT blob hash integrity check failed for ${ pathname }`,
-                { code: 'CA_STORE_INTEGRITY_CHECK_FAILED' },
+                { code: 'CA_STORE_INTEGRITY_CHECK_FAILED', etag: computedEtag },
             );
         }
 
         const kv = this.#resolveKvStore(context);
-        const key = KEY.blob + hash;
-        this.#logger.info('put blob', { pathname, key });
-        await kv.put(key, typedArrayToBuffer(blob));
-
-        const durableObject = this.#resolveDurableObject(context);
 
         const size = blob.byteLength;
-        await durableObject.addFile({ pathname, hash, metadata, size });
-        return { pathname, hash, metadata, size };
+        const key = KEY.blob + hash;
+
+        this.#logger.info('put blob', { pathname, key });
+
+        await kv.put(key, typedArrayToBuffer(blob));
+
+        return {
+            pathname,
+            hash,
+            size,
+            metadata,
+        };
+    }
+
+    async touchBlob(context, stats) {
+        const {
+            pathname,
+            hash,
+            size,
+            metadata,
+        } = stats;
+
+        const db = this.#resolveD1Database(context);
+
+        const etag = await hashEtag(hash, metadata);
+
+        const now = new Date().toISOString();
+        const updatedAt = now;
+        const createdAt = now;
+
+        const sql = `
+            INSERT INTO staged_blobs (pathname, hash, etag, metadata, size, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(pathname) DO UPDATE SET
+                hash = EXCLUDED.hash,
+                etag = EXCLUDED.etag,
+                metadata = EXCLUDED.metadata,
+                size = EXCLUDED.size,
+                updated_at = EXCLUDED.updated_at
+            RETURNING created_at, updated_at
+        `;
+
+        const stmt = db.prepare(sql).bind(
+            pathname,
+            hash,
+            etag,
+            canonicalize(metadata),
+            size,
+            createdAt,
+            updatedAt,
+        );
+
+        const row = await stmt.first();
+
+        return {
+            pathname,
+            hash,
+            etag,
+            metadata,
+            size,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+        };
     }
 
     async getBlob(context, hash) {
