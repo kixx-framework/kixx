@@ -122,7 +122,7 @@ export default class Store {
 
         const kv = this.#resolveKvStore(context);
         const key = KEY.blob + hash;
-        this.#logger.debug('put blob', { pathname, key });
+        this.#logger.info('put blob', { pathname, key });
         await kv.put(key, typedArrayToBuffer(blob));
 
         const durableObject = this.#resolveDurableObject(context);

@@ -85,8 +85,7 @@ export default class ContentAddressableStore {
             return null;
         }
 
-        // A ContentObject must be finalized to get the etag.
-        return await ContentObject.create(bytes, {
+        return new ContentObject(bytes, {
             pathname: stat.pathname,
             kind: 'blob',
             hash: stat.hash,
@@ -104,7 +103,7 @@ export default class ContentAddressableStore {
     async getTemplatePartialsEtag(context) {
         const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
         if (entry) {
-            const stat = await StatObject.create(entry);
+            const stat = new StatObject(entry);
             return stat.etag;
         }
         return null;

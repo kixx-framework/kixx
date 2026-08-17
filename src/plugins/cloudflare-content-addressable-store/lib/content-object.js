@@ -1,4 +1,4 @@
-import { bufferToString, hashValue } from './addressing.js';
+import { bufferToString } from './addressing.js';
 
 
 export class StatObject {
@@ -8,17 +8,7 @@ export class StatObject {
         this.hash = spec.hash;
         this.size = spec.size;
         this.metadata = spec.metadata;
-    }
-
-    async finalize() {
-        // Include metadata in the etag if it exists.
-        this.etag = await hashValue([ this.hash, this.metadata ]);
-        return Object.freeze(this);
-    }
-
-    static async create(spec) {
-        const stat = new StatObject(spec);
-        return await stat.finalize();
+        this.etag = spec.etag;
     }
 }
 
