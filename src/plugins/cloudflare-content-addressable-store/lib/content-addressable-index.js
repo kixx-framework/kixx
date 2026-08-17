@@ -1,10 +1,25 @@
-import { assert, isUndefined } from '../../../kixx/assertions/mod.js';
+import {
+    assert,
+    assertArray,
+    isNonEmptyString,
+    isPlainObject,
+    isUndefined,
+} from '../../../kixx/assertions/mod.js';
 import { FORMAT, compareStrings, hashTree } from './addressing.js';
 
 /**
- * Encoded index-table value: kind, hash, size and metadata packed as a
- * fixed-order tuple instead of an object, to keep the persisted table small.
- * @typedef {[('tree'|'blob'), string, (number|null), (Object|null)]} IndexEntryTuple
+ * Encoded directory entry containing only the fields which apply to trees.
+ * @typedef {['tree', string]} TreeIndexEntryTuple
+ */
+
+/**
+ * Encoded file entry with its content attributes in a fixed order.
+ * @typedef {['blob', string, (number|null), (Object|null)]} BlobIndexEntryTuple
+ */
+
+/**
+ * Compact encoded index-table value used to keep the persisted table small.
+ * @typedef {TreeIndexEntryTuple|BlobIndexEntryTuple} IndexEntryTuple
  */
 
 /**
@@ -27,19 +42,26 @@ import { FORMAT, compareStrings, hashTree } from './addressing.js';
  */
 
 /**
- * Read-only, in-memory view over a persisted content-addressable index table.
- * Supports point lookups and prefix listings by pathname without re-deriving
- * the underlying directory structure.
+ * Read-only, in-memory snapshot of a persisted content-addressable index
+ * table. Supports point lookups and prefix listings by pathname without
+ * re-deriving the underlying directory structure.
  */
 export default class ContentAddressableIndex {
 
+    #entries;
     #sortedPaths;
 
     /**
-     * @param {Object<string, IndexEntryTuple>} entries - Encoded index table, typically loaded from durable storage or produced by {@link ContentAddressableIndex.buildIndex}.
+     * @param {Object<string, IndexEntryTuple>} entries - Encoded index table to validate and copy, typically loaded from durable storage or produced by {@link ContentAddressableIndex.buildIndex}.
      */
     constructor(entries) {
-        this.entries = entries;
+        assert(isPlainObject(entries), 'ContentAddressableIndex: entries must be a plain object');
+
+        for (const [ pathname, tuple ] of Object.entries(entries)) {
+            assertValidIndexEntryTuple(pathname, tuple);
+        }
+
+        this.#entries = structuredClone(entries);
     }
 
     /**
@@ -48,7 +70,7 @@ export default class ContentAddressableIndex {
      * @returns {IndexEntry|null} The matching node, or null when no entry exists at that pathname.
      */
     getNode(pathname) {
-        const tuple = this.entries[pathname];
+        const tuple = this.#entries[pathname];
         return tuple ? decodeIndexEntry(pathname, tuple) : null;
     }
 
@@ -84,7 +106,7 @@ export default class ContentAddressableIndex {
             if (!recursive && path.slice(prefix.length).includes('/')) {
                 continue;
             }
-            nodes.push(decodeIndexEntry(path, this.entries[path]));
+            nodes.push(decodeIndexEntry(path, this.#entries[path]));
         }
 
         return nodes;
@@ -94,7 +116,7 @@ export default class ContentAddressableIndex {
         if (this.#sortedPaths) {
             return this.#sortedPaths;
         }
-        this.#sortedPaths = Object.keys(this.entries).sort(compareStrings);
+        this.#sortedPaths = Object.keys(this.#entries).sort(compareStrings);
         return this.#sortedPaths;
     }
 
@@ -126,18 +148,46 @@ export default class ContentAddressableIndex {
 }
 
 function decodeIndexEntry(pathname, tuple) {
-    const [ kind, hash, size, metadata ] = tuple;
+    const [ kind, hash, size = null, metadata = null ] = tuple;
     return {
         pathname,
         kind,
         hash,
         size,
-        metadata,
+        metadata: metadata === null ? null : structuredClone(metadata),
     };
+}
+
+function assertValidIndexEntryTuple(pathname, tuple) {
+    const messagePrefix = `ContentAddressableIndex: entry "${ pathname }"`;
+    assertArray(tuple, `${ messagePrefix } must be a tuple`);
+
+    const [ kind, hash, size, metadata ] = tuple;
+    assert(kind === 'tree' || kind === 'blob', `${ messagePrefix } kind must be "tree" or "blob"`);
+    assert(isNonEmptyString(hash), `${ messagePrefix } hash must be a non-empty string`);
+
+    if (kind === 'tree') {
+        assert(tuple.length === 2, `${ messagePrefix } tree tuple must contain exactly 2 elements`);
+        return;
+    }
+
+    assert(tuple.length === 4, `${ messagePrefix } blob tuple must contain exactly 4 elements`);
+    assert(
+        size === null || (Number.isInteger(size) && size >= 0),
+        `${ messagePrefix } blob size must be a non-negative integer or null`,
+    );
+    assert(
+        metadata === null || isPlainObject(metadata),
+        `${ messagePrefix } blob metadata must be a plain object or null`,
+    );
 }
 
 function encodeIndexEntry(kind, node) {
     const { hash } = node;
+    if (kind === 'tree') {
+        return [ kind, hash ];
+    }
+
     const size = isUndefined(node.size) ? null : node.size;
     const metadata = isUndefined(node.metadata) ? null : node.metadata;
     return [ kind, hash, size, metadata ];

@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches, assertNotEqual } from 'kixx-assert';
+import { assert, assertEqual, assertMatches, assertNotEqual, assertUndefined } from 'kixx-assert';
 
 import ContentAddressableIndex from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js';
 import { FORMAT, compareStrings, hashTree } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
@@ -14,12 +14,21 @@ async function catchAsyncError(fn) {
     return null;
 }
 
+function catchError(fn) {
+    try {
+        fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}
+
 function makeListingEntries() {
     return {
         '/a.txt': [ 'blob', 'h-a', 1, null ],
-        '/dir': [ 'tree', 'h-dir', null, null ],
+        '/dir': [ 'tree', 'h-dir' ],
         '/dir/b.txt': [ 'blob', 'h-b', 2, null ],
-        '/dir/sub': [ 'tree', 'h-sub', null, null ],
+        '/dir/sub': [ 'tree', 'h-sub' ],
         '/dir/sub/c.txt': [ 'blob', 'h-c', 3, null ],
         '/dirbar.txt': [ 'blob', 'h-dirbar', 4, null ],
     };
@@ -27,6 +36,84 @@ function makeListingEntries() {
 
 
 describe('ContentAddressableIndex', ({ describe }) => {
+
+    describe('constructor', ({ it }) => {
+        it('rejects entries which are not a plain object', () => {
+            const caught = catchError(() => new ContentAddressableIndex([]));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('entries must be a plain object', caught.message);
+        });
+
+        it('rejects an invalid tree tuple', () => {
+            const caught = catchError(() => new ContentAddressableIndex({
+                '/dir': [ 'tree', 'hashabc', null, null ],
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('tree tuple must contain exactly 2 elements', caught.message);
+        });
+
+        it('rejects an invalid blob tuple', () => {
+            const caught = catchError(() => new ContentAddressableIndex({
+                '/file.txt': [ 'blob', 'hashabc', -1, null ],
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('blob size must be a non-negative integer or null', caught.message);
+        });
+
+        it('rejects malformed tuple fields', () => {
+            const invalidTuples = [
+                'not-a-tuple',
+                [ 'other', 'hashabc' ],
+                [ 'tree', '' ],
+                [ 'blob', 'hashabc', 1 ],
+                [ 'blob', 'hashabc', 1, [] ],
+            ];
+
+            for (const tuple of invalidTuples) {
+                const caught = catchError(() => new ContentAddressableIndex({
+                    '/entry': tuple,
+                }));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+            }
+        });
+
+        it('takes a private snapshot of entries and metadata', () => {
+            const metadata = { attributes: { language: 'en' } };
+            const entries = {
+                '/file.txt': [ 'blob', 'hashabc', 10, metadata ],
+            };
+            const index = new ContentAddressableIndex(entries);
+
+            entries['/file.txt'][1] = 'changed-hash';
+            metadata.attributes.language = 'fr';
+            entries['/other.txt'] = [ 'blob', 'other-hash', 1, null ];
+
+            const node = index.getNode('/file.txt');
+            assertEqual('hashabc', node.hash);
+            assertEqual('en', node.metadata.attributes.language);
+            assertEqual(null, index.getNode('/other.txt'));
+            assertUndefined(index.entries);
+        });
+
+        it('does not expose metadata which can mutate the index', () => {
+            const index = new ContentAddressableIndex({
+                '/file.txt': [ 'blob', 'hashabc', 10, { attributes: { language: 'en' } } ],
+            });
+
+            const node = index.getNode('/file.txt');
+            node.metadata.attributes.language = 'fr';
+
+            assertEqual('en', index.getNode('/file.txt').metadata.attributes.language);
+        });
+    });
 
     describe('getNode()', ({ it }) => {
         it('returns the decoded node for an existing pathname', () => {
@@ -43,9 +130,9 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual('text', node.metadata.type);
         });
 
-        it('decodes a tree entry with null size and metadata', () => {
+        it('decodes a compact tree entry with null size and metadata', () => {
             const index = new ContentAddressableIndex({
-                '/a': [ 'tree', 'hashabc', null, null ],
+                '/a': [ 'tree', 'hashabc' ],
             });
 
             const node = index.getNode('/a');
@@ -159,6 +246,16 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual('tree', index.getNode('/dir').kind);
             assertEqual('tree', index.getNode('/dir/sub').kind);
             assertEqual('blob', index.getNode('/dir/sub/file.txt').kind);
+        });
+
+        it('encodes tree entries as kind and hash tuples', async () => {
+            const entries = await ContentAddressableIndex.buildIndex([
+                { pathname: '/dir/file.txt', hash: 'hash-file', size: 1 },
+            ]);
+
+            assertEqual(2, entries['/'].length);
+            assertEqual(2, entries['/dir'].length);
+            assertEqual('tree', entries['/dir'][0]);
         });
 
         it('produces a directory hash independent of file input order', async () => {
