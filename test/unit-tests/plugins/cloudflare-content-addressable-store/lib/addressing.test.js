@@ -49,7 +49,7 @@ describe('addressing', ({ describe }) => {
         });
 
         it('prefixes blob storage keys with the format version', () => {
-            assertEqual('b1:', KEY.blob);
+            assertEqual('b:1:', KEY.blob);
         });
     });
 
