@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { assert, isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
+import { assert, assertNonEmptyString, isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
 import { encodeIndexEntry, decodeIndexEntryTuple } from './content-addressable-index.js';
 
 
@@ -13,14 +13,25 @@ import { encodeIndexEntry, decodeIndexEntryTuple } from './content-addressable-i
  * or rolling back a build is always a single-row write to the build's
  * pointer; it never rewrites closure content.
  */
+// Maximum number of closures held in #closureCache at once. Bounds memory
+// in a long-lived Durable Object instance while keeping the working set
+// (the current build plus recent rollback targets) resident.
+const CLOSURE_CACHE_MAX_SIZE = 50;
+
 export default class ContentAddressableIndexStore extends DurableObject {
 
     #sql;
 
-    // Keyed by root hash. Safe to cache forever because a closure's entries
-    // never change once committed.
+    // LRU cache keyed by root hash, bounded to CLOSURE_CACHE_MAX_SIZE entries.
+    // Individual entries are safe to cache indefinitely because a closure's
+    // entries never change once committed; the bound exists only to cap
+    // total memory, evicting the least-recently-used closure first.
     #closureCache = new Map();
 
+    /**
+     * @param {DurableObjectState} ctx - Durable Object state, provided by the runtime.
+     * @param {Object} env - Worker environment bindings, provided by the runtime.
+     */
     constructor(ctx, env) {
         super(ctx, env);
         this.#sql = ctx.storage.sql;
@@ -33,6 +44,11 @@ export default class ContentAddressableIndexStore extends DurableObject {
         });
     }
 
+    /**
+     * Creates the closure_entries and builds tables if they do not already
+     * exist. Safe to call repeatedly; only the constructor does so.
+     * @returns {Promise<void>}
+     */
     async migrate() {
         this.#sql.exec(`
             CREATE TABLE IF NOT EXISTS closure_entries (
@@ -54,7 +70,14 @@ export default class ContentAddressableIndexStore extends DurableObject {
         `);
     }
 
+    /**
+     * Looks up the closure entries served by a build.
+     * @param {string} buildId - The build to resolve.
+     * @returns {Promise<{success: boolean, entries: (Object<string, import('./content-addressable-index.js').IndexEntryTuple>|null)}>} `entries` is null when no build is registered for `buildId`.
+     */
     async getIndex(buildId) {
+        assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getIndex: buildId');
+
         const rootHash = this.#getBuildRootHash(buildId);
 
         if (!rootHash) {
@@ -73,7 +96,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
     #getClosureEntries(rootHash) {
         if (this.#closureCache.has(rootHash)) {
-            return this.#closureCache.get(rootHash);
+            return this.#touchClosureCacheEntry(rootHash);
         }
 
         const sql = 'SELECT pathname, kind, hash, size, metadata FROM closure_entries WHERE root_hash = ?';
@@ -87,16 +110,41 @@ export default class ContentAddressableIndexStore extends DurableObject {
             entries[pathname] = encodeIndexEntry(kind, { hash, size, metadata: parsedMetadata });
         }
 
+        this.#setClosureCacheEntry(rootHash, entries);
+        return entries;
+    }
+
+    // Map preserves insertion order, so re-inserting a key on access moves it
+    // to the end, making the first key in iteration order the least recently
+    // used one.
+    #touchClosureCacheEntry(rootHash) {
+        const entries = this.#closureCache.get(rootHash);
+        this.#closureCache.delete(rootHash);
         this.#closureCache.set(rootHash, entries);
         return entries;
+    }
+
+    #setClosureCacheEntry(rootHash, entries) {
+        this.#closureCache.set(rootHash, entries);
+
+        if (this.#closureCache.size > CLOSURE_CACHE_MAX_SIZE) {
+            const leastRecentlyUsedKey = this.#closureCache.keys().next().value;
+            this.#closureCache.delete(leastRecentlyUsedKey);
+        }
     }
 
     /**
      * Writes an immutable closure's entries, keyed by its own root hash.
      * Idempotent: a closure already present under rootHash is left
      * untouched, since the same hash always implies the same content.
+     * @param {string} rootHash - Root hash identifying the closure.
+     * @param {Object<string, import('./content-addressable-index.js').IndexEntryTuple>} index - Encoded index table to persist, keyed by pathname.
+     * @returns {Promise<{success: boolean}>}
      */
     async commitClosure(rootHash, index) {
+        assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#commitClosure: rootHash');
+        assert(isPlainObject(index), 'ContentAddressableIndexStore#commitClosure: index must be a plain object');
+
         const sql = `
             INSERT OR IGNORE INTO closure_entries (root_hash, pathname, kind, hash, size, metadata)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -106,6 +154,16 @@ export default class ContentAddressableIndexStore extends DurableObject {
         for (const pathname of pathnames) {
             const { kind, hash, size, metadata } = decodeIndexEntryTuple(index[pathname]);
 
+            // Validate every column bound for insertion, not just metadata:
+            // closure_entries.kind and .hash are NOT NULL, and this statement
+            // uses INSERT OR IGNORE for commit idempotency, which would
+            // otherwise silently drop a malformed row on a NOT NULL
+            // violation instead of failing loudly.
+            assert(
+                kind === 'tree' || kind === 'blob',
+                `ContentAddressableIndexStore#commitClosure: entry "${ pathname }" kind must be "tree" or "blob"`,
+            );
+            assertNonEmptyString(hash, `ContentAddressableIndexStore#commitClosure: entry "${ pathname }" hash`);
             assert(
                 metadata === null || isPlainObject(metadata),
                 `ContentAddressableIndexStore#commitClosure: entry "${ pathname }" metadata must be a plain object or null`,
@@ -131,8 +189,14 @@ export default class ContentAddressableIndexStore extends DurableObject {
      * Atomically points a build at a closure. Used for both deploying a new
      * version and rolling back to a previously committed one — in either
      * case this is the only write a build ever needs.
+     * @param {string} buildId - The build to assign.
+     * @param {string} rootHash - Root hash of an already-committed closure.
+     * @returns {Promise<{success: boolean}>}
      */
     async assignBuild(buildId, rootHash) {
+        assertNonEmptyString(buildId, 'ContentAddressableIndexStore#assignBuild: buildId');
+        assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#assignBuild: rootHash');
+
         const closureRows = this.#sql.exec(
             'SELECT 1 FROM closure_entries WHERE root_hash = ? LIMIT 1',
             rootHash,
