@@ -314,6 +314,19 @@ export default class ContentAddressableStore {
         };
     }
 
+    /**
+     * Points an already-deployed buildId at a previously committed root
+     * hash. This is the rollback (and re-promotion) operation: it never
+     * rewrites closure content, only the build's pointer to one.
+     * @param {Object} context - Request or runtime context.
+     * @param {string} buildId - The build to repoint.
+     * @param {string} rootHash - The root hash of a closure previously returned from commitChanges().
+     * @throws {AssertionError} When no closure exists for rootHash.
+     */
+    async rollbackBuild(context, buildId, rootHash) {
+        await this.#store.assignBuild(context, buildId, rootHash);
+    }
+
     async getPage(context, pathname) {
         assert(
             this.isValidPathname(pathname),

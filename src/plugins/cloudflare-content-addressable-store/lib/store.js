@@ -145,20 +145,44 @@ export default class Store {
         };
     }
 
-    async commitChanges(context, buildId, files) {
+    async commitClosure(context, files) {
         const durableObject = this.#resolveDurableObject(context);
 
         const index = await ContentAddressableIndex.buildIndex(files);
+        const rootHash = index['/'][1];
+
+        this.#logger.info('commit closure', { rootHash });
 
         // TODO: Use appropriate error handling for durable objects:
         //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
         //       see: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
-        const { success, message } = await durableObject.commitIndex(buildId, index);
+        const { success, message } = await durableObject.commitClosure(rootHash, index);
 
         if (!success) {
-            throw new Error(`Error calling ContentAddressableIndexStore#commitIndex(): ${ message }`);
+            throw new Error(`Error calling ContentAddressableIndexStore#commitClosure(): ${ message }`);
         }
 
+        return index;
+    }
+
+    async assignBuild(context, buildId, rootHash) {
+        const durableObject = this.#resolveDurableObject(context);
+
+        this.#logger.info('assign build', { buildId, rootHash });
+
+        // TODO: Use appropriate error handling for durable objects:
+        //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
+        //       see: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
+        const { success, message } = await durableObject.assignBuild(buildId, rootHash);
+
+        if (!success) {
+            throw new Error(`Error calling ContentAddressableIndexStore#assignBuild(): ${ message }`);
+        }
+    }
+
+    async commitChanges(context, buildId, files) {
+        const index = await this.commitClosure(context, files);
+        await this.assignBuild(context, buildId, index['/'][1]);
         return index;
     }
 

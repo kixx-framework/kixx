@@ -77,5 +77,6 @@ export async function commitChanges(context, buildId, manifest) {
         buildId = context.runtime.build.id;
     }
 
-    return await commitChanges(context, buildId, manifest);
+    const store = context.getService('ContentAddressableStore');
+    return await store.commitChanges(context, buildId, manifest);
 }

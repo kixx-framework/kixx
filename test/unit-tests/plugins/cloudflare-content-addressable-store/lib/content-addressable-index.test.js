@@ -290,6 +290,13 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual('/dir/b.txt,/dir/sub,/dir/sub/c.txt', pathnames.join(','));
         });
 
+        it('lists nodes under the root without including the root node itself', async () => {
+            const index = new ContentAddressableIndex(makeListingEntries());
+            const nodes = await index.listNodes('/', { recursive: true });
+            const pathnames = nodes.map((node) => node.pathname).sort(compareStrings);
+            assertEqual('/a.txt,/dir,/dir/b.txt,/dir/sub,/dir/sub/c.txt,/dirbar.txt', pathnames.join(','));
+        });
+
         it('treats a prefix without a trailing slash the same as one with it', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
             const withSlash = (await index.listNodes('/dir/', { recursive: true })).map((node) => node.pathname).sort(compareStrings);
@@ -428,6 +435,19 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
             assertMatches('duplicate pathname "/dir/file.txt"', caught.message);
+        });
+
+        it('rejects a pathname used as both a blob and a tree regardless of input order', async () => {
+            const blob = { pathname: '/a', hash: 'hash-a', size: 1 };
+            const child = { pathname: '/a/b.txt', hash: 'hash-b', size: 2 };
+
+            for (const files of [ [ blob, child ], [ child, blob ] ]) {
+                const caught = await catchAsyncError(() => ContentAddressableIndex.buildIndex(files));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+                assertMatches('pathname "/a" cannot be both a blob and a tree', caught.message);
+            }
         });
 
         it('throws AssertionError when a file pathname does not start with a slash', async () => {

@@ -111,6 +111,11 @@ export default class ContentAddressableIndex {
             if (prefix !== '' && !path.startsWith(prefix)) {
                 break;
             }
+            // The root pathname is also its own slash-terminated prefix, unlike
+            // every other directory pathname. Listings contain children only.
+            if (path === prefix) {
+                continue;
+            }
             // If a path includes a "/" beyond the scope, then we know it is nested.
             // Paths never end with a slash "/" -- not even directories.
             if (!recursive && path.slice(prefix.length).includes('/')) {
@@ -125,7 +130,7 @@ export default class ContentAddressableIndex {
     }
 
     async #decodeNode(pathname, tuple) {
-        const [ kind, hash, size = null, metadata = null ] = tuple;
+        const { kind, hash, size, metadata } = decodeIndexEntryTuple(tuple);
         const etag = kind === 'blob' ? await this.#getEtag(pathname, hash, metadata) : hash;
         return {
             pathname,
@@ -241,7 +246,16 @@ function assertValidTreeStructure(entries) {
     }
 }
 
-function encodeIndexEntry(kind, node) {
+/**
+ * Encodes a decoded node's fields into its compact tuple representation.
+ * @param {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file.
+ * @param {Object} node
+ * @param {string} node.hash - Content digest of the blob's bytes, or of the tree's canonicalized child list.
+ * @param {number} [node.size] - Byte size of a blob; ignored for a tree.
+ * @param {Object|null} [node.metadata] - Caller-supplied metadata for a blob; ignored for a tree.
+ * @returns {IndexEntryTuple} The compact tuple representation.
+ */
+export function encodeIndexEntry(kind, node) {
     const { hash } = node;
     if (kind === 'tree') {
         return [ kind, hash ];
@@ -252,11 +266,23 @@ function encodeIndexEntry(kind, node) {
     return [ kind, hash, size, metadata ];
 }
 
+/**
+ * Decodes a compact index-table tuple into its named fields, without deriving
+ * an etag. Use this when only the tuple's own fields are needed.
+ * @param {IndexEntryTuple} tuple - The compact tuple representation.
+ * @returns {{kind: ('tree'|'blob'), hash: string, size: (number|null), metadata: (Object|null)}}
+ */
+export function decodeIndexEntryTuple(tuple) {
+    const [ kind, hash, size = null, metadata = null ] = tuple;
+    return { kind, hash, size, metadata };
+}
+
 // Build a tree of nodes - files and directories - and output the list of all
 // nodes - files and directories. The directory nodes (kind=tree) contain
 // a nested list of all children.
 function buildDirectoryTree(files) {
     const nodeList = [];
+    const directoryPathnames = new Set([ '/' ]);
     const filePathnames = new Set();
     const root = { pathname: '/', kind: 'tree', directories: new Map(), files: new Map() };
     nodeList.push(root);
@@ -267,7 +293,10 @@ function buildDirectoryTree(files) {
             !filePathnames.has(entry.pathname),
             `buildDirectoryTree: duplicate pathname "${ entry.pathname }"`,
         );
-        filePathnames.add(entry.pathname);
+        assert(
+            !directoryPathnames.has(entry.pathname),
+            `buildDirectoryTree: pathname "${ entry.pathname }" cannot be both a blob and a tree`,
+        );
 
         // entry.pathname is normalized (see addressing.js#normalizePathname): leading
         // slash, no trailing slash, no doubled slashes. Drop the leading empty
@@ -279,6 +308,10 @@ function buildDirectoryTree(files) {
         // to build the directory tree up to the file.
         for (let i = 0; i < parts.length - 1; i += 1) {
             pathname += `/${ parts[i] }`;
+            assert(
+                !filePathnames.has(pathname),
+                `buildDirectoryTree: pathname "${ pathname }" cannot be both a blob and a tree`,
+            );
             if (currentNode.directories.has(pathname)) {
                 currentNode = currentNode.directories.get(pathname);
             } else {
@@ -289,10 +322,12 @@ function buildDirectoryTree(files) {
                     files: new Map(),
                 };
                 currentNode.directories.set(pathname, node);
+                directoryPathnames.add(pathname);
                 nodeList.push(node);
                 currentNode = node;
             }
         }
+        filePathnames.add(entry.pathname);
         const fileNode = {
             pathname: entry.pathname,
             kind: 'blob',
