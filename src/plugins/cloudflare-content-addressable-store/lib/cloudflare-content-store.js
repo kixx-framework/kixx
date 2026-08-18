@@ -25,16 +25,17 @@ const DURABLE_OBJECT_NAME = `ContentAddressableStore:${ FORMAT }`;
 // never leave the colo that wrote them.
 const INDEX_CACHE_URL_PREFIX = `https://content-addressable-store.internal/index/${ FORMAT }/`;
 const BLOB_READ_CONCURRENCY = 6;
-const PROGRAMMER_ERROR_NAMES = new Set([
-    'AggregateError',
-    'AssertionError',
-    'EvalError',
-    'RangeError',
-    'ReferenceError',
-    'SyntaxError',
-    'TypeError',
-    'URIError',
-]);
+// Retry policy for Durable Object calls, per Cloudflare's documented
+// guidance: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
+const DURABLE_OBJECT_MAX_ATTEMPTS = 3;
+const DURABLE_OBJECT_BACKOFF_BASE_MS = 100;
+const DURABLE_OBJECT_BACKOFF_MAX_MS = 20000;
+// Properties the Workers runtime stamps onto an exception that actually
+// crossed the Durable Object RPC boundary (thrown by the DO's own code, or
+// raised by DO infrastructure). Their absence means the exception was
+// raised locally by our own callback, not by the Durable Object, so it is
+// a programmer error here and must not be retried or wrapped.
+const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
 
 
 /**
@@ -82,18 +83,46 @@ export default class CloudflareContentStore {
         return new Request(INDEX_CACHE_URL_PREFIX + buildId);
     }
 
-    async #callDurableObject(methodName, callback) {
-        try {
-            return await callback();
-        } catch (cause) {
-            if (PROGRAMMER_ERROR_NAMES.has(cause?.name)) {
-                throw cause;
-            }
+    // Re-resolves the DurableObjectStub on every attempt because Cloudflare
+    // leaves a stub "broken" after it throws — reusing it just replays the
+    // same failure. Only errors flagged .retryable are retried (never
+    // .overloaded ones, which would worsen the overload), and only up to
+    // DURABLE_OBJECT_MAX_ATTEMPTS, with jittered exponential backoff between
+    // attempts. This is safe because every ContentAddressableIndexStore
+    // method called through here (getIndex, commitClosure, assignBuild) is
+    // idempotent.
+    async #callDurableObject(context, methodName, callback) {
+        let attempt = 0;
 
-            throw new OperationalError(
-                `CloudflareContentStore failed to call ContentAddressableIndexStore#${ methodName }()`,
-                { cause },
-            );
+        for (;;) {
+            const durableObject = this.#resolveDurableObject(context);
+
+            try {
+                return await callback(durableObject);
+            } catch (cause) {
+                const isDurableObjectError = DURABLE_OBJECT_ERROR_MARKERS.some((prop) => prop in Object(cause));
+                if (!isDurableObjectError) {
+                    throw cause;
+                }
+
+                attempt += 1;
+
+                if (!cause?.retryable || attempt >= DURABLE_OBJECT_MAX_ATTEMPTS) {
+                    throw new OperationalError(
+                        `CloudflareContentStore failed to call ContentAddressableIndexStore#${ methodName }()`,
+                        { cause },
+                    );
+                }
+
+                const backoffMs = Math.min(
+                    DURABLE_OBJECT_BACKOFF_MAX_MS,
+                    DURABLE_OBJECT_BACKOFF_BASE_MS * Math.random() * (2 ** attempt),
+                );
+
+                this.#logger.warn('durable object call failed, retrying', { methodName, attempt, backoffMs });
+
+                await scheduler.wait(backoffMs);
+            }
         }
     }
 
@@ -132,11 +161,13 @@ export default class CloudflareContentStore {
             return new ContentAddressableIndex(entries);
         }
 
-        const durableObject = this.#resolveDurableObject(context);
-
         this.#logger.info('fetching index', { buildId });
 
-        const result = await this.#callDurableObject('getIndex', () => durableObject.getIndex(buildId));
+        const result = await this.#callDurableObject(
+            context,
+            'getIndex',
+            (durableObject) => durableObject.getIndex(buildId),
+        );
         if (!result.success) {
             throw new Error(`CloudflareContentStore#fetchIndex() was unsuccessful: ${ result.message }`);
         }
@@ -215,16 +246,15 @@ export default class CloudflareContentStore {
     }
 
     async commitClosure(context, files) {
-        const durableObject = this.#resolveDurableObject(context);
-
         const index = await ContentAddressableIndex.buildIndex(files);
         const rootHash = index['/'][1];
 
         this.#logger.info('commit closure', { rootHash });
 
         const result = await this.#callDurableObject(
+            context,
             'commitClosure',
-            () => durableObject.commitClosure(rootHash, index),
+            (durableObject) => durableObject.commitClosure(rootHash, index),
         );
 
         if (!result.success) {
@@ -235,13 +265,12 @@ export default class CloudflareContentStore {
     }
 
     async assignBuild(context, buildId, rootHash) {
-        const durableObject = this.#resolveDurableObject(context);
-
         this.#logger.info('assign build', { buildId, rootHash });
 
         const result = await this.#callDurableObject(
+            context,
             'assignBuild',
-            () => durableObject.assignBuild(buildId, rootHash),
+            (durableObject) => durableObject.assignBuild(buildId, rootHash),
         );
         if (!result.success) {
             throw new Error(`CloudflareContentStore#assignBuild() was unsuccessful: ${ result.message }`);

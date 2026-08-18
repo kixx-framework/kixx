@@ -373,6 +373,7 @@ export default [
                 structuredClone: 'readonly',
                 crypto: 'readonly',
                 caches: 'readonly',
+                scheduler: 'readonly',
             },
         },
         rules: serverRules,

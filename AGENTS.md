@@ -43,7 +43,7 @@ src/docs/server-error-handling.md
 
 test/unit-tests/README.md
 
-**When to use this document:** Apply this guide only when you have been explicitly asked to write new tests or update existing tests. Consult it whenever you are:
+**When to use this document:** Apply this guide whenever you are:
 
 - Creating a new `*.test.js` file under `test/unit-tests/`.
 - Adding or modifying test cases, hooks, or assertions in an existing test file.
