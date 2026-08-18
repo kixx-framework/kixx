@@ -21,6 +21,9 @@ import {
 
 
 const DURABLE_OBJECT_NAME = `ContentAddressableStore:${ FORMAT }`;
+// Not a real destination, only a stable Cache API key; index cache entries
+// never leave the colo that wrote them.
+const INDEX_CACHE_URL_PREFIX = `https://content-addressable-store.internal/index/${ FORMAT }/`;
 const BLOB_READ_CONCURRENCY = 6;
 const PROGRAMMER_ERROR_NAMES = new Set([
     'AggregateError',
@@ -43,12 +46,18 @@ export default class CloudflareContentStore {
     #logger;
     #kvBindingName;
     #durableObjectBindingName;
+    #edgeCache;
     #pendingIndexes = new Map();
 
     constructor(options) {
         this.#logger = options.logger;
         this.#kvBindingName = options.kvBindingName;
         this.#durableObjectBindingName = options.durableObjectBindingName;
+        // The Cache API's default cache is a true platform global rather than
+        // a request-scoped context.env binding, so it is injectable here
+        // (options.edgeCache) the same way ContentAddressableStore injects a
+        // whole #store, allowing tests to supply a fake without a Workers runtime.
+        this.#edgeCache = options.edgeCache ?? caches.default;
         this.blobReadCacheTtlSeconds = options.blobReadCacheTtlSeconds;
         this.indexCacheTtlSeconds = options.indexCacheTtlSeconds;
     }
@@ -67,6 +76,10 @@ export default class CloudflareContentStore {
 
     #invalidateIndex(buildId) {
         this.#pendingIndexes.delete(buildId);
+    }
+
+    #buildIndexCacheRequest(buildId) {
+        return new Request(INDEX_CACHE_URL_PREFIX + buildId);
     }
 
     async #callDurableObject(methodName, callback) {
@@ -106,46 +119,62 @@ export default class CloudflareContentStore {
     async getIndex(context) {
         const buildId = context.runtime.build.id;
 
-        // Cache both pending and resolved index promises for a few moments in
-        // runtime memory, scoped to the build which produced them.
+        // Cache pending and resolved index promises in runtime memory, scoped
+        // to the build which produced them. Freshness is checked lazily on
+        // read (against cachedAt) rather than through a scheduled eviction:
+        // a Workers isolate can go idle between requests with no guarantee a
+        // pending setTimeout() ever fires, so a timer cannot be trusted to
+        // keep this map small or its entries fresh.
         const cached = this.#pendingIndexes.get(buildId);
-        if (cached) {
+        if (cached && Date.now() - cached.cachedAt < this.indexCacheTtlSeconds * 1000) {
             return cached.promise;
+        }
+
+        const promise = this.#fetchIndex(context, buildId);
+
+        this.#pendingIndexes.set(buildId, { promise, cachedAt: Date.now() });
+
+        // Drop a failed fetch immediately so the next call retries instead of
+        // waiting out the TTL on a rejected promise.
+        promise.catch(() => this.#invalidateIndex(buildId));
+
+        return await promise;
+    }
+
+    async #fetchIndex(context, buildId) {
+        const cache = this.#edgeCache;
+        const cacheKey = this.#buildIndexCacheRequest(buildId);
+
+        // The edge Cache API is shared by every isolate hitting this colo, so
+        // a cache hit here avoids a Durable Object call regardless of which
+        // isolate served the last request for this build.
+        const cachedResponse = await cache.match(cacheKey);
+        if (cachedResponse) {
+            const entries = await cachedResponse.json();
+            return new ContentAddressableIndex(entries);
         }
 
         const durableObject = this.#resolveDurableObject(context);
 
         this.#logger.info('fetching index', { buildId });
 
-        const entry = {};
-        const pending = this.#callDurableObject('getIndex', () => durableObject.getIndex(buildId))
-            .then((result) => {
-                this.#assertSuccessfulResponse('getIndex', result);
-                const { entries } = result;
-                if (!entries) {
-                    // If the index does not exist, then the system is not recoverable.
-                    throw new AssertionError(`No registered content index for BUILD_ID ${ buildId }`);
-                }
-                return new ContentAddressableIndex(entries);
-            })
-            .catch((error) => {
-                if (this.#pendingIndexes.get(buildId) === entry) {
-                    this.#pendingIndexes.delete(buildId);
-                }
+        const result = await this.#callDurableObject('getIndex', () => durableObject.getIndex(buildId));
+        this.#assertSuccessfulResponse('getIndex', result);
 
-                return Promise.reject(error);
-            });
+        const { entries } = result;
+        if (!entries) {
+            // If the index does not exist, then the system is not recoverable.
+            throw new AssertionError(`No registered content index for BUILD_ID ${ buildId }`);
+        }
 
-        entry.promise = pending;
-        this.#pendingIndexes.set(buildId, entry);
+        await cache.put(cacheKey, new Response(JSON.stringify(entries), {
+            headers: {
+                'content-type': 'application/json',
+                'cache-control': `max-age=${ this.indexCacheTtlSeconds }`,
+            },
+        }));
 
-        setTimeout(() => {
-            if (this.#pendingIndexes.get(buildId) === entry) {
-                this.#pendingIndexes.delete(buildId);
-            }
-        }, this.indexCacheTtlSeconds * 1000);
-
-        return pending;
+        return new ContentAddressableIndex(entries);
     }
 
     async statPath(context, pathname) {
@@ -233,6 +262,12 @@ export default class CloudflareContentStore {
         );
         this.#assertSuccessfulResponse('assignBuild', result);
         this.#invalidateIndex(buildId);
+
+        // Purge this colo's edge cache entry so the deploying request sees the
+        // new build immediately. Every other colo still picks it up within
+        // indexCacheTtlSeconds via the cache-control max-age set in
+        // #fetchIndex().
+        await this.#edgeCache.delete(this.#buildIndexCacheRequest(buildId));
     }
 
     async commitChanges(context, buildId, files) {
