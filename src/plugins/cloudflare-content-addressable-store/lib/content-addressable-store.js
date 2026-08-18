@@ -102,38 +102,74 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE);
         const blob = stringToUint8Array(canonicalize(bundle));
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        return await this.#store.touchBlob(context, stats);
+
+        // The pathname for template partials is internal to the
+        // ContentAddressableStore, so not returned here.
+        return {
+            hash: stats.hash,
+            size: stats.size,
+            metadata: null,
+        };
     }
 
     async statTemplatePartials(context) {
         const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
         if (entry) {
-            return new StatObject(entry);
+            const stats = new StatObject(entry);
+            // The pathname for template partials is internal to the
+            // ContentAddressableStore, so not returned here.
+            delete stats.pathname;
+            return stats;
         }
         return null;
     }
 
     async getTemplatePartials(context) {
-        return await this.#getPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
+        const contentObject = await this.#getPath(
+            context,
+            this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE),
+        );
+        // The pathname for template partials is internal to the
+        // ContentAddressableStore, so not returned here.
+        delete contentObject.pathname;
+        return contentObject;
     }
 
     async putBaseTemplates(context, bundle, etag) {
         const pathname = this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE);
         const blob = stringToUint8Array(canonicalize(bundle));
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        return await this.#store.touchBlob(context, stats);
+
+        // The pathname for base templates is internal to the
+        // ContentAddressableStore, so not returned here.
+        return {
+            hash: stats.hash,
+            size: stats.size,
+            metadata: null,
+        };
     }
 
     async statBaseTemplates(context) {
         const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
         if (entry) {
-            return new StatObject(entry);
+            const stats = new StatObject(entry);
+            // The pathname for base templatese is internal to the
+            // ContentAddressableStore, so not returned here.
+            delete stats.pathname;
+            return stats;
         }
         return null;
     }
 
     async getBaseTemplates(context) {
-        return await this.#getPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
+        const contentObject = await this.#getPath(
+            context,
+            this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE),
+        );
+        // The pathname for base templates is internal to the
+        // ContentAddressableStore, so not returned here.
+        delete contentObject.pathname;
+        return contentObject;
     }
 
     async putPageMetadata(context, pagePath, obj, etag) {
@@ -145,7 +181,10 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
         const blob = stringToUint8Array(canonicalize(obj));
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        return await this.#store.touchBlob(context, stats);
+        // Use the given page pathname as the blob pathname instead of
+        // the full pathname used internally.
+        stats.pathname = pagePath;
+        return stats;
     }
 
     async statPageMetadata(context, pagePath) {
@@ -157,7 +196,11 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
         const entry = await this.#store.statPath(context, pathname);
         if (entry) {
-            return new StatObject(entry);
+            const stats = new StatObject(entry);
+            // Use the given page pathname as the blob pathname instead of
+            // the full pathname used internally.
+            stats.pathname = pagePath;
+            return stats;
         }
         return null;
     }

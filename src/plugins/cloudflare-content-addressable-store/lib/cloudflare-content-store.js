@@ -39,8 +39,20 @@ const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
 
 
 /**
+ * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
+ * @typedef {import('./content-addressable-index.js').IndexEntry} IndexEntry
+ * @typedef {import('./content-addressable-index.js').IndexSourceFile} IndexSourceFile
+ */
+
+/**
  * Coordinates content-addressable persistence through request-scoped
  * Cloudflare KV and Durable Object bindings.
+ *
+ * Blobs are read and written directly against a KV binding. The index — the
+ * mapping of a build to the closure of paths it serves — is read through an
+ * in-memory promise cache and the platform's edge Cache API before falling
+ * back to a Durable Object, and is always written straight through to the
+ * Durable Object, which is the single source of truth.
  */
 export default class CloudflareContentStore {
 
@@ -48,8 +60,19 @@ export default class CloudflareContentStore {
     #kvBindingName;
     #durableObjectBindingName;
     #edgeCache;
+    #scheduler;
     #pendingIndexes = new Map();
 
+    /**
+     * @param {Object} options - Store configuration
+     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Logger used for index-fetch and Durable Object retry diagnostics
+     * @param {string} options.kvBindingName - Name of the `context.env` binding for the blob KV namespace
+     * @param {string} options.durableObjectBindingName - Name of the `context.env` binding for the index Durable Object namespace
+     * @param {Cache} [options.edgeCache] - Cache API instance backing the index cache; defaults to `caches.default`. Injectable so tests can supply a fake without a Workers runtime.
+     * @param {{wait: function(number): Promise<void>}} [options.scheduler] - Scheduler used to back off between Durable Object retries; defaults to the platform `scheduler` global. Injectable so tests can supply a fake without a Workers runtime.
+     * @param {number} options.blobReadCacheTtlSeconds - `cacheTtl` passed to KV reads for blob bytes
+     * @param {number} options.indexCacheTtlSeconds - Time-to-live, in seconds, for both the in-memory pending-index cache and the edge Cache API's `cache-control: max-age`
+     */
     constructor(options) {
         this.#logger = options.logger;
         this.#kvBindingName = options.kvBindingName;
@@ -59,6 +82,10 @@ export default class CloudflareContentStore {
         // (options.edgeCache) the same way ContentAddressableStore injects a
         // whole #store, allowing tests to supply a fake without a Workers runtime.
         this.#edgeCache = options.edgeCache ?? caches.default;
+        // The Scheduler API is likewise a platform global, injectable here for
+        // the same reason: it lets Durable Object retry-backoff tests run
+        // without a Workers runtime and without waiting out real backoff delays.
+        this.#scheduler = options.scheduler ?? scheduler;
         this.blobReadCacheTtlSeconds = options.blobReadCacheTtlSeconds;
         this.indexCacheTtlSeconds = options.indexCacheTtlSeconds;
     }
@@ -121,11 +148,21 @@ export default class CloudflareContentStore {
 
                 this.#logger.warn('durable object call failed, retrying', { methodName, attempt, backoffMs });
 
-                await scheduler.wait(backoffMs);
+                await this.#scheduler.wait(backoffMs);
             }
         }
     }
 
+    /**
+     * Resolves the content-addressable index for the current build, the
+     * table of every pathname it serves. Reads are served, in order, from an
+     * in-memory promise cache, the edge Cache API, and finally a Durable
+     * Object call, each layer refreshed lazily once `indexCacheTtlSeconds`
+     * elapses.
+     * @param {RequestContext} context - Request context carrying the current build ID and platform bindings
+     * @returns {Promise<import('./content-addressable-index.js').default>} Index for `context.runtime.build.id`
+     * @throws {AssertionError} When no index has been committed for the current build
+     */
     async getIndex(context) {
         const buildId = context.runtime.build.id;
 
@@ -188,11 +225,25 @@ export default class CloudflareContentStore {
         return new ContentAddressableIndex(entries);
     }
 
+    /**
+     * Looks up a single node in the current build's index by exact pathname.
+     * @param {RequestContext} context - Request context carrying the current build ID
+     * @param {string} pathname - The pathname to look up, including a leading slash "/"
+     * @returns {Promise<IndexEntry|null>} The matching node, or null when no entry exists at that pathname
+     */
     async statPath(context, pathname) {
         const index = await this.getIndex(context);
         return index.getNode(pathname);
     }
 
+    /**
+     * Lists the nodes under a directory in the current build's index.
+     * @param {RequestContext} context - Request context carrying the current build ID
+     * @param {string} prefix - Directory pathname; a trailing slash "/" is added if missing
+     * @param {Object} [options]
+     * @param {boolean} [options.recursive=true] - When false, only list the prefix's immediate children — nested nodes are skipped
+     * @returns {Promise<IndexEntry[]>} Matching nodes in pathname sort order
+     */
     async listStats(context, prefix, options) {
         const { recursive = true } = options ?? {};
         const index = await this.getIndex(context);
@@ -202,6 +253,13 @@ export default class CloudflareContentStore {
         return index.listNodes(prefix, { recursive });
     }
 
+    /**
+     * Computes a deterministic digest from a set of index nodes' content and
+     * metadata, independent of the order `stats` was supplied in. Suitable
+     * for use as an aggregate etag over several files.
+     * @param {IndexEntry[]} stats - Nodes to fold into the digest
+     * @returns {Promise<string>} Content digest in the current wire format
+     */
     async computeHashFromStats(stats) {
         const pairs = new Map();
         for (const stat of stats) {
@@ -218,6 +276,18 @@ export default class CloudflareContentStore {
         return await hashSet(sorted);
     }
 
+    /**
+     * Writes a blob's bytes to KV under its content hash, independent of the
+     * `commitClosure`/`assignBuild` step that makes it reachable through a
+     * build's index.
+     * @param {RequestContext} context - Request context carrying the KV binding
+     * @param {string} pathname - Logical pathname the blob will be indexed under; carried through to the returned descriptor only, not used as the storage key
+     * @param {Uint8Array} blob - Blob bytes to store
+     * @param {Object|null} metadata - Caller-supplied metadata to associate with the blob, carried through to the returned descriptor
+     * @param {string} [etag] - Previously computed etag to verify against; when supplied it must match the etag recomputed from `blob` and `metadata`
+     * @returns {Promise<{pathname: string, hash: string, size: number, metadata: (Object|null)}>} Descriptor suitable for inclusion in the `files` array passed to `commitClosure`/`commitChanges`
+     * @throws {ValidationError} When `etag` is supplied and does not match the recomputed etag
+     */
     async putBlob(context, pathname, blob, metadata, etag) {
         const hash = await hashBlob(blob);
         const computedEtag = await hashEtag(hash, metadata);
@@ -245,6 +315,15 @@ export default class CloudflareContentStore {
         };
     }
 
+    /**
+     * Derives and persists an immutable closure — the directory tree implied
+     * by `files` — under its own root hash. Does not point any build at the
+     * closure; pair with `assignBuild`, or use `commitChanges` to do both.
+     * Idempotent: committing the same closure content again is a no-op.
+     * @param {RequestContext} context - Request context carrying the Durable Object binding
+     * @param {IndexSourceFile[]} files - Blob descriptors to include in the closure, typically returned from `putBlob`
+     * @returns {Promise<import('./content-addressable-index.js').default>} The committed closure's index
+     */
     async commitClosure(context, files) {
         const index = await ContentAddressableIndex.buildIndex(files);
         const rootHash = index['/'][1];
@@ -264,6 +343,17 @@ export default class CloudflareContentStore {
         return index;
     }
 
+    /**
+     * Points `buildId` at a previously committed closure's root hash. This
+     * is the only write a build's pointer ever needs, for both deploying a
+     * new closure and rolling back to one committed earlier — it never
+     * rewrites closure content.
+     * @param {RequestContext} context - Request context carrying the Durable Object binding
+     * @param {string} buildId - The build to repoint
+     * @param {string} rootHash - Root hash of an already-committed closure, such as one returned from `commitClosure`
+     * @returns {Promise<void>}
+     * @throws {AssertionError} When no closure has been committed for `rootHash`
+     */
     async assignBuild(context, buildId, rootHash) {
         this.#logger.info('assign build', { buildId, rootHash });
 
@@ -284,12 +374,27 @@ export default class CloudflareContentStore {
         await this.#edgeCache.delete(this.#buildIndexCacheRequest(buildId));
     }
 
+    /**
+     * Commits a new closure from `files` and assigns `buildId` to it in one
+     * call — the combination of `commitClosure` and `assignBuild` used to
+     * deploy a new build.
+     * @param {RequestContext} context - Request context carrying the Durable Object binding
+     * @param {string} buildId - The build to deploy
+     * @param {IndexSourceFile[]} files - Blob descriptors to include in the new closure, typically returned from `putBlob`
+     * @returns {Promise<import('./content-addressable-index.js').default>} The newly committed closure's index
+     */
     async commitChanges(context, buildId, files) {
         const index = await this.commitClosure(context, files);
         await this.assignBuild(context, buildId, index['/'][1]);
         return index;
     }
 
+    /**
+     * Reads a single blob's bytes by content hash.
+     * @param {RequestContext} context - Request context carrying the KV binding
+     * @param {string} hash - Content hash identifying the blob, such as one returned from `putBlob` or an `IndexEntry.hash`
+     * @returns {Promise<Uint8Array|null>} The blob's bytes, or null when no blob exists under `hash`
+     */
     async getBlob(context, hash) {
         const kv = this.#resolveKvStore(context);
 
@@ -303,6 +408,13 @@ export default class CloudflareContentStore {
         return buff ? new Uint8Array(buff) : null;
     }
 
+    /**
+     * Reads several blobs' bytes by content hash, in batches of
+     * `BLOB_READ_CONCURRENCY` concurrent KV reads.
+     * @param {RequestContext} context - Request context carrying the KV binding
+     * @param {string[]} hashes - Content hashes to read
+     * @returns {Promise<Array<Uint8Array|null>>} Bytes for each hash, in the same order as `hashes`; an entry is null when no blob exists under that hash
+     */
     async getBlobs(context, hashes) {
         const kv = this.#resolveKvStore(context);
 
