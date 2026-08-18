@@ -6,142 +6,190 @@ import {
 
 export default [
     {
-        pattern: '/template-partials',
-        name: 'template-partials',
+        pattern: '/index',
+        name: 'index',
         routes: [
-        ],
-    },
-    {
-        pattern: '/base-templates',
-        name: 'base-templates',
-        routes: [
-        ],
-    },
-    {
-        // Optional wildcard group so the root page ('/') can be accessed via
-        // `/publishing-api/v1/page-metadata/`
-        // A bare `/page-metadata/*pathname` requires at least one path segment, so
-        // the root request would fall through.
-        pattern: '/page-metadata{/*path}',
-        name: 'page-metadata',
-        routes: [
-        ],
-    },
-    {
-        pattern: '/page-partials/*path',
-        name: 'page-partials',
-        routes: [
-        ],
-    },
-    {
-        pattern: '/page-includes/*path',
-        name: 'page-includes',
-        routes: [
-        ],
-    },
-    {
-        pattern: '/page-templates/*path',
-        name: 'page-templates',
-        routes: [
-        ],
-    },
-    {
-        pattern: '/stats',
-        name: 'stats',
-        routes: [
+            {
+                pattern: '/closure',
+                name: 'closure',
+                targets: [
+                    {
+                        name: 'commit-changes',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [
+                            CommitChanges(),
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/template-partials',
+                name: 'template-partials',
+                targets: [
+                    {
+                        name: 'get-stats',
+                        methods: [ 'HEAD', 'GET' ],
+                        requestHandlers: [
+                            StatResource({ type: 'template_partials' }),
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/base-templates',
+                name: 'base-templates',
+                targets: [
+                    {
+                        name: 'get-stats',
+                        methods: [ 'HEAD', 'GET' ],
+                        requestHandlers: [
+                            StatResource({ type: 'base_templates' }),
+                        ],
+                    },
+                ],
+            },
+            {
+                // Optional wildcard group so the root page ('/') can be accessed via
+                // `/publishing-api/v1/page-metadata/`.
+                // A bare `/page-metadata/*pathname` requires at least one path segment, so
+                // the root request would fall through.
+                pattern: '/page-metadata{/*path}',
+                name: 'page-metadata',
+                targets: [
+                    {
+                        name: 'get-stats',
+                        methods: [ 'HEAD', 'GET' ],
+                        requestHandlers: [
+                            StatResource({ type: 'page_metadata' }),
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/page-partials{/*path}',
+                name: 'page-partials',
+                targets: [
+                    {
+                        name: 'get-stats',
+                        methods: [ 'HEAD', 'GET' ],
+                        requestHandlers: [
+                            StatResource({ type: 'page_partials' }),
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/page-includes{/*path}',
+                name: 'page-includes',
+                targets: [
+                    {
+                        name: 'get-stats',
+                        methods: [ 'HEAD', 'GET' ],
+                        requestHandlers: [
+                            StatResource({ type: 'page_includes' }),
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/page-templates/*path',
+                name: 'page-templates',
+                targets: [
+                    {
+                        name: 'get-stats',
+                        methods: [ 'HEAD', 'GET' ],
+                        requestHandlers: [
+                            StatResource({ type: 'page_templates' }),
+                        ],
+                    },
+                ],
+            },
         ],
     },
     {
         pattern: '/resources',
-        name: 'stats',
+        name: 'resources',
         routes: [
-        ],
-    },
-    {
-        pattern: '/templates/base/*filepath',
-        name: 'base-templates',
-        targets: [
             {
-                name: 'put',
-                methods: [ 'PUT' ],
-                requestHandlers: [
-                    Permissions.requireTemplatePermission,
-                    PublishingAPI.putBaseTemplate,
+                pattern: '/template-partials',
+                name: 'template-partials',
+                targets: [
+                    {
+                        name: 'put-resource',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [
+                            PutResource({ type: 'template_partials' }),
+                        ],
+                    },
                 ],
             },
-        ],
-    },
-    {
-        pattern: '/templates/pages/*filepath',
-        name: 'page-templates',
-        targets: [
             {
-                name: 'put',
-                methods: [ 'PUT' ],
-                requestHandlers: [
-                    Permissions.requireTemplatePermission,
-                    PublishingAPI.putPageTemplate,
+                pattern: '/base-templates',
+                name: 'base-templates',
+                targets: [
+                    {
+                        name: 'put-resource',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [
+                            PutResource({ type: 'base_templates' }),
+                        ],
+                    },
                 ],
             },
-        ],
-    },
-    {
-        pattern: '/templates/partials/*filepath',
-        name: 'partial-templates',
-        targets: [
             {
-                name: 'put',
-                methods: [ 'PUT' ],
-                requestHandlers: [
-                    Permissions.requireTemplatePermission,
-                    PublishingAPI.putPartialTemplate,
+                // Optional wildcard group so the root page ('/') can be accessed via
+                // `/publishing-api/v1/page-metadata/`.
+                // A bare `/page-metadata/*pathname` requires at least one path segment, so
+                // the root request would fall through.
+                pattern: '/page-metadata{/*path}',
+                name: 'page-metadata',
+                targets: [
+                    {
+                        name: 'put-resource',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [
+                            PutResource({ type: 'page_metadata' }),
+                        ],
+                    },
                 ],
             },
-        ],
-    },
-    {
-        // Optional wildcard group so the site root page ('/') can be
-        // published via `PUT /publishing-api/v1/pages` (or with a
-        // trailing slash). A bare `/pages/*pathname` requires at least
-        // one segment, so the root request would fall through to the
-        // catch-all GET/HEAD route and return 405.
-        pattern: '/pages{/*pathname}',
-        name: 'pages',
-        targets: [
             {
-                name: 'put-metadata',
-                methods: [ 'PUT' ],
-                requestHandlers: [
-                    Permissions.requirePageMetadataPermission,
-                    PublishingAPI.putPageMetadata,
+                pattern: '/page-partials{/*path}',
+                name: 'page-partials',
+                targets: [
+                    {
+                        name: 'put-resource',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [
+                            PutResource({ type: 'page_partials' }),
+                        ],
+                    },
                 ],
             },
-        ],
-    },
-    {
-        pattern: '/includes/*filepath',
-        name: 'includes',
-        targets: [
             {
-                name: 'put',
-                methods: [ 'PUT' ],
-                requestHandlers: [
-                    Permissions.requireIncludePermission,
-                    PublishingAPI.putPageInclude,
+                pattern: '/page-includes{/*path}',
+                name: 'page-includes',
+                targets: [
+                    {
+                        name: 'put-resource',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [
+                            PutResource({ type: 'page_includes' }),
+                        ],
+                    },
                 ],
             },
-        ],
-    },
-    {
-        pattern: '/assets/*filepath',
-        name: 'assets',
-        targets: [
             {
-                name: 'put',
-                methods: [ 'PUT' ],
-                requestHandlers: [
-                    Permissions.requireAssetPermission,
-                    PublishingAPI.putStaticAsset,
+                pattern: '/page-templates/*path',
+                name: 'page-templates',
+                targets: [
+                    {
+                        name: 'put-resource',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [
+                            PutResource({ type: 'page_templates' }),
+                        ],
+                    },
                 ],
             },
         ],
