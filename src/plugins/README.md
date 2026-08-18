@@ -1,6 +1,6 @@
 # Plugins
 
-This directory holds the **adapters** in the Kixx ports-and-adapters architecture. It is the layer that makes one application codebase run on Node.js, Cloudflare Workers, and — as they are added — Deno, Deno Deploy, and AWS Lambda, with little or no change to the code in `app/`.
+This directory holds the **adapters** in the Kixx ports-and-adapters architecture. It is the layer that makes one application codebase run on Node.js, Cloudflare Workers, Deno, Deno Deploy, and AWS Lambda, with little or no change to the code in `app/`.
 
 The rule this architecture enforces: **application code never names a platform.** It asks for a capability by name and gets back whatever implements that capability on the runtime it happens to be running on.
 
@@ -27,17 +27,15 @@ The entry point is the only place in the system that decides which set of adapte
 
 ```js
 // node-server.js
-import nodePlugins from './plugins/node.js';
+import { plugins as nodePlugins } from './plugins/node.js';
 
 // cloudflare-server.js
-import cloudflarePlugins from './plugins/cloudflare.js';
+import { plugins as cloudflarePlugins } from './plugins/cloudflare.js';
 ```
 
 After that import, both entry points run identical registration logic, hand the same `ApplicationContext` to the same `HttpRouter`, and serve the same `app/`.
 
 Each adapter package is self-contained: `plugin.js` is the lifecycle module the entry point calls, and `lib/` holds the implementation. Nothing outside a package imports its `lib/` directly except its own `plugin.js` and, occasionally, the entry point for direct-construction adapters which are described below.
-
-`Hyperview` is the one service registered by a *general* plugin. It is pure framework logic that reads through the two Hyperview store ports, so it needs no platform variant of its own.
 
 ### Adapters That Skip the Registry
 
@@ -47,6 +45,11 @@ Each adapter package is self-contained: `plugin.js` is the lifecycle module the 
 - The **server request** is constructed fresh per request from a platform-native request object (`nativeRequest` on Workers, `nodeRequest` on Node), so it is a per-request value, not a long-lived service.
 
 Everything with a process lifetime goes through the registry. Everything that predates or outlives a single registry lookup does not.
+
+## General Plugins
+Not every plugin must be an adapter. Some plugins - called "general" plugins - use the plugin registration and initialization process without platform specific logic.
+
+The `Hyperview` service is a good example of a *general* plugin. It is pure framework logic that reads through the two Hyperview store ports, so it needs no platform variant of its own.
 
 ## The Plugin Module Contract
 
@@ -85,32 +88,6 @@ for (const plugin of plugins.values()) {
 ```
 
 The application's own `app.register()` and `app.initialize()` run after all plugins, so `app/app.js` can rely on every platform service being present when it registers its Collections.
-
-## The Plugin Registries
-
-Three small modules map a plugin name to its module:
-
-```js
-// plugins/general.js
-const generalPlugins = new Map([
-    [ 'hyperview', hyperview ],
-]);
-
-// plugins/node.js
-const nodePlugins = new Map([
-    [ 'nodeKeyValueStore', nodeKeyValueStore ],
-    // ...
-]);
-```
-
-The entry point merges them, and the merge direction is the extension point:
-
-```js
-// Merge plugin maps, allowing platform plugins to override general plugins.
-const plugins = new Map([ ...generalPlugins, ...nodePlugins ]);
-```
-
-This structure allows a platform registry to replace a general plugin by reusing its key. This is helpful to add a capability that is portable in general and needs a special case on one runtime.
 
 ## Where Platform Differences Actually Live
 
