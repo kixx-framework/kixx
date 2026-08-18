@@ -65,7 +65,7 @@ export function StatResource({ type }) {
 
         const resource = jsonApiResource({
             type,
-            id: stats.pathname,
+            id: pathname,
             attributes: stats,
         });
 
@@ -117,7 +117,7 @@ export function PutResource({ type }) {
 
         const resource = jsonApiResource({
             type,
-            id: stats.pathname,
+            id: pathname,
             attributes: stats,
         });
 

@@ -1,5 +1,10 @@
-import { AssertionError } from '../../../kixx/errors/mod.js';
-import { assert, isUndefined } from '../../../kixx/assertions/mod.js';
+import { AssertionError, ValidationError } from '../../../kixx/errors/mod.js';
+import {
+    assert,
+    isNonEmptyString,
+    isPlainObject,
+    isUndefined,
+} from '../../../kixx/assertions/mod.js';
 import CloudflareContentStore from './cloudflare-content-store.js';
 import { ContentObject, StatObject } from './content-object.js';
 import {
@@ -100,15 +105,8 @@ export default class ContentAddressableStore {
     async putTemplatePartials(context, bundle, etag) {
         const pathname = this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE);
         const blob = stringToUint8Array(canonicalize(bundle));
-        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-
-        // The pathname for template partials is internal to the
-        // ContentAddressableStore, so not returned here.
-        return {
-            hash: stats.hash,
-            size: stats.size,
-            metadata: null,
-        };
+        const { hash, size } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return { hash, size, metadata: null };
     }
 
     async statTemplatePartials(context) {
@@ -129,15 +127,8 @@ export default class ContentAddressableStore {
     async putBaseTemplates(context, bundle, etag) {
         const pathname = this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE);
         const blob = stringToUint8Array(canonicalize(bundle));
-        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-
-        // The pathname for base templates is internal to the
-        // ContentAddressableStore, so not returned here.
-        return {
-            hash: stats.hash,
-            size: stats.size,
-            metadata: null,
-        };
+        const { hash, size } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return { hash, size, metadata: null };
     }
 
     async statBaseTemplates(context) {
@@ -163,11 +154,8 @@ export default class ContentAddressableStore {
 
         const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
         const blob = stringToUint8Array(canonicalize(obj));
-        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        // Use the given page pathname as the blob pathname instead of
-        // the full pathname used internally.
-        stats.pathname = pagePath;
-        return stats;
+        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return { hash, size, metadata };
     }
 
     async statPageMetadata(context, pagePath) {
@@ -179,11 +167,7 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
         const entry = await this.#store.statPath(context, pathname);
         if (entry) {
-            const stats = new StatObject(entry);
-            // Use the given page pathname as the blob pathname instead of
-            // the full pathname used internally.
-            stats.pathname = pagePath;
-            return stats;
+            return new StatObject(entry);
         }
         return null;
     }
@@ -196,11 +180,8 @@ export default class ContentAddressableStore {
 
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
-        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        // Use the given page pathname as the blob pathname instead of
-        // the full pathname used internally.
-        stats.pathname = pagePath;
-        return stats;
+        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return { hash, size, metadata };
     }
 
     async statPagePartials(context, pagePath) {
@@ -212,11 +193,7 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
         const entry = await this.#store.statPath(context, pathname);
         if (entry) {
-            const stats = new StatObject(entry);
-            // Use the given page pathname as the blob pathname instead of
-            // the full pathname used internally.
-            stats.pathname = pagePath;
-            return stats;
+            return new StatObject(entry);
         }
         return null;
     }
@@ -229,11 +206,8 @@ export default class ContentAddressableStore {
 
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
-        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        // Use the given page pathname as the blob pathname instead of
-        // the full pathname used internally.
-        stats.pathname = pagePath;
-        return stats;
+        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return { hash, size, metadata };
     }
 
     async statPageIncludes(context, pagePath) {
@@ -245,11 +219,7 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
         const entry = await this.#store.statPath(context, pathname);
         if (entry) {
-            const stats = new StatObject(entry);
-            // Use the given page pathname as the blob pathname instead of
-            // the full pathname used internally.
-            stats.pathname = pagePath;
-            return stats;
+            return new StatObject(entry);
         }
         return null;
     }
@@ -262,11 +232,8 @@ export default class ContentAddressableStore {
 
         const pathname = this.#normalizePagePath(filepath);
         const blob = stringToUint8Array(sourceText);
-        const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        // Use the given filepath as the blob pathname instead of
-        // the full pathname used internally.
-        stats.pathname = filepath;
-        return stats;
+        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        return { hash, size, metadata };
     }
 
     async statPageTemplate(context, filepath) {
@@ -277,85 +244,138 @@ export default class ContentAddressableStore {
 
         const entry = await this.#store.statPath(context, this.#normalizePagePath(filepath));
         if (entry) {
-            const stats = new StatObject(entry);
-            // Use the given filepath as the blob pathname instead of
-            // the full pathname used internally.
-            stats.pathname = filepath;
-            return stats;
+            return new StatObject(entry);
         }
         return null;
     }
 
     async getPageTemplate(context, filepath) {
-        const contentObject = await this.#getPath(
-            context,
-            this.#normalizePagePath(filepath),
+        return await this.#getPath(context, this.#normalizePagePath(filepath));
+    }
+
+    // Checks that a manifest bundle/entry is an object carrying a
+    // content-addressing hash and byte size, the two fields buildIndex()
+    // assumes are already well-formed when it derives the directory tree.
+    // Errors are pushed onto `error` rather than thrown so the caller can
+    // report every problem in the manifest at once.
+    #checkBlobDescriptor(error, source, descriptor) {
+        if (!isPlainObject(descriptor)) {
+            error.push(`${ source } must be an object`, source);
+            return;
+        }
+        if (!isNonEmptyString(descriptor.hash)) {
+            error.push(`${ source }.hash must be a non-empty string`, `${ source }.hash`);
+        }
+        if (!Number.isInteger(descriptor.size) || descriptor.size < 0) {
+            error.push(`${ source }.size must be a non-negative integer`, `${ source }.size`);
+        }
+    }
+
+    // Validates the whole manifest up front and returns the flat IndexSourceFile
+    // list buildIndex() expects, instead of letting its bare assumptions about
+    // pathname/hash/size shape surface as a deep, hard-to-trace AssertionError.
+    // The manifest is client-supplied (it arrives via the CommitChanges JSON:API
+    // request), so failures here are reported as a ValidationError rather than
+    // an assertion, and every problem is collected before throwing.
+    #buildManifestFiles(manifest) {
+        assert(isPlainObject(manifest), 'ContentAddressableStore#commitChanges() requires a manifest object');
+
+        const error = new ValidationError('The content manifest contains invalid entries');
+        const files = [];
+        const pathnames = new Set();
+
+        const addFile = (source, pathname, hash, size) => {
+            if (pathnames.has(pathname)) {
+                error.push(`${ source } duplicates pathname "${ pathname }"`, source);
+                return;
+            }
+            pathnames.add(pathname);
+            files.push({ pathname, hash, size });
+        };
+
+        // A single bundle descriptor, e.g. manifest.templatePartials.
+        const checkBundle = (source, bundle, internalPathname) => {
+            if (isUndefined(bundle)) {
+                return;
+            }
+            this.#checkBlobDescriptor(error, source, bundle);
+            if (isPlainObject(bundle)) {
+                addFile(source, internalPathname, bundle.hash, bundle.size);
+            }
+        };
+
+        // An array of per-page descriptors, e.g. manifest.pageMetadata.
+        // `pathField` is "pathname" for page entries or "filename" for page
+        // templates; `toInternalPathname` maps the caller-supplied value to
+        // the pathname buildIndex() will index by.
+        const checkArray = (entries, source, pathField, toInternalPathname) => {
+            if (isUndefined(entries)) {
+                return;
+            }
+            if (!Array.isArray(entries)) {
+                error.push(`${ source } must be an array`, source);
+                return;
+            }
+
+            entries.forEach((entry, index) => {
+                const entrySource = `${ source }[${ index }]`;
+
+                if (!isPlainObject(entry)) {
+                    error.push(`${ entrySource } must be an object`, entrySource);
+                    return;
+                }
+
+                const pathValue = entry[pathField];
+                const isValidPath = isNonEmptyString(pathValue) && this.isValidPathname(pathValue);
+                if (!isValidPath) {
+                    error.push(`${ entrySource }.${ pathField } must be a valid pathname`, `${ entrySource }.${ pathField }`);
+                }
+
+                this.#checkBlobDescriptor(error, entrySource, entry);
+
+                if (isValidPath) {
+                    addFile(entrySource, toInternalPathname(pathValue), entry.hash, entry.size);
+                }
+            });
+        };
+
+        checkBundle('templatePartials', manifest.templatePartials, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
+        checkBundle('baseTemplates', manifest.baseTemplates, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
+
+        checkArray(
+            manifest.pageMetadata,
+            'pageMetadata',
+            'pathname',
+            (pathname) => this.#normalizePagePath(`${ pathname }/page.json`),
         );
-        // Use the given filepath as the blob pathname instead of
-        // the full pathname used internally.
-        contentObject.pathname = filepath;
-        return contentObject;
+        checkArray(
+            manifest.pagePartials,
+            'pagePartials',
+            'pathname',
+            (pathname) => this.#normalizePagePath(`${ pathname }/${ PAGE_PARTIALS_BUNDLE }`),
+        );
+        checkArray(
+            manifest.pageIncludes,
+            'pageIncludes',
+            'pathname',
+            (pathname) => this.#normalizePagePath(`${ pathname }/${ PAGE_INCLUDES_BUNDLE }`),
+        );
+        checkArray(
+            manifest.pageTemplates,
+            'pageTemplates',
+            'filename',
+            (filename) => this.#normalizePagePath(filename),
+        );
+
+        if (error.length) {
+            throw error;
+        }
+
+        return files;
     }
 
     async commitChanges(context, buildId, manifest) {
-        const files = [];
-
-        if (!isUndefined(manifest.templatePartials)) {
-            const { hash, size } = manifest.templatePartials;
-            files.push({
-                pathname: this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE),
-                hash,
-                size,
-            });
-        }
-        if (!isUndefined(manifest.baseTemplates)) {
-            const { hash, size } = manifest.baseTemplates;
-            files.push({
-                pathname: this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE),
-                hash,
-                size,
-            });
-        }
-        if (Array.isArray(manifest.pageMetadata)) {
-            for (const file of manifest.pageMetadata) {
-                const { pathname, hash, size } = file;
-                files.push({
-                    pathname: this.#normalizePagePath(`${ pathname }/page.json`),
-                    hash,
-                    size,
-                });
-            }
-        }
-        if (Array.isArray(manifest.pagePartials)) {
-            for (const file of manifest.pagePartials) {
-                const { pathname, hash, size } = file;
-                files.push({
-                    pathname: this.#normalizePagePath(`${ pathname }/${ PAGE_PARTIALS_BUNDLE }`),
-                    hash,
-                    size,
-                });
-            }
-        }
-        if (Array.isArray(manifest.pageIncludes)) {
-            for (const file of manifest.pageIncludes) {
-                const { pathname, hash, size } = file;
-                files.push({
-                    pathname: this.#normalizePagePath(`${ pathname }/${ PAGE_INCLUDES_BUNDLE }`),
-                    hash,
-                    size,
-                });
-            }
-        }
-        if (Array.isArray(manifest.pageTemplates)) {
-            for (const file of manifest.pageTemplates) {
-                const { filename, hash, size } = file;
-                files.push({
-                    pathname: this.#normalizePagePath(filename),
-                    hash,
-                    size,
-                });
-            }
-        }
+        const files = this.#buildManifestFiles(manifest);
 
         const index = await this.#store.commitChanges(context, buildId, files);
 
