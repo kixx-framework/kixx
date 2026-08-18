@@ -148,7 +148,7 @@ export default class Store {
     async commitChanges(context, buildId, files) {
         const durableObject = this.#resolveDurableObject(context);
 
-        const index = ContentAddressableIndex.buildIndex(files);
+        const index = await ContentAddressableIndex.buildIndex(files);
 
         // TODO: Use appropriate error handling for durable objects:
         //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/

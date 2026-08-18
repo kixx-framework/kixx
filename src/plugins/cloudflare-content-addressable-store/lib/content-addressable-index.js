@@ -5,7 +5,14 @@ import {
     isPlainObject,
     isUndefined,
 } from '../../../kixx/assertions/mod.js';
-import { FORMAT, compareStrings, hashEtag, hashTree } from './addressing.js';
+import {
+    FORMAT,
+    compareStrings,
+    hashEtag,
+    hashTree,
+    isValidPathname,
+    normalizePathname,
+} from './addressing.js';
 
 /**
  * Encoded directory entry containing only the fields which apply to trees.
@@ -14,7 +21,7 @@ import { FORMAT, compareStrings, hashEtag, hashTree } from './addressing.js';
 
 /**
  * Encoded file entry with its content attributes in a fixed order.
- * @typedef {['blob', string, (number|null), (Object|null)]} BlobIndexEntryTuple
+ * @typedef {['blob', string, number, (Object|null)]} BlobIndexEntryTuple
  */
 
 /**
@@ -28,8 +35,8 @@ import { FORMAT, compareStrings, hashEtag, hashTree } from './addressing.js';
  * @property {string} pathname - Normalized pathname for the node, with a leading slash "/".
  * @property {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file.
  * @property {string} hash - Content digest of the blob's bytes, or of the tree's canonicalized child list.
- * @property {string|null} etag - Digest of a blob's content hash and canonicalized metadata, or null for a tree.
- * @property {number|null} size - Byte size of a blob, or null for a tree or an unspecified size.
+ * @property {string} etag - Digest of a blob's content hash and canonicalized metadata, or the content hash for a tree.
+ * @property {number|null} size - Byte size of a blob, or null for a tree.
  * @property {Object|null} metadata - Caller-supplied metadata for a blob, or null.
  */
 
@@ -38,7 +45,7 @@ import { FORMAT, compareStrings, hashEtag, hashTree } from './addressing.js';
  * @typedef {Object} IndexSourceFile
  * @property {string} pathname - Normalized pathname for the file, with a leading slash "/".
  * @property {string} hash - Content digest of the file bytes, computed by the caller (see hashBlob in addressing.js).
- * @property {number} [size] - Byte size of the file.
+ * @property {number} size - Byte size of the file.
  * @property {Object} [metadata] - Caller-supplied metadata to associate with the file.
  */
 
@@ -62,6 +69,7 @@ export default class ContentAddressableIndex {
         for (const [ pathname, tuple ] of Object.entries(entries)) {
             assertValidIndexEntryTuple(pathname, tuple);
         }
+        assertValidTreeStructure(entries);
 
         this.#entries = structuredClone(entries);
     }
@@ -118,7 +126,7 @@ export default class ContentAddressableIndex {
 
     async #decodeNode(pathname, tuple) {
         const [ kind, hash, size = null, metadata = null ] = tuple;
-        const etag = kind === 'blob' ? await this.#getEtag(pathname, hash, metadata) : null;
+        const etag = kind === 'blob' ? await this.#getEtag(pathname, hash, metadata) : hash;
         return {
             pathname,
             kind,
@@ -175,6 +183,10 @@ export default class ContentAddressableIndex {
 
 function assertValidIndexEntryTuple(pathname, tuple) {
     const messagePrefix = `ContentAddressableIndex: entry "${ pathname }"`;
+    assert(
+        isValidPathname(pathname) && normalizePathname(pathname) === pathname,
+        `${ messagePrefix } pathname must be safe and canonical`,
+    );
     assertArray(tuple, `${ messagePrefix } must be a tuple`);
 
     const [ kind, hash, size, metadata ] = tuple;
@@ -188,13 +200,45 @@ function assertValidIndexEntryTuple(pathname, tuple) {
 
     assert(tuple.length === 4, `${ messagePrefix } blob tuple must contain exactly 4 elements`);
     assert(
-        size === null || (Number.isInteger(size) && size >= 0),
-        `${ messagePrefix } blob size must be a non-negative integer or null`,
+        Number.isInteger(size) && size >= 0,
+        `${ messagePrefix } blob size must be a non-negative integer`,
     );
     assert(
         metadata === null || isPlainObject(metadata),
         `${ messagePrefix } blob metadata must be a plain object or null`,
     );
+}
+
+function assertValidTreeStructure(entries) {
+    const root = entries['/'];
+    assert(root, 'ContentAddressableIndex: entry "/" must be present');
+    assert(root[0] === 'tree', 'ContentAddressableIndex: entry "/" must be a tree');
+
+    const childCounts = new Map();
+
+    for (const pathname of Object.keys(entries)) {
+        if (pathname === '/') {
+            continue;
+        }
+
+        const separatorIndex = pathname.lastIndexOf('/');
+        const parentPathname = separatorIndex === 0 ? '/' : pathname.slice(0, separatorIndex);
+        const parent = entries[parentPathname];
+        const messagePrefix = `ContentAddressableIndex: entry "${ pathname }" parent "${ parentPathname }"`;
+
+        assert(parent, `${ messagePrefix } must be present`);
+        assert(parent[0] === 'tree', `${ messagePrefix } must be a tree`);
+        childCounts.set(parentPathname, (childCounts.get(parentPathname) ?? 0) + 1);
+    }
+
+    for (const [ pathname, tuple ] of Object.entries(entries)) {
+        if (pathname !== '/' && tuple[0] === 'tree') {
+            assert(
+                childCounts.has(pathname),
+                `ContentAddressableIndex: entry "${ pathname }" tree must contain at least one child`,
+            );
+        }
+    }
 }
 
 function encodeIndexEntry(kind, node) {
@@ -213,11 +257,17 @@ function encodeIndexEntry(kind, node) {
 // a nested list of all children.
 function buildDirectoryTree(files) {
     const nodeList = [];
+    const filePathnames = new Set();
     const root = { pathname: '/', kind: 'tree', directories: new Map(), files: new Map() };
     nodeList.push(root);
 
     for (const entry of files) {
         assert(entry.pathname.startsWith('/'), `buildDirectoryTree: entry.pathname must start with "/", got "${ entry.pathname }"`);
+        assert(
+            !filePathnames.has(entry.pathname),
+            `buildDirectoryTree: duplicate pathname "${ entry.pathname }"`,
+        );
+        filePathnames.add(entry.pathname);
 
         // entry.pathname is normalized (see addressing.js#normalizePathname): leading
         // slash, no trailing slash, no doubled slashes. Drop the leading empty

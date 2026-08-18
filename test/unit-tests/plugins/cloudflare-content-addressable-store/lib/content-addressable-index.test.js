@@ -25,6 +25,7 @@ function catchError(fn) {
 
 function makeListingEntries() {
     return {
+        '/': [ 'tree', 'h-root' ],
         '/a.txt': [ 'blob', 'h-a', 1, null ],
         '/dir': [ 'tree', 'h-dir' ],
         '/dir/b.txt': [ 'blob', 'h-b', 2, null ],
@@ -38,6 +39,20 @@ function makeListingEntries() {
 describe('ContentAddressableIndex', ({ describe }) => {
 
     describe('constructor', ({ it }) => {
+        it('accepts an empty root tree', () => {
+            new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
+            });
+        });
+
+        it('accepts a complete nested tree', () => {
+            new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
+                '/a': [ 'tree', 'a-hash' ],
+                '/a/b.txt': [ 'blob', 'blob-hash', 0, null ],
+            });
+        });
+
         it('rejects entries which are not a plain object', () => {
             const caught = catchError(() => new ContentAddressableIndex([]));
 
@@ -56,14 +71,23 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertMatches('tree tuple must contain exactly 2 elements', caught.message);
         });
 
-        it('rejects an invalid blob tuple', () => {
-            const caught = catchError(() => new ContentAddressableIndex({
-                '/file.txt': [ 'blob', 'hashabc', -1, null ],
-            }));
+        it('rejects invalid blob sizes', () => {
+            for (const size of [ null, -1, 1.5, '1' ]) {
+                const caught = catchError(() => new ContentAddressableIndex({
+                    '/file.txt': [ 'blob', 'hashabc', size, null ],
+                }));
 
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('blob size must be a non-negative integer or null', caught.message);
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+                assertMatches('blob size must be a non-negative integer', caught.message);
+            }
+        });
+
+        it('accepts a zero-byte blob', () => {
+            new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
+                '/empty.txt': [ 'blob', 'blob-hash', 0, null ],
+            });
         });
 
         it('rejects malformed tuple fields', () => {
@@ -85,9 +109,86 @@ describe('ContentAddressableIndex', ({ describe }) => {
             }
         });
 
+        it('rejects pathnames which are unsafe or not canonical', () => {
+            const invalidPathnames = [
+                'file.txt',
+                '/FILE.txt',
+                '/dir//file.txt',
+                '/dir/',
+                '/.hidden',
+                '/has space.txt',
+            ];
+
+            for (const pathname of invalidPathnames) {
+                const caught = catchError(() => new ContentAddressableIndex({
+                    '/': [ 'tree', 'root-hash' ],
+                    [pathname]: [ 'blob', 'blob-hash', 1, null ],
+                }));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+                assertMatches(`entry "${ pathname }" pathname must be safe and canonical`, caught.message);
+            }
+        });
+
+        it('requires a root entry', () => {
+            const caught = catchError(() => new ContentAddressableIndex({
+                '/file.txt': [ 'blob', 'blob-hash', 1, null ],
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('entry "/" must be present', caught.message);
+        });
+
+        it('requires the root entry to be a tree', () => {
+            const caught = catchError(() => new ContentAddressableIndex({
+                '/': [ 'blob', 'blob-hash', 1, null ],
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('entry "/" must be a tree', caught.message);
+        });
+
+        it('requires every non-root node to have an immediate parent', () => {
+            const caught = catchError(() => new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
+                '/a/b.txt': [ 'blob', 'blob-hash', 1, null ],
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('entry "/a/b.txt" parent "/a" must be present', caught.message);
+        });
+
+        it('requires every non-root node parent to be a tree', () => {
+            const caught = catchError(() => new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
+                '/a': [ 'blob', 'parent-hash', 1, null ],
+                '/a/b.txt': [ 'blob', 'blob-hash', 1, null ],
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('entry "/a/b.txt" parent "/a" must be a tree', caught.message);
+        });
+
+        it('rejects an empty non-root tree', () => {
+            const caught = catchError(() => new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
+                '/empty': [ 'tree', 'empty-hash' ],
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('entry "/empty" tree must contain at least one child', caught.message);
+        });
+
         it('takes a private snapshot of entries and metadata', async () => {
             const metadata = { attributes: { language: 'en' } };
             const entries = {
+                '/': [ 'tree', 'root-hash' ],
                 '/file.txt': [ 'blob', 'hashabc', 10, metadata ],
             };
             const index = new ContentAddressableIndex(entries);
@@ -105,6 +206,7 @@ describe('ContentAddressableIndex', ({ describe }) => {
 
         it('does not expose metadata which can mutate the index', async () => {
             const index = new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
                 '/file.txt': [ 'blob', 'hashabc', 10, { attributes: { language: 'en' } } ],
             });
 
@@ -118,6 +220,8 @@ describe('ContentAddressableIndex', ({ describe }) => {
     describe('getNode()', ({ it }) => {
         it('returns the decoded node for an existing pathname', async () => {
             const index = new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
+                '/a': [ 'tree', 'a-hash' ],
                 '/a/b.txt': [ 'blob', 'hash123', 42, { type: 'text' } ],
             });
 
@@ -131,9 +235,11 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual(await hashEtag('hash123', { type: 'text' }), node.etag);
         });
 
-        it('decodes a compact tree entry with null size, metadata, and etag', async () => {
+        it('uses the tree hash as its etag', async () => {
             const index = new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
                 '/a': [ 'tree', 'hashabc' ],
+                '/a/file.txt': [ 'blob', 'blob-hash', 1, null ],
             });
 
             const node = await index.getNode('/a');
@@ -141,11 +247,13 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual('tree', node.kind);
             assertEqual(null, node.size);
             assertEqual(null, node.metadata);
-            assertEqual(null, node.etag);
+            assertEqual('hashabc', node.etag);
         });
 
         it('returns null when no entry exists at the pathname', async () => {
-            const index = new ContentAddressableIndex({});
+            const index = new ContentAddressableIndex({
+                '/': [ 'tree', 'root-hash' ],
+            });
             assertEqual(null, await index.getNode('/missing'));
         });
     });
@@ -154,7 +262,7 @@ describe('ContentAddressableIndex', ({ describe }) => {
         it('lists every node when the prefix is empty', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
             const nodes = await index.listNodes('', { recursive: true });
-            assertEqual(6, nodes.length);
+            assertEqual(7, nodes.length);
         });
 
         it('lists nodes in pathname sort order', async () => {
@@ -165,14 +273,14 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual(sorted.join(','), pathnames.join(','));
         });
 
-        it('includes etags for blobs and null etags for trees', async () => {
+        it('includes etags for blobs and trees', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
             const nodes = await index.listNodes('/dir', { recursive: false });
             const blob = nodes.find((node) => node.pathname === '/dir/b.txt');
             const tree = nodes.find((node) => node.pathname === '/dir/sub');
 
             assertEqual(await hashEtag('h-b', null), blob.etag);
-            assertEqual(null, tree.etag);
+            assertEqual('h-sub', tree.etag);
         });
 
         it('recursively lists all nodes nested under a prefix, excluding the directory node itself', async () => {
@@ -229,14 +337,14 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual('en', node.metadata.lang);
         });
 
-        it('defaults a missing size and metadata to null', async () => {
+        it('defaults missing metadata to null', async () => {
             const entries = await ContentAddressableIndex.buildIndex([
-                { pathname: '/a.txt', hash: 'hash-a' },
+                { pathname: '/a.txt', hash: 'hash-a', size: 1 },
             ]);
             const index = new ContentAddressableIndex(entries);
 
             const node = await index.getNode('/a.txt');
-            assertEqual(null, node.size);
+            assertEqual(1, node.size);
             assertEqual(null, node.metadata);
         });
 
@@ -309,6 +417,17 @@ describe('ContentAddressableIndex', ({ describe }) => {
             });
 
             assertEqual(expectedHash, entries['/dir'][1]);
+        });
+
+        it('rejects duplicate file pathnames', async () => {
+            const caught = await catchAsyncError(() => ContentAddressableIndex.buildIndex([
+                { pathname: '/dir/file.txt', hash: 'hash-a', size: 1 },
+                { pathname: '/dir/file.txt', hash: 'hash-b', size: 2 },
+            ]));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('duplicate pathname "/dir/file.txt"', caught.message);
         });
 
         it('throws AssertionError when a file pathname does not start with a slash', async () => {
