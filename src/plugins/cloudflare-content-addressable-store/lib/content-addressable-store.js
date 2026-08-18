@@ -85,12 +85,11 @@ export default class ContentAddressableStore {
 
         const bytes = await this.#store.getBlob(context, stat.hash);
 
-        if (bytes) {
+        if (!bytes) {
             return null;
         }
 
         return new ContentObject(bytes, {
-            pathname: stat.pathname,
             kind: 'blob',
             hash: stat.hash,
             size: bytes.length,
@@ -115,24 +114,16 @@ export default class ContentAddressableStore {
     async statTemplatePartials(context) {
         const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
         if (entry) {
-            const stats = new StatObject(entry);
-            // The pathname for template partials is internal to the
-            // ContentAddressableStore, so not returned here.
-            delete stats.pathname;
-            return stats;
+            return new StatObject(entry);
         }
         return null;
     }
 
     async getTemplatePartials(context) {
-        const contentObject = await this.#getPath(
+        return await this.#getPath(
             context,
             this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE),
         );
-        // The pathname for template partials is internal to the
-        // ContentAddressableStore, so not returned here.
-        delete contentObject.pathname;
-        return contentObject;
     }
 
     async putBaseTemplates(context, bundle, etag) {
@@ -152,24 +143,16 @@ export default class ContentAddressableStore {
     async statBaseTemplates(context) {
         const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
         if (entry) {
-            const stats = new StatObject(entry);
-            // The pathname for base templatese is internal to the
-            // ContentAddressableStore, so not returned here.
-            delete stats.pathname;
-            return stats;
+            return new StatObject(entry);
         }
         return null;
     }
 
     async getBaseTemplates(context) {
-        const contentObject = await this.#getPath(
+        return await this.#getPath(
             context,
             this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE),
         );
-        // The pathname for base templates is internal to the
-        // ContentAddressableStore, so not returned here.
-        delete contentObject.pathname;
-        return contentObject;
     }
 
     async putPageMetadata(context, pagePath, obj, etag) {
@@ -214,7 +197,10 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        return await this.#store.touchBlob(context, stats);
+        // Use the given page pathname as the blob pathname instead of
+        // the full pathname used internally.
+        stats.pathname = pagePath;
+        return stats;
     }
 
     async statPagePartials(context, pagePath) {
@@ -226,7 +212,11 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
         const entry = await this.#store.statPath(context, pathname);
         if (entry) {
-            return new StatObject(entry);
+            const stats = new StatObject(entry);
+            // Use the given page pathname as the blob pathname instead of
+            // the full pathname used internally.
+            stats.pathname = pagePath;
+            return stats;
         }
         return null;
     }
@@ -240,7 +230,10 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        return await this.#store.touchBlob(context, stats);
+        // Use the given page pathname as the blob pathname instead of
+        // the full pathname used internally.
+        stats.pathname = pagePath;
+        return stats;
     }
 
     async statPageIncludes(context, pagePath) {
@@ -252,7 +245,11 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
         const entry = await this.#store.statPath(context, pathname);
         if (entry) {
-            return new StatObject(entry);
+            const stats = new StatObject(entry);
+            // Use the given page pathname as the blob pathname instead of
+            // the full pathname used internally.
+            stats.pathname = pagePath;
+            return stats;
         }
         return null;
     }
@@ -266,7 +263,10 @@ export default class ContentAddressableStore {
         const pathname = this.#normalizePagePath(filepath);
         const blob = stringToUint8Array(sourceText);
         const stats = await this.#store.putBlob(context, pathname, blob, null, etag);
-        return await this.#store.touchBlob(context, stats);
+        // Use the given filepath as the blob pathname instead of
+        // the full pathname used internally.
+        stats.pathname = filepath;
+        return stats;
     }
 
     async statPageTemplate(context, filepath) {
@@ -277,13 +277,24 @@ export default class ContentAddressableStore {
 
         const entry = await this.#store.statPath(context, this.#normalizePagePath(filepath));
         if (entry) {
-            return new StatObject(entry);
+            const stats = new StatObject(entry);
+            // Use the given filepath as the blob pathname instead of
+            // the full pathname used internally.
+            stats.pathname = filepath;
+            return stats;
         }
         return null;
     }
 
     async getPageTemplate(context, filepath) {
-        return await this.#getPath(context, this.#normalizePagePath(filepath));
+        const contentObject = await this.#getPath(
+            context,
+            this.#normalizePagePath(filepath),
+        );
+        // Use the given filepath as the blob pathname instead of
+        // the full pathname used internally.
+        contentObject.pathname = filepath;
+        return contentObject;
     }
 
     async commitChanges(context, buildId, manifest) {
@@ -305,7 +316,7 @@ export default class ContentAddressableStore {
                 size,
             });
         }
-        if (!Array.isArray(manifest.pageMetadata)) {
+        if (Array.isArray(manifest.pageMetadata)) {
             for (const file of manifest.pageMetadata) {
                 const { pathname, hash, size } = file;
                 files.push({
@@ -315,7 +326,7 @@ export default class ContentAddressableStore {
                 });
             }
         }
-        if (!Array.isArray(manifest.pagePartials)) {
+        if (Array.isArray(manifest.pagePartials)) {
             for (const file of manifest.pagePartials) {
                 const { pathname, hash, size } = file;
                 files.push({
@@ -325,7 +336,7 @@ export default class ContentAddressableStore {
                 });
             }
         }
-        if (!Array.isArray(manifest.pageIncludes)) {
+        if (Array.isArray(manifest.pageIncludes)) {
             for (const file of manifest.pageIncludes) {
                 const { pathname, hash, size } = file;
                 files.push({
@@ -335,7 +346,7 @@ export default class ContentAddressableStore {
                 });
             }
         }
-        if (!Array.isArray(manifest.pageTemplates)) {
+        if (Array.isArray(manifest.pageTemplates)) {
             for (const file of manifest.pageTemplates) {
                 const { filename, hash, size } = file;
                 files.push({
@@ -366,7 +377,7 @@ export default class ContentAddressableStore {
      * @param {string} rootHash - The root hash of a closure previously returned from commitChanges().
      * @throws {AssertionError} When no closure exists for rootHash.
      */
-    async rollbackBuild(context, buildId, rootHash) {
+    async assignBuild(context, buildId, rootHash) {
         await this.#store.assignBuild(context, buildId, rootHash);
     }
 
@@ -384,16 +395,14 @@ export default class ContentAddressableStore {
         // /blog/reviews/page.json
         // /blog/reviews/music/page.json
         // /blog/reviews/music/led-zeppelin/page.json
-        const parts = this.normalizePathname(pathname).split('/');
-        const filepaths = [];
-        let path;
-
-        // Always start with the root page metadata item.
-        filepaths.push(this.#normalizePagePath('page.json'));
+        const parts = this.normalizePathname(pathname).split('/').filter((part) => part);
+        // Start with the root page data.
+        const filepaths = [ this.#normalizePagePath('page.json') ];
+        let path = '/';
 
         for (const part of parts) {
-            path = `${ path }/${ part }`;
-            filepaths.push(this.#normalizePagePath(`${ path }/page.json`));
+            path = `${ path }${ part }/`;
+            filepaths.push(this.#normalizePagePath(`${ path }page.json`));
         }
 
         // We don't need to get the page leaf node page.json separately, because we'll
@@ -420,11 +429,9 @@ export default class ContentAddressableStore {
 
         const sourceFileStats = await this.#store.listStats(context, directory, { recursive: false });
 
-        const hashesToFetch = parentStats
-            .concat(sourceFileStats)
-            .map(({ hash }) => hash);
-
-        const entries = await this.#store.getBlobs(context, hashesToFetch);
+        const entries = parentStats.concat(sourceFileStats);
+        const hashesToFetch = entries.map(({ hash }) => hash);
+        const blobs = await this.#store.getBlobs(context, hashesToFetch);
 
         const pageDataFiles = [];
         let pageTemplateFilename = null;
@@ -432,17 +439,20 @@ export default class ContentAddressableStore {
         let includes = null;
         const pageFiles = [];
 
-        for (const entry of entries) {
+        for (let i = 0; i < entries.length; i += 1) {
+            const entry = entries[i];
+            const bytes = blobs[i];
             // We are not interested in including any child directories which may
             // be listed in this page directory; so filter on 'blob'.
             if (entry.kind === 'blob') {
+                assert(bytes, `missing expected blob from ${ entry.pathname }`);
                 pageFiles.push(entry);
                 if (this.#filepathBasename(entry.pathname) === 'page.json') {
-                    pageDataFiles.push(entry);
+                    pageDataFiles.push(new ContentObject(bytes, entry));
                 } else if (this.#filepathBasename(entry.pathname) === PAGE_PARTIALS_BUNDLE) {
-                    partials = entry;
+                    partials = new ContentObject(bytes, entry);
                 } else if (this.#filepathBasename(entry.pathname) === PAGE_INCLUDES_BUNDLE) {
-                    includes = entry;
+                    includes = new ContentObject(bytes, entry);
                 } else {
                     // Whatever is left must be the page template.
                     pageTemplateFilename = this.#filepathBasename(entry.pathname);
@@ -453,7 +463,6 @@ export default class ContentAddressableStore {
         // Include the page files with the parent page.json filepaths to
         // accumulate the full dependencies list.
         const dependencies = parentStats.concat(pageFiles);
-
         const etag = await this.#store.computeHashFromStats(dependencies);
 
         return {

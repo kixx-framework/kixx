@@ -3,7 +3,6 @@ import { bufferToString } from './addressing.js';
 
 export class StatObject {
     constructor(spec) {
-        this.pathname = spec.pathname;
         this.kind = spec.kind;
         this.hash = spec.hash;
         this.size = spec.size;
