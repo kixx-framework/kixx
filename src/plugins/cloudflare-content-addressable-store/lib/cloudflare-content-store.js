@@ -1,4 +1,8 @@
-import { AssertionError, ValidationError } from '../../../kixx/errors/mod.js';
+import {
+    AssertionError,
+    OperationalError,
+    ValidationError,
+} from '../../../kixx/errors/mod.js';
 import {
     isUndefined,
     isNonEmptyString,
@@ -17,14 +21,29 @@ import {
 
 
 const DURABLE_OBJECT_NAME = `ContentAddressableStore:${ FORMAT }`;
+const BLOB_READ_CONCURRENCY = 6;
+const PROGRAMMER_ERROR_NAMES = new Set([
+    'AggregateError',
+    'AssertionError',
+    'EvalError',
+    'RangeError',
+    'ReferenceError',
+    'SyntaxError',
+    'TypeError',
+    'URIError',
+]);
 
 
-export default class Store {
+/**
+ * Coordinates content-addressable persistence through request-scoped
+ * Cloudflare KV and Durable Object bindings.
+ */
+export default class CloudflareContentStore {
 
     #logger;
     #kvBindingName;
     #durableObjectBindingName;
-    #pendingIndex = null;
+    #pendingIndexes = new Map();
 
     constructor(options) {
         this.#logger = options.logger;
@@ -46,25 +65,63 @@ export default class Store {
         return namespace.getByName(DURABLE_OBJECT_NAME);
     }
 
+    #invalidateIndex(buildId) {
+        this.#pendingIndexes.delete(buildId);
+    }
+
+    async #callDurableObject(methodName, callback) {
+        try {
+            return await callback();
+        } catch (cause) {
+            if (PROGRAMMER_ERROR_NAMES.has(cause?.name)) {
+                throw cause;
+            }
+
+            throw new OperationalError(
+                `ContentAddressableStore failed to call ContentAddressableIndexStore#${ methodName }()`,
+                { cause },
+            );
+        }
+    }
+
+    #assertSuccessfulResponse(methodName, result) {
+        assert(
+            result && typeof result === 'object',
+            `ContentAddressableIndexStore#${ methodName }() must return a result object`,
+        );
+        assert(
+            typeof result.success === 'boolean',
+            `ContentAddressableIndexStore#${ methodName }() result.success must be a boolean`,
+        );
+
+        if (!result.success) {
+            const cause = new Error(result.message ?? 'The Durable Object reported an unsuccessful operation');
+            throw new OperationalError(
+                `ContentAddressableIndexStore#${ methodName }() was unsuccessful`,
+                { cause },
+            );
+        }
+    }
+
     async getIndex(context) {
-        // We cache pending index promises for a few moments in runtime memory.
-        if (this.#pendingIndex) {
-            return this.#pendingIndex;
+        const buildId = context.runtime.build.id;
+
+        // Cache both pending and resolved index promises for a few moments in
+        // runtime memory, scoped to the build which produced them.
+        const cached = this.#pendingIndexes.get(buildId);
+        if (cached) {
+            return cached.promise;
         }
 
         const durableObject = this.#resolveDurableObject(context);
-        const buildId = context.runtime.build.id;
 
         this.#logger.info('fetching index', { buildId });
 
-        // TODO: Use appropriate error handling for durable objects:
-        //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
-        //       see: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
-        const pending = durableObject.getIndex(buildId)
-            .then(({ success, message, entries }) => {
-                if (!success) {
-                    throw new Error(`Error in ContentAddressableIndexStore#getIndex(): ${ message }`);
-                }
+        const entry = {};
+        const pending = this.#callDurableObject('getIndex', () => durableObject.getIndex(buildId))
+            .then((result) => {
+                this.#assertSuccessfulResponse('getIndex', result);
+                const { entries } = result;
                 if (!entries) {
                     // If the index does not exist, then the system is not recoverable.
                     throw new AssertionError(`No registered content index for BUILD_ID ${ buildId }`);
@@ -72,17 +129,20 @@ export default class Store {
                 return new ContentAddressableIndex(entries);
             })
             .catch((error) => {
-                if (this.#pendingIndex === pending) {
-                    this.#pendingIndex = null;
+                if (this.#pendingIndexes.get(buildId) === entry) {
+                    this.#pendingIndexes.delete(buildId);
                 }
 
                 return Promise.reject(error);
             });
 
-        this.#pendingIndex = pending;
+        entry.promise = pending;
+        this.#pendingIndexes.set(buildId, entry);
 
         setTimeout(() => {
-            this.#pendingIndex = null;
+            if (this.#pendingIndexes.get(buildId) === entry) {
+                this.#pendingIndexes.delete(buildId);
+            }
         }, this.indexCacheTtlSeconds * 1000);
 
         return pending;
@@ -153,14 +213,11 @@ export default class Store {
 
         this.#logger.info('commit closure', { rootHash });
 
-        // TODO: Use appropriate error handling for durable objects:
-        //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
-        //       see: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
-        const { success, message } = await durableObject.commitClosure(rootHash, index);
-
-        if (!success) {
-            throw new Error(`Error calling ContentAddressableIndexStore#commitClosure(): ${ message }`);
-        }
+        const result = await this.#callDurableObject(
+            'commitClosure',
+            () => durableObject.commitClosure(rootHash, index),
+        );
+        this.#assertSuccessfulResponse('commitClosure', result);
 
         return index;
     }
@@ -170,14 +227,12 @@ export default class Store {
 
         this.#logger.info('assign build', { buildId, rootHash });
 
-        // TODO: Use appropriate error handling for durable objects:
-        //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
-        //       see: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
-        const { success, message } = await durableObject.assignBuild(buildId, rootHash);
-
-        if (!success) {
-            throw new Error(`Error calling ContentAddressableIndexStore#assignBuild(): ${ message }`);
-        }
+        const result = await this.#callDurableObject(
+            'assignBuild',
+            () => durableObject.assignBuild(buildId, rootHash),
+        );
+        this.#assertSuccessfulResponse('assignBuild', result);
+        this.#invalidateIndex(buildId);
     }
 
     async commitChanges(context, buildId, files) {
@@ -204,15 +259,20 @@ export default class Store {
 
         const keys = hashes.map((hash) => KEY.blob + hash);
         this.#logger.debug('get blobs', { count: keys.length });
-        const resultsMap = await kv.get(keys, {
-            type: 'arrayBuffer',
-            cacheTtl: this.blobReadCacheTtlSeconds,
-        });
 
         const resultsArray = [];
-        for (const key of keys) {
-            const buff = resultsMap.get(key);
-            resultsArray.push(buff ? new Uint8Array(buff) : null);
+        for (let offset = 0; offset < keys.length; offset += BLOB_READ_CONCURRENCY) {
+            const batch = keys.slice(offset, offset + BLOB_READ_CONCURRENCY);
+            const buffers = await Promise.all(batch.map((key) => {
+                return kv.get(key, {
+                    type: 'arrayBuffer',
+                    cacheTtl: this.blobReadCacheTtlSeconds,
+                });
+            }));
+
+            for (const buff of buffers) {
+                resultsArray.push(buff ? new Uint8Array(buff) : null);
+            }
         }
 
         return resultsArray;

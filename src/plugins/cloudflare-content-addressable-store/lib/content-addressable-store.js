@@ -1,6 +1,6 @@
 import { AssertionError } from '../../../kixx/errors/mod.js';
 import { assert, isUndefined } from '../../../kixx/assertions/mod.js';
-import Store from './store.js';
+import CloudflareContentStore from './cloudflare-content-store.js';
 import { ContentObject, StatObject } from './content-object.js';
 import {
     canonicalize,
@@ -25,7 +25,7 @@ export default class ContentAddressableStore {
     constructor(options) {
         this.#logger = options.logger.createChild('ContentAddressableStore');
 
-        this.#store = options.store ?? new Store({
+        this.#store = options.store ?? new CloudflareContentStore({
             logger: this.#logger,
             kvBindingName: options.kvBindingName,
             durableObjectBindingName: options.durableObjectBindingName,
