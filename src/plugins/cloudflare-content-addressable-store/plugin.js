@@ -1,4 +1,6 @@
 import ContentAddressableStore from './lib/content-addressable-store.js';
+// Export the Cloudflare durable object.
+export { default as ContentAddressableIndexStore } from './lib/content-addressable-index-store.js';
 
 
 const DEFAULTS = {

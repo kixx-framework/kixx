@@ -57,13 +57,19 @@ export default class Store {
 
         this.#logger.info('fetching index', { buildId });
 
-        const pending = durableObject.getContentAddressableIndex(buildId)
-            .then((result) => {
-                if (!result) {
+        // TODO: Use appropriate error handling for durable objects:
+        //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
+        //       see: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
+        const pending = durableObject.getIndex(buildId)
+            .then(({ success, message, entries }) => {
+                if (!success) {
+                    throw new Error(`Error in ContentAddressableIndexStore#getIndex(): ${ message }`);
+                }
+                if (!entries) {
                     // If the index does not exist, then the system is not recoverable.
                     throw new AssertionError(`No registered content index for BUILD_ID ${ buildId }`);
                 }
-                return new ContentAddressableIndex(result);
+                return new ContentAddressableIndex(entries);
             })
             .catch((error) => {
                 if (this.#pendingIndex === pending) {
@@ -147,7 +153,11 @@ export default class Store {
         // TODO: Use appropriate error handling for durable objects:
         //       see: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
         //       see: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
-        await durableObject.commitIndex({ buildId, index });
+        const { success, message } = await durableObject.commitIndex(buildId, index);
+
+        if (!success) {
+            throw new Error(`Error calling ContentAddressableIndexStore#commitIndex(): ${ message }`);
+        }
 
         return index;
     }
