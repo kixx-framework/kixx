@@ -91,26 +91,7 @@ export default class CloudflareContentStore {
             }
 
             throw new OperationalError(
-                `ContentAddressableStore failed to call ContentAddressableIndexStore#${ methodName }()`,
-                { cause },
-            );
-        }
-    }
-
-    #assertSuccessfulResponse(methodName, result) {
-        assert(
-            result && typeof result === 'object',
-            `ContentAddressableIndexStore#${ methodName }() must return a result object`,
-        );
-        assert(
-            typeof result.success === 'boolean',
-            `ContentAddressableIndexStore#${ methodName }() result.success must be a boolean`,
-        );
-
-        if (!result.success) {
-            const cause = new Error(result.message ?? 'The Durable Object reported an unsuccessful operation');
-            throw new OperationalError(
-                `ContentAddressableIndexStore#${ methodName }() was unsuccessful`,
+                `CloudflareContentStore failed to call ContentAddressableIndexStore#${ methodName }()`,
                 { cause },
             );
         }
@@ -121,10 +102,7 @@ export default class CloudflareContentStore {
 
         // Cache pending and resolved index promises in runtime memory, scoped
         // to the build which produced them. Freshness is checked lazily on
-        // read (against cachedAt) rather than through a scheduled eviction:
-        // a Workers isolate can go idle between requests with no guarantee a
-        // pending setTimeout() ever fires, so a timer cannot be trusted to
-        // keep this map small or its entries fresh.
+        // read (against cachedAt) rather than through a scheduled eviction.
         const cached = this.#pendingIndexes.get(buildId);
         if (cached && Date.now() - cached.cachedAt < this.indexCacheTtlSeconds * 1000) {
             return cached.promise;
@@ -159,7 +137,9 @@ export default class CloudflareContentStore {
         this.#logger.info('fetching index', { buildId });
 
         const result = await this.#callDurableObject('getIndex', () => durableObject.getIndex(buildId));
-        this.#assertSuccessfulResponse('getIndex', result);
+        if (!result.success) {
+            throw new Error(`CloudflareContentStore#fetchIndex() was unsuccessful: ${ result.message }`);
+        }
 
         const { entries } = result;
         if (!entries) {
@@ -246,7 +226,10 @@ export default class CloudflareContentStore {
             'commitClosure',
             () => durableObject.commitClosure(rootHash, index),
         );
-        this.#assertSuccessfulResponse('commitClosure', result);
+
+        if (!result.success) {
+            throw new Error(`CloudflareContentStore#commitClosure() was unsuccessful: ${ result.message }`);
+        }
 
         return index;
     }
@@ -260,7 +243,9 @@ export default class CloudflareContentStore {
             'assignBuild',
             () => durableObject.assignBuild(buildId, rootHash),
         );
-        this.#assertSuccessfulResponse('assignBuild', result);
+        if (!result.success) {
+            throw new Error(`CloudflareContentStore#assignBuild() was unsuccessful: ${ result.message }`);
+        }
         this.#invalidateIndex(buildId);
 
         // Purge this colo's edge cache entry so the deploying request sees the

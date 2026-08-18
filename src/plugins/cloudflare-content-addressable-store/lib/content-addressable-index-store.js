@@ -16,7 +16,7 @@ import { encodeIndexEntry, decodeIndexEntryTuple } from './content-addressable-i
 // Maximum number of closures held in #closureCache at once. Bounds memory
 // in a long-lived Durable Object instance while keeping the working set
 // (the current build plus recent rollback targets) resident.
-const CLOSURE_CACHE_MAX_SIZE = 50;
+const CLOSURE_CACHE_MAX_SIZE = 10;
 
 export default class ContentAddressableIndexStore extends DurableObject {
 
