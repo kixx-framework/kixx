@@ -22,7 +22,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
     async migrate() {
         this.#sql.exec(`
-            CREATE TABLE IF NOT EXISTS enries (
+            CREATE TABLE IF NOT EXISTS entries (
                 build_id TEXT    NOT NULL,
                 pathname TEXT    NOT NULL,
                 kind     TEXT    NOT NULL,
@@ -36,7 +36,10 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
     async getIndex(buildId) {
         if (this.#indexCache.has(buildId)) {
-            return buildId;
+            return {
+                success: true,
+                entries: this.#indexCache.get(buildId),
+            };
         }
 
         const sql = 'SELECT pathname, kind, hash, size, metadata FROM entries WHERE build_id = ?';
@@ -52,9 +55,9 @@ export default class ContentAddressableIndexStore extends DurableObject {
                 // kind === 'blob'
                 entries[pathname] = [ kind, hash, size ];
                 if (isNonEmptyString(metadata)) {
-                    entries.push(JSON.parse(metadata));
+                    entries[pathname].push(JSON.parse(metadata));
                 } else {
-                    entries.push(null);
+                    entries[pathname].push(null);
                 }
             }
         }
