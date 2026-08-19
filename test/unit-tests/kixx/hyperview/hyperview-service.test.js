@@ -193,6 +193,168 @@ describe('HyperviewService', ({ describe }) => {
     });
 
     describe('respondWithHypertext', ({ it }) => {
+        it('refreshes partials before rendering a cached page template', async () => {
+            const pageContent = {
+                pageTemplateFilename: 'page.html',
+                partials: {
+                    etag: 'page-partials-v1',
+                    json: [
+                        { id: 'page.html', source: 'first page partial' },
+                    ],
+                },
+                includes: null,
+                etag: 'page-etag-1',
+                pageDataFiles: [
+                    { json() {
+                        return { page: {} };
+                    } },
+                ],
+            };
+            const globalPartials = {
+                etag: 'global-partials-v1',
+                templates: [
+                    { id: 'global.html', source: 'first global partial' },
+                ],
+            };
+            const store = {
+                isValidPathname(value) {
+                    return typeof value === 'string' && value.length > 0;
+                },
+                normalizePathname(value) {
+                    return value;
+                },
+                async getPage() {
+                    return pageContent;
+                },
+                async statTemplatePartials() {
+                    return { etag: globalPartials.etag };
+                },
+                async getTemplatePartials() {
+                    return {
+                        etag: globalPartials.etag,
+                        json() {
+                            return globalPartials.templates;
+                        },
+                    };
+                },
+                async statPageTemplate() {
+                    return { etag: 'page-template-v1' };
+                },
+                async getPageTemplate() {
+                    return {
+                        etag: 'page-template-v1',
+                        text() {
+                            return '{{> global.html }} / {{> page.html }}';
+                        },
+                    };
+                },
+                async statBaseTemplates() {
+                    return { etag: 'base-template-v1' };
+                },
+                async getBaseTemplates() {
+                    return {
+                        etag: 'base-template-v1',
+                        json() {
+                            return [ { id: 'layout', source: '{{ body }}' } ];
+                        },
+                    };
+                },
+                async hashValue(value) {
+                    return `hash:${ value }`;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const request = {
+                headers: new Headers(),
+                url: new URL('https://example.com/articles/example'),
+            };
+            const response = {
+                props: {},
+                status: 200,
+                respondWithUtf8(_status, hypertext) {
+                    this.hypertext = hypertext;
+                    return this;
+                },
+            };
+
+            await service.respondWithHypertext({}, request, response, { baseTemplateId: 'layout' });
+            assertEqual('first global partial / first page partial', response.hypertext);
+
+            globalPartials.etag = 'global-partials-v2';
+            globalPartials.templates = [
+                { id: 'global.html', source: 'second global partial' },
+            ];
+            pageContent.partials.etag = 'page-partials-v2';
+            pageContent.partials.json = [
+                { id: 'page.html', source: 'second page partial' },
+            ];
+
+            await service.respondWithHypertext({}, request, response, { baseTemplateId: 'layout' });
+
+            assertEqual('second global partial / second page partial', response.hypertext);
+        });
+
+        it('loads the matching page for a .json request', async () => {
+            const requestedPathnames = [];
+            const pageContent = {
+                pageTemplateFilename: 'page.html',
+                partials: null,
+                includes: null,
+                etag: 'page-etag-1',
+                pageDataFiles: [
+                    { json() {
+                        return { page: {} };
+                    } },
+                ],
+            };
+            const store = {
+                isValidPathname(value) {
+                    return typeof value === 'string' && value.length > 0;
+                },
+                normalizePathname(value) {
+                    return value;
+                },
+                async getPage(_context, pathname) {
+                    requestedPathnames.push(pathname);
+                    return pageContent;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const response = {
+                props: {},
+                status: 200,
+                respondWithJSON() {
+                    return this;
+                },
+            };
+
+            await service.respondWithHypertext(
+                {},
+                {
+                    headers: new Headers(),
+                    url: new URL('https://example.com/articles/example.json'),
+                },
+                response,
+                { skipBaseRender: true },
+            );
+            await service.respondWithHypertext(
+                {},
+                {
+                    headers: new Headers(),
+                    url: new URL('https://example.com/index.json'),
+                },
+                response,
+                { skipBaseRender: true },
+            );
+
+            assertEqual('/articles/example', requestedPathnames[0]);
+            assertEqual('/', requestedPathnames[1]);
+        });
+
         it('renders skipBaseRender without requiring options.baseTemplateId', async () => {
             const pageContent = {
                 pageTemplateFilename: 'page.html',

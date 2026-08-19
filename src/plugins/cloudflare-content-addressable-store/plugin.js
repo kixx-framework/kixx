@@ -6,7 +6,7 @@ export { default as ContentAddressableIndexStore } from './lib/content-addressab
 const DEFAULTS = {
     kvBindingName: 'CA_STORE_KV_STORE',
     durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
-    blobReadCacheTtlSeconds: 60 * 60 * 36,
+    blobReadCacheTtlSeconds: 60 * 60 * 24,
     indexCacheTtlSeconds: 10,
 };
 

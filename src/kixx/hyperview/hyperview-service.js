@@ -13,6 +13,8 @@ import {
     isNonEmptyString,
 } from '../assertions/mod.js';
 
+const MAX_PAGE_TEMPLATE_CACHE_ENTRIES = 1000;
+
 // NOTE: There are private methods on HyperviewService marked with the @private
 //       tag instead of prefixed by "#". This is intentional, to allow unit
 //       testing coverage to be more thorough.
@@ -69,6 +71,9 @@ export default class HyperviewService {
 
     // The page partials templates cache, indexed by page pathname
     #pagePartials = new Map();
+
+    // Tracks the LRU order and template filepath for each cached page pathname.
+    #pageTemplateCacheEntries = new Map();
 
     /**
      * @param {Object} options
@@ -247,9 +252,12 @@ export default class HyperviewService {
      * page partials hash from the ContentAddressableStore still matches, the
      * cached Map is returned as-is after that global-partials refresh.
      * @private
+     * @param {Object} context - Request context for template-store access
+     * @param {HyperviewPage} page - Loaded page that owns the partial definitions
+     * @param {Map<string, Function>} [globalPartials] - Already refreshed global partials, when available
      * @return {Map} The page-specific partial template Map for the given page.pathname
      */
-    async getPagePartials(context, page) {
+    async getPagePartials(context, page, globalPartials) {
 
         // Keep the same Map instance for this pathname across rebuilds, rather
         // than replacing it, so that page and base templates already compiled
@@ -261,9 +269,15 @@ export default class HyperviewService {
             if (pagePartials) {
                 pagePartials.clear();
                 pagePartials.etag = null;
-            } else {
+            } else if (this.#useTemplateCache) {
                 pagePartials = new Map();
                 this.#pagePartials.set(page.pathname, pagePartials);
+                this.#cachePagePathname(page.pathname, null);
+            } else {
+                pagePartials = new Map();
+            }
+            if (this.#useTemplateCache) {
+                this.#cachePagePathname(page.pathname, null);
             }
             return pagePartials;
         }
@@ -279,15 +293,19 @@ export default class HyperviewService {
 
         // Refresh global partials before returning a cached page-partials Map.
         // Compiled page partials resolve global partials through a live lookup.
-        const globalPartials = await this.loadGlobalPartials(context);
+        globalPartials = globalPartials ?? await this.loadGlobalPartials(context);
 
         if (this.#useTemplateCache && pagePartials?.etag === page.partials.etag) {
+            this.#cachePagePathname(page.pathname, null);
             return pagePartials;
         }
 
         if (!pagePartials) {
             pagePartials = new Map();
-            this.#pagePartials.set(page.pathname, pagePartials);
+            if (this.#useTemplateCache) {
+                this.#pagePartials.set(page.pathname, pagePartials);
+                this.#cachePagePathname(page.pathname, null);
+            }
         }
 
         // Page-specific partials can reference global partials and each other.
@@ -316,6 +334,25 @@ export default class HyperviewService {
         return pagePartials;
     }
 
+    #cachePagePathname(pathname, filepath) {
+        const previousFilepath = this.#pageTemplateCacheEntries.get(pathname);
+        filepath = filepath ?? previousFilepath ?? null;
+        if (previousFilepath && previousFilepath !== filepath) {
+            this.#pageTemplates.delete(previousFilepath);
+        }
+        this.#pageTemplateCacheEntries.delete(pathname);
+        this.#pageTemplateCacheEntries.set(pathname, filepath);
+
+        while (this.#pageTemplateCacheEntries.size > MAX_PAGE_TEMPLATE_CACHE_ENTRIES) {
+            const [ evictedPathname, evictedFilepath ] = this.#pageTemplateCacheEntries.entries().next().value;
+            this.#pageTemplateCacheEntries.delete(evictedPathname);
+            this.#pagePartials.delete(evictedPathname);
+            if (evictedFilepath) {
+                this.#pageTemplates.delete(evictedFilepath);
+            }
+        }
+    }
+
     /**
      * Load the a base template by id, directly from the ContentAddressableStore.
      * If global partials are not loaded yet, they will be loaded here. If
@@ -326,6 +363,10 @@ export default class HyperviewService {
      * @return {Function} A Kixx template function.
      */
     async getBaseTemplate(context, templateId) {
+        // Cached templates use this live Map for partial lookups, so refresh it
+        // before the base-template cache can return.
+        const partials = await this.loadGlobalPartials(context);
+
         // Skip the stat() round-trip entirely when template caching is disabled;
         // its result would only ever feed the cache-hit check below.
         if (this.#useTemplateCache) {
@@ -352,9 +393,6 @@ export default class HyperviewService {
             this.#baseTemplates.etag = null;
             return null;
         }
-
-        // Ensure the global partials are loaded before compiling the templates.
-        const partials = await this.loadGlobalPartials(context);
 
         // Reset the etag to use as a cache invalidation key.
         this.#baseTemplates.etag = templates.etag;
@@ -398,6 +436,11 @@ export default class HyperviewService {
 
         const filepath = this.#store.normalizePathname(`${ pathname }/${ pageTemplateFilename }`);
 
+        // Cached templates capture these live Maps for partial lookups, so they
+        // must be refreshed before the page-template cache can return.
+        const globalPartials = await this.loadGlobalPartials(context);
+        const pagePartials = await this.getPagePartials(context, page, globalPartials);
+
         let template;
 
         // Skip the stat() round-trip entirely when template caching is disabled;
@@ -411,6 +454,7 @@ export default class HyperviewService {
                 template = this.#pageTemplates.get(filepath);
                 // Check this template version by comparing the latest etag.
                 if (template.etag === stats.etag) {
+                    this.#cachePagePathname(pathname, filepath);
                     return template;
                 }
             }
@@ -424,8 +468,6 @@ export default class HyperviewService {
         // against a live delegator over both persistent Maps rather than a
         // merged snapshot copy, so partial content updates are picked up at
         // render time without recompiling this page template.
-        const globalPartials = await this.loadGlobalPartials(context);
-        const pagePartials = await this.getPagePartials(context, page);
         const partials = layerPartials(pagePartials, globalPartials);
 
         template = this.compileTemplate(
@@ -439,6 +481,7 @@ export default class HyperviewService {
 
         if (this.#useTemplateCache) {
             this.#pageTemplates.set(filepath, template);
+            this.#cachePagePathname(pathname, filepath);
         }
 
         return template;
@@ -536,12 +579,23 @@ export default class HyperviewService {
         const pageCacheReadTtlSeconds = options.pageCacheReadTtlSeconds ?? this.#pageCacheReadTtlSeconds;
         const pageCacheExpirationSeconds = options.pageCacheExpirationSeconds ?? this.#pageCacheExpirationSeconds;
         const allowJsonResponse = options.allowJsonResponse ?? this.#allowJsonResponse;
+        const isJsonPathRequest = request.url.pathname.endsWith('.json');
+        const isJsonRequest = isJsonPathRequest || (
+            allowJsonResponse && this.isJsonRequest(request)
+        );
 
         let pathname;
         if (isNonEmptyString(options.pathname)) {
             pathname = options.pathname;
         } else {
-            pathname = this.#store.normalizePathname(request.url.pathname);
+            let requestPathname = request.url.pathname;
+            if (isJsonPathRequest) {
+                requestPathname = requestPathname.slice(0, -'.json'.length);
+                if (requestPathname === '/index') {
+                    requestPathname = '/';
+                }
+            }
+            pathname = this.#store.normalizePathname(requestPathname);
         }
 
         this.assertCanonicalIdentifier(
@@ -574,7 +628,7 @@ export default class HyperviewService {
             });
         }
 
-        if (allowJsonResponse && this.isJsonRequest(request)) {
+        if (allowJsonResponse && isJsonRequest) {
             // The optional JSON response is intended for development and debugging.
             return response.respondWithJSON(
                 response.status,
