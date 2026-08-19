@@ -18,7 +18,7 @@ export default class HyperviewPage {
             pageTemplateFilename,
             partials,
             includes,
-            hash,
+            etag,
         } = spec;
 
         this.#responseProps = responseProps;
@@ -28,17 +28,17 @@ export default class HyperviewPage {
         this.pageTemplateFilename = pageTemplateFilename;
         this.includes = null;
         this.partials = null;
-        this.hash = hash;
+        this.etag = etag;
 
         if (includes) {
             this.includes = {
-                hash: includes.hash,
+                etag: includes.etag,
                 includes: includes.json,
             };
         }
         if (partials) {
             this.partials = {
-                hash: partials.hash,
+                etag: partials.etag,
                 partials: partials.json,
             };
         }

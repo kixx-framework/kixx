@@ -153,9 +153,9 @@ export default class HyperviewService {
     async #loadGlobalPartials(context, options) {
         const stats = await this.#store.statTemplatePartials(context);
 
-        // Use the hash from the content-addressable storage as
+        // Use the etag from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && stats?.hash && this.#globalPartials.get('_hash') === stats.hash) {
+        if (options.useTemplateCache && stats?.etag && this.#globalPartials.get('_etag') === stats.etag) {
             return this.#globalPartials;
         }
 
@@ -167,8 +167,8 @@ export default class HyperviewService {
             return this.#globalPartials;
         }
 
-        // Reset the hash as the cache invalidation key.
-        this.#globalPartials.set('_hash', partials.hash);
+        // Reset the etag as the cache invalidation key.
+        this.#globalPartials.set('_etag', partials.etag);
 
         for (const { id, source } of partials.json()) {
             assertNonEmptyString(
@@ -197,8 +197,8 @@ export default class HyperviewService {
      */
     async getPagePartials(context, page, options) {
         assertNonEmptyString(
-            page.partials?.hash,
-            `HyperviewService#getPagePartialTemplate() expects page.partials.hash to be present`,
+            page.partials?.etag,
+            `HyperviewService#getPagePartialTemplate() expects page.partials.etag to be present`,
         );
         assertArray(
             page.partials?.partials,
@@ -210,8 +210,8 @@ export default class HyperviewService {
         // Try the partials cache first, if the cache is enabled.
         if (options.useTemplateCache && this.#pagePartials.has(page.pathname)) {
             pagePartials = this.#pagePartials.get(page.pathname);
-            // Check this set of page partials version by comparing the latest hash.
-            if (pagePartials.get('_hash') === page.partials.hash) {
+            // Check this set of page partials version by comparing the latest etag.
+            if (pagePartials.get('_etag') === page.partials.etag) {
                 return pagePartials;
             }
         }
@@ -229,8 +229,8 @@ export default class HyperviewService {
             pagePartials.clear();
         }
         pagePartials = new Map();
-        // Set the special _hash key to version this set of page partials.
-        pagePartials.set('_hash', page.partials.hash);
+        // Set the special _etag key to version this set of page partials.
+        pagePartials.set('_etag', page.partials.etag);
 
         for (const { id, source } of page.partials.partials) {
             assertNonEmptyString(
@@ -266,9 +266,9 @@ export default class HyperviewService {
     async getBaseTemplate(context, templateId, options) {
         const stats = await this.#store.statBaseTemplates(context);
 
-        // Use the hash from the content-addressable storage as
+        // Use the etag from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && stats?.hash && this.#baseTemplates.get('_hash') === stats.hash) {
+        if (options.useTemplateCache && stats?.etag && this.#baseTemplates.get('_etag') === stats.etag) {
             return this.#baseTemplates.get(templateId);
         }
 
@@ -285,8 +285,8 @@ export default class HyperviewService {
         // Ensure the global partials are loaded before compiling the templates.
         const partials = await this.loadGlobalPartials(context, options);
 
-        // Reset the hash to use as a cache invalidation key.
-        this.#baseTemplates.set('_hash', templates.hash);
+        // Reset the etag to use as a cache invalidation key.
+        this.#baseTemplates.set('_etag', templates.etag);
 
         for (const { id, source } of templates.json()) {
             assertNonEmptyString(
@@ -324,28 +324,27 @@ export default class HyperviewService {
 
         const { pathname, pageTemplateFilename } = page;
 
-        const hash = await this.#store.getPageTemplateHash(context, pathname, pageTemplateFilename);
+        const filepath = this.#store.normalizePathname(`${ pathname }/${ pageTemplateFilename }`);
+        const stats = await this.#store.statPageTemplate(context, filepath);
 
-        const templateId = `${ pathname }/${ pageTemplateFilename }`;
         let template;
 
-        // Use the hash from the content-addressable storage as
+        // Use the etag from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && hash && this.#pageTemplates.has(templateId)) {
-            template = this.#pageTemplates.get(templateId);
-            // Check this template version by comparing the latest hash.
-            if (template.hash === hash) {
+        if (options.useTemplateCache && stats?.etag && this.#pageTemplates.has(filepath)) {
+            template = this.#pageTemplates.get(filepath);
+            // Check this template version by comparing the latest etag.
+            if (template.etag === stats.etag) {
                 return template;
             }
         }
 
-        this.#pageTemplates.delete(templateId);
+        this.#pageTemplates.delete(filepath);
 
-        const blob = await this.#store.getPageTemplate(context, pathname, pageTemplateFilename);
+        const pageTemplate = await this.#store.getPageTemplate(context, filepath);
 
         // Ensure the global partials are loaded; we're going to copy and extend them.
         const globalPartials = await this.loadGlobalPartials(context, options);
-
         const pagePartials = await this.getPagePartials(context, page, options);
 
         // Make a copy of the global partials and page partials so that we can
@@ -354,16 +353,16 @@ export default class HyperviewService {
         const partials = new Map([...globalPartials, ...pagePartials]);
 
         template = this.compileTemplate(
-            templateId,
-            blob.text(),
+            filepath,
+            pageTemplate.text(),
             this.#customHelpers,
             partials,
         );
 
-        template.hash = hash;
+        template.etag = pageTemplate.etag;
 
         if (options.useTemplateCache) {
-            this.#pageTemplates.set(templateId, template);
+            this.#pageTemplates.set(filepath, template);
         }
 
         return template;
@@ -390,9 +389,9 @@ export default class HyperviewService {
             pathname,
             responseProps,
             pageTemplateFilename: pageContent.pageTemplateFilename,
-            partials: pageContent.partials.json(),
-            includes: pageContent.includes.json(),
-            hash: pageContent.hash,
+            partials: pageContent.partials,
+            includes: pageContent.includes,
+            etag: pageContent.etag,
         });
 
         // Fold all the source metadata objects into the page context.
@@ -471,7 +470,7 @@ export default class HyperviewService {
         if (isNonEmptyString(options.pathname)) {
             pathname = options.pathname;
         } else {
-            pathname = this.#store.normalizeIdentifier(request.pathname);
+            pathname = this.#store.normalizePathname(request.pathname);
         }
 
         this.assertCanonicalIdentifier(
@@ -513,7 +512,7 @@ export default class HyperviewService {
             );
         }
 
-        let hash = page.hash;
+        let etag = page.etag;
 
         // Optionally add the hash of the canonicalized props object.
         if (options.includePropsInCacheKey) {
@@ -527,7 +526,7 @@ export default class HyperviewService {
             } else {
                 propsHash = this.#store.hashValue(response.props);
             }
-            hash = this.#store.hashValue(page.hash + propsHash);
+            etag = this.#store.hashValue(page.etag + propsHash);
         }
 
         // If the caller does not provide a custom cache key, we use the
@@ -537,7 +536,7 @@ export default class HyperviewService {
             : (url.pathname + url.search);
 
         // Add the namespace prefix and hash for the complete KV key.
-        let key = `hyperview_page_cache#${ pageCacheKey }#${ hash }`;
+        let key = `hyperview_page_cache#${ pageCacheKey }#${ etag }`;
 
         if (options.partial) {
             key = `${ key }#${ options.partial }`;
