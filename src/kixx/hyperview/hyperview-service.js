@@ -49,6 +49,7 @@ export default class HyperviewService {
     #usePageCache;
     #pageCacheReadTtlSeconds;
     #pageCacheExpirationSeconds;
+    #includePropsInCacheKey;
     #allowJsonResponse;
 
     #customHelpers = new Map([
@@ -82,6 +83,7 @@ export default class HyperviewService {
      * @param {boolean} [options.usePageCache=false] - Default for respondWithHypertext()'s options.usePageCache; overridable per call.
      * @param {number} [options.pageCacheReadTtlSeconds=86400] - Default for respondWithHypertext()'s options.pageCacheReadTtlSeconds; overridable per call.
      * @param {number} [options.pageCacheExpirationSeconds=86400] - Default for respondWithHypertext()'s options.pageCacheExpirationSeconds; overridable per call.
+     * @param {boolean} [options.includePropsInCacheKey=false] - Default for respondWithHypertext()'s options.includePropsInCacheKey; overridable per call. Enable this for any deployment which caches pages while passing per-request or per-user response props. See respondWithHypertext() for why.
      * @param {boolean} [options.allowJsonResponse=false] - Default for respondWithHypertext()'s options.allowJsonResponse; overridable per call.
      */
     constructor(options) {
@@ -91,6 +93,7 @@ export default class HyperviewService {
             usePageCache = false,
             pageCacheReadTtlSeconds = 60 * 60 * 24,
             pageCacheExpirationSeconds = 60 * 60 * 24,
+            includePropsInCacheKey = false,
             allowJsonResponse = false,
         } = options ?? {};
         assert(logger, 'HyperviewService requires a logger');
@@ -99,6 +102,7 @@ export default class HyperviewService {
         this.#usePageCache = usePageCache;
         this.#pageCacheReadTtlSeconds = pageCacheReadTtlSeconds;
         this.#pageCacheExpirationSeconds = pageCacheExpirationSeconds;
+        this.#includePropsInCacheKey = includePropsInCacheKey;
         this.#allowJsonResponse = allowJsonResponse;
     }
 
@@ -125,8 +129,11 @@ export default class HyperviewService {
      * @throws {AssertionError} When value is empty, invalid, or not lower case
      */
     assertCanonicalIdentifier(value, messagePrefix) {
+        // isValidPathname() accepts an empty string, so check for content here.
+        // This method exists to validate identifiers which may not have been
+        // checked by any earlier layer, so it must enforce the whole contract.
         assert(
-            this.#store.isValidPathname(value),
+            isNonEmptyString(value) && this.#store.isValidPathname(value),
             `${ messagePrefix } must be a valid pathname`,
         );
     }
@@ -137,8 +144,8 @@ export default class HyperviewService {
      * @param {string} pathname - The pathname to check
      * @returns {boolean} True when the pathname is valid
      */
-    isValidPathname(value) {
-        return this.#store.isValidPathname(value);
+    isValidPathname(pathname) {
+        return this.#store.isValidPathname(pathname);
     }
 
     /**
@@ -179,7 +186,8 @@ export default class HyperviewService {
      * application memory using the partials hash from the
      * ContentAddressableStore as a cache invalidation key.
      * @private
-     * @return {Map} The private #globalPartials Map
+     * @param {Object} context - Request context for template-store access
+     * @returns {Promise<Map>} The private #globalPartials Map
      */
     async loadGlobalPartials(context) {
         if (this.#globalPartialsLoadPromise) {
@@ -255,7 +263,7 @@ export default class HyperviewService {
      * @param {Object} context - Request context for template-store access
      * @param {HyperviewPage} page - Loaded page that owns the partial definitions
      * @param {Map<string, Function>} [globalPartials] - Already refreshed global partials, when available
-     * @return {Map} The page-specific partial template Map for the given page.pathname
+     * @returns {Promise<Map>} The page-specific partial template Map for the given page.pathname
      */
     async getPagePartials(context, page, globalPartials) {
 
@@ -269,12 +277,11 @@ export default class HyperviewService {
             if (pagePartials) {
                 pagePartials.clear();
                 pagePartials.etag = null;
-            } else if (this.#useTemplateCache) {
-                pagePartials = new Map();
-                this.#pagePartials.set(page.pathname, pagePartials);
-                this.#cachePagePathname(page.pathname, null);
             } else {
                 pagePartials = new Map();
+                if (this.#useTemplateCache) {
+                    this.#pagePartials.set(page.pathname, pagePartials);
+                }
             }
             if (this.#useTemplateCache) {
                 this.#cachePagePathname(page.pathname, null);
@@ -284,11 +291,11 @@ export default class HyperviewService {
 
         assertNonEmptyString(
             page.partials?.etag,
-            `HyperviewService#getPagePartialTemplate() expects page.partials.etag to be present`,
+            `HyperviewService#getPagePartials() expects page.partials.etag to be present`,
         );
         assertArray(
             page.partials?.partials,
-            `HyperviewService#getPagePartialTemplate() expects page.partials.partials to be defined`,
+            `HyperviewService#getPagePartials() expects page.partials.partials to be defined`,
         );
 
         // Refresh global partials before returning a cached page-partials Map.
@@ -360,7 +367,9 @@ export default class HyperviewService {
      * template will be returned from the runtime memory cache if the cache
      * has not been invalidated by the base templates hash.
      * @private
-     * @return {Function} A Kixx template function.
+     * @param {Object} context - Request context for template-store access
+     * @param {string} templateId - Canonical base template identifier
+     * @returns {Promise<Function>} A Kixx template function.
      */
     async getBaseTemplate(context, templateId) {
         // Cached templates use this live Map for partial lookups, so refresh it
@@ -420,7 +429,9 @@ export default class HyperviewService {
      * will be returned from the runtime memory cache, using the pageTemplate
      * hash as the cache invalidation key.
      * @private
-     * @return {Function} A Kixx template function.
+     * @param {Object} context - Request context for template-store access
+     * @param {HyperviewPage} page - Loaded page which names the template file
+     * @returns {Promise<Function>} A Kixx template function.
      */
     async getPageTemplate(context, page) {
         assertNonEmptyString(
@@ -464,6 +475,15 @@ export default class HyperviewService {
 
         const pageTemplate = await this.#store.getPageTemplate(context, filepath);
 
+        // The page metadata named this template file, so a missing blob means the
+        // build index and the blob store disagree. Assert it here, where the page
+        // pathname and filename are still in scope to name in the message, rather
+        // than letting text() below fail with an unlabeled TypeError.
+        assert(
+            pageTemplate,
+            `Page template "${ pageTemplateFilename }" does not exist in pages/${ pathname }`,
+        );
+
         // Ensure the global and page partials are loaded and current. Compile
         // against a live delegator over both persistent Maps rather than a
         // merged snapshot copy, so partial content updates are picked up at
@@ -492,7 +512,11 @@ export default class HyperviewService {
      * data cascade and hydrates the title and description mini templates if they
      * are defined.
      * @private
-     * @return {HyperviewPage}
+     * @param {Object} context - Request context for page-store access
+     * @param {URL} url - Request URL used to derive canonical page metadata
+     * @param {string} pathname - Canonical page pathname
+     * @param {Object} responseProps - Response props merged into the page context
+     * @returns {Promise<HyperviewPage|null>} The loaded page, or null when no page exists
      */
     async getPage(context, url, pathname, responseProps) {
         const pageContent = await this.#store.getPage(context, pathname);
@@ -558,9 +582,9 @@ export default class HyperviewService {
      * @param {string} [options.baseTemplateId] - Canonical base template identifier required for full-page rendering
      * @param {string} [options.partial] - Canonical partial identifier to render instead of the page and base templates
      * @param {boolean} [options.skipBaseRender=false] - Render the page template without its base template
-     * @param {boolean} [options.usePageCache] - Read and write rendered hypertext in the page cache; defaults to the value passed to the constructor
+     * @param {boolean} [options.usePageCache] - Read and write rendered hypertext in the page cache; defaults to the value passed to the constructor. When enabled, see options.includePropsInCacheKey before passing response props which vary per request.
      * @param {string} [options.cacheKey] - Page-cache key component; defaults to the request origin, pathname, and query string
-     * @param {boolean} [options.includePropsInCacheKey=false] - Include a hash derived from response props in the page-cache key
+     * @param {boolean} [options.includePropsInCacheKey] - Include a hash derived from response props in the page-cache key; defaults to the value passed to the constructor. REQUIRED whenever the page cache is enabled and response props vary per request or per user: props are merged into the page context and change rendered output, but do not otherwise participate in the cache key, so omitting this causes one request's rendered props to be served to every later requester of the same URL until the entry expires.
      * @param {Function} [options.propsHashFunction] - Returns the response-props hash from the page pathname, merged page context, and response props
      * @param {number} [options.pageCacheReadTtlSeconds] - Cache TTL passed to page-cache reads; defaults to the value passed to the constructor
      * @param {number} [options.pageCacheExpirationSeconds] - Expiration TTL passed to page-cache writes; defaults to the value passed to the constructor
@@ -578,11 +602,15 @@ export default class HyperviewService {
         const usePageCache = options.usePageCache ?? this.#usePageCache;
         const pageCacheReadTtlSeconds = options.pageCacheReadTtlSeconds ?? this.#pageCacheReadTtlSeconds;
         const pageCacheExpirationSeconds = options.pageCacheExpirationSeconds ?? this.#pageCacheExpirationSeconds;
+        const includePropsInCacheKey = options.includePropsInCacheKey ?? this.#includePropsInCacheKey;
         const allowJsonResponse = options.allowJsonResponse ?? this.#allowJsonResponse;
-        const isJsonPathRequest = request.url.pathname.endsWith('.json');
-        const isJsonRequest = isJsonPathRequest || (
-            allowJsonResponse && this.isJsonRequest(request)
-        );
+        // Gate the ".json" extension on allowJsonResponse here, and not only on the
+        // response below, because this flag also decides whether the extension is
+        // stripped from the pathname. Ungated, a ".json" request would resolve the
+        // page at the extensionless pathname and render it as HTML whenever JSON
+        // responses are disabled, exposing every page under a second,
+        // non-canonical URL instead of reporting it as not found.
+        const isJsonPathRequest = allowJsonResponse && request.url.pathname.endsWith('.json');
 
         let pathname;
         if (isNonEmptyString(options.pathname)) {
@@ -591,8 +619,12 @@ export default class HyperviewService {
             let requestPathname = request.url.pathname;
             if (isJsonPathRequest) {
                 requestPathname = requestPathname.slice(0, -'.json'.length);
-                if (requestPathname === '/index') {
-                    requestPathname = '/';
+                // "index" names a directory page at every depth, not a page called
+                // "index", so drop the segment and let normalizePathname() fold the
+                // trailing slash. Matching only "/index" would leave the ".json"
+                // affordance broken for every directory page below the root.
+                if (requestPathname.endsWith('/index')) {
+                    requestPathname = requestPathname.slice(0, -'index'.length);
                 }
             }
             pathname = this.#store.normalizePathname(requestPathname);
@@ -628,7 +660,11 @@ export default class HyperviewService {
             });
         }
 
-        if (allowJsonResponse && isJsonRequest) {
+        // Serve JSON only when the deployment allows it and the client asked for
+        // it, by the ".json" path extension or an explicit Accept header. Applying
+        // the policy flag here, at its single decision point, keeps it out of the
+        // request-shape checks above, which describe the request alone.
+        if (allowJsonResponse && (isJsonPathRequest || this.isJsonRequest(request))) {
             // The optional JSON response is intended for development and debugging.
             return response.respondWithJSON(
                 response.status,
@@ -638,10 +674,10 @@ export default class HyperviewService {
         }
 
         const partials = await this.#store.statTemplatePartials(context);
-        let etag = await this.#store.hashValue(page.etag + (partials?.etag ?? ''));
+        let etag = await this.#store.hashValue(`${ page.etag }#${ partials?.etag ?? '' }`);
 
         // Optionally add the hash of the canonicalized props object.
-        if (options.includePropsInCacheKey) {
+        if (includePropsInCacheKey) {
             let propsHash;
             if (isFunction(options.propsHashFunction)) {
                 propsHash = await options.propsHashFunction(
@@ -652,7 +688,7 @@ export default class HyperviewService {
             } else {
                 propsHash = await this.#store.hashValue(response.props);
             }
-            etag = await this.#store.hashValue(etag + propsHash);
+            etag = await this.#store.hashValue(`${ etag }#${ propsHash }`);
         }
 
         // If the caller does not provide a custom cache key, we use the URL
@@ -673,7 +709,7 @@ export default class HyperviewService {
             key = `${ key }#PAGE_TEMPLATE_ONLY#${ etag }`;
         } else {
             const baseTemplates = await this.#store.statBaseTemplates(context);
-            etag = await this.#store.hashValue(etag + (baseTemplates?.etag ?? ''));
+            etag = await this.#store.hashValue(`${ etag }#${ baseTemplates?.etag ?? '' }`);
             // The base templates etag covers the whole bundle, not the selected
             // templateId, so options.baseTemplateId must be in the key too. Otherwise
             // requests for the same page rendered with different base templates
@@ -722,7 +758,6 @@ export default class HyperviewService {
             this.#logger.debug('skip base template render for page', { pathname });
 
             const template = await this.getPageTemplate(context, page);
-            assertFunction(template, `Page template "${ page.pageTemplateFilename }" does not exist in pages/${ pathname }`);
 
             hypertext = template(page.getPageContext());
 
@@ -741,7 +776,6 @@ export default class HyperviewService {
             this.getPageTemplate(context, page),
         ]);
 
-        assertFunction(pageTemplate, `Page template "${ page.pageTemplateFilename }" does not exist in pages/${ pathname }`);
         assertFunction(baseTemplate, `Base template "${ options.baseTemplateId }" does not exist`);
 
         const pageContext = page.getPageContext();

@@ -12,6 +12,60 @@ function makeLogger() {
     };
 }
 
+// A minimal page-and-store pair for cache-key tests. The hashValue() stub
+// serializes objects so that two distinct props objects produce two distinct
+// hashes, which is what makes a props-sensitive cache key observable.
+function makePropsCacheKeyFixtures() {
+    const pageContent = {
+        pageTemplateFilename: 'page.html',
+        partials: null,
+        includes: null,
+        etag: 'page-etag-1',
+        pageDataFiles: [
+            { json() {
+                return { page: {} };
+            } },
+        ],
+    };
+
+    const store = {
+        isValidPathname(value) {
+            return typeof value === 'string' && value.length > 0;
+        },
+        normalizePathname(value) {
+            return value;
+        },
+        async getPage() {
+            return pageContent;
+        },
+        async statTemplatePartials() {
+            return null;
+        },
+        async getTemplatePartials() {
+            return null;
+        },
+        async hashValue(value) {
+            if (typeof value === 'string') {
+                return `hash:${ value }`;
+            }
+            return `hash:${ JSON.stringify(value) }`;
+        },
+        async statPageTemplate() {
+            return null;
+        },
+        async getPageTemplate() {
+            return {
+                text() {
+                    return 'PAGE BODY';
+                },
+                etag: 'page-template-etag-1',
+            };
+        },
+    };
+
+    return { pageContent, store };
+}
+
 async function catchAsyncError(fn) {
     try {
         await fn();
@@ -75,6 +129,84 @@ describe('HyperviewService', ({ describe }) => {
             const cachedPagePartials = await service.getPagePartials({}, page);
 
             assertEqual('second global partial', cachedPagePartials.get('page.html')({}));
+        });
+
+        it('returns a reusable empty Map for a page which declares no partials', async () => {
+            // The Map instance must be retained across calls, because a compiled page
+            // template delegates its partial lookups into this exact instance.
+            const store = {
+                async statTemplatePartials() {
+                    return null;
+                },
+                async getTemplatePartials() {
+                    return null;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const page = { pathname: '/articles/example', partials: null };
+
+            const first = await service.getPagePartials({}, page);
+            const second = await service.getPagePartials({}, page);
+
+            assertEqual(0, first.size);
+            assertEqual(null, first.etag);
+            assert(first === second, 'expected the same Map instance across calls');
+        });
+
+        it('empties a cached partials Map when the page stops declaring partials', async () => {
+            const store = {
+                async statTemplatePartials() {
+                    return null;
+                },
+                async getTemplatePartials() {
+                    return null;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const page = {
+                pathname: '/articles/example',
+                partials: {
+                    etag: 'page-v1',
+                    partials: [
+                        { id: 'page.html', source: 'PAGE PARTIAL' },
+                    ],
+                },
+            };
+
+            const populated = await service.getPagePartials({}, page);
+            assertEqual(1, populated.size);
+
+            page.partials = null;
+            const emptied = await service.getPagePartials({}, page);
+
+            assert(populated === emptied, 'expected the same Map instance to be reused');
+            assertEqual(0, emptied.size);
+            assertEqual(null, emptied.etag);
+        });
+
+        it('does not retain a partials Map when useTemplateCache is disabled', async () => {
+            const store = {
+                async statTemplatePartials() {
+                    return null;
+                },
+                async getTemplatePartials() {
+                    return null;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const page = { pathname: '/articles/example', partials: null };
+
+            const first = await service.getPagePartials({}, page);
+            const second = await service.getPagePartials({}, page);
+
+            assertEqual(0, first.size);
+            assert(first !== second, 'expected a fresh Map instance on each call');
         });
     });
 
@@ -189,6 +321,48 @@ describe('HyperviewService', ({ describe }) => {
             assertEqual(0, statCalls);
             assertEqual(1, getCalls);
             assertEqual('PAGE BODY', template({}));
+        });
+    });
+
+    describe('assertCanonicalIdentifier', ({ it }) => {
+        it('rejects an empty identifier even when the store accepts it', async () => {
+            // The underlying isValidPathname() returns true for an empty string, so
+            // this method must reject it on its own. It exists to validate
+            // identifiers which may not have been checked by any earlier layer.
+            const store = {
+                isValidPathname() {
+                    return true;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const caught = await catchAsyncError(() => {
+                return service.assertCanonicalIdentifier('', 'test identifier');
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assert(
+                caught.message.includes('test identifier'),
+                `expected the caller context in the message; got "${ caught.message }"`,
+            );
+        });
+
+        it('accepts a non-empty identifier the store considers valid', async () => {
+            const store = {
+                isValidPathname() {
+                    return true;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const caught = await catchAsyncError(() => {
+                return service.assertCanonicalIdentifier('/articles/example', 'test identifier');
+            });
+
+            assertEqual(null, caught);
         });
     });
 
@@ -353,6 +527,139 @@ describe('HyperviewService', ({ describe }) => {
 
             assertEqual('/articles/example', requestedPathnames[0]);
             assertEqual('/', requestedPathnames[1]);
+        });
+
+        it('resolves a nested "index.json" request to its directory page', async () => {
+            // "/index" names a directory page, not a page called "index", at every
+            // depth. Handling only the root would leave the ".json" affordance
+            // broken for every directory page below it.
+            const requestedPathnames = [];
+            const pageContent = {
+                pageTemplateFilename: 'page.html',
+                partials: null,
+                includes: null,
+                etag: 'page-etag-1',
+                pageDataFiles: [
+                    { json() {
+                        return { page: {} };
+                    } },
+                ],
+            };
+            const store = {
+                isValidPathname(value) {
+                    return typeof value === 'string' && value.length > 0;
+                },
+                // Mirror the real store: fold a trailing slash, except at the root.
+                normalizePathname(value) {
+                    return value.length > 1 ? value.replace(/\/+$/, '') : value;
+                },
+                async getPage(_context, pathname) {
+                    requestedPathnames.push(pathname);
+                    return pageContent;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const response = {
+                props: {},
+                status: 200,
+                respondWithJSON() {
+                    return this;
+                },
+            };
+
+            await service.respondWithHypertext(
+                {},
+                {
+                    headers: new Headers(),
+                    url: new URL('https://example.com/blog/index.json'),
+                },
+                response,
+                { skipBaseRender: true },
+            );
+            await service.respondWithHypertext(
+                {},
+                {
+                    headers: new Headers(),
+                    url: new URL('https://example.com/index.json'),
+                },
+                response,
+                { skipBaseRender: true },
+            );
+
+            assertEqual('/blog', requestedPathnames[0]);
+            assertEqual('/', requestedPathnames[1]);
+        });
+
+        it('does not strip the ".json" extension when allowJsonResponse is disabled', async () => {
+            // The ".json" extension is a development affordance. When JSON responses are
+            // disabled the extension must stay part of the pathname, so the request
+            // resolves no page instead of silently serving the HTML page at the
+            // extensionless pathname under a second, non-canonical URL.
+            const requestedPathnames = [];
+            const store = {
+                isValidPathname(value) {
+                    return typeof value === 'string' && value.length > 0;
+                },
+                normalizePathname(value) {
+                    return value;
+                },
+                async getPage(_context, pathname) {
+                    requestedPathnames.push(pathname);
+                    return null;
+                },
+            };
+
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const request = {
+                headers: new Headers(),
+                url: new URL('https://example.com/articles/example.json'),
+            };
+            const response = { props: {}, status: 200 };
+
+            const caught = await catchAsyncError(() => {
+                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
+            });
+
+            assertEqual('/articles/example.json', requestedPathnames[0]);
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
+        });
+
+        it('does not remap "/index.json" to "/" when allowJsonResponse is disabled', async () => {
+            const requestedPathnames = [];
+            const store = {
+                isValidPathname(value) {
+                    return typeof value === 'string' && value.length > 0;
+                },
+                normalizePathname(value) {
+                    return value;
+                },
+                async getPage(_context, pathname) {
+                    requestedPathnames.push(pathname);
+                    return null;
+                },
+            };
+
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const request = {
+                headers: new Headers(),
+                url: new URL('https://example.com/index.json'),
+            };
+            const response = { props: {}, status: 200 };
+
+            const caught = await catchAsyncError(() => {
+                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
+            });
+
+            assertEqual('/index.json', requestedPathnames[0]);
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
         });
 
         it('renders skipBaseRender without requiring options.baseTemplateId', async () => {
@@ -526,6 +833,131 @@ describe('HyperviewService', ({ describe }) => {
             assert(putKeys[0] !== putKeys[1], 'expected different cache keys for different origins');
             assert(putKeys[0].includes('host-a.example'), 'expected cache key to include the request origin');
             assert(putKeys[1].includes('host-b.example'), 'expected cache key to include the request origin');
+        });
+
+        it('throws a labeled assertion when the page template blob is absent', async () => {
+            // The page metadata declares a pageTemplateFilename, so a missing blob
+            // violates an invariant the build is supposed to guarantee. It must fail
+            // as a labeled assertion naming the page, not as a TypeError raised by
+            // calling text() on null.
+            const { store } = makePropsCacheKeyFixtures();
+
+            store.getPageTemplate = async function getPageTemplate() {
+                return null;
+            };
+
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const request = { url: new URL('https://example.com/articles/example') };
+            const response = { props: {}, status: 200 };
+
+            const caught = await catchAsyncError(() => {
+                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assert(
+                caught.message.includes('page.html'),
+                `expected the page template filename in the message; got "${ caught.message }"`,
+            );
+            assert(
+                caught.message.includes('/articles/example'),
+                `expected the page pathname in the message; got "${ caught.message }"`,
+            );
+        });
+
+        it('honors the constructor-level includePropsInCacheKey default', async () => {
+            // Response props are merged into the page context and change rendered
+            // output, so a deployment which caches pages while passing per-request
+            // props must be able to set this once, in the constructor, rather than
+            // relying on every call site to remember the per-call option.
+            const { store } = makePropsCacheKeyFixtures();
+
+            const putKeys = [];
+            const kvStore = {
+                async get() {
+                    return null;
+                },
+                async put(_context, key) {
+                    putKeys.push(key);
+                },
+            };
+
+            const service = new HyperviewService({
+                logger: makeLogger(),
+                usePageCache: true,
+                includePropsInCacheKey: true,
+            });
+            service.initialize({ contentAddressableStore: store, kvStore });
+
+            const request = { url: new URL('https://example.com/articles/example') };
+
+            await service.respondWithHypertext({}, request, {
+                props: { viewer: 'alice' },
+                status: 200,
+                respondWithUtf8() {
+                    return this;
+                },
+            }, { skipBaseRender: true });
+
+            await service.respondWithHypertext({}, request, {
+                props: { viewer: 'bob' },
+                status: 200,
+                respondWithUtf8() {
+                    return this;
+                },
+            }, { skipBaseRender: true });
+
+            assertEqual(2, putKeys.length);
+            assert(
+                putKeys[0] !== putKeys[1],
+                'expected different cache keys for different response props',
+            );
+        });
+
+        it('allows a per-call includePropsInCacheKey to override the constructor default', async () => {
+            const { store } = makePropsCacheKeyFixtures();
+
+            const putKeys = [];
+            const kvStore = {
+                async get() {
+                    return null;
+                },
+                async put(_context, key) {
+                    putKeys.push(key);
+                },
+            };
+
+            const service = new HyperviewService({
+                logger: makeLogger(),
+                usePageCache: true,
+                includePropsInCacheKey: true,
+            });
+            service.initialize({ contentAddressableStore: store, kvStore });
+
+            const request = { url: new URL('https://example.com/articles/example') };
+            const options = { skipBaseRender: true, includePropsInCacheKey: false };
+
+            await service.respondWithHypertext({}, request, {
+                props: { viewer: 'alice' },
+                status: 200,
+                respondWithUtf8() {
+                    return this;
+                },
+            }, options);
+
+            await service.respondWithHypertext({}, request, {
+                props: { viewer: 'bob' },
+                status: 200,
+                respondWithUtf8() {
+                    return this;
+                },
+            }, options);
+
+            assertEqual(2, putKeys.length);
+            assertEqual(putKeys[0], putKeys[1]);
         });
 
         it('includes options.baseTemplateId in the full-page cache key', async () => {
