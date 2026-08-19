@@ -360,6 +360,16 @@ export default class HyperviewService {
         }
     }
 
+    // A rendered result must never be empty; an empty string means a template
+    // (or the store data it read) is broken, not that there is nothing to cache
+    // or return. Checked before hypertext reaches the cache or the response.
+    #assertRenderedHypertext(hypertext, renderMode, pathname) {
+        assertNonEmptyString(
+            hypertext,
+            `HyperviewService rendered empty hypertext for the ${ renderMode } render of page "${ pathname }"`,
+        );
+    }
+
     /**
      * Load the a base template by id, directly from the ContentAddressableStore.
      * If global partials are not loaded yet, they will be loaded here. If
@@ -553,13 +563,14 @@ export default class HyperviewService {
 
     /**
      * Returns `true` when the client explicitly requests JSON with a ".json"
-     * request path extension or an Accept header which includes
-     * "application/json" explicitly, without a wildcard.
+     * request path extension (matched case-insensitively, so ".JSON" also
+     * qualifies) or an Accept header which includes "application/json"
+     * explicitly, without a wildcard.
      *
      * @returns {boolean} `true` when the client explicitly requests JSON
      */
     isJsonRequest(request) {
-        if (request.url.pathname.endsWith('.json')) {
+        if (request.url.pathname.toLowerCase().endsWith('.json')) {
             return true;
         }
 
@@ -583,7 +594,7 @@ export default class HyperviewService {
      * @param {string} [options.partial] - Canonical partial identifier to render instead of the page and base templates
      * @param {boolean} [options.skipBaseRender=false] - Render the page template without its base template
      * @param {boolean} [options.usePageCache] - Read and write rendered hypertext in the page cache; defaults to the value passed to the constructor. When enabled, see options.includePropsInCacheKey before passing response props which vary per request.
-     * @param {string} [options.cacheKey] - Page-cache key component; defaults to the request origin, pathname, and query string
+     * @param {string} [options.cacheKey] - Page-cache identity component; defaults to the request origin, pathname, and query string. Hashed together with the render mode and content etag into the final opaque KV key, so it is never logged or stored verbatim.
      * @param {boolean} [options.includePropsInCacheKey] - Include a hash derived from response props in the page-cache key; defaults to the value passed to the constructor. REQUIRED whenever the page cache is enabled and response props vary per request or per user: props are merged into the page context and change rendered output, but do not otherwise participate in the cache key, so omitting this causes one request's rendered props to be served to every later requester of the same URL until the entry expires.
      * @param {Function} [options.propsHashFunction] - Returns the response-props hash from the page pathname, merged page context, and response props
      * @param {number} [options.pageCacheReadTtlSeconds] - Cache TTL passed to page-cache reads; defaults to the value passed to the constructor
@@ -610,7 +621,10 @@ export default class HyperviewService {
         // page at the extensionless pathname and render it as HTML whenever JSON
         // responses are disabled, exposing every page under a second,
         // non-canonical URL instead of reporting it as not found.
-        const isJsonPathRequest = allowJsonResponse && request.url.pathname.endsWith('.json');
+        // Matched case-insensitively so ".JSON" is recognized too; the requested
+        // URL keeps its original case everywhere else, since it is intentionally
+        // part of the page context and the default page-cache identity.
+        const isJsonPathRequest = allowJsonResponse && request.url.pathname.toLowerCase().endsWith('.json');
 
         let pathname;
         if (isNonEmptyString(options.pathname)) {
@@ -618,6 +632,8 @@ export default class HyperviewService {
         } else {
             let requestPathname = request.url.pathname;
             if (isJsonPathRequest) {
+                // Slicing by length rather than matching on ".json" literally, so
+                // this strips whichever case of the extension isJsonPathRequest matched.
                 requestPathname = requestPathname.slice(0, -'.json'.length);
                 // "index" names a directory page at every depth, not a page called
                 // "index", so drop the segment and let normalizePathname() fold the
@@ -696,26 +712,33 @@ export default class HyperviewService {
         // included because HyperviewPage#getPageContext() derives page.canonical_url
         // and page.href from the request origin when page data does not provide
         // them, so rendered output for the same path differs across hosts.
-        const pageCacheKey = isNonEmptyString(options.cacheKey)
+        const pageCacheIdentity = isNonEmptyString(options.cacheKey)
             ? options.cacheKey
             : (url.origin + url.pathname + url.search);
 
-        // Add the namespace prefix and hash for the complete KV key.
-        let key = `hyperview_page_cache#${ pageCacheKey }`;
+        let renderModeIdentity;
 
         if (options.partial) {
-            key = `${ key }#${ options.partial }#${ etag }`;
+            renderModeIdentity = `PARTIAL#${ options.partial }`;
         } else if (options.skipBaseRender) {
-            key = `${ key }#PAGE_TEMPLATE_ONLY#${ etag }`;
+            renderModeIdentity = 'PAGE_TEMPLATE_ONLY';
         } else {
             const baseTemplates = await this.#store.statBaseTemplates(context);
             etag = await this.#store.hashValue(`${ etag }#${ baseTemplates?.etag ?? '' }`);
             // The base templates etag covers the whole bundle, not the selected
-            // templateId, so options.baseTemplateId must be in the key too. Otherwise
-            // requests for the same page rendered with different base templates
-            // (e.g. distinct layouts per host or user state) would collide.
-            key = `${ key }#FULL_PAGE#${ options.baseTemplateId }#${ etag }`;
+            // templateId, so options.baseTemplateId must be in the identity too.
+            // Otherwise requests for the same page rendered with different base
+            // templates (e.g. distinct layouts per host or user state) would collide.
+            renderModeIdentity = `FULL_PAGE#${ options.baseTemplateId }`;
         }
+
+        // The logical identity can be arbitrarily large (full URL, query string,
+        // custom cache key) and may contain sensitive query-string values, so it
+        // is never used as the KV key or logged directly. Hashing it into a short,
+        // opaque, fixed-length key also keeps every key within the portable
+        // 512-byte KV key limit regardless of the input size.
+        const logicalCacheIdentity = `${ pageCacheIdentity }#${ renderModeIdentity }#${ etag }`;
+        const key = `hyperview_page_cache#${ await this.#store.hashValue(logicalCacheIdentity) }`;
 
         let hypertext;
 
@@ -741,6 +764,7 @@ export default class HyperviewService {
             assertFunction(template, `Partial template "${ options.partial }" does not exist in pages/${ pathname }`);
 
             hypertext = template(page.getPageContext());
+            this.#assertRenderedHypertext(hypertext, `partial "${ options.partial }"`, pathname);
 
             if (usePageCache) {
                 await this.#kvStore.put(context, key, hypertext, {
@@ -760,6 +784,7 @@ export default class HyperviewService {
             const template = await this.getPageTemplate(context, page);
 
             hypertext = template(page.getPageContext());
+            this.#assertRenderedHypertext(hypertext, 'page template', pathname);
 
             if (usePageCache) {
                 await this.#kvStore.put(context, key, hypertext, {
@@ -782,6 +807,7 @@ export default class HyperviewService {
 
         pageContext.body = pageTemplate(pageContext);
         hypertext = baseTemplate(pageContext);
+        this.#assertRenderedHypertext(hypertext, 'full page', pathname);
 
         if (usePageCache) {
             await this.#kvStore.put(context, key, hypertext, {

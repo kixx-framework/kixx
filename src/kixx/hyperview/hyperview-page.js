@@ -34,13 +34,15 @@ export default class HyperviewPage {
         this.partials = null;
         this.etag = etag;
 
+        // includes and partials are ContentObject instances; json() decodes the
+        // stored bytes and must be invoked, not read as a data property.
         if (includes) {
-            this.includes = includes.json;
+            this.includes = includes.json();
         }
         if (partials) {
             this.partials = {
                 etag: partials.etag,
-                partials: partials.json,
+                partials: partials.json(),
             };
         }
     }
