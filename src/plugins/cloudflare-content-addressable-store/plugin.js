@@ -18,7 +18,7 @@ export function register(context) {
         durableObjectBindingName,
         blobReadCacheTtlSeconds,
         indexCacheTtlSeconds,
-    } = config?.env?.CONTENT_ADDRESSABLE_STORE ?? {};
+    } = config.env.CONTENT_ADDRESSABLE_STORE ?? {};
 
     context.registerService('ContentAddressableStore', new ContentAddressableStore({
         logger,
