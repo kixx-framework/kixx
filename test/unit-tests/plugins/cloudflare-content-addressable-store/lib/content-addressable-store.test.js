@@ -335,7 +335,7 @@ describe('ContentAddressableStore', ({ describe }) => {
             assertUndefined(store.putBlobCalls[0]);
         });
 
-        it('returns null when the index entry points at a hash with no stored blob', async () => {
+        it('throws an AssertionError when the index entry points at a hash with no stored blob', async () => {
             const { subject } = makeSubject({
                 async statPath() {
                     return { kind: 'blob', hash: 'orphan-hash', size: 3, metadata: null };
@@ -346,7 +346,14 @@ describe('ContentAddressableStore', ({ describe }) => {
             });
             const context = makeContext();
 
-            assertEqual(null, await subject.getPageTemplate(context, 'blog/led-zeppelin/index.html'));
+            const caught = await catchAsyncError(
+                () => subject.getPageTemplate(context, 'blog/led-zeppelin/index.html'),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('/pages/blog/led-zeppelin/index.html', caught.message);
+            assertMatches('orphan-hash', caught.message);
         });
     });
 

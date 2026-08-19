@@ -185,7 +185,9 @@ export default class ContentAddressableStore {
         const bytes = await this.#store.getBlob(context, stat.hash);
 
         if (!bytes) {
-            return null;
+            throw new AssertionError(
+                `ContentAddressableStore#getPath(): The pathname "${ pathname }" references unreadable blob "${ stat.hash }"`,
+            );
         }
 
         return new ContentObject(bytes, {
@@ -229,7 +231,8 @@ export default class ContentAddressableStore {
     /**
      * Loads the global partial-template bundle from the current build.
      * @param {RequestContext} context - Request context carrying the current build ID and Cloudflare bindings
-     * @returns {Promise<ContentObject|null>} Stored bundle, or null when its index entry or blob is absent
+     * @returns {Promise<ContentObject|null>} Stored bundle, or null when its index entry is absent
+     * @throws {AssertionError} When its committed blob cannot be read
      */
     async getTemplatePartials(context) {
         return await this.#getPath(
@@ -271,7 +274,8 @@ export default class ContentAddressableStore {
     /**
      * Loads the base-template bundle from the current build.
      * @param {RequestContext} context - Request context carrying the current build ID and Cloudflare bindings
-     * @returns {Promise<ContentObject|null>} Stored bundle, or null when its index entry or blob is absent
+     * @returns {Promise<ContentObject|null>} Stored bundle, or null when its index entry is absent
+     * @throws {AssertionError} When its committed blob cannot be read
      */
     async getBaseTemplates(context) {
         return await this.#getPath(
@@ -454,7 +458,8 @@ export default class ContentAddressableStore {
      * Loads a page template from the current build.
      * @param {RequestContext} context - Request context carrying the current build ID and Cloudflare bindings
      * @param {string} filepath - Template filepath beneath the logical `/pages` namespace
-     * @returns {Promise<ContentObject|null>} Template content, or null when its index entry or blob is absent
+     * @returns {Promise<ContentObject|null>} Template content, or null when its index entry is absent
+     * @throws {AssertionError} When its committed blob cannot be read
      */
     async getPageTemplate(context, filepath) {
         return await this.#getPath(context, this.#normalizePagePath(filepath));
