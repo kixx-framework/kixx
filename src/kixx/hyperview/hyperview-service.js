@@ -194,14 +194,18 @@ export default class HyperviewService {
     }
 
     async #loadGlobalPartials(context) {
-        const stats = await this.#store.statTemplatePartials(context);
+        // Skip the stat() round-trip entirely when template caching is disabled;
+        // its result would only ever feed the cache-hit check below.
+        if (this.#useTemplateCache) {
+            const stats = await this.#store.statTemplatePartials(context);
 
-        // Use the etag from the content-addressable storage as
-        // the cache invalidation key. The etag is kept as a property on the
-        // Map instance, rather than an entry in it, so it can never collide
-        // with a partial id (e.g. a partial literally named "_etag").
-        if (this.#useTemplateCache && stats?.etag && this.#globalPartials.etag === stats.etag) {
-            return this.#globalPartials;
+            // Use the etag from the content-addressable storage as
+            // the cache invalidation key. The etag is kept as a property on the
+            // Map instance, rather than an entry in it, so it can never collide
+            // with a partial id (e.g. a partial literally named "_etag").
+            if (stats?.etag && this.#globalPartials.etag === stats.etag) {
+                return this.#globalPartials;
+            }
         }
 
         const partials = await this.#store.getTemplatePartials(context);
@@ -238,9 +242,10 @@ export default class HyperviewService {
     /**
      * Extracts page level partial templates from a HyperviewPage which has already
      * been loaded. Also loads the global partials to be used when compiling the
-     * page partials. If this service was constructed with useTemplateCache
-     * enabled and the page partials hash from the ContentAddressableStore
-     * still matches, the cached Map is returned as-is.
+     * page partials and refreshes them before returning cached page partials.
+     * If this service was constructed with useTemplateCache enabled and the
+     * page partials hash from the ContentAddressableStore still matches, the
+     * cached Map is returned as-is after that global-partials refresh.
      * @private
      * @return {Map} The page-specific partial template Map for the given page.pathname
      */
@@ -272,6 +277,10 @@ export default class HyperviewService {
             `HyperviewService#getPagePartialTemplate() expects page.partials.partials to be defined`,
         );
 
+        // Refresh global partials before returning a cached page-partials Map.
+        // Compiled page partials resolve global partials through a live lookup.
+        const globalPartials = await this.loadGlobalPartials(context);
+
         if (this.#useTemplateCache && pagePartials?.etag === page.partials.etag) {
             return pagePartials;
         }
@@ -280,9 +289,6 @@ export default class HyperviewService {
             pagePartials = new Map();
             this.#pagePartials.set(page.pathname, pagePartials);
         }
-
-        // Ensure the global partials are loaded; page partials may reference them.
-        const globalPartials = await this.loadGlobalPartials(context);
 
         // Page-specific partials can reference global partials and each other.
         // Page partials shadow a global partial that shares the same id.
@@ -320,14 +326,18 @@ export default class HyperviewService {
      * @return {Function} A Kixx template function.
      */
     async getBaseTemplate(context, templateId) {
-        const stats = await this.#store.statBaseTemplates(context);
+        // Skip the stat() round-trip entirely when template caching is disabled;
+        // its result would only ever feed the cache-hit check below.
+        if (this.#useTemplateCache) {
+            const stats = await this.#store.statBaseTemplates(context);
 
-        // Use the etag from the content-addressable storage as the cache
-        // invalidation key. The etag is kept as a property on the Map
-        // instance, rather than an entry in it, so it can never collide
-        // with a template id (e.g. a base template literally named "_etag").
-        if (this.#useTemplateCache && stats?.etag && this.#baseTemplates.etag === stats.etag) {
-            return this.#baseTemplates.get(templateId);
+            // Use the etag from the content-addressable storage as the cache
+            // invalidation key. The etag is kept as a property on the Map
+            // instance, rather than an entry in it, so it can never collide
+            // with a template id (e.g. a base template literally named "_etag").
+            if (stats?.etag && this.#baseTemplates.etag === stats.etag) {
+                return this.#baseTemplates.get(templateId);
+            }
         }
 
         // Base templates are stored in a single bundle file, which
@@ -387,17 +397,22 @@ export default class HyperviewService {
         const { pathname, pageTemplateFilename } = page;
 
         const filepath = this.#store.normalizePathname(`${ pathname }/${ pageTemplateFilename }`);
-        const stats = await this.#store.statPageTemplate(context, filepath);
 
         let template;
 
-        // Use the etag from the content-addressable storage as
-        // the cache invalidation key.
-        if (this.#useTemplateCache && stats?.etag && this.#pageTemplates.has(filepath)) {
-            template = this.#pageTemplates.get(filepath);
-            // Check this template version by comparing the latest etag.
-            if (template.etag === stats.etag) {
-                return template;
+        // Skip the stat() round-trip entirely when template caching is disabled;
+        // its result would only ever feed the cache-hit check below.
+        if (this.#useTemplateCache) {
+            // Use the etag from the content-addressable storage as
+            // the cache invalidation key.
+            const stats = await this.#store.statPageTemplate(context, filepath);
+
+            if (stats?.etag && this.#pageTemplates.has(filepath)) {
+                template = this.#pageTemplates.get(filepath);
+                // Check this template version by comparing the latest etag.
+                if (template.etag === stats.etag) {
+                    return template;
+                }
             }
         }
 
@@ -501,7 +516,7 @@ export default class HyperviewService {
      * @param {string} [options.partial] - Canonical partial identifier to render instead of the page and base templates
      * @param {boolean} [options.skipBaseRender=false] - Render the page template without its base template
      * @param {boolean} [options.usePageCache] - Read and write rendered hypertext in the page cache; defaults to the value passed to the constructor
-     * @param {string} [options.cacheKey] - Page-cache key component; defaults to the request pathname and query string
+     * @param {string} [options.cacheKey] - Page-cache key component; defaults to the request origin, pathname, and query string
      * @param {boolean} [options.includePropsInCacheKey=false] - Include a hash derived from response props in the page-cache key
      * @param {Function} [options.propsHashFunction] - Returns the response-props hash from the page pathname, merged page context, and response props
      * @param {number} [options.pageCacheReadTtlSeconds] - Cache TTL passed to page-cache reads; defaults to the value passed to the constructor
@@ -543,7 +558,7 @@ export default class HyperviewService {
                 options.partial,
                 'HyperviewService#respondWithHypertext: options.partial',
             );
-        } else {
+        } else if (!options.skipBaseRender) {
             this.assertCanonicalIdentifier(
                 options.baseTemplateId,
                 'HyperviewService#respondWithHypertext options.baseTemplateId',
@@ -568,37 +583,48 @@ export default class HyperviewService {
             );
         }
 
-        let etag = page.etag;
+        const partials = await this.#store.statTemplatePartials(context);
+        let etag = await this.#store.hashValue(page.etag + (partials?.etag ?? ''));
 
         // Optionally add the hash of the canonicalized props object.
         if (options.includePropsInCacheKey) {
             let propsHash;
             if (isFunction(options.propsHashFunction)) {
-                propsHash = options.propsHashFunction(
+                propsHash = await options.propsHashFunction(
                     page.pathname,
                     page.getPageContext(),
                     response.props,
                 );
             } else {
-                propsHash = this.#store.hashValue(response.props);
+                propsHash = await this.#store.hashValue(response.props);
             }
-            etag = this.#store.hashValue(page.etag + propsHash);
+            etag = await this.#store.hashValue(etag + propsHash);
         }
 
-        // If the caller does not provide a custom cache key, we use the
-        // URL pathname + query params as the default.
+        // If the caller does not provide a custom cache key, we use the URL
+        // origin + pathname + query params as the default. The origin must be
+        // included because HyperviewPage#getPageContext() derives page.canonical_url
+        // and page.href from the request origin when page data does not provide
+        // them, so rendered output for the same path differs across hosts.
         const pageCacheKey = isNonEmptyString(options.cacheKey)
             ? options.cacheKey
-            : (url.pathname + url.search);
+            : (url.origin + url.pathname + url.search);
 
         // Add the namespace prefix and hash for the complete KV key.
-        let key = `hyperview_page_cache#${ pageCacheKey }#${ etag }`;
+        let key = `hyperview_page_cache#${ pageCacheKey }`;
 
         if (options.partial) {
-            key = `${ key }#${ options.partial }`;
-        }
-        if (options.skipBaseRender) {
-            key = `${ key }#_PAGE_TEMPLATE_ONLY`;
+            key = `${ key }#${ options.partial }#${ etag }`;
+        } else if (options.skipBaseRender) {
+            key = `${ key }#PAGE_TEMPLATE_ONLY#${ etag }`;
+        } else {
+            const baseTemplates = await this.#store.statBaseTemplates(context);
+            etag = await this.#store.hashValue(etag + (baseTemplates?.etag ?? ''));
+            // The base templates etag covers the whole bundle, not the selected
+            // templateId, so options.baseTemplateId must be in the key too. Otherwise
+            // requests for the same page rendered with different base templates
+            // (e.g. distinct layouts per host or user state) would collide.
+            key = `${ key }#FULL_PAGE#${ options.baseTemplateId }#${ etag }`;
         }
 
         let hypertext;

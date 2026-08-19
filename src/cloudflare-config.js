@@ -4,9 +4,11 @@ export default {
     environments: {
         development: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: true,
-                USE_PAGE_CACHE: false,
-                USE_TEMPLATE_CACHE: false,
+                useTemplateCache: false,
+                usePageCache: false,
+                allowJsonResponse: true,
+                pageCacheReadTtlSeconds: 0,
+                pageCacheExpirationSeconds: 0,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -49,16 +51,6 @@ export default {
                     },
                 },
             },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'STATIC_FILE_STORE',
@@ -67,9 +59,11 @@ export default {
         },
         staging: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: false,
-                USE_PAGE_CACHE: true,
-                USE_TEMPLATE_CACHE: true,
+                useTemplateCache: true,
+                usePageCache: true,
+                allowJsonResponse: true,
+                pageCacheReadTtlSeconds: 60 * 60,
+                pageCacheExpirationSeconds: 60 * 60,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -112,16 +106,6 @@ export default {
                     },
                 },
             },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'STATIC_FILE_STORE',
@@ -130,9 +114,11 @@ export default {
         },
         production: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: false,
-                USE_PAGE_CACHE: true,
-                USE_TEMPLATE_CACHE: true,
+                useTemplateCache: true,
+                usePageCache: true,
+                allowJsonResponse: false,
+                pageCacheReadTtlSeconds: 60 * 60 * 36,
+                pageCacheExpirationSeconds: 60 * 60 * 36,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -174,16 +160,6 @@ export default {
                         bindingName: 'OBJECT_STORE_FILES',
                     },
                 },
-            },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
