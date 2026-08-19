@@ -924,6 +924,121 @@ describe('HyperviewService', ({ describe }) => {
             assertEqual('AssertionError', caught.name);
         });
 
+        it('skips rendered-page cache work when page caching is disabled', async () => {
+            const pageContent = {
+                pageTemplateFilename: 'page.html',
+                partials: null,
+                includes: null,
+                etag: 'page-etag-1',
+                pageDataFiles: [
+                    { json() {
+                        return { page: {} };
+                    } },
+                ],
+            };
+            const store = {
+                isValidPathname(value) {
+                    return typeof value === 'string' && value.length > 0;
+                },
+                normalizePathname(value) {
+                    return value;
+                },
+                async getPage() {
+                    return pageContent;
+                },
+                async statTemplatePartials() {
+                    throw new Error('unexpected rendered-page cache operation');
+                },
+                async getTemplatePartials() {
+                    return null;
+                },
+                async statBaseTemplates() {
+                    throw new Error('unexpected rendered-page cache operation');
+                },
+                async getBaseTemplates() {
+                    return {
+                        etag: 'base-etag-1',
+                        json() {
+                            return [ { id: 'layout', source: 'LAYOUT[{{ body }}]' } ];
+                        },
+                    };
+                },
+                async hashValue() {
+                    throw new Error('unexpected rendered-page cache operation');
+                },
+                async getPageTemplate() {
+                    return {
+                        text() {
+                            return 'PAGE BODY';
+                        },
+                        etag: 'page-template-etag-1',
+                    };
+                },
+            };
+            const kvStore = {
+                async get() {
+                    throw new Error('unexpected rendered-page cache operation');
+                },
+                async put() {
+                    throw new Error('unexpected rendered-page cache operation');
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore });
+
+            const request = { url: new URL('https://example.com/articles/example') };
+            const response = {
+                props: {},
+                status: 200,
+                respondWithUtf8(_status, hypertext) {
+                    this.hypertext = hypertext;
+                    return this;
+                },
+            };
+
+            await service.respondWithHypertext({}, request, response, { baseTemplateId: 'layout' });
+
+            assertEqual('LAYOUT[PAGE BODY]', response.hypertext);
+        });
+
+        it('skips rendered-page cache work when page caching is disabled per call', async () => {
+            const { store } = makePropsCacheKeyFixtures();
+            store.statTemplatePartials = async function statTemplatePartials() {
+                throw new Error('unexpected rendered-page cache operation');
+            };
+            store.hashValue = async function hashValue() {
+                throw new Error('unexpected rendered-page cache operation');
+            };
+
+            const kvStore = {
+                async get() {
+                    throw new Error('unexpected rendered-page cache operation');
+                },
+                async put() {
+                    throw new Error('unexpected rendered-page cache operation');
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
+            service.initialize({ contentAddressableStore: store, kvStore });
+
+            const request = { url: new URL('https://example.com/articles/example') };
+            const response = {
+                props: {},
+                status: 200,
+                respondWithUtf8(_status, hypertext) {
+                    this.hypertext = hypertext;
+                    return this;
+                },
+            };
+
+            await service.respondWithHypertext({}, request, response, {
+                skipBaseRender: true,
+                usePageCache: false,
+            });
+
+            assertEqual('PAGE BODY', response.hypertext);
+        });
+
         it('partitions the rendered-page cache by request origin', async () => {
             const pageContent = {
                 pageTemplateFilename: 'page.html',
