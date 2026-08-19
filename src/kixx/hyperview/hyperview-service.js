@@ -17,6 +17,27 @@ import {
 //       tag instead of prefixed by "#". This is intentional, to allow unit
 //       testing coverage to be more thorough.
 
+/**
+ * Builds a partials lookup that checks `primary` before falling back to
+ * `secondary`. Unlike a merged copy, this delegates every lookup to the
+ * live Maps at render time, so mutating either Map in place (as the
+ * template caches do on refresh) is visible to every template already
+ * compiled against the delegator, with no recompilation required.
+ * @param {Map<string, Function>} primary - Consulted first; wins on a shared id
+ * @param {Map<string, Function>} secondary - Consulted when `primary` has no entry
+ * @returns {{ has: Function, get: Function }} A partials-lookup view usable by the template renderer
+ */
+function layerPartials(primary, secondary) {
+    return {
+        has(id) {
+            return primary.has(id) || secondary.has(id);
+        },
+        get(id) {
+            return primary.has(id) ? primary.get(id) : secondary.get(id);
+        },
+    };
+}
+
 export default class HyperviewService {
 
     #logger;
@@ -189,11 +210,11 @@ export default class HyperviewService {
     /**
      * Extracts page level partial templates from a HyperviewPage which has already
      * been loaded. Also loads the global partials to be used when compiling the
-     * page partials. If useTemplateCache has been toggled on, the page partials
-     * will be cached in runtime memory using the page partials hash from
-     * the ContentAddressableStore as the cache invalidation key.
+     * page partials. If useTemplateCache has been toggled on and the page partials
+     * hash from the ContentAddressableStore still matches, the cached Map is
+     * returned as-is.
      * @private
-     * @return {Map} The partial template Map for the given page.pathname
+     * @return {Map} The page-specific partial template Map for the given page.pathname
      */
     async getPagePartials(context, page, options) {
         assertNonEmptyString(
@@ -205,30 +226,29 @@ export default class HyperviewService {
             `HyperviewService#getPagePartialTemplate() expects page.partials.partials to be defined`,
         );
 
-        let pagePartials;
+        // Keep the same Map instance for this pathname across rebuilds, rather
+        // than replacing it, so that page and base templates already compiled
+        // against it (via layerPartials()) keep seeing current content after
+        // an in-place refresh instead of needing to be recompiled.
+        let pagePartials = this.#pagePartials.get(page.pathname);
 
-        // Try the partials cache first, if the cache is enabled.
-        if (options.useTemplateCache && this.#pagePartials.has(page.pathname)) {
-            pagePartials = this.#pagePartials.get(page.pathname);
-            // Check this set of page partials version by comparing the latest etag.
-            if (pagePartials.get('_etag') === page.partials.etag) {
-                return pagePartials;
-            }
+        if (options.useTemplateCache && pagePartials?.get('_etag') === page.partials.etag) {
+            return pagePartials;
         }
 
-        // Ensure the global partials are loaded; we're going to copy and extend them.
+        if (!pagePartials) {
+            pagePartials = new Map();
+            this.#pagePartials.set(page.pathname, pagePartials);
+        }
+
+        // Ensure the global partials are loaded; page partials may reference them.
         const globalPartials = await this.loadGlobalPartials(context, options);
 
-        // Make a copy of the global partials so that we can safely mutate the Map
-        // without impacting the global partials Map. This is the partials Map
-        // we're going to pass to the template factory.
-        const partials = new Map(globalPartials);
+        // Page-specific partials can reference global partials and each other.
+        // Page partials shadow a global partial that shares the same id.
+        const partials = layerPartials(pagePartials, globalPartials);
 
-        // Cache the page partials seperately.
-        if (pagePartials) {
-            pagePartials.clear();
-        }
-        pagePartials = new Map();
+        pagePartials.clear();
         // Set the special _etag key to version this set of page partials.
         pagePartials.set('_etag', page.partials.etag);
 
@@ -243,12 +263,7 @@ export default class HyperviewService {
             );
 
             const template = this.compileTemplate(id, source, this.#customHelpers, partials);
-            partials.set(id, template);
             pagePartials.set(id, template);
-        }
-
-        if (options.useTemplateCache) {
-            this.#pagePartials.set(page.pathname, pagePartials);
         }
 
         return pagePartials;
@@ -343,14 +358,13 @@ export default class HyperviewService {
 
         const pageTemplate = await this.#store.getPageTemplate(context, filepath);
 
-        // Ensure the global partials are loaded; we're going to copy and extend them.
+        // Ensure the global and page partials are loaded and current. Compile
+        // against a live delegator over both persistent Maps rather than a
+        // merged snapshot copy, so partial content updates are picked up at
+        // render time without recompiling this page template.
         const globalPartials = await this.loadGlobalPartials(context, options);
         const pagePartials = await this.getPagePartials(context, page, options);
-
-        // Make a copy of the global partials and page partials so that we can
-        // safely merge them. This is the partials Map we're going
-        // to pass to the template factory.
-        const partials = new Map([...globalPartials, ...pagePartials]);
+        const partials = layerPartials(pagePartials, globalPartials);
 
         template = this.compileTemplate(
             filepath,
@@ -564,7 +578,7 @@ export default class HyperviewService {
             // updates from the browser with fetch().
             this.#logger.debug('render partial for page', { pathname, partial: options.partial });
 
-            const pagePartials = await this.getPagePartials(context, page, { useCache: options.useTemplateCache });
+            const pagePartials = await this.getPagePartials(context, page, { useTemplateCache: options.useTemplateCache });
             const template = pagePartials.get(options.partial);
             assertFunction(template, `Partial template "${ options.partial }" does not exist in pages/${ pathname }`);
 
@@ -585,7 +599,7 @@ export default class HyperviewService {
             // for page transitions triggered from the browser with fetch().
             this.#logger.debug('skip base template render for page', { pathname });
 
-            const template = await this.getPageTemplate(context, page, { useCache: options.useTemplateCache });
+            const template = await this.getPageTemplate(context, page, { useTemplateCache: options.useTemplateCache });
             assertFunction(template, `Page template "${ page.pageTemplate.id }" does not exist in pages/${ pathname }`);
 
             hypertext = template(page.getPageContext());
@@ -601,8 +615,8 @@ export default class HyperviewService {
         }
 
         const [ baseTemplate, pageTemplate ] = await Promise.all([
-            this.getBaseTemplate(context, options.baseTemplateId, { useCache: options.useTemplateCache }),
-            this.getPageTemplate(context, page, { useCache: options.useTemplateCache }),
+            this.getBaseTemplate(context, options.baseTemplateId, { useTemplateCache: options.useTemplateCache }),
+            this.getPageTemplate(context, page, { useTemplateCache: options.useTemplateCache }),
         ]);
 
         assertFunction(pageTemplate, `Page template "${ page.pageTemplate.id }" does not exist in pages/${ pathname }`);
