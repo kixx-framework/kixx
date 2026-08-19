@@ -182,9 +182,12 @@ export default class HyperviewService {
 
         const partials = await this.#store.getTemplatePartials(context);
 
+        // Clear old partials, but do not replace the Map:
+        // Existing compiled templates depend on it.
+        this.#globalPartials.clear();
+
         if (!partials) {
             // No template partials defined for this application.
-            this.#globalPartials.clear();
             return this.#globalPartials;
         }
 
@@ -217,6 +220,23 @@ export default class HyperviewService {
      * @return {Map} The page-specific partial template Map for the given page.pathname
      */
     async getPagePartials(context, page, options) {
+
+        // Keep the same Map instance for this pathname across rebuilds, rather
+        // than replacing it, so that page and base templates already compiled
+        // against it (via layerPartials()) keep seeing current content after
+        // an in-place refresh instead of needing to be recompiled.
+        let pagePartials = this.#pagePartials.get(page.pathname);
+
+        if (!page.partials) {
+            if (pagePartials) {
+                pagePartials.clear();
+            } else {
+                pagePartials = new Map();
+                this.#pagePartials.set(page.pathname, pagePartials);
+            }
+            return pagePartials;
+        }
+
         assertNonEmptyString(
             page.partials?.etag,
             `HyperviewService#getPagePartialTemplate() expects page.partials.etag to be present`,
@@ -225,12 +245,6 @@ export default class HyperviewService {
             page.partials?.partials,
             `HyperviewService#getPagePartialTemplate() expects page.partials.partials to be defined`,
         );
-
-        // Keep the same Map instance for this pathname across rebuilds, rather
-        // than replacing it, so that page and base templates already compiled
-        // against it (via layerPartials()) keep seeing current content after
-        // an in-place refresh instead of needing to be recompiled.
-        let pagePartials = this.#pagePartials.get(page.pathname);
 
         if (options.useTemplateCache && pagePartials?.get('_etag') === page.partials.etag) {
             return pagePartials;
@@ -290,6 +304,9 @@ export default class HyperviewService {
         // Base templates are stored in a single bundle file, which
         // we fetch here.
         const templates = await this.#store.getBaseTemplates(context);
+
+        // Clear old templates to ensure the map does not grow unbounded.
+        this.#baseTemplates.clear();
 
         if (!templates) {
             // No base templates defined for this application.
@@ -396,7 +413,10 @@ export default class HyperviewService {
             return null;
         }
 
-        assert(pageContent.pageTemplate, `Missing page template in ${ pathname }`);
+        assertNonEmptyString(
+            pageContent.pageTemplateFilename,
+            `Missing page template in ${ pathname }`,
+        );
 
         const page = new HyperviewPage({
             url,
@@ -406,6 +426,7 @@ export default class HyperviewService {
             partials: pageContent.partials,
             includes: pageContent.includes,
             etag: pageContent.etag,
+            createMiniTemplate: this.createMiniTemplate.bind(this),
         });
 
         // Fold all the source metadata objects into the page context.
@@ -414,21 +435,6 @@ export default class HyperviewService {
         // otherwise this merge would be incorrect.
         const sources = pageContent.pageDataFiles.map((file) => file.json());
         page.mergeSources(sources);
-
-        // Compile the title template, if it exists.
-        if (isNonEmptyString(page.rawPageTitle?.template)) {
-            page.setMetadataTemplate('page.title', this.createMiniTemplate(
-                `${ pathname }/page.title`,
-                page.title.template,
-            ));
-        }
-        // Compile the description template, if it exists.
-        if (isNonEmptyString(page.rawPageDescription?.template)) {
-            page.setMetadataTemplate('page.description', this.createMiniTemplate(
-                `${ pathname }/page.description`,
-                page.description.template,
-            ));
-        }
 
         return page;
     }

@@ -1,14 +1,16 @@
 import deepMerge from '../utils/deep-merge.js';
 import {
+    isFunction,
     isUndefined,
     isObjectNotNull,
+    isNonEmptyString,
 } from '../assertions/mod.js';
 
 export default class HyperviewPage {
 
     #pageContext = {};
     #responseProps = null;
-    #metadataTemplates = new Map();
+    #createMiniTemplate;
 
     constructor(spec) {
         const {
@@ -19,9 +21,11 @@ export default class HyperviewPage {
             partials,
             includes,
             etag,
+            createMiniTemplate,
         } = spec;
 
         this.#responseProps = responseProps;
+        this.#createMiniTemplate = createMiniTemplate;
 
         this.url = url;
         this.pathname = pathname;
@@ -31,10 +35,7 @@ export default class HyperviewPage {
         this.etag = etag;
 
         if (includes) {
-            this.includes = {
-                etag: includes.etag,
-                includes: includes.json,
-            };
+            this.includes = includes.json;
         }
         if (partials) {
             this.partials = {
@@ -42,14 +43,6 @@ export default class HyperviewPage {
                 partials: partials.json,
             };
         }
-    }
-
-    get rawPageTitle() {
-        return this.#pageContext.page?.title;
-    }
-
-    get rawPageDescription() {
-        return this.#pageContext.page?.description;
     }
 
     mergeSources(originalSources) {
@@ -75,15 +68,28 @@ export default class HyperviewPage {
 
         Object.assign(this.#pageContext, pageContext);
 
+        this.#pageContext.includes = this.includes;
+
         // Clone the response.props so we don't mutate the nested data structures
         // as part of the page context hydration process.
         deepMerge(this.#pageContext, structuredClone(this.#responseProps));
 
-        return this;
-    }
+        // Compile the title template, if it exists.
+        if (isNonEmptyString(this.#pageContext.page?.title?.template)) {
+            this.#pageContext.page.title = this.#createMiniTemplate(
+                `${ this.pathname }/page.title`,
+                this.#pageContext.page.title.template,
+            );
+        }
+        // Compile the description template, if it exists.
+        if (isNonEmptyString(this.#pageContext.page?.description?.template)) {
+            this.#pageContext.page.description = this.#createMiniTemplate(
+                `${ this.pathname }/page.description`,
+                this.#pageContext.page.description.template,
+            );
+        }
 
-    setMetadataTemplate(name, template) {
-        this.#metadataTemplates.set(name, template);
+        return this;
     }
 
     getPageContext() {
@@ -111,11 +117,11 @@ export default class HyperviewPage {
         }
 
         // Hydrate the title and description templates, if they exist.
-        if (this.#metadataTemplates.has('page.title')) {
-            page.title = this.#metadataTemplates.get('page.title')(this.#pageContext);
+        if (isFunction(page.title)) {
+            page.title = page.title(this.#pageContext);
         }
-        if (this.#metadataTemplates.has('page.description')) {
-            page.description = this.#metadataTemplates.get('page.description')(this.#pageContext);
+        if (isFunction(page.description)) {
+            page.description = page.description(this.#pageContext);
         }
 
         // Create the Open Graph object if it does not yet exist.
