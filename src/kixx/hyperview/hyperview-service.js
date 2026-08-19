@@ -260,6 +260,7 @@ export default class HyperviewService {
                 pagePartials.etag = null;
             } else {
                 pagePartials = new Map();
+                pagePartials.etag = null;
                 if (this.#useTemplateCache) {
                     this.#pagePartials.set(page.pathname, pagePartials);
                 }
@@ -444,8 +445,13 @@ export default class HyperviewService {
 
             if (stats?.etag && this.#pageTemplates.has(filepath)) {
                 template = this.#pageTemplates.get(filepath);
-                // Check this template version by comparing the latest etag.
-                if (template.etag === stats.etag) {
+                // Check this template version by comparing the latest etag. Also
+                // compare the page-partials etag: a concurrent request can replace
+                // the #pagePartials entry for this pathname with a new Map instance
+                // (see getPagePartials()), orphaning the one this cached template
+                // closed over. The template file's own etag alone would not catch
+                // that, since the file itself never changed.
+                if (template.etag === stats.etag && template.partialsEtag === pagePartials.etag) {
                     this.#cachePagePathname(pathname, filepath);
                     return template;
                 }
@@ -479,6 +485,7 @@ export default class HyperviewService {
         );
 
         template.etag = pageTemplate.etag;
+        template.partialsEtag = pagePartials.etag;
 
         if (this.#useTemplateCache) {
             this.#pageTemplates.set(filepath, template);
@@ -494,19 +501,20 @@ export default class HyperviewService {
      * @param {URL} url - Request URL used to derive canonical page metadata
      * @param {string} pathname - Canonical page pathname
      * @param {Object} responseProps - Response props merged into the page context
-     * @returns {Promise<HyperviewPage|null>} The loaded page, or null when no page exists
+     * @returns {Promise<HyperviewPage|null>} The loaded page, or null when no page exists at that
+     *   pathname, or when its metadata declares no page template
      */
     async getPage(context, url, pathname, responseProps) {
         const pageContent = await this.#store.getPage(context, pathname);
 
-        if (!pageContent) {
+        // A page directory can carry metadata with no template of its own -- an
+        // ancestor directory published only to supply inherited defaults for its
+        // descendants, for example. Requesting that pathname directly is a
+        // missing resource from the caller's perspective, the same as no page
+        // metadata at all, not a build invariant violation.
+        if (!pageContent || !isNonEmptyString(pageContent.pageTemplateFilename)) {
             return null;
         }
-
-        assertNonEmptyString(
-            pageContent.pageTemplateFilename,
-            `Missing page template in ${ pathname }`,
-        );
 
         const page = new HyperviewPage({
             url,

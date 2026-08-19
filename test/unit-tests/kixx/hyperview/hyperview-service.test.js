@@ -12,6 +12,17 @@ function makeLogger() {
     };
 }
 
+// Lets a test control exactly when an awaited store call resolves, so two
+// concurrent HyperviewService calls can be driven through a specific
+// interleaving instead of relying on real timing.
+function makeDeferred() {
+    let resolve;
+    const promise = new Promise((res) => {
+        resolve = res;
+    });
+    return { promise, resolve };
+}
+
 // A minimal page-and-store pair for cache-key tests. The hashValue() stub
 // serializes objects so that two distinct props objects produce two distinct
 // hashes, which is what makes a props-sensitive cache key observable.
@@ -359,6 +370,187 @@ describe('HyperviewService', ({ describe }) => {
             assertEqual(0, statCalls);
             assertEqual(1, getCalls);
             assertEqual('PAGE BODY', template({}));
+        });
+
+        it('does not serve a page template compiled against a page-partials Map orphaned by a concurrent partial request', async () => {
+            // getPageTemplate() always supplies an already-resolved globalPartials
+            // Map to getPagePartials(), so its own call runs to completion
+            // synchronously once resumed. respondWithHypertext()'s partial-render
+            // path instead calls getPagePartials(context, page) directly, without
+            // a resolved globalPartials argument -- that call reads the current
+            // #pagePartials entry *before* suspending on loadGlobalPartials(), and
+            // resumes using the value it already read, without re-checking the
+            // cache. If a concurrent getPageTemplate() call wins the cache slot
+            // with a fresh Map while the partial-render call is still suspended,
+            // the partial-render call still finds "no entry" on the way in,
+            // creates a second Map, and overwrites the entry getPageTemplate()
+            // just compiled against -- orphaning it. A page-template cache that
+            // only checks the template file's own etag would keep serving that
+            // orphaned, never-refreshed template forever.
+            const deferred = makeDeferred();
+
+            const page = {
+                pathname: '/articles/example',
+                pageTemplateFilename: 'page.html',
+                partials: {
+                    etag: 'page-partials-v1',
+                    partials: [ { id: 'x.html', source: 'V1 CONTENT' } ],
+                },
+            };
+
+            const store = {
+                normalizePathname(value) {
+                    return value;
+                },
+                async statTemplatePartials() {
+                    return null;
+                },
+                async getTemplatePartials() {
+                    return deferred.promise;
+                },
+                async statPageTemplate() {
+                    return { etag: 'page-template-v1' };
+                },
+                async getPageTemplate() {
+                    return {
+                        text() {
+                            return '{{> x.html }}';
+                        },
+                        etag: 'page-template-v1',
+                    };
+                },
+            };
+
+            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            // Start the "full render" request first, so it becomes the
+            // loadGlobalPartials() lock holder; then start the "partial render"
+            // request, which reads the (still empty) page-partials cache before
+            // it, too, suspends on the same lock.
+            const fullRenderPromise = service.getPageTemplate({}, page);
+            const partialRenderPromise = service.getPagePartials({}, page);
+
+            deferred.resolve({
+                etag: 'global-partials-v1',
+                json() {
+                    return [];
+                },
+            });
+
+            const template = await fullRenderPromise;
+            await partialRenderPromise;
+
+            assertEqual('V1 CONTENT', template({}));
+
+            // Partials content changes, but the page template file itself does
+            // not, so a cache-hit check based only on the template's own etag
+            // would keep serving the template compiled above.
+            page.partials = {
+                etag: 'page-partials-v2',
+                partials: [ { id: 'x.html', source: 'V2 CONTENT' } ],
+            };
+
+            const secondTemplate = await service.getPageTemplate({}, page);
+
+            assertEqual('V2 CONTENT', secondTemplate({}));
+        });
+
+        it('does not force a redundant recompile on a second request for a page with no partials', async () => {
+            let templateFetchCount = 0;
+            const store = {
+                normalizePathname(value) {
+                    return value;
+                },
+                async statTemplatePartials() {
+                    return null;
+                },
+                async getTemplatePartials() {
+                    return null;
+                },
+                async statPageTemplate() {
+                    return { etag: 'page-template-v1' };
+                },
+                async getPageTemplate() {
+                    templateFetchCount += 1;
+                    return {
+                        text() {
+                            return 'PAGE BODY';
+                        },
+                        etag: 'page-template-v1',
+                    };
+                },
+            };
+
+            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const page = {
+                pathname: '/articles/example',
+                pageTemplateFilename: 'page.html',
+                partials: null,
+            };
+
+            await service.getPageTemplate({}, page);
+            await service.getPageTemplate({}, page);
+
+            assertEqual(1, templateFetchCount);
+        });
+    });
+
+    describe('getPage', ({ it }) => {
+        it('returns null when the page metadata declares no page template', async () => {
+            // A page directory can carry page.json metadata with no template of
+            // its own -- an ancestor directory published only to supply
+            // inherited defaults for its descendants, for example. Requesting
+            // that pathname directly must resolve as "nothing to render here",
+            // not crash the process.
+            const store = {
+                async getPage() {
+                    return {
+                        pageTemplateFilename: null,
+                        partials: null,
+                        includes: null,
+                        etag: 'page-etag-1',
+                        pageDataFiles: [
+                            { json() {
+                                return { page: {} };
+                            } },
+                        ],
+                    };
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const page = await service.getPage({}, new URL('https://example.com/blog'), '/blog', {});
+
+            assertEqual(null, page);
+        });
+
+        it('returns the loaded page when a page template is declared', async () => {
+            const store = {
+                async getPage() {
+                    return {
+                        pageTemplateFilename: 'page.html',
+                        partials: null,
+                        includes: null,
+                        etag: 'page-etag-1',
+                        pageDataFiles: [
+                            { json() {
+                                return { page: {} };
+                            } },
+                        ],
+                    };
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const page = await service.getPage({}, new URL('https://example.com/blog'), '/blog', {});
+
+            assert(page, 'expected a page to be returned');
+            assertEqual('page.html', page.pageTemplateFilename);
         });
     });
 
@@ -1417,6 +1609,50 @@ describe('HyperviewService', ({ describe }) => {
 
             assertEqual(2, putKeys.length);
             assert(putKeys[0] !== putKeys[1], 'expected different cache keys for different page content etags');
+        });
+
+        it('throws NotFoundError, not a crash, when the page has metadata but no page template', async () => {
+            // A page directory can carry page.json metadata with no template of
+            // its own -- an ancestor directory published only to supply
+            // inherited defaults for its descendants, for example. A direct
+            // request for that pathname is a missing resource from the caller's
+            // perspective, the same as no page metadata at all -- contrast with
+            // the next test, where the metadata names a template that the blob
+            // store fails to produce, which is a build invariant violation.
+            const store = {
+                isValidPathname(value) {
+                    return typeof value === 'string' && value.length > 0;
+                },
+                normalizePathname(value) {
+                    return value;
+                },
+                async getPage() {
+                    return {
+                        pageTemplateFilename: null,
+                        partials: null,
+                        includes: null,
+                        etag: 'page-etag-1',
+                        pageDataFiles: [
+                            { json() {
+                                return { page: {} };
+                            } },
+                        ],
+                    };
+                },
+            };
+
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: store, kvStore: {} });
+
+            const request = { url: new URL('https://example.com/blog') };
+            const response = { props: {}, status: 200 };
+
+            const caught = await catchAsyncError(() => {
+                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
         });
 
         it('throws a labeled assertion when the page template blob is absent', async () => {
