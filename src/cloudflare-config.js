@@ -51,6 +51,12 @@ export default {
                     },
                 },
             },
+            CONTENT_ADDRESSABLE_STORE: {
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
+                blobReadCacheTtlSeconds: 0,
+                indexCacheTtlSeconds: 0,
+            },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'STATIC_FILE_STORE',
@@ -62,8 +68,8 @@ export default {
                 useTemplateCache: true,
                 usePageCache: true,
                 allowJsonResponse: true,
-                pageCacheReadTtlSeconds: 60 * 60,
-                pageCacheExpirationSeconds: 60 * 60,
+                pageCacheReadTtlSeconds: 60 * 5,
+                pageCacheExpirationSeconds: 60 * 12,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -106,6 +112,12 @@ export default {
                     },
                 },
             },
+            CONTENT_ADDRESSABLE_STORE: {
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
+                blobReadCacheTtlSeconds: 60 * 60 * 24,
+                indexCacheTtlSeconds: 10,
+            },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
                 bindingName: 'STATIC_FILE_STORE',
@@ -117,8 +129,8 @@ export default {
                 useTemplateCache: true,
                 usePageCache: true,
                 allowJsonResponse: false,
-                pageCacheReadTtlSeconds: 60 * 60 * 36,
-                pageCacheExpirationSeconds: 60 * 60 * 36,
+                pageCacheReadTtlSeconds: 60 * 60,
+                pageCacheExpirationSeconds: 60 * 60 * 4,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -160,6 +172,12 @@ export default {
                         bindingName: 'OBJECT_STORE_FILES',
                     },
                 },
+            },
+            CONTENT_ADDRESSABLE_STORE: {
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
+                blobReadCacheTtlSeconds: 60 * 60 * 36,
+                indexCacheTtlSeconds: 10,
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
