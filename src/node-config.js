@@ -4,9 +4,11 @@ export default {
     environments: {
         development: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: true,
-                USE_PAGE_CACHE: false,
-                USE_TEMPLATE_CACHE: false,
+                useTemplateCache: false,
+                usePageCache: false,
+                allowJsonResponse: true,
+                pageCacheReadTtlSeconds: 0,
+                pageCacheExpirationSeconds: 0,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -40,11 +42,11 @@ export default {
                     uploads: {},
                 },
             },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                directory: './pages',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                directory: './templates',
+            CONTENT_ADDRESSABLE_STORE: {
+                blobReadCacheTtlSeconds: 0,
+                indexCacheTtlSeconds: 0,
+                pagesDirectory: './pages',
+                templatesDirectory: './templates',
             },
             STATIC_FILE_STORE: {
                 directory: './public',
@@ -52,9 +54,11 @@ export default {
         },
         staging: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: false,
-                USE_PAGE_CACHE: true,
-                USE_TEMPLATE_CACHE: true,
+                useTemplateCache: true,
+                usePageCache: true,
+                allowJsonResponse: true,
+                pageCacheReadTtlSeconds: 60 * 5,
+                pageCacheExpirationSeconds: 60 * 12,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -88,11 +92,11 @@ export default {
                     uploads: {},
                 },
             },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                directory: './pages',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                directory: './templates',
+            CONTENT_ADDRESSABLE_STORE: {
+                blobReadCacheTtlSeconds: 60 * 60 * 24,
+                indexCacheTtlSeconds: 10,
+                pagesDirectory: './pages',
+                templatesDirectory: './templates',
             },
             STATIC_FILE_STORE: {
                 directory: './public',
@@ -100,9 +104,11 @@ export default {
         },
         production: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: false,
-                USE_PAGE_CACHE: true,
-                USE_TEMPLATE_CACHE: true,
+                useTemplateCache: true,
+                usePageCache: true,
+                allowJsonResponse: false,
+                pageCacheReadTtlSeconds: 60 * 60,
+                pageCacheExpirationSeconds: 60 * 60 * 4,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -136,11 +142,11 @@ export default {
                     uploads: {},
                 },
             },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                directory: './pages',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                directory: './templates',
+            CONTENT_ADDRESSABLE_STORE: {
+                blobReadCacheTtlSeconds: 60 * 60 * 36,
+                indexCacheTtlSeconds: 10,
+                pagesDirectory: './pages',
+                templatesDirectory: './templates',
             },
             STATIC_FILE_STORE: {
                 directory: './public',

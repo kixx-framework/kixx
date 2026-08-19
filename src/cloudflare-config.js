@@ -52,10 +52,10 @@ export default {
                 },
             },
             CONTENT_ADDRESSABLE_STORE: {
-                kvBindingName: 'CA_STORE_KV_STORE',
-                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
                 blobReadCacheTtlSeconds: 0,
                 indexCacheTtlSeconds: 0,
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
@@ -113,10 +113,10 @@ export default {
                 },
             },
             CONTENT_ADDRESSABLE_STORE: {
-                kvBindingName: 'CA_STORE_KV_STORE',
-                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
                 blobReadCacheTtlSeconds: 60 * 60 * 24,
                 indexCacheTtlSeconds: 10,
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
@@ -174,10 +174,10 @@ export default {
                 },
             },
             CONTENT_ADDRESSABLE_STORE: {
-                kvBindingName: 'CA_STORE_KV_STORE',
-                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
                 blobReadCacheTtlSeconds: 60 * 60 * 36,
                 indexCacheTtlSeconds: 10,
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
