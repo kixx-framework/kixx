@@ -78,7 +78,7 @@ export default class HyperviewService {
      */
     assertCanonicalIdentifier(value, messagePrefix) {
         assert(
-            this.#store.isValidIdentifier(value),
+            this.#store.isValidPathname(value),
             `${ messagePrefix } must be a valid pathname`,
         );
     }
@@ -89,8 +89,8 @@ export default class HyperviewService {
      * @param {string} pathname - The pathname to check
      * @returns {boolean} True when the pathname is valid
      */
-    isValidIdentifier(value) {
-        return this.#store.isValidIdentifier(value);
+    isValidPathname(value) {
+        return this.#store.isValidPathname(value);
     }
 
     /**
@@ -151,11 +151,11 @@ export default class HyperviewService {
     }
 
     async #loadGlobalPartials(context, options) {
-        const hash = await this.#store.getTemplatePartialsHash(context);
+        const stats = await this.#store.statTemplatePartials(context);
 
         // Use the hash from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && hash && this.#globalPartials.get('_hash') === hash) {
+        if (options.useTemplateCache && stats?.hash && this.#globalPartials.get('_hash') === stats.hash) {
             return this.#globalPartials;
         }
 
@@ -210,8 +210,8 @@ export default class HyperviewService {
         // Try the partials cache first, if the cache is enabled.
         if (options.useTemplateCache && this.#pagePartials.has(page.pathname)) {
             pagePartials = this.#pagePartials.get(page.pathname);
-            // Check this set of page partials version by comparing the latest page hash.
-            if (pagePartials.get('_hash') === page.hash) {
+            // Check this set of page partials version by comparing the latest hash.
+            if (pagePartials.get('_hash') === page.partials.hash) {
                 return pagePartials;
             }
         }
@@ -230,7 +230,7 @@ export default class HyperviewService {
         }
         pagePartials = new Map();
         // Set the special _hash key to version this set of page partials.
-        pagePartials.set('_hash', page.hash);
+        pagePartials.set('_hash', page.partials.hash);
 
         for (const { id, source } of page.partials.partials) {
             assertNonEmptyString(
@@ -264,11 +264,11 @@ export default class HyperviewService {
      * @return {Function} A Kixx template function.
      */
     async getBaseTemplate(context, templateId, options) {
-        const hash = await this.#store.getBaseTemplatesHash(context);
+        const stats = await this.#store.statBaseTemplates(context);
 
         // Use the hash from the content-addressable storage as
         // the cache invalidation key.
-        if (options.useTemplateCache && hash && this.#baseTemplates.get('_hash') === hash) {
+        if (options.useTemplateCache && stats?.hash && this.#baseTemplates.get('_hash') === stats.hash) {
             return this.#baseTemplates.get(templateId);
         }
 
