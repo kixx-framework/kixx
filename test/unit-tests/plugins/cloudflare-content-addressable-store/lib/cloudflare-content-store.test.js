@@ -3,6 +3,7 @@ import { assert, assertEqual, assertMatches, assertNotEqual } from 'kixx-assert'
 
 import CloudflareContentStore from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js';
 import Logger from '../../../../../src/kixx/logger/logger.js';
+import { getRootHash } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js';
 import { KEY, hashBlob, hashEtag } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
 
 
@@ -503,11 +504,13 @@ describe('CloudflareContentStore', ({ describe }) => {
             const context = makeContext({ durableObjectNamespace: makeDurableObjectNamespace(stub) });
             const files = [ { pathname: '/a.txt', hash: 'hash-a', size: 1 } ];
 
-            const index = await store.commitClosure(context, files);
+            const entries = await store.commitClosure(context, files);
 
-            assertEqual('tree', index['/'][0]);
-            assertEqual(received.rootHash, index['/'][1]);
-            assertEqual(index, received.index);
+            // Resolves the encoded table itself, not a ContentAddressableIndex.
+            assertEqual('tree', entries['/'][0]);
+            assertEqual('hash-a', entries['/a.txt'][1]);
+            assertEqual(received.rootHash, getRootHash(entries));
+            assertEqual(entries, received.index);
         });
 
         it('throws when the Durable Object reports an unsuccessful result', async () => {
@@ -608,11 +611,11 @@ describe('CloudflareContentStore', ({ describe }) => {
             const context = makeContext({ durableObjectNamespace: makeDurableObjectNamespace(stub) });
             const files = [ { pathname: '/a.txt', hash: 'hash-a', size: 1 } ];
 
-            const index = await store.commitChanges(context, 'build-1', files);
+            const entries = await store.commitChanges(context, 'build-1', files);
 
-            assertEqual(index['/'][1], committedRootHash);
+            assertEqual(getRootHash(entries), committedRootHash);
             assertEqual('build-1', assignedBuild.buildId);
-            assertEqual(index['/'][1], assignedBuild.rootHash);
+            assertEqual(getRootHash(entries), assignedBuild.rootHash);
         });
     });
 

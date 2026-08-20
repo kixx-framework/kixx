@@ -8,7 +8,7 @@ import {
     isNonEmptyString,
     assert,
 } from '../../../kixx/assertions/mod.js';
-import ContentAddressableIndex from './content-addressable-index.js';
+import ContentAddressableIndex, { getRootHash } from './content-addressable-index.js';
 import ContentSnapshot from './content-snapshot.js';
 import {
     FORMAT,
@@ -349,26 +349,33 @@ export default class CloudflareContentStore {
      * Idempotent: committing the same closure content again is a no-op.
      * @param {RequestContext} context - Request context carrying the Durable Object binding
      * @param {IndexSourceFile[]} files - Blob descriptors to include in the closure, typically returned from `putBlob`
-     * @returns {Promise<import('./content-addressable-index.js').default>} The committed closure's index
+     * @returns {Promise<Object<string, import('./content-addressable-index.js').IndexEntryTuple>>} Encoded index table for the committed closure; pass it to `getRootHash` to name the closure, or to the ContentAddressableIndex constructor to read it
+     * @throws {AssertionError} When `files` is not an array
+     * @throws {ValidationError} When any file entry is malformed or collides with another
      * @throws {OperationalError} When the index store call fails or reports an unsuccessful result
      */
     async commitClosure(context, files) {
-        const index = await ContentAddressableIndex.buildIndex(files);
-        const rootHash = index['/'][1];
+        // buildIndex() validates `files` and derives the encoded table the
+        // Durable Object stores. The table is persisted as-is rather than
+        // wrapped in a ContentAddressableIndex: the constructor's assertions
+        // are the read-side check, and a table built from a validated file
+        // list already satisfies them.
+        const entries = await ContentAddressableIndex.buildIndex(files);
+        const rootHash = getRootHash(entries);
 
         this.#logger.info('commit closure', { rootHash });
 
         const result = await this.#callDurableObject(
             context,
             'commitClosure',
-            (durableObject) => durableObject.commitClosure(rootHash, index),
+            (durableObject) => durableObject.commitClosure(rootHash, entries),
         );
 
         if (!result.success) {
             throw new OperationalError(`CloudflareContentStore#commitClosure() was unsuccessful: ${ result.message }`);
         }
 
-        return index;
+        return entries;
     }
 
     /**
@@ -378,10 +385,9 @@ export default class CloudflareContentStore {
      * rewrites closure content.
      * @param {RequestContext} context - Request context carrying the Durable Object binding
      * @param {string} buildId - The build to repoint
-     * @param {string} rootHash - Root hash of an already-committed closure, such as one returned from `commitClosure`
+     * @param {string} rootHash - Root hash of an already-committed closure, such as one named by `getRootHash`
      * @returns {Promise<void>}
-     * @throws {AssertionError} When no closure has been committed for `rootHash`
-     * @throws {OperationalError} When the index store call fails or reports an unsuccessful result
+     * @throws {OperationalError} When the index store call fails or reports an unsuccessful result. An unknown `rootHash` asserts inside the Durable Object; crossing the Workers RPC boundary marks that error `remote`, so #callDurableObject wraps it and it surfaces here as an OperationalError with the assertion as its `cause`
      */
     async assignBuild(context, buildId, rootHash) {
         this.#logger.info('assign build', { buildId, rootHash });
@@ -410,12 +416,15 @@ export default class CloudflareContentStore {
      * @param {RequestContext} context - Request context carrying the Durable Object binding
      * @param {string} buildId - The build to deploy
      * @param {IndexSourceFile[]} files - Blob descriptors to include in the new closure, typically returned from `putBlob`
-     * @returns {Promise<import('./content-addressable-index.js').default>} The newly committed closure's index
+     * @returns {Promise<Object<string, import('./content-addressable-index.js').IndexEntryTuple>>} Encoded index table for the newly committed closure
+     * @throws {AssertionError} When `files` is not an array
+     * @throws {ValidationError} When any file entry is malformed or collides with another
+     * @throws {OperationalError} When either index store call fails or reports an unsuccessful result
      */
     async commitChanges(context, buildId, files) {
-        const index = await this.commitClosure(context, files);
-        await this.assignBuild(context, buildId, index['/'][1]);
-        return index;
+        const entries = await this.commitClosure(context, files);
+        await this.assignBuild(context, buildId, getRootHash(entries));
+        return entries;
     }
 
     /**

@@ -5,6 +5,7 @@ import {
     isPlainObject,
     isUndefined,
 } from '../../../kixx/assertions/mod.js';
+import { ValidationError } from '../../../kixx/errors/mod.js';
 import {
     FORMAT,
     compareStrings,
@@ -79,7 +80,7 @@ export default class ContentAddressableIndex {
      * @returns {string} Root hash identifying the index closure
      */
     get rootHash() {
-        return this.#entries['/'][1];
+        return getRootHash(this.#entries);
     }
 
     /**
@@ -174,16 +175,36 @@ export default class ContentAddressableIndex {
      * {@link ContentAddressableIndex} constructor to rehydrate an index.
      * @param {IndexSourceFile[]} files - Files to include in the index.
      * @returns {Promise<Object<string, IndexEntryTuple>>} Encoded index table keyed by pathname.
+     * @throws {AssertionError} When `files` is not an array
+     * @throws {ValidationError} When any file entry is malformed or collides with another
      */
     static async buildIndex(files) {
+        validateIndexSourceFiles(files);
+
         const nodeList = buildDirectoryTree(files);
+        const treeHashes = new Map();
+
+        // buildDirectoryTree() pushes every directory before the children
+        // nested under it, so walking the list in reverse reaches each
+        // subdirectory before its parent. Every child hash a directory needs is
+        // therefore already memoized when its turn comes, and each subtree is
+        // hashed exactly once — hashing top-down instead would re-hash each
+        // subtree once per ancestor above it.
+        for (let i = nodeList.length - 1; i >= 0; i -= 1) {
+            const node = nodeList[i];
+            if (node.kind === 'tree') {
+                treeHashes.set(node.pathname, await hashDirectory(node, treeHashes));
+            }
+        }
+
+        // Built in a second pass rather than in the one above so the table is
+        // keyed in the tree's own top-down order.
         const entries = {};
 
         for (const node of nodeList) {
             if (node.kind === 'tree') {
                 // The "tree" kind is a directory
-                const hash = await hashDirectory(node);
-                entries[node.pathname] = encodeIndexEntry('tree', { hash });
+                entries[node.pathname] = encodeIndexEntry('tree', { hash: treeHashes.get(node.pathname) });
             } else {
                 // The "blob" is the only other kind, and represents a file.
                 entries[node.pathname] = encodeIndexEntry('blob', node);
@@ -255,6 +276,139 @@ function assertValidTreeStructure(entries) {
 }
 
 /**
+ * Reads the root hash — the digest which identifies a whole closure — out of
+ * an encoded index table.
+ *
+ * The write path works in encoded tables rather than ContentAddressableIndex
+ * instances, so this is how a committed closure is named without paying to
+ * construct and clone an index. Prefer it to reaching into the root tuple at
+ * the call site: the tuple layout is this module's business.
+ * @param {Object<string, IndexEntryTuple>} entries - Encoded index table, as returned by {@link ContentAddressableIndex.buildIndex}.
+ * @returns {string} Root hash identifying the closure.
+ * @throws {AssertionError} When the table has no root tree entry
+ */
+export function getRootHash(entries) {
+    const tuple = isPlainObject(entries) ? entries['/'] : null;
+    assert(
+        Array.isArray(tuple) && tuple[0] === 'tree' && isNonEmptyString(tuple[1]),
+        'getRootHash: entries must contain a root tree entry "/"',
+    );
+    return tuple[1];
+}
+
+/**
+ * Validates the file list `buildIndex` derives an index from, collecting every
+ * failure before throwing.
+ *
+ * This is the write-side boundary check for the index. `files` originates in
+ * client-supplied input (a publishing manifest arriving over HTTP), so a
+ * malformed entry is an expected operational failure the caller can correct,
+ * reported as a ValidationError. The container itself is a programmer's
+ * responsibility rather than the client's, so a non-array `files` still
+ * asserts.
+ *
+ * Passing this check is what lets the write path skip constructing a
+ * ContentAddressableIndex: a validated file list can only produce an entry
+ * table which already satisfies the constructor's assertions. Those assertions
+ * remain the read-side check, where a table is decoded back out of storage and
+ * was not produced by this process.
+ * @param {IndexSourceFile[]} files - Files to validate.
+ * @returns {void}
+ * @throws {AssertionError} When `files` is not an array
+ * @throws {ValidationError} When any file entry is malformed or collides with another
+ */
+export function validateIndexSourceFiles(files) {
+    assertArray(files, 'ContentAddressableIndex.buildIndex(files)');
+
+    const error = new ValidationError('The index source files contain invalid entries');
+    const pathnames = new Set();
+    // Every directory implied by an accepted pathname, seeded with the root so
+    // a file cannot claim "/" — the pathname the root tree node occupies.
+    const directories = new Set([ '/' ]);
+
+    files.forEach((entry, index) => {
+        const source = `files[${ index }]`;
+
+        if (!isPlainObject(entry)) {
+            error.push(`${ source } must be an object`, source);
+            return;
+        }
+
+        const { pathname, hash, size, metadata } = entry;
+        let hasValidFields = true;
+
+        // Short-circuit before normalizePathname(), which throws on a non-string.
+        if (!isNonEmptyString(pathname)
+            || !isValidPathname(pathname)
+            || normalizePathname(pathname) !== pathname) {
+            error.push(
+                `${ source }.pathname must be a safe, canonical pathname`,
+                `${ source }.pathname`,
+            );
+            hasValidFields = false;
+        }
+        if (!isNonEmptyString(hash)) {
+            error.push(`${ source }.hash must be a non-empty string`, `${ source }.hash`);
+            hasValidFields = false;
+        }
+        if (!Number.isInteger(size) || size < 0) {
+            error.push(`${ source }.size must be a non-negative integer`, `${ source }.size`);
+            hasValidFields = false;
+        }
+        if (!isUndefined(metadata) && metadata !== null && !isPlainObject(metadata)) {
+            error.push(`${ source }.metadata must be a plain object or null`, `${ source }.metadata`);
+            hasValidFields = false;
+        }
+
+        // The collision checks below index by pathname, so they are only
+        // meaningful once the pathname itself is known to be well formed.
+        if (!hasValidFields) {
+            return;
+        }
+
+        if (pathnames.has(pathname)) {
+            error.push(`${ source } duplicates pathname "${ pathname }"`, source);
+            return;
+        }
+        if (directories.has(pathname)) {
+            error.push(
+                `${ source } pathname "${ pathname }" is already used as a directory`,
+                source,
+            );
+            return;
+        }
+
+        // Walk the ancestors before recording anything, so a rejected entry
+        // leaves neither a file nor a partial chain of directories behind.
+        const ancestors = [];
+        const parts = pathname.split('/').slice(1, -1);
+        let ancestor = '';
+
+        for (const part of parts) {
+            ancestor += `/${ part }`;
+            if (pathnames.has(ancestor)) {
+                error.push(
+                    `${ source } pathname "${ pathname }" nests under file "${ ancestor }"`,
+                    source,
+                );
+                return;
+            }
+            ancestors.push(ancestor);
+        }
+
+        for (const directory of ancestors) {
+            directories.add(directory);
+        }
+
+        pathnames.add(pathname);
+    });
+
+    if (error.length) {
+        throw error;
+    }
+}
+
+/**
  * Encodes a decoded node's fields into its compact tuple representation.
  * @param {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file.
  * @param {Object} node
@@ -288,24 +442,17 @@ export function decodeIndexEntryTuple(tuple) {
 // Build a tree of nodes - files and directories - and output the list of all
 // nodes - files and directories. The directory nodes (kind=tree) contain
 // a nested list of all children.
+//
+// Every precondition this relies on — canonical pathnames, no duplicates, and
+// no pathname claimed as both a file and a directory — is enforced by
+// validateIndexSourceFiles(), which buildIndex() runs first. Re-checking here
+// would only restate those rules as assertions the caller cannot act on.
 function buildDirectoryTree(files) {
     const nodeList = [];
-    const directoryPathnames = new Set([ '/' ]);
-    const filePathnames = new Set();
     const root = { pathname: '/', kind: 'tree', directories: new Map(), files: new Map() };
     nodeList.push(root);
 
     for (const entry of files) {
-        assert(entry.pathname.startsWith('/'), `buildDirectoryTree: entry.pathname must start with "/", got "${ entry.pathname }"`);
-        assert(
-            !filePathnames.has(entry.pathname),
-            `buildDirectoryTree: duplicate pathname "${ entry.pathname }"`,
-        );
-        assert(
-            !directoryPathnames.has(entry.pathname),
-            `buildDirectoryTree: pathname "${ entry.pathname }" cannot be both a blob and a tree`,
-        );
-
         // entry.pathname is normalized (see addressing.js#normalizePathname): leading
         // slash, no trailing slash, no doubled slashes. Drop the leading empty
         // segment the split produces so directory pathnames don't get doubled.
@@ -316,10 +463,6 @@ function buildDirectoryTree(files) {
         // to build the directory tree up to the file.
         for (let i = 0; i < parts.length - 1; i += 1) {
             pathname += `/${ parts[i] }`;
-            assert(
-                !filePathnames.has(pathname),
-                `buildDirectoryTree: pathname "${ pathname }" cannot be both a blob and a tree`,
-            );
             if (currentNode.directories.has(pathname)) {
                 currentNode = currentNode.directories.get(pathname);
             } else {
@@ -330,12 +473,10 @@ function buildDirectoryTree(files) {
                     files: new Map(),
                 };
                 currentNode.directories.set(pathname, node);
-                directoryPathnames.add(pathname);
                 nodeList.push(node);
                 currentNode = node;
             }
         }
-        filePathnames.add(entry.pathname);
         const fileNode = {
             pathname: entry.pathname,
             kind: 'blob',
@@ -350,7 +491,11 @@ function buildDirectoryTree(files) {
     return nodeList;
 }
 
-async function hashDirectory(directory) {
+// Hashes one directory node from its immediate children only. Subdirectory
+// hashes are read from `treeHashes`, which buildIndex() fills bottom-up; this
+// function never descends, so the cost of hashing a whole tree stays linear in
+// the number of nodes rather than growing with its depth.
+async function hashDirectory(directory, treeHashes) {
     const entries = [];
 
     for (const [ pathname, file ] of directory.files) {
@@ -369,12 +514,11 @@ async function hashDirectory(directory) {
         entries.push(entry);
     }
 
-    for (const [ pathname, sub ] of directory.directories) {
-        const hash = await hashDirectory(sub);
+    for (const pathname of directory.directories.keys()) {
         entries.push({
             pathname,
             kind: 'tree',
-            hash,
+            hash: treeHashes.get(pathname),
         });
     }
 

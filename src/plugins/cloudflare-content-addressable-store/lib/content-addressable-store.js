@@ -12,6 +12,7 @@ import {
     isUndefined,
 } from '../../../kixx/assertions/mod.js';
 import CloudflareContentStore from './cloudflare-content-store.js';
+import { getRootHash } from './content-addressable-index.js';
 import {
     BASE_TEMPLATES_BUNDLE,
     TEMPLATE_PARTIALS_BUNDLE,
@@ -516,14 +517,11 @@ export default class ContentAddressableStore {
     async commitChanges(context, buildId, manifest) {
         const files = this.#buildManifestFiles(manifest);
 
-        const index = await this.#store.commitChanges(context, buildId, files);
-
-        const entries = Object.keys(index);
+        const entries = await this.#store.commitChanges(context, buildId, files);
 
         return {
-            // Return the root hash.
-            hash: index['/'][1],
-            count: entries.length,
+            hash: getRootHash(entries),
+            count: Object.keys(entries).length,
         };
     }
 
