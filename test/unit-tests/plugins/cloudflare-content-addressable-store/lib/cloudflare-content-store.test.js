@@ -129,6 +129,16 @@ function makeRetryableError(overrides) {
     return error;
 }
 
+function makeDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
+
 async function catchAsyncError(fn) {
     try {
         await fn();
@@ -228,6 +238,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const caught = await catchAsyncError(() => store.getIndex(context));
 
             assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
             assertMatches('boom', caught.message);
         });
 
@@ -329,6 +340,38 @@ describe('CloudflareContentStore', ({ describe }) => {
             await store.getIndex(context);
 
             assertEqual(2, durableObjectNamespace.names.length);
+        });
+
+        it('keeps a newer cached index when an invalidated fetch fails late', async () => {
+            const firstFetch = makeDeferred();
+            const firstCallStarted = makeDeferred();
+            let getIndexCallCount = 0;
+            const stub = {
+                async getIndex() {
+                    getIndexCallCount += 1;
+                    if (getIndexCallCount === 1) {
+                        firstCallStarted.resolve();
+                        return await firstFetch.promise;
+                    }
+                    return { success: true, entries: makeIndexEntries() };
+                },
+                async assignBuild() {
+                    return { success: true };
+                },
+            };
+            const store = makeStore();
+            const context = makeContext({ durableObjectNamespace: makeDurableObjectNamespace(stub) });
+
+            const staleRequest = store.getIndex(context);
+            await firstCallStarted.promise;
+            await store.assignBuild(context, 'build-1', 'new-root-hash');
+            await store.getIndex(context);
+
+            firstFetch.reject(new Error('stale fetch failed'));
+            await catchAsyncError(() => staleRequest);
+
+            await store.getIndex(context);
+            assertEqual(2, getIndexCallCount);
         });
     });
 
@@ -480,6 +523,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const caught = await catchAsyncError(() => store.commitClosure(context, files));
 
             assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
             assertMatches('disk full', caught.message);
         });
     });
@@ -541,6 +585,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const caught = await catchAsyncError(() => store.assignBuild(context, 'build-1', 'root-hash'));
 
             assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
             assertMatches('no such closure', caught.message);
         });
     });

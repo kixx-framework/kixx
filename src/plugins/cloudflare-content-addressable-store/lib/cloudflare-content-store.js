@@ -163,6 +163,7 @@ export default class CloudflareContentStore {
      * @param {RequestContext} context - Request context carrying the current build ID and platform bindings
      * @returns {Promise<import('./content-addressable-index.js').default>} Index for `context.runtime.build.id`
      * @throws {AssertionError} When no index has been committed for the current build
+     * @throws {OperationalError} When the index store call fails or reports an unsuccessful result
      */
     async getIndex(context) {
         const buildId = context.runtime.build.id;
@@ -176,12 +177,18 @@ export default class CloudflareContentStore {
         }
 
         const promise = this.#fetchIndex(context, buildId);
+        const entry = { promise, cachedAt: Date.now() };
 
-        this.#pendingIndexes.set(buildId, { promise, cachedAt: Date.now() });
+        this.#pendingIndexes.set(buildId, entry);
 
         // Drop a failed fetch immediately so the next call retries instead of
-        // waiting out the TTL on a rejected promise.
-        promise.catch(() => this.#invalidateIndex(buildId));
+        // waiting out the TTL on a rejected promise, but only if this entry
+        // is still current. A slow, failed fetch must not evict a newer one.
+        promise.catch(() => {
+            if (this.#pendingIndexes.get(buildId) === entry) {
+                this.#pendingIndexes.delete(buildId);
+            }
+        });
 
         return await promise;
     }
@@ -219,7 +226,7 @@ export default class CloudflareContentStore {
             (durableObject) => durableObject.getIndex(buildId),
         );
         if (!result.success) {
-            throw new Error(`CloudflareContentStore#fetchIndex() was unsuccessful: ${ result.message }`);
+            throw new OperationalError(`CloudflareContentStore#fetchIndex() was unsuccessful: ${ result.message }`);
         }
 
         const { entries } = result;
@@ -336,6 +343,7 @@ export default class CloudflareContentStore {
      * @param {RequestContext} context - Request context carrying the Durable Object binding
      * @param {IndexSourceFile[]} files - Blob descriptors to include in the closure, typically returned from `putBlob`
      * @returns {Promise<import('./content-addressable-index.js').default>} The committed closure's index
+     * @throws {OperationalError} When the index store call fails or reports an unsuccessful result
      */
     async commitClosure(context, files) {
         const index = await ContentAddressableIndex.buildIndex(files);
@@ -350,7 +358,7 @@ export default class CloudflareContentStore {
         );
 
         if (!result.success) {
-            throw new Error(`CloudflareContentStore#commitClosure() was unsuccessful: ${ result.message }`);
+            throw new OperationalError(`CloudflareContentStore#commitClosure() was unsuccessful: ${ result.message }`);
         }
 
         return index;
@@ -366,6 +374,7 @@ export default class CloudflareContentStore {
      * @param {string} rootHash - Root hash of an already-committed closure, such as one returned from `commitClosure`
      * @returns {Promise<void>}
      * @throws {AssertionError} When no closure has been committed for `rootHash`
+     * @throws {OperationalError} When the index store call fails or reports an unsuccessful result
      */
     async assignBuild(context, buildId, rootHash) {
         this.#logger.info('assign build', { buildId, rootHash });
@@ -376,7 +385,7 @@ export default class CloudflareContentStore {
             (durableObject) => durableObject.assignBuild(buildId, rootHash),
         );
         if (!result.success) {
-            throw new Error(`CloudflareContentStore#assignBuild() was unsuccessful: ${ result.message }`);
+            throw new OperationalError(`CloudflareContentStore#assignBuild() was unsuccessful: ${ result.message }`);
         }
         this.#invalidateIndex(buildId);
 
