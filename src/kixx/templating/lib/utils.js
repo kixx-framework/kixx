@@ -16,11 +16,10 @@ function escapeChar(chr) {
 }
 
 /**
- * Escapes HTML special characters in a string to prevent XSS attacks.
- * Characters escaped: & < > " (the Mustache spec set).
+ * Escapes the Mustache HTML character set: &, <, >, and ".
  *
- * @param {*} str - The value to escape. Non-strings are coerced to strings.
- * @returns {string} The escaped string, or empty string if input is null/undefined.
+ * @param {*} str - Value to escape; non-string values are coerced to strings.
+ * @returns {string} Escaped text, or an empty string for null and undefined.
  */
 export function escapeHTMLChars(str) {
     if (typeof str === 'undefined' || str === null) {

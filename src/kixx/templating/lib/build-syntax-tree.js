@@ -1,6 +1,14 @@
 import LineSyntaxError from './line-syntax-error.js';
 
 
+/**
+ * Parses template tokens into an abstract syntax tree used by the renderer.
+ *
+ * @param {Object|null} _options - Reserved for future use; pass null.
+ * @param {Array<Object>} tokens - Tokens returned by tokenize().
+ * @returns {Array<Object>} Syntax tree nodes in source order.
+ * @throws {LineSyntaxError} If an expression or block is malformed.
+ */
 export default function buildSyntaxTree(_options, tokens) {
     const tree = [];
     const blocks = [];
