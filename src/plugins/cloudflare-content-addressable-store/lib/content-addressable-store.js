@@ -4,7 +4,7 @@
  * @module cloudflare-content-addressable-store/content-addressable-store
  */
 
-import { AssertionError, ValidationError } from '../../../kixx/errors/mod.js';
+import { ValidationError } from '../../../kixx/errors/mod.js';
 import {
     assert,
     isNonEmptyString,
@@ -12,7 +12,14 @@ import {
     isUndefined,
 } from '../../../kixx/assertions/mod.js';
 import CloudflareContentStore from './cloudflare-content-store.js';
-import { ContentObject, StatObject } from './content-object.js';
+import {
+    BASE_TEMPLATES_BUNDLE,
+    TEMPLATE_PARTIALS_BUNDLE,
+    PAGE_PARTIALS_BUNDLE,
+    PAGE_INCLUDES_BUNDLE,
+    normalizeTemplatePath,
+    normalizePagePath,
+} from './content-snapshot.js';
 import {
     canonicalize,
     hashValue,
@@ -22,15 +29,12 @@ import {
 } from './addressing.js';
 
 
-const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
-const TEMPLATE_PARTIALS_BUNDLE = '__template-partials-bundle';
-const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
-const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
-
-
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
  * @typedef {import('../../../kixx/logger/logger.js').default} Logger
+ * @typedef {import('./content-object.js').ContentObject} ContentObject
+ * @typedef {import('./content-object.js').StatObject} StatObject
+ * @typedef {import('./content-snapshot.js').default} ContentSnapshot
  */
 
 /**
@@ -152,50 +156,21 @@ export default class ContentAddressableStore {
         return normalizePathname(value);
     }
 
-    #normalizeTemplatePath(pathname) {
-        return this.normalizePathname(`templates/${ pathname }`);
-    }
-
-    #normalizePagePath(pathname) {
-        return this.normalizePathname(`pages/${ pathname }`);
-    }
-
-    #filepathBasename(pathname) {
-        return pathname.split('/').pop();
-    }
-
     #filepathDirname(pathname) {
         const parts = pathname.split('/');
         parts.pop();
         return parts.join('/');
     }
 
-    async #getPath(context, pathname) {
-        const stat = await this.#store.statPath(context, pathname);
-
-        if (!stat) {
-            return null;
-        }
-        if (stat.kind !== 'blob') {
-            throw new AssertionError(
-                `ContentAddressableStore#getPath(): The pathname "${ pathname }" points to a directory and not a blob`,
-            );
-        }
-
-        const bytes = await this.#store.getBlob(context, stat.hash);
-
-        if (!bytes) {
-            throw new AssertionError(
-                `ContentAddressableStore#getPath(): The pathname "${ pathname }" references unreadable blob "${ stat.hash }"`,
-            );
-        }
-
-        return new ContentObject(bytes, {
-            kind: 'blob',
-            hash: stat.hash,
-            size: bytes.length,
-            metadata: stat.metadata,
-        });
+    /**
+     * Opens a request-scoped view pinned to one immutable content index.
+     * All reads through the returned snapshot use the index resolved here,
+     * even if the build is reassigned before the request completes.
+     * @param {RequestContext} context - Request context carrying the current build ID and platform bindings
+     * @returns {Promise<ContentSnapshot>} Snapshot valid only for this request
+     */
+    async openSnapshot(context) {
+        return await this.#store.openSnapshot(context);
     }
 
     /**
@@ -209,7 +184,7 @@ export default class ContentAddressableStore {
      * @throws {ValidationError} When etag does not match the uploaded content
      */
     async putTemplatePartials(context, bundle, etag) {
-        const pathname = this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE);
+        const pathname = normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE);
         const blob = stringToUint8Array(canonicalize(bundle));
         const { hash, size } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata: null };
@@ -221,11 +196,7 @@ export default class ContentAddressableStore {
      * @returns {Promise<StatObject|null>} Resource attributes, or null when the bundle is absent
      */
     async statTemplatePartials(context) {
-        const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
-        if (entry) {
-            return new StatObject(entry);
-        }
-        return null;
+        return await (await this.openSnapshot(context)).statTemplatePartials();
     }
 
     /**
@@ -235,10 +206,7 @@ export default class ContentAddressableStore {
      * @throws {AssertionError} When its committed blob cannot be read
      */
     async getTemplatePartials(context) {
-        return await this.#getPath(
-            context,
-            this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE),
-        );
+        return await (await this.openSnapshot(context)).getTemplatePartials();
     }
 
     /**
@@ -252,7 +220,7 @@ export default class ContentAddressableStore {
      * @throws {ValidationError} When etag does not match the uploaded content
      */
     async putBaseTemplates(context, bundle, etag) {
-        const pathname = this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE);
+        const pathname = normalizeTemplatePath(BASE_TEMPLATES_BUNDLE);
         const blob = stringToUint8Array(canonicalize(bundle));
         const { hash, size } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata: null };
@@ -264,11 +232,7 @@ export default class ContentAddressableStore {
      * @returns {Promise<StatObject|null>} Resource attributes, or null when the bundle is absent
      */
     async statBaseTemplates(context) {
-        const entry = await this.#store.statPath(context, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
-        if (entry) {
-            return new StatObject(entry);
-        }
-        return null;
+        return await (await this.openSnapshot(context)).statBaseTemplates();
     }
 
     /**
@@ -278,10 +242,7 @@ export default class ContentAddressableStore {
      * @throws {AssertionError} When its committed blob cannot be read
      */
     async getBaseTemplates(context) {
-        return await this.#getPath(
-            context,
-            this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE),
-        );
+        return await (await this.openSnapshot(context)).getBaseTemplates();
     }
 
     /**
@@ -301,7 +262,7 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#putPageMetadata() requires a valid page pathname',
         );
 
-        const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
+        const pathname = normalizePagePath(`${ pagePath }/page.json`);
         const blob = stringToUint8Array(canonicalize(obj));
         const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata };
@@ -319,12 +280,7 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#statPageMetadata() requires a valid page pathname',
         );
 
-        const pathname = this.#normalizePagePath(`${ pagePath }/page.json`);
-        const entry = await this.#store.statPath(context, pathname);
-        if (entry) {
-            return new StatObject(entry);
-        }
-        return null;
+        return await (await this.openSnapshot(context)).statPageMetadata(pagePath);
     }
 
     /**
@@ -344,7 +300,7 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#putPagePartials() requires a valid page pathname',
         );
 
-        const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
+        const pathname = normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
         const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata };
@@ -362,12 +318,7 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#statPagePartials() requires a valid page pathname',
         );
 
-        const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_PARTIALS_BUNDLE }`);
-        const entry = await this.#store.statPath(context, pathname);
-        if (entry) {
-            return new StatObject(entry);
-        }
-        return null;
+        return await (await this.openSnapshot(context)).statPagePartials(pagePath);
     }
 
     /**
@@ -387,7 +338,7 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#putPageIncludes() requires a valid page pathname',
         );
 
-        const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
+        const pathname = normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
         const blob = stringToUint8Array(canonicalize(bundle));
         const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata };
@@ -405,12 +356,7 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#statPageIncludes() requires a valid page pathname',
         );
 
-        const pathname = this.#normalizePagePath(`${ pagePath }/${ PAGE_INCLUDES_BUNDLE }`);
-        const entry = await this.#store.statPath(context, pathname);
-        if (entry) {
-            return new StatObject(entry);
-        }
-        return null;
+        return await (await this.openSnapshot(context)).statPageIncludes(pagePath);
     }
 
     /**
@@ -429,7 +375,7 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#putPageTemplate() requires a valid filepath',
         );
 
-        const pathname = this.#normalizePagePath(filepath);
+        const pathname = normalizePagePath(filepath);
         const blob = stringToUint8Array(sourceText);
         const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata };
@@ -447,11 +393,7 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#statPageTemplate() requires a valid pathname and filename',
         );
 
-        const entry = await this.#store.statPath(context, this.#normalizePagePath(filepath));
-        if (entry) {
-            return new StatObject(entry);
-        }
-        return null;
+        return await (await this.openSnapshot(context)).statPageTemplate(filepath);
     }
 
     /**
@@ -462,7 +404,7 @@ export default class ContentAddressableStore {
      * @throws {AssertionError} When its committed blob cannot be read
      */
     async getPageTemplate(context, filepath) {
-        return await this.#getPath(context, this.#normalizePagePath(filepath));
+        return await (await this.openSnapshot(context)).getPageTemplate(filepath);
     }
 
     // Checks that a manifest bundle/entry is an object carrying a
@@ -582,32 +524,32 @@ export default class ContentAddressableStore {
             });
         };
 
-        checkBundle('templatePartials', manifest.templatePartials, this.#normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
-        checkBundle('baseTemplates', manifest.baseTemplates, this.#normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
+        checkBundle('templatePartials', manifest.templatePartials, normalizeTemplatePath(TEMPLATE_PARTIALS_BUNDLE));
+        checkBundle('baseTemplates', manifest.baseTemplates, normalizeTemplatePath(BASE_TEMPLATES_BUNDLE));
 
         checkArray(
             manifest.pageMetadata,
             'pageMetadata',
             'pathname',
-            (pathname) => this.#normalizePagePath(`${ pathname }/page.json`),
+            (pathname) => normalizePagePath(`${ pathname }/page.json`),
         );
         checkArray(
             manifest.pagePartials,
             'pagePartials',
             'pathname',
-            (pathname) => this.#normalizePagePath(`${ pathname }/${ PAGE_PARTIALS_BUNDLE }`),
+            (pathname) => normalizePagePath(`${ pathname }/${ PAGE_PARTIALS_BUNDLE }`),
         );
         checkArray(
             manifest.pageIncludes,
             'pageIncludes',
             'pathname',
-            (pathname) => this.#normalizePagePath(`${ pathname }/${ PAGE_INCLUDES_BUNDLE }`),
+            (pathname) => normalizePagePath(`${ pathname }/${ PAGE_INCLUDES_BUNDLE }`),
         );
         checkArray(
             manifest.pageTemplates,
             'pageTemplates',
             'filename',
-            (filename) => this.#normalizePagePath(filename),
+            (filename) => normalizePagePath(filename),
         );
 
         // getPage() picks "whatever is left" in a page directory as its
@@ -674,98 +616,6 @@ export default class ContentAddressableStore {
             this.isValidPathname(pathname),
             'ContentAddressableStore#getPage() requires a valid pathname',
         );
-
-        // We need to get the page data for this page - the page at `pathname` - and
-        // all its parent pages. So for pathname "/blog/reviews/music/led-zeppelin" we need:
-        //
-        // /page.json
-        // /blog/page.json
-        // /blog/reviews/page.json
-        // /blog/reviews/music/page.json
-        // /blog/reviews/music/led-zeppelin/page.json
-        const parts = this.normalizePathname(pathname).split('/').filter((part) => part);
-        // Start with the root page data.
-        const filepaths = [ this.#normalizePagePath('page.json') ];
-        let path = '/';
-
-        for (const part of parts) {
-            path = `${ path }${ part }/`;
-            filepaths.push(this.#normalizePagePath(`${ path }page.json`));
-        }
-
-        // We don't need to get the page leaf node page.json separately, because we'll
-        // be fetching everything in the `pages/${ pathname }` directory, including
-        // the leaf page.json file. But, we can do a cheap check to make sure it
-        // exists before proceeding.
-        const leafPage = filepaths.pop();
-        const leafPageStat = await this.#store.statPath(context, leafPage);
-
-        if (!leafPageStat) {
-            return null;
-        }
-
-        const parentStats = [];
-        for (const parentFilepath of filepaths) {
-            const stat = await this.#store.statPath(context, parentFilepath);
-            // Not all parent pages have a page.json file.
-            if (stat) {
-                parentStats.push(stat);
-            }
-        }
-
-        const directory = this.#normalizePagePath(pathname);
-
-        const sourceFileStats = await this.#store.listStats(context, directory, { recursive: false });
-
-        const entries = parentStats.concat(sourceFileStats);
-        const hashesToFetch = entries.map(({ hash }) => hash);
-        const blobs = await this.#store.getBlobs(context, hashesToFetch);
-
-        const pageDataFiles = [];
-        let pageTemplateFilename = null;
-        let partials = null;
-        let includes = null;
-        const pageFiles = [];
-
-        for (let i = 0; i < entries.length; i += 1) {
-            const entry = entries[i];
-            const bytes = blobs[i];
-            // We are not interested in including any child directories which may
-            // be listed in this page directory; so filter on 'blob'.
-            if (entry.kind === 'blob') {
-                assert(bytes, `missing expected blob from ${ entry.pathname }`);
-                pageFiles.push(entry);
-                if (this.#filepathBasename(entry.pathname) === 'page.json') {
-                    pageDataFiles.push(new ContentObject(bytes, entry));
-                } else if (this.#filepathBasename(entry.pathname) === PAGE_PARTIALS_BUNDLE) {
-                    partials = new ContentObject(bytes, entry);
-                } else if (this.#filepathBasename(entry.pathname) === PAGE_INCLUDES_BUNDLE) {
-                    includes = new ContentObject(bytes, entry);
-                } else {
-                    // Whatever is left must be the page template. The manifest-commit
-                    // path (#buildManifestFiles()) rejects a manifest with more than
-                    // one page template per directory, so finding a second one here
-                    // means committed data has drifted from that invariant.
-                    assert(
-                        pageTemplateFilename === null,
-                        `ContentAddressableStore#getPage(): found more than one page template in "${ directory }"`,
-                    );
-                    pageTemplateFilename = this.#filepathBasename(entry.pathname);
-                }
-            }
-        }
-
-        // Include the page files with the parent page.json filepaths to
-        // accumulate the full dependencies list.
-        const dependencies = parentStats.concat(pageFiles);
-        const etag = await this.#store.computeHashFromStats(dependencies);
-
-        return {
-            etag,
-            pageDataFiles,
-            pageTemplateFilename,
-            partials,
-            includes,
-        };
+        return await (await this.openSnapshot(context)).getPage(pathname);
     }
 }

@@ -75,6 +75,14 @@ export default class ContentAddressableIndex {
     }
 
     /**
+     * Content hash of this immutable index's root directory.
+     * @returns {string} Root hash identifying the index closure
+     */
+    get rootHash() {
+        return this.#entries['/'][1];
+    }
+
+    /**
      * Looks up a single node by exact pathname.
      * @param {string} pathname - The pathname for the node, including a leading slash "/".
      * @returns {Promise<IndexEntry|null>} The matching node, or null when no entry exists at that pathname.

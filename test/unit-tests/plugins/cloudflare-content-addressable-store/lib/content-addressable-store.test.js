@@ -2,6 +2,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertUndefined } from 'kixx-assert';
 
 import ContentAddressableStore from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.js';
+import ContentSnapshot from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-snapshot.js';
 import Logger from '../../../../../src/kixx/logger/logger.js';
 import { canonicalize, hashBlob, stringToUint8Array } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
 
@@ -19,6 +20,7 @@ function makeBackingStore(overrides) {
     const putBlobCalls = [];
     const commitChangesCalls = [];
     const assignBuildCalls = [];
+    const openSnapshotCalls = [];
 
     return {
         paths,
@@ -26,6 +28,7 @@ function makeBackingStore(overrides) {
         putBlobCalls,
         commitChangesCalls,
         assignBuildCalls,
+        openSnapshotCalls,
 
         async statPath(_context, pathname) {
             const entry = paths.get(pathname);
@@ -73,6 +76,16 @@ function makeBackingStore(overrides) {
             }
 
             return entries;
+        },
+
+        async openSnapshot(context) {
+            openSnapshotCalls.push(context);
+            const index = {
+                rootHash: 'root-hash',
+                getNode: async (pathname) => this.statPath(context, pathname),
+                listNodes: async (prefix, options) => this.listStats(context, prefix, options),
+            };
+            return new ContentSnapshot({ store: this, context, index });
         },
 
         async computeHashFromStats() {
@@ -141,6 +154,18 @@ describe('ContentAddressableStore', ({ describe }) => {
         it('removes empty segments and folds to lowercase', () => {
             const { subject } = makeSubject();
             assertEqual('/blog/reviews', subject.normalizePathname('//Blog//Reviews//'));
+        });
+    });
+
+    describe('openSnapshot', ({ it }) => {
+        it('delegates exactly once to the backing store for each snapshot', async () => {
+            const { subject, store } = makeSubject();
+            const context = makeContext();
+
+            const snapshot = await subject.openSnapshot(context);
+
+            assertEqual(1, store.openSnapshotCalls.length);
+            assertEqual('root-hash', snapshot.rootHash);
         });
     });
 

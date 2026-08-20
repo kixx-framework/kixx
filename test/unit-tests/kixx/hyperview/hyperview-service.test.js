@@ -23,6 +23,39 @@ function makeDeferred() {
     return { promise, resolve };
 }
 
+// Content reads now run through request-scoped snapshots. This adapter keeps
+// focused test doubles concise while matching the production boundary: pure
+// helpers stay on the store and all content reads are exposed by a snapshot.
+function makeSnapshot(store) {
+    const readMethods = [
+        'getPage',
+        'statTemplatePartials',
+        'getTemplatePartials',
+        'statBaseTemplates',
+        'getBaseTemplates',
+        'statPageTemplate',
+        'getPageTemplate',
+    ];
+    const snapshot = {};
+
+    for (const methodName of readMethods) {
+        if (typeof store[methodName] === 'function') {
+            snapshot[methodName] = (...args) => store[methodName](undefined, ...args);
+        }
+    }
+
+    return snapshot;
+}
+
+function makeContentStore(store) {
+    return {
+        ...store,
+        async openSnapshot() {
+            return makeSnapshot(store);
+        },
+    };
+}
+
 // A minimal page-and-store pair for cache-key tests. The hashValue() stub
 // serializes objects so that two distinct props objects produce two distinct
 // hashes, which is what makes a props-sensitive cache key observable.
@@ -183,106 +216,36 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
-            const first = await service.getBaseTemplate({}, 'layout');
-            const second = await service.getBaseTemplate({}, 'layout');
+            const first = await service.getBaseTemplate(makeSnapshot(store), 'layout');
+            const second = await service.getBaseTemplate(makeSnapshot(store), 'layout');
 
             assertEqual(1, baseTemplateLoads);
             assertEqual(first, second);
-            assertEqual('<main>Body</main>', first({ body: 'Body' }));
+            assertEqual('<main>Body</main>', first({ body: 'Body' }, new Map()));
         });
     });
 
     describe('getPagePartials', ({ it }) => {
-        it('refreshes global partials when returning cached page partials', async () => {
-            const globalPartials = {
-                etag: 'global-v1',
-                templates: [
-                    { id: 'global.html', source: 'first global partial' },
-                ],
-            };
-            const store = {
-                async statTemplatePartials() {
-                    return { etag: globalPartials.etag };
-                },
-                async getTemplatePartials() {
-                    return {
-                        etag: globalPartials.etag,
-                        json() {
-                            return globalPartials.templates;
-                        },
-                    };
-                },
-            };
-            const service = new HyperviewService({
-                logger: {
-                    createChild() {
-                        return {};
-                    },
-                },
-                useTemplateCache: true,
-            });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
-
-            const page = {
-                pathname: '/articles/example',
-                partials: {
-                    etag: 'page-v1',
-                    partials: [
-                        { id: 'page.html', source: '{{> global.html }}' },
-                    ],
-                },
-            };
-
-            const pagePartials = await service.getPagePartials({}, page);
-            assertEqual('first global partial', pagePartials.get('page.html')({}));
-
-            globalPartials.etag = 'global-v2';
-            globalPartials.templates = [
-                { id: 'global.html', source: 'second global partial' },
-            ];
-
-            const cachedPagePartials = await service.getPagePartials({}, page);
-
-            assertEqual('second global partial', cachedPagePartials.get('page.html')({}));
-        });
-
-        it('returns a reusable empty Map for a page which declares no partials', async () => {
-            // The Map instance must be retained across calls, because a compiled page
-            // template delegates its partial lookups into this exact instance.
-            const store = {
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-            };
+        it('returns a fresh empty Map for a page which declares no partials', async () => {
+            const store = {};
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const page = { pathname: '/articles/example', partials: null };
 
-            const first = await service.getPagePartials({}, page);
-            const second = await service.getPagePartials({}, page);
+            const first = await service.getPagePartials(makeSnapshot(store), page);
+            const second = await service.getPagePartials(makeSnapshot(store), page);
 
             assertEqual(0, first.size);
-            assertEqual(null, first.etag);
-            assert(first === second, 'expected the same Map instance across calls');
+            assert(first !== second, 'expected a new per-render Map');
         });
 
-        it('empties a cached partials Map when the page stops declaring partials', async () => {
-            const store = {
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-            };
+        it('keeps a cached bundle immutable when a page stops declaring partials', async () => {
+            const store = {};
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const page = {
                 pathname: '/articles/example',
@@ -294,41 +257,101 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
 
-            const populated = await service.getPagePartials({}, page);
+            const populated = await service.getPagePartials(makeSnapshot(store), page);
             assertEqual(1, populated.size);
 
             page.partials = null;
-            const emptied = await service.getPagePartials({}, page);
+            const emptied = await service.getPagePartials(makeSnapshot(store), page);
 
-            assert(populated === emptied, 'expected the same Map instance to be reused');
+            assert(populated !== emptied, 'expected the prior bundle to remain independent');
+            assertEqual(1, populated.size);
             assertEqual(0, emptied.size);
-            assertEqual(null, emptied.etag);
         });
 
         it('does not retain a partials Map when useTemplateCache is disabled', async () => {
-            const store = {
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-            };
+            const store = {};
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const page = { pathname: '/articles/example', partials: null };
 
-            const first = await service.getPagePartials({}, page);
-            const second = await service.getPagePartials({}, page);
+            const first = await service.getPagePartials(makeSnapshot(store), page);
+            const second = await service.getPagePartials(makeSnapshot(store), page);
 
             assertEqual(0, first.size);
             assert(first !== second, 'expected a fresh Map instance on each call');
         });
+
+        it('reuses compiled page partials across a global-partials change', async () => {
+            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
+            service.initialize({ contentAddressableStore: makeContentStore({}), kvStore: {} });
+            const page = {
+                pathname: '/articles/example',
+                partials: {
+                    etag: 'page-v1',
+                    partials: [ { id: 'page.html', source: '{{> global.html }}' } ],
+                },
+            };
+
+            const first = await service.getPagePartials({}, page);
+            const second = await service.getPagePartials({}, page);
+
+            assert(first === second, 'expected the page-partials bundle to be reused by its own etag');
+            assertEqual('global-v2', first.get('page.html')({}, new Map([
+                [ 'global.html', () => 'global-v2' ],
+                ...first,
+            ])));
+        });
+    });
+
+    describe('snapshot consistency', ({ it }) => {
+        it('does not share global-partials loads across snapshots with different etags', async () => {
+            const firstLoad = makeDeferred();
+            const secondLoad = makeDeferred();
+            let loads = 0;
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({
+                contentAddressableStore: makeContentStore({}),
+                kvStore: {},
+            });
+            const firstSnapshot = {
+                async statTemplatePartials() {
+                    return { etag: 'global-v1' };
+                },
+                async getTemplatePartials() {
+                    loads += 1;
+                    return firstLoad.promise;
+                },
+            };
+            const secondSnapshot = {
+                async statTemplatePartials() {
+                    return { etag: 'global-v2' };
+                },
+                async getTemplatePartials() {
+                    loads += 1;
+                    return secondLoad.promise;
+                },
+            };
+
+            const first = service.loadGlobalPartials(firstSnapshot);
+            const second = service.loadGlobalPartials(secondSnapshot);
+
+            firstLoad.resolve({
+                etag: 'global-v1',
+                json() { return [] },
+            });
+            secondLoad.resolve({
+                etag: 'global-v2',
+                json() { return [] },
+            });
+
+            await Promise.all([first, second]);
+            assertEqual(2, loads);
+        });
     });
 
     describe('loadGlobalPartials', ({ it }) => {
-        it('skips the stat() call when useTemplateCache is disabled', async () => {
+        it('reads the snapshot stat when useTemplateCache is disabled', async () => {
             let statCalls = 0;
             let getCalls = 0;
             const store = {
@@ -348,18 +371,18 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
-            const partials = await service.loadGlobalPartials({});
+            const partials = await service.loadGlobalPartials(makeSnapshot(store));
 
-            assertEqual(0, statCalls);
+            assertEqual(1, statCalls);
             assertEqual(1, getCalls);
-            assertEqual('hello', partials.get('global.html')({}));
+            assertEqual('hello', partials.get('global.html')({}, new Map()));
         });
     });
 
     describe('getBaseTemplate', ({ it }) => {
-        it('skips the stat() call when useTemplateCache is disabled', async () => {
+        it('reads the snapshot stat when useTemplateCache is disabled', async () => {
             let statCalls = 0;
             let getCalls = 0;
             const store = {
@@ -385,13 +408,13 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
-            const template = await service.getBaseTemplate({}, 'layout');
+            const template = await service.getBaseTemplate(makeSnapshot(store), 'layout');
 
-            assertEqual(0, statCalls);
+            assertEqual(1, statCalls);
             assertEqual(1, getCalls);
-            assertEqual('LAYOUT', template({}));
+            assertEqual('LAYOUT', template({}, new Map()));
         });
     });
 
@@ -425,7 +448,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const page = {
                 pathname: '/articles/example',
@@ -433,30 +456,14 @@ describe('HyperviewService', ({ describe }) => {
                 partials: null,
             };
 
-            const template = await service.getPageTemplate({}, page);
+            const template = await service.getPageTemplate(makeSnapshot(store), page);
 
-            assertEqual(0, statCalls);
+            assertEqual(1, statCalls);
             assertEqual(1, getCalls);
-            assertEqual('PAGE BODY', template({}));
+            assertEqual('PAGE BODY', template({}, new Map()));
         });
 
-        it('does not serve a page template compiled against a page-partials Map orphaned by a concurrent partial request', async () => {
-            // getPageTemplate() always supplies an already-resolved globalPartials
-            // Map to getPagePartials(), so its own call runs to completion
-            // synchronously once resumed. respondWithHypertext()'s partial-render
-            // path instead calls getPagePartials(context, page) directly, without
-            // a resolved globalPartials argument -- that call reads the current
-            // #pagePartials entry *before* suspending on loadGlobalPartials(), and
-            // resumes using the value it already read, without re-checking the
-            // cache. If a concurrent getPageTemplate() call wins the cache slot
-            // with a fresh Map while the partial-render call is still suspended,
-            // the partial-render call still finds "no entry" on the way in,
-            // creates a second Map, and overwrites the entry getPageTemplate()
-            // just compiled against -- orphaning it. A page-template cache that
-            // only checks the template file's own etag would keep serving that
-            // orphaned, never-refreshed template forever.
-            const deferred = makeDeferred();
-
+        it('reuses a page template when only its page-partials bundle changes', async () => {
             const page = {
                 pathname: '/articles/example',
                 pageTemplateFilename: 'page.html',
@@ -469,12 +476,6 @@ describe('HyperviewService', ({ describe }) => {
             const store = {
                 normalizePathname(value) {
                     return value;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return deferred.promise;
                 },
                 async statPageTemplate() {
                     return { etag: 'page-template-v1' };
@@ -490,38 +491,23 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
-            // Start the "full render" request first, so it becomes the
-            // loadGlobalPartials() lock holder; then start the "partial render"
-            // request, which reads the (still empty) page-partials cache before
-            // it, too, suspends on the same lock.
-            const fullRenderPromise = service.getPageTemplate({}, page);
-            const partialRenderPromise = service.getPagePartials({}, page);
+            const template = await service.getPageTemplate(makeSnapshot(store), page);
+            const pagePartials = await service.getPagePartials(makeSnapshot(store), page);
 
-            deferred.resolve({
-                etag: 'global-partials-v1',
-                json() {
-                    return [];
-                },
-            });
+            assertEqual('V1 CONTENT', template({}, pagePartials));
 
-            const template = await fullRenderPromise;
-            await partialRenderPromise;
-
-            assertEqual('V1 CONTENT', template({}));
-
-            // Partials content changes, but the page template file itself does
-            // not, so a cache-hit check based only on the template's own etag
-            // would keep serving the template compiled above.
             page.partials = {
                 etag: 'page-partials-v2',
                 partials: [ { id: 'x.html', source: 'V2 CONTENT' } ],
             };
 
-            const secondTemplate = await service.getPageTemplate({}, page);
+            const secondTemplate = await service.getPageTemplate(makeSnapshot(store), page);
+            const secondPagePartials = await service.getPagePartials(makeSnapshot(store), page);
 
-            assertEqual('V2 CONTENT', secondTemplate({}));
+            assert(template === secondTemplate, 'expected the compiled page template to be reused');
+            assertEqual('V2 CONTENT', secondTemplate({}, secondPagePartials));
         });
 
         it('does not force a redundant recompile on a second request for a page with no partials', async () => {
@@ -551,7 +537,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const page = {
                 pathname: '/articles/example',
@@ -559,10 +545,46 @@ describe('HyperviewService', ({ describe }) => {
                 partials: null,
             };
 
-            await service.getPageTemplate({}, page);
-            await service.getPageTemplate({}, page);
+            await service.getPageTemplate(makeSnapshot(store), page);
+            await service.getPageTemplate(makeSnapshot(store), page);
 
             assertEqual(1, templateFetchCount);
+        });
+
+        it('recompiles a page template when its own etag changes', async () => {
+            let etag = 'page-template-v1';
+            let source = 'V1';
+            const store = {
+                normalizePathname(value) {
+                    return value;
+                },
+                async statPageTemplate() {
+                    return { etag };
+                },
+                async getPageTemplate() {
+                    return {
+                        etag,
+                        text() {
+                            return source;
+                        },
+                    };
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            const page = {
+                pathname: '/articles/example',
+                pageTemplateFilename: 'page.html',
+                partials: null,
+            };
+
+            const first = await service.getPageTemplate(makeSnapshot(store), page);
+            etag = 'page-template-v2';
+            source = 'V2';
+            const second = await service.getPageTemplate(makeSnapshot(store), page);
+
+            assert(first !== second, 'expected a new compiled function for a new template etag');
+            assertEqual('V2', second({}, new Map()));
         });
     });
 
@@ -589,9 +611,9 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
-            const page = await service.getPage({}, new URL('https://example.com/blog'), '/blog', {});
+            const page = await service.getPage(makeSnapshot(store), new URL('https://example.com/blog'), '/blog', {});
 
             assertEqual(null, page);
         });
@@ -613,9 +635,9 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
-            const page = await service.getPage({}, new URL('https://example.com/blog'), '/blog', {});
+            const page = await service.getPage(makeSnapshot(store), new URL('https://example.com/blog'), '/blog', {});
 
             assert(page, 'expected a page to be returned');
             assertEqual('page.html', page.pageTemplateFilename);
@@ -633,7 +655,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const caught = await catchAsyncError(() => {
                 return service.assertCanonicalIdentifier('', 'test identifier');
@@ -654,7 +676,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const caught = await catchAsyncError(() => {
                 return service.assertCanonicalIdentifier('/articles/example', 'test identifier');
@@ -665,6 +687,63 @@ describe('HyperviewService', ({ describe }) => {
     });
 
     describe('respondWithHypertext', ({ it }) => {
+        it('renders a global partial referenced by a page partial', async () => {
+            const store = {
+                isValidPathname(value) {
+                    return typeof value === 'string' && value.length > 0;
+                },
+                normalizePathname(value) {
+                    return value;
+                },
+                async getPage() {
+                    return {
+                        pageTemplateFilename: 'page.html',
+                        partials: {
+                            etag: 'page-partials-v1',
+                            json() {
+                                return [ { id: 'fragment.html', source: '{{> global.html }}' } ];
+                            },
+                        },
+                        includes: null,
+                        etag: 'page-v1',
+                        pageDataFiles: [ {
+                            json() {
+                                return { page: {} };
+                            },
+                        } ],
+                    };
+                },
+                async statTemplatePartials() {
+                    return { etag: 'global-partials-v1' };
+                },
+                async getTemplatePartials() {
+                    return {
+                        etag: 'global-partials-v1',
+                        json() {
+                            return [ { id: 'global.html', source: 'GLOBAL' } ];
+                        },
+                    };
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger() });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            const response = {
+                props: {},
+                status: 200,
+                respondWithUtf8(_status, hypertext) {
+                    this.hypertext = hypertext;
+                    return this;
+                },
+            };
+
+            await service.respondWithHypertext({}, {
+                headers: new Headers(),
+                url: new URL('https://example.com/articles/example'),
+            }, response, { partial: 'fragment.html' });
+
+            assertEqual('GLOBAL', response.hypertext);
+        });
+
         it('recognizes JSON requests by representation suffix or Accept header', () => {
             const service = new HyperviewService({ logger: makeLogger() });
 
@@ -680,6 +759,240 @@ describe('HyperviewService', ({ describe }) => {
                 url: new URL('https://example.com/articles'),
                 headers: new Headers({ accept: 'text/html' }),
             }));
+        });
+
+        it('opens exactly one snapshot for JSON and rendered-page cache-hit responses', async () => {
+            let openSnapshotCalls = 0;
+            const pageContent = {
+                pageTemplateFilename: 'page.html',
+                partials: null,
+                includes: null,
+                etag: 'page-v1',
+                pageDataFiles: [ {
+                    json() { return { page: {} } },
+                } ],
+            };
+            const snapshot = {
+                async getPage() { return pageContent },
+                async statTemplatePartials() { return null },
+                async statBaseTemplates() { return { etag: 'base-v1' } },
+            };
+            const store = {
+                isValidPathname(value) { return typeof value === 'string' && value.length > 0 },
+                normalizePathname(value) { return value },
+                async openSnapshot() {
+                    openSnapshotCalls += 1;
+                    return snapshot;
+                },
+                async hashValue(value) { return `hash:${ value }` },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true, usePageCache: true });
+            service.initialize({
+                contentAddressableStore: store,
+                kvStore: { async get() { return 'cached' } },
+            });
+            const jsonResponse = {
+                props: {},
+                status: 200,
+                respondWithJSON() { return this },
+            };
+            const htmlResponse = {
+                props: {},
+                status: 200,
+                respondWithUtf8() { return this },
+            };
+
+            await service.respondWithHypertext({}, {
+                url: new URL('https://example.com/articles'),
+                headers: new Headers({ accept: 'application/json' }),
+            }, jsonResponse, { baseTemplateId: 'layout' });
+            await service.respondWithHypertext({}, {
+                url: new URL('https://example.com/articles'), headers: new Headers(),
+            }, htmlResponse, { baseTemplateId: 'layout' });
+
+            assertEqual(2, openSnapshotCalls);
+        });
+
+        it('renders and keys a response from the snapshot that loaded its page', async () => {
+            let v2Published = false;
+            const hashInputs = [];
+            const snapshot = {
+                async getPage() {
+                    v2Published = true;
+                    return {
+                        pageTemplateFilename: 'page.html',
+                        partials: null,
+                        includes: null,
+                        etag: 'page-v1',
+                        pageDataFiles: [ {
+                            json() { return { page: {} } },
+                        } ],
+                    };
+                },
+                async statTemplatePartials() {
+                    assert(v2Published, 'expected V2 publication after page loading');
+                    return { etag: 'partials-v1' };
+                },
+                async getTemplatePartials() { return null },
+                async statPageTemplate() {
+                    assert(v2Published, 'expected V2 publication before template loading');
+                    return { etag: 'template-v1' };
+                },
+                async getPageTemplate() {
+                    assert(v2Published, 'expected V2 publication before template loading');
+                    return {
+                        etag: 'template-v1',
+                        text() { return 'V1 BODY' },
+                    };
+                },
+            };
+            const store = {
+                isValidPathname(value) { return typeof value === 'string' && value.length > 0 },
+                normalizePathname(value) { return value },
+                async openSnapshot() { return snapshot },
+                async hashValue(value) {
+                    hashInputs.push(value);
+                    return `hash:${ hashInputs.length }`;
+                },
+            };
+            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
+            service.initialize({
+                contentAddressableStore: store,
+                kvStore: {
+                    async get() { return null },
+                    async put() {},
+                },
+            });
+            const response = {
+                props: {},
+                status: 200,
+                respondWithUtf8(_status, hypertext) {
+                    this.hypertext = hypertext;
+                    return this;
+                },
+            };
+
+            await service.respondWithHypertext({}, {
+                url: new URL('https://example.com/articles/example'), headers: new Headers(),
+            }, response, { skipBaseRender: true });
+
+            assertEqual('V1 BODY', response.hypertext);
+            assert(hashInputs.includes('page-v1#partials-v1'));
+            assert(!hashInputs.some((input) => String(input).includes('v2')));
+        });
+
+        it('keeps concurrent V1 and V2 renders, partials, and page-cache writes separate', async () => {
+            const firstPartialsStarted = makeDeferred();
+            const releaseFirstPartials = makeDeferred();
+            const cacheWrites = [];
+            let snapshotsOpened = 0;
+
+            function makeVersionedSnapshot(version, waitForPartials) {
+                return {
+                    async getPage() {
+                        return {
+                            pageTemplateFilename: 'page.html',
+                            partials: {
+                                etag: `page-partials-${ version }`,
+                                json() {
+                                    return [ {
+                                        id: 'page.html',
+                                        source: '{{> global.html }}',
+                                    } ];
+                                },
+                            },
+                            includes: null,
+                            etag: `page-${ version }`,
+                            pageDataFiles: [ {
+                                json() { return { page: {} } },
+                            } ],
+                        };
+                    },
+                    async statTemplatePartials() {
+                        return { etag: `global-${ version }` };
+                    },
+                    async getTemplatePartials() {
+                        if (waitForPartials) {
+                            firstPartialsStarted.resolve();
+                            await releaseFirstPartials.promise;
+                        }
+                        return {
+                            etag: `global-${ version }`,
+                            json() {
+                                return [ { id: 'global.html', source: version } ];
+                            },
+                        };
+                    },
+                    async statPageTemplate() {
+                        return { etag: `template-${ version }` };
+                    },
+                    async getPageTemplate() {
+                        return {
+                            etag: `template-${ version }`,
+                            text() { return '{{> page.html }}' },
+                        };
+                    },
+                };
+            }
+
+            const v1 = makeVersionedSnapshot('V1', true);
+            const v2 = makeVersionedSnapshot('V2', false);
+            const store = {
+                isValidPathname(value) { return typeof value === 'string' && value.length > 0 },
+                normalizePathname(value) { return value },
+                async openSnapshot() {
+                    snapshotsOpened += 1;
+                    return snapshotsOpened === 1 ? v1 : v2;
+                },
+                async hashValue(value) { return `hash:${ value }` },
+            };
+            const service = new HyperviewService({
+                logger: makeLogger(),
+                usePageCache: true,
+                useTemplateCache: true,
+            });
+            service.initialize({
+                contentAddressableStore: store,
+                kvStore: {
+                    async get() { return null },
+                    async put(_context, key, value) {
+                        cacheWrites.push({ key, value });
+                    },
+                },
+            });
+            const request = {
+                headers: new Headers(),
+                url: new URL('https://example.com/articles/example'),
+            };
+            const firstResponse = {
+                props: {},
+                status: 200,
+                respondWithUtf8(_status, hypertext) {
+                    this.hypertext = hypertext;
+                    return this;
+                },
+            };
+            const secondResponse = {
+                props: {},
+                status: 200,
+                respondWithUtf8(_status, hypertext) {
+                    this.hypertext = hypertext;
+                    return this;
+                },
+            };
+
+            const firstRender = service.respondWithHypertext({}, request, firstResponse, { skipBaseRender: true });
+            await firstPartialsStarted.promise;
+            const secondRender = service.respondWithHypertext({}, request, secondResponse, { skipBaseRender: true });
+            await secondRender;
+            releaseFirstPartials.resolve();
+            await firstRender;
+
+            assertEqual('V1', firstResponse.hypertext);
+            assertEqual('V2', secondResponse.hypertext);
+            assertEqual(2, cacheWrites.length);
+            assert(cacheWrites.some(({ key, value }) => key.includes('page-V1#global-V1') && value === 'V1'));
+            assert(cacheWrites.some(({ key, value }) => key.includes('page-V2#global-V2') && value === 'V2'));
         });
 
         it('returns assembled page context for an allowed JSON Accept request', async () => {
@@ -705,7 +1018,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
             const response = {
                 props: { viewer: { name: 'Ada' } },
                 status: 200,
@@ -761,7 +1074,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
             const response = {
                 props: { viewer: { name: 'Ada' } },
                 status: 200,
@@ -798,7 +1111,7 @@ describe('HyperviewService', ({ describe }) => {
                 return await originalGetPageTemplate();
             };
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
             const response = {
                 props: {},
                 status: 200,
@@ -830,7 +1143,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
             const response = {
                 props: {},
                 status: 200,
@@ -851,7 +1164,7 @@ describe('HyperviewService', ({ describe }) => {
             assertEqual(240, kvStore.write.options.ttlSeconds);
         });
 
-        it('refreshes partials before rendering a cached page template', async () => {
+        it('uses refreshed partials without recompiling cached page and base templates', async () => {
             let pagePartialDefs = [
                 { id: 'page.html', source: 'first page partial' },
             ];
@@ -925,7 +1238,13 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            const compileTemplate = service.compileTemplate.bind(service);
+            let compilationCount = 0;
+            service.compileTemplate = (...args) => {
+                compilationCount += 1;
+                return compileTemplate(...args);
+            };
 
             const request = {
                 headers: new Headers(),
@@ -942,6 +1261,7 @@ describe('HyperviewService', ({ describe }) => {
 
             await service.respondWithHypertext({}, request, response, { baseTemplateId: 'layout' });
             assertEqual('first global partial / first page partial', response.hypertext);
+            const firstCompilationCount = compilationCount;
 
             globalPartials.etag = 'global-partials-v2';
             globalPartials.templates = [
@@ -955,6 +1275,7 @@ describe('HyperviewService', ({ describe }) => {
             await service.respondWithHypertext({}, request, response, { baseTemplateId: 'layout' });
 
             assertEqual('second global partial / second page partial', response.hypertext);
+            assertEqual(firstCompilationCount + 2, compilationCount);
         });
 
         it('loads the matching page for a .json request', async () => {
@@ -983,7 +1304,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const response = {
                 props: {},
@@ -1046,7 +1367,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const response = {
                 props: {},
@@ -1105,7 +1426,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const response = {
                 props: {},
@@ -1155,7 +1476,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const response = {
                 props: {},
@@ -1198,7 +1519,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = {
                 headers: new Headers(),
@@ -1231,7 +1552,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = {
                 headers: new Headers(),
@@ -1264,7 +1585,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = {
                 headers: new Headers(),
@@ -1327,7 +1648,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -1357,7 +1678,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };
@@ -1393,13 +1714,13 @@ describe('HyperviewService', ({ describe }) => {
                     return pageContent;
                 },
                 async statTemplatePartials() {
-                    throw new Error('unexpected rendered-page cache operation');
+                    return null;
                 },
                 async getTemplatePartials() {
                     return null;
                 },
                 async statBaseTemplates() {
-                    throw new Error('unexpected rendered-page cache operation');
+                    return { etag: 'base-etag-1' };
                 },
                 async getBaseTemplates() {
                     return {
@@ -1411,6 +1732,9 @@ describe('HyperviewService', ({ describe }) => {
                 },
                 async hashValue() {
                     throw new Error('unexpected rendered-page cache operation');
+                },
+                async statPageTemplate() {
+                    return { etag: 'page-template-etag-1' };
                 },
                 async getPageTemplate() {
                     return {
@@ -1430,7 +1754,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = {
@@ -1450,7 +1774,7 @@ describe('HyperviewService', ({ describe }) => {
         it('skips rendered-page cache work when page caching is disabled per call', async () => {
             const { store } = makePropsCacheKeyFixtures();
             store.statTemplatePartials = async function statTemplatePartials() {
-                throw new Error('unexpected rendered-page cache operation');
+                return null;
             };
             store.hashValue = async function hashValue() {
                 throw new Error('unexpected rendered-page cache operation');
@@ -1465,7 +1789,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = {
@@ -1541,7 +1865,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const responseA = {
                 props: {},
@@ -1574,7 +1898,7 @@ describe('HyperviewService', ({ describe }) => {
             store.hashValue = makeOpaqueHashValue();
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore: makeSizeBoundedKvStore() });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: makeSizeBoundedKvStore() });
 
             const longSegment = 'x'.repeat(2000);
             const request = { url: new URL(`https://example.com/articles/${ longSegment }?query=${ longSegment }`) };
@@ -1619,7 +1943,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger, usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const secret = 'SUPER-SECRET-QUERY-VALUE';
             const request = { url: new URL(`https://example.com/articles/example?token=${ secret }`) };
@@ -1717,7 +2041,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -1801,7 +2125,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -1839,7 +2163,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -1896,7 +2220,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/blog') };
             const response = { props: {}, status: 200 };
@@ -1921,7 +2245,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };
@@ -1964,7 +2288,7 @@ describe('HyperviewService', ({ describe }) => {
                 usePageCache: true,
                 includePropsInCacheKey: true,
             });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -2009,7 +2333,7 @@ describe('HyperviewService', ({ describe }) => {
                 usePageCache: true,
                 includePropsInCacheKey: true,
             });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const options = { skipBaseRender: true, includePropsInCacheKey: false };
@@ -2108,7 +2432,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: store, kvStore });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -2179,7 +2503,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };
@@ -2244,7 +2568,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };
@@ -2322,7 +2646,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: store, kvStore: {} });
+            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };

@@ -9,6 +9,7 @@ import {
     assert,
 } from '../../../kixx/assertions/mod.js';
 import ContentAddressableIndex from './content-addressable-index.js';
+import ContentSnapshot from './content-snapshot.js';
 import {
     FORMAT,
     KEY,
@@ -183,6 +184,18 @@ export default class CloudflareContentStore {
         promise.catch(() => this.#invalidateIndex(buildId));
 
         return await promise;
+    }
+
+    /**
+     * Opens a request-scoped view pinned to one immutable content index.
+     * All reads through the returned snapshot use the index resolved here,
+     * even if the build is reassigned before the request completes.
+     * @param {RequestContext} context - Request context carrying the current build ID and platform bindings
+     * @returns {Promise<ContentSnapshot>} Snapshot valid only for this request
+     */
+    async openSnapshot(context) {
+        const index = await this.getIndex(context);
+        return new ContentSnapshot({ store: this, context, index });
     }
 
     async #fetchIndex(context, buildId) {

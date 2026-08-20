@@ -43,18 +43,28 @@ Tasks HV-3 and HV-4 assume an updated vendored `src/kixx/templating/` in which a
 compiled render function accepts an optional partials lookup at invocation time.
 The full specification is in `tmp/kixx-templating-render-time-partials.md`.
 
-Before starting HV-3, verify the vendored engine actually provides it:
+This landed in commit `734b2964` (2026-08-20). Confirmed provided:
 
-- `createRenderFunction(options, helpers, partials, tree)` signature is unchanged.
-- The returned function accepts `(data, partialsOverride)`.
-- `renderWithFrame(frame, partialsOverride)` and
-  `renderWithFrameAndIndent(frame, indent, partialsOverride)` accept and forward
-  the binding.
-- An invocation-time lookup overrides the compile-time map for the whole render
-  tree, including nested partials; omitting it preserves current behavior exactly.
+- `createRenderFunction(options, helpers, tree)` — the compile-time `partials`
+  parameter is removed entirely, not merely made optional. Compiled functions
+  depend on their own source and helpers only, matching HV-3's design.
+- The returned function accepts `(data, partials)`, and `renderWithFrame(frame, partials)`
+  / `renderWithFrameAndIndent(frame, partials, indent)` accept and forward the same
+  lookup — note the argument order is `(frame, partials, indent)`.
+- The `partials` argument is **required on every render call, including every
+  nested and recursive partial invocation** — it is validated with `assertPartialsLookup()`
+  and rejected with a `TypeError` if it is missing or does not provide callable
+  `has()`/`get()`. There is no "omit it to preserve current behavior" fallback:
+  every call site, with no exceptions, must pass an explicit lookup (an empty
+  `Map()` is fine when a render has no partials).
+- A registered partial name that resolves to a non-function value now throws a
+  `TypeError` at that tag, and a bare partial function (no `renderWithFrame`)
+  receives only `frame.value`.
+- An invocation-time lookup is used throughout the complete nested render tree,
+  including nested and recursive partials, so a compiled template can render
+  against different partial sets on successive calls.
 
-If the vendored engine does not yet provide this, HV-1 and HV-2 can still be
-completed and reviewed; HV-3 is blocked.
+HV-1 and HV-2 do not depend on this change and can proceed regardless.
 
 ### Cross-cutting decisions
 
@@ -89,7 +99,7 @@ vendored engine.
 
 ### Task HV-1: Content reads resolve one immutable index per snapshot
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `TODO.md` Issue 2 "Recommended fix" §1; `src/plugins/README.md`
 
@@ -157,17 +167,17 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] `openSnapshot()` on both stores resolves the index exactly once per call.
-- [ ] Every `ContentSnapshot` read method resolves against that one index; no
+- [x] `openSnapshot()` on both stores resolves the index exactly once per call.
+- [x] Every `ContentSnapshot` read method resolves against that one index; no
       snapshot method calls `getIndex()`.
-- [ ] A build reassignment performed between two reads on the same snapshot does
+- [x] A build reassignment performed between two reads on the same snapshot does
       not change the second read's result.
-- [ ] `getPage()` performs all of its stats, its directory listing, and its blob
+- [x] `getPage()` performs all of its stats, its directory listing, and its blob
       reads against one index.
-- [ ] All existing context-taking read methods keep their signatures, return
+- [x] All existing context-taking read methods keep their signatures, return
       values, and error behavior, including the Issue 1 assertions.
-- [ ] Publishing transaction scripts and the publishing API require no changes.
-- [ ] JSDoc on `openSnapshot()` and every `ContentSnapshot` method states the
+- [x] Publishing transaction scripts and the publishing API require no changes.
+- [x] JSDoc on `openSnapshot()` and every `ContentSnapshot` method states the
       pinning guarantee and the request-scoped lifetime.
 
 **Validation**
@@ -181,19 +191,19 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added request-scoped `ContentSnapshot`; moved all logical read ownership, path helpers, and bundle constants into it; added store facades; preserved publishing paths; and added focused snapshot coverage.
+- Current state: Complete.
+- Remaining: HV-2.
+- Decisions and discoveries: `ContentAddressableIndex` encapsulates its persisted table, so it now exposes a read-only `rootHash` accessor rather than leaking its encoded entries. Existing context-taking read methods validate at their original public boundary, then delegate through a newly opened snapshot.
+- Actual files changed: `agents/plans/hyperview-snapshot-consistency.md`; `src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js`; `src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js`; `src/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.js`; `src/plugins/cloudflare-content-addressable-store/lib/content-snapshot.js`; `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.test.js`; `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-snapshot.test.js`.
+- Validation run: `node run-linter.js src/plugins/cloudflare-content-addressable-store test/unit-tests/plugins/cloudflare-content-addressable-store` (pass); `node run-tests.js test/unit-tests/plugins/cloudflare-content-addressable-store` (pass: 160 tests); `git diff --check` (pass).
 - Blockers: None.
 
 ---
 
 ### Task HV-2: One Hyperview render reads from one pinned snapshot
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HV-1
 **Documentation:** `TODO.md` Issue 2 "Recommended fix" §1 and §3; `src/app/presentation/README.md`
 
@@ -281,19 +291,19 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Verified HV-1's working-tree changes and its recorded passing validation; opened one snapshot after request validation; threaded it through page loading, template and partial reads, and rendered-page cache etag collection; replaced the global-partials single-flight with an etag-keyed promise map; and adapted render sites to pass render-time partial lookups. Converted every Hyperview test fixture to snapshot-shaped reads and updated affected expectations now that snapshot stats run independently of the rendered-page cache. Added deterministic V1→V2 publication coverage proving the response body and cache-key inputs stay on V1.
+- Current state: Complete. `HyperviewService` no longer calls context-taking content reads. The Hyperview unit suite covers one snapshot per JSON/cache-hit response, V1-only rendering/cache identity after a mid-render publication, and separation of global-partials loads by pinned etag. The mutable-cache portion remains HV-3 work.
+- Remaining: HV-3.
+- Decisions and discoveries: The vendored templating API in commit `734b2964` is already present, but HyperviewService had not adopted it. A minimal compatibility bridge was required while threading snapshots: compilation now uses the new three-argument API, mini templates explicitly supply an empty map, and renderer paths pass layered partials. Cache ownership/immutability is intentionally not yet changed. Stats now run even when template caching is disabled because snapshot stats are pure in-memory index reads and establish the pinned cache identity. Test helper `makeContentStore()` exposes live test doubles through `openSnapshot()`, while `makeSnapshot()` drops the legacy context argument so direct workflow tests exercise the production API shape.
+- Actual files changed: `agents/plans/hyperview-snapshot-consistency.md`; `src/kixx/hyperview/hyperview-service.js`; `test/unit-tests/kixx/hyperview/hyperview-service.test.js`.
+- Validation run: `node run-linter.js src/kixx/hyperview test/unit-tests/kixx/hyperview` (pass with pre-existing `hyperview-request-handlers.js` TODO warning); `node run-tests.js test/unit-tests/kixx/hyperview/hyperview-service.test.js` (pass: 51 tests); `node run-tests.js test/unit-tests/kixx` (pass: 479 tests); `git diff --check` (pass).
 - Blockers: None.
 
 ---
 
 ### Task HV-3: Compiled templates stop depending on mutable partial sets
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HV-2; vendored kixx-templating render-time partial binding (see Prerequisite)
 **Documentation:** `TODO.md` Issue 2 "Recommended fix" §2; `tmp/kixx-templating-render-time-partials.md`; `src/templates/README.md`
 
@@ -350,10 +360,13 @@ is preserved and extended to base templates and page partials.
   - `skipBaseRender`: `template(pageContext, layered)`
   - **partial-only render**: `template(pageContext, layered)`. This path currently
     relies on the compile-time layered delegate to let a page partial reference a
-    global partial; without the explicit argument that reference would silently
-    render as an empty string. It is the easiest site to miss.
-  - `createMiniTemplate()` intentionally renders without partials and passes
-    nothing.
+    global partial; without the explicit argument the vendored engine now throws
+    a `TypeError` rather than silently rendering an empty string, since `partials`
+    is a required render-time argument. It is still the easiest site to miss, but
+    a missed call site now fails loudly instead of silently.
+  - `createMiniTemplate()` renders with an explicit empty `Map()` in place of
+    partials, not by omitting the argument — the vendored engine rejects a
+    missing or malformed partials lookup on every call, including this one.
 - When `#useTemplateCache` is false, caches are neither read nor populated, as
   today.
 - Bound constants are named and commented with the reasoning above; replace
@@ -370,22 +383,22 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] No compiled-partials or compiled-template map is mutated after it is
+- [x] No compiled-partials or compiled-template map is mutated after it is
       published to a cache; verified by holding a reference across a version
       change and asserting its contents are unchanged.
-- [ ] A page template is **not** recompiled when only the global-partials or
+- [x] A page template is **not** recompiled when only the global-partials or
       page-partials bundle changes; the next render uses the same compiled
       function with a new lookup.
-- [ ] A page template **is** recompiled when its own etag changes.
-- [ ] A compiled page-partials entry is reused across a global-partials change.
-- [ ] A partial-only render can resolve a global partial referenced from a page
+- [x] A page template **is** recompiled when its own etag changes.
+- [x] A compiled page-partials entry is reused across a global-partials change.
+- [x] A partial-only render can resolve a global partial referenced from a page
       partial.
-- [ ] Page partials shadow global partials of the same id, unchanged from today.
-- [ ] A missing global-partials bundle yields an empty partial set for that render
+- [x] Page partials shadow global partials of the same id, unchanged from today.
+- [x] A missing global-partials bundle yields an empty partial set for that render
       only and cannot clear any other render's set.
-- [ ] `partialsEtag`, `#pageTemplateCacheEntries`, and `#cachePagePathname()` are
+- [x] `partialsEtag`, `#pageTemplateCacheEntries`, and `#cachePagePathname()` are
       gone, with no behavior they provided left uncovered.
-- [ ] Each cache respects its bound under sustained distinct keys.
+- [x] Each cache respects its bound under sustained distinct keys.
 
 **Validation**
 
@@ -397,20 +410,32 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: Requires the vendored kixx-templating change described in the
-  Prerequisite section.
+- Completed: Replaced the live-map cache design with immutable compiled bundle
+  entries, keyed by content etag and bounded with LRU eviction. Page templates
+  now cache by their own etag only; page and global partials are layered freshly
+  at every render. Removed `partialsEtag`, `#pageTemplateCacheEntries`, and
+  `#cachePagePathname()`. Updated template API documentation and focused tests.
+- Current state: Complete.
+- Remaining: HV-4.
+- Decisions and discoveries: The prerequisite specification file named by this
+  plan is no longer present in `tmp/`; its required API was verified from the
+  recorded prerequisite contract and vendored implementation. The missing
+  global bundle is cached as an independent empty map and therefore cannot
+  clear a previously published bundle.
+- Actual files changed: `agents/plans/hyperview-snapshot-consistency.md`;
+  `src/kixx/hyperview/hyperview-service.js`; `src/templates/README.md`;
+  `test/unit-tests/kixx/hyperview/hyperview-service.test.js`.
+- Validation run: `node run-linter.js src/kixx/hyperview test/unit-tests/kixx/hyperview`
+  (pass with the pre-existing `hyperview-request-handlers.js` TODO warning);
+  `node run-tests.js test/unit-tests/kixx` (pass: 481 tests); `git diff --check`
+  (pass).
+- Blockers: None.
 
 ---
 
 ### Task HV-4: Deterministic race coverage and documentation
 
-**Status:** Not started
+**Status:** In progress
 **Depends on:** HV-1, HV-2, HV-3
 **Documentation:** `TODO.md` Issue 2 "Recommended validation"; `test/unit-tests/README.md`
 
@@ -459,11 +484,11 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] All five scenarios are covered and pass.
-- [ ] Each new test is verified to fail when its corresponding fix is reverted;
+- [x] All five scenarios are covered and pass.
+- [x] Each new test is verified to fail when its corresponding fix is reverted;
       record which revert was used for each in the handoff notes.
-- [ ] No test depends on wall-clock timing or timer ordering.
-- [ ] The snapshot guarantee and the render-time partials contract are documented
+- [x] No test depends on wall-clock timing or timer ordering.
+- [x] The snapshot guarantee and the render-time partials contract are documented
       in the two READMEs and in JSDoc.
 
 **Validation**
@@ -475,10 +500,10 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added a deterministic `getPage()` V1→V2 reassignment test, a concurrent V1/V2 Hyperview render test that also verifies body-to-page-cache-key pairing, and the two required documentation notes. Existing focused tests cover the V1-only mid-render response/cache identity and cached-bundle immutability; the new concurrency test covers a V1 compiled template completing after V2 global and page partial caches have advanced.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: The presentation README has unrelated, substantial working-tree edits; the snapshot note was added directly after its existing Hyperview introduction without disturbing that restructure. All race ordering uses promises controlled by `makeDeferred()`, never clocks. Revert checks: temporarily redirecting the paused snapshot test's subsequent index reads to the reassigned V2 index fails its V1 metadata assertion; temporarily omitting the `skipBaseRender` layered-partials render argument makes the concurrent V1/V2 test fail with the templating engine's required-partials `TypeError`. These temporary changes were restored before final validation.
+- Actual files changed: `agents/plans/hyperview-snapshot-consistency.md`; `src/app/presentation/README.md`; `src/templates/README.md`; `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-snapshot.test.js`; `test/unit-tests/kixx/hyperview/hyperview-service.test.js`.
+- Validation run: Focused `node run-linter.js src/kixx/hyperview test/unit-tests/kixx/hyperview test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-snapshot.test.js` (pass with pre-existing `hyperview-request-handlers.js` TODO warning); focused `node run-tests.js test/unit-tests/kixx/hyperview/hyperview-service.test.js test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-snapshot.test.js` (pass: 60 tests); `node run-linter.js` (pass with the same warning); `node run-tests.js` (pass: 882 tests); `git diff --check` (pass).
 - Blockers: None.
