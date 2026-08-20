@@ -12,11 +12,15 @@ async function makeIndex(files) {
 }
 
 function makeStore(blobs) {
+    const getBlobsCalls = [];
+
     return {
+        getBlobsCalls,
         async getBlob(_context, hash) {
             return blobs.get(hash) ?? null;
         },
         async getBlobs(_context, hashes) {
+            getBlobsCalls.push(hashes);
             return hashes.map((hash) => blobs.get(hash) ?? null);
         },
         async computeHashFromStats(stats) {
@@ -100,7 +104,32 @@ describe('ContentSnapshot', ({ it }) => {
         assertEqual(1, page.pageDataFiles[0].json().v);
         assertEqual(1, page.pageDataFiles[1].json().v);
         assertEqual('index.html', page.pageTemplateFilename);
-        assertEqual('root-v1:root-v1:template-v1:page-v1', page.etag);
+        assertEqual('root-v1:template-v1:page-v1', page.etag);
+    });
+
+    it('reads blobs but not child-directory hashes when loading a page', async () => {
+        const index = await makeIndex([
+            { pathname: '/pages/page.json', hash: 'root', size: 4 },
+            { pathname: '/pages/blog/page.json', hash: 'page', size: 4 },
+            { pathname: '/pages/blog/index.html', hash: 'template', size: 4 },
+            { pathname: '/pages/blog/child/page.json', hash: 'child', size: 4 },
+        ]);
+        const blobs = new Map([
+            [ 'root', stringToUint8Array('{"v":1}') ],
+            [ 'page', stringToUint8Array('{"v":2}') ],
+            [ 'template', stringToUint8Array('page') ],
+            [ 'child', stringToUint8Array('{"v":3}') ],
+        ]);
+        const store = makeStore(blobs);
+        const snapshot = new ContentSnapshot({ store, context: {}, index });
+
+        const page = await snapshot.getPage('/blog');
+
+        assertEqual(1, store.getBlobsCalls.length);
+        assertEqual('root:template:page', store.getBlobsCalls[0].join(':'));
+        assertEqual(2, page.pageDataFiles.length);
+        assertEqual('index.html', page.pageTemplateFilename);
+        assertEqual('root:template:page', page.etag);
     });
 
     it('keeps getPage on V1 when reassignment occurs after its first lookup', async () => {
@@ -155,7 +184,7 @@ describe('ContentSnapshot', ({ it }) => {
         assertEqual(1, page.pageDataFiles[0].json().v);
         assertEqual(1, page.pageDataFiles[1].json().v);
         assertEqual('index.html', page.pageTemplateFilename);
-        assertEqual('root-v1:root-v1:template-v1:page-v1', page.etag);
+        assertEqual('root-v1:template-v1:page-v1', page.etag);
     });
 
     it('throws an AssertionError for an invalid page pathname', async () => {

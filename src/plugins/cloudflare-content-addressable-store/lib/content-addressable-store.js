@@ -26,6 +26,12 @@ import {
     stringToUint8Array,
 } from './addressing.js';
 
+const RESERVED_PAGE_FILENAMES = new Set([
+    'page.json',
+    PAGE_PARTIALS_BUNDLE,
+    PAGE_INCLUDES_BUNDLE,
+]);
+
 
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
@@ -319,7 +325,7 @@ export default class ContentAddressableStore {
             }
 
             const entrySource = `${ source }[${ index }]`;
-            const directory = this.#filepathDirname(filename);
+            const directory = this.#filepathDirname(normalizePagePath(filename));
             const existingSource = directories.get(directory);
 
             if (existingSource) {
@@ -370,7 +376,7 @@ export default class ContentAddressableStore {
         // `pathField` is "pathname" for page entries or "filename" for page
         // templates; `toInternalPathname` maps the caller-supplied value to
         // the pathname buildIndex() will index by.
-        const checkArray = (entries, source, pathField, toInternalPathname) => {
+        const checkArray = (entries, source, pathField, toInternalPathname, reservedFilenames) => {
             if (isUndefined(entries)) {
                 return;
             }
@@ -396,7 +402,17 @@ export default class ContentAddressableStore {
                 this.#checkBlobDescriptor(error, entrySource, entry);
 
                 if (isValidPath) {
-                    addFile(entrySource, toInternalPathname(pathValue), entry.hash, entry.size);
+                    const pathname = toInternalPathname(pathValue);
+                    const basename = pathname.split('/').pop();
+
+                    if (reservedFilenames?.has(basename)) {
+                        error.push(
+                            `${ entrySource }.${ pathField } uses reserved page filename "${ basename }"`,
+                            `${ entrySource }.${ pathField }`,
+                        );
+                    } else {
+                        addFile(entrySource, pathname, entry.hash, entry.size);
+                    }
                 }
             });
         };
@@ -427,6 +443,7 @@ export default class ContentAddressableStore {
             'pageTemplates',
             'filename',
             (filename) => normalizePagePath(filename),
+            RESERVED_PAGE_FILENAMES,
         );
 
         // getPage() picks "whatever is left" in a page directory as its

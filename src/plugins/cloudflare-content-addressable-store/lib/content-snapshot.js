@@ -257,7 +257,9 @@ export default class ContentSnapshot {
 
         const directory = normalizePagePath(pathname);
         const sourceFileStats = await this.listStats(directory, { recursive: false });
-        const entries = parentStats.concat(sourceFileStats);
+        const entries = parentStats
+            .concat(sourceFileStats)
+            .filter((entry) => entry.kind === 'blob');
         const blobs = await this.getBlobs(entries.map(({ hash }) => hash));
 
         const pageDataFiles = [];
@@ -269,27 +271,25 @@ export default class ContentSnapshot {
         for (let i = 0; i < entries.length; i += 1) {
             const entry = entries[i];
             const bytes = blobs[i];
-            if (entry.kind === 'blob') {
-                assert(bytes, `missing expected blob from ${ entry.pathname }`);
-                pageFiles.push(entry);
-                const basename = entry.pathname.split('/').pop();
-                if (basename === 'page.json') {
-                    pageDataFiles.push(new ContentObject(bytes, entry));
-                } else if (basename === PAGE_PARTIALS_BUNDLE) {
-                    partials = new ContentObject(bytes, entry);
-                } else if (basename === PAGE_INCLUDES_BUNDLE) {
-                    includes = new ContentObject(bytes, entry);
-                } else {
-                    assert(
-                        pageTemplateFilename === null,
-                        `ContentAddressableStore#getPage(): found more than one page template in "${ directory }"`,
-                    );
-                    pageTemplateFilename = basename;
-                }
+            assert(bytes, `missing expected blob from ${ entry.pathname }`);
+            pageFiles.push(entry);
+            const basename = entry.pathname.split('/').pop();
+            if (basename === 'page.json') {
+                pageDataFiles.push(new ContentObject(bytes, entry));
+            } else if (basename === PAGE_PARTIALS_BUNDLE) {
+                partials = new ContentObject(bytes, entry);
+            } else if (basename === PAGE_INCLUDES_BUNDLE) {
+                includes = new ContentObject(bytes, entry);
+            } else {
+                assert(
+                    pageTemplateFilename === null,
+                    `ContentAddressableStore#getPage(): found more than one page template in "${ directory }"`,
+                );
+                pageTemplateFilename = basename;
             }
         }
 
-        const dependencies = parentStats.concat(pageFiles);
+        const dependencies = pageFiles;
         const etag = await this.#store.computeHashFromStats(dependencies);
 
         return { etag, pageDataFiles, pageTemplateFilename, partials, includes };

@@ -428,6 +428,50 @@ describe('ContentAddressableStore', ({ describe }) => {
             assertMatches('duplicates the page template already assigned', caught.errors[0].message);
         });
 
+        it('throws a ValidationError when leading slashes disguise duplicate page templates', async () => {
+            const { subject } = makeSubject();
+            const context = makeContext();
+
+            const manifest = {
+                pageTemplates: [
+                    { filename: 'about/index.html', hash: 'hash-a', size: 1 },
+                    { filename: '/about/other.html', hash: 'hash-b', size: 2 },
+                ],
+            };
+
+            const caught = await catchAsyncError(
+                () => subject.commitChanges(context, 'build-1', manifest),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ValidationError', caught.name);
+            assertMatches('duplicates the page template already assigned', caught.errors[0].message);
+        });
+
+        it('throws a ValidationError when a page template uses a reserved page filename', async () => {
+            const { subject } = makeSubject();
+            const context = makeContext();
+
+            const manifest = {
+                pageTemplates: [
+                    { filename: 'about/page.json', hash: 'hash-a', size: 1 },
+                    { filename: 'contact/__page-partials-bundle', hash: 'hash-b', size: 2 },
+                    { filename: 'legal/__page-includes-bundle', hash: 'hash-c', size: 3 },
+                ],
+            };
+
+            const caught = await catchAsyncError(
+                () => subject.commitChanges(context, 'build-1', manifest),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ValidationError', caught.name);
+            assertEqual(3, caught.errors.length);
+            assertMatches('reserved page filename', caught.errors[0].message);
+            assertMatches('reserved page filename', caught.errors[1].message);
+            assertMatches('reserved page filename', caught.errors[2].message);
+        });
+
         describe('when a manifest group is omitted', ({ it }) => {
             it('excludes that group from the committed files', async () => {
                 const { subject, store } = makeSubject();
