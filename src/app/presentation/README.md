@@ -116,7 +116,7 @@ Use the special app pattern `*` only for unnamed catch-all routes. This is a pro
 ### Middleware vs. Request Handlers vs. Error Handlers
 
 - **Route middleware** (`inboundMiddleware`, `outboundMiddleware`) applies to every target in a route subtree. Use it for capabilities like authentication, session loading, request normalization, and shared response headers.
-- **Target `requestHandlers`** applies to one endpoint. Use them for loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect/JSON response — and, as the first entry in the chain, for authorization (see [Authentication Middleware vs. Authorization Gates](#authentication-middleware-vs-authorization-gates)).
+- **Target `requestHandlers`** applies to one endpoint. Use them for resource authorization, loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect response
 - **Route error handlers** (`errorHandlers`) when an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
 
 Execution order for a matched target runs in two phases — a **request phase** followed by an **outbound (response) phase**:

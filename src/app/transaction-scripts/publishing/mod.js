@@ -5,30 +5,34 @@ import { isUndefined } from '../../../../kixx/assertions/mod.js';
 export async function statResource(context, type, pathname) {
     const store = context.getService('ContentAddressableStore');
 
+    // Reads resolve through a snapshot rather than the store so they are
+    // pinned to a single immutable content index for this request.
+    const content = await store.openSnapshot(context);
+
     // When provided, we assume the pathname has been validated by the
     // caller before reaching this point.
     //
-    // If required, the pathname validity is asserted by the
-    // Content Addressable Store, so we don't assert it here.
+    // If required, the pathname validity is asserted by the snapshot,
+    // so we don't assert it here.
     let result;
     switch (type) {
         case 'template_partials':
-            result = await store.statTemplatePartials(context);
+            result = await content.statTemplatePartials();
             break;
         case 'base_templates':
-            result = await store.statBaseTemplates(context);
+            result = await content.statBaseTemplates();
             break;
         case 'page_metadata':
-            result = await store.statPageMetadata(context, pathname);
+            result = await content.statPageMetadata(pathname);
             break;
         case 'page_partials':
-            result = await store.statPagePartials(context, pathname);
+            result = await content.statPagePartials(pathname);
             break;
         case 'page_includes':
-            result = await store.statPageIncludes(context, pathname);
+            result = await content.statPageIncludes(pathname);
             break;
         case 'page_template':
-            result = await store.statPageTemplate(context, pathname);
+            result = await content.statPageTemplate(pathname);
             break;
         default:
             throw new AssertionError(`Invalid resource type "${ type }" passed to statResource()`);

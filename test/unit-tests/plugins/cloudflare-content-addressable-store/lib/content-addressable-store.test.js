@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches, assertUndefined } from 'kixx-assert';
+import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import ContentAddressableStore from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.js';
 import ContentSnapshot from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-snapshot.js';
@@ -191,15 +191,7 @@ describe('ContentAddressableStore', ({ describe }) => {
         });
     });
 
-    describe('statTemplatePartials / getTemplatePartials', ({ it }) => {
-        it('returns null when no bundle has been committed', async () => {
-            const { subject } = makeSubject();
-            const context = makeContext();
-
-            assertEqual(null, await subject.statTemplatePartials(context));
-            assertEqual(null, await subject.getTemplatePartials(context));
-        });
-
+    describe('putTemplatePartials', ({ it }) => {
         it('returns the stored bundle after it has been uploaded', async () => {
             const { subject } = makeSubject();
             const context = makeContext();
@@ -207,15 +199,16 @@ describe('ContentAddressableStore', ({ describe }) => {
 
             await subject.putTemplatePartials(context, bundle);
 
-            const stat = await subject.statTemplatePartials(context);
+            const snapshot = await subject.openSnapshot(context);
+            const stat = await snapshot.statTemplatePartials();
             assertEqual('blob', stat.kind);
 
-            const content = await subject.getTemplatePartials(context);
+            const content = await snapshot.getTemplatePartials();
             assertEqual(canonicalize(bundle), content.text());
         });
     });
 
-    describe('putBaseTemplates / statBaseTemplates / getBaseTemplates', ({ it }) => {
+    describe('putBaseTemplates', ({ it }) => {
         it('uploads to and reads back from the base-templates path', async () => {
             const { subject, store } = makeSubject();
             const context = makeContext();
@@ -225,15 +218,16 @@ describe('ContentAddressableStore', ({ describe }) => {
 
             assertEqual('/templates/__base-templates-bundle', store.putBlobCalls[0].pathname);
 
-            const stat = await subject.statBaseTemplates(context);
+            const snapshot = await subject.openSnapshot(context);
+            const stat = await snapshot.statBaseTemplates();
             assertEqual('blob', stat.kind);
 
-            const content = await subject.getBaseTemplates(context);
+            const content = await snapshot.getBaseTemplates();
             assertEqual(canonicalize(bundle), content.text());
         });
     });
 
-    describe('putPageMetadata / statPageMetadata', ({ it }) => {
+    describe('putPageMetadata', ({ it }) => {
         it('throws an AssertionError for an invalid page pathname', async () => {
             const { subject } = makeSubject();
             const context = makeContext();
@@ -254,19 +248,12 @@ describe('ContentAddressableStore', ({ describe }) => {
 
             assertEqual('/pages/blog/led-zeppelin/page.json', store.putBlobCalls[0].pathname);
 
-            const stat = await subject.statPageMetadata(context, '/blog/led-zeppelin');
+            const stat = await (await subject.openSnapshot(context)).statPageMetadata('/blog/led-zeppelin');
             assertEqual('blob', stat.kind);
-        });
-
-        it('returns null when no metadata has been committed for the page', async () => {
-            const { subject } = makeSubject();
-            const context = makeContext();
-
-            assertEqual(null, await subject.statPageMetadata(context, '/blog/missing'));
         });
     });
 
-    describe('putPagePartials / statPagePartials', ({ it }) => {
+    describe('putPagePartials', ({ it }) => {
         it('uploads the page partial-template bundle under the page directory', async () => {
             const { subject, store } = makeSubject();
             const context = makeContext();
@@ -275,7 +262,7 @@ describe('ContentAddressableStore', ({ describe }) => {
 
             assertEqual('/pages/blog/led-zeppelin/__page-partials-bundle', store.putBlobCalls[0].pathname);
 
-            const stat = await subject.statPagePartials(context, '/blog/led-zeppelin');
+            const stat = await (await subject.openSnapshot(context)).statPagePartials('/blog/led-zeppelin');
             assertEqual('blob', stat.kind);
         });
 
@@ -291,7 +278,7 @@ describe('ContentAddressableStore', ({ describe }) => {
         });
     });
 
-    describe('putPageIncludes / statPageIncludes', ({ it }) => {
+    describe('putPageIncludes', ({ it }) => {
         it('uploads the page include bundle under the page directory', async () => {
             const { subject, store } = makeSubject();
             const context = makeContext();
@@ -300,12 +287,12 @@ describe('ContentAddressableStore', ({ describe }) => {
 
             assertEqual('/pages/blog/led-zeppelin/__page-includes-bundle', store.putBlobCalls[0].pathname);
 
-            const stat = await subject.statPageIncludes(context, '/blog/led-zeppelin');
+            const stat = await (await subject.openSnapshot(context)).statPageIncludes('/blog/led-zeppelin');
             assertEqual('blob', stat.kind);
         });
     });
 
-    describe('putPageTemplate / statPageTemplate / getPageTemplate', ({ it }) => {
+    describe('putPageTemplate', ({ it }) => {
         it('uploads raw source text without canonicalizing it', async () => {
             const { subject, store } = makeSubject();
             const context = makeContext();
@@ -317,10 +304,11 @@ describe('ContentAddressableStore', ({ describe }) => {
             assertEqual('/pages/blog/led-zeppelin/index.html', call.pathname);
             assertEqual(stringToUint8Array(sourceText).length, call.blob.length);
 
-            const stat = await subject.statPageTemplate(context, 'blog/led-zeppelin/index.html');
+            const snapshot = await subject.openSnapshot(context);
+            const stat = await snapshot.statPageTemplate('blog/led-zeppelin/index.html');
             assertEqual('blob', stat.kind);
 
-            const content = await subject.getPageTemplate(context, 'blog/led-zeppelin/index.html');
+            const content = await snapshot.getPageTemplate('blog/led-zeppelin/index.html');
             assertEqual(sourceText, content.text());
         });
 
@@ -333,52 +321,6 @@ describe('ContentAddressableStore', ({ describe }) => {
             );
 
             assertEqual('AssertionError', caught.name);
-        });
-
-        it('returns null from getPageTemplate when the template is absent', async () => {
-            const { subject } = makeSubject();
-            const context = makeContext();
-
-            assertEqual(null, await subject.getPageTemplate(context, 'blog/missing/index.html'));
-        });
-
-        it('throws an AssertionError when the pathname points to a directory', async () => {
-            const { subject, store } = makeSubject({
-                async statPath() {
-                    return { kind: 'tree', hash: 'dir-hash' };
-                },
-            });
-            const context = makeContext();
-
-            const caught = await catchAsyncError(
-                () => subject.getPageTemplate(context, 'blog/led-zeppelin'),
-            );
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('points to a directory', caught.message);
-            assertUndefined(store.putBlobCalls[0]);
-        });
-
-        it('throws an AssertionError when the index entry points at a hash with no stored blob', async () => {
-            const { subject } = makeSubject({
-                async statPath() {
-                    return { kind: 'blob', hash: 'orphan-hash', size: 3, metadata: null };
-                },
-                async getBlob() {
-                    return null;
-                },
-            });
-            const context = makeContext();
-
-            const caught = await catchAsyncError(
-                () => subject.getPageTemplate(context, 'blog/led-zeppelin/index.html'),
-            );
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('/pages/blog/led-zeppelin/index.html', caught.message);
-            assertMatches('orphan-hash', caught.message);
         });
     });
 
@@ -513,25 +455,8 @@ describe('ContentAddressableStore', ({ describe }) => {
         });
     });
 
-    describe('getPage', ({ it }) => {
-        it('throws an AssertionError for an invalid pathname', async () => {
-            const { subject } = makeSubject();
-            const context = makeContext();
-
-            const caught = await catchAsyncError(() => subject.getPage(context, 'Bad Path'));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-        });
-
-        it('returns null when the leaf page has no committed metadata', async () => {
-            const { subject } = makeSubject();
-            const context = makeContext();
-
-            assertEqual(null, await subject.getPage(context, '/blog/missing'));
-        });
-
-        it('returns inherited metadata in root-to-leaf order plus leaf directory resources', async () => {
+    describe('uploaded page resources', ({ it }) => {
+        it('are readable through a snapshot in root-to-leaf order', async () => {
             const { subject } = makeSubject();
             const context = makeContext();
 
@@ -543,7 +468,7 @@ describe('ContentAddressableStore', ({ describe }) => {
             await subject.putPagePartials(context, '/blog/led-zeppelin', [ { name: 'sidebar' } ]);
             await subject.putPageIncludes(context, '/blog/led-zeppelin', [ { name: 'related' } ]);
 
-            const page = await subject.getPage(context, '/blog/led-zeppelin');
+            const page = await (await subject.openSnapshot(context)).getPage('/blog/led-zeppelin');
 
             assertEqual(2, page.pageDataFiles.length);
             assertEqual('Root', page.pageDataFiles[0].json().title);

@@ -158,6 +158,21 @@ describe('ContentSnapshot', ({ it }) => {
         assertEqual('root-v1:root-v1:template-v1:page-v1', page.etag);
     });
 
+    it('throws an AssertionError for an invalid page pathname', async () => {
+        const snapshot = makeSnapshot(await makeIndex([]), new Map());
+
+        const caught = await catchAsyncError(() => snapshot.getPage('Bad Path'));
+
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('AssertionError', caught.name);
+    });
+
+    it('returns null from getPage when the leaf page has no committed metadata', async () => {
+        const snapshot = makeSnapshot(await makeIndex([]), new Map());
+
+        assertEqual(null, await snapshot.getPage('/blog/missing'));
+    });
+
     it('returns null when an indexed pathname is absent', async () => {
         const snapshot = makeSnapshot(await makeIndex([]), new Map());
 

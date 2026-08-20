@@ -32,8 +32,6 @@ import {
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
  * @typedef {import('../../../kixx/logger/logger.js').default} Logger
- * @typedef {import('./content-object.js').ContentObject} ContentObject
- * @typedef {import('./content-object.js').StatObject} StatObject
  * @typedef {import('./content-snapshot.js').default} ContentSnapshot
  */
 
@@ -73,16 +71,6 @@ import {
  * @property {PageContentDescriptor[]} [pagePartials] - Page partial-template bundles
  * @property {PageContentDescriptor[]} [pageIncludes] - Page include bundles
  * @property {PageTemplateDescriptor[]} [pageTemplates] - Page template source files
- */
-
-/**
- * Content required to construct a page and its aggregate cache validator.
- * @typedef {Object} PageContent
- * @property {string} etag - Digest covering inherited metadata and every blob in the leaf page directory
- * @property {ContentObject[]} pageDataFiles - Existing metadata files ordered from the root page to the requested page
- * @property {string|null} pageTemplateFilename - Leaf page template filename, or null when none is committed
- * @property {ContentObject|null} partials - Leaf page partial-template bundle, or null when absent
- * @property {ContentObject|null} includes - Leaf page include bundle, or null when absent
  */
 
 /**
@@ -191,25 +179,6 @@ export default class ContentAddressableStore {
     }
 
     /**
-     * Looks up the global partial-template bundle in the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID
-     * @returns {Promise<StatObject|null>} Resource attributes, or null when the bundle is absent
-     */
-    async statTemplatePartials(context) {
-        return await (await this.openSnapshot(context)).statTemplatePartials();
-    }
-
-    /**
-     * Loads the global partial-template bundle from the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID and Cloudflare bindings
-     * @returns {Promise<ContentObject|null>} Stored bundle, or null when its index entry is absent
-     * @throws {AssertionError} When its committed blob cannot be read
-     */
-    async getTemplatePartials(context) {
-        return await (await this.openSnapshot(context)).getTemplatePartials();
-    }
-
-    /**
      * Uploads the canonicalized base-template bundle as an immutable blob.
      * The blob remains unreachable from builds until included in `commitChanges()`.
      * @param {RequestContext} context - Request context carrying Cloudflare bindings
@@ -224,25 +193,6 @@ export default class ContentAddressableStore {
         const blob = stringToUint8Array(canonicalize(bundle));
         const { hash, size } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata: null };
-    }
-
-    /**
-     * Looks up the base-template bundle in the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID
-     * @returns {Promise<StatObject|null>} Resource attributes, or null when the bundle is absent
-     */
-    async statBaseTemplates(context) {
-        return await (await this.openSnapshot(context)).statBaseTemplates();
-    }
-
-    /**
-     * Loads the base-template bundle from the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID and Cloudflare bindings
-     * @returns {Promise<ContentObject|null>} Stored bundle, or null when its index entry is absent
-     * @throws {AssertionError} When its committed blob cannot be read
-     */
-    async getBaseTemplates(context) {
-        return await (await this.openSnapshot(context)).getBaseTemplates();
     }
 
     /**
@@ -269,21 +219,6 @@ export default class ContentAddressableStore {
     }
 
     /**
-     * Looks up a page's metadata resource in the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID
-     * @param {string} pagePath - Valid logical page pathname
-     * @returns {Promise<StatObject|null>} Resource attributes, or null when page metadata is absent
-     */
-    async statPageMetadata(context, pagePath) {
-        assert(
-            this.isValidPathname(pagePath),
-            'ContentAddressableStore#statPageMetadata() requires a valid page pathname',
-        );
-
-        return await (await this.openSnapshot(context)).statPageMetadata(pagePath);
-    }
-
-    /**
      * Uploads a canonicalized page partial-template bundle as an immutable blob.
      * The blob remains unreachable from builds until included in `commitChanges()`.
      * @param {RequestContext} context - Request context carrying Cloudflare bindings
@@ -304,21 +239,6 @@ export default class ContentAddressableStore {
         const blob = stringToUint8Array(canonicalize(bundle));
         const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata };
-    }
-
-    /**
-     * Looks up a page's partial-template bundle in the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID
-     * @param {string} pagePath - Valid logical page pathname
-     * @returns {Promise<StatObject|null>} Resource attributes, or null when the bundle is absent
-     */
-    async statPagePartials(context, pagePath) {
-        assert(
-            this.isValidPathname(pagePath),
-            'ContentAddressableStore#statPagePartials() requires a valid page pathname',
-        );
-
-        return await (await this.openSnapshot(context)).statPagePartials(pagePath);
     }
 
     /**
@@ -345,21 +265,6 @@ export default class ContentAddressableStore {
     }
 
     /**
-     * Looks up a page's include bundle in the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID
-     * @param {string} pagePath - Valid logical page pathname
-     * @returns {Promise<StatObject|null>} Resource attributes, or null when the bundle is absent
-     */
-    async statPageIncludes(context, pagePath) {
-        assert(
-            this.isValidPathname(pagePath),
-            'ContentAddressableStore#statPageIncludes() requires a valid page pathname',
-        );
-
-        return await (await this.openSnapshot(context)).statPageIncludes(pagePath);
-    }
-
-    /**
      * Uploads page template source as an immutable blob without canonicalizing it.
      * The blob remains unreachable from builds until included in `commitChanges()`.
      * @param {RequestContext} context - Request context carrying Cloudflare bindings
@@ -379,32 +284,6 @@ export default class ContentAddressableStore {
         const blob = stringToUint8Array(sourceText);
         const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
         return { hash, size, metadata };
-    }
-
-    /**
-     * Looks up a page template in the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID
-     * @param {string} filepath - Valid template filepath beneath the logical `/pages` namespace
-     * @returns {Promise<StatObject|null>} Resource attributes, or null when the template is absent
-     */
-    async statPageTemplate(context, filepath) {
-        assert(
-            this.isValidPathname(filepath),
-            'ContentAddressableStore#statPageTemplate() requires a valid pathname and filename',
-        );
-
-        return await (await this.openSnapshot(context)).statPageTemplate(filepath);
-    }
-
-    /**
-     * Loads a page template from the current build.
-     * @param {RequestContext} context - Request context carrying the current build ID and Cloudflare bindings
-     * @param {string} filepath - Template filepath beneath the logical `/pages` namespace
-     * @returns {Promise<ContentObject|null>} Template content, or null when its index entry is absent
-     * @throws {AssertionError} When its committed blob cannot be read
-     */
-    async getPageTemplate(context, filepath) {
-        return await (await this.openSnapshot(context)).getPageTemplate(filepath);
     }
 
     // Checks that a manifest bundle/entry is an object carrying a
@@ -600,22 +479,5 @@ export default class ContentAddressableStore {
      */
     async assignBuild(context, buildId, rootHash) {
         await this.#store.assignBuild(context, buildId, rootHash);
-    }
-
-    /**
-     * Loads the requested page's inherited metadata and immediate leaf
-     * resources from the current build. Metadata is returned in root-to-leaf
-     * order. The aggregate etag covers every returned metadata file and every
-     * blob in the leaf page directory.
-     * @param {RequestContext} context - Request context carrying the current build ID and Cloudflare bindings
-     * @param {string} pathname - Valid logical page pathname
-     * @returns {Promise<PageContent|null>} Page content, or null when the leaf page metadata is absent
-     */
-    async getPage(context, pathname) {
-        assert(
-            this.isValidPathname(pathname),
-            'ContentAddressableStore#getPage() requires a valid pathname',
-        );
-        return await (await this.openSnapshot(context)).getPage(pathname);
     }
 }

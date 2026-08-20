@@ -10,6 +10,16 @@ export const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
 export const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
 
 /**
+ * Content required to construct a page and its aggregate cache validator.
+ * @typedef {Object} PageContent
+ * @property {string} etag - Digest covering inherited metadata and every blob in the leaf page directory
+ * @property {ContentObject[]} pageDataFiles - Existing metadata files ordered from the root page to the requested page
+ * @property {string|null} pageTemplateFilename - Leaf page template filename, or null when none is committed
+ * @property {ContentObject|null} partials - Leaf page partial-template bundle, or null when absent
+ * @property {ContentObject|null} includes - Leaf page include bundle, or null when absent
+ */
+
+/**
  * Maps a template-relative pathname into the logical templates namespace.
  * @param {string} pathname - Template-relative pathname
  * @returns {string} Normalized logical pathname
@@ -221,9 +231,12 @@ export default class ContentSnapshot {
     }
 
     /**
-     * Loads page resources from the index pinned for this snapshot.
+     * Loads the requested page's inherited metadata and immediate leaf
+     * resources from the index pinned for this snapshot. Metadata is returned
+     * in root-to-leaf order. The aggregate etag covers every returned metadata
+     * file and every blob in the leaf page directory.
      * @param {string} pathname - Valid logical page pathname
-     * @returns {Promise<Object|null>} Page content, or null when leaf metadata is absent
+     * @returns {Promise<PageContent|null>} Page content, or null when leaf metadata is absent
      */
     async getPage(pathname) {
         this.#assertPagePath('getPage', pathname, 'valid pathname');
