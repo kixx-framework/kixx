@@ -1,13 +1,17 @@
 import { AssertionError } from '../../../kixx/errors/mod.js';
 import { assert } from '../../../kixx/assertions/mod.js';
-import { normalizePathname, isValidPathname } from './addressing.js';
+import {
+    BASE_TEMPLATES_BUNDLE,
+    TEMPLATE_PARTIALS_BUNDLE,
+    PAGE_PARTIALS_BUNDLE,
+    PAGE_INCLUDES_BUNDLE,
+    isValidPathname,
+    normalizePagePath,
+    normalizePathname,
+    normalizeTemplatePath,
+} from './addressing.js';
 import { ContentObject, StatObject } from './content-object.js';
 
-
-export const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
-export const TEMPLATE_PARTIALS_BUNDLE = '__template-partials-bundle';
-export const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
-export const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
 
 /**
  * Content required to construct a page and its aggregate cache validator.
@@ -18,24 +22,6 @@ export const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
  * @property {ContentObject|null} partials - Leaf page partial-template bundle, or null when absent
  * @property {ContentObject|null} includes - Leaf page include bundle, or null when absent
  */
-
-/**
- * Maps a template-relative pathname into the logical templates namespace.
- * @param {string} pathname - Template-relative pathname
- * @returns {string} Normalized logical pathname
- */
-export function normalizeTemplatePath(pathname) {
-    return normalizePathname(`templates/${ pathname }`);
-}
-
-/**
- * Maps a page-relative pathname into the logical pages namespace.
- * @param {string} pathname - Page-relative pathname
- * @returns {string} Normalized logical pathname
- */
-export function normalizePagePath(pathname) {
-    return normalizePathname(`pages/${ pathname }`);
-}
 
 /**
  * Request-scoped view of one immutable content index.

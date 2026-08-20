@@ -17,14 +17,12 @@ import {
     TEMPLATE_PARTIALS_BUNDLE,
     PAGE_PARTIALS_BUNDLE,
     PAGE_INCLUDES_BUNDLE,
-    normalizeTemplatePath,
-    normalizePagePath,
-} from './content-snapshot.js';
-import {
     canonicalize,
     hashValue,
     isValidPathname,
+    normalizePagePath,
     normalizePathname,
+    normalizeTemplatePath,
     stringToUint8Array,
 } from './addressing.js';
 

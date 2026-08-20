@@ -1,6 +1,12 @@
 /**
  * Provides deterministic serialization, hashing and encoding for the content
- * addressable store.
+ * addressable store, and defines the logical pathname namespace its callers
+ * address content by.
+ *
+ * The namespace layout (the `/templates` and `/pages` roots, and the reserved
+ * bundle filenames within a page directory) is Kixx content vocabulary rather
+ * than wire format, so it is not covered by FORMAT and does not change when the
+ * digest or key format does.
  *
  * Wire format v1:
  *   - digest: SHA-256 truncated to 128 bits, base32 (RFC 4648 lowercase, no pad)
@@ -129,6 +135,52 @@ export function normalizePathname(value) {
         .toLowerCase();
 
     return '/' + id;
+}
+
+/**
+ * Reserved filename of the base-template bundle within the templates namespace.
+ * @type {string}
+ * @readonly
+ */
+export const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
+
+/**
+ * Reserved filename of the global partial-template bundle within the templates namespace.
+ * @type {string}
+ * @readonly
+ */
+export const TEMPLATE_PARTIALS_BUNDLE = '__template-partials-bundle';
+
+/**
+ * Reserved filename of a page's partial-template bundle within its page directory.
+ * @type {string}
+ * @readonly
+ */
+export const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
+
+/**
+ * Reserved filename of a page's include bundle within its page directory.
+ * @type {string}
+ * @readonly
+ */
+export const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
+
+/**
+ * Maps a template-relative pathname into the logical templates namespace.
+ * @param {string} pathname - Template-relative pathname
+ * @returns {string} Normalized logical pathname
+ */
+export function normalizeTemplatePath(pathname) {
+    return normalizePathname(`templates/${ pathname }`);
+}
+
+/**
+ * Maps a page-relative pathname into the logical pages namespace.
+ * @param {string} pathname - Page-relative pathname
+ * @returns {string} Normalized logical pathname
+ */
+export function normalizePagePath(pathname) {
+    return normalizePathname(`pages/${ pathname }`);
 }
 
 /**

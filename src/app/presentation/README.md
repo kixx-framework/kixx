@@ -117,7 +117,59 @@ Use the special app pattern `*` only for unnamed catch-all routes. This is a pro
 
 - **Route middleware** (`inboundMiddleware`, `outboundMiddleware`) applies to every target in a route subtree. Use it for capabilities like authentication, session loading, request normalization, and shared response headers.
 - **Target `requestHandlers`** applies to one endpoint. Use them for resource authorization, loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect response
-- **Route error handlers** (`errorHandlers`) when an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
+- **Error handlers** (`errorHandlers`) Error handlers can be defined for routes and targets. When an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. When both a target and ancestor route have error handlers, the target error handlers run first, before the route error handlers. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
+
+The signature for middleware and request handler functions is:
+
+```js
+/**
+ * @param {Object} context - Active request context
+ * @param {Object} request - Incoming HTTP request
+ * @param {Object} response - Response threaded through the middleware chain
+ * @param {Function} skip - Stops the remaining request-phase middleware; outbound middleware still runs
+ * @returns {Promise<Object>} Response for the next middleware
+ */
+async function requireAuthenticatedUser(context, request, response, skip) {
+    const user = await context.getCurrentUser(request);
+
+    if (!user) {
+        response.respondWithJSON(401, { errors: [ { title: 'Sign in required' } ] });
+        skip();
+    }
+    return response;
+}
+```
+
+The signature for an error handler is:
+
+```js
+/**
+ * Converts an authentication failure into a JSON response.
+ * @param {Object} context - Active request context
+ * @param {Object} request - Incoming HTTP request
+ * @param {Object} response - Response threaded through the middleware chain
+ * @param {Error} error - Error raised while handling the request
+ * @returns {Object|false} A response when handled, or false to continue the error-handler cascade
+ */
+function handleAuthenticationError(context, request, response, error) {
+    if (error.code !== 'UNAUTHENTICATED_ERROR') {
+        return false;
+    }
+
+    return response.respondWithJSON(401, {
+        errors: [
+            {
+                title: 'Authentication required',
+                detail: 'Sign in before continuing.',
+            },
+        ],
+    });
+}
+```
+
+An error handler may also be async; in that case, it returns `Promise<ServerResponse|false>`. If the error handler handles the error, return the `response` object. Otherwise, return `false` to signal the error handler chain to try the next handler.
+
+### Route handling execution order
 
 Execution order for a matched target runs in two phases — a **request phase** followed by an **outbound (response) phase**:
 
@@ -125,7 +177,11 @@ Execution order for a matched target runs in two phases — a **request phase** 
 2. Target `requestHandlers` (in order) — request phase
 3. Route outbound middleware (child-first) — outbound phase
 
-When middleware or a request handler throws, the router emits an `error` event; for logging and, for unexpected errors, to trigger the platform server's graceful shutdown. Separately, the router runs the error-handler cascade: target, then route, then the router's built-in fallback, stopping at the first one that returns a response. The router error event fires for every failure regardless of what the cascade produces, so a target or route handler is free to render a normal-looking response even for an unexpected error without delaying or preventing the shutdown. Only when every cascade level returns `false` does the error propagate out of the router for the platform server's last-resort fallback. A throw skips the outbound phase for that request.
+When middleware or a request handler throws, the router emits an `error` event; for logging and, for unexpected errors, to trigger the platform server's graceful shutdown. Separately, the router runs the error-handler cascade: target, then route, then the router's built-in fallback, stopping at the first one that returns a response. The router error event fires for every failure regardless of what the cascade produces, so a target or route handler is free to render a normal-looking response even for an unexpected error without delaying or preventing the shutdown. Only when every cascade level returns `false` does the error propagate out of the router for the platform server's last-resort fallback.
+
+When the error handling chain is triggered, the outbound phase is skipped for that request.
+
+### Skipping Middleware and Request Handlers
 
 **The `skip()` callback** ends the **request phase** early: when called, no further inbound middleware or request handlers run. The **outbound phase still runs to completion**, so response post-processing such as formatting, shared headers, and logging is never bypassed by `skip()`. Use `skip()` when a request handler has committed a terminal response (a redirect or JSON document) and you want to stop a later request handler — such as a Hyperview render handler — from running. Do not reach for `skip()` merely because you committed a response; if no later request handler needs to be bypassed, just return the response. Outbound middleware is not passed `skip()` and cannot short-circuit the chain.
 
