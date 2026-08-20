@@ -54,6 +54,13 @@ const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
  * in-memory promise cache and the platform's edge Cache API before falling
  * back to a Durable Object, and is always written straight through to the
  * Durable Object, which is the single source of truth.
+ *
+ * Blob retention is intentionally unbounded: blobs are immutable, have no
+ * KV TTL, and are never deleted. This keeps cached blob reads safe without
+ * invalidation and permits rollback to every historical closure. If storage
+ * reclamation becomes necessary, it must first define a closure-retention
+ * policy, then sweep only blob hashes absent from the union of closures
+ * reachable through every build pointer.
  */
 export default class CloudflareContentStore {
 
