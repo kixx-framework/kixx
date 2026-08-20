@@ -201,4 +201,30 @@ describe('ContentSnapshot', ({ it }) => {
         assertMatches('/pages/example.html', caught.message);
         assertMatches('missing-hash', caught.message);
     });
+
+    it('returns content carrying the same etag the matching stat method reports', async () => {
+        const index = await makeIndex([
+            { pathname: '/templates/__template-partials-bundle', hash: 'partials', size: 2 },
+            { pathname: '/templates/__base-templates-bundle', hash: 'bases', size: 2 },
+            { pathname: '/pages/example.html', hash: 'template', size: 2 },
+        ]);
+        const snapshot = makeSnapshot(index, new Map([
+            [ 'partials', stringToUint8Array('p') ],
+            [ 'bases', stringToUint8Array('b') ],
+            [ 'template', stringToUint8Array('t') ],
+        ]));
+
+        // Callers cache compiled templates under the content etag and validate
+        // them against the stat etag, so the two must be the same value.
+        const pairs = [
+            [ await snapshot.statTemplatePartials(), await snapshot.getTemplatePartials() ],
+            [ await snapshot.statBaseTemplates(), await snapshot.getBaseTemplates() ],
+            [ await snapshot.statPageTemplate('example.html'), await snapshot.getPageTemplate('example.html') ],
+        ];
+
+        for (const [ stat, content ] of pairs) {
+            assert(stat.etag, 'expected the stat object to report an etag');
+            assertEqual(stat.etag, content.etag);
+        }
+    });
 });

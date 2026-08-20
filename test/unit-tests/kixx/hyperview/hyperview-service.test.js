@@ -235,8 +235,8 @@ describe('HyperviewService', ({ describe }) => {
 
             const page = { pathname: '/articles/example', partials: null };
 
-            const first = await service.getPagePartials(makeSnapshot(store), page);
-            const second = await service.getPagePartials(makeSnapshot(store), page);
+            const first = await service.getPagePartials(page);
+            const second = await service.getPagePartials(page);
 
             assertEqual(0, first.size);
             assert(first !== second, 'expected a new per-render Map');
@@ -257,11 +257,11 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
 
-            const populated = await service.getPagePartials(makeSnapshot(store), page);
+            const populated = await service.getPagePartials(page);
             assertEqual(1, populated.size);
 
             page.partials = null;
-            const emptied = await service.getPagePartials(makeSnapshot(store), page);
+            const emptied = await service.getPagePartials(page);
 
             assert(populated !== emptied, 'expected the prior bundle to remain independent');
             assertEqual(1, populated.size);
@@ -275,8 +275,8 @@ describe('HyperviewService', ({ describe }) => {
 
             const page = { pathname: '/articles/example', partials: null };
 
-            const first = await service.getPagePartials(makeSnapshot(store), page);
-            const second = await service.getPagePartials(makeSnapshot(store), page);
+            const first = await service.getPagePartials(page);
+            const second = await service.getPagePartials(page);
 
             assertEqual(0, first.size);
             assert(first !== second, 'expected a fresh Map instance on each call');
@@ -293,8 +293,8 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
 
-            const first = await service.getPagePartials({}, page);
-            const second = await service.getPagePartials({}, page);
+            const first = await service.getPagePartials(page);
+            const second = await service.getPagePartials(page);
 
             assert(first === second, 'expected the page-partials bundle to be reused by its own etag');
             assertEqual('global-v2', first.get('page.html')({}, new Map([
@@ -494,7 +494,7 @@ describe('HyperviewService', ({ describe }) => {
             service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
 
             const template = await service.getPageTemplate(makeSnapshot(store), page);
-            const pagePartials = await service.getPagePartials(makeSnapshot(store), page);
+            const pagePartials = await service.getPagePartials(page);
 
             assertEqual('V1 CONTENT', template({}, pagePartials));
 
@@ -504,7 +504,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const secondTemplate = await service.getPageTemplate(makeSnapshot(store), page);
-            const secondPagePartials = await service.getPagePartials(makeSnapshot(store), page);
+            const secondPagePartials = await service.getPagePartials(page);
 
             assert(template === secondTemplate, 'expected the compiled page template to be reused');
             assertEqual('V2 CONTENT', secondTemplate({}, secondPagePartials));

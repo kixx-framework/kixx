@@ -112,9 +112,14 @@ export default class ContentSnapshot {
             );
         }
 
+        // Carry the index entry's etag onto the content object. Callers cache
+        // compiled templates under it and compare it against the etag from the
+        // matching stat method, so dropping it here silently turns every one of
+        // those caches into a permanent miss.
         return new ContentObject(bytes, {
             kind: 'blob',
             hash: stat.hash,
+            etag: stat.etag,
             size: bytes.length,
             metadata: stat.metadata,
         });

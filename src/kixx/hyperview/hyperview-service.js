@@ -19,8 +19,6 @@ const MAX_VERSIONED_TEMPLATE_CACHE_ENTRIES = 4;
 const MAX_PAGE_PARTIAL_CACHE_ENTRIES = 1000;
 const MAX_PAGE_TEMPLATE_CACHE_ENTRIES = 1000;
 
-// Methods used only by the rendering workflow remain callable so their cache
-// behavior can be unit tested directly. They are not external service APIs.
 function layerPartials(primary, secondary) {
     // Page partials take precedence over global partials for this render only.
     return new Map([ ...secondary, ...primary ]);
@@ -228,12 +226,13 @@ export default class HyperviewService {
     }
 
     /**
-     * Compiles a loaded page's partials with page definitions taking precedence over global definitions.
-     * @param {ContentSnapshot} content - Request-scoped content snapshot for template-store access
+     * Compiles a loaded page's own partials. Layering these over the global
+     * partials is the caller's responsibility; this method reads only the
+     * definitions the page carries.
      * @param {HyperviewPage} page - Loaded page that owns the partial definitions
      * @returns {Promise<Map<string, Function>>} Immutable compiled-partials Map for the page bundle
      */
-    async getPagePartials(_content, page) {
+    async getPagePartials(page) {
         if (!page.partials) {
             return new Map();
         }
@@ -655,7 +654,7 @@ export default class HyperviewService {
             this.#logger.debug('render partial for page', { pathname, partial: options.partial });
 
             const globalPartials = await this.loadGlobalPartials(content);
-            const pagePartials = await this.getPagePartials(content, page, globalPartials);
+            const pagePartials = await this.getPagePartials(page);
             const template = pagePartials.get(options.partial);
             assertFunction(template, `Partial template "${ options.partial }" does not exist in pages/${ pathname }`);
 
@@ -679,7 +678,7 @@ export default class HyperviewService {
 
             const template = await this.getPageTemplate(content, page);
             const globalPartials = await this.loadGlobalPartials(content);
-            const pagePartials = await this.getPagePartials(content, page, globalPartials);
+            const pagePartials = await this.getPagePartials(page);
 
             hypertext = template(page.getPageContext(), layerPartials(pagePartials, globalPartials));
             this.#assertRenderedHypertext(hypertext, 'page template', pathname);
@@ -703,7 +702,7 @@ export default class HyperviewService {
 
         const pageContext = page.getPageContext();
         const globalPartials = await this.loadGlobalPartials(content);
-        const pagePartials = await this.getPagePartials(content, page, globalPartials);
+        const pagePartials = await this.getPagePartials(page);
         const partials = layerPartials(pagePartials, globalPartials);
 
         pageContext.body = pageTemplate(pageContext, partials);

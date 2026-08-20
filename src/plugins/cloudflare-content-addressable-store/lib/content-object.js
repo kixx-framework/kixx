@@ -28,9 +28,4 @@ export class ContentObject extends StatObject {
     json() {
         return JSON.parse(this.text());
     }
-
-    static async create(bytes, spec) {
-        const stat = new ContentObject(bytes, spec);
-        return await stat.finalize();
-    }
 }
