@@ -2,9 +2,154 @@
 
 This project is a Hypermedia Driven Application, which means the presentation layer is a web presentation, primarily following the Representational State Transfer (REST) and Hypermedia As The Engine Of Application State (HATEOAS) patterns.
 
-The primary view layer for the presentation is provided by mustache style templates called "Hyperview templates". For information about the template syntax, partials, and helpers see the template guide at `templates/README.md`.
+The primary view layer for the presentation is provided by mustache style templates called "Hyperview templates". For information about the template syntax, partials, and helpers see the template guide at `templates/README.md`. The Kixx Hyperview plugin is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `templates/`.
 
-The Kixx Hyperview plugin is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `/templates/`.
+Each Hyperview response opens one request-scoped content snapshot before loading
+its page data. Every page, template, partial, and rendered-page cache-key read
+for that response uses that snapshot, so a publish that reassigns the live build
+while rendering cannot combine content from two build versions.
+
+HTTP routes are defined in `virtual-hosts.js` with sub-trees defined in `routes/` and imported by `virtual-hosts.js`.
+
+## Routing
+
+Routes are defined in `virtual-hosts.js` as an array of virtual host specification objects. The HTTP router resolves every request through a four-level hierarchy: **HttpRouter → VirtualHost → HttpRoute → HttpTarget**.
+
+`virtual-hosts.js` is a thin top-level shell: it declares the virtual hosts, their hostnames, and the route subtrees mounted under each one. The route subtrees themselves live in `routes/`, one module per API or UI surface. Add a route to the module that owns the surface it belongs to, and reserve edits to `virtual-hosts.js` for mounting a new subtree, adding a virtual host, or changing subtree-level middleware and error handlers.
+
+- **VirtualHost** matches the request by hostname. If no hostname match is found, the first virtual configured will be used.
+- **HttpRoute** matches the URL pathname using `path-to-regexp` pattern syntax (e.g. `/users/:id`). Named segments are captured and available as `request.pathnameParams`.
+- **HttpTarget** declares which HTTP methods it handles and runs a chain of middleware functions to produce the response. When a route matches but no target handles the request method, the router responds `405 Method Not Allowed`.
+
+Routes may be nested. Nested routes compose their patterns (parent + child), and their middleware chains (parent inbound runs first; parent outbound runs last). A route with a `routes` array is a branch node that shares configuration with its children; a route with a `targets` array is a leaf endpoint.
+
+### Route Matching Order
+
+Route matching is ordered, not specificity-ranked. The router checks the virtual host's flattened route list from top to bottom and uses the first route whose composed `pattern` matches the request pathname. It does not keep looking for a more specific route after a match.
+
+Nested routes are flattened in depth-first order, preserving the order in each `routes` array. Put more specific sibling routes before broader dynamic or wildcard routes:
+
+```js
+routes: [
+    { pattern: '/platform.json', targets: [ ... ] },
+    { pattern: '/platform', targets: [ ... ] },
+    { pattern: '*', targets: [ ... ] },
+]
+```
+
+Catch-all routes must stay last within the route set they belong to. A route such as `*`, `/:slug`, or `/*splat` can shadow later routes if it appears first.
+
+### Route Pattern Matching
+
+Route `pattern` values use the vendored `path-to-regexp` matcher. Static text must match exactly, and named matches are decoded and exposed on `request.pathnameParams` before request handlers run.
+
+The matcher is for ordered path-like strings. Route patterns match `request.url.pathname` only; do not put query strings, URL fragments, JSON, or any arbitrarily ordered data in the pattern.
+
+Use a colon-prefixed parameter to capture arbitrary text within one pathname segment. Parameter names can be any valid JavaScript identifier. Double-quote the name when it contains other characters:
+
+```js
+{
+    pattern: '/users/:userId/posts/:"post-id"',
+    targets: [ ... ],
+}
+```
+
+A request for `/users/42/posts/intro` produces:
+
+```js
+request.pathnameParams.userId; // '42'
+request.pathnameParams['post-id']; // 'intro'
+```
+
+Parameter names are required after `:`. A pattern such as `/users/:` is invalid; use a named parameter such as `/users/:id`.
+
+The pattern string is not a JavaScript `RegExp`. Raw regexp groups and character classes are not supported in route patterns. Characters reserved by `path-to-regexp`, including `(`, `)`, `[`, `]`, `?`, `+`, and `!`, must be avoided or escaped when they need to match literally.
+
+Use an asterisk-prefixed wildcard parameter to capture one or more characters across multiple pathname segments. Wildcard parameters must be named, and their values are arrays of decoded segment strings:
+
+```js
+{
+    pattern: '/files/*path',
+    targets: [ ... ],
+}
+```
+
+A request for `/files/releases/2026/report.pdf` produces:
+
+```js
+request.pathnameParams.path; // [ 'releases', '2026', 'report.pdf' ]
+```
+
+Use braces to mark part of a pattern as optional. Optional groups can contain static text and parameters. Optional parameters are omitted from `request.pathnameParams` when that part of the path is not present:
+
+```js
+{
+    pattern: '/{index.json}',
+    targets: [ ... ],
+},
+{
+    pattern: '/users{.json}',
+    targets: [ ... ],
+},
+{
+    pattern: '/files/:file{.:ext}',
+    targets: [ ... ],
+},
+{
+    pattern: '/users/invite{/}',
+    targets: [ ... ],
+}
+```
+
+Both `/` and `/index.json` match the first route, while `/users` and `/users.json` match the second route. The third route matches both `/files/report` and `/files/report.pdf`; the `ext` parameter is present only when the extension is present.
+
+The fourth route uses the optional group to make a trailing slash optional: `/users/invite` and `/users/invite/` both match one route, without a redirect or a duplicate route entry. Use `{/}` on API endpoints where clients may or may not send the trailing slash. A nested route can also use the bare pattern `'{/}'` to mean "the parent pattern itself, with or without a trailing slash".
+
+Do not use older `path-to-regexp` modifier syntax in new routes:
+
+- For optional path parts, use braces: `/file{.:ext}`.
+- For one or more path segments, use a named wildcard: `/*path`.
+- For zero or more path segments, put the wildcard in an optional group: `/files{/*path}`.
+
+Use the special app pattern `*` only for unnamed catch-all routes. This is a project-level shortcut; regular `path-to-regexp` wildcards must have names. The app pattern `*` matches every pathname and returns an empty `request.pathnameParams` object. If the handler needs the captured path segments, use a named wildcard pattern such as `/*splat` instead.
+
+### Middleware vs. Request Handlers vs. Error Handlers
+
+- **Route middleware** (`inboundMiddleware`, `outboundMiddleware`) applies to every target in a route subtree. Use it for capabilities like authentication, session loading, request normalization, and shared response headers.
+- **Target `requestHandlers`** applies to one endpoint. Use them for loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect/JSON response — and, as the first entry in the chain, for authorization (see [Authentication Middleware vs. Authorization Gates](#authentication-middleware-vs-authorization-gates)).
+- **Route error handlers** (`errorHandlers`) when an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
+
+Execution order for a matched target runs in two phases — a **request phase** followed by an **outbound (response) phase**:
+
+1. Route inbound middleware (parent-first) — request phase
+2. Target `requestHandlers` (in order) — request phase
+3. Route outbound middleware (child-first) — outbound phase
+
+When middleware or a request handler throws, the router emits an `error` event; for logging and, for unexpected errors, to trigger the platform server's graceful shutdown. Separately, the router runs the error-handler cascade: target, then route, then the router's built-in fallback, stopping at the first one that returns a response. The router error event fires for every failure regardless of what the cascade produces, so a target or route handler is free to render a normal-looking response even for an unexpected error without delaying or preventing the shutdown. Only when every cascade level returns `false` does the error propagate out of the router for the platform server's last-resort fallback. A throw skips the outbound phase for that request.
+
+**The `skip()` callback** ends the **request phase** early: when called, no further inbound middleware or request handlers run. The **outbound phase still runs to completion**, so response post-processing such as formatting, shared headers, and logging is never bypassed by `skip()`. Use `skip()` when a request handler has committed a terminal response (a redirect or JSON document) and you want to stop a later request handler — such as a Hyperview render handler — from running. Do not reach for `skip()` merely because you committed a response; if no later request handler needs to be bypassed, just return the response. Outbound middleware is not passed `skip()` and cannot short-circuit the chain.
+
+```js
+export async function redirectAfterSuccess(context, request, response, skip) {
+    // Stops a later Hyperview render handler in this target from running, while
+    // still letting route outbound middleware post-process the redirect response.
+    skip();
+    return response.respondWithRedirect(303, '/account');
+}
+```
+
+---
+
+The same path syntax is used for reverse pathname compilation through `HttpTarget.compilePathname(params)`. Provide string values for `:name` parameters and arrays for `*name` wildcard parameters:
+
+```js
+target.compilePathname({ id: 'BUG-123' }).pathname; // For '/bugs/:id' -> '/bugs/BUG-123'
+target.compilePathname({ path: [ 'releases', '2026', 'report.pdf' ] }).pathname; // For '/files/*path'
+```
+
+Pathname compilation encodes values for safe URL output, so non-ASCII text and reserved URL characters are escaped in the generated pathname.
+
+---
 
 ### Hyperview File Layout
 
@@ -13,50 +158,32 @@ Hyperview content is authored in two application directories. As an example:
 ```text
 pages/
 ├── page.json
-├── page.html
+├── template.html
 └── blog/
     ├── page.json
-    ├── page.html
     └── hello-world/
         ├── page.json
-        └── intro.md
+        └── article.md
 
 templates/
 ├── base/
+│   ├── article.html
 │   └── website.html
-├── pages/
-│   ├── page.html
-│   └── blog/
-│       ├── page.html
-│       └── hello-world/
-│           └── page.html
 └── partials/
     └── website/
         └── header.html
 ```
 
-Use `pages/` for route-specific page metadata and text based content:
-
-- `page.json` contains root or directory-level page data.
-- Other files in the same page directory can be loaded with `includes`.
+Use `pages/` for route-specific page metadata and text based content; `page.json` contains root or directory-level page data including a manifest for page specific partial templates and included content.
 
 Use `templates/` for page specific and shared templates.
 
 - `templates/base/` contains base templates.
 - `templates/partials/` contains shared partial templates.
-- `templates/pages/` contains specific page templates at defined pathnames.
-
-For a request to `/blog/hello-world`, the default page template is `templates/pages/blog/hello-world/page.html`. If the page data sets `"pageTemplate": "article.html"`, Hyperview loads `templates/pages/blog/hello-world/article.html`.
-
-Every identifier Hyperview turns into a storage key must be valid and canonical (lower case). This rule covers all five file types: base templates under `templates/base/`, page templates under `templates/pages/`, partial templates under `templates/partials/`, page data `page.json` files under `pages/`, and text files named by `includes[*].filename`. It also applies to the `baseTemplate` and `pageTemplate` addresses authored inside `page.json`.
-
-Public request pathnames and publishing-API wildcard filepaths are validated and folded at the HTTP edge, so `/Blog/Hello-World` and `/blog/hello-world` resolve the same page data, templates, and includes. Authored addresses inside `page.json` and files discovered in a store listing are not silently corrected: the publishing API rejects an invalid or non-canonical include filename with a 400 response naming the include key, while invalid checked-in page data or a non-canonical stored template produces an `AssertionError` when Hyperview loads it. Partial references inside template markup remain case-insensitive, so `{{> Website/Header.html }}` can resolve the canonically stored `website/header.html`; this does not relax the lower-case rule for the stored filename.
-
-Page content lookup and the rendered-page cache use different identities, so case variants of a URL do not share a cache entry even though they resolve the same content. Page data, template, and include lookups fold to the canonical (lower-case) pathname described above, but the default rendered-page cache identity is built from the requested URL exactly as received (origin, pathname, and query string), before any folding. `/Blog/Hello-World` and `/blog/hello-world` therefore render identical content on a cache miss, but populate two separate page-cache entries.
 
 ### Page Context Data
 
-When Hyperview renders a page, it loads root page metadata, page metadata for the requested pathname's ancestor directories, and leaf page metadata for the requested pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview attempts to load and merge:
+When Hyperview renders a page, it loads page metadata for the requested pathname's ancestor directories, and leaf page metadata for the requested pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview attempts to load and merge:
 
 - `pages/page.json`
 - `pages/blog/page.json`
@@ -112,118 +239,7 @@ Hyperview can return the assembled page metadata as JSON when JSON responses are
 
 This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data for development and debugging, but it is not the contract for application API endpoints.
 
-## Dynamic Routes
-
-Routes are defined in `virtual-hosts.js` as an array of virtual host specification objects. The HTTP router resolves every request through a four-level hierarchy: **HttpRouter → VirtualHost → HttpRoute → HttpTarget**.
-
-`virtual-hosts.js` is a thin top-level shell: it declares the virtual hosts, their hostnames, and the route subtrees mounted under each one. The route subtrees themselves live in `routes/`, one module per API or UI surface, each default-exporting the array of routes mounted at its parent pattern. Add a route to the module that owns the surface it belongs to, and reserve edits to `virtual-hosts.js` for mounting a new subtree, adding a virtual host, or changing subtree-level middleware and error handlers.
-
-- **VirtualHost** matches the request by hostname. If no hostname match is found, the first virtual configured will be used.
-- **HttpRoute** matches the URL pathname using `path-to-regexp` pattern syntax (e.g. `/users/:id`). Named segments are captured and available as `request.pathnameParams`.
-- **HttpTarget** declares which HTTP methods it handles and runs a chain of middleware functions to produce the response. When a route matches but no target handles the request method, the router responds `405 Method Not Allowed`.
-
-Routes are configured under the virtual host. This allows you to set up different routing patterns for different hostnames.
-
-Routes may be nested. Nested routes compose their patterns (parent + child), and their middleware chains (parent inbound runs first; parent outbound runs last). A route with a `routes` array is a branch node that shares configuration with its children; a route with a `targets` array is a leaf endpoint.
-
-### Route Matching Order
-
-Route matching is ordered, not specificity-ranked. The router checks the virtual host's flattened route list from top to bottom and uses the first route whose composed `pattern` matches the request pathname. It does not keep looking for a more specific route after a match.
-
-Nested routes are flattened in depth-first order, preserving the order in each `routes` array. Put more specific sibling routes before broader dynamic or wildcard routes:
-
-```js
-routes: [
-    { pattern: '/platform.json', targets: [ ... ] },
-    { pattern: '/platform', targets: [ ... ] },
-    { pattern: '*', targets: [ ... ] },
-]
-```
-
-Catch-all routes must stay last within the route set they belong to. A route such as `*`, `/:slug`, or `/*splat` can shadow later routes if it appears first. After the router chooses the first pathname match, HTTP method selection happens only inside that route's `targets`; a method mismatch returns `405 Method Not Allowed` instead of continuing to another route with the same pathname.
-
-### Route Pattern Matching
-
-Route `pattern` values use the vendored `path-to-regexp` matcher. Static text must match exactly, and named matches are decoded and exposed on `request.pathnameParams` before request handlers run.
-
-The matcher is for ordered path-like strings. Route patterns match `request.url.pathname` only; do not put query strings, URL fragments, JSON, or any arbitrarily ordered data in the pattern.
-
-The pattern string is not a JavaScript `RegExp`. Raw regexp groups and character classes are not supported in route patterns. Characters reserved by `path-to-regexp`, including `(`, `)`, `[`, `]`, `?`, `+`, and `!`, must be avoided or escaped when they need to match literally.
-
-Use a colon-prefixed parameter to capture arbitrary text within one pathname segment. Parameter names can be any valid JavaScript identifier. Double-quote the name when it contains other characters:
-
-```js
-{
-    pattern: '/users/:userId/posts/:"post-id"',
-    targets: [ ... ],
-}
-```
-
-A request for `/users/42/posts/intro` produces:
-
-```js
-request.pathnameParams.userId; // '42'
-request.pathnameParams['post-id']; // 'intro'
-```
-
-Parameter names are required after `:`. A pattern such as `/users/:` is invalid; use a named parameter such as `/users/:id`.
-
-Use an asterisk-prefixed wildcard parameter to capture one or more characters across multiple pathname segments. Wildcard parameters must be named, and their values are arrays of decoded segment strings:
-
-```js
-{
-    pattern: '/files/*path',
-    targets: [ ... ],
-}
-```
-
-A request for `/files/releases/2026/report.pdf` produces:
-
-```js
-request.pathnameParams.path; // [ 'releases', '2026', 'report.pdf' ]
-```
-
-Use braces to mark part of a pattern as optional. Optional groups can contain static text and parameters. Optional parameters are omitted from `request.pathnameParams` when that part of the path is not present:
-
-```js
-{
-    pattern: '/{index.json}',
-    targets: [ ... ],
-},
-{
-    pattern: '/users{.json}',
-    targets: [ ... ],
-},
-{
-    pattern: '/files/:file{.:ext}',
-    targets: [ ... ],
-},
-{
-    pattern: '/users/invite{/}',
-    targets: [ ... ],
-}
-```
-
-Both `/` and `/index.json` match the first route, while `/users` and `/users.json` match the second route. The third route matches both `/files/report` and `/files/report.pdf`; the `ext` parameter is present only when the extension is present.
-
-The fourth route uses the optional group to make a trailing slash optional: `/users/invite` and `/users/invite/` both match one route, without a redirect or a duplicate route entry. Use `{/}` on API endpoints where clients may or may not send the trailing slash. A nested route can also use the bare pattern `'{/}'` to mean "the parent pattern itself, with or without a trailing slash" — `routes/admin-api-v1.js` mounts its migrations list that way under the `/migrations` parent.
-
-Do not use older `path-to-regexp` modifier syntax in new routes:
-
-- For optional path parts, use braces: `/file{.:ext}`.
-- For one or more path segments, use a named wildcard: `/*path`.
-- For zero or more path segments, put the wildcard in an optional group: `/files{/*path}`.
-
-Use the special app pattern `*` only for unnamed catch-all routes. This is a project-level shortcut; regular `path-to-regexp` wildcards must have names. The app pattern `*` matches every pathname and returns an empty `request.pathnameParams` object. If the handler needs the captured path segments, use a named wildcard pattern such as `/*splat` instead.
-
-The same path syntax is used for reverse pathname compilation through `HttpTarget.compilePathname(params)`. Provide string values for `:name` parameters and arrays for `*name` wildcard parameters:
-
-```js
-target.compilePathname({ id: 'BUG-123' }).pathname; // For '/bugs/:id' -> '/bugs/BUG-123'
-target.compilePathname({ path: [ 'releases', '2026', 'report.pdf' ] }).pathname; // For '/files/*path'
-```
-
-Pathname compilation encodes values for safe URL output, so non-ASCII text and reserved URL characters are escaped in the generated pathname.
+---
 
 ### Middleware vs. Request Handlers vs. Error Handlers
 
