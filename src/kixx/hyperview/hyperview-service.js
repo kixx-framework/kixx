@@ -31,7 +31,7 @@ function layerPartials(primary, secondary) {
 export default class HyperviewService {
 
     #logger;
-    #store;
+    #contentService;
     #kvStore;
     #useTemplateCache;
     #usePageCache;
@@ -92,23 +92,23 @@ export default class HyperviewService {
     }
 
     /**
-     * Connects the stores required for content loading and rendered-page caching.
-     * @param {Object} args - Store dependencies
+     * Connects the dependencies required for content loading and rendered-page caching.
+     * @param {Object} args - Service dependencies
      * @param {KeyValueStoreInterface} args.kvStore - Key-value store for rendered hypertext
-     * @param {ContentAddressableStore} args.contentAddressableStore - Content-addressable store for page metadata, includes, and templates
+     * @param {import('./hyperview-content-service.js').default} args.contentService - Hyperview content service for page metadata, includes, and templates
      * @returns {void}
      */
     initialize(args) {
-        const { contentAddressableStore, kvStore } = args ?? {};
+        const { contentService, kvStore } = args ?? {};
         assert(kvStore, 'HyperviewService#initialize() requires a kvStore');
-        assert(contentAddressableStore, 'HyperviewService#initialize() requires a contentAddressableStore');
+        assert(contentService, 'HyperviewService#initialize() requires a contentService');
 
-        this.#store = contentAddressableStore;
+        this.#contentService = contentService;
         this.#kvStore = kvStore;
     }
 
     /**
-     * Validates a non-empty identifier against the content store's canonical pathname rules.
+     * Validates a non-empty identifier against the content service's canonical pathname rules.
      * @param {*} value - Value to assert
      * @param {string} messagePrefix - Caller context included in assertion messages
      * @returns {void}
@@ -118,18 +118,18 @@ export default class HyperviewService {
         // This method exists to validate identifiers which may not have been
         // checked by any earlier layer, so it must enforce the whole contract.
         assert(
-            isNonEmptyString(value) && this.#store.isValidPathname(value),
+            isNonEmptyString(value) && this.#contentService.isValidPathname(value),
             `${ messagePrefix } must be a valid pathname`,
         );
     }
 
     /**
-     * Reports whether a URL or logical pathname satisfies the content store's pathname rules.
+     * Reports whether a URL or logical pathname satisfies the content service's pathname rules.
      * @param {string} pathname - The pathname to check
      * @returns {boolean} True when the pathname is valid
      */
     isValidPathname(pathname) {
-        return this.#store.isValidPathname(pathname);
+        return this.#contentService.isValidPathname(pathname);
     }
 
     /**
@@ -163,7 +163,7 @@ export default class HyperviewService {
 
     /**
      * Loads global partials, reusing an immutable compiled bundle while its etag is current.
-     * @param {ContentSnapshot} content - Request-scoped content snapshot for template-store access
+     * @param {import('./hyperview-content-snapshot.js').default} content - Request-scoped content snapshot for template-store access
      * @returns {Promise<Map<string, Function>>} Immutable compiled-partials Map for this render's bundle
      */
     async loadGlobalPartials(content) {
@@ -305,7 +305,7 @@ export default class HyperviewService {
 
     /**
      * Loads a base template, reusing its compiled function while the base-template bundle etag is current.
-     * @param {ContentSnapshot} content - Request-scoped content snapshot for template-store access
+     * @param {import('./hyperview-content-snapshot.js').default} content - Request-scoped content snapshot for template-store access
      * @param {string} templateId - Canonical base template identifier
      * @returns {Promise<Function|null|undefined>} Compiled template, null when no bundle exists, or undefined when the id is absent
      */
@@ -350,7 +350,7 @@ export default class HyperviewService {
 
     /**
      * Loads the template selected by a page, reusing its compiled function while its etag is current.
-     * @param {ContentSnapshot} content - Request-scoped content snapshot for template-store access
+     * @param {import('./hyperview-content-snapshot.js').default} content - Request-scoped content snapshot for template-store access
      * @param {HyperviewPage} page - Loaded page which names the template file
      * @returns {Promise<Function>} Compiled page-template function
      */
@@ -366,7 +366,7 @@ export default class HyperviewService {
 
         const { pathname, pageTemplateFilename } = page;
 
-        const filepath = this.#store.normalizePathname(`${ pathname }/${ pageTemplateFilename }`);
+        const filepath = this.#contentService.normalizePathname(`${ pathname }/${ pageTemplateFilename }`);
 
         // Use the etag from the content-addressable storage as the cache
         // invalidation key. Snapshot stats are in-memory index lookups, so this
@@ -411,7 +411,7 @@ export default class HyperviewService {
 
     /**
      * Loads a page and merges its ordered metadata cascade with runtime response props.
-     * @param {ContentSnapshot} content - Request-scoped content snapshot for page-store access
+     * @param {import('./hyperview-content-snapshot.js').default} content - Request-scoped content snapshot for page-store access
      * @param {URL} url - Request URL used to derive canonical page metadata
      * @param {string} pathname - Canonical page pathname
      * @param {Object} responseProps - Response props merged into the page context
@@ -531,7 +531,7 @@ export default class HyperviewService {
                     requestPathname = requestPathname.slice(0, -'index'.length);
                 }
             }
-            pathname = this.#store.normalizePathname(requestPathname);
+            pathname = this.#contentService.normalizePathname(requestPathname);
         }
 
         this.assertCanonicalIdentifier(
@@ -557,7 +557,7 @@ export default class HyperviewService {
 
         // A render reads all of its content, including cache-key inputs, through
         // exactly one request-scoped snapshot.
-        const content = await this.#store.openSnapshot(context);
+        const content = await this.#contentService.openSnapshot(context);
         const page = await this.getPage(content, url, pathname, response.props);
 
         if (!page) {
@@ -587,7 +587,7 @@ export default class HyperviewService {
         // hashing; compiled-template cache validation remains in the loaders.
         if (usePageCache) {
             const partials = await content.statTemplatePartials();
-            let etag = await this.#store.hashValue(`${ page.etag }#${ partials?.etag ?? '' }`);
+            let etag = await this.#contentService.hashValue(`${ page.etag }#${ partials?.etag ?? '' }`);
 
             // Optionally add the hash of the canonicalized props object.
             if (includePropsInCacheKey) {
@@ -599,9 +599,9 @@ export default class HyperviewService {
                         response.props,
                     );
                 } else {
-                    propsHash = await this.#store.hashValue(response.props);
+                    propsHash = await this.#contentService.hashValue(response.props);
                 }
-                etag = await this.#store.hashValue(`${ etag }#${ propsHash }`);
+                etag = await this.#contentService.hashValue(`${ etag }#${ propsHash }`);
             }
 
             // If the caller does not provide a custom cache key, we use the URL
@@ -621,7 +621,7 @@ export default class HyperviewService {
                 renderModeIdentity = 'PAGE_TEMPLATE_ONLY';
             } else {
                 const baseTemplates = await content.statBaseTemplates();
-                etag = await this.#store.hashValue(`${ etag }#${ baseTemplates?.etag ?? '' }`);
+                etag = await this.#contentService.hashValue(`${ etag }#${ baseTemplates?.etag ?? '' }`);
                 // The base templates etag covers the whole bundle, not the selected
                 // templateId, so options.baseTemplateId must be in the identity too.
                 // Otherwise requests for the same page rendered with different base
@@ -635,7 +635,7 @@ export default class HyperviewService {
             // opaque, fixed-length key also keeps every key within the portable
             // 512-byte KV key limit regardless of the input size.
             const logicalCacheIdentity = `${ pageCacheIdentity }#${ renderModeIdentity }#${ etag }`;
-            pageCacheKey = `hyperview_page_cache#${ await this.#store.hashValue(logicalCacheIdentity) }`;
+            pageCacheKey = `hyperview_page_cache#${ await this.#contentService.hashValue(logicalCacheIdentity) }`;
 
             hypertext = await this.#kvStore.get(context, pageCacheKey, {
                 type: 'text',

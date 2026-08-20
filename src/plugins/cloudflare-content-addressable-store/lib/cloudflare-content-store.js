@@ -4,7 +4,6 @@ import {
     ValidationError,
 } from '../../../kixx/errors/mod.js';
 import {
-    isUndefined,
     isNonEmptyString,
     assert,
 } from '../../../kixx/assertions/mod.js';
@@ -13,11 +12,10 @@ import ContentSnapshot from './content-snapshot.js';
 import {
     FORMAT,
     KEY,
-    compareStrings,
     typedArrayToBuffer,
     hashBlob,
     hashEtag,
-    hashSet,
+    hashValue,
 } from './addressing.js';
 
 
@@ -61,6 +59,8 @@ const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
  * reclamation becomes necessary, it must first define a closure-retention
  * policy, then sweep only blob hashes absent from the union of closures
  * reachable through every build pointer.
+ *
+ * @implements {import('../../../kixx/content-store/content-addressable-store-interface.js').ContentAddressableStoreInterface}
  */
 export default class CloudflareContentStore {
 
@@ -201,6 +201,16 @@ export default class CloudflareContentStore {
     }
 
     /**
+     * Computes a deterministic digest for a primitive or canonicalizable value.
+     * @param {*} value - Value to hash
+     * @returns {Promise<string>} Content digest in the current wire format
+     * @throws {TypeError} When a non-primitive value cannot be canonicalized
+     */
+    async hashValue(value) {
+        return await hashValue(value);
+    }
+
+    /**
      * Opens a request-scoped view pinned to one immutable content index.
      * All reads through the returned snapshot use the index resolved here,
      * even if the build is reassigned before the request completes.
@@ -281,29 +291,6 @@ export default class CloudflareContentStore {
     }
 
     /**
-     * Computes a deterministic digest from a set of index nodes' content and
-     * metadata, independent of the order `stats` was supplied in. Suitable
-     * for use as an aggregate etag over several files.
-     * @param {IndexEntry[]} stats - Nodes to fold into the digest
-     * @returns {Promise<string>} Content digest in the current wire format
-     */
-    async computeHashFromStats(stats) {
-        const pairs = new Map();
-        for (const stat of stats) {
-            const tuple = [ stat.hash ];
-            if (!isUndefined(stat.metadata) && stat.metadata !== null) {
-                tuple.push(stat.metadata);
-            }
-            pairs.set(stat.pathname, tuple);
-        }
-
-        // Sort by key before hashing so the result is independent of the order
-        // callers supplied inputs in — digest(['a','b']) === digest(['b','a']).
-        const sorted = [...pairs.entries()].sort((a, b) => compareStrings(a[0], b[0]));
-        return await hashSet(sorted);
-    }
-
-    /**
      * Writes a blob's bytes to KV under its content hash, independent of the
      * `commitClosure`/`assignBuild` step that makes it reachable through a
      * build's index.
@@ -349,7 +336,7 @@ export default class CloudflareContentStore {
      * Idempotent: committing the same closure content again is a no-op.
      * @param {RequestContext} context - Request context carrying the Durable Object binding
      * @param {IndexSourceFile[]} files - Blob descriptors to include in the closure, typically returned from `putBlob`
-     * @returns {Promise<Object<string, import('./content-addressable-index.js').IndexEntryTuple>>} Encoded index table for the committed closure; pass it to `getRootHash` to name the closure, or to the ContentAddressableIndex constructor to read it
+     * @returns {Promise<{rootHash: string, nodeCount: number}>} Stable descriptor identifying the committed closure
      * @throws {AssertionError} When `files` is not an array
      * @throws {ValidationError} When any file entry is malformed or collides with another
      * @throws {OperationalError} When the index store call fails or reports an unsuccessful result
@@ -375,7 +362,11 @@ export default class CloudflareContentStore {
             throw new OperationalError(`CloudflareContentStore#commitClosure() was unsuccessful: ${ result.message }`);
         }
 
-        return entries;
+        // The encoded table is private to this write path; no caller outside
+        // this adapter needs it. Compute the stable descriptor here, while the
+        // table is still in hand, rather than exposing it for callers to
+        // re-derive the same two values.
+        return { rootHash, nodeCount: Object.keys(entries).length };
     }
 
     /**
@@ -416,15 +407,15 @@ export default class CloudflareContentStore {
      * @param {RequestContext} context - Request context carrying the Durable Object binding
      * @param {string} buildId - The build to deploy
      * @param {IndexSourceFile[]} files - Blob descriptors to include in the new closure, typically returned from `putBlob`
-     * @returns {Promise<Object<string, import('./content-addressable-index.js').IndexEntryTuple>>} Encoded index table for the newly committed closure
+     * @returns {Promise<{rootHash: string, nodeCount: number}>} Stable descriptor identifying the newly committed closure
      * @throws {AssertionError} When `files` is not an array
      * @throws {ValidationError} When any file entry is malformed or collides with another
      * @throws {OperationalError} When either index store call fails or reports an unsuccessful result
      */
     async commitChanges(context, buildId, files) {
-        const entries = await this.commitClosure(context, files);
-        await this.assignBuild(context, buildId, getRootHash(entries));
-        return entries;
+        const result = await this.commitClosure(context, files);
+        await this.assignBuild(context, buildId, result.rootHash);
+        return result;
     }
 
     /**

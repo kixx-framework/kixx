@@ -50,3 +50,16 @@ The final base URL must be a valid absolute HTTP or HTTPS URL with no leading or
 It has to be supplied out of band because no response exposes it, and it must match the running deployment exactly; a value that does not match makes those writes succeed, and the tests which use it fail. Set it only when you know the current Build ID of the target you are pointing at.
 
 Tests which need this value disable themselves when it is absent, so an unconfigured run reports them as disabled blocks in the summary rather than skipping them silently or failing. A local dev server has no current build at all — nothing in this repository sets `BUILD_ID` — so those tests stay disabled against `--development` unless you start the server with one.
+
+## Known obsolete suite: `020-publishing-api/`
+
+This suite targets URL paths (e.g. `/publishing-api/v1/templates/**`) that
+predate the current routes in `src/routes/publishing-api-v1.js`
+(`/publishing-api/v1/resources/**` and `/publishing-api/v1/index/**`). It
+predates and is unrelated to `agents/plans/hyperview-content-service.md`;
+rewriting it against the current routes is out of scope for that work.
+Passing or failing here is not a signal about that migration or about the
+Publishing API's current behavior — see
+`src/kixx/hyperview/README.md#publication-flow` and
+`src/app/presentation/request-handlers/publishing-api/mod.js` for the
+current, tested behavior instead.

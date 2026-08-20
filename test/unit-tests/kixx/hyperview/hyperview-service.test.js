@@ -47,7 +47,7 @@ function makeSnapshot(store) {
     return snapshot;
 }
 
-function makeContentStore(store) {
+function makeContentService(store) {
     return {
         ...store,
         async openSnapshot() {
@@ -168,20 +168,20 @@ describe('HyperviewService', ({ describe }) => {
             assert(caught.message.includes('logger'), `expected logger in "${ caught.message }"`);
         });
 
-        it('requires both stores when initialized', async () => {
+        it('requires both dependencies when initialized', async () => {
             const service = new HyperviewService({ logger: makeLogger() });
 
             const missingKvStore = await catchAsyncError(() => {
-                return service.initialize({ contentAddressableStore: {} });
+                return service.initialize({ contentService: {} });
             });
-            const missingContentStore = await catchAsyncError(() => {
+            const missingContentService = await catchAsyncError(() => {
                 return service.initialize({ kvStore: {} });
             });
 
             assertEqual('AssertionError', missingKvStore.name);
             assert(missingKvStore.message.includes('kvStore'));
-            assertEqual('AssertionError', missingContentStore.name);
-            assert(missingContentStore.message.includes('contentAddressableStore'));
+            assertEqual('AssertionError', missingContentService.name);
+            assert(missingContentService.message.includes('contentService'));
         });
     });
 
@@ -216,7 +216,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const first = await service.getBaseTemplate(makeSnapshot(store), 'layout');
             const second = await service.getBaseTemplate(makeSnapshot(store), 'layout');
@@ -231,7 +231,7 @@ describe('HyperviewService', ({ describe }) => {
         it('returns a fresh empty Map for a page which declares no partials', async () => {
             const store = {};
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const page = { pathname: '/articles/example', partials: null };
 
@@ -245,7 +245,7 @@ describe('HyperviewService', ({ describe }) => {
         it('keeps a cached bundle immutable when a page stops declaring partials', async () => {
             const store = {};
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const page = {
                 pathname: '/articles/example',
@@ -271,7 +271,7 @@ describe('HyperviewService', ({ describe }) => {
         it('does not retain a partials Map when useTemplateCache is disabled', async () => {
             const store = {};
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const page = { pathname: '/articles/example', partials: null };
 
@@ -284,7 +284,7 @@ describe('HyperviewService', ({ describe }) => {
 
         it('reuses compiled page partials across a global-partials change', async () => {
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore({}), kvStore: {} });
+            service.initialize({ contentService: makeContentService({}), kvStore: {} });
             const page = {
                 pathname: '/articles/example',
                 partials: {
@@ -311,7 +311,7 @@ describe('HyperviewService', ({ describe }) => {
             let loads = 0;
             const service = new HyperviewService({ logger: makeLogger() });
             service.initialize({
-                contentAddressableStore: makeContentStore({}),
+                contentService: makeContentService({}),
                 kvStore: {},
             });
             const firstSnapshot = {
@@ -371,7 +371,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const partials = await service.loadGlobalPartials(makeSnapshot(store));
 
@@ -408,7 +408,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const template = await service.getBaseTemplate(makeSnapshot(store), 'layout');
 
@@ -448,7 +448,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const page = {
                 pathname: '/articles/example',
@@ -491,7 +491,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const template = await service.getPageTemplate(makeSnapshot(store), page);
             const pagePartials = await service.getPagePartials(page);
@@ -537,7 +537,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const page = {
                 pathname: '/articles/example',
@@ -571,7 +571,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
             const page = {
                 pathname: '/articles/example',
                 pageTemplateFilename: 'page.html',
@@ -611,7 +611,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const page = await service.getPage(makeSnapshot(store), new URL('https://example.com/blog'), '/blog', {});
 
@@ -635,7 +635,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const page = await service.getPage(makeSnapshot(store), new URL('https://example.com/blog'), '/blog', {});
 
@@ -655,7 +655,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const caught = await catchAsyncError(() => {
                 return service.assertCanonicalIdentifier('', 'test identifier');
@@ -676,7 +676,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const caught = await catchAsyncError(() => {
                 return service.assertCanonicalIdentifier('/articles/example', 'test identifier');
@@ -726,7 +726,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
             const response = {
                 props: {},
                 status: 200,
@@ -788,7 +788,7 @@ describe('HyperviewService', ({ describe }) => {
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true, usePageCache: true });
             service.initialize({
-                contentAddressableStore: store,
+                contentService: store,
                 kvStore: { async get() { return 'cached' } },
             });
             const jsonResponse = {
@@ -857,7 +857,7 @@ describe('HyperviewService', ({ describe }) => {
             };
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
             service.initialize({
-                contentAddressableStore: store,
+                contentService: store,
                 kvStore: {
                     async get() { return null },
                     async put() {},
@@ -952,7 +952,7 @@ describe('HyperviewService', ({ describe }) => {
                 useTemplateCache: true,
             });
             service.initialize({
-                contentAddressableStore: store,
+                contentService: store,
                 kvStore: {
                     async get() { return null },
                     async put(_context, key, value) {
@@ -1018,7 +1018,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
             const response = {
                 props: { viewer: { name: 'Ada' } },
                 status: 200,
@@ -1074,7 +1074,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
             const response = {
                 props: { viewer: { name: 'Ada' } },
                 status: 200,
@@ -1111,7 +1111,7 @@ describe('HyperviewService', ({ describe }) => {
                 return await originalGetPageTemplate();
             };
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
             const response = {
                 props: {},
                 status: 200,
@@ -1143,7 +1143,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
             const response = {
                 props: {},
                 status: 200,
@@ -1238,7 +1238,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
             const compileTemplate = service.compileTemplate.bind(service);
             let compilationCount = 0;
             service.compileTemplate = (...args) => {
@@ -1304,7 +1304,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const response = {
                 props: {},
@@ -1367,7 +1367,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const response = {
                 props: {},
@@ -1426,7 +1426,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const response = {
                 props: {},
@@ -1476,7 +1476,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const response = {
                 props: {},
@@ -1519,7 +1519,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = {
                 headers: new Headers(),
@@ -1552,7 +1552,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = {
                 headers: new Headers(),
@@ -1585,7 +1585,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = {
                 headers: new Headers(),
@@ -1648,7 +1648,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -1678,7 +1678,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };
@@ -1754,7 +1754,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = {
@@ -1789,7 +1789,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = {
@@ -1865,7 +1865,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const responseA = {
                 props: {},
@@ -1898,7 +1898,7 @@ describe('HyperviewService', ({ describe }) => {
             store.hashValue = makeOpaqueHashValue();
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: makeSizeBoundedKvStore() });
+            service.initialize({ contentService: makeContentService(store), kvStore: makeSizeBoundedKvStore() });
 
             const longSegment = 'x'.repeat(2000);
             const request = { url: new URL(`https://example.com/articles/${ longSegment }?query=${ longSegment }`) };
@@ -1943,7 +1943,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger, usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const secret = 'SUPER-SECRET-QUERY-VALUE';
             const request = { url: new URL(`https://example.com/articles/example?token=${ secret }`) };
@@ -2041,7 +2041,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -2125,7 +2125,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -2163,7 +2163,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -2220,7 +2220,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/blog') };
             const response = { props: {}, status: 200 };
@@ -2245,7 +2245,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };
@@ -2288,7 +2288,7 @@ describe('HyperviewService', ({ describe }) => {
                 usePageCache: true,
                 includePropsInCacheKey: true,
             });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -2333,7 +2333,7 @@ describe('HyperviewService', ({ describe }) => {
                 usePageCache: true,
                 includePropsInCacheKey: true,
             });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const options = { skipBaseRender: true, includePropsInCacheKey: false };
@@ -2432,7 +2432,7 @@ describe('HyperviewService', ({ describe }) => {
             };
 
             const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore });
+            service.initialize({ contentService: makeContentService(store), kvStore });
 
             const request = { url: new URL('https://example.com/articles/example') };
 
@@ -2503,7 +2503,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };
@@ -2568,7 +2568,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };
@@ -2646,7 +2646,7 @@ describe('HyperviewService', ({ describe }) => {
                 },
             };
             const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentAddressableStore: makeContentStore(store), kvStore: {} });
+            service.initialize({ contentService: makeContentService(store), kvStore: {} });
 
             const request = { url: new URL('https://example.com/articles/example') };
             const response = { props: {}, status: 200 };

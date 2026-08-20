@@ -1,12 +1,13 @@
 /**
- * Provides deterministic serialization, hashing and encoding for the content
- * addressable store, and defines the logical pathname namespace its callers
- * address content by.
+ * Provides deterministic serialization, hashing, and encoding for the generic
+ * content-addressable store, plus a defensive pathname check for its own key
+ * space.
  *
- * The namespace layout (the `/templates` and `/pages` roots, and the reserved
- * bundle filenames within a page directory) is Kixx content vocabulary rather
- * than wire format, so it is not covered by FORMAT and does not change when the
- * digest or key format does.
+ * This module owns no content-layout vocabulary. The `/templates` and
+ * `/pages` namespace, reserved bundle filenames, and the canonical Hyperview
+ * pathname rule belong to `src/kixx/hyperview/content-layout.js`. See
+ * `isValidPathname()`/`normalizePathname()` below for why this module still
+ * keeps its own copy of the pathname check.
  *
  * Wire format v1:
  *   - digest: SHA-256 truncated to 128 bits, base32 (RFC 4648 lowercase, no pad)
@@ -21,6 +22,15 @@ import {
     isString,
     isUndefined,
 } from '../../../kixx/assertions/mod.js';
+import { canonicalize, compareStrings } from '../../../kixx/utils/canonicalize.js';
+
+
+// Re-exported for existing callers within this content-addressable store
+// package. The definitions live in kixx/utils/canonicalize.js because
+// deterministic serialization is needed on both sides of the publishing wire
+// contract: Hyperview produces the bytes it uploads, and this module's
+// digest functions consume the same bytes when hashing.
+export { canonicalize, compareStrings };
 
 /**
  * Identifies the current storage-key and digest wire format.
@@ -80,6 +90,16 @@ export function bufferToString(bytes) {
     return decoder.decode(bytes);
 }
 
+// This is a deliberate duplicate of the canonical pathname rule
+// `src/kixx/hyperview/content-layout.js` also implements, not a shared
+// source of Hyperview semantics. Hyperview owns the canonical pathname rule
+// and normalizes and validates every pathname before calling this store's
+// `putBlob()`; this copy is an invariant check across the port boundary,
+// guarding only this store's own key space (the index, blob keys, and
+// directory-tree construction below). It must not import
+// `src/kixx/hyperview/content-layout.js` or the unrelated, expected-to-be-
+// deprecated `src/kixx/utils/validate-pathname.js`.
+
 /**
  * Reports whether a logical pathname contains only lowercase and
  * safe path segments.
@@ -138,52 +158,6 @@ export function normalizePathname(value) {
 }
 
 /**
- * Reserved filename of the base-template bundle within the templates namespace.
- * @type {string}
- * @readonly
- */
-export const BASE_TEMPLATES_BUNDLE = '__base-templates-bundle';
-
-/**
- * Reserved filename of the global partial-template bundle within the templates namespace.
- * @type {string}
- * @readonly
- */
-export const TEMPLATE_PARTIALS_BUNDLE = '__template-partials-bundle';
-
-/**
- * Reserved filename of a page's partial-template bundle within its page directory.
- * @type {string}
- * @readonly
- */
-export const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
-
-/**
- * Reserved filename of a page's include bundle within its page directory.
- * @type {string}
- * @readonly
- */
-export const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
-
-/**
- * Maps a template-relative pathname into the logical templates namespace.
- * @param {string} pathname - Template-relative pathname
- * @returns {string} Normalized logical pathname
- */
-export function normalizeTemplatePath(pathname) {
-    return normalizePathname(`templates/${ pathname }`);
-}
-
-/**
- * Maps a page-relative pathname into the logical pages namespace.
- * @param {string} pathname - Page-relative pathname
- * @returns {string} Normalized logical pathname
- */
-export function normalizePagePath(pathname) {
-    return normalizePathname(`pages/${ pathname }`);
-}
-
-/**
  * Copies the bytes visible through an ArrayBuffer view into a standalone buffer.
  * @param {ArrayBufferView} typedArray - View whose byte range to copy
  * @returns {ArrayBuffer|SharedArrayBuffer} New buffer containing only the viewed bytes
@@ -194,68 +168,6 @@ export function typedArrayToBuffer(typedArray) {
     // Make sure we are handling cases where the allocated buffer is
     // larger than the data in the view.
     return typedArray.buffer.slice(byteOffset, byteLength + byteOffset);
-}
-
-/**
- * Compares strings in the UTF-16 code-unit order shared by all address readers
- * and writers.
- * @param {string} a - Left operand
- * @param {string} b - Right operand
- * @returns {number} Negative, zero or positive when a sorts before, with or after b
- */
-export function compareStrings(a, b) {
-    if (a < b) {
-        return -1;
-    }
-    if (a > b) {
-        return 1;
-    }
-    return 0;
-}
-
-/**
- * Serializes a JSON-compatible value deterministically, sorting object keys,
- * omitting undefined object properties and removing insignificant whitespace.
- *
- * This function is critical to the ContentAddressableStore: if two runs of the
- * publisher serialize the same logical tree differently, the root hash changes
- * when nothing changed, and every downstream cache misses.
- *
- * @param {null|boolean|number|string|Array<*>|Object} value - Value to serialize
- * @returns {string} Deterministic JSON representation
- * @throws {TypeError} When value contains a non-finite number or unsupported type
- */
-export function canonicalize(value) {
-    if (value === null) {
-        return 'null';
-    }
-
-    const t = typeof value;
-    if (t === 'number') {
-        if (!Number.isFinite(value)) {
-            throw new TypeError(`canonicalize: non-finite number ${ value }`);
-        }
-        return JSON.stringify(value);
-    }
-    if (t === 'string' || t === 'boolean') {
-        return JSON.stringify(value);
-    }
-    if (t !== 'object') {
-        throw new TypeError(`canonicalize: unsupported type ${ t }`);
-    }
-    if (Array.isArray(value)) {
-        return `[${ value.map(canonicalize).join(',') }]`;
-    }
-
-    const keys = Object.keys(value)
-        .filter((k) => !isUndefined(value[k]))
-        .sort(compareStrings);
-
-    const parts = keys.map((k) => {
-        return `${ JSON.stringify(k) }:${ canonicalize(value[k]) }`;
-    });
-
-    return `{${ parts.join(',') }}`;
 }
 
 /**

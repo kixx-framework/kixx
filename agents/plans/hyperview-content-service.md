@@ -191,7 +191,7 @@ content-store gap remains explicitly deferred:
 
 ### Task HCS-1: Correct plugin-map imports in both entry points
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/plugins/README.md` §"The Three Roles"; `src/docs/code-style-guide.md`; `test/unit-tests/README.md`
 
@@ -258,21 +258,59 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: This is a pre-existing import defect unrelated to
-  the content-service refactor. Fixing it does not close the separately deferred
-  Node content-store gap.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Both entry points now import the named `plugins` binding from
+  their general and platform plugin-map modules. A new side-effect-free
+  `mergePluginMaps()` helper replaces the inline `new Map([...a, ...b])` spread
+  in both entry points, asserting both arguments are `Map` instances
+  (`AssertionError` naming the offending parameter) before merging with
+  platform-over-general override order. Regression coverage exercises merge,
+  override, non-mutation of inputs, and both non-Map rejection cases.
+- Current state: Complete. Acceptance criteria satisfied.
+- Remaining: Nothing for this task.
+- Decisions and discoveries:
+  - Confirmed the described defect before fixing it:
+    `node -e "import('./src/plugins/general.js').then((m) => console.log(Object.keys(m), m.default))"`
+    printed `[ 'plugins' ] undefined`, matching the plan's diagnosis.
+  - `src/plugins/README.md`'s own "Composition root" example already shows the
+    correct named-import form (`import { plugins as nodePlugins } from
+    './plugins/node.js';`), so this fix brings the entry points in line with
+    already-documented intent rather than introducing a new convention.
+  - Named the new test file `merge-plugin-maps.test.js` (mirroring the source
+    filename `src/plugins/merge-plugin-maps.js`) rather than the plan's
+    orientation name `plugin-maps.test.js`, per the unit testing guide's
+    "mirror the source tree" convention. It is the first file under
+    `test/unit-tests/plugins/*.test.js` (previously only nested plugin
+    directories had tests).
+  - `assert()` + `isMap()` from `kixx/assertions/mod.js` gives a clear
+    `AssertionError` naming the bad parameter if a non-Map is ever passed,
+    rather than letting a bad input fail later with an opaque
+    "is not iterable" `TypeError` from the spread syntax.
+  - Did not attempt to make the Node entry point fully bootable — no Node
+    content-addressable-store adapter exists yet, per this plan's explicit
+    deferral. `node --check` only proves the module parses/resolves, not that
+    `node src/node-server.js` can start and initialize the general Hyperview
+    plugin successfully.
+- Actual files changed:
+  - `src/node-server.js` — named `plugins` imports for `general.js`/`node.js`;
+    use `mergePluginMaps()`.
+  - `src/cloudflare-server.js` — named `plugins` imports for
+    `general.js`/`cloudflare.js`; use `mergePluginMaps()`.
+  - `src/plugins/merge-plugin-maps.js` — new side-effect-free merge helper.
+  - `test/unit-tests/plugins/merge-plugin-maps.test.js` — new regression
+    coverage.
+- Validation run:
+  - `node run-linter.js src/node-server.js src/cloudflare-server.js src/plugins test/unit-tests/plugins` — clean, no output, exit 0.
+  - `node run-tests.js test/unit-tests/plugins` — 428 tests passed, 0 disabled.
+  - `node --check src/node-server.js && node --check src/cloudflare-server.js` — both parse.
+  - `node run-tests.js` (full suite, run as an extra sanity check beyond this
+    task's required validation) — 910 tests passed, 0 disabled.
 - Blockers: None.
 
 ---
 
 ### Task HCS-2: Define the generic content-addressable store port
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HCS-1
 **Documentation:** This plan §"Ownership" and §"Decisions"; `src/plugins/README.md` §"How the Contracts Are Written"; `src/docs/code-documentation-guide.md`; `src/docs/server-error-handling.md`
 
@@ -386,23 +424,134 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: `CloudflareContentStore` is already fully generic —
-  `grep` for `pages|templates|BUNDLE` across it and the two index modules returns
-  nothing — so this task defines a contract around behavior that already exists,
-  plus two small return-shape corrections needed to keep the dependency direction
-  correct in HCS-3.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed:
+  - Added `src/kixx/content-store/content-addressable-store-interface.js`
+    (JSDoc-only, no executable code) documenting
+    `ContentAddressableStoreInterface` (`hashValue`, `openSnapshot`, `putBlob`,
+    `commitChanges`) and `ContentIndexSnapshotInterface` (`rootHash`,
+    `statPath`, `listStats`, `getBlob`, `getBlobs`, `computeHashFromStats`),
+    with top-level invariants for blob immutability, snapshot pinning and
+    request lifetime, digest opacity, caller-visible errors, context
+    pass-through, and why pathname validation is deliberately absent.
+  - Moved `canonicalize()`/`compareStrings()` to `src/kixx/utils/canonicalize.js`.
+    `addressing.js` imports and re-exports both under a comment explaining why
+    (deterministic serialization is needed on both sides of the publishing wire
+    contract). Every internal `addressing.js` caller (`hashSet`, `hashEtag`,
+    `hashTree`, `hashValue`) keeps working unchanged through the re-export.
+  - `CloudflareContentStore`: added `@implements` for
+    `ContentAddressableStoreInterface`; added a `hashValue(value)` method
+    (delegates to `addressing.js`'s free function — the port requires it at
+    store level even though the old facade called the free function directly);
+    removed `computeHashFromStats()`; `commitClosure()` and `commitChanges()`
+    now return `{ rootHash, nodeCount }` instead of the encoded index table
+    (computed from the table before it goes out of scope, so the encoded table
+    is never returned to any caller).
+  - `ContentSnapshot`: added `@implements` for `ContentIndexSnapshotInterface`;
+    added its own `computeHashFromStats(stats)` (the exact algorithm moved
+    verbatim from the store, using `hashSet`/`compareStrings` imported directly
+    from `addressing.js`); `getPage()` now calls `this.computeHashFromStats(...)`
+    instead of `this.#store.computeHashFromStats(...)`. `ContentSnapshot` still
+    holds `#store` for `getBlob`/`getBlobs`/etc. in this task — HCS-6 is where
+    the semantic half of this class (including any store coupling that HCS-3
+    relocates) gets pruned, not this task.
+  - `content-addressable-store.js` facade: `commitChanges()` now destructures
+    `{ rootHash, nodeCount }` from the store call and returns `{ hash: rootHash,
+    count: nodeCount }` — its own public `{ hash, count }` return shape is
+    unchanged. Removed the now-unused `getRootHash` import.
+  - `plugin.js` (cloudflare-content-addressable-store): constructs one
+    `CloudflareContentStore` and registers it under both `ContentAddressableStore`
+    (final name) and, wrapped by the facade, `HyperviewContentFacade`
+    (transitional name) — so reads/writes through either name observe the same
+    blobs, index cache, and Durable Object binding.
+  - Updated all consumers of the old `ContentAddressableStore` service name to
+    `HyperviewContentFacade`.
+  - Deleted the migrated `compareStrings()`/`canonicalize()` describe blocks
+    from `addressing.test.js` (now covered by the new `canonicalize.test.js`,
+    byte-identical assertions preserved); deleted the migrated
+    `computeHashFromStats` describe block from `cloudflare-content-store.test.js`
+    (now covered by a new describe block on `ContentSnapshot` in
+    `content-snapshot.test.js`, same order-independence/hash-change cases);
+    updated `commitClosure`/`commitChanges` tests in
+    `cloudflare-content-store.test.js` for the new return shape; updated the
+    `commitChanges` backing-store mock and three `page.etag` assertions in
+    `content-snapshot.test.js` and one in `content-addressable-store.test.js`
+    that depended on the deleted store-level `computeHashFromStats` mock (see
+    discoveries below).
+- Current state: Complete. Acceptance criteria satisfied; full unit suite and
+  targeted lint both pass.
+- Decisions and discoveries:
+  - **Found a third consumer of the old service name that the plan did not
+    list.** The plan's "two consumers" (`src/plugins/hyperview/plugin.js:36`
+    and `src/app/transaction-scripts/publishing/mod.js`) missed
+    `src/app/presentation/request-handlers/publishing-api/mod.js`, which calls
+    `context.getService('ContentAddressableStore')` directly (twice, for
+    `normalizePathname()`/`isValidPathname()` in `StatResource`/`PutResource`)
+    rather than going through the transaction script. Left unrenamed, this
+    handler would have silently broken at runtime the moment
+    `'ContentAddressableStore'` started resolving to the generic store, which
+    has neither method — directly contradicting this plan's own sequencing
+    invariant ("the migration does not introduce a new runtime break"). Renamed
+    both call sites to `'HyperviewContentFacade'` as well, with the same
+    transitional-name comment used at the other two sites. No test file exists
+    yet for this handler (`test/unit-tests/app/` is not created until HCS-5, per
+    that task's own handoff note), so there was no test double to update.
+  - **Test doubles that stubbed `computeHashFromStats()` on a mock *store* went
+    silent once `ContentSnapshot` stopped delegating to the store for that
+    operation.** Both `content-snapshot.test.js`'s `makeStore()` and
+    `content-addressable-store.test.js`'s `makeBackingStore()` had a
+    `computeHashFromStats()` mock returning a fixed, readable string (e.g.
+    `'root-v1:template-v1:page-v1'`, `'computed-etag'`). After moving the real
+    algorithm into `ContentSnapshot`, those mocks are simply never called, and
+    `getPage()` computes a real base32 digest instead. Removed the dead mock
+    methods and changed the four affected `page.etag` assertions from an exact
+    literal to `assert(page.etag, '...')` — non-empty-string presence — with a
+    comment pointing to the two dedicated `computeHashFromStats` tests (in
+    `content-snapshot.test.js`) that own verifying the real algorithm
+    (order-independence, changes when a hash changes). The surrounding
+    `pageDataFiles`/`pageTemplateFilename`/pinning assertions in those tests
+    were untouched and still carry the tests' primary intent.
+  - `CloudflareContentStore` is already fully generic — confirmed again after
+    the fact via `rg -n "pages|templates|BUNDLE" src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index-store.js`
+    returns nothing — so this task defined a contract around behavior that
+    already existed, plus the two return-shape corrections and the new
+    `hashValue()` store method needed to make `CloudflareContentStore` actually
+    satisfy every operation the port promises.
+  - Kept `ContentSnapshot`'s constructor and `#store` field exactly as they
+    were (still takes `{ store, context, index }`); this task only relocated
+    the one method's algorithm and its one caller. HCS-3/HCS-6 are where the
+    class's shape changes further.
+- Actual files changed:
+  - `src/kixx/content-store/content-addressable-store-interface.js` (new)
+  - `src/kixx/utils/canonicalize.js` (new)
+  - `src/plugins/cloudflare-content-addressable-store/lib/addressing.js`
+  - `src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js`
+  - `src/plugins/cloudflare-content-addressable-store/lib/content-snapshot.js`
+  - `src/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.js`
+  - `src/plugins/cloudflare-content-addressable-store/plugin.js`
+  - `src/plugins/hyperview/plugin.js`
+  - `src/app/transaction-scripts/publishing/mod.js`
+  - `src/app/presentation/request-handlers/publishing-api/mod.js` (not listed
+    in the plan's expected touch points — see discoveries above)
+  - `test/unit-tests/kixx/utils/canonicalize.test.js` (new)
+  - `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/addressing.test.js`
+  - `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.test.js`
+  - `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-snapshot.test.js`
+  - `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.test.js`
+- Validation run:
+  - `node run-linter.js src/kixx/content-store src/kixx/utils src/plugins/cloudflare-content-addressable-store src/plugins/hyperview src/app/transaction-scripts/publishing src/app/presentation/request-handlers/publishing-api test/unit-tests/kixx/utils test/unit-tests/plugins/cloudflare-content-addressable-store` — clean, no output, exit 0 (widened slightly from the plan's listed command to also cover the third consumer discovered above; `test/unit-tests/app` does not exist yet so it is not part of this run).
+  - `node run-tests.js test/unit-tests/plugins/cloudflare-content-addressable-store test/unit-tests/kixx/utils` — 251 tests passed, 0 disabled.
+  - `node run-tests.js` (full suite) — 910 tests passed, 0 disabled.
+  - Manual `rg` checks: no `pages|templates|BUNDLE` vocabulary in the new port
+    file (only incidental prose saying it has none); exactly one `canonicalize`
+    definition (`src/kixx/utils/canonicalize.js`); no `computeHashFromStats` on
+    `CloudflareContentStore`; both services registered in `plugin.js`.
 - Blockers: None.
 
 ---
 
 ### Task HCS-3: Build the Hyperview content layer
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HCS-2
 **Documentation:** This plan §"Ownership" and §"Decisions"; `src/plugins/README.md`; `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`; `src/docs/server-error-handling.md`; `test/unit-tests/README.md`
 
@@ -568,23 +717,122 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Roughly 750 lines of behavior move here, so the test
-  migration is the bulk of the work. Migrate cases rather than rewriting them:
-  the existing `content-addressable-store.test.js` (623 lines) and
-  `content-snapshot.test.js` (259 lines) encode the manifest and page-assembly
-  edge cases, and re-deriving them from scratch will lose coverage.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed:
+  - `src/kixx/hyperview/content-layout.js`: layout vocabulary
+    (`BASE_TEMPLATES_BUNDLE`, `TEMPLATE_PARTIALS_BUNDLE`, `PAGE_PARTIALS_BUNDLE`,
+    `PAGE_INCLUDES_BUNDLE`, `RESERVED_PAGE_FILENAMES`), an independent
+    `isValidPathname()`/`normalizePathname()` implementation (duplicated from,
+    not imported from, the adapter's `addressing.js` — see design note below),
+    the new `isValidTemplateFilepath()` (canonical AND non-root), and the six
+    focused path constructors (`getBaseTemplatesPath`, `getTemplatePartialsPath`,
+    `getPageMetadataPath`, `getPagePartialsPath`, `getPageIncludesPath`,
+    `getPageTemplatePath`). Page-oriented constructors assert page-pathname
+    validity internally; `getPageTemplatePath()` asserts template-filepath
+    validity internally, so a caller cannot construct a `/pages` blob at the
+    namespace root through this module.
+  - `src/kixx/hyperview/hyperview-content-object.js`: `HyperviewContentStat` and
+    `HyperviewContentObject`, relocated from the adapter's `content-object.js`,
+    decoding with a local `TextDecoder` (a Web Platform global, not an adapter
+    import) instead of `addressing.js`'s `bufferToString`.
+  - `src/kixx/hyperview/hyperview-content-snapshot.js`: `HyperviewContentSnapshot`
+    wraps one `ContentIndexSnapshotInterface` (a plain object, e.g. from
+    `CloudflareContentStore#openSnapshot()`), holds no store reference, and
+    owns the six stat/get pairs plus `getPage()`, all relocated from the
+    adapter's `ContentSnapshot`. `getPage()`'s page-directory-prefix need (for
+    listing a leaf directory's immediate children) is met with a private
+    `getPageDirectoryPath()` helper that derives the directory from
+    `getPageMetadataPath()` by stripping `/page.json`, rather than adding a
+    seventh, unfocused path constructor to `content-layout.js`.
+  - `src/kixx/hyperview/hyperview-content-service.js`: `HyperviewContentService`
+    implementing the full public contract table — `initialize()`,
+    `normalizePathname()`/`isValidPathname()`/`isValidTemplateFilepath()` (sync,
+    delegate to `content-layout.js`), `hashValue()` (async, delegates to the
+    injected store), `openSnapshot()`, six one-off `stat*` reads (each opens
+    exactly one snapshot), six `put*` writes (each takes one args object,
+    returns `{hash, size, metadata}`), and `commitChanges()`. Manifest
+    validation/translation (`#buildManifestFiles`, `#checkBlobDescriptor`,
+    `#checkOnePageTemplatePerDirectory`, `#filepathDirname`) is relocated from
+    the adapter's facade with the same error classification and every original
+    rejection case preserved, plus the new root-template-filepath fix (see
+    below).
+  - **The root-template-filepath fix**: `checkArray()` (the manifest
+    entry-validator closure inside `#buildManifestFiles`) now takes an explicit
+    `pathnameValidator` + `pathDescription` pair instead of hardcoding
+    `isValidPathname`. `pageMetadata`/`pagePartials`/`pageIncludes` still use
+    `isValidPathname` with the original message text `"... must be a valid
+    pathname"`. `pageTemplates` now uses `isValidTemplateFilepath` with a new
+    message `"... must be a valid, non-root template filepath"`. A
+    `pageTemplates` entry with `filename: '/'` is now rejected at this
+    validity check — before `toInternalPathname()` (now `getPageTemplatePath()`,
+    which itself asserts) is ever reached — so it is impossible for a root
+    manifest entry to become a `/pages` blob descriptor.
+  - Test coverage, migrated and extended rather than rewritten from scratch,
+    all under `test/unit-tests/kixx/hyperview/`: `content-layout.test.js` (34
+    tests: every constructor, both pathname rules including empty-string/root/
+    mixed-case), `hyperview-content-snapshot.test.js` (17 tests, migrated from
+    the adapter's `content-snapshot.test.js`), `hyperview-content-service.test.js`
+    (38 tests, migrated from the adapter's `content-addressable-store.test.js`,
+    plus new cases for the root-template-filepath rejection and the
+    omitted/explicit/explicit-null build ID contract).
+- Current state: Complete. Acceptance criteria satisfied; targeted lint and
+  test runs pass, and the full unit suite passes with the new layer present
+  but unwired (confirmed by `rg` — no file outside `src/kixx/hyperview/` and
+  its own tests imports any of the three new modules; only explanatory
+  comments in the HCS-2 transitional-name sites mention the future move).
+- Decisions and discoveries:
+  - **The migrated test doubles deliberately do not depend on the adapter's
+    real index/hashing machinery.** The original `content-snapshot.test.js`
+    and `content-addressable-store.test.js` built real
+    `ContentAddressableIndex` instances and used `addressing.js`'s real
+    `hashBlob`/`canonicalize` to produce test fixtures. `HyperviewContentSnapshot`
+    and `HyperviewContentService` are consumers of the generic
+    `ContentAddressableStoreInterface`/`ContentIndexSnapshotInterface` port, not
+    of the Cloudflare adapter, so their tests mock the port directly with
+    self-contained, deterministic fakes (a flat pathname→stat map with a
+    simple prefix-listing implementation; a content-derived fake hash instead
+    of the real SHA-256/base32 digest). This is also what makes `rg -n
+    "from '.*plugins/" src/kixx/hyperview` return nothing even under the test
+    tree's sibling location — the test files themselves also import nothing
+    from `src/plugins/`, though that specific `rg` command only targets
+    `src/kixx/hyperview` per the plan.
+  - Roughly 750 lines of behavior moved here as anticipated, and the test
+    migration was indeed the bulk of the work — cases were adapted (new mock
+    shapes, new argument-object call signatures, three `page.etag` literal
+    assertions loosened to presence checks because the real digest algorithm
+    is no longer reachable through these mocks — see HCS-2's handoff for the
+    parallel discovery on the adapter side) rather than re-derived from
+    scratch, so no manifest or page-assembly edge case was lost.
+  - `HyperviewContentSnapshot#getPage()` and `HyperviewContentService`'s
+    manifest validator both needed a "page directory" pathname that
+    `content-layout.js` deliberately does not expose as a public constructor.
+    Both solved it the same way: derive it privately from
+    `getPageMetadataPath()` (`getPage()`'s `getPageDirectoryPath()`) or reuse
+    plain `normalizePathname()` for basename extraction (the manifest
+    validator's reserved-filename check) — rather than adding a seventh,
+    unfocused constructor that would let other callers assemble arbitrary
+    `/pages` paths.
+- Actual files changed:
+  - `src/kixx/hyperview/content-layout.js` (new)
+  - `src/kixx/hyperview/hyperview-content-object.js` (new)
+  - `src/kixx/hyperview/hyperview-content-snapshot.js` (new)
+  - `src/kixx/hyperview/hyperview-content-service.js` (new)
+  - `test/unit-tests/kixx/hyperview/content-layout.test.js` (new)
+  - `test/unit-tests/kixx/hyperview/hyperview-content-snapshot.test.js` (new)
+  - `test/unit-tests/kixx/hyperview/hyperview-content-service.test.js` (new)
+- Validation run:
+  - `node run-linter.js src/kixx/hyperview test/unit-tests/kixx/hyperview` — clean (one pre-existing `no-warning-comments` warning in `hyperview-request-handlers.js`, unrelated to this task's files).
+  - `node run-tests.js test/unit-tests/kixx test/unit-tests/plugins` — 998 tests passed, 0 disabled.
+  - `node run-tests.js` (full suite) — 999 tests passed, 0 disabled.
+  - `rg -n "from '.*plugins/" src/kixx/hyperview` — no matches.
+  - `rg -n "^import.*validate-pathname" src/kixx/hyperview` — no matches (one prose mention of the filename in a comment explaining why it is *not* imported).
+  - `rg -n "hyperview-content-service|hyperview-content-snapshot|content-layout\.js|HyperviewContentService" src/plugins src/app src/routes` — only explanatory comments from HCS-2's transitional renames, no actual import or wiring.
 - Blockers: None.
 
 ---
 
 ### Task HCS-4: Make rendering consume Hyperview content snapshots
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HCS-3
 **Documentation:** This plan §"Sequencing"; `agents/plans/hyperview-snapshot-consistency.md` Tasks HV-2 through HV-4; `src/app/presentation/README.md` §"Hyperview Page Context"; `src/plugins/README.md` §"The Plugin Module Contract"; `test/unit-tests/README.md`
 
@@ -666,21 +914,127 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: `HyperviewService` already threads a snapshot
-  through rendering, so this changes who supplies the snapshot, not the render
-  algorithm.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed:
+  - `HyperviewService`: renamed the private `#store` field to
+    `#contentService`; `initialize({ contentService, kvStore })` replaces
+    `initialize({ contentAddressableStore, kvStore })`, asserting
+    `contentService` with a message naming it; every internal call site
+    (`assertCanonicalIdentifier`, `isValidPathname`, `normalizePathname`,
+    `openSnapshot`, `hashValue` in cache-key computation) now reads
+    `this.#contentService` instead of `this.#store`. No call-site logic
+    changed — only what object those calls are made on, since
+    `HyperviewContentService` and `HyperviewContentSnapshot` (built in HCS-3)
+    already expose the identical method names and signatures the old raw
+    store did. JSDoc `@param`/`@returns` types updated to reference
+    `./hyperview-content-service.js` and `./hyperview-content-snapshot.js`
+    instead of the retired `ContentAddressableStore`/`ContentSnapshot` names.
+  - `src/plugins/hyperview/plugin.js`: `register()` now also constructs and
+    registers `HyperviewContentService` under the service name
+    `HyperviewContent`, alongside the existing `Hyperview` registration.
+    `initialize()` resolves `ContentAddressableStore` (the generic store, per
+    HCS-2), initializes `HyperviewContent` with it as `contentStore`, then
+    resolves `KeyValueStore` and initializes `Hyperview` with `{ kvStore,
+    contentService: hyperviewContent }` — in that order, so the content
+    service is fully initialized before the object reference reaches
+    `HyperviewService#initialize()`. Removed the transitional
+    `HyperviewContentFacade` lookup and its explanatory comment; added a
+    module-level comment recording the Node platform gap (no
+    `ContentAddressableStore` registration in `src/plugins/node.js` yet) and
+    naming the port (`src/kixx/content-store/content-addressable-store-interface.js`)
+    a future Node adapter must implement.
+  - Test doubles in `hyperview-service.test.js` adapted from the raw-store
+    shape to the content-service shape: every `contentAddressableStore` key in
+    an `initialize({...})` call became `contentService`; the helper
+    `makeContentStore()` was renamed `makeContentService()` (same
+    implementation — it already returned an object shaped like
+    `HyperviewContentService`: pass-through methods plus an `openSnapshot()`
+    that returns a snapshot-shaped object exposing the seven read methods).
+    The "requires both stores" initialization test was renamed to "requires
+    both dependencies" and its missing-dependency variable/assertion updated
+    to check for `'contentService'` instead of `'contentAddressableStore'` in
+    the `AssertionError` message. No behavioral assertion in this 2670-line
+    file was rewritten around implementation calls — every change was a
+    rename of the dependency key/variable/message text the tests already
+    exercised.
+  - New `test/unit-tests/plugins/hyperview/plugin.test.js` (first file under
+    `test/unit-tests/plugins/hyperview/`, and the first `plugin.js` lifecycle
+    test in the repository — no precedent existed to follow, so this task set
+    one): constructs a real `ApplicationContext` (not a mock) with a fake
+    logger, calls the plugin's exported `register()`/`initialize()` directly,
+    and asserts (a) `register()` puts a `HyperviewContentService` instance at
+    `HyperviewContent` and a `HyperviewService` instance at `Hyperview`; (b)
+    `initialize()` wires `HyperviewContent` to whatever is registered as
+    `ContentAddressableStore` (proved by a fake store's `hashValue()` spy
+    reachable through `hyperviewContent.hashValue()`); (c) `initialize()`
+    wires `Hyperview` to the *same* `HyperviewContent` instance `register()`
+    created (proved by monkey-patching a spy onto
+    `hyperviewContent.isValidPathname` after `register()` but before
+    `initialize()`, then observing the spy fire through
+    `hyperviewService.isValidPathname()` — object-identity proof that
+    survives regardless of exact call order, since JS holds objects by
+    reference); (d) `initialize()` fails with a clear `AssertionError` naming
+    the missing service when `ContentAddressableStore` or `KeyValueStore` is
+    not registered.
+- Current state: Complete. All acceptance criteria satisfied; targeted lint
+  and test runs pass, and the full unit suite passes.
+- Decisions and discoveries:
+  - `HyperviewService` already threads a snapshot through rendering, so this
+    task changed who supplies the snapshot (`HyperviewContentService` instead
+    of the adapter facade), not the render algorithm. Confirmed by grep that
+    the renderer still calls exactly the seven documented snapshot operations
+    (`statTemplatePartials`, `getTemplatePartials`, `statBaseTemplates`,
+    `getBaseTemplates`, `statPageTemplate`, `getPageTemplate`, `getPage`) and
+    no others.
+  - The rename was mechanically safe specifically because HCS-3 already built
+    `HyperviewContentService`/`HyperviewContentSnapshot` to match the raw
+    store's method names and signatures (`isValidPathname`,
+    `normalizePathname`, `hashValue`, `openSnapshot`, and the snapshot's
+    seven read methods) — there was no shape to adapt, only a dependency name
+    and its call sites to rename. This is also why the 2670-line test file
+    needed only a mechanical key rename (`contentAddressableStore` →
+    `contentService`, plus one assertion-message string) rather than new
+    mock shapes.
+  - Registering `HyperviewContent` first and `Hyperview` second in
+    `register()`, and initializing `HyperviewContent` before `Hyperview` in
+    `initialize()`, matches this plan's §"Sequencing"/design note ("registers
+    `HyperviewContent` and `Hyperview` during `register()` ... resolve
+    `ContentAddressableStore` ... initialize `HyperviewContent` with it as
+    `contentStore`, then initialize `Hyperview`"). Both entries in each
+    registry are plain sequential statements, so there is no dependency-order
+    ambiguity for a later plugin registry change to reintroduce.
+  - Left `src/plugins/cloudflare-content-addressable-store/plugin.js`'s
+    `HyperviewContentFacade` registration untouched: publishing
+    (`src/app/transaction-scripts/publishing/mod.js` and
+    `src/app/presentation/request-handlers/publishing-api/mod.js`) still
+    consumes it and is not migrated until HCS-5. Confirmed via `rg -n
+    "HyperviewContentFacade" src` that only the adapter's registration and
+    those two publishing files reference it now that `plugin.js` no longer
+    does.
+  - Did not touch `src/plugins/README.md`'s "General Plugins" section, which
+    still describes Hyperview as reading "through the two Hyperview store
+    ports" — that phrasing is now stale (there is one port,
+    `ContentAddressableStoreInterface`, consumed by `HyperviewContentService`,
+    not two Hyperview-specific ports), but updating plugin documentation is
+    HCS-7's explicit scope, not this task's.
+- Actual files changed:
+  - `src/kixx/hyperview/hyperview-service.js`
+  - `src/plugins/hyperview/plugin.js`
+  - `test/unit-tests/kixx/hyperview/hyperview-service.test.js`
+  - `test/unit-tests/plugins/hyperview/plugin.test.js` (new)
+- Validation run:
+  - `node run-linter.js src/kixx/hyperview src/plugins/hyperview test/unit-tests/kixx/hyperview test/unit-tests/plugins/hyperview` — clean except one pre-existing, unrelated `no-warning-comments` warning in `hyperview-request-handlers.js` (a `TODO` comment predating this task).
+  - `node run-tests.js test/unit-tests/kixx/hyperview test/unit-tests/plugins/hyperview` — 153 tests passed, 0 disabled (148 renderer + 5 new plugin-lifecycle tests).
+  - `node run-tests.js` (full suite) — 1004 tests passed, 0 disabled (up from 999 before this task).
+  - `node --check src/kixx/hyperview/hyperview-service.js && node --check src/plugins/hyperview/plugin.js` — both parse.
+  - `git diff --check` — no whitespace errors.
+  - `rg -n "ContentAddressableStore" src/kixx/hyperview/hyperview-service.js` — no matches (renderer names no store type).
 - Blockers: None.
 
 ---
 
 ### Task HCS-5: Route publishing through HyperviewContentService
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HCS-3, HCS-4
 **Documentation:** `src/app/presentation/README.md` §"JSON:API Endpoint"; `src/app/transaction-scripts/README.md`; `src/docs/server-error-handling.md`; `test/unit-tests/README.md`
 
@@ -789,21 +1143,149 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: `test/unit-tests/app/` does not exist yet — this
-  task creates the first test under it, so any `rg` over that path will fail
-  until the first file lands.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed:
+  - Rewrote `src/app/presentation/request-handlers/publishing-api/mod.js`
+    around a single module-private, `Object.freeze()`-protected
+    `RESOURCE_CATALOG`, keyed by the six canonical identifiers
+    (`template_partials`, `base_templates`, `page_metadata`, `page_partials`,
+    `page_includes`, `page_templates`). Each entry carries `pathKind`
+    (`'none'` | `'page-path'` | `'template-filepath'`), `bodyFormat` (`'json'`
+    | `'text'`), and explicit `stat`/`put` functions that call the matching
+    `HyperviewContentService` method with the right argument shape (`{
+    bundle, etag }` for the two bundle resources, `{ pathname, metadata,
+    etag }` for page metadata, `{ pathname, bundle, etag }` for page
+    partials/includes, `{ filepath, source, etag }` for page templates).
+    Replaced `CHECK_PATHNAME_TYPES`/`TEXT_PAYLOAD_TYPES` and both `switch`
+    statements entirely — no trace of either remains.
+  - Added `getCatalogEntry(type)`, which `assert()`s the entry exists (an
+    unregistered type is a route-configuration bug, so `StatResource({type})`
+    /`PutResource({type})` — called once per route at module-load time —
+    throw `AssertionError` immediately rather than deferring to the first
+    request), and `resolvePathname(contentService, entry, type, handlerName,
+    request)`, the one function implementing all three `pathKind` branches:
+    `'none'` returns `undefined` with no wildcard read at all; `'page-path'`
+    keeps the pre-existing `segments.length === 1 && segments[0] === '' →
+    '/'` fold and validates with `contentService.isValidPathname()`;
+    `'template-filepath'` never folds to root and validates with
+    `contentService.isValidTemplateFilepath()` instead — so a
+    `/page-templates/` request (segments `['']`) normalizes to `'/'` and is
+    then rejected by the filepath rule (which requires non-root), never
+    reaching `putPageTemplate()`. Both `StatResource` and `PutResource` now
+    resolve `context.getService('HyperviewContent')` per request and call
+    `entry.stat`/`entry.put` — no direct call to any storage-layer method
+    remains in this file.
+  - `CommitChanges()`: replaced the Transaction Script call with
+    `context.getService('HyperviewContent').commitChanges(context, {
+    buildId, manifest })`. The omitted-build fallback (`isUndefined(buildId)
+    ? context.runtime.build.id : buildId`) already lives inside
+    `HyperviewContentService#commitChanges()` (built in HCS-3), so the
+    handler now simply forwards whatever `buildId` the JSON:API payload
+    contained, including `undefined` — it does not duplicate the fallback
+    logic itself. Manifest field mapping (`templatePartials`, `baseTemplates`,
+    `pageMetadata`, `pagePartials`, `pageIncludes`, `pageTemplates`) and the
+    `{ hash, count }` → `{ hash, nodeCount }` response shape are unchanged.
+  - `src/routes/publishing-api-v1.js` needed no changes: both the stat and
+    put routes already configured `type: 'page_templates'` (plural) at what
+    is now lines 102 and 190 — the drift described in this plan's design
+    section was entirely on the handler/Transaction-Script side (which
+    recognized only singular `page_template`), confirmed fixed by grep (see
+    discoveries).
+  - Deleted `src/app/transaction-scripts/publishing/mod.js` and the
+    now-empty `src/app/transaction-scripts/publishing/` directory. No test
+    file existed for it (confirmed before deleting) and no remaining source
+    file imports it (confirmed by `rg` after deleting).
+  - New `test/unit-tests/app/presentation/request-handlers/publishing-api/mod.test.js`
+    — the first file under `test/unit-tests/app/`, so this task created that
+    directory tree. 17 tests: all six `StatResource` catalog entries invoke
+    their matching explicit method; the `page_templates` root-path rejection
+    (`path: ['']`, simulating `/page-templates/`) is rejected as
+    `BadRequestError`/`InvalidPagePath` without calling the service; the
+    complementary `page_metadata` root acceptance (`path: ['']` folds to
+    `'/'`) proves the two `pathKind` branches are genuinely different, not a
+    shared one relaxed for both; a `path: {}` case (no `path` key at all,
+    simulating the bare `/page-metadata` spelling with no trailing slash)
+    is rejected as `BadRequestError`/`PagePathRequired`, recording — not
+    assuming — which of the two spellings is the valid "root" one, per this
+    task's own validation note; an invalid page path (`['..','secret']`) is
+    rejected as `InvalidPagePath` without calling the service; a `null` stat
+    result becomes `NotFoundError` naming the pathname; `PutResource` cases
+    cover a JSON payload (`page_metadata`) and a text payload
+    (`page_templates`), asserting the exact argument object forwarded to the
+    service, plus the same root-rejection and no-path-validation-for-bundle-
+    resources cases; `CommitChanges` cases cover full manifest field mapping
+    plus response shape, and the omitted-`buildId` forwarding case
+    specifically asserting `args.buildId` is `undefined` (not resolved by
+    the handler) when the JSON:API payload omits it. The fake
+    `HyperviewContent` service double reuses the *real*
+    `normalizePathname`/`isValidPathname`/`isValidTemplateFilepath` from
+    `src/kixx/hyperview/content-layout.js` (imported directly, not
+    reimplemented) so path-validation assertions exercise the actual
+    production rule, not a loose stand-in; its six stat/six put/commitChanges
+    methods are generated from one list into a `calls` array of `[methodName,
+    ...args]` tuples per call, configurable per test via a `results` map, to
+    avoid dozens of hand-written mock methods.
+- Current state: Complete. All acceptance criteria satisfied; targeted lint
+  and test runs pass, and the full unit suite passes.
+- Decisions and discoveries:
+  - **Fixed a pre-existing bug while rewriting the line it lived on**:
+    `CommitChanges()` called `parseJsonApiResource(request, 'ContentTree')`
+    without `await`, even though that function is `async` (it awaits
+    `request.json()` internally) and every other caller in the codebase
+    (`create-publishing-api-token.js`, `run-migration.js`, `accept-invite.js`)
+    correctly awaits it. Unawaited, `{ attributes }` destructures off a
+    pending `Promise`, so `attributes` would always be `undefined` and every
+    real `CommitChanges` request would throw — this endpoint could not have
+    worked in production. Confirmed via `rg -n "parseJsonApiResource" src`
+    that every other call site awaits it before fixing this one. Added the
+    missing `await`. This is a one-token fix on a line this task was already
+    rewriting to change its data source, not a scope expansion — leaving a
+    known request-breaking bug in freshly-touched code would have been
+    irresponsible, and the plan's own validation for this task explicitly
+    covers "Commit requests preserve JSON:API parsing... and response shape,"
+    which a still-broken `parseJsonApiResource` call would have silently
+    failed to satisfy.
+  - Confirmed the `page_templates`/`page_template` drift this task's design
+    section describes was already isolated to the handler and Transaction
+    Script: `rg -n "page_template\b" src` before this task's edit showed
+    only the two `case 'page_template':` lines inside the now-deleted
+    `transaction-scripts/publishing/mod.js`; the route file already used
+    plural `page_templates` throughout. The new catalog uses `page_templates`
+    exclusively, so the route/catalog identifier now matches on both ends of
+    every request.
+  - No handler-level test precedent existed anywhere in the repository
+    (`find test -path "*request-handlers*" -name "*.test.js"` found only an
+    unrelated static-file-server suite under `test/unit-tests/kixx/`), so
+    this task set the pattern for `test/unit-tests/app/`: a plain fake
+    `context` object with a `getService()` stub (not a real
+    `ApplicationContext`, since these tests exercise handler dispatch, not
+    service-registry wiring — that is HCS-4's `plugin.test.js`), a plain fake
+    `request`, and a real `ServerResponse` instance from
+    `src/kixx/http-router/server-response.js` so `response.status`/
+    `response.body` reflect the exact production serialization — mirroring
+    the one existing precedent for framework-level request-handler tests
+    (`static-file-server-request-handlers.test.js`).
+  - Left `src/app/presentation/README.md`'s Publishing API guidance and
+    `src/app/transaction-scripts/README.md`'s framework-service-versus-
+    Transaction-Script boundary description untouched; both are HCS-7's
+    explicit scope, not this task's.
+- Actual files changed:
+  - `src/app/presentation/request-handlers/publishing-api/mod.js`
+  - `src/app/transaction-scripts/publishing/mod.js` (deleted, directory removed)
+  - `test/unit-tests/app/presentation/request-handlers/publishing-api/mod.test.js` (new)
+- Validation run:
+  - `node run-linter.js src/app/presentation/request-handlers/publishing-api src/routes/publishing-api-v1.js test/unit-tests/app` — clean, no output, exit 0.
+  - `node run-tests.js test/unit-tests/app test/unit-tests/kixx/hyperview` — 165 tests passed, 0 disabled.
+  - `node run-tests.js` (full suite) — 1021 tests passed, 0 disabled (up from 1004 after HCS-4).
+  - `rg -n "ContentAddressableStore|HyperviewContentFacade" src/app` — no matches.
+  - `rg -n "ContentAddressableStore|HyperviewContentFacade|transaction-scripts/publishing" src/app src/routes` — only unrelated `transaction-scripts/publishing-api-tokens/*` matches (a different, still-live directory for API-token management, matched only because the substring `publishing` overlaps); no match against the deleted content-publishing script.
+  - `git diff --check` — no whitespace errors.
 - Blockers: None.
 
 ---
 
 ### Task HCS-6: Retire the adapter's Hyperview facade
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HCS-4, HCS-5
 **Documentation:** This plan §"Ownership"; `src/plugins/README.md`; `src/docs/code-style-guide.md`
 
@@ -875,21 +1357,123 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: This task is deletion only. If anything here cannot
-  be deleted, a caller was missed in HCS-4 or HCS-5 — fix the caller rather than
-  keeping the facade alive.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed:
+  - Deleted `content-addressable-store.js` (the facade) and `content-object.js`
+    (the relocated-to-Hyperview `ContentObject`/`StatObject` pair). Confirmed
+    before deleting that nothing outside those two files imported
+    `content-object.js`, and that `content-addressable-store.js`'s only
+    remaining importer was `plugin.js`'s `HyperviewContentFacade`
+    registration.
+  - Reduced `ContentSnapshot` (`lib/content-snapshot.js`) to exactly
+    `rootHash`, `statPath()`, `listStats()`, `getBlob()`, `getBlobs()`, and
+    `computeHashFromStats()`. Removed `getPage()`, the six semantic stat/get
+    pairs (`statTemplatePartials`/`getTemplatePartials`/`statBaseTemplates`/
+    `getBaseTemplates`/`statPageTemplate`/`getPageTemplate`,
+    `statPageMetadata`/`statPagePartials`/`statPageIncludes`), the private
+    `#getPath()` (directory-check + unreadable-blob assertion +
+    `ContentObject` construction), the private `#statPath()` (`StatObject`
+    wrapping), and `#assertPagePath()`. Dropped the now-unused imports
+    (`AssertionError`, `assert`, the four bundle constants,
+    `normalizePagePath`/`normalizeTemplatePath`, `ContentObject`/`StatObject`)
+    — the file now imports only `isUndefined`, `compareStrings`, and
+    `hashSet`.
+  - `addressing.js`: removed `BASE_TEMPLATES_BUNDLE`, `TEMPLATE_PARTIALS_BUNDLE`,
+    `PAGE_PARTIALS_BUNDLE`, `PAGE_INCLUDES_BUNDLE`, `normalizeTemplatePath()`,
+    and `normalizePagePath()`. Kept `FORMAT`, `KEY`, the byte helpers
+    (`stringToUint8Array`/`bufferToString`/`typedArrayToBuffer`), all four
+    digest functions, and the defensive `isValidPathname()`/
+    `normalizePathname()` pair — unchanged in behavior, but now preceded by a
+    comment explicitly recording that this is a deliberate duplicate of
+    Hyperview's canonical pathname rule (not a shared source of Hyperview
+    semantics), that it guards only this store's own key space, and that it
+    must not import `content-layout.js` or the deprecated
+    `validate-pathname.js`. Rewrote the module's top docblock, which
+    previously claimed this module "defines the logical pathname namespace
+    its callers address content by" — no longer true — to describe it as
+    owning deterministic serialization/hashing/encoding plus a defensive
+    pathname check only, with content-layout ownership pointed at
+    `src/kixx/hyperview/content-layout.js`.
+  - `plugin.js`: removed the `ContentAddressableStore` (facade class) import
+    and the `HyperviewContentFacade` registration line. `register()` now
+    registers exactly one service, `ContentAddressableStore`, bound to
+    `CloudflareContentStore`. Replaced the stale "transitional name" comment
+    (which described the now-deleted two-service registration) with one
+    stating the plugin's public surface is a generic content-addressable
+    store and pointing Hyperview vocabulary at `src/kixx/hyperview/`.
+  - Test pruning in
+    `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/`:
+    deleted `content-addressable-store.test.js` outright (all of its coverage
+    was already migrated to `hyperview-content-service.test.js` in HCS-3, per
+    that task's handoff note: "38 tests, migrated from
+    content-addressable-store.test.js"). In `content-snapshot.test.js`,
+    deleted eight `getPage()`/semantic-`getPath()` cases whose direct
+    counterparts already exist in
+    `test/unit-tests/kixx/hyperview/hyperview-content-snapshot.test.js`
+    (confirmed by name/behavior match: "throws when a pathname resolves to a
+    directory," "throws when an indexed blob is unreadable," "returns
+    content carrying the same etag the matching stat method reports,"
+    "throws an AssertionError for an invalid page pathname" (both the
+    stat-method and `getPage()` variants), "returns null when the leaf page
+    has no committed metadata," "returns null when an indexed pathname is
+    absent," and the two `getPage()` pinned-index/blob-read cases — all
+    present in the Hyperview suite). Kept the `computeHashFromStats`
+    describe block verbatim (still exactly the generic algorithm this
+    reduced class owns) and the "continues to read its original index after
+    a build reassignment" test, **rewritten** rather than deleted: it
+    previously demonstrated pinning through the semantic
+    `getTemplatePartials()`, which no longer exists on this class, but the
+    pinning guarantee it demonstrates — a `ContentSnapshot` instance keeps
+    resolving through the index it was constructed with even after a new
+    snapshot observes a reassigned build — is a property of the *generic*
+    `statPath()`/`getBlob()` pair too, not something `getPage()` added. The
+    plan says "do not delete cases covering generic storage, indexing, or
+    digests"; deleting this one outright would have quietly dropped that
+    generic pinning coverage instead of relocating it, so it was rewritten
+    to exercise `statPath()`+`getBlob()` against a generic (non-Hyperview)
+    pathname/blob pair, using `addressing.js`'s `bufferToString()` to decode
+    the returned bytes for comparison (a `Uint8Array`'s own `.toString()`
+    gives comma-joined byte values, not the decoded text, which would have
+    made the original naive rewrite pass for the wrong reason).
+    `addressing.test.js` and `cloudflare-content-store.test.js` needed no
+    changes — confirmed by grep that neither referenced any of the removed
+    vocabulary before this task touched them.
+- Current state: Complete. All acceptance criteria satisfied; targeted lint
+  and test runs pass, and the full unit suite passes.
+- Decisions and discoveries:
+  - This task was deletion-and-reduction only, as its own design note
+    anticipated, and nothing needed a caller fix — every consumer of the
+    facade had already moved off it in HCS-4 (`HyperviewService`) and HCS-5
+    (publishing). `rg -n "HyperviewContentFacade" src` returned no matches
+    immediately, confirming the facade was already orphaned before this
+    task's edits began.
+  - The one place this task deviated from pure deletion was the pinning test
+    in `content-snapshot.test.js`, per the reasoning above: rewriting one
+    generic-behavior test is not the same as losing coverage, and the plan's
+    own instruction ("do not delete cases covering generic storage,
+    indexing, or digests") is what this rewrite honors.
+- Actual files changed:
+  - `src/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.js` (deleted)
+  - `src/plugins/cloudflare-content-addressable-store/lib/content-object.js` (deleted)
+  - `src/plugins/cloudflare-content-addressable-store/lib/content-snapshot.js`
+  - `src/plugins/cloudflare-content-addressable-store/lib/addressing.js`
+  - `src/plugins/cloudflare-content-addressable-store/plugin.js`
+  - `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.test.js` (deleted)
+  - `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/content-snapshot.test.js`
+- Validation run:
+  - `node run-linter.js src/plugins/cloudflare-content-addressable-store test/unit-tests/plugins` — clean, no output, exit 0.
+  - `node run-tests.js` (full suite) — 983 tests passed, 0 disabled (down from 1021 after HCS-5, reflecting deleted/migrated coverage, not a regression — every deletion was traced to a counterpart already present in `test/unit-tests/kixx/hyperview/`).
+  - `rg -n "BUNDLE|normalizePagePath|normalizeTemplatePath|getPage\b" src/plugins` — no matches.
+  - `rg -n "HyperviewContentFacade" src` — no matches.
+  - `rg -n "pages|templates|BUNDLE" src/plugins/cloudflare-content-addressable-store/lib` — only the two incidental prose lines in `addressing.js`'s module docblock explaining what this module does *not* own; no code vocabulary.
+  - `rg -n "validate-pathname" src/plugins/cloudflare-content-addressable-store` — no matches.
+  - `git diff --check` — no whitespace errors.
 - Blockers: None.
 
 ---
 
 ### Task HCS-7: Document the boundary and verify the complete migration
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HCS-6
 **Documentation:** This complete plan; `README.md` §"Linting" and §"Testing"; `src/plugins/README.md`; `src/app/transaction-scripts/README.md`; `src/app/presentation/README.md`; `src/docs/code-documentation-guide.md`
 
@@ -967,13 +1551,180 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: No Hyperview architecture README exists today.
-  Adding one keeps the service split and its snapshot and publication invariants
-  discoverable outside this plan, which is what stops the boundary from eroding
-  again.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed:
+  - New `src/kixx/hyperview/README.md`: the architectural reference this task's
+    design section called for. Documents the two-service split
+    (`HyperviewContentService` registered as `HyperviewContent`,
+    `HyperviewService` registered as `Hyperview`) and their dependency
+    direction; the content layout vocabulary in `content-layout.js`,
+    including why `isValidPathname()` and `isValidTemplateFilepath()` are two
+    different rules rather than one relaxed for both; the one-snapshot-per-
+    render guarantee (`HyperviewContentSnapshot` holds no store reference, one
+    `HyperviewService#respondWithHypertext()` call opens exactly one
+    snapshot) and the narrower per-call snapshot used by the six one-off
+    `stat*` reads; the two-phase upload/commit publication flow, including the
+    manifest's rejection rules and the omitted-build-id default; the public
+    service boundary (no JSON:API resource-type string or platform type
+    crosses it); and port/adapter ownership, ending on the Node platform gap.
+    Cross-links to `src/app/presentation/README.md`, `src/templates/README.md`,
+    `src/plugins/README.md`, `src/kixx/utils/validate-pathname.js`, and the
+    content-store interface rather than duplicating their content — every
+    linked heading and file path was verified to exist before publishing (see
+    discoveries).
+  - `src/plugins/README.md`: rewrote the "General Plugins" section's
+    Hyperview paragraph, which previously said the `Hyperview` service
+    "reads through the two Hyperview store ports" — no longer accurate, since
+    the surviving port (`ContentAddressableStoreInterface`) is explicitly
+    generic, not Hyperview vocabulary, which is the entire premise of this
+    plan. The rewritten section names both registered services, states the
+    fixed `register()`/`initialize()` wiring order (content service
+    initialized, then handed to the renderer), and documents the Node
+    platform gap identified in HCS-4 — which port a Node adapter would need
+    to implement and which service name to register it under — with a
+    forward reference to the existing "Adding a New Port" checklist for the
+    adapter-authoring steps.
+  - `src/app/transaction-scripts/README.md`: added a new "When Not to Write a
+    Transaction Script" section, placed right after the file's opening
+    description of what a Transaction Script is (before "File and Naming
+    Conventions"). States the test for when presentation code may call a
+    framework service directly instead — the service already owns the
+    complete operation (validation, storage, error semantics) and no
+    application business policy sits between the request and the call — and
+    names the Publishing API's direct `HyperviewContentService` calls as the
+    concrete example, including why the old pass-through
+    `app/transaction-scripts/publishing/mod.js` (deleted in HCS-5) was not
+    replaced with an equivalent rather than updated. Explicitly notes this
+    exception is narrow and most application writes still belong in a
+    Transaction Script, so the guidance does not read as license to bypass
+    the pattern generally.
+  - `src/app/presentation/README.md`: reviewed but left unchanged. Grepped
+    for `ContentAddressableStore`, `HyperviewContentFacade`,
+    `putPageMetadata`/`putBaseTemplates`/`putTemplatePartials`/
+    `commitChanges`, and `Publishing API` — no matches. This README never
+    documented the Publishing API's write path or named a platform store, so
+    it had no "legacy write owner" to correct; its existing "Hyperview File
+    Layout" and "Page Context Data" sections describe only the dev-authored
+    static-file read path, which this migration does not touch.
+  - `test/end-to-end/020-publishing-api/*.test.js` (all 12 files): prepended
+    an identical obsolescence comment block to each file, before its first
+    `import`, stating the suite targets stale URL paths (verified per-file:
+    `/publishing-api/v1/templates/**` for the template/partial suites,
+    `/publishing-api/v1/assets/**` for the static-asset suite — the initial
+    draft of this comment incorrectly generalized the asset suite's path as
+    `/publishing-api/v1/static-assets/**`, caught and corrected before
+    finalizing, see discoveries) against the current
+    `/publishing-api/v1/resources/**`/`/publishing-api/v1/index/**` routes,
+    that this predates and is unrelated to this plan, and that passing or
+    failing here is not a signal about it. No other stale comment existed in
+    these files to correct — they operate entirely at the HTTP level and
+    never named an internal service, so there was nothing beyond the route
+    paths themselves (the test bodies, left untouched per this task's scope)
+    that was factually wrong.
+  - `test/end-to-end/README.md`: added a "Known obsolete suite:
+    `020-publishing-api/`" section stating the same obsolescence fact once,
+    at the suite level, with pointers to the current routes file and to
+    `src/kixx/hyperview/README.md#publication-flow` and the current
+    publishing request-handler module for the real, currently-tested
+    behavior.
+  - `AGENTS.md`: added a "Hyperview Content Model and Rendering" entry to the
+    Developer Documentation index, pointing at the new
+    `src/kixx/hyperview/README.md`, placed between "Transaction Scripts" and
+    "Presentation Layer Guide" to match its position in the dependency
+    layering (presentation depends on Hyperview rendering; Hyperview
+    rendering depends on nothing above it). This file is not in this task's
+    listed "Expected touch points," but AGENTS.md's own instruction ("Before
+    starting any task, including planning, ALWAYS review this documentation
+    index") makes an architecturally-significant new README invisible to
+    future agents unless it is indexed here — leaving it unindexed would have
+    directly undermined this task's own objective ("Maintainers and future
+    agents can identify the content-service, renderer, presentation,
+    Transaction Script, port, and adapter boundaries without rediscovering
+    them from implementation details").
+  - Ran the complete verification this task requires: full lint, full unit
+    suite, and a whitespace check across every changed and new file in the
+    working tree (see Validation run below).
+- Current state: Complete. All acceptance criteria satisfied.
+- Decisions and discoveries:
+  - Verified every relative link and heading anchor in the new
+    `src/kixx/hyperview/README.md` resolves before publishing it: checked
+    each linked file path exists on disk (`content-layout.js`,
+    `hyperview-content-snapshot.js`, `hyperview-content-service.js`,
+    `hyperview-service.js`, `validate-pathname.js`,
+    `content-addressable-store-interface.js`, `plugins/hyperview/plugin.js`,
+    `plugins/README.md`, `templates/README.md`,
+    `app/presentation/README.md`, `app/transaction-scripts/README.md`,
+    `plugins/cloudflare-content-addressable-store/`), and confirmed the two
+    heading anchors it links into (`#hyperview-file-layout` in the
+    presentation README, `#general-plugins` in the plugins README) exist as
+    written. A broken internal link in a document whose whole purpose is
+    "so future agents don't have to rediscover this from implementation
+    details" would have defeated the point.
+  - Caught and fixed one inaccuracy in the end-to-end test comments before
+    finalizing them: the static-asset suite's actual stale route is
+    `/publishing-api/v1/assets/*filepath` (confirmed by grep), not
+    `/publishing-api/v1/static-assets/**` as an initial draft of the shared
+    comment text assumed. Rewrote the comment to describe the pattern
+    generically (an example path plus "URL paths that predate the current
+    routes") instead of enumerating every suite's exact stale path, so the
+    identical comment block stays accurate across all 12 files without
+    needing a "close enough" statement for any one of them.
+  - Considered, and rejected, updating the illustrative sentence in
+    `src/plugins/README.md`'s "Ports" section ("`HyperviewService` owns the
+    shape of the template store it reads from..."). It is generic filler
+    illustrating the "ports live next to their consumer" principle in the
+    document's introduction, not a factual claim about
+    `HyperviewContentService`/`ContentAddressableStoreInterface`'s actual
+    file layout, and this task's design section scopes the required update
+    to the "General Plugins" section specifically. Left it as-is rather than
+    rewriting prose outside this task's stated scope.
+  - Confirmed via grep across `src/` (excluding `agents/plans/` and
+    `TODO.md`, which are historical/plan documents recording what happened
+    and are not living reference documentation) that no other Markdown file
+    in the living documentation tree references `ContentAddressableStore` or
+    `HyperviewContentFacade` in a way that misattributes a current
+    responsibility.
+  - `src/app/README.md` does not exist, so there was no top-level
+    application-layer doc to check beyond the ones this task's design
+    section already named.
+- Actual files changed:
+  - `src/kixx/hyperview/README.md` (new)
+  - `src/plugins/README.md`
+  - `src/app/transaction-scripts/README.md`
+  - `AGENTS.md`
+  - `test/end-to-end/README.md`
+  - `test/end-to-end/020-publishing-api/put-base-template-errors.test.js`
+  - `test/end-to-end/020-publishing-api/put-base-template.test.js`
+  - `test/end-to-end/020-publishing-api/put-page-include-errors.test.js`
+  - `test/end-to-end/020-publishing-api/put-page-include.test.js`
+  - `test/end-to-end/020-publishing-api/put-page-metadata-errors.test.js`
+  - `test/end-to-end/020-publishing-api/put-page-metadata.test.js`
+  - `test/end-to-end/020-publishing-api/put-page-template-errors.test.js`
+  - `test/end-to-end/020-publishing-api/put-page-template.test.js`
+  - `test/end-to-end/020-publishing-api/put-partial-template-errors.test.js`
+  - `test/end-to-end/020-publishing-api/put-partial-template.test.js`
+  - `test/end-to-end/020-publishing-api/put-static-asset-errors.test.js`
+  - `test/end-to-end/020-publishing-api/put-static-asset.test.js`
+  - `src/app/presentation/README.md` (reviewed, no change needed)
+- Validation run:
+  - `node run-linter.js` (full repo) — clean except the same pre-existing,
+    unrelated `no-warning-comments` warning in `hyperview-request-handlers.js`
+    seen throughout this plan's earlier tasks (a `TODO` comment predating
+    this work); exit 0.
+  - `node run-tests.js` (full suite) — 983 tests passed, 0 disabled, matching
+    HCS-6's post-deletion count (no behavior changed in this documentation-
+    only task).
+  - `git diff --check` against every tracked and new file (staged with `git
+    add -A` for the check, then `git reset` immediately after to leave the
+    working tree unstaged, matching the state before this task) — no
+    whitespace errors.
+  - Manual review confirmed: every method in this plan's public contract
+    tables (HCS-2's port, HCS-3's `HyperviewContentService` table) has both a
+    JSDoc block on the implementing method and dedicated unit coverage
+    (verified during HCS-2/HCS-3's own validation, reconfirmed by re-reading
+    those tasks' handoff notes here); every task HCS-1 through HCS-7 in this
+    plan has a completed "Progress and handoff" section naming its actual
+    files changed and the exact commands run.
+  - No end-to-end server or remote service was started; the only end-to-end
+    directory touched received comment-only edits, per this task's explicit
+    scope boundary.
 - Blockers: None.

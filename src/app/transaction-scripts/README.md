@@ -8,6 +8,14 @@ You can think of Transaction Scripts as remote procedure calls.
 
 Transaction scripts are application-specific domain logic and live in the app/transaction-scripts/ directory.
 
+## When Not to Write a Transaction Script
+
+A Transaction Script earns its place by adding something: cross-field validation, business rules, orchestration across more than one Collection or gateway, or a decision about what an operational error means to the application. If a Transaction Script's only content is calling one framework service method and returning its result unchanged, it is not organizing domain logic — it is an extra hop between the presentation layer and a framework service that already owns the complete operation.
+
+Presentation code (request handlers, middleware) may call a framework service directly through `context.getService(name)` when that service already owns the complete operation — validation, storage, and error semantics — and no application business policy sits between the request and the call. `src/app/presentation/request-handlers/publishing-api/mod.js` is the concrete example: it calls `HyperviewContentService` directly for every stat, upload, and commit, because `HyperviewContentService` (a framework service under `src/kixx/hyperview/`, not a platform adapter) already owns Hyperview's complete content model — path validation, manifest validation, and storage — and the Publishing API applies no business rule beyond mapping an HTTP resource type to the matching service method. An earlier version of this endpoint routed every call through a Transaction Script (`app/transaction-scripts/publishing/mod.js`) that did nothing but forward its arguments to a content store by resource-type string; that module was deleted rather than updated to call the new service, because keeping it would have reintroduced the same pass-through with a new name.
+
+This is narrower than it may first appear. Most application writes still belong in a Transaction Script: anything that touches a Collection, enforces a business rule, or needs the error-classification discretion described below is domain logic, not a pass-through, and calling a framework service directly does not apply there.
+
 ## File and Naming Conventions
 
 Each Transaction Script lives in its own file. Files are named after the action they perform, in kebab-case:

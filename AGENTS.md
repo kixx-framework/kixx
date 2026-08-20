@@ -67,6 +67,19 @@ src/app/transaction-scripts/README.md
 
 **What this document provides:** The Transaction Script pattern used for domain logic — file and naming conventions, function signatures for read and write scripts, how middleware calls Transaction Scripts, how Forms feed write workflows, data access via Collections, calling external services through registered gateways, domain error rules, storage-error translation with `cause`, and complete annotated examples.
 
+### Hyperview Content Model and Rendering
+
+src/kixx/hyperview/README.md
+
+**When to use this document:** Apply this guide whenever you are working on framework-owned Hyperview code under `src/kixx/hyperview/`. This includes:
+
+- Reading or writing Hyperview content (page metadata, templates, partials, includes) through `HyperviewContentService`, or rendering pages/JSON through `HyperviewService`.
+- Adding or changing a Hyperview pathname rule, path constructor, or reserved bundle filename in `content-layout.js`.
+- Deciding whether new code belongs in the content service, the renderer, or a platform adapter under `src/plugins/`.
+- Reviewing request-scoped content-snapshot lifetime, the manifest-based publication flow, or the boundary between this framework layer and the generic content-addressable store port.
+
+**What this document provides:** The Hyperview architecture reference — the two-service split (`HyperviewContentService` and `HyperviewService`) and how the general plugin wires them, the content layout vocabulary and its two pathname rules, the one-snapshot-per-render guarantee, the two-phase upload/commit publication flow, the public service boundary each class exposes, and how this framework layer relates to the generic content-addressable store port and its Cloudflare adapter.
+
 ### Presentation Layer Guide
 
 src/app/presentation/README.md

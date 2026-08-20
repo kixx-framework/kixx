@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches, assertNotEqual } from 'kixx-assert';
+import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import CloudflareContentStore from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js';
 import Logger from '../../../../../src/kixx/logger/logger.js';
@@ -418,33 +418,6 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
     });
 
-    describe('computeHashFromStats', ({ it }) => {
-        it('is independent of input order', async () => {
-            const store = makeStore();
-            const statsA = [
-                { pathname: '/a.txt', hash: 'hash-a', metadata: null },
-                { pathname: '/b.txt', hash: 'hash-b', metadata: null },
-            ];
-            const statsB = [ statsA[1], statsA[0] ];
-
-            const hashA = await store.computeHashFromStats(statsA);
-            const hashB = await store.computeHashFromStats(statsB);
-
-            assertEqual(hashA, hashB);
-        });
-
-        it('changes when a hash changes', async () => {
-            const store = makeStore();
-            const statsA = [ { pathname: '/a.txt', hash: 'hash-a', metadata: null } ];
-            const statsB = [ { pathname: '/a.txt', hash: 'hash-a-changed', metadata: null } ];
-
-            const hashA = await store.computeHashFromStats(statsA);
-            const hashB = await store.computeHashFromStats(statsB);
-
-            assertNotEqual(hashA, hashB);
-        });
-    });
-
     describe('putBlob', ({ it }) => {
         it('stores the blob bytes in KV keyed by content hash', async () => {
             const kv = makeKvNamespace();
@@ -492,7 +465,7 @@ describe('CloudflareContentStore', ({ describe }) => {
     });
 
     describe('commitClosure', ({ it }) => {
-        it('derives the closure and commits it to the Durable Object', async () => {
+        it('derives the closure, commits it to the Durable Object, and returns a stable descriptor', async () => {
             let received = null;
             const stub = {
                 async commitClosure(rootHash, index) {
@@ -504,13 +477,15 @@ describe('CloudflareContentStore', ({ describe }) => {
             const context = makeContext({ durableObjectNamespace: makeDurableObjectNamespace(stub) });
             const files = [ { pathname: '/a.txt', hash: 'hash-a', size: 1 } ];
 
-            const entries = await store.commitClosure(context, files);
+            const result = await store.commitClosure(context, files);
 
-            // Resolves the encoded table itself, not a ContentAddressableIndex.
-            assertEqual('tree', entries['/'][0]);
-            assertEqual('hash-a', entries['/a.txt'][1]);
-            assertEqual(received.rootHash, getRootHash(entries));
-            assertEqual(entries, received.index);
+            // The Durable Object still receives the full encoded table...
+            assertEqual('tree', received.index['/'][0]);
+            assertEqual('hash-a', received.index['/a.txt'][1]);
+            assertEqual(received.rootHash, getRootHash(received.index));
+            // ...but the caller only gets back the stable closure descriptor.
+            assertEqual(received.rootHash, result.rootHash);
+            assertEqual(2, result.nodeCount);
         });
 
         it('throws when the Durable Object reports an unsuccessful result', async () => {
@@ -611,11 +586,12 @@ describe('CloudflareContentStore', ({ describe }) => {
             const context = makeContext({ durableObjectNamespace: makeDurableObjectNamespace(stub) });
             const files = [ { pathname: '/a.txt', hash: 'hash-a', size: 1 } ];
 
-            const entries = await store.commitChanges(context, 'build-1', files);
+            const result = await store.commitChanges(context, 'build-1', files);
 
-            assertEqual(getRootHash(entries), committedRootHash);
+            assertEqual(result.rootHash, committedRootHash);
             assertEqual('build-1', assignedBuild.buildId);
-            assertEqual(getRootHash(entries), assignedBuild.rootHash);
+            assertEqual(result.rootHash, assignedBuild.rootHash);
+            assertEqual(2, result.nodeCount);
         });
     });
 
