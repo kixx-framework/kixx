@@ -351,12 +351,47 @@ export default class ContentAddressableStore {
         const error = new ValidationError('The content manifest contains invalid entries');
         const files = [];
         const pathnames = new Set();
+        // Every directory implied by an accepted pathname. buildDirectoryTree()
+        // derives the same set and asserts when a pathname is claimed as both a
+        // blob and a tree, so the conflict is caught here instead, where it can
+        // be reported against the manifest entry which caused it.
+        const directories = new Set([ '/' ]);
 
         const addFile = (source, pathname, hash, size) => {
             if (pathnames.has(pathname)) {
                 error.push(`${ source } duplicates pathname "${ pathname }"`, source);
                 return;
             }
+            if (directories.has(pathname)) {
+                error.push(
+                    `${ source } pathname "${ pathname }" is already used as a page directory`,
+                    source,
+                );
+                return;
+            }
+
+            // Walk the ancestors before recording anything, so a rejected entry
+            // leaves neither a file nor a partial chain of directories behind.
+            const ancestors = [];
+            const parts = pathname.split('/').slice(1, -1);
+            let ancestor = '';
+
+            for (const part of parts) {
+                ancestor += `/${ part }`;
+                if (pathnames.has(ancestor)) {
+                    error.push(
+                        `${ source } pathname "${ pathname }" nests under file "${ ancestor }"`,
+                        source,
+                    );
+                    return;
+                }
+                ancestors.push(ancestor);
+            }
+
+            for (const directory of ancestors) {
+                directories.add(directory);
+            }
+
             pathnames.add(pathname);
             files.push({ pathname, hash, size });
         };
@@ -403,9 +438,15 @@ export default class ContentAddressableStore {
 
                 if (isValidPath) {
                     const pathname = toInternalPathname(pathValue);
-                    const basename = pathname.split('/').pop();
+                    // Take the basename from the caller-supplied path rather
+                    // than the internal one. For page entries the internal
+                    // pathname always ends in a reserved bundle filename this
+                    // method appended itself; the name the caller chose — the
+                    // page directory, or the template filename — is the one
+                    // which must not collide with a reserved filename.
+                    const basename = normalizePagePath(pathValue).split('/').pop();
 
-                    if (reservedFilenames?.has(basename)) {
+                    if (reservedFilenames.has(basename)) {
                         error.push(
                             `${ entrySource }.${ pathField } uses reserved page filename "${ basename }"`,
                             `${ entrySource }.${ pathField }`,
@@ -425,18 +466,21 @@ export default class ContentAddressableStore {
             'pageMetadata',
             'pathname',
             (pathname) => normalizePagePath(`${ pathname }/page.json`),
+            RESERVED_PAGE_FILENAMES,
         );
         checkArray(
             manifest.pagePartials,
             'pagePartials',
             'pathname',
             (pathname) => normalizePagePath(`${ pathname }/${ PAGE_PARTIALS_BUNDLE }`),
+            RESERVED_PAGE_FILENAMES,
         );
         checkArray(
             manifest.pageIncludes,
             'pageIncludes',
             'pathname',
             (pathname) => normalizePagePath(`${ pathname }/${ PAGE_INCLUDES_BUNDLE }`),
+            RESERVED_PAGE_FILENAMES,
         );
         checkArray(
             manifest.pageTemplates,

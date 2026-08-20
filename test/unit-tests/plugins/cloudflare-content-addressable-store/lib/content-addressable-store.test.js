@@ -472,6 +472,103 @@ describe('ContentAddressableStore', ({ describe }) => {
             assertMatches('reserved page filename', caught.errors[2].message);
         });
 
+        it('throws a ValidationError when a page template collides with a sibling page directory', async () => {
+            const { subject } = makeSubject();
+            const context = makeContext();
+
+            // The child page forces "/pages/about/team" to be a directory,
+            // while the page template claims the same pathname as a file.
+            const manifest = {
+                pageMetadata: [
+                    { pathname: 'about', hash: 'hash-a', size: 1 },
+                    { pathname: 'about/team', hash: 'hash-b', size: 2 },
+                ],
+                pageTemplates: [
+                    { filename: 'about/team', hash: 'hash-c', size: 3 },
+                ],
+            };
+
+            const caught = await catchAsyncError(
+                () => subject.commitChanges(context, 'build-1', manifest),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ValidationError', caught.name);
+            assertMatches('already used as a page directory', caught.errors[0].message);
+        });
+
+        it('throws a ValidationError when a manifest entry nests beneath another entry\'s file', async () => {
+            const { subject } = makeSubject();
+            const context = makeContext();
+
+            // The reverse collision order: the blob "/pages/about/page.json"
+            // is registered first, then the page template requires the same
+            // pathname to be a directory.
+            const manifest = {
+                pageMetadata: [
+                    { pathname: 'about', hash: 'hash-a', size: 1 },
+                ],
+                pageTemplates: [
+                    { filename: 'about/page.json/index.html', hash: 'hash-b', size: 2 },
+                ],
+            };
+
+            const caught = await catchAsyncError(
+                () => subject.commitChanges(context, 'build-1', manifest),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ValidationError', caught.name);
+            assertMatches('nests under file', caught.errors[0].message);
+        });
+
+        it('throws a ValidationError when a page directory uses a reserved page filename', async () => {
+            const { subject } = makeSubject();
+            const context = makeContext();
+
+            const manifest = {
+                pageMetadata: [
+                    { pathname: 'about/__page-partials-bundle', hash: 'hash-a', size: 1 },
+                ],
+                pageIncludes: [
+                    { pathname: 'contact/page.json', hash: 'hash-b', size: 2 },
+                ],
+            };
+
+            const caught = await catchAsyncError(
+                () => subject.commitChanges(context, 'build-1', manifest),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ValidationError', caught.name);
+            assertEqual(2, caught.errors.length);
+            assertMatches('reserved page filename', caught.errors[0].message);
+            assertMatches('reserved page filename', caught.errors[1].message);
+        });
+
+        it('accepts a page directory that shares a prefix with a sibling page', async () => {
+            const { subject, store } = makeSubject();
+            const context = makeContext();
+
+            // "/pages/about-us" is not an ancestor of "/pages/about", so the
+            // ancestor checks must not reject sibling paths sharing a prefix.
+            const manifest = {
+                pageMetadata: [
+                    { pathname: 'about', hash: 'hash-a', size: 1 },
+                    { pathname: 'about-us', hash: 'hash-b', size: 2 },
+                    { pathname: 'about/team', hash: 'hash-c', size: 3 },
+                ],
+                pageTemplates: [
+                    { filename: 'about/index.html', hash: 'hash-d', size: 4 },
+                ],
+            };
+
+            await subject.commitChanges(context, 'build-1', manifest);
+
+            const files = store.commitChangesCalls[0].files;
+            assertEqual(4, files.length);
+        });
+
         describe('when a manifest group is omitted', ({ it }) => {
             it('excludes that group from the committed files', async () => {
                 const { subject, store } = makeSubject();
