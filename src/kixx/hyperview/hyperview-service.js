@@ -94,7 +94,7 @@ export default class HyperviewService {
     /**
      * Connects the dependencies required for content loading and rendered-page caching.
      * @param {Object} args - Service dependencies
-     * @param {KeyValueStoreInterface} args.kvStore - Key-value store for rendered hypertext
+     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store for rendered hypertext
      * @param {import('./hyperview-content-service.js').default} args.contentService - Hyperview content service for page metadata, includes, and templates
      * @returns {void}
      */

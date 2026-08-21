@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import CloudflareContentStore from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js';
+import ContentAddressableStore from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-store.js';
 import Logger from '../../../../../src/kixx/logger/logger.js';
 import { getRootHash } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js';
 import {
@@ -42,7 +42,7 @@ function makeKvNamespace() {
 }
 
 // Minimal Cache API double, keyed by request URL, mirroring the subset of
-// the Cache interface CloudflareContentStore relies on (match/put/delete).
+// the Cache interface ContentAddressableStore relies on (match/put/delete).
 function makeEdgeCache() {
     const store = new Map();
     const puts = [];
@@ -107,7 +107,7 @@ function makeScheduler() {
 }
 
 function makeStore(options) {
-    return new CloudflareContentStore({
+    return new ContentAddressableStore({
         logger: makeLogger(),
         kvBindingName: KV_BINDING_NAME,
         durableObjectBindingName: DURABLE_OBJECT_BINDING_NAME,
@@ -156,7 +156,7 @@ async function catchAsyncError(fn) {
 }
 
 
-describe('CloudflareContentStore', ({ describe }) => {
+describe('ContentAddressableStore', ({ describe }) => {
 
     describe('getIndex', ({ it }) => {
         it('fetches the index from the Durable Object on a cold cache', async () => {

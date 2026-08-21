@@ -10,7 +10,8 @@
 // content-addressable store, so the general Hyperview plugin cannot
 // initialize on the Node target yet. A future Node adapter must implement
 // `src/kixx/content-store/content-addressable-store-interface.js` and
-// register itself as `ContentAddressableStore` to close this gap.
+// register itself as `ContentAddressableStore` to close this gap. It is free
+// to choose its own digest and serialization format; the port fixes neither.
 import HyperviewService from '../../kixx/hyperview/hyperview-service.js';
 import HyperviewContentService from '../../kixx/hyperview/hyperview-content-service.js';
 

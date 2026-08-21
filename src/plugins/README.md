@@ -56,8 +56,6 @@ The `hyperview` general plugin (`plugins/hyperview/plugin.js`) is a good example
 
 `register()` constructs and registers both services before either is initialized. `initialize()` resolves `ContentAddressableStore`, initializes `HyperviewContent` with it as the backing store, then initializes `Hyperview` with `HyperviewContent` and `KeyValueStore` — in that order, so `Hyperview` never receives a content service that has not itself been initialized. Neither service is platform-specific, so this plugin has no adapter package of its own; it only needs whatever platform registry has already registered `ContentAddressableStore` and `KeyValueStore` under those names.
 
-**Known platform gap.** Only `plugins/cloudflare.js` currently registers a `ContentAddressableStore` (via the `cloudflare-content-addressable-store` adapter, over a KV binding and a Durable Object index). `plugins/node.js` registers none, so the general Hyperview plugin cannot initialize on the Node target yet — `HyperviewContent#initialize({ contentStore })` would receive `undefined` and assert. Closing this gap needs a Node adapter package implementing `ContentAddressableStoreInterface` (immutable blob storage, an immutable index, and the digest wire format described in that port) and registering itself as `ContentAddressableStore` in `plugins/node.js`, following the "Adding a New Port" checklist below for the adapter half of the work — the port contract itself already exists and does not change.
-
 ## The Plugin Module Contract
 
 A plugin module exports up to two named functions. Both are optional:

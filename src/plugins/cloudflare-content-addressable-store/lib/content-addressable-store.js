@@ -21,6 +21,12 @@ import {
 } from './addressing.js';
 
 
+// WARNING: This names the Durable Object instance holding every committed
+// closure and build pointer. It only looks like it is derived from the class
+// name — it is a persistent storage identity, and changing it (by renaming
+// the class, or otherwise) silently repoints the adapter at a fresh, empty
+// Durable Object rather than failing. Change it only as a deliberate
+// migration, alongside FORMAT.
 const DURABLE_OBJECT_NAME = `ContentAddressableStore:${ FORMAT }`;
 // Not a real destination, only a stable Cache API key; index cache entries
 // never leave the colo that wrote them.
@@ -62,9 +68,16 @@ const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
  * policy, then sweep only blob hashes absent from the union of closures
  * reachable through every build pointer.
  *
+ * Only the methods tagged `@public` — `hashValue`, `openSnapshot`, `putBlob`,
+ * `putUtf8`, `putObject`, and `commitChanges` — form the port surface that
+ * framework code may call. The rest are tagged `@private`: they are this
+ * adapter's own, reachable to `ContentSnapshot` and to deployment tooling
+ * that constructs the store directly, and a second adapter is under no
+ * obligation to provide them.
+ *
  * @implements {import('../../../kixx/content-store/content-addressable-store-interface.js').ContentAddressableStoreInterface}
  */
-export default class CloudflareContentStore {
+export default class ContentAddressableStore {
 
     #logger;
     #kvBindingName;
@@ -89,8 +102,8 @@ export default class CloudflareContentStore {
         this.#durableObjectBindingName = options.durableObjectBindingName;
         // The Cache API's default cache is a true platform global rather than
         // a request-scoped context.env binding, so it is injectable here
-        // (options.edgeCache) the same way ContentAddressableStore injects a
-        // whole #store, allowing tests to supply a fake without a Workers runtime.
+        // (options.edgeCache), allowing tests to supply a fake without a
+        // Workers runtime.
         this.#edgeCache = options.edgeCache ?? caches.default;
         // The Scheduler API is likewise a platform global, injectable here for
         // the same reason: it lets Durable Object retry-backoff tests run
@@ -146,7 +159,7 @@ export default class CloudflareContentStore {
 
                 if (!cause?.retryable || attempt >= DURABLE_OBJECT_MAX_ATTEMPTS) {
                     throw new OperationalError(
-                        `CloudflareContentStore failed to call ContentAddressableIndexStore#${ methodName }()`,
+                        `ContentAddressableStore failed to call ContentAddressableIndexStore#${ methodName }()`,
                         { cause },
                     );
                 }
@@ -173,6 +186,7 @@ export default class CloudflareContentStore {
      * @returns {Promise<import('./content-addressable-index.js').default>} Index for `context.runtime.build.id`
      * @throws {AssertionError} When no index has been committed for the current build
      * @throws {OperationalError} When the index store call fails or reports an unsuccessful result
+     * @private Not part of ContentAddressableStoreInterface. Framework code reaches the index through openSnapshot(), which pins one index for the request; calling this directly gives up that pinning.
      */
     async getIndex(context) {
         const buildId = context.runtime.build.id;
@@ -207,6 +221,7 @@ export default class CloudflareContentStore {
      * @param {*} value - Value to hash
      * @returns {Promise<string>} Content digest in the current wire format
      * @throws {TypeError} When a non-primitive value cannot be canonicalized
+     * @public
      */
     async hashValue(value) {
         return await hashValue(value);
@@ -218,6 +233,7 @@ export default class CloudflareContentStore {
      * even if the build is reassigned before the request completes.
      * @param {RequestContext} context - Request context carrying the current build ID and platform bindings
      * @returns {Promise<ContentSnapshot>} Snapshot valid only for this request
+     * @public
      */
     async openSnapshot(context) {
         const index = await this.getIndex(context);
@@ -245,7 +261,7 @@ export default class CloudflareContentStore {
             (durableObject) => durableObject.getIndex(buildId),
         );
         if (!result.success) {
-            throw new OperationalError(`CloudflareContentStore#fetchIndex() was unsuccessful: ${ result.message }`);
+            throw new OperationalError(`ContentAddressableStore#fetchIndex() was unsuccessful: ${ result.message }`);
         }
 
         const { entries } = result;
@@ -269,6 +285,7 @@ export default class CloudflareContentStore {
      * @param {RequestContext} context - Request context carrying the current build ID
      * @param {string} pathname - The pathname to look up, including a leading slash "/"
      * @returns {Promise<IndexEntry|null>} The matching node, or null when no entry exists at that pathname
+     * @private Not part of ContentAddressableStoreInterface. The port exposes statPath() on the snapshot, not the store; this unpinned variant resolves the index afresh on every call.
      */
     async statPath(context, pathname) {
         const index = await this.getIndex(context);
@@ -282,6 +299,7 @@ export default class CloudflareContentStore {
      * @param {Object} [options]
      * @param {boolean} [options.recursive=true] - When false, only list the prefix's immediate children — nested nodes are skipped
      * @returns {Promise<IndexEntry[]>} Matching nodes in pathname sort order
+     * @private Not part of ContentAddressableStoreInterface. The port exposes listStats() on the snapshot, not the store; this unpinned variant resolves the index afresh on every call.
      */
     async listStats(context, prefix, options) {
         const { recursive = true } = options ?? {};
@@ -300,9 +318,10 @@ export default class CloudflareContentStore {
      * @param {string} pathname - Logical pathname the blob will be indexed under; carried through to the returned descriptor only, not used as the storage key
      * @param {Uint8Array} blob - Blob bytes to store
      * @param {Object|null} metadata - Caller-supplied metadata to associate with the blob, carried through to the returned descriptor
-     * @param {string} [etag] - Previously computed etag to verify against; when supplied it must match the etag recomputed from `blob` and `metadata`
+     * @param {string} [etag] - Opaque etag from an earlier read of this content, echoed back as a precondition; when supplied it must match the etag recomputed from `blob` and `metadata`
      * @returns {Promise<{pathname: string, hash: string, size: number, metadata: (Object|null)}>} Descriptor suitable for inclusion in the `files` array passed to `commitClosure`/`commitChanges`
      * @throws {ValidationError} When `etag` is supplied and does not match the recomputed etag
+     * @public
      */
     async putBlob(context, pathname, blob, metadata, etag) {
         const hash = await hashBlob(blob);
@@ -337,9 +356,10 @@ export default class CloudflareContentStore {
      * @param {string} pathname - Logical pathname the blob will be indexed under
      * @param {string} text - Text to encode and store
      * @param {Object|null} metadata - Caller-supplied metadata to associate with the blob
-     * @param {string} [etag] - Previously computed etag to verify against
+     * @param {string} [etag] - Opaque etag from an earlier read of this content, echoed back as a precondition
      * @returns {Promise<{pathname: string, hash: string, size: number, metadata: (Object|null)}>} Descriptor suitable for inclusion in `files`
      * @throws {ValidationError} When `etag` does not match the recomputed etag
+     * @public
      */
     async putUtf8(context, pathname, text, metadata, etag) {
         return await this.putBlob(context, pathname, stringToUint8Array(text), metadata, etag);
@@ -351,10 +371,11 @@ export default class CloudflareContentStore {
      * @param {string} pathname - Logical pathname the blob will be indexed under
      * @param {*} value - JSON-compatible value to canonically serialize and store
      * @param {Object|null} metadata - Caller-supplied metadata to associate with the blob
-     * @param {string} [etag] - Previously computed etag to verify against
+     * @param {string} [etag] - Opaque etag from an earlier read of this content, echoed back as a precondition
      * @returns {Promise<{pathname: string, hash: string, size: number, metadata: (Object|null)}>} Descriptor suitable for inclusion in `files`
      * @throws {TypeError} When `value` cannot be canonically serialized
      * @throws {ValidationError} When `etag` does not match the recomputed etag
+     * @public
      */
     async putObject(context, pathname, value, metadata, etag) {
         return await this.putUtf8(context, pathname, canonicalize(value), metadata, etag);
@@ -371,6 +392,7 @@ export default class CloudflareContentStore {
      * @throws {AssertionError} When `files` is not an array
      * @throws {ValidationError} When any file entry is malformed or collides with another
      * @throws {OperationalError} When the index store call fails or reports an unsuccessful result
+     * @private Not part of ContentAddressableStoreInterface. The port exposes only commitChanges(), which composes this with assignBuild(); the split halves exist for deployment tooling that commits a closure before deciding to serve it.
      */
     async commitClosure(context, files) {
         // buildIndex() validates `files` and derives the encoded table the
@@ -390,7 +412,7 @@ export default class CloudflareContentStore {
         );
 
         if (!result.success) {
-            throw new OperationalError(`CloudflareContentStore#commitClosure() was unsuccessful: ${ result.message }`);
+            throw new OperationalError(`ContentAddressableStore#commitClosure() was unsuccessful: ${ result.message }`);
         }
 
         // The encoded table is private to this write path; no caller outside
@@ -410,6 +432,7 @@ export default class CloudflareContentStore {
      * @param {string} rootHash - Root hash of an already-committed closure, such as one named by `getRootHash`
      * @returns {Promise<void>}
      * @throws {OperationalError} When the index store call fails or reports an unsuccessful result. An unknown `rootHash` asserts inside the Durable Object; crossing the Workers RPC boundary marks that error `remote`, so #callDurableObject wraps it and it surfaces here as an OperationalError with the assertion as its `cause`
+     * @private Not part of ContentAddressableStoreInterface. The port exposes only commitChanges(); this is the rollback half, for deployment tooling repointing a build at a closure committed earlier.
      */
     async assignBuild(context, buildId, rootHash) {
         this.#logger.info('assign build', { buildId, rootHash });
@@ -420,7 +443,7 @@ export default class CloudflareContentStore {
             (durableObject) => durableObject.assignBuild(buildId, rootHash),
         );
         if (!result.success) {
-            throw new OperationalError(`CloudflareContentStore#assignBuild() was unsuccessful: ${ result.message }`);
+            throw new OperationalError(`ContentAddressableStore#assignBuild() was unsuccessful: ${ result.message }`);
         }
         this.#invalidateIndex(buildId);
 
@@ -442,6 +465,7 @@ export default class CloudflareContentStore {
      * @throws {AssertionError} When `files` is not an array
      * @throws {ValidationError} When any file entry is malformed or collides with another
      * @throws {OperationalError} When either index store call fails or reports an unsuccessful result
+     * @public
      */
     async commitChanges(context, buildId, files) {
         const result = await this.commitClosure(context, files);
@@ -454,6 +478,7 @@ export default class CloudflareContentStore {
      * @param {RequestContext} context - Request context carrying the KV binding
      * @param {string} hash - Content hash identifying the blob, such as one returned from `putBlob` or an `IndexEntry.hash`
      * @returns {Promise<Uint8Array|null>} The blob's bytes, or null when no blob exists under `hash`
+     * @private Not part of ContentAddressableStoreInterface. The port exposes getBlob() on the snapshot; ContentSnapshot delegates here, supplying the context it captured, and is the only intended caller.
      */
     async getBlob(context, hash) {
         const kv = this.#resolveKvStore(context);
@@ -474,6 +499,7 @@ export default class CloudflareContentStore {
      * @param {RequestContext} context - Request context carrying the KV binding
      * @param {string[]} hashes - Content hashes to read
      * @returns {Promise<Array<Uint8Array|null>>} Bytes for each hash, in the same order as `hashes`; an entry is null when no blob exists under that hash
+     * @private Not part of ContentAddressableStoreInterface. The port exposes getBlobs() on the snapshot; ContentSnapshot delegates here, supplying the context it captured, and is the only intended caller.
      */
     async getBlobs(context, hashes) {
         const kv = this.#resolveKvStore(context);

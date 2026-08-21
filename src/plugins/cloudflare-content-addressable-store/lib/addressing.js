@@ -3,19 +3,32 @@
  * content-addressable store, plus a defensive pathname check for its own key
  * space.
  *
- * This module owns no content-layout vocabulary. The `/templates` and
- * `/pages` namespace, reserved bundle filenames, and the canonical Hyperview
- * pathname rule belong to `src/kixx/hyperview/content-layout.js`. See
- * `isValidPathname()`/`normalizePathname()` below for why this module still
- * keeps its own copy of the pathname check.
- *
  * Wire format v1:
  *   - digest: SHA-256 truncated to 128 bits, base32 (RFC 4648 lowercase, no pad)
  *   - domains: blobs, trees, digest-sets and etags use distinct prefix bytes
  *   - values: general-purpose hashes do not use a content-store domain byte
  *   - keys: two-character format prefix so a future format can coexist
  *
+ * The wire format is this adapter's own and stays internal to it.
+ * `ContentAddressableStoreInterface` specifies neither a digest algorithm nor
+ * a canonical serialization, only that an adapter be internally
+ * deterministic.
+ *
+ * Nothing outside this package derives a digest, external publishing clients
+ * included. The optional `x-checksum` header on a publishing upload carries
+ * an etag the client received from an earlier stat of already-published
+ * content and echoes back unchanged; `putBlob()` recomputes the etag from the
+ * bytes it was handed and rejects a mismatch. The header asserts "what I am
+ * uploading is what you already have", so the digest stays opaque to the
+ * client and no derivation needs publishing.
+ *
+ * The format must nonetheless stay stable over time. Blob hashes and etags
+ * are persisted in the index, so a change to `canonicalize()` or to any
+ * digest below would orphan every committed closure — the same content would
+ * address differently. `FORMAT` exists to gate such a change.
+ *
  * @module cloudflare-content-addr-store/addressing
+ * @see ../../../kixx/content-store/content-addressable-store-interface.js for the port this adapter's store implements
  */
 
 import {
@@ -83,10 +96,16 @@ export function compareStrings(a, b) {
  * Serializes a JSON-compatible value deterministically, sorting object keys,
  * omitting undefined object properties and removing insignificant whitespace.
  *
- * This is a published wire-format primitive. Publishing clients outside this
- * repository reproduce these exact bytes to compute an `x-checksum`, so any
- * two callers that canonicalize the same logical value must produce
- * byte-identical output. Object keys sort by UTF-16 code unit; object
+ * This is a wire-format primitive of *this adapter*, not shared framework
+ * code. The port specifies no canonical serialization, so another
+ * content-addressable store adapter may serialize differently and produce
+ * different digests for the same value; nothing outside this package may
+ * import this function.
+ *
+ * Within this adapter it is normative across time rather than across
+ * implementations: blob hashes and etags derived from these bytes are
+ * persisted in the index, so any change to the output orphans every committed
+ * closure and requires a `FORMAT` migration. Object keys sort by UTF-16 code unit; object
  * properties whose value is `undefined` are omitted; arrays preserve order;
  * output has no insignificant whitespace; numbers use `JSON.stringify()`
  * formatting; and non-finite numbers are rejected.

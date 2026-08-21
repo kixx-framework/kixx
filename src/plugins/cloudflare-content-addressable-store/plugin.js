@@ -1,4 +1,4 @@
-import CloudflareContentStore from './lib/cloudflare-content-store.js';
+import ContentAddressableStore from './lib/content-addressable-store.js';
 // Export the Cloudflare durable object.
 export { default as ContentAddressableIndexStore } from './lib/content-addressable-index-store.js';
 
@@ -25,7 +25,7 @@ export function register(context) {
         indexCacheTtlSeconds,
     } = config.env.CONTENT_ADDRESSABLE_STORE ?? {};
 
-    const store = new CloudflareContentStore({
+    const store = new ContentAddressableStore({
         logger,
         kvBindingName: kvBindingName ?? DEFAULTS.kvBindingName,
         durableObjectBindingName: durableObjectBindingName ?? DEFAULTS.durableObjectBindingName,

@@ -221,7 +221,7 @@ export default class HyperviewContentService {
      * @param {RequestContext} context - Request context carrying platform bindings
      * @param {Object} args
      * @param {Array<*>|Object} args.bundle - JSON-compatible partial-template definitions
-     * @param {string} [args.etag] - Expected digest used to verify upload integrity
+     * @param {string} [args.etag] - Opaque etag from an earlier stat of this resource, echoed back as a precondition; the write is rejected unless the uploaded content still matches it
      * @returns {Promise<StoredContentDescriptor>} Descriptor for a content manifest
      * @throws {TypeError} When bundle cannot be canonicalized
      * @throws {ValidationError} When etag does not match the uploaded content
@@ -239,7 +239,7 @@ export default class HyperviewContentService {
      * @param {RequestContext} context - Request context carrying platform bindings
      * @param {Object} args
      * @param {Array<*>|Object} args.bundle - JSON-compatible base-template definitions
-     * @param {string} [args.etag] - Expected digest used to verify upload integrity
+     * @param {string} [args.etag] - Opaque etag from an earlier stat of this resource, echoed back as a precondition; the write is rejected unless the uploaded content still matches it
      * @returns {Promise<StoredContentDescriptor>} Descriptor for a content manifest
      * @throws {TypeError} When bundle cannot be canonicalized
      * @throws {ValidationError} When etag does not match the uploaded content
@@ -258,7 +258,7 @@ export default class HyperviewContentService {
      * @param {Object} args
      * @param {string} args.pathname - Valid logical page pathname
      * @param {Object} args.metadata - JSON-compatible page metadata
-     * @param {string} [args.etag] - Expected digest used to verify upload integrity
+     * @param {string} [args.etag] - Opaque etag from an earlier stat of this resource, echoed back as a precondition; the write is rejected unless the uploaded content still matches it
      * @returns {Promise<StoredContentDescriptor>} Descriptor for a content manifest
      * @throws {AssertionError} When pathname is not a valid page pathname
      * @throws {TypeError} When metadata cannot be canonicalized
@@ -278,7 +278,7 @@ export default class HyperviewContentService {
      * @param {Object} args
      * @param {string} args.pathname - Valid logical page pathname
      * @param {Array<*>|Object} args.bundle - JSON-compatible page partial-template definitions
-     * @param {string} [args.etag] - Expected digest used to verify upload integrity
+     * @param {string} [args.etag] - Opaque etag from an earlier stat of this resource, echoed back as a precondition; the write is rejected unless the uploaded content still matches it
      * @returns {Promise<StoredContentDescriptor>} Descriptor for a content manifest
      * @throws {AssertionError} When pathname is not a valid page pathname
      * @throws {TypeError} When bundle cannot be canonicalized
@@ -298,7 +298,7 @@ export default class HyperviewContentService {
      * @param {Object} args
      * @param {string} args.pathname - Valid logical page pathname
      * @param {Array<*>|Object} args.bundle - JSON-compatible page include definitions
-     * @param {string} [args.etag] - Expected digest used to verify upload integrity
+     * @param {string} [args.etag] - Opaque etag from an earlier stat of this resource, echoed back as a precondition; the write is rejected unless the uploaded content still matches it
      * @returns {Promise<StoredContentDescriptor>} Descriptor for a content manifest
      * @throws {AssertionError} When pathname is not a valid page pathname
      * @throws {TypeError} When bundle cannot be canonicalized
@@ -318,7 +318,7 @@ export default class HyperviewContentService {
      * @param {Object} args
      * @param {string} args.filepath - Valid, non-root template filepath
      * @param {string} args.source - Template source text
-     * @param {string} [args.etag] - Expected digest used to verify upload integrity
+     * @param {string} [args.etag] - Opaque etag from an earlier stat of this resource, echoed back as a precondition; the write is rejected unless the uploaded content still matches it
      * @returns {Promise<StoredContentDescriptor>} Descriptor for a content manifest
      * @throws {AssertionError} When filepath is not a valid, non-root template filepath
      * @throws {ValidationError} When etag does not match the uploaded content
