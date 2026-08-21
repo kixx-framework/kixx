@@ -17,8 +17,8 @@ import {
     hashBlob,
     hashEtag,
     hashValue,
+    canonicalize,
 } from './addressing.js';
-import { canonicalize } from '../../../kixx/content-store/canonicalize.js';
 
 
 const DURABLE_OBJECT_NAME = `ContentAddressableStore:${ FORMAT }`;

@@ -2,7 +2,6 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import HyperviewContentService from '../../../../src/kixx/hyperview/hyperview-content-service.js';
-import { canonicalize } from '../../../../src/kixx/content-store/canonicalize.js';
 
 
 const encoder = new TextEncoder();
@@ -17,6 +16,10 @@ function encodeUtf8(str) {
 // double only needs a stable, distinguishable identity per distinct payload.
 async function fakeHashBlob(bytes) {
     return `hash:${ decoder.decode(bytes) }`;
+}
+
+function fakeSerializeObject(value) {
+    return JSON.stringify(value);
 }
 
 function makeGenericSnapshotFromPaths(paths, blobs) {
@@ -75,6 +78,7 @@ function makeBackingStore(overrides) {
     const putUtf8Calls = [];
     const commitChangesCalls = [];
     const openSnapshotCalls = [];
+    const hashValueCalls = [];
 
     return {
         paths,
@@ -84,9 +88,11 @@ function makeBackingStore(overrides) {
         putUtf8Calls,
         commitChangesCalls,
         openSnapshotCalls,
+        hashValueCalls,
 
         async hashValue(value) {
-            return `value-hash:${ canonicalize(value) }`;
+            hashValueCalls.push(value);
+            return 'value-hash';
         },
 
         async putBlob(_context, pathname, blob, metadata, etag) {
@@ -111,7 +117,7 @@ function makeBackingStore(overrides) {
 
         async putObject(context, pathname, value, metadata, etag) {
             putObjectCalls.push({ pathname, value, metadata, etag });
-            return await this.putBlob(context, pathname, encodeUtf8(canonicalize(value)), metadata, etag);
+            return await this.putBlob(context, pathname, encodeUtf8(fakeSerializeObject(value)), metadata, etag);
         },
 
         async openSnapshot(context) {
@@ -188,11 +194,13 @@ describe('HyperviewContentService', ({ describe }) => {
     describe('hashValue', ({ it }) => {
         it('delegates to the backing store', async () => {
             const { subject, store } = makeSubject();
+            const value = { b: 1, a: 2 };
 
-            const a = await subject.hashValue({ b: 1, a: 2 });
-            const b = await store.hashValue({ a: 2, b: 1 });
+            const result = await subject.hashValue(value);
 
-            assertEqual(a, b);
+            assertEqual('value-hash', result);
+            assertEqual(1, store.hashValueCalls.length);
+            assertEqual(value, store.hashValueCalls[0]);
         });
     });
 
@@ -291,7 +299,7 @@ describe('HyperviewContentService', ({ describe }) => {
 
             const snapshot = await subject.openSnapshot(context);
             const content = await snapshot.getTemplatePartials();
-            assertEqual(canonicalize(bundle), content.text());
+            assertEqual(fakeSerializeObject(bundle), content.text());
         });
     });
 
@@ -307,7 +315,7 @@ describe('HyperviewContentService', ({ describe }) => {
 
             const snapshot = await subject.openSnapshot(context);
             const content = await snapshot.getBaseTemplates();
-            assertEqual(canonicalize(bundle), content.text());
+            assertEqual(fakeSerializeObject(bundle), content.text());
         });
     });
 
@@ -723,8 +731,8 @@ describe('HyperviewContentService', ({ describe }) => {
             assertEqual('Root', page.pageDataFiles[0].json().title);
             assertEqual('Led Zeppelin', page.pageDataFiles[1].json().title);
             assertEqual('index.html', page.pageTemplateFilename);
-            assertEqual(canonicalize([ { name: 'sidebar' } ]), page.partials.text());
-            assertEqual(canonicalize([ { name: 'related' } ]), page.includes.text());
+            assertEqual(fakeSerializeObject([ { name: 'sidebar' } ]), page.partials.text());
+            assertEqual(fakeSerializeObject([ { name: 'related' } ]), page.includes.text());
             assert(page.etag, 'expected getPage to compute an etag');
         });
     });

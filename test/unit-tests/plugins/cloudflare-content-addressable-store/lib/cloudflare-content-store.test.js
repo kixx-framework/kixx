@@ -4,9 +4,9 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import CloudflareContentStore from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js';
 import Logger from '../../../../../src/kixx/logger/logger.js';
 import { getRootHash } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js';
-import { canonicalize } from '../../../../../src/kixx/content-store/canonicalize.js';
 import {
     KEY,
+    canonicalize,
     hashBlob,
     hashEtag,
     stringToUint8Array,
