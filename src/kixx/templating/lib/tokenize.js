@@ -1,3 +1,12 @@
+/**
+ * Splits a template source string into content, delimiter, and expression tokens.
+ * Tokens include their source location and standalone-tag metadata where applicable.
+ *
+ * @param {Object|null} _options - Reserved for future use; pass null.
+ * @param {string} filename - Template name included in token locations and errors.
+ * @param {string} utf8 - Template source to tokenize.
+ * @returns {Array<Object>} Tokens in source order.
+ */
 export default function tokenize(_options, filename, utf8) {
     const lineInfo = createLineInfo(utf8);
     const tokens = [];

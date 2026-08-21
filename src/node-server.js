@@ -16,8 +16,9 @@ import ServerRequest from './plugins/node-server-request/lib/server-request.js';
 import ServerResponse from './kixx/http-router/server-response.js';
 import sourceConfig from './node-config.js';
 import * as app from './app/app.js';
-import generalPlugins from './plugins/general.js';
-import nodePlugins from './plugins/node.js';
+import { plugins as generalPlugins } from './plugins/general.js';
+import { plugins as nodePlugins } from './plugins/node.js';
+import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import { readConfig } from './kixx/config/read-config.js';
 import virtualHosts from './virtual-hosts.js';
 
@@ -112,7 +113,7 @@ const appContext = new ApplicationContext({
 const trustProxy = appContext.getEnvBoolean('TRUST_PROXY');
 
 // Merge plugin maps, allowing platform plugins to override general plugins.
-const plugins = new Map([ ...generalPlugins, ...nodePlugins ]);
+const plugins = mergePluginMaps(generalPlugins, nodePlugins);
 
 // Register all plugins before calling initialize() on each.
 for (const plugin of plugins.values()) {

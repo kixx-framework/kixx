@@ -14,7 +14,7 @@ import {
  * the matching severity method. Cloudflare captures these console calls and
  * makes them available in Workers Logs and Tail Workers.
  *
- * @implements {import('../../logger/logger-writer-interface.js').LoggerWriterInterface}
+ * @implements {import('../../../kixx/logger/logger-writer-interface.js').LoggerWriterInterface}
  */
 export default class LoggerWriter {
 

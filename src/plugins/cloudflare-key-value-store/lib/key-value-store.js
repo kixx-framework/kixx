@@ -19,6 +19,7 @@ const VALID_TYPES = [ 'text', 'json', 'arrayBuffer' ];
 // limits, so other adapters enforces the same numbers.
 const MAX_KEY_BYTES = 512;
 const MIN_EXPIRATION_SECONDS = 60;
+const MIN_CACHE_TTL_SECONDS = 60;
 const DEFAULT_BINDING_NAME = 'KEY_VALUE_STORE';
 
 /**
@@ -64,15 +65,16 @@ export default class KeyValueStore {
      * @param {string} key - Cache key
      * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
      * @returns {Promise<string|Object|ArrayBuffer|null>} The decoded value, or null when absent or expired
-     * @throws {AssertionError} When the key or `options.type` is invalid
+     * @throws {AssertionError} When the key, `options.type`, or `options.cacheTtl` is invalid
      */
     async get(context, key, options) {
         this.#assertValidKey(key);
         const type = this.#resolveType(options);
+        const cacheTtl = this.#resolveCacheTtl(options);
         this.#logger.debug('get() loading key', { key, type });
 
         const kvStore = this.#getKVStore(context);
-        const value = await kvStore.get(key, { type });
+        const value = await kvStore.get(key, { type, ...cacheTtl });
 
         return isUndefined(value) ? null : value;
     }
@@ -189,6 +191,28 @@ export default class KeyValueStore {
             throw new AssertionError('KeyValueStore "arrayBuffer" value must be an ArrayBuffer or typed-array view');
         }
         return value;
+    }
+
+    /**
+     * Validates the optional edge-cache hint and maps it to KV's `get()` options
+     * (`cacheTtl`). Enforces the contract's 60-second minimum rather than clamping,
+     * matching Cloudflare KV's own floor.
+     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
+     * @returns {Object} KV get options, possibly empty when no cacheTtl was supplied
+     * @throws {AssertionError} When `options.cacheTtl` is not a valid TTL
+     */
+    #resolveCacheTtl(options) {
+        const cacheTtl = options?.cacheTtl;
+        if (isUndefined(cacheTtl)) {
+            return {};
+        }
+        if (!Number.isInteger(cacheTtl) || cacheTtl <= 0) {
+            throw new AssertionError('KeyValueStore "cacheTtl" must be a positive integer');
+        }
+        if (cacheTtl < MIN_CACHE_TTL_SECONDS) {
+            throw new AssertionError(`KeyValueStore "cacheTtl" must be at least ${ MIN_CACHE_TTL_SECONDS } seconds`);
+        }
+        return { cacheTtl };
     }
 
     /**

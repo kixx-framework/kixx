@@ -1,74 +1,44 @@
+import { NotFoundError } from '../errors/mod.js';
+import HyperviewPage from './hyperview-page.js';
 import * as templating from '../templating/mod.js';
-import deepMerge from '../utils/deep-merge.js';
-import { NO_BUILD_ID_SEGMENT } from '../utils/build-id.js';
-import {
-    assert,
-    assertNonEmptyString,
-    isUndefined,
-    isNonEmptyString,
-    isFunction,
-} from '../assertions/mod.js';
-
 import formatDate from './helpers/format-date.js';
 import markup from './helpers/markup.js';
 import truncate from './helpers/truncate.js';
 import {
-    assertCanonicalIdentifier,
-    normalizeIdentifier,
-} from './canonical-identifiers.js';
+    assert,
+    assertArray,
+    assertFunction,
+    assertNonEmptyString,
+    isFunction,
+    isNonEmptyString,
+} from '../assertions/mod.js';
 
+// Versioned bundles only coexist while requests finish across a publication.
+const MAX_VERSIONED_TEMPLATE_CACHE_ENTRIES = 4;
+// Page-specific content can vary across many routes, so it needs a larger bound.
+const MAX_PAGE_PARTIAL_CACHE_ENTRIES = 1000;
+const MAX_PAGE_TEMPLATE_CACHE_ENTRIES = 1000;
 
-/**
- * @typedef {import('../context/request-context.js').default} RequestContext
- */
-
-/**
- * @typedef {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} KeyValueStoreInterface
- */
-
-/**
- * @typedef {import('./page-data-store-interface.js').PageDataStoreInterface} PageDataStoreInterface
- */
-
-/**
- * @typedef {import('./template-file-store-interface.js').TemplateFileStoreInterface} TemplateFileStoreInterface
- */
-
-/**
- * @typedef {Object} HyperviewPageContent
- * @property {string} version - Version string composed from the merged page data files.
- * @property {Object} metadata - Page metadata merged from root to leaf page data.
- */
-
-/**
- * @typedef {Object} HyperviewIncludeSpec
- * @property {string} filename - Page-relative file to load.
- * @property {boolean} [template=false] - Compile and render the file as a template.
- */
-
-/**
- * A Map with case-insensitive string-key lookup, so a partial referenced as
- * `{{> Nav.html }}` resolves the canonical entry stored under `nav.html`.
- * Insertion deliberately preserves the key: stored partial names must already
- * be canonical rather than being silently corrected here. The templating engine
- * calls only `has`/`get` and never learns this subclass exists.
- */
-class CaseInsensitiveMap extends Map {
-    get(key) {
-        return super.get(key.toLowerCase());
-    }
-
-    has(key) {
-        return super.has(key.toLowerCase());
-    }
+function layerPartials(primary, secondary) {
+    // Page partials take precedence over global partials for this render only.
+    return new Map([ ...secondary, ...primary ]);
 }
 
 /**
- * Renders Hyperview pages by fetching, merging, and processing hierarchical page data.
+ * Assembles Hyperview page context and renders JSON, fragments, or full pages
+ * from content-addressed application data and templates.
  */
 export default class HyperviewService {
 
-    #logger = null;
+    #logger;
+    #contentService;
+    #kvStore;
+    #useTemplateCache;
+    #usePageCache;
+    #pageCacheReadTtlSeconds;
+    #pageCacheExpirationSeconds;
+    #includePropsInCacheKey;
+    #allowJsonResponse;
 
     #customHelpers = new Map([
         [ 'formatDate', formatDate ],
@@ -76,676 +46,676 @@ export default class HyperviewService {
         [ 'truncate', truncate ],
     ]);
 
-    #kvStore = null;
-    #pageDataStore = null;
-    #templateFileStore = null;
+    // Immutable template maps, indexed by their content bundle etags.
+    #baseTemplates = new Map();
 
-    #templateCache = new Map();
-    #partialsCache = new Map();
-    #includesCache = new Map();
+    // Immutable partial maps, indexed by their content bundle etags.
+    #globalPartials = new Map();
+
+    // Active global partials loads, keyed by the pinned bundle etag.
+    #globalPartialsLoadPromises = new Map();
+
+    // Immutable compiled page templates, indexed by normalized template filepath.
+    #pageTemplates = new Map();
+
+    // Immutable compiled page partials, indexed by their content bundle etags.
+    #pagePartials = new Map();
 
     /**
-     * @param {Object} options - Service configuration
+     * @param {Object} options
      * @param {import('../logger/logger.js').default} options.logger - Root logger used to create a HyperviewService child logger
-     * @throws {AssertionError} When logger is not provided
+     * @param {boolean} [options.useTemplateCache=false] - Reuse compiled templates until their content etags change; fixed for the lifetime of the service
+     * @param {boolean} [options.usePageCache=false] - Default rendered-page cache policy; overridable per render
+     * @param {number} [options.pageCacheReadTtlSeconds=86400] - Default cache TTL for rendered-page reads, in seconds
+     * @param {number} [options.pageCacheExpirationSeconds=86400] - Default expiration for rendered-page writes, in seconds
+     * @param {boolean} [options.includePropsInCacheKey=false] - Include response props in rendered-page cache identity by default; enable when props vary by request or user
+     * @param {boolean} [options.allowJsonResponse=false] - Allow explicit JSON requests to receive assembled page context by default
      */
     constructor(options) {
-        const { logger } = options ?? {};
+        const {
+            logger,
+            useTemplateCache = false,
+            usePageCache = false,
+            pageCacheReadTtlSeconds = 60 * 60 * 24,
+            pageCacheExpirationSeconds = 60 * 60 * 24,
+            includePropsInCacheKey = false,
+            allowJsonResponse = false,
+        } = options ?? {};
         assert(logger, 'HyperviewService requires a logger');
         this.#logger = logger.createChild('HyperviewService');
+        this.#useTemplateCache = useTemplateCache;
+        this.#usePageCache = usePageCache;
+        this.#pageCacheReadTtlSeconds = pageCacheReadTtlSeconds;
+        this.#pageCacheExpirationSeconds = pageCacheExpirationSeconds;
+        this.#includePropsInCacheKey = includePropsInCacheKey;
+        this.#allowJsonResponse = allowJsonResponse;
     }
 
     /**
-     * @param {Object} args
-     * @param {KeyValueStoreInterface} [args.kvStore] - Optional key/value store for full-page caching.
-     * @param {PageDataStoreInterface} args.pageDataStore - Store for page metadata and include files.
-     * @param {TemplateFileStoreInterface} args.templateFileStore - Store for base, page, and partial templates.
-     * @throws {AssertionError} When a required store is missing.
+     * Connects the dependencies required for content loading and rendered-page caching.
+     * @param {Object} args - Service dependencies
+     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store for rendered hypertext
+     * @param {import('./hyperview-content-service.js').default} args.contentService - Hyperview content service for page metadata, includes, and templates
+     * @returns {void}
      */
     initialize(args) {
-        const { kvStore, pageDataStore, templateFileStore } = args ?? {};
-        assert(kvStore, 'HyperviewService requires a kvStore');
-        assert(pageDataStore, 'HyperviewService requires a pageDataStore');
-        assert(templateFileStore, 'HyperviewService requires a templateFileStore');
+        const { contentService, kvStore } = args ?? {};
+        assert(kvStore, 'HyperviewService#initialize() requires a kvStore');
+        assert(contentService, 'HyperviewService#initialize() requires a contentService');
+
+        this.#contentService = contentService;
         this.#kvStore = kvStore;
-        this.#pageDataStore = pageDataStore;
-        this.#templateFileStore = templateFileStore;
     }
 
     /**
-     * Loads and merges page metadata from the root page through `pathname`.
-     * @param {RequestContext} context - Request context passed through to the page data store.
-     * @param {string} pathname - Normalized page pathname, such as `/` or `/blog/post`.
-     * @returns {Promise<HyperviewPageContent|null>} Merged page content, or null when the leaf page is missing.
-     * @throws {AssertionError} When pathname is not canonical
+     * Validates a non-empty identifier against the content service's canonical pathname rules.
+     * @param {*} value - Value to assert
+     * @param {string} messagePrefix - Caller context included in assertion messages
+     * @returns {void}
      */
-    async getPageMetadata(context, pathname) {
-        assertCanonicalIdentifier(
-            pathname,
-            'HyperviewService.getPageMetadata: pathname',
+    assertCanonicalIdentifier(value, messagePrefix) {
+        // isValidPathname() accepts an empty string, so check for content here.
+        // This method exists to validate identifiers which may not have been
+        // checked by any earlier layer, so it must enforce the whole contract.
+        assert(
+            isNonEmptyString(value) && this.#contentService.isValidPathname(value),
+            `${ messagePrefix } must be a valid pathname`,
         );
-        const buildId = context.runtime.build?.id ?? null;
-
-        // We need to get the page data for this page - the page at `pathname` - and
-        // all its parent pages. So for pathname "/blog/reviews/music/led-zeppelin" we need:
-        //
-        // /page.json
-        // /blog/page.json
-        // /blog/reviews/page.json
-        // /blog/reviews/music/page.json
-        // /blog/reviews/music/led-zeppelin/page.json
-
-        const parts = pathname.split('/').filter((part) => part);
-        const filepaths = [ '/page.json' ];
-        let path = '';
-
-        if (pathname !== '/') {
-            for (const part of parts) {
-                path = `${ path }/${ part }`;
-                filepaths.push(`${ path }/page.json`);
-            }
-        }
-
-        const items = await this.#pageDataStore.getJSONFiles(context, buildId, filepaths);
-
-        if (!items[items.length - 1]) {
-            this.#logger.debug('page metadata not found', { pathname });
-            return null;
-        }
-
-        let version = '';
-
-        // Extract json payloads for merging. Parent page.json files are optional, nulls are skipped.
-        const jsonItems = items
-            .filter((x) => x)
-            .map((x) => {
-                version = version ? `${ version }:${ x.json.version }` : x.json.version;
-                return x.json;
-            });
-
-        // Merge the pages together, with the more specific page data objects overriding
-        // their parents. Includes are page-relative, so only the leaf page can declare
-        // files that should be loaded for the requested pathname.
-        const mergeItems = jsonItems.map((json, index) => {
-            if (index === jsonItems.length - 1) {
-                return json;
-            }
-
-            const parentJson = Object.assign({}, json);
-            delete parentJson.includes;
-            return parentJson;
-        });
-
-        const metadata = deepMerge(...mergeItems);
-
-        // Templates need a non-empty segment for one stable asset URL shape; the
-        // asset handler maps this placeholder back to the flat store root.
-        metadata.build_id = buildId ?? NO_BUILD_ID_SEGMENT;
-
-        return { version, metadata };
     }
 
     /**
-     * Retrieves a cached full-page HTML response.
-     * @param {RequestContext} context - Request context passed through to the key/value store.
-     * @param {string} pathname - Normalized page pathname.
-     * @param {string} version - Page content version used to isolate cache entries.
-     * @returns {Promise<string|null>} Cached HTML, or null when absent.
-     * @throws {AssertionError} When no key/value store was configured or pathname is not canonical.
+     * Reports whether a URL or logical pathname satisfies the content service's pathname rules.
+     * @param {string} pathname - The pathname to check
+     * @returns {boolean} True when the pathname is valid
      */
-    async getCachedPage(context, pathname, version) {
-        assert(this.#kvStore, 'HyperviewService requires a kvStore to cache full pages');
-        assertCanonicalIdentifier(
-            pathname,
-            'HyperviewService.getCachedPage: pathname',
-        );
-        const buildId = context.runtime.build?.id || '';
-        const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
-        const page = await this.#kvStore.get(context, key, { type: 'text' });
-        if (page) {
-            this.#logger.debug('cached page hit', { pathname, key });
-        } else {
-            this.#logger.debug('cached page miss', { pathname, key });
-        }
-        return page;
+    isValidPathname(pathname) {
+        return this.#contentService.isValidPathname(pathname);
     }
 
     /**
-     * Stores a rendered full-page HTML response in the key/value cache.
-     * @param {RequestContext} context - Request context passed through to the key/value store.
-     * @param {string} pathname - Normalized page pathname.
-     * @param {string} version - Page content version used to isolate cache entries.
-     * @param {string} page - Rendered HTML page.
-     * @returns {Promise<void>}
-     * @throws {AssertionError} When no key/value store was configured or pathname is not canonical.
-     */
-    async setCachedPage(context, pathname, version, page) {
-        assert(this.#kvStore, 'HyperviewService requires a kvStore to cache full pages');
-        assertCanonicalIdentifier(
-            pathname,
-            'HyperviewService.setCachedPage: pathname',
-        );
-        const buildId = context.runtime.build?.id || '';
-        const key = `hyperview_page_cache:${ buildId }:${ pathname }:${ version }`;
-        await this.#kvStore.put(context, key, page, { type: 'text' });
-    }
-
-    /**
-     * Adds request path, canonical URL, current href, templated title/description, and Open Graph defaults.
-     * @param {URL} url - Request URL for the page being rendered.
-     * @param {Object} metadata - Merged page metadata. Its `page` object is mutated and returned.
-     * @returns {Object} The normalized `metadata.page` object.
-     */
-    mergePageMetadata(url, metadata) {
-        const page = metadata.page ?? {};
-        metadata.page = page;
-        const pathname = normalizeIdentifier(url.pathname);
-        page.pathname = pathname;
-
-        // Set canonical URL from request URL if not already defined in page data
-        // Canonical URL excludes query string and hash to provide a stable reference
-        if (!page.canonical_url) {
-            page.canonical_url = this.#urlToCanonicalURLString(url, pathname);
-        }
-        // href records the literal request, while pathname and canonical_url identify
-        // every case variant as one canonical page.
-        if (!page.href) {
-            page.href = url.href;
-        }
-
-        if (isNonEmptyString(page.title?.template)) {
-            const template = this.#createMiniTemplate(`${ url.pathname }/page.title`, page.title.template);
-            page.title = template(metadata);
-        }
-        if (isNonEmptyString(page.description?.template)) {
-            const template = this.#createMiniTemplate(`${ url.pathname }/page.description`, page.description.template);
-            page.description = template(metadata);
-        }
-
-        // Create the Open Graph object if it does not yet exist.
-        if (!page.open_graph) {
-            page.open_graph = {};
-        }
-
-        const { open_graph } = page;
-
-        // Let existing open_graph values override the page values
-
-        if (isUndefined(open_graph.url)) {
-            open_graph.url = page.canonical_url;
-        }
-        if (isUndefined(open_graph.type)) {
-            open_graph.type = 'website';
-        }
-        if (isUndefined(open_graph.title)) {
-            open_graph.title = page.title;
-        }
-        if (isUndefined(open_graph.description)) {
-            open_graph.description = page.description;
-        }
-        if (isUndefined(open_graph.locale)) {
-            open_graph.locale = page.locale;
-        }
-
-        return page;
-    }
-
-    /**
-     * Loads include files declared by page metadata and returns rendered include content.
-     * @param {RequestContext} context - Request context passed through to the page data and template stores.
-     * @param {string} pathname - Normalized page pathname.
-     * @param {Object<string, HyperviewIncludeSpec>} includes - Include declarations keyed by template name.
-     * @param {Object} [options] - Include loading options.
-     * @param {boolean} [options.useCache=false] - Reuse compiled include templates from this service instance.
-     * @param {string} [options.version] - Page content version used to isolate compiled include cache entries.
-     * @param {Object} [options.metadata] - Page metadata used when rendering templated includes.
-     * @returns {Promise<Object<string, string>>} Rendered include content keyed by include name.
-     * @throws {AssertionError} When pathname or an include filename is not canonical
-     */
-    async getIncludes(context, pathname, includes, options) {
-        const { useCache = false, version, metadata = {} } = options ?? {};
-        const buildId = context.runtime.build?.id ?? null;
-
-        assertCanonicalIdentifier(
-            pathname,
-            'HyperviewService.getIncludes: pathname',
-        );
-
-        // Process included files. Example:
-        // const data = {
-        //     includes: {
-        //         header: { filename: 'header.html', template: true },
-        //         summary: { filename: 'summary.md' },
-        //         body: { filename: 'body.md', template: true },
-        //     },
-        // };
-
-        // Build a flat list without mutating metadata.includes; the name is
-        // carried separately so each loaded file can be assigned to its public key.
-        const includesList = Object.keys(includes)
-            .map((name) => {
-                const item = includes[name];
-                if (item) {
-                    return Object.assign({}, item, { name });
-                }
-                return null;
-            })
-            .filter((x) => x);
-
-        let usesTemplate = false;
-
-        const includedFilepaths = includesList.map(({ name, filename, template }) => {
-            assertCanonicalIdentifier(
-                filename,
-                `HyperviewService.getIncludes: includes[${ name }].filename for ${ pathname }`,
-            );
-            if (template) usesTemplate = true;
-            return joinPageFilepath(pathname, filename);
-        });
-
-        let cacheKey;
-        if (useCache && version) {
-            cacheKey = `${ buildId }:${ pathname }:${ version }`;
-            if (this.#includesCache.has(cacheKey)) {
-                const cachedIncludes = this.#includesCache.get(cacheKey);
-                this.#logger.debug('page includes cache hit', { pathname, key: cacheKey });
-                return renderIncludes(cachedIncludes, metadata);
-            }
-            this.#logger.debug('page includes cache miss', { pathname, key: cacheKey });
-        }
-
-        const files = await this.#pageDataStore.getTextFiles(context, buildId, includedFilepaths);
-
-        let partials;
-        if (usesTemplate) {
-            partials = await this.loadPartials(context, { useCache });
-        }
-
-        const compiledIncludes = {};
-
-        const includedContent = files
-            .map((file, index) => {
-                if (file) {
-                    const { filepath, source } = file;
-                    return Object.assign(includesList[index], { filepath, source });
-                }
-                return null;
-            })
-            .filter((x) => x);
-
-        for (const item of includedContent) {
-            if (item.template) {
-                const template = this.compileTemplate(item.filepath, item.source, this.#customHelpers, partials);
-                compiledIncludes[item.name] = template;
-            } else {
-                compiledIncludes[item.name] = item.source;
-            }
-        }
-
-        if (cacheKey) {
-            // Cache compiled include templates, not rendered strings, because
-            // dynamic pages may merge different response props into each request.
-            this.#includesCache.set(cacheKey, compiledIncludes);
-        }
-
-        return renderIncludes(compiledIncludes, metadata);
-    }
-
-    /**
-     * Writes a page's metadata file (`page.json`) to a build, fully replacing any
-     * existing file at that path.
-     *
-     * Unlike the template writes, page data writes deliberately allow the current
-     * build id so content can be edited on the live build; the only build-id rule
-     * is that it must be a non-empty string (contrast with #assertWritableBuildId).
-     *
-     * Caller responsibilities, not enforced here: the metadata must reference every
-     * include it expects under its `includes` map, and — for a write to the current
-     * build — it must carry a changed `version`, because the full-page and includes
-     * caches key on `version`; an unchanged version serves stale cached content.
-     * @param {RequestContext} context - Request context passed through to the page data store
-     * @param {string} buildId - Target build id (write namespace); may be the current build id
-     * @param {string} pathname - Normalized page pathname, such as `/` or `/blog/post`
-     * @param {Object} metadata - The complete page metadata to store as `page.json`
-     * @returns {Promise<import('./page-data-store-interface.js').PageDataFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When buildId is empty, pathname is not canonical, or an
-     *   include filename in metadata is not canonical
-     */
-    async putPageMetadata(context, buildId, pathname, metadata) {
-        assertNonEmptyString(buildId, 'HyperviewService page data writes require a buildId');
-        assertCanonicalIdentifier(
-            pathname,
-            'HyperviewService.putPageMetadata: pathname',
-        );
-        assertIncludeFilenames(
-            metadata.includes,
-            pathname,
-            'HyperviewService.putPageMetadata',
-        );
-        const filepath = joinPageFilepath(pathname, 'page.json');
-        return await this.#pageDataStore.putJSONFile(context, buildId, filepath, metadata);
-    }
-
-    /**
-     * Writes an include's text content file for a page to a build.
-     *
-     * Writes only the content file; it does not index the include. The caller is
-     * responsible for referencing the include in the page's `page.json` `includes`
-     * map (see putPageMetadata) — an unreferenced include is never loaded at render
-     * time.
-     * @param {RequestContext} context - Request context passed through to the page data store
-     * @param {string} buildId - Target build id (write namespace); may be the current build id
-     * @param {string} pathname - Normalized page pathname the include belongs to
-     * @param {string} filename - Include filename relative to the page pathname, such as `body.md`
-     * @param {string} source - Include source text to store
-     * @returns {Promise<import('./page-data-store-interface.js').PageDataFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When buildId is empty, or pathname or filename is not canonical
-     */
-    async putIncludeContent(context, buildId, pathname, filename, source) {
-        assertNonEmptyString(buildId, 'HyperviewService page data writes require a buildId');
-        assertCanonicalIdentifier(
-            pathname,
-            'HyperviewService.putIncludeContent: pathname',
-        );
-        assertCanonicalIdentifier(
-            filename,
-            'HyperviewService.putIncludeContent: filename',
-        );
-        const filepath = joinPageFilepath(pathname, filename);
-        return await this.#pageDataStore.putTextFile(context, buildId, filepath, source);
-    }
-
-    /**
-     * Loads and compiles a shared base template with all available partials.
-     * @param {RequestContext} context - Request context passed through to the template file store
-     * @param {string} templateId - Canonical base template identifier understood by the template file store.
-     * @param {Object} [options] - Template loading options
-     * @param {boolean} [options.useCache=false] - Reuse compiled templates from this service instance
-     * @returns {Promise<Function|null>} Render function, or null when the base template does not exist
-     * @throws {AssertionError} When templateId is not canonical
-     * @throws {Error} When a template or partial cannot be compiled
-     */
-    async getBaseTemplate(context, templateId, options) {
-        assertCanonicalIdentifier(
-            templateId,
-            'HyperviewService.getBaseTemplate: templateId',
-        );
-        const { useCache = false } = options ?? {};
-        const buildId = context.runtime.build?.id ?? null;
-
-        let template;
-        const cacheKey = `${ buildId }:base:${ templateId }`;
-        if (useCache) {
-            if (this.#templateCache.has(cacheKey)) {
-                template = this.#templateCache.get(cacheKey);
-                this.#logger.debug('base template cache hit', { templateId, key: cacheKey });
-                return template;
-            }
-            this.#logger.debug('base template cache miss', { templateId, key: cacheKey });
-        }
-
-        const file = await this.#templateFileStore.getBaseTemplate(context, buildId, templateId);
-        if (file) {
-            const partials = await this.loadPartials(context, { useCache });
-            template = this.compileTemplate(file.filepath, file.source, this.#customHelpers, partials);
-        }
-
-        if (useCache) {
-            this.#templateCache.set(cacheKey, template ?? null);
-        }
-
-        return template ?? null;
-    }
-
-    /**
-     * Loads and compiles a page-specific template with all available partials.
-     * @param {RequestContext} context - Request context
-     * @param {string} templateId - Canonical template identifier understood by the template file store.
-     * @param {Object} [options] - Template loading options
-     * @param {boolean} [options.useCache=false] - Reuse compiled templates from this service instance
-     * @returns {Promise<Function|null>} Render function, or null when the page template does not exist
-     * @throws {AssertionError} When templateId is not canonical
-     */
-    async getPageTemplate(context, templateId, options) {
-        assertCanonicalIdentifier(
-            templateId,
-            'HyperviewService.getPageTemplate: templateId',
-        );
-        const { useCache = false } = options ?? {};
-        const buildId = context.runtime.build?.id ?? null;
-
-        let template;
-        const cacheKey = `${ buildId }:page:${ templateId }`;
-        if (useCache) {
-            if (this.#templateCache.has(cacheKey)) {
-                template = this.#templateCache.get(cacheKey);
-                this.#logger.debug('page template cache hit', { templateId, key: cacheKey });
-                return template;
-            }
-            this.#logger.debug('page template cache miss', { templateId, key: cacheKey });
-        }
-
-        const file = await this.#templateFileStore.getPageTemplate(context, buildId, templateId);
-        if (file) {
-            const partials = await this.loadPartials(context, { useCache });
-            template = this.compileTemplate(file.filepath, file.source, this.#customHelpers, partials);
-        }
-
-        if (useCache) {
-            this.#templateCache.set(cacheKey, template ?? null);
-        }
-
-        return template ?? null;
-    }
-
-    /**
-     * Writes a base template source file to a target build's namespace.
-     *
-     * Stores the source verbatim — no compilation — so template syntax is
-     * validated at render time, not at write time.
-     * @param {RequestContext} context - Request context carrying the current build id
-     * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} templateId - Canonical base template filename relative to `base/`
-     * @param {string} source - Template source text to store
-     * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When templateId is not canonical, buildId is empty, or
-     *   buildId matches the current build id
-     */
-    async putBaseTemplate(context, buildId, templateId, source) {
-        assertCanonicalIdentifier(
-            templateId,
-            'HyperviewService.putBaseTemplate: templateId',
-        );
-        this.#assertWritableBuildId(context, buildId);
-        return await this.#templateFileStore.putBaseTemplate(context, buildId, templateId, source);
-    }
-
-    /**
-     * Writes a page template source file to a target build's namespace.
-     *
-     * Stores the source verbatim — no compilation — so template syntax is
-     * validated at render time, not at write time. The templateId may be nested
-     * several segments deep, delimited by `/`.
-     * @param {RequestContext} context - Request context carrying the current build id
-     * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} templateId - Canonical page template filepath relative to `pages/`
-     * @param {string} source - Template source text to store
-     * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When templateId is not canonical, buildId is empty, or
-     *   buildId matches the current build id
-     */
-    async putPageTemplate(context, buildId, templateId, source) {
-        assertCanonicalIdentifier(
-            templateId,
-            'HyperviewService.putPageTemplate: templateId',
-        );
-        this.#assertWritableBuildId(context, buildId);
-        return await this.#templateFileStore.putPageTemplate(context, buildId, templateId, source);
-    }
-
-    /**
-     * Writes a partial template source file to a target build's namespace.
-     *
-     * Stores the source verbatim — no compilation — so template syntax and
-     * cross-partial references are resolved at render time, not at write time.
-     * @param {RequestContext} context - Request context carrying the current build id
-     * @param {string} buildId - Target build id (write namespace); must differ from the current build id
-     * @param {string} filepath - Canonical partial filename relative to `partials/`
-     * @param {string} source - Partial source text to store
-     * @returns {Promise<import('./template-file-store-interface.js').TemplateFileRef>} The logical filepath that was written
-     * @throws {AssertionError} When filepath is not canonical, buildId is empty, or
-     *   buildId matches the current build id
-     */
-    async putPartial(context, buildId, filepath, source) {
-        assertCanonicalIdentifier(
-            filepath,
-            'HyperviewService.putPartial: filepath',
-        );
-        this.#assertWritableBuildId(context, buildId);
-        return await this.#templateFileStore.putPartial(context, buildId, filepath, source);
-    }
-
-    /**
-     * Loads and compiles shared partial templates for use by base and page templates.
-     * @param {RequestContext} context - Request context
-     * @param {Object} [options] - Partial loading options
-     * @param {boolean} [options.useCache=false] - Reuse compiled partials from this service instance
-     * @returns {Promise<Map<string, Function>>} Partial render functions keyed by canonical
-     *   template include name. `get`/`has` fold reference-side lookup keys.
-     * @throws {AssertionError} When the store returns a non-canonical partial filepath
-     */
-    async loadPartials(context, options) {
-        const { useCache = false } = options ?? {};
-        const buildId = context.runtime.build?.id ?? null;
-
-        let partials;
-        const cacheKey = buildId || 'null';
-        if (useCache) {
-            partials = this.#partialsCache.get(cacheKey);
-            if (partials) {
-                this.#logger.debug('template partials cache hit', { key: cacheKey });
-                return partials;
-            }
-            this.#logger.debug('template partials cache miss', { key: cacheKey });
-        }
-
-        const files = await this.#templateFileStore.getPartials(context, buildId);
-
-        partials = new CaseInsensitiveMap();
-
-        for (const { filepath, source } of files) {
-            const name = filepath.replace(/^\/?partials\//, '');
-            assertCanonicalIdentifier(
-                name,
-                `HyperviewService.loadPartials: partial filepath ${ filepath }`,
-            );
-            const template = this.compileTemplate(filepath, source, this.#customHelpers, partials);
-            partials.set(name, template);
-        }
-
-        // Only retain the compiled partials when caching is enabled; otherwise the
-        // map would grow even though no reader ever consults it (the read above is
-        // guarded by useCache), matching getBaseTemplate/getPageTemplate.
-        if (useCache) {
-            this.#partialsCache.set(cacheKey, partials);
-        }
-
-        return partials;
-    }
-
-    /**
-     * Compiles template source into a render function. Custom helpers override built-ins
-     * when they share the same key.
+     * Compiles template source with built-in and caller-provided helpers.
      * @param {string} templateId - Unique identifier used in error reporting
      * @param {string} source - Template source code
      * @param {Map<string, Function>} customHelpers - Helper functions that override built-in helpers
-     * @param {Map<string, Function>} partials - Compiled partial templates keyed by partial name
-     * @returns {Function} Render function: accepts a data object and returns a rendered string
+     * @returns {Function} Render function: accepts data and a partials lookup, then returns a rendered string
      */
-    compileTemplate(templateId, source, customHelpers, partials) {
+    compileTemplate(templateId, source, customHelpers) {
         const helpers = new Map([...templating.helpers, ...customHelpers]);
 
         const tokens = templating.tokenize(null, templateId, source);
         const tree = templating.buildSyntaxTree(null, tokens);
 
-        return templating.createRenderFunction(null, helpers, partials, tree);
+        return templating.createRenderFunction(null, helpers, tree);
     }
 
     /**
-     * Asserts that the target build id is safe to write to. All template writes
-     * publish a *new* build under its own build id and must never mutate the
-     * build id the live site is currently reading from.
-     * @param {RequestContext} context - Request context carrying the current build id
-     * @param {string} buildId - Target build id (write namespace)
-     * @throws {AssertionError} When buildId is not a non-empty string, or when
-     *   buildId matches the current build id
-     */
-    #assertWritableBuildId(context, buildId) {
-        const currentBuildId = context.runtime.build?.id ?? null;
-
-        assertNonEmptyString(buildId, 'HyperviewService template writes require a buildId');
-
-        // The new build's namespace must differ from the live build's namespace
-        // so a deploy can never overwrite templates the running site is serving.
-        // When there is no current build (a never-deployed site), there is no live
-        // namespace to protect; a non-empty buildId can never equal null, so the
-        // first deploy is allowed to stage its templates.
-        assert(
-            buildId !== currentBuildId,
-            'HyperviewService template write buildId must not match the current build id',
-        );
-    }
-
-    /**
-     * Compiles a template with helpers but no partials.
+     * Compiles a template with helpers but no partials; useful for metadata fields
+     * like title and description which contain template syntax that can be
+     * rendered with the page context.
      * @param {string} templateId - Unique identifier used in error messages
      * @param {string} templateSource - Template source text which may contain template syntax
      * @returns {Function} Render function: accepts a data object and returns a rendered string
      */
-    #createMiniTemplate(templateId, templateSource) {
-        // Metadata fields (title, description) can contain template syntax, so compile
-        // and render them with page data. Use empty partials since metadata templates
-        // shouldn't include partials to avoid circular dependencies
-        const partials = new Map();
-        return this.compileTemplate(templateId, templateSource, this.#customHelpers, partials);
+    createMiniTemplate(templateId, templateSource) {
+        const template = this.compileTemplate(templateId, templateSource, this.#customHelpers);
+        return (data) => template(data, new Map());
     }
 
     /**
-     * Converts a URL object to a canonical URL string without query string or hash.
-     *
-     * Builds a stable reference URL that doesn't change with request parameters or fragments.
-     * Used for canonical URLs and Open Graph metadata.
-     * @param {URL} url - URL object with protocol and host properties
-     * @param {string} pathname - Canonical page pathname
-     * @returns {string} Canonical URL string (e.g., 'https://example.com/blog/post')
+     * Loads global partials, reusing an immutable compiled bundle while its etag is current.
+     * @param {import('./hyperview-content-snapshot.js').default} content - Request-scoped content snapshot for template-store access
+     * @returns {Promise<Map<string, Function>>} Immutable compiled-partials Map for this render's bundle
      */
-    #urlToCanonicalURLString(url, pathname) {
-        return `${ url.protocol }//${ url.host }${ pathname }`;
+    async loadGlobalPartials(content) {
+        const stats = await content.statTemplatePartials();
+        const etag = stats?.etag ?? null;
+        const activeLoad = this.#globalPartialsLoadPromises.get(etag);
+        if (activeLoad) {
+            return activeLoad;
+        }
+
+        const loadPromise = this.#loadGlobalPartials(content, stats);
+        this.#globalPartialsLoadPromises.set(etag, loadPromise);
+
+        try {
+            return await loadPromise;
+        } finally {
+            if (this.#globalPartialsLoadPromises.get(etag) === loadPromise) {
+                this.#globalPartialsLoadPromises.delete(etag);
+            }
+        }
     }
-}
 
-function renderIncludes(compiledIncludes, metadata) {
-    const includes = {};
+    async #loadGlobalPartials(content, stats) {
+        const etag = stats?.etag ?? null;
+        if (this.#useTemplateCache && this.#globalPartials.has(etag)) {
+            return this.#getCachedEntry(this.#globalPartials, etag);
+        }
 
-    for (const name of Object.keys(compiledIncludes)) {
-        const include = compiledIncludes[name];
-        includes[name] = isFunction(include) ? include(metadata) : include;
-    }
+        const partials = await content.getTemplatePartials();
+        const compiledPartials = new Map();
 
-    return includes;
-}
+        if (!partials) {
+            return this.#cacheTemplateEntry(
+                this.#globalPartials,
+                etag,
+                compiledPartials,
+                MAX_VERSIONED_TEMPLATE_CACHE_ENTRIES,
+            );
+        }
 
-function joinPageFilepath(pathname, filename) {
-    return `${ pathname.replace(/\/$/, '') }/${ filename }`;
-}
+        for (const { id, source } of partials.json()) {
+            assertNonEmptyString(
+                id,
+                `Missing or invalid "id" from global template partials`,
+            );
+            assertNonEmptyString(
+                source,
+                `Missing or invalid "source" from global template partials`,
+            );
+            const template = this.compileTemplate(id, source, this.#customHelpers);
+            compiledPartials.set(id, template);
+        }
 
-function assertIncludeFilenames(includes, pathname, messagePrefix) {
-    if (!includes) return;
-
-    for (const name of Object.keys(includes)) {
-        assertCanonicalIdentifier(
-            includes[name]?.filename,
-            `${ messagePrefix }: includes[${ name }].filename for ${ pathname }`,
+        return this.#cacheTemplateEntry(
+            this.#globalPartials,
+            partials.etag,
+            compiledPartials,
+            MAX_VERSIONED_TEMPLATE_CACHE_ENTRIES,
         );
+    }
+
+    /**
+     * Compiles a loaded page's own partials. Layering these over the global
+     * partials is the caller's responsibility; this method reads only the
+     * definitions the page carries.
+     * @param {HyperviewPage} page - Loaded page that owns the partial definitions
+     * @returns {Promise<Map<string, Function>>} Immutable compiled-partials Map for the page bundle
+     */
+    async getPagePartials(page) {
+        if (!page.partials) {
+            return new Map();
+        }
+
+        assertNonEmptyString(
+            page.partials?.etag,
+            `HyperviewService#getPagePartials() expects page.partials.etag to be present`,
+        );
+        assertArray(
+            page.partials?.partials,
+            `HyperviewService#getPagePartials() expects page.partials.partials to be defined`,
+        );
+
+        if (this.#useTemplateCache && this.#pagePartials.has(page.partials.etag)) {
+            return this.#getCachedEntry(this.#pagePartials, page.partials.etag);
+        }
+
+        const pagePartials = new Map();
+
+        for (const { id, source } of page.partials.partials) {
+            assertNonEmptyString(
+                id,
+                `Missing or invalid "id" from page partials in page ${ page.pathname }`,
+            );
+            assertNonEmptyString(
+                source,
+                `Missing or invalid "source" from page partials in page ${ page.pathname }`,
+            );
+
+            const template = this.compileTemplate(id, source, this.#customHelpers);
+            pagePartials.set(id, template);
+        }
+
+        return this.#cacheTemplateEntry(
+            this.#pagePartials,
+            page.partials.etag,
+            pagePartials,
+            MAX_PAGE_PARTIAL_CACHE_ENTRIES,
+        );
+    }
+
+    #getCachedEntry(cache, key) {
+        const entry = cache.get(key);
+        cache.delete(key);
+        cache.set(key, entry);
+        return entry;
+    }
+
+    #cacheTemplateEntry(cache, key, entry, maxEntries) {
+        if (!this.#useTemplateCache) {
+            return entry;
+        }
+
+        cache.set(key, entry);
+        while (cache.size > maxEntries) {
+            cache.delete(cache.keys().next().value);
+        }
+        return entry;
+    }
+
+    // A rendered result must never be empty; an empty string means a template
+    // (or the store data it read) is broken, not that there is nothing to cache
+    // or return. Checked before hypertext reaches the cache or the response.
+    #assertRenderedHypertext(hypertext, renderMode, pathname) {
+        assertNonEmptyString(
+            hypertext,
+            `HyperviewService rendered empty hypertext for the ${ renderMode } render of page "${ pathname }"`,
+        );
+    }
+
+    /**
+     * Loads a base template, reusing its compiled function while the base-template bundle etag is current.
+     * @param {import('./hyperview-content-snapshot.js').default} content - Request-scoped content snapshot for template-store access
+     * @param {string} templateId - Canonical base template identifier
+     * @returns {Promise<Function|null|undefined>} Compiled template, null when no bundle exists, or undefined when the id is absent
+     */
+    async getBaseTemplate(content, templateId) {
+        const stats = await content.statBaseTemplates();
+        const etag = stats?.etag ?? null;
+
+        if (this.#useTemplateCache && this.#baseTemplates.has(etag)) {
+            return this.#getCachedEntry(this.#baseTemplates, etag).get(templateId);
+        }
+
+        // Base templates are stored in a single bundle file, which
+        // we fetch here.
+        const templates = await content.getBaseTemplates();
+
+        const compiledTemplates = new Map();
+
+        if (!templates) {
+            return null;
+        }
+
+        for (const { id, source } of templates.json()) {
+            assertNonEmptyString(
+                id,
+                `Missing or invalid "id" from base templates`,
+            );
+            assertNonEmptyString(
+                source,
+                `Missing or invalid "source" from base templates`,
+            );
+            const template = this.compileTemplate(id, source, this.#customHelpers);
+            compiledTemplates.set(id, template);
+        }
+
+        return this.#cacheTemplateEntry(
+            this.#baseTemplates,
+            templates.etag,
+            compiledTemplates,
+            MAX_VERSIONED_TEMPLATE_CACHE_ENTRIES,
+        ).get(templateId);
+    }
+
+    /**
+     * Loads the template selected by a page, reusing its compiled function while its etag is current.
+     * @param {import('./hyperview-content-snapshot.js').default} content - Request-scoped content snapshot for template-store access
+     * @param {HyperviewPage} page - Loaded page which names the template file
+     * @returns {Promise<Function>} Compiled page-template function
+     */
+    async getPageTemplate(content, page) {
+        assertNonEmptyString(
+            page.pathname,
+            `HyperviewService#getPageTemplate() expects page.pathname to be present`,
+        );
+        assertNonEmptyString(
+            page.pageTemplateFilename,
+            `HyperviewService#getPageTemplate() expects page.pageTemplateFilename to be present in ${ page.pathname }`,
+        );
+
+        const { pathname, pageTemplateFilename } = page;
+
+        const filepath = this.#contentService.normalizePathname(`${ pathname }/${ pageTemplateFilename }`);
+
+        // Use the etag from the content-addressable storage as the cache
+        // invalidation key. Snapshot stats are in-memory index lookups, so this
+        // also supplies the render's pinned view when template caching is off.
+        const stats = await content.statPageTemplate(filepath);
+
+        if (this.#useTemplateCache) {
+            if (stats?.etag && this.#pageTemplates.has(filepath)) {
+                const entry = this.#getCachedEntry(this.#pageTemplates, filepath);
+                if (entry.etag === stats.etag) {
+                    return entry.template;
+                }
+            }
+        }
+
+        this.#pageTemplates.delete(filepath);
+
+        const pageTemplate = await content.getPageTemplate(filepath);
+
+        // The page metadata named this template file, so a missing blob means the
+        // build index and the blob store disagree. Assert it here, where the page
+        // pathname and filename are still in scope to name in the message, rather
+        // than letting text() below fail with an unlabeled TypeError.
+        assert(
+            pageTemplate,
+            `Page template "${ pageTemplateFilename }" does not exist in pages/${ pathname }`,
+        );
+
+        const template = this.compileTemplate(filepath, pageTemplate.text(), this.#customHelpers);
+
+        if (this.#useTemplateCache) {
+            this.#cacheTemplateEntry(
+                this.#pageTemplates,
+                filepath,
+                { etag: pageTemplate.etag, template },
+                MAX_PAGE_TEMPLATE_CACHE_ENTRIES,
+            );
+        }
+
+        return template;
+    }
+
+    /**
+     * Loads a page and merges its ordered metadata cascade with runtime response props.
+     * @param {import('./hyperview-content-snapshot.js').default} content - Request-scoped content snapshot for page-store access
+     * @param {URL} url - Request URL used to derive canonical page metadata
+     * @param {string} pathname - Canonical page pathname
+     * @param {Object} responseProps - Response props merged into the page context
+     * @returns {Promise<HyperviewPage|null>} The loaded page, or null when no page exists at that
+     *   pathname, or when its metadata declares no page template
+     */
+    async getPage(content, url, pathname, responseProps) {
+        const pageContent = await content.getPage(pathname);
+
+        // A page directory can carry metadata with no template of its own -- an
+        // ancestor directory published only to supply inherited defaults for its
+        // descendants, for example. Requesting that pathname directly is a
+        // missing resource from the caller's perspective, the same as no page
+        // metadata at all, not a build invariant violation.
+        if (!pageContent || !isNonEmptyString(pageContent.pageTemplateFilename)) {
+            return null;
+        }
+
+        const page = new HyperviewPage({
+            url,
+            pathname,
+            responseProps,
+            pageTemplateFilename: pageContent.pageTemplateFilename,
+            partials: pageContent.partials,
+            includes: pageContent.includes,
+            etag: pageContent.etag,
+            createMiniTemplate: this.createMiniTemplate.bind(this),
+        });
+
+        // Merge precedence depends on the store returning page data from the
+        // broadest ancestor through the requested leaf page.
+        const sources = pageContent.pageDataFiles.map((file) => file.json());
+        page.mergeSources(sources);
+
+        return page;
+    }
+
+    /**
+     * Reports whether the pathname has a case-insensitive `.json` suffix or the
+     * Accept header explicitly includes `application/json`.
+     * @param {import('../http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request
+     * @returns {boolean} True when the request explicitly asks for JSON
+     */
+    isJsonRequest(request) {
+        if (request.url.pathname.toLowerCase().endsWith('.json')) {
+            return true;
+        }
+
+        if (request.headers.get('accept')?.includes('application/json')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Configures a response with assembled page-context JSON, a page partial,
+     * a page template, or a page template wrapped by a base template. Opens one
+     * request-scoped content snapshot so every content read, including cache-key
+     * inputs, resolves from the same committed build closure.
+     *
+     * @param {import('../context/request-context.js').default} context - Context for storage and cache operations
+     * @param {import('../http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request used to select the page and response format
+     * @param {import('../http-router/server-response.js').default} response - Mutable response carrying the status and page props
+     * @param {Object} [options]
+     * @param {string} [options.pathname] - Canonical page identifier; defaults to the normalized request pathname
+     * @param {string} [options.baseTemplateId] - Canonical base template identifier required for full-page rendering
+     * @param {string} [options.partial] - Canonical page-partial identifier to render instead of the page and base templates
+     * @param {boolean} [options.skipBaseRender=false] - Render the page template without its base template
+     * @param {boolean} [options.usePageCache] - Enable rendered-page cache preparation, reads, and writes; defaults to the constructor value
+     * @param {string} [options.cacheKey] - Cache identity component used only when page caching is enabled; defaults to request origin, pathname, and query string, then becomes part of an opaque hashed KV key
+     * @param {boolean} [options.includePropsInCacheKey] - Include response props in cache identity; required with page caching when props vary by request or user to prevent reuse of another request's rendered output
+     * @param {Function} [options.propsHashFunction] - Returns the response-props hash from the page pathname, merged page context, and response props; used only when page caching and props-sensitive keys are enabled
+     * @param {number} [options.pageCacheReadTtlSeconds] - Cache TTL passed to enabled page-cache reads; defaults to the constructor value
+     * @param {number} [options.pageCacheExpirationSeconds] - Expiration passed to enabled page-cache writes; defaults to the constructor value
+     * @param {boolean} [options.allowJsonResponse] - Serve assembled page context for explicit JSON requests and treat `.json` as a representation suffix; defaults to the constructor value
+     * @param {Object} [options.responseOptions] - Options forwarded to the UTF-8 response method
+     * @param {string} [options.responseOptions.contentType='text/plain'] - Response MIME type; a UTF-8 charset is appended
+     * @param {Object|Headers|Array<[string,string]>} [options.responseOptions.headers] - Additional response headers
+     * @returns {Promise<import('../http-router/server-response.js').default>} Resolves to the configured response
+     * @throws {NotFoundError} When no page exists for the resolved pathname
+     */
+    async respondWithHypertext(context, request, response, options) {
+        options = options ?? {};
+
+        // Each caller may override the constructor-level default for its own call.
+        const usePageCache = options.usePageCache ?? this.#usePageCache;
+        const pageCacheReadTtlSeconds = options.pageCacheReadTtlSeconds ?? this.#pageCacheReadTtlSeconds;
+        const pageCacheExpirationSeconds = options.pageCacheExpirationSeconds ?? this.#pageCacheExpirationSeconds;
+        const includePropsInCacheKey = options.includePropsInCacheKey ?? this.#includePropsInCacheKey;
+        const allowJsonResponse = options.allowJsonResponse ?? this.#allowJsonResponse;
+        // Gate the ".json" extension on allowJsonResponse here, and not only on the
+        // response below, because this flag also decides whether the extension is
+        // stripped from the pathname. Ungated, a ".json" request would resolve the
+        // page at the extensionless pathname and render it as HTML whenever JSON
+        // responses are disabled, exposing every page under a second,
+        // non-canonical URL instead of reporting it as not found.
+        // Matched case-insensitively so ".JSON" is recognized too; the requested
+        // URL keeps its original case everywhere else, since it is intentionally
+        // part of the page context and the default page-cache identity.
+        const isJsonPathRequest = allowJsonResponse && request.url.pathname.toLowerCase().endsWith('.json');
+
+        let pathname;
+        if (isNonEmptyString(options.pathname)) {
+            pathname = options.pathname;
+        } else {
+            let requestPathname = request.url.pathname;
+            if (isJsonPathRequest) {
+                // Slicing by length rather than matching on ".json" literally, so
+                // this strips whichever case of the extension isJsonPathRequest matched.
+                requestPathname = requestPathname.slice(0, -'.json'.length);
+                // "index" names a directory page at every depth, not a page called
+                // "index", so drop the segment and let normalizePathname() fold the
+                // trailing slash. Matching only "/index" would leave the ".json"
+                // affordance broken for every directory page below the root.
+                if (requestPathname.endsWith('/index')) {
+                    requestPathname = requestPathname.slice(0, -'index'.length);
+                }
+            }
+            pathname = this.#contentService.normalizePathname(requestPathname);
+        }
+
+        this.assertCanonicalIdentifier(
+            pathname,
+            'HyperviewService#respondWithHypertext: pathname',
+        );
+
+        const { url } = request;
+
+        // We need to assert these identifiers are correct and safe here, because they
+        // may not have been checked prior to reaching this routine.
+        if (options.partial) {
+            this.assertCanonicalIdentifier(
+                options.partial,
+                'HyperviewService#respondWithHypertext: options.partial',
+            );
+        } else if (!options.skipBaseRender) {
+            this.assertCanonicalIdentifier(
+                options.baseTemplateId,
+                'HyperviewService#respondWithHypertext options.baseTemplateId',
+            );
+        }
+
+        // A render reads all of its content, including cache-key inputs, through
+        // exactly one request-scoped snapshot.
+        const content = await this.#contentService.openSnapshot(context);
+        const page = await this.getPage(content, url, pathname, response.props);
+
+        if (!page) {
+            throw new NotFoundError(`No page found for URL "${ url.href }"`, {
+                url: url.href,
+                pathname,
+            });
+        }
+
+        // Serve JSON only when the deployment allows it and the client asked for
+        // it, by the ".json" path extension or an explicit Accept header. Applying
+        // the policy flag here, at its single decision point, keeps it out of the
+        // request-shape checks above, which describe the request alone.
+        if (allowJsonResponse && (isJsonPathRequest || this.isJsonRequest(request))) {
+            // The optional JSON response is intended for development and debugging.
+            return response.respondWithJSON(
+                response.status,
+                page.getPageContext(),
+                { whiteSpace: 4 },
+            );
+        }
+
+        let pageCacheKey;
+        let hypertext;
+
+        // Disabling the rendered-page cache also skips its storage stats and
+        // hashing; compiled-template cache validation remains in the loaders.
+        if (usePageCache) {
+            const partials = await content.statTemplatePartials();
+            let etag = await this.#contentService.hashValue(`${ page.etag }#${ partials?.etag ?? '' }`);
+
+            // Optionally add the hash of the canonicalized props object.
+            if (includePropsInCacheKey) {
+                let propsHash;
+                if (isFunction(options.propsHashFunction)) {
+                    propsHash = await options.propsHashFunction(
+                        page.pathname,
+                        page.getPageContext(),
+                        response.props,
+                    );
+                } else {
+                    propsHash = await this.#contentService.hashValue(response.props);
+                }
+                etag = await this.#contentService.hashValue(`${ etag }#${ propsHash }`);
+            }
+
+            // If the caller does not provide a custom cache key, we use the URL
+            // origin + pathname + query params as the default. The origin must be
+            // included because HyperviewPage#getPageContext() derives page.canonical_url
+            // and page.href from the request origin when page data does not provide
+            // them, so rendered output for the same path differs across hosts.
+            const pageCacheIdentity = isNonEmptyString(options.cacheKey)
+                ? options.cacheKey
+                : (url.origin + url.pathname + url.search);
+
+            let renderModeIdentity;
+
+            if (options.partial) {
+                renderModeIdentity = `PARTIAL#${ options.partial }`;
+            } else if (options.skipBaseRender) {
+                renderModeIdentity = 'PAGE_TEMPLATE_ONLY';
+            } else {
+                const baseTemplates = await content.statBaseTemplates();
+                etag = await this.#contentService.hashValue(`${ etag }#${ baseTemplates?.etag ?? '' }`);
+                // The base templates etag covers the whole bundle, not the selected
+                // templateId, so options.baseTemplateId must be in the identity too.
+                // Otherwise requests for the same page rendered with different base
+                // templates (e.g. distinct layouts per host or user state) would collide.
+                renderModeIdentity = `FULL_PAGE#${ options.baseTemplateId }`;
+            }
+
+            // The logical identity can be arbitrarily large (full URL, query string,
+            // custom cache key) and may contain sensitive query-string values, so it
+            // is never used as the KV key or logged directly. Hashing it into a short,
+            // opaque, fixed-length key also keeps every key within the portable
+            // 512-byte KV key limit regardless of the input size.
+            const logicalCacheIdentity = `${ pageCacheIdentity }#${ renderModeIdentity }#${ etag }`;
+            pageCacheKey = `hyperview_page_cache#${ await this.#contentService.hashValue(logicalCacheIdentity) }`;
+
+            hypertext = await this.#kvStore.get(context, pageCacheKey, {
+                type: 'text',
+                cacheTtl: pageCacheReadTtlSeconds,
+            });
+            if (hypertext) {
+                this.#logger.debug('cached page hit', { pathname, key: pageCacheKey });
+                return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
+            }
+            this.#logger.debug('cached page miss', { pathname, key: pageCacheKey });
+        }
+
+        if (options.partial) {
+            // Render a partial template only. This is common for making dynamic page
+            // updates from the browser with fetch().
+            this.#logger.debug('render partial for page', { pathname, partial: options.partial });
+
+            const globalPartials = await this.loadGlobalPartials(content);
+            const pagePartials = await this.getPagePartials(page);
+            const template = pagePartials.get(options.partial);
+            assertFunction(template, `Partial template "${ options.partial }" does not exist in pages/${ pathname }`);
+
+            hypertext = template(page.getPageContext(), layerPartials(pagePartials, globalPartials));
+            this.#assertRenderedHypertext(hypertext, `partial "${ options.partial }"`, pathname);
+
+            if (usePageCache) {
+                await this.#kvStore.put(context, pageCacheKey, hypertext, {
+                    type: 'text',
+                    ttlSeconds: pageCacheExpirationSeconds,
+                });
+            }
+
+            return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
+        }
+
+        if (options.skipBaseRender) {
+            // Render the page body, without wrapping in the base template. This is common
+            // for page transitions triggered from the browser with fetch().
+            this.#logger.debug('skip base template render for page', { pathname });
+
+            const template = await this.getPageTemplate(content, page);
+            const globalPartials = await this.loadGlobalPartials(content);
+            const pagePartials = await this.getPagePartials(page);
+
+            hypertext = template(page.getPageContext(), layerPartials(pagePartials, globalPartials));
+            this.#assertRenderedHypertext(hypertext, 'page template', pathname);
+
+            if (usePageCache) {
+                await this.#kvStore.put(context, pageCacheKey, hypertext, {
+                    type: 'text',
+                    ttlSeconds: pageCacheExpirationSeconds,
+                });
+            }
+
+            return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
+        }
+
+        const [ baseTemplate, pageTemplate ] = await Promise.all([
+            this.getBaseTemplate(content, options.baseTemplateId),
+            this.getPageTemplate(content, page),
+        ]);
+
+        assertFunction(baseTemplate, `Base template "${ options.baseTemplateId }" does not exist`);
+
+        const pageContext = page.getPageContext();
+        const globalPartials = await this.loadGlobalPartials(content);
+        const pagePartials = await this.getPagePartials(page);
+        const partials = layerPartials(pagePartials, globalPartials);
+
+        pageContext.body = pageTemplate(pageContext, partials);
+        hypertext = baseTemplate(pageContext, partials);
+        this.#assertRenderedHypertext(hypertext, 'full page', pathname);
+
+        if (usePageCache) {
+            await this.#kvStore.put(context, pageCacheKey, hypertext, {
+                type: 'text',
+                ttlSeconds: pageCacheExpirationSeconds,
+            });
+        }
+
+        return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
     }
 }

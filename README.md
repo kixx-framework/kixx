@@ -18,7 +18,7 @@ Deploy on:
 
 - [x] Node.js
 - [ ] Deno
-- [ ] Cloudflare
+- [x] Cloudflare
 - [ ] AWS Lambda
 
 Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2026.

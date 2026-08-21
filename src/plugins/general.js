@@ -1,7 +1,5 @@
 import * as hyperview from './hyperview/plugin.js';
 
-const generalPlugins = new Map([
+export const plugins = new Map([
     [ 'hyperview', hyperview ],
 ]);
-
-export default generalPlugins;

@@ -4,9 +4,11 @@ export default {
     environments: {
         development: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: true,
-                USE_PAGE_CACHE: false,
-                USE_TEMPLATE_CACHE: false,
+                useTemplateCache: false,
+                usePageCache: false,
+                allowJsonResponse: true,
+                pageCacheReadTtlSeconds: 0,
+                pageCacheExpirationSeconds: 0,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -49,15 +51,11 @@ export default {
                     },
                 },
             },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
+            CONTENT_ADDRESSABLE_STORE: {
+                blobReadCacheTtlSeconds: 0,
+                indexCacheTtlSeconds: 0,
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
@@ -67,9 +65,11 @@ export default {
         },
         staging: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: false,
-                USE_PAGE_CACHE: true,
-                USE_TEMPLATE_CACHE: true,
+                useTemplateCache: true,
+                usePageCache: true,
+                allowJsonResponse: true,
+                pageCacheReadTtlSeconds: 60 * 5,
+                pageCacheExpirationSeconds: 60 * 12,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -112,15 +112,11 @@ export default {
                     },
                 },
             },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
+            CONTENT_ADDRESSABLE_STORE: {
+                blobReadCacheTtlSeconds: 60 * 60 * 24,
+                indexCacheTtlSeconds: 10,
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',
@@ -130,9 +126,11 @@ export default {
         },
         production: {
             HYPERVIEW: {
-                ALLOW_JSON_RESPONSE: false,
-                USE_PAGE_CACHE: true,
-                USE_TEMPLATE_CACHE: true,
+                useTemplateCache: true,
+                usePageCache: true,
+                allowJsonResponse: false,
+                pageCacheReadTtlSeconds: 60 * 60,
+                pageCacheExpirationSeconds: 60 * 60 * 4,
             },
             SECRET_ENCRYPTION: {
                 PBKDF2_ITERATIONS: 50000,
@@ -175,15 +173,11 @@ export default {
                     },
                 },
             },
-            HYPERVIEW_PAGE_DATA_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_PAGE_DATA_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
-            HYPERVIEW_TEMPLATE_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'HYPERVIEW_TEMPLATE_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
+            CONTENT_ADDRESSABLE_STORE: {
+                blobReadCacheTtlSeconds: 60 * 60 * 36,
+                indexCacheTtlSeconds: 10,
+                kvBindingName: 'CA_STORE_KV_STORE',
+                durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
             },
             STATIC_FILE_STORE: {
                 type: 'kv_namespace',

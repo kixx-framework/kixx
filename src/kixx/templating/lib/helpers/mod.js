@@ -7,6 +7,11 @@ import unescape_helper from './unescape.js';
 import plusone_helper from './plus-one.js';
 
 
+/**
+ * Registry of all built-in template helper functions, keyed by helper name.
+ *
+ * @type {Map<string, Function>}
+ */
 export default new Map([
     [ 'each', each_helper ],
     [ 'if', if_helper ],

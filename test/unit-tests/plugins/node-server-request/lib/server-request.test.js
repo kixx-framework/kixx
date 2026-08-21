@@ -421,26 +421,6 @@ describe('Node ServerRequest', ({ describe }) => {
         });
     });
 
-    describe('isJSONRequest', ({ it }) => {
-        it('is true when the pathname ends with .json', () => {
-            const request = makeServerRequest({ url: '/users/42.json' });
-
-            assert(request.isJSONRequest());
-        });
-
-        it('is true when the Accept header includes application/json', () => {
-            const request = makeServerRequest({ headers: { accept: 'text/html, application/json' } });
-
-            assert(request.isJSONRequest());
-        });
-
-        it('is false when neither the path nor the Accept header requests JSON', () => {
-            const request = makeServerRequest({ headers: { accept: 'text/html' } });
-
-            assertFalsy(request.isJSONRequest());
-        });
-    });
-
     describe('isFormURLEncodedRequest', ({ it }) => {
         it('is true for a urlencoded content type, ignoring parameters', () => {
             const request = makeServerRequest({

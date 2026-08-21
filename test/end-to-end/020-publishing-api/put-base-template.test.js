@@ -1,3 +1,10 @@
+// This suite targets URL paths (e.g. `/publishing-api/v1/templates/**`)
+// that predate the current routes in src/routes/publishing-api-v1.js
+// (`/publishing-api/v1/resources/**` and `/publishing-api/v1/index/**`). It
+// is already obsolete against the current routes for reasons unrelated to
+// and predating agents/plans/hyperview-content-service.md, and its passing
+// or failing is not a signal about that work. See test/end-to-end/README.md.
+
 import fsp from 'node:fs/promises';
 import { describe } from 'kixx-test';
 import {

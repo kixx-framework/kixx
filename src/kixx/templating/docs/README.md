@@ -562,7 +562,6 @@ the default policy. If you need something stricter, pass a custom `escape` funct
 const render = createRenderFunction(
     { escape: (value) => String(value).replace(/'/g, '&#39;') },
     helpers,
-    partials,
     tree,
 );
 ```
@@ -634,8 +633,17 @@ are reachable:
 
 Additional notes:
 
+- Supply a partial lookup on every render call, even if the template has no partial
+  tags. The lookup may be a `Map` or any object with callable `has(id)` and `get(id)`
+  methods. A missing or malformed lookup throws a `TypeError` before rendering starts.
+- The root template and every nested or recursive compiled partial use that same
+  invocation lookup. A compiled template can therefore render against different
+  partial sets on successive calls.
 - A partial name that is not registered renders as an empty string.
+- If a registered name resolves to a non-function value, rendering throws a
+  `TypeError` when that tag is reached.
 - Partial names are literal. The dynamic-name extension (`{{>*name}}`) is not supported.
+- A bare partial function receives exactly one argument: the current context value.
 - A standalone partial tag propagates its indentation to every line of the partial's
   output:
 
@@ -735,6 +743,11 @@ function entries(context, options, value) {
 {{/entries}}
 ```
 
+Rendering is synchronous. Helpers and partials must finish their rendering before they
+return. In particular, `this.renderPrimary()` and `this.renderInverse()` may only be
+called during the helper invocation; saving either method for deferred or asynchronous
+use is unsupported.
+
 ## Errors
 
 Malformed templates throw a `LineSyntaxError` during tokenization or syntax-tree
@@ -781,17 +794,19 @@ Builds an AST from tokens.
 - `options` — pass `null`
 - `tokens` — the array returned by `tokenize()`
 
-### createRenderFunction(options, helpers, partials, tree)
+### createRenderFunction(options, helpers, tree)
 
 Compiles an AST into a render function.
 
 - `options` — pass `null`, or `{ escape }` to override the escaped-interpolation policy
 - `helpers` — `Map` of helper functions
-- `partials` — `Map` of compiled partial render functions
 - `tree` — the AST returned by `buildSyntaxTree()`
 
-Returns a render function with the signature `(context) => string`. Partials are resolved
-at render time, so a template may reference partials registered after it was compiled.
+Returns a render function with the signature `(context, partials) => string`. The
+`partials` argument is required on every invocation and must provide callable `has(id)`
+and `get(id)` methods. It is validated before template evaluation, including for
+templates without partial tags. The supplied lookup is used throughout the complete
+nested render tree.
 
 ### helpers
 
@@ -827,14 +842,18 @@ class TemplateEngine {
     registerPartial(name, source) {
         const tokens = tokenize(null, name, source);
         const tree = buildSyntaxTree(null, tokens);
-        const partial = createRenderFunction(null, this.#helpers, this.#partials, tree);
+        const partial = createRenderFunction(null, this.#helpers, tree);
         this.#partials.set(name, partial);
     }
 
     compileTemplate(name, source) {
         const tokens = tokenize(null, name, source);
         const tree = buildSyntaxTree(null, tokens);
-        return createRenderFunction(null, this.#helpers, this.#partials, tree);
+        return createRenderFunction(null, this.#helpers, tree);
+    }
+
+    render(compiledTemplate, context) {
+        return compiledTemplate(context, this.#partials);
     }
 }
 ```
@@ -853,7 +872,7 @@ const render = engine.compileTemplate('track-list', `
 </ol>
 `);
 
-render({
+engine.render(render, {
     album: 'Follow the Leader',
     tracks: [
         { title: 'Follow the Leader', duration: '5:36' },

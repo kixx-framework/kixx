@@ -8,7 +8,17 @@ import { escapeHTMLChars } from './utils.js';
 // then calls those closures over a stack of "frames" ({ value, parent }) instead of
 // copying the context object at every scope change. The same frame stack provides
 // Mustache's upward name resolution.
-export default function createRenderFunction(options, helpers, partials, tree) {
+
+/**
+ * Compiles a syntax tree into a synchronous template render function.
+ *
+ * @param {Object|null} options - Options, including an optional escape function.
+ * @param {Map<string, Function>} helpers - Helper functions keyed by template name.
+ * @param {Array<Object>} tree - Syntax tree returned by buildSyntaxTree().
+ * @returns {Function} A render function accepting a context and partial lookup.
+ * @throws {LineSyntaxError} If the tree references an unregistered helper.
+ */
+export default function createRenderFunction(options, helpers, tree) {
 
     // The escape policy is pluggable: callers can pass a stricter escape function
     // via options.escape. The default escapes the Mustache spec set (& < > ").
@@ -18,15 +28,20 @@ export default function createRenderFunction(options, helpers, partials, tree) {
 
     const renderRoot = compileNodes(tree);
 
-    function render(data) {
-        return renderRoot({ value: data, parent: null });
+    function render(data, partials) {
+        assertPartialsLookup(partials);
+        return renderRoot({ value: data, parent: null }, partials);
     }
 
     // Partials inherit the caller's full frame stack. Exposing the frame-accepting
     // renderer lets a {{> partial}} render against the current stack rather than a
     // fresh root.
-    render.renderWithFrame = renderRoot;
-    render.renderWithFrameAndIndent = renderRoot.renderIndented;
+    render.renderWithFrame = function renderWithFrame(frame, partials) {
+        return renderRoot(frame, partials);
+    };
+    render.renderWithFrameAndIndent = function renderWithFrameAndIndent(frame, partials, indent) {
+        return renderRoot.renderIndented(frame, partials, indent);
+    };
 
     return render;
 
@@ -45,7 +60,7 @@ export default function createRenderFunction(options, helpers, partials, tree) {
                 steps.push(function renderContent() {
                     return str;
                 });
-                steps[steps.length - 1].renderIndented = function renderIndentedContent(_frame, indent) {
+                steps[steps.length - 1].renderIndented = function renderIndentedContent(_frame, _partials, indent) {
                     return indentContent(str, indent, startsLine);
                 };
 
@@ -84,18 +99,18 @@ export default function createRenderFunction(options, helpers, partials, tree) {
             return steps[0];
         }
 
-        function renderSteps(frame) {
+        function renderSteps(frame, partials) {
             let out = '';
             for (let i = 0; i < steps.length; i += 1) {
-                out += steps[i](frame);
+                out += steps[i](frame, partials);
             }
             return out;
         }
 
-        renderSteps.renderIndented = function renderIndentedSteps(frame, indent) {
+        renderSteps.renderIndented = function renderIndentedSteps(frame, partials, indent) {
             let out = '';
             for (let i = 0; i < steps.length; i += 1) {
-                out += steps[i].renderIndented(frame, indent);
+                out += steps[i].renderIndented(frame, partials, indent);
             }
             return out;
         };
@@ -170,36 +185,40 @@ export default function createRenderFunction(options, helpers, partials, tree) {
         const path = pathForHead(head) || [];
         const program = compileNodes(node.children || []);
 
-        function renderInvertedSection(frame) {
-            return renderInvertedSectionWith(frame, program);
+        function renderInvertedSection(frame, partials) {
+            return renderInvertedSectionWith(frame, partials, program);
         }
 
-        function renderSection(frame) {
-            return renderSectionWith(frame, program);
+        function renderSection(frame, partials) {
+            return renderSectionWith(frame, partials, program);
         }
 
         if (inverted) {
-            renderInvertedSection.renderIndented = function renderIndentedInvertedSection(frame, indent) {
-                return prefixIndentedLine(renderInvertedSectionWith(frame, program.renderIndented, indent), node, indent);
+            renderInvertedSection.renderIndented = function renderIndentedInvertedSection(frame, partials, indent) {
+                return prefixIndentedLine(
+                    renderInvertedSectionWith(frame, partials, program.renderIndented, indent),
+                    node,
+                    indent,
+                );
             };
 
             return renderInvertedSection;
         }
 
-        renderSection.renderIndented = function renderIndentedSection(frame, indent) {
-            return prefixIndentedLine(renderSectionWith(frame, program.renderIndented, indent), node, indent);
+        renderSection.renderIndented = function renderIndentedSection(frame, partials, indent) {
+            return prefixIndentedLine(renderSectionWith(frame, partials, program.renderIndented, indent), node, indent);
         };
 
         return renderSection;
 
-        function renderInvertedSectionWith(frame, renderProgram, indent) {
+        function renderInvertedSectionWith(frame, partials, renderProgram, indent) {
             if (isSectionFalsey(lookup(frame, path))) {
-                return indent ? renderProgram(frame, indent) : renderProgram(frame);
+                return indent ? renderProgram(frame, partials, indent) : renderProgram(frame, partials);
             }
             return '';
         }
 
-        function renderSectionWith(frame, renderProgram, indent) {
+        function renderSectionWith(frame, partials, renderProgram, indent) {
             const value = lookup(frame, path);
 
             if (isSectionFalsey(value)) {
@@ -210,7 +229,9 @@ export default function createRenderFunction(options, helpers, partials, tree) {
                 let out = '';
                 for (let i = 0; i < value.length; i += 1) {
                     const childFrame = { value: value[i], parent: frame };
-                    out += indent ? renderProgram(childFrame, indent) : renderProgram(childFrame);
+                    out += indent
+                        ? renderProgram(childFrame, partials, indent)
+                        : renderProgram(childFrame, partials);
                 }
                 return out;
             }
@@ -219,7 +240,9 @@ export default function createRenderFunction(options, helpers, partials, tree) {
                 let out = '';
                 for (const item of value.values()) {
                     const childFrame = { value: item, parent: frame };
-                    out += indent ? renderProgram(childFrame, indent) : renderProgram(childFrame);
+                    out += indent
+                        ? renderProgram(childFrame, partials, indent)
+                        : renderProgram(childFrame, partials);
                 }
                 return out;
             }
@@ -228,7 +251,9 @@ export default function createRenderFunction(options, helpers, partials, tree) {
                 let out = '';
                 for (const item of value) {
                     const childFrame = { value: item, parent: frame };
-                    out += indent ? renderProgram(childFrame, indent) : renderProgram(childFrame);
+                    out += indent
+                        ? renderProgram(childFrame, partials, indent)
+                        : renderProgram(childFrame, partials);
                 }
                 return out;
             }
@@ -238,13 +263,17 @@ export default function createRenderFunction(options, helpers, partials, tree) {
                 const keys = Object.keys(value);
                 for (let i = 0; i < keys.length; i += 1) {
                     const childFrame = { value: value[keys[i]], parent: frame };
-                    out += indent ? renderProgram(childFrame, indent) : renderProgram(childFrame);
+                    out += indent
+                        ? renderProgram(childFrame, partials, indent)
+                        : renderProgram(childFrame, partials);
                 }
                 return out;
             }
 
             const childFrame = { value, parent: frame };
-            return indent ? renderProgram(childFrame, indent) : renderProgram(childFrame);
+            return indent
+                ? renderProgram(childFrame, partials, indent)
+                : renderProgram(childFrame, partials);
         }
     }
 
@@ -282,6 +311,7 @@ export default function createRenderFunction(options, helpers, partials, tree) {
 
         let currentFrame = null;
         let currentIndent = null;
+        let currentPartials = null;
 
         let renderPrimary = noopRender;
         let renderInverse = noopRender;
@@ -322,21 +352,23 @@ export default function createRenderFunction(options, helpers, partials, tree) {
             },
         };
 
-        function renderHelper(frame) {
-            return invokeHelper(frame);
+        function renderHelper(frame, partials) {
+            return invokeHelper(frame, partials);
         }
 
-        renderHelper.renderIndented = function renderIndentedHelper(frame, indent) {
-            return prefixIndentedLine(invokeHelper(frame, indent), node, indent);
+        renderHelper.renderIndented = function renderIndentedHelper(frame, partials, indent) {
+            return prefixIndentedLine(invokeHelper(frame, partials, indent), node, indent);
         };
 
         return renderHelper;
 
-        function invokeHelper(frame, indent) {
+        function invokeHelper(frame, partials, indent) {
             const previousFrame = currentFrame;
             const previousIndent = currentIndent;
+            const previousPartials = currentPartials;
             currentFrame = frame;
             currentIndent = indent;
+            currentPartials = partials;
 
             try {
                 return invokeHelperFunction(frame, createNamedArgs(frame));
@@ -349,6 +381,7 @@ export default function createRenderFunction(options, helpers, partials, tree) {
             } finally {
                 currentFrame = previousFrame;
                 currentIndent = previousIndent;
+                currentPartials = previousPartials;
             }
         }
 
@@ -412,50 +445,54 @@ export default function createRenderFunction(options, helpers, partials, tree) {
                 ? currentFrame
                 : { value: newData, parent: currentFrame };
 
-            return currentIndent ? renderBlock.renderIndented(frame, currentIndent) : renderBlock(frame);
+            return currentIndent
+                ? renderBlock.renderIndented(frame, currentPartials, currentIndent)
+                : renderBlock(frame, currentPartials);
         }
     }
 
     function compilePartial(node) {
         const partialName = node.exp;
 
-        function renderPartial(frame) {
+        function renderPartial(frame, partials) {
             if (typeof node.indentation === 'string') {
-                return renderPartialWithIndent(frame, node.indentation);
+                return renderPartialWithIndent(frame, partials, node.indentation);
             }
-            return renderPartialWithoutIndent(frame);
+            return renderPartialWithoutIndent(frame, partials);
         }
 
-        renderPartial.renderIndented = function renderIndentedPartial(frame, indent) {
+        renderPartial.renderIndented = function renderIndentedPartial(frame, partials, indent) {
             if (typeof node.indentation === 'string') {
-                return renderPartialWithIndent(frame, indent + node.indentation);
+                return renderPartialWithIndent(frame, partials, indent + node.indentation);
             }
-            return prefixIndentedLine(renderPartialWithoutIndent(frame), node, indent);
+            return prefixIndentedLine(renderPartialWithoutIndent(frame, partials), node, indent);
         };
 
         return renderPartial;
 
-        function renderPartialWithoutIndent(frame) {
+        function renderPartialWithoutIndent(frame, partials) {
             // Per the Mustache spec, a missing partial renders as an empty string.
             if (!partials.has(partialName)) {
                 return '';
             }
 
             const partial = partials.get(partialName);
+            assertPartialFunction(partialName, partial);
             if (typeof partial.renderWithFrame === 'function') {
-                return partial.renderWithFrame(frame);
+                return partial.renderWithFrame(frame, partials);
             }
             return partial(frame.value);
         }
 
-        function renderPartialWithIndent(frame, indentation) {
+        function renderPartialWithIndent(frame, partials, indentation) {
             if (!partials.has(partialName)) {
                 return '';
             }
 
             const partial = partials.get(partialName);
+            assertPartialFunction(partialName, partial);
             if (typeof partial.renderWithFrameAndIndent === 'function') {
-                return partial.renderWithFrameAndIndent(frame, indentation);
+                return partial.renderWithFrameAndIndent(frame, partials, indentation);
             }
             return indentRenderedOutput(partial(frame.value), indentation);
         }
@@ -576,9 +613,21 @@ function coerce(value) {
     return typeof value === 'string' ? value : String(value);
 }
 
+function assertPartialsLookup(partials) {
+    if (!partials || typeof partials.has !== 'function' || typeof partials.get !== 'function') {
+        throw new TypeError('Expected partials to provide has() and get() methods');
+    }
+}
+
+function assertPartialFunction(partialName, partial) {
+    if (typeof partial !== 'function') {
+        throw new TypeError(`Expected partial "${ partialName }" to be a function`);
+    }
+}
+
 function withIndentedLinePrefix(render, node) {
-    render.renderIndented = function renderIndentedWithLinePrefix(frame, indent) {
-        return prefixIndentedLine(render(frame), node, indent);
+    render.renderIndented = function renderIndentedWithLinePrefix(frame, partials, indent) {
+        return prefixIndentedLine(render(frame, partials), node, indent);
     };
     return render;
 }

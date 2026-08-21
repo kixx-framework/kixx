@@ -127,7 +127,7 @@ createContext({ runtime, config, logger }) {}
 
 ## Document Error Conditions and Edge Cases
 
-Use `@throws` for meaningful caller-visible failure modes.
+Use `@throws` for meaningful caller-visible failure modes. Do not document assertion errors thrown from invalid arguments; argument assertions are obvious without documentation.
 
 ```javascript
 /**
@@ -139,10 +139,9 @@ Use `@throws` for meaningful caller-visible failure modes.
  */
 ```
 
-Prefer the error class that callers can reasonably catch or that the framework will translate. Do not document every assertion in a deeply private helper unless it changes how the public API is used.
+Prefer the error class that callers can reasonably catch or that the framework will translate. Most assertions in private helpers do not need to be documented unless it changes how the public API is used.
 
-Error classes from `kixx/errors/` shoud be named with a bare class name in `@throws`; not an `import()` path,
-even though `@param` and `@returns` in the same block use paths:
+Error classes from `kixx/errors/` shoud be named with a bare class name in `@throws`; not an `import()` path, even though `@param` and `@returns` in the same block use paths:
 
 ```javascript
 /**
@@ -156,7 +155,7 @@ The two tags are doing different jobs. A `@param` or `@returns` type identifies 
 
 ## Do Not Use JSDoc for Module-Private Functions
 
-JSDoc documents a module's public contract — the exported functions, classes, and types that other modules call. Functions that are private to a module (those that are not exported) must not have JSDoc block comments. They have no external callers, and a JSDoc block above an internal helper only adds ceremony that drifts out of sync with the code.
+JSDoc documents a module's public contract — the exported functions, classes, and types that other modules call. Functions that are private to a module (those that are not exported) do not JSDoc block comments. They have no external callers, and a JSDoc block above an internal helper only adds ceremony that drifts out of sync with the code.
 
 When a private helper needs explanation — a non-obvious decision, a constraint, or a surprising return value — use a short inline comment instead. Place it where the reasoning lives, not as a header block.
 

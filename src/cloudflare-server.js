@@ -10,8 +10,9 @@ import ServerRequest from './plugins/cloudflare-server-request/lib/server-reques
 import ServerResponse from './kixx/http-router/server-response.js';
 import { isFunction } from './kixx/assertions/mod.js';
 import * as app from './app/app.js';
-import generalPlugins from './plugins/general.js';
-import cloudflarePlugins from './plugins/cloudflare.js';
+import { plugins as generalPlugins } from './plugins/general.js';
+import { plugins as cloudflarePlugins } from './plugins/cloudflare.js';
+import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import virtualHosts from './virtual-hosts.js';
 
 const environment = env.ENVIRONMENT || 'development';
@@ -37,7 +38,7 @@ const appContext = new ApplicationContext({
 });
 
 // Merge plugin maps, allowing platform plugins to override general plugins.
-const plugins = new Map([ ...generalPlugins, ...cloudflarePlugins ]);
+const plugins = mergePluginMaps(generalPlugins, cloudflarePlugins);
 
 // Register all plugins before calling initialize() on each.
 for (const plugin of plugins.values()) {

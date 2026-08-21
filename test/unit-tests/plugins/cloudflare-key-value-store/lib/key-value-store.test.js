@@ -19,6 +19,7 @@ function makeLogger() {
 function makeKVNamespace(initial) {
     const store = new Map(Object.entries(initial ?? {}));
     const puts = [];
+    const gets = [];
 
     function decode(raw, type) {
         if (raw === null || raw === undefined) {
@@ -30,7 +31,9 @@ function makeKVNamespace(initial) {
     return {
         store,
         puts,
+        gets,
         async get(key, options) {
+            gets.push({ key, options: options ?? {} });
             const type = options?.type;
             return store.has(key) ? decode(store.get(key), type) : null;
         },
@@ -145,6 +148,35 @@ describe('KeyValueStore', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
             assertMatches('type must be one of', caught.message);
+        });
+
+        it('maps cacheTtl onto the KV get cacheTtl option', async () => {
+            const kvStore = makeKVNamespace({ greeting: 'hello' });
+            const store = makeStore();
+
+            await store.get(makeContext(kvStore), 'greeting', { cacheTtl: 300 });
+
+            assertEqual(300, kvStore.gets[0].options.cacheTtl);
+        });
+
+        it('throws when cacheTtl is below the 60 second minimum', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.get(makeContext(), 'key', { cacheTtl: 59 }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertEqual('KeyValueStore "cacheTtl" must be at least 60 seconds', caught.message);
+        });
+
+        it('throws when cacheTtl is not a positive integer', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.get(makeContext(), 'key', { cacheTtl: 1.5 }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('cacheTtl" must be a positive integer', caught.message);
         });
     });
 

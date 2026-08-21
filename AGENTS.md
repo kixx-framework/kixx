@@ -1,9 +1,7 @@
 Read the @README.md for the project overview, including what this project is and why it exists.
 
 ## Developer Documentation
-Before starting any task, including planning, ALWAYS review this documentation index.
-
-Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each relevant document — the index entries are summaries only. Keep the available documentation in mind as you work, so you can review additional documents that become relevant as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
+Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each linked document — the index entries are summaries only. Keep the available documentation in mind as you work and review relevant documentation as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
 
 ### Code Style Guide
 
@@ -43,7 +41,7 @@ src/docs/server-error-handling.md
 
 test/unit-tests/README.md
 
-**When to use this document:** Apply this guide only when you have been explicitly asked to write new tests or update existing tests. Consult it whenever you are:
+**When to use this document:** Apply this guide whenever you are:
 
 - Creating a new `*.test.js` file under `test/unit-tests/`.
 - Adding or modifying test cases, hooks, or assertions in an existing test file.
@@ -80,11 +78,11 @@ src/app/presentation/README.md
 
 **What this document provides:** The main presentation-layer guide for this Hypermedia Driven Application — where presentation files live, common recipes for static pages, dynamic pages, forms, and progressive enhancement, route matching behavior, middleware and request handler responsibilities, `HyperviewDynamicPageHandler` options, form conventions, request and response object APIs, and HTML error handler guidance.
 
-### Kixx Hyperview Templating Guide
+### Templating Guide
 
 src/templates/README.md
 
-**When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging Hyperview templates. This includes:
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging frontend templates. This includes:
 
 - Editing any templates in `templates/` including page templates, base templates, partials, or templated include files.
 - Choosing interpolation, raw output, nested property access, bracket notation, sections, loops, conditionals, helpers, or partials in templates.
