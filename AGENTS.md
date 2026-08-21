@@ -1,9 +1,7 @@
 Read the @README.md for the project overview, including what this project is and why it exists.
 
 ## Developer Documentation
-Before starting any task, including planning, ALWAYS review this documentation index.
-
-Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each relevant document — the index entries are summaries only. Keep the available documentation in mind as you work, so you can review additional documents that become relevant as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
+Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each linked document — the index entries are summaries only. Keep the available documentation in mind as you work and review relevant documentation as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
 
 ### Code Style Guide
 
@@ -67,19 +65,6 @@ src/app/transaction-scripts/README.md
 
 **What this document provides:** The Transaction Script pattern used for domain logic — file and naming conventions, function signatures for read and write scripts, how middleware calls Transaction Scripts, how Forms feed write workflows, data access via Collections, calling external services through registered gateways, domain error rules, storage-error translation with `cause`, and complete annotated examples.
 
-### Hyperview Content Model and Rendering
-
-src/kixx/hyperview/README.md
-
-**When to use this document:** Apply this guide whenever you are working on framework-owned Hyperview code under `src/kixx/hyperview/`. This includes:
-
-- Reading or writing Hyperview content (page metadata, templates, partials, includes) through `HyperviewContentService`, or rendering pages/JSON through `HyperviewService`.
-- Adding or changing a Hyperview pathname rule, path constructor, or reserved bundle filename in `content-layout.js`.
-- Deciding whether new code belongs in the content service, the renderer, or a platform adapter under `src/plugins/`.
-- Reviewing request-scoped content-snapshot lifetime, the manifest-based publication flow, or the boundary between this framework layer and the generic content-addressable store port.
-
-**What this document provides:** The Hyperview architecture reference — the two-service split (`HyperviewContentService` and `HyperviewService`) and how the general plugin wires them, the content layout vocabulary and its two pathname rules, the one-snapshot-per-render guarantee, the two-phase upload/commit publication flow, the public service boundary each class exposes, and how this framework layer relates to the generic content-addressable store port and its Cloudflare adapter.
-
 ### Presentation Layer Guide
 
 src/app/presentation/README.md
@@ -93,11 +78,11 @@ src/app/presentation/README.md
 
 **What this document provides:** The main presentation-layer guide for this Hypermedia Driven Application — where presentation files live, common recipes for static pages, dynamic pages, forms, and progressive enhancement, route matching behavior, middleware and request handler responsibilities, `HyperviewDynamicPageHandler` options, form conventions, request and response object APIs, and HTML error handler guidance.
 
-### Kixx Hyperview Templating Guide
+### Templating Guide
 
 src/templates/README.md
 
-**When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging Hyperview templates. This includes:
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging frontend templates. This includes:
 
 - Editing any templates in `templates/` including page templates, base templates, partials, or templated include files.
 - Choosing interpolation, raw output, nested property access, bracket notation, sections, loops, conditionals, helpers, or partials in templates.
