@@ -25,11 +25,7 @@ import {
 import { canonicalize, compareStrings } from '../../../kixx/utils/canonicalize.js';
 
 
-// Re-exported for existing callers within this content-addressable store
-// package. The definitions live in kixx/utils/canonicalize.js because
-// deterministic serialization is needed on both sides of the publishing wire
-// contract: Hyperview produces the bytes it uploads, and this module's
-// digest functions consume the same bytes when hashing.
+// Re-exported for callers within this content-addressable store package.
 export { canonicalize, compareStrings };
 
 /**
@@ -90,15 +86,12 @@ export function bufferToString(bytes) {
     return decoder.decode(bytes);
 }
 
-// This is a deliberate duplicate of the canonical pathname rule
-// `src/kixx/hyperview/content-layout.js` also implements, not a shared
-// source of Hyperview semantics. Hyperview owns the canonical pathname rule
-// and normalizes and validates every pathname before calling this store's
-// `putBlob()`; this copy is an invariant check across the port boundary,
-// guarding only this store's own key space (the index, blob keys, and
-// directory-tree construction below). It must not import
-// `src/kixx/hyperview/content-layout.js` or the unrelated, expected-to-be-
-// deprecated `src/kixx/utils/validate-pathname.js`.
+// The isValidPathname and normalizePathname functions may seem like duplicates
+// if the canonical pathname rules in the Kixx Hyperview Services. But, they
+// serve different purposes, so fundamentally they are not duplicates even
+// if the logic appears to be the same. These functions are an invariant check
+// across the port boundary, guarding only this store's own key space
+// (the index, blob keys, and directory-tree construction below)
 
 /**
  * Reports whether a logical pathname contains only lowercase and
