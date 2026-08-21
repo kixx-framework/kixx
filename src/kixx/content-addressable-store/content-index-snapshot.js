@@ -19,11 +19,11 @@ export default class ContentIndexSnapshot {
             );
         }
 
-        // `bytes` could be a String, ArrayBuffer, or plain JS object from JSON.
+        // `bytes` could be a String or ArrayBuffer, depending on the `type`.
         return [ stat, bytes ];
     }
 
-    async statGlobalTemplatePartials() {
+    statGlobalTemplatePartials() {
         const fullPathname = getGlobalTemplatePartialsPath();
         return this.#index.getNode(fullPathname);
     }
@@ -31,23 +31,17 @@ export default class ContentIndexSnapshot {
     async getGlobalTemplatePartials() {
         const fullPathname = getGlobalTemplatePartialsPath();
 
-        const result = await this.#getPath('json', fullPathname);
+        const result = await this.#getPath('text', fullPathname);
 
         if (!result) {
             return null;
         }
 
         const [ stat, json ] = result;
-
-        return new JsonContentObject(json, {
-            kind: 'blob',
-            hash: stat.hash,
-            size: stat.size,
-            metadata: stat.metadata,
-        });
+        return new JsonContentObject(json, stat);
     }
 
-    async statBaseTemplates() {
+    statBaseTemplates() {
         const fullPathname = getBaseTemplatesPath();
         return this.#index.getNode(fullPathname);
     }
@@ -61,115 +55,75 @@ export default class ContentIndexSnapshot {
             return null;
         }
 
-        const [ stat, text ] = result;
-
-        return new TextContentObject(text, {
-            kind: 'blob',
-            hash: stat.hash,
-            size: stat.size,
-            metadata: stat.metadata,
-        });
+        const [ stat, json ] = result;
+        return new JsonContentObject(json, stat);
     }
 
-    async batchStatPageMetadata(pathnames) {
-        return pathnames.map((pathname) => {
-            const fullPathname = getPageMetadataPath(pathname);
-            return this.#index.getNode(fullPathname);
+    async batchGetPageAssets(pathname) {
+        assert(isValidPathname(pathname), 'batchGetPageAssets() requires a valid pathname');
+
+        const parts = normalizePathname(pathname).split('/').filter((part) => part);
+        const filepaths = [ getPageMetadataPath('/') ];
+        let path = '/';
+
+        for (const part of parts) {
+            path = `${ path }${ part }/`;
+            filepaths.push(getPageMetadataPath(path));
+        }
+
+        const leafPage = filepaths.pop();
+        const leafPageStat = this.#index.getNode(leafPage);
+        if (!leafPageStat) {
+            // If the leaf page node does not exist, we consider the page to not exist.
+            return null;
+        }
+
+        const parentStats = filepaths.map((parentFilepath) => {
+            return this.#index.getNode(parentFilepath);
         });
-    }
 
-    async batchGetPageMetadata(pathnames) {
-        const files = pathnames.map((pathname) => {
-            return { type: 'json', pathname: getPageMetadataPath(pathname) };
-        });
+        const directory = getPageDirectoryPath(pathname);
+        const sourceFileStats = this.#index.listStats(directory, { recursive: false });
 
-        const results = await this.#batchGetPaths(files);
+        const files = parentStats
+            .concat(sourceFileStats)
+            .filter((entry) => entry.kind === 'blob');
 
-        return results.map((result) => {
-            if (!result) {
-                return null;
+        const results = await this.#store.getFiles(type, files);
+
+        const pageDataFiles = [];
+        let pageTemplate = null;
+        let partials = null;
+        let includes = null;
+
+        for (let i = 0; i < results.length; i += 1) {
+            // It is important that getFiles() returns results in the same
+            // order as the stats array we passed into it, so that
+            // we can match stats with their blobs.
+            const stat = files[i];
+            const bytes = results[i];
+            if (!bytes) {
+                throw new AssertionError(
+                    `The pathname "${ stat.pathname }" references unreadable blob "${ stat.hash }"`,
+                );
             }
-
-            const [ stat, json ] = result;
-
-            return new JsonContentObject(json, {
-                kind: 'blob',
-                hash: stat.hash,
-                size: stat.size,
-                metadata: stat.metadata,
-            });
-        });
-    }
-
-    async statPageTemplate(filepath) {
-        const fullPathname = getPageTemplatePath(filepath);
-        return this.#index.getNode(fullPathname);
-    }
-
-    async getPageTemplate(filepath) {
-        const fullPathname = getPageTemplatePath(filepath);
-
-        const result = await this.#getPath('text', fullPathname);
-
-        if (!result) {
-            return null;
+            const basename = stat.pathname.split('/').pop();
+            if (basename === 'page.json') {
+                pageDataFiles.push(new JsonContentObject(bytes, stat));
+            } else if (isPagePartialsBundleBasename(basename)) {
+                partials = new JsonContentObject(bytes, stat);
+            } else if (isPageIncludesBundleBasename(basename)) {
+                includes = new JsonContentObject(bytes, stat);
+            } else {
+                assert(
+                    pageTemplate === null,
+                    `batchGetPageAssets(): found more than one page template in "${ directory }"`,
+                );
+                pageTemplate = new TextContentObject(bytes, stat);
+            }
         }
 
-        const [ stat, text ] = result;
-
-        return new TextContentObject(text, {
-            kind: 'blob',
-            hash: stat.hash,
-            size: stat.size,
-            metadata: stat.metadata,
-        });
-    }
-
-    async statPageIncludes(pathname) {
-        const fullPathname = getPageIncludesPath(pathname);
-        return this.#index.getNode(fullPathname);
-    }
-
-    async getPageIncludes(pathname) {
-        const fullPathname = getPageIncludesPath(pathname);
-
-        const result = await this.#getPath('json', fullPathname);
-
-        if (!result) {
-            return null;
-        }
-
-        const [ stat, json ] = result;
-
-        return new JsonContentObject(json, {
-            kind: 'blob',
-            hash: stat.hash,
-            size: stat.size,
-            metadata: stat.metadata,
-        });
-    }
-
-    async statPagePartials(pathname) {
-        const fullPathname = getPagePartialsPath(pathname);
-        return this.#index.getNode(fullPathname);
-    }
-
-    async getPagePartials(pathname) {
-        const fullPathname = getPagePartialsPath(pathname);
-
-        const result = await this.#getPath('json', fullPathname);
-
-        if (!result) {
-            return null;
-        }
-
-        const [ stat, json ] = result;
-
-        return new JsonContentObject(json, {
-            kind: 'blob',
-            hash: stat.hash,
-            size: stat.size,
-            metadata: stat.metadata,
-        });
+        const hash = await hashFileStats(files);
+        return { hash, pageDataFiles, pageTemplate, partials, includes };
     }
 }
