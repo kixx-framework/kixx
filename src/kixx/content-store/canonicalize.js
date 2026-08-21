@@ -21,11 +21,13 @@ export function compareStrings(a, b) {
  * Serializes a JSON-compatible value deterministically, sorting object keys,
  * omitting undefined object properties and removing insignificant whitespace.
  *
- * This is a wire-format primitive: any two callers that canonicalize the same
- * logical value must produce byte-identical output, because callers hash the
- * result or compare it directly (for example, the content-addressable store's
- * digest functions, and a publishing client's `x-checksum` computed over these
- * exact bytes).
+ * This is a published wire-format primitive. Publishing clients outside this
+ * repository reproduce these exact bytes to compute an `x-checksum`, so any
+ * two callers that canonicalize the same logical value must produce
+ * byte-identical output. Object keys sort by UTF-16 code unit; object
+ * properties whose value is `undefined` are omitted; arrays preserve order;
+ * output has no insignificant whitespace; numbers use `JSON.stringify()`
+ * formatting; and non-finite numbers are rejected.
  *
  * @param {null|boolean|number|string|Array<*>|Object} value - Value to serialize
  * @returns {string} Deterministic JSON representation

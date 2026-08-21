@@ -33,9 +33,39 @@
  * and as cache keys — and MUST NOT parse their structure, assume a fixed
  * length, or depend on the wire format across a store implementation change.
  *
+ * ## External upload checksum wire format
+ *
+ * The `x-checksum` accepted for a publishing upload is an exception to digest
+ * opacity: a remote publishing client must reproduce it before sending the
+ * request. This specification is `FORMAT` 1; a format-version change is a
+ * breaking change for existing clients.
+ *
+ * For a JSON resource value `value`, first canonicalize it as specified by
+ * `canonicalize()`: sort object keys by UTF-16 code unit, omit
+ * `undefined`-valued object properties, preserve array order, emit no
+ * insignificant whitespace, format finite numbers as `JSON.stringify()`
+ * does, and reject non-finite numbers. UTF-8 encode that text. For a page
+ * template, UTF-8 encode its raw source text instead, without canonicalizing
+ * it. In either case, derive:
+ *
+ * ```text
+ * blobHash = base32lower(sha256(0x00 || contentBytes)[0:16])
+ * etagValue = canonicalize({ v: 1, blobHash, metadata: null })
+ * x-checksum = base32lower(sha256(0x03 || utf8(etagValue))[0:16])
+ * ```
+ *
+ * `base32lower` is RFC 4648 base32 using the lowercase alphabet
+ * `abcdefghijklmnopqrstuvwxyz234567` and no padding. `||` denotes byte
+ * concatenation and `[0:16]` selects the first 16 SHA-256 digest bytes. This
+ * is equivalently `hashEtag(hashBlob(contentBytes), null)`. The canonicalizer
+ * and this derivation have consumers outside this repository; do not change
+ * either without a format-version migration.
+ *
  * ## Caller-visible errors
- * - `putBlob()` rejects with a `ValidationError` when a supplied `etag` does
- *   not match the etag recomputed from the uploaded bytes and metadata.
+ * - `putBlob()`, `putUtf8()`, and `putObject()` reject with a
+ *   `ValidationError` when a supplied `etag` does not match the etag
+ *   recomputed from the produced bytes and metadata. `putObject()` also
+ *   throws `TypeError` when its value cannot be canonically serialized.
  * - `commitChanges()` rejects with a `ValidationError` when `files` contains
  *   a malformed entry, a duplicate pathname, or a pathname that collides with
  *   another entry's directory.
@@ -48,7 +78,8 @@
  * ## Context pass-through
  * Every method that reads or writes storage takes a request or execution
  * `context` as its first argument (`openSnapshot()`, `putBlob()`,
- * `commitChanges()`). Implementations use it according to their platform —
+ * `putUtf8()`, `putObject()`, `commitChanges()`). Implementations use it
+ * according to their platform —
  * for example, a Cloudflare adapter resolves its request-scoped KV and
  * Durable Object bindings from `context.env` on every call. `hashValue()`
  * takes no context because it is a pure digest function with no storage
@@ -130,6 +161,16 @@
  *   When `etag` is supplied, it MUST match the etag recomputed from the
  *   uploaded bytes and metadata, or the call rejects with a
  *   `ValidationError`.
+
+ * @property {function(Object, string, string, (Object|null), string=): Promise<PutBlobResult>} putUtf8
+ *   Encodes `text` as UTF-8 and writes the resulting bytes with the same
+ *   addressing and integrity behavior as `putBlob()`.
+
+ * @property {function(Object, string, *, (Object|null), string=): Promise<PutBlobResult>} putObject
+ *   Canonically serializes `value`, encodes it as UTF-8, and writes the
+ *   resulting bytes with the same addressing and integrity behavior as
+ *   `putBlob()`. Throws `TypeError` when `value` cannot be canonically
+ *   serialized.
  *
  * @property {function(Object, string, ContentManifestFile[]): Promise<CommitResult>} commitChanges
  *   Derives an immutable closure from `files` — the directory tree implied by

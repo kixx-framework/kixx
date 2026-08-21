@@ -1,7 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { canonicalize, compareStrings } from '../../../../src/kixx/utils/canonicalize.js';
+import { canonicalize, compareStrings } from '../../../../src/kixx/content-store/canonicalize.js';
 
 
 function catchError(fn) {

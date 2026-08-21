@@ -113,7 +113,11 @@ store separates blob storage from build visibility:
    (`putTemplatePartials`, `putBaseTemplates`, `putPageMetadata`,
    `putPagePartials`, `putPageIncludes`, `putPageTemplate`) each persist one
    immutable blob and return a `{ hash, size, metadata }` descriptor. An
-   uploaded blob is not yet visible to any build.
+   uploaded blob is not yet visible to any build. A publishing client supplies
+   `x-checksum` during this phase; its normative derivation is documented in
+   the [`ContentAddressableStoreInterface`](../content-store/content-addressable-store-interface.js)
+   external upload checksum wire format. JSON resources use canonical UTF-8
+   JSON, while page templates use their raw UTF-8 source.
 2. **Commit** — `commitChanges(context, { buildId, manifest })` validates a
    complete manifest of previously uploaded descriptors, translates it into
    the flat pathname/hash/size file list the generic store's

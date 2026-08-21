@@ -12,11 +12,13 @@ import ContentSnapshot from './content-snapshot.js';
 import {
     FORMAT,
     KEY,
+    stringToUint8Array,
     typedArrayToBuffer,
     hashBlob,
     hashEtag,
     hashValue,
 } from './addressing.js';
+import { canonicalize } from '../../../kixx/content-store/canonicalize.js';
 
 
 const DURABLE_OBJECT_NAME = `ContentAddressableStore:${ FORMAT }`;
@@ -327,6 +329,35 @@ export default class CloudflareContentStore {
             size,
             metadata,
         };
+    }
+
+    /**
+     * Encodes text as UTF-8 and writes it through the blob write path.
+     * @param {RequestContext} context - Request context carrying the KV binding
+     * @param {string} pathname - Logical pathname the blob will be indexed under
+     * @param {string} text - Text to encode and store
+     * @param {Object|null} metadata - Caller-supplied metadata to associate with the blob
+     * @param {string} [etag] - Previously computed etag to verify against
+     * @returns {Promise<{pathname: string, hash: string, size: number, metadata: (Object|null)}>} Descriptor suitable for inclusion in `files`
+     * @throws {ValidationError} When `etag` does not match the recomputed etag
+     */
+    async putUtf8(context, pathname, text, metadata, etag) {
+        return await this.putBlob(context, pathname, stringToUint8Array(text), metadata, etag);
+    }
+
+    /**
+     * Canonically serializes a value and writes it through the blob write path.
+     * @param {RequestContext} context - Request context carrying the KV binding
+     * @param {string} pathname - Logical pathname the blob will be indexed under
+     * @param {*} value - JSON-compatible value to canonically serialize and store
+     * @param {Object|null} metadata - Caller-supplied metadata to associate with the blob
+     * @param {string} [etag] - Previously computed etag to verify against
+     * @returns {Promise<{pathname: string, hash: string, size: number, metadata: (Object|null)}>} Descriptor suitable for inclusion in `files`
+     * @throws {TypeError} When `value` cannot be canonically serialized
+     * @throws {ValidationError} When `etag` does not match the recomputed etag
+     */
+    async putObject(context, pathname, value, metadata, etag) {
+        return await this.putUtf8(context, pathname, canonicalize(value), metadata, etag);
     }
 
     /**

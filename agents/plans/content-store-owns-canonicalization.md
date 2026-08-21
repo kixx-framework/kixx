@@ -105,7 +105,7 @@ failed.
 
 ### Task 1: Port accepts values and text, not only bytes
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/plugins/README.md` (port and adapter contract); `src/kixx/content-store/content-addressable-store-interface.js`
 
@@ -159,16 +159,16 @@ adapter implements all three with identical addressing behavior.
 
 **Acceptance criteria**
 
-- [ ] `putObject()` and `putUtf8()` exist on the interface and the adapter.
-- [ ] A test asserts `putObject(ctx, p, v, m)` returns the same `hash` and
+- [x] `putObject()` and `putUtf8()` exist on the interface and the adapter.
+- [x] A test asserts `putObject(ctx, p, v, m)` returns the same `hash` and
       `etag` as `putBlob(ctx, p, encodeUtf8(canonicalize(v)), m)`.
-- [ ] A test asserts `putUtf8(ctx, p, s, m)` matches
+- [x] A test asserts `putUtf8(ctx, p, s, m)` matches
       `putBlob(ctx, p, encodeUtf8(s), m)`.
-- [ ] A test asserts key-order independence: `putObject` of `{a:1,b:2}` and
+- [x] A test asserts key-order independence: `putObject` of `{a:1,b:2}` and
       `{b:2,a:1}` yield the same hash.
-- [ ] A test asserts a mismatched `etag` rejects with `ValidationError` on both
+- [x] A test asserts a mismatched `etag` rejects with `ValidationError` on both
       new methods.
-- [ ] No existing digest, storage key, or `putBlob()` behavior changes.
+- [x] No existing digest, storage key, or `putBlob()` behavior changes.
 
 **Validation**
 
@@ -178,19 +178,19 @@ adapter implements all three with identical addressing behavior.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added `putUtf8()` and `putObject()` to the port and Cloudflare adapter. Both convert their input and delegate to `putBlob()`. Added digest-equivalence, key-order, and integrity-failure coverage.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: `PutBlobResult` deliberately has no `etag`; the matching-etag test proves both write paths accept the same independently computed etag while comparing their returned content hashes.
+- Actual files changed: `src/kixx/content-store/content-addressable-store-interface.js`; `src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js`; `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.test.js`; `agents/plans/content-store-owns-canonicalization.md`.
+- Validation run: `node run-tests.js test/unit-tests/plugins` — 388 passed; `node run-linter.js src/kixx/content-store src/plugins test/unit-tests/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.test.js` — passed with no diagnostics; `git diff --check` — passed.
 - Blockers: None.
 
 ---
 
 ### Task 2: Relocate canonicalization into the port
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/plugins/README.md` (where interface contracts live)
 
@@ -235,12 +235,12 @@ serve. `src/kixx/utils/canonicalize.js` no longer exists.
 
 **Acceptance criteria**
 
-- [ ] `src/kixx/utils/canonicalize.js` does not exist.
-- [ ] `grep -rn "utils/canonicalize" src test` returns nothing.
-- [ ] `canonicalize` and `compareStrings` have exactly one definition in the
+- [x] `src/kixx/utils/canonicalize.js` does not exist.
+- [x] `grep -rn "utils/canonicalize" src test` returns nothing.
+- [x] `canonicalize` and `compareStrings` have exactly one definition in the
       repository.
-- [ ] The relocated test suite passes unchanged.
-- [ ] `addressing.js` still re-exports both symbols.
+- [x] The relocated test suite passes unchanged.
+- [x] `addressing.js` still re-exports both symbols.
 
 **Validation**
 
@@ -249,19 +249,19 @@ serve. `src/kixx/utils/canonicalize.js` no longer exists.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Moved the unchanged canonicalization implementation and its unit suite into `kixx/content-store`; updated all source and test imports; removed the old utility module and test.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: `addressing.js` continues to re-export both symbols, keeping its intra-adapter consumers unchanged. The Hyperview service still imports the relocated module until Task 3 removes that dependency.
+- Actual files changed: `src/kixx/content-store/canonicalize.js`; deleted `src/kixx/utils/canonicalize.js`; `src/plugins/cloudflare-content-addressable-store/lib/addressing.js`; `src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js`; `src/kixx/hyperview/hyperview-content-service.js`; `test/unit-tests/kixx/content-store/canonicalize.test.js`; deleted `test/unit-tests/kixx/utils/canonicalize.test.js`; `test/unit-tests/kixx/hyperview/hyperview-content-service.test.js`; `test/unit-tests/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.test.js`; `agents/plans/content-store-owns-canonicalization.md`.
+- Validation run: `rg -n "utils/canonicalize" src test` — no matches; export-definition check — one definition of each symbol; `node run-tests.js` — 988 passed; `node run-linter.js` — passed with one pre-existing TODO warning in `src/kixx/hyperview/hyperview-request-handlers.js`; `git diff --check` — passed.
 - Blockers: None.
 
 ---
 
 ### Task 3: Hyperview stops producing bytes
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 1, Task 2
 **Documentation:** `src/kixx/hyperview/README.md`; `src/app/presentation/README.md`
 
@@ -319,17 +319,17 @@ owns *how* it becomes bytes.
 
 **Acceptance criteria**
 
-- [ ] `hyperview-content-service.js` imports neither `canonicalize` nor
+- [x] `hyperview-content-service.js` imports neither `canonicalize` nor
       `TextEncoder`.
-- [ ] All six upload methods call `putObject()` or `putUtf8()`; none calls
+- [x] All six upload methods call `putObject()` or `putUtf8()`; none calls
       `putBlob()`.
-- [ ] Existing tests asserting stored content — for example
+- [x] Existing tests asserting stored content — for example
       `assertEqual(canonicalize(bundle), content.text())` at
       `hyperview-content-service.test.js:282` — still pass, proving the stored
       bytes are unchanged.
-- [ ] The Publishing API handler tests pass with no modification, proving the
+- [x] The Publishing API handler tests pass with no modification, proving the
       change is invisible above the service.
-- [ ] `grep -rn "canonicalize" src/kixx/hyperview` returns only prose in JSDoc.
+- [x] `grep -rn "canonicalize" src/kixx/hyperview` returns only prose in JSDoc.
 
 **Validation**
 
@@ -340,19 +340,19 @@ owns *how* it becomes bytes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Switched the five JSON-resource uploads to `putObject()` and the page-template upload to `putUtf8()`. Removed Hyperview's serializer and encoder. Extended the port double and updated interaction assertions while retaining its byte-level storage model for read-back compatibility tests.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: A direct fixed-input compatibility check gave `putPageMetadata()` the hash `cug7bewircs6zns62k3svhkpxq`, exactly matching `hashBlob(stringToUint8Array(canonicalize(metadata)))` for `{ title: 'Example', tags: [ 'a', 'b' ] }`.
+- Actual files changed: `src/kixx/hyperview/hyperview-content-service.js`; `test/unit-tests/kixx/hyperview/hyperview-content-service.test.js`; `agents/plans/content-store-owns-canonicalization.md`.
+- Validation run: `rg -n "canonicalize|TextEncoder|putBlob" src/kixx/hyperview/hyperview-content-service.js` — only JSDoc prose matched; `node run-tests.js` — 988 passed, including Publishing API tests; `node run-linter.js` — passed with one pre-existing TODO warning in `src/kixx/hyperview/hyperview-request-handlers.js`; `git diff --check` — passed; fixed-input digest command — passed.
 - Blockers: None.
 
 ---
 
 ### Task 4: Document the checksum wire contract
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 2
 **Documentation:** `src/kixx/hyperview/README.md` (publication flow)
 
@@ -400,12 +400,12 @@ without reading implementation source.
 
 **Acceptance criteria**
 
-- [ ] A reader can compute a valid `x-checksum` from the documentation alone,
+- [x] A reader can compute a valid `x-checksum` from the documentation alone,
       without reading `addressing.js` source.
-- [ ] The documentation states that `canonicalize()` has consumers outside this
+- [x] The documentation states that `canonicalize()` has consumers outside this
       repository.
-- [ ] The `FORMAT` version coupling is stated.
-- [ ] No behavior changes.
+- [x] The `FORMAT` version coupling is stated.
+- [x] No behavior changes.
 
 **Validation**
 
@@ -415,10 +415,10 @@ without reading implementation source.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Documented the format-1 remote publishing checksum derivation, canonical serialization rules, hash domains, digest truncation, and base32 encoding at the port boundary; added the canonicalizer's external-consumer contract and a Hyperview publication-flow reference.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: The precise wire description includes domain bytes `0x00` and `0x03`, because the formula alone would not permit an external implementation to reproduce the digest.
+- Actual files changed: `src/kixx/content-store/canonicalize.js`; `src/kixx/content-store/content-addressable-store-interface.js`; `src/kixx/hyperview/README.md`; `agents/plans/content-store-owns-canonicalization.md`.
+- Validation run: Hand-worked format-1 derivation for `{ b: 2, a: 1 }` produced `zek66wtofbjs7ogxedxu7sm734`, matching `hashEtag(hashBlob(...), null)`; `node run-tests.js` — 988 passed; `node run-linter.js` — passed with one pre-existing TODO warning in `src/kixx/hyperview/hyperview-request-handlers.js`; `git diff --check` — passed.
 - Blockers: None.

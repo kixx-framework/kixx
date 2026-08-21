@@ -4,7 +4,13 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import CloudflareContentStore from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/cloudflare-content-store.js';
 import Logger from '../../../../../src/kixx/logger/logger.js';
 import { getRootHash } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js';
-import { KEY, hashBlob, hashEtag } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
+import { canonicalize } from '../../../../../src/kixx/content-store/canonicalize.js';
+import {
+    KEY,
+    hashBlob,
+    hashEtag,
+    stringToUint8Array,
+} from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
 
 
 const KV_BINDING_NAME = 'CONTENT_STORE_KV';
@@ -455,6 +461,84 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             const caught = await catchAsyncError(
                 () => store.putBlob(context, '/a.txt', blob, null, 'not-the-real-etag'),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ValidationError', caught.name);
+            assertEqual('INTEGRITY_CHECK_FAILED', caught.code);
+            assertEqual(0, kv.store.size, 'expected no blob to be written on a failed integrity check');
+        });
+    });
+
+    describe('putUtf8', ({ it }) => {
+        it('returns the same descriptor as putBlob for equivalent UTF-8 bytes', async () => {
+            const text = 'hello 👋';
+            const metadata = { contentType: 'text/plain' };
+            const store = makeStore();
+            const context = makeContext();
+
+            const putUtf8Result = await store.putUtf8(context, '/a.txt', text, metadata);
+            const putBlobResult = await store.putBlob(context, '/a.txt', stringToUint8Array(text), metadata);
+
+            assertEqual(putBlobResult.hash, putUtf8Result.hash);
+            assertEqual(putBlobResult.size, putUtf8Result.size);
+            assertEqual(putBlobResult.metadata, putUtf8Result.metadata);
+        });
+
+        it('rejects a mismatched etag without writing the blob', async () => {
+            const kv = makeKvNamespace();
+            const store = makeStore();
+            const context = makeContext({ kv });
+
+            const caught = await catchAsyncError(
+                () => store.putUtf8(context, '/a.txt', 'hello world', null, 'not-the-real-etag'),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ValidationError', caught.name);
+            assertEqual('INTEGRITY_CHECK_FAILED', caught.code);
+            assertEqual(0, kv.store.size, 'expected no blob to be written on a failed integrity check');
+        });
+    });
+
+    describe('putObject', ({ it }) => {
+        it('matches putBlob addressing for equivalent canonical bytes', async () => {
+            const value = { b: 2, a: 1 };
+            const metadata = { contentType: 'application/json' };
+            const store = makeStore();
+            const context = makeContext();
+            const bytes = stringToUint8Array(canonicalize(value));
+            const etag = await hashEtag(await hashBlob(bytes), metadata);
+
+            const putObjectResult = await store.putObject(context, '/a.json', value, metadata, etag);
+            const putBlobResult = await store.putBlob(
+                context,
+                '/a.json',
+                bytes,
+                metadata,
+                etag,
+            );
+
+            assertEqual(putBlobResult.hash, putObjectResult.hash);
+        });
+
+        it('addresses objects with different key order identically', async () => {
+            const store = makeStore();
+            const context = makeContext();
+
+            const first = await store.putObject(context, '/a.json', { a: 1, b: 2 }, null);
+            const second = await store.putObject(context, '/a.json', { b: 2, a: 1 }, null);
+
+            assertEqual(first.hash, second.hash);
+        });
+
+        it('rejects a mismatched etag without writing the blob', async () => {
+            const kv = makeKvNamespace();
+            const store = makeStore();
+            const context = makeContext({ kv });
+
+            const caught = await catchAsyncError(
+                () => store.putObject(context, '/a.json', { a: 1 }, null, 'not-the-real-etag'),
             );
 
             assert(caught, 'expected an error to be thrown');

@@ -22,7 +22,7 @@ import {
     isString,
     isUndefined,
 } from '../../../kixx/assertions/mod.js';
-import { canonicalize, compareStrings } from '../../../kixx/utils/canonicalize.js';
+import { canonicalize, compareStrings } from '../../../kixx/content-store/canonicalize.js';
 
 
 // Re-exported for callers within this content-addressable store package.

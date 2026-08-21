@@ -2,7 +2,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import HyperviewContentService from '../../../../src/kixx/hyperview/hyperview-content-service.js';
-import { canonicalize } from '../../../../src/kixx/utils/canonicalize.js';
+import { canonicalize } from '../../../../src/kixx/content-store/canonicalize.js';
 
 
 const encoder = new TextEncoder();
@@ -71,6 +71,8 @@ function makeBackingStore(overrides) {
     const paths = new Map();
     const blobs = new Map();
     const putBlobCalls = [];
+    const putObjectCalls = [];
+    const putUtf8Calls = [];
     const commitChangesCalls = [];
     const openSnapshotCalls = [];
 
@@ -78,6 +80,8 @@ function makeBackingStore(overrides) {
         paths,
         blobs,
         putBlobCalls,
+        putObjectCalls,
+        putUtf8Calls,
         commitChangesCalls,
         openSnapshotCalls,
 
@@ -98,6 +102,16 @@ function makeBackingStore(overrides) {
             return {
                 hash, pathname, size: blob.byteLength, metadata: metadata ?? null,
             };
+        },
+
+        async putUtf8(context, pathname, text, metadata, etag) {
+            putUtf8Calls.push({ pathname, text, metadata, etag });
+            return await this.putBlob(context, pathname, encodeUtf8(text), metadata, etag);
+        },
+
+        async putObject(context, pathname, value, metadata, etag) {
+            putObjectCalls.push({ pathname, value, metadata, etag });
+            return await this.putBlob(context, pathname, encodeUtf8(canonicalize(value)), metadata, etag);
         },
 
         async openSnapshot(context) {
@@ -259,14 +273,12 @@ describe('HyperviewContentService', ({ describe }) => {
 
             const result = await subject.putTemplatePartials(context, { bundle, etag: 'etag-1' });
 
-            assertEqual(1, store.putBlobCalls.length);
-            const call = store.putBlobCalls[0];
+            assertEqual(1, store.putObjectCalls.length);
+            const call = store.putObjectCalls[0];
             assertEqual('/templates/__template-partials-bundle', call.pathname);
             assertEqual('etag-1', call.etag);
             assertEqual(null, call.metadata);
-
-            const expectedBlob = encodeUtf8(canonicalize(bundle));
-            assertEqual(expectedBlob.length, call.blob.length);
+            assertEqual(bundle, call.value);
             assertEqual(null, result.metadata);
         });
 
@@ -291,7 +303,7 @@ describe('HyperviewContentService', ({ describe }) => {
 
             await subject.putBaseTemplates(context, { bundle });
 
-            assertEqual('/templates/__base-templates-bundle', store.putBlobCalls[0].pathname);
+            assertEqual('/templates/__base-templates-bundle', store.putObjectCalls[0].pathname);
 
             const snapshot = await subject.openSnapshot(context);
             const content = await snapshot.getBaseTemplates();
@@ -321,7 +333,7 @@ describe('HyperviewContentService', ({ describe }) => {
                 metadata: { title: 'Led Zeppelin' },
             });
 
-            assertEqual('/pages/blog/led-zeppelin/page.json', store.putBlobCalls[0].pathname);
+            assertEqual('/pages/blog/led-zeppelin/page.json', store.putObjectCalls[0].pathname);
         });
     });
 
@@ -332,7 +344,7 @@ describe('HyperviewContentService', ({ describe }) => {
 
             await subject.putPagePartials(context, { pathname: '/blog/led-zeppelin', bundle: [ { name: 'sidebar' } ] });
 
-            assertEqual('/pages/blog/led-zeppelin/__page-partials-bundle', store.putBlobCalls[0].pathname);
+            assertEqual('/pages/blog/led-zeppelin/__page-partials-bundle', store.putObjectCalls[0].pathname);
         });
 
         it('throws an AssertionError for an invalid page pathname', async () => {
@@ -354,7 +366,7 @@ describe('HyperviewContentService', ({ describe }) => {
 
             await subject.putPageIncludes(context, { pathname: '/blog/led-zeppelin', bundle: [ { name: 'related' } ] });
 
-            assertEqual('/pages/blog/led-zeppelin/__page-includes-bundle', store.putBlobCalls[0].pathname);
+            assertEqual('/pages/blog/led-zeppelin/__page-includes-bundle', store.putObjectCalls[0].pathname);
         });
     });
 
@@ -366,9 +378,9 @@ describe('HyperviewContentService', ({ describe }) => {
 
             await subject.putPageTemplate(context, { filepath: 'blog/led-zeppelin/index.html', source: sourceText });
 
-            const call = store.putBlobCalls[0];
+            const call = store.putUtf8Calls[0];
             assertEqual('/pages/blog/led-zeppelin/index.html', call.pathname);
-            assertEqual(encodeUtf8(sourceText).length, call.blob.length);
+            assertEqual(sourceText, call.text);
 
             const snapshot = await subject.openSnapshot(context);
             const content = await snapshot.getPageTemplate('blog/led-zeppelin/index.html');

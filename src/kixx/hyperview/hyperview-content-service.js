@@ -14,7 +14,6 @@ import {
     isPlainObject,
     isUndefined,
 } from '../assertions/mod.js';
-import { canonicalize } from '../utils/canonicalize.js';
 import {
     RESERVED_PAGE_FILENAMES,
     isValidPathname,
@@ -28,13 +27,6 @@ import {
     getPageTemplatePath,
 } from './content-layout.js';
 import HyperviewContentSnapshot from './hyperview-content-snapshot.js';
-
-
-const encoder = new TextEncoder();
-
-function encodeUtf8(str) {
-    return encoder.encode(str);
-}
 
 
 /**
@@ -237,8 +229,7 @@ export default class HyperviewContentService {
     async putTemplatePartials(context, args) {
         const { bundle, etag } = args;
         const pathname = getTemplatePartialsPath();
-        const blob = encodeUtf8(canonicalize(bundle));
-        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        const { hash, size, metadata } = await this.#store.putObject(context, pathname, bundle, null, etag);
         return { hash, size, metadata };
     }
 
@@ -256,8 +247,7 @@ export default class HyperviewContentService {
     async putBaseTemplates(context, args) {
         const { bundle, etag } = args;
         const pathname = getBaseTemplatesPath();
-        const blob = encodeUtf8(canonicalize(bundle));
-        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        const { hash, size, metadata } = await this.#store.putObject(context, pathname, bundle, null, etag);
         return { hash, size, metadata };
     }
 
@@ -277,8 +267,7 @@ export default class HyperviewContentService {
     async putPageMetadata(context, args) {
         const { pathname: pagePath, metadata: pageMetadata, etag } = args;
         const pathname = getPageMetadataPath(pagePath);
-        const blob = encodeUtf8(canonicalize(pageMetadata));
-        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        const { hash, size, metadata } = await this.#store.putObject(context, pathname, pageMetadata, null, etag);
         return { hash, size, metadata };
     }
 
@@ -298,8 +287,7 @@ export default class HyperviewContentService {
     async putPagePartials(context, args) {
         const { pathname: pagePath, bundle, etag } = args;
         const pathname = getPagePartialsPath(pagePath);
-        const blob = encodeUtf8(canonicalize(bundle));
-        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        const { hash, size, metadata } = await this.#store.putObject(context, pathname, bundle, null, etag);
         return { hash, size, metadata };
     }
 
@@ -319,8 +307,7 @@ export default class HyperviewContentService {
     async putPageIncludes(context, args) {
         const { pathname: pagePath, bundle, etag } = args;
         const pathname = getPageIncludesPath(pagePath);
-        const blob = encodeUtf8(canonicalize(bundle));
-        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        const { hash, size, metadata } = await this.#store.putObject(context, pathname, bundle, null, etag);
         return { hash, size, metadata };
     }
 
@@ -339,8 +326,7 @@ export default class HyperviewContentService {
     async putPageTemplate(context, args) {
         const { filepath, source, etag } = args;
         const pathname = getPageTemplatePath(filepath);
-        const blob = encodeUtf8(source);
-        const { hash, size, metadata } = await this.#store.putBlob(context, pathname, blob, null, etag);
+        const { hash, size, metadata } = await this.#store.putUtf8(context, pathname, source, null, etag);
         return { hash, size, metadata };
     }
 
