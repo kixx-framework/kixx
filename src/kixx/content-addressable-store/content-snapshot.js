@@ -1,4 +1,32 @@
+import {
+    isValidPathname,
+    normalizePathname,
+    getGlobalTemplatePartialsPath,
+    getBaseTemplatesPath,
+    getPageDirectoryPath,
+    getPageMetadataPath,
+    isPageMetadataPath,
+    isPagePartialsPath,
+    isPageIncludesPath,
+    getEmailBundlePath,
+} from './content-layout.js';
+import { hashSet } from './addressing.js';
+import {
+    assert,
+    assertEqual,
+    assertNonEmptyString,
+} from '../assertions/mod.js';
+
+
 export default class ContentSnapshot {
+
+    #store;
+    #index;
+
+    constructor(store, index) {
+        this.#store = store;
+        this.#index = index;
+    }
 
     async #getPath(type, pathname) {
         const stat = this.#index.getNode(pathname);
@@ -6,18 +34,10 @@ export default class ContentSnapshot {
         if (!stat) {
             return null;
         }
-        if (stat.kind !== 'blob') {
-            throw new AssertionError(
-                `Expected the  path "${ pathname }" to point to a file and not a directory`,
-            );
-        }
+        assertEqual('blob', stat.kind, `Expected the  path "${ pathname }" to point to a file and not a directory`);
 
         const bytes = await this.#store.getFile(type, stat);
-        if (!bytes) {
-            throw new AssertionError(
-                `The pathname "${ pathname }" references unreadable blob "${ stat.hash }"`,
-            );
-        }
+        assert(bytes, `The pathname "${ pathname }" references unreadable blob "${ stat.hash }"`);
 
         // `bytes` could be a String or ArrayBuffer, depending on the `type`.
         return [ stat, bytes ];
@@ -89,7 +109,7 @@ export default class ContentSnapshot {
             .concat(sourceFileStats)
             .filter((entry) => entry.kind === 'blob');
 
-        const results = await this.#store.getFiles(type, files);
+        const results = await this.#store.getFiles('text', files);
 
         const pageDataFiles = [];
         let template = null;
@@ -102,17 +122,13 @@ export default class ContentSnapshot {
             // we can match stats with their blobs.
             const stat = files[i];
             const bytes = results[i];
-            if (!bytes) {
-                throw new AssertionError(
-                    `The pathname "${ stat.pathname }" references unreadable blob "${ stat.hash }"`,
-                );
-            }
-            const basename = stat.pathname.split('/').pop();
-            if (basename === 'page.json') {
+            assertNonEmptyString(bytes, `The pathname "${ stat.pathname }" references unreadable blob "${ stat.hash }"`);
+
+            if (isPageMetadataPath(stat.pathname)) {
                 pageDataFiles.push(new JsonContentObject(bytes, stat));
-            } else if (isPagePartialsBundleBasename(basename)) {
+            } else if (isPagePartialsPath(stat.pathname)) {
                 partials = new JsonContentObject(bytes, stat);
-            } else if (isPageIncludesBundleBasename(basename)) {
+            } else if (isPageIncludesPath(stat.pathname)) {
                 includes = new JsonContentObject(bytes, stat);
             } else {
                 assert(
@@ -123,7 +139,7 @@ export default class ContentSnapshot {
             }
         }
 
-        const hash = await hashFileStats(files);
+        const hash = await hashSet(files);
         return { hash, pageDataFiles, template, partials, includes };
     }
 

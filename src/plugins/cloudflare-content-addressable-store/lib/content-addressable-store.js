@@ -223,8 +223,8 @@ export default class ContentAddressableStore {
      * @throws {TypeError} When a non-primitive value cannot be canonicalized
      * @public
      */
-    async hashValue(value) {
-        return await hashValue(value);
+    async hashString(value) {
+        return await hashString(value);
     }
 
     /**

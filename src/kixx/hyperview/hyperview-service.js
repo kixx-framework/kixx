@@ -551,7 +551,7 @@ export default class HyperviewService {
         // hashing; compiled-template cache validation remains in the loaders.
         if (usePageCache) {
             const partials = content.statGlobalTemplatePartials();
-            let hash = await this.#contentStore.hashValue(`${ page.hash }#${ partials?.hash ?? '' }`);
+            let hash = await this.#contentStore.hashString(`${ page.hash }#${ partials?.hash ?? '' }`);
 
             // Optionally add the hash of the canonicalized props object.
             if (includePropsInCacheKey) {
@@ -563,9 +563,9 @@ export default class HyperviewService {
                         response.props,
                     );
                 } else {
-                    propsHash = await this.#contentStore.hashValue(response.props);
+                    propsHash = await this.#contentStore.hashString(response.props);
                 }
-                hash = await this.#contentStore.hashValue(`${ hash }#${ propsHash }`);
+                hash = await this.#contentStore.hashString(`${ hash }#${ propsHash }`);
             }
 
             // If the caller does not provide a custom cache key, we use the URL
@@ -582,7 +582,7 @@ export default class HyperviewService {
                 renderModeIdentity = 'PAGE_TEMPLATE_ONLY';
             } else {
                 const baseTemplates = content.statBaseTemplates();
-                hash = await this.#contentStore.hashValue(`${ hash }#${ baseTemplates?.hash ?? '' }`);
+                hash = await this.#contentStore.hashString(`${ hash }#${ baseTemplates?.hash ?? '' }`);
                 renderModeIdentity = `FULL_PAGE#${ options.baseTemplateId }`;
             }
 
@@ -591,7 +591,7 @@ export default class HyperviewService {
             // is never used as the KV key or logged directly. Hashing it into a short,
             // opaque, fixed-length key also keeps every key within the portable
             // 512-byte KV key limit regardless of the input size.
-            const logicalCacheIdentity = await this.#contentStore.hashValue(
+            const logicalCacheIdentity = await this.#contentStore.hashString(
                 `${ pageCacheIdentity }#${ renderModeIdentity }#${ hash }`,
             );
             pageCacheKey = `hyperview_page_cache#${ logicalCacheIdentity }`;
