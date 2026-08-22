@@ -356,39 +356,54 @@ export default class HyperviewService {
     }
 
     async #getEmail(content, pathname) {
-        const email = await content.batchGetEmailAssets(pathname);
+        const bundle = await content.getEmailAssets(pathname);
 
-        if (!email) {
+        if (!bundle) {
             return null;
         }
 
         // HTML and text are independent representations; an email may publish
         // either one without requiring the other.
         let htmlTemplate;
-        if (email.htmlTemplate) {
-            const file = email.htmlTemplate;
-            htmlTemplate = compileTemplate(file.pathname, file.text, this.#customHelpers);
+        if (bundle.json.htmlTemplate) {
+            const { id, source } = bundle.json.htmlTemplate;
+            assertNonEmptyString(
+                id,
+                `Missing or invalid "id" from email HTML template in "${ pathname }"`,
+            );
+            assertNonEmptyString(
+                source,
+                `Missing or invalid "source" from email HTML template in "${ pathname }"`,
+            );
+            htmlTemplate = compileTemplate(id, source, this.#customHelpers);
         }
         let textTemplate;
-        if (email.textTemplate) {
-            const file = email.textTemplate;
-            textTemplate = compileTemplate(file.pathname, file.text, this.#customHelpers);
+        if (bundle.json.textTemplate) {
+            const { id, source } = bundle.json.textTemplate;
+            assertNonEmptyString(
+                id,
+                `Missing or invalid "id" from email text template in "${ pathname }"`,
+            );
+            assertNonEmptyString(
+                source,
+                `Missing or invalid "source" from email text template in "${ pathname }"`,
+            );
+            textTemplate = compileTemplate(id, source, this.#customHelpers);
         }
 
         const partials = new Map();
 
-        if (email.partials) {
-            const file = email.partials;
-            assertArray(file.json, `Email template partials must be defined as an Array in "${ file.pathname }"`);
+        if (bundle.json.partials) {
+            assertArray(bundle.json.partials, `Email template partials must be defined as an Array in "${ pathname }"`);
 
-            for (const { id, source } of file.json) {
+            for (const { id, source } of bundle.json.partials) {
                 assertNonEmptyString(
                     id,
-                    `Missing or invalid "id" from email partials in "${ file.pathname }"`,
+                    `Missing or invalid "id" from email partials in "${ pathname }"`,
                 );
                 assertNonEmptyString(
                     source,
-                    `Missing or invalid "source" from email partials in "${ file.pathname }"`,
+                    `Missing or invalid "source" from email partials in "${ pathname }"`,
                 );
 
                 const template = compileTemplate(`${ pathname }/${ id }`, source, this.#customHelpers);
@@ -397,12 +412,12 @@ export default class HyperviewService {
         }
 
         return {
-            contextData: email.contextData ? email.contextData.json : {},
+            contextData: bundle.json.contextData ?? {},
             htmlTemplate,
             textTemplate,
             partials,
-            includes: email.includes || {},
-            hash: email.hash,
+            includes: bundle.json.includes ?? {},
+            hash: bundle.hash,
         };
     }
 
@@ -694,7 +709,7 @@ export default class HyperviewService {
 
         // Runtime values take precedence over published defaults so callers can
         // supply recipient- and delivery-specific data.
-        const contextData = deepMerge(email.contextData, props);
+        const contextData = deepMerge(email.contextData, { includes: email.includes }, props);
 
         let subject = null;
         let html = null;

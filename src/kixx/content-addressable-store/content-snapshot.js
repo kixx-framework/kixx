@@ -1,4 +1,4 @@
-export default class ContentIndexSnapshot {
+export default class ContentSnapshot {
 
     async #getPath(type, pathname) {
         const stat = this.#index.getNode(pathname);
@@ -125,5 +125,19 @@ export default class ContentIndexSnapshot {
 
         const hash = await hashFileStats(files);
         return { hash, pageDataFiles, template, partials, includes };
+    }
+
+    async getEmailAssets(pathname) {
+        assert(isValidPathname(pathname), 'batchGetEmailAssets() requires a valid pathname');
+
+        const fullPathname = getEmailBundlePath(pathname);
+        const result = await this.#getPath('text', fullPathname);
+
+        if (!result) {
+            return null;
+        }
+
+        const [ stat, json ] = result;
+        return new JsonContentObject(json, stat);
     }
 }
