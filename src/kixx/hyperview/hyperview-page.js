@@ -8,8 +8,6 @@ import {
 
 export default class HyperviewPage {
 
-    #pageContext = {};
-    #responseProps = null;
     #createMiniTemplate;
 
     constructor(spec) {
@@ -17,96 +15,79 @@ export default class HyperviewPage {
             url,
             pathname,
             responseProps,
-            pageTemplateFilename,
+            pageDataSources,
+            template,
             partials,
             includes,
-            etag,
+            hash,
             createMiniTemplate,
         } = spec;
 
-        this.#responseProps = responseProps;
         this.#createMiniTemplate = createMiniTemplate;
 
         this.url = url;
         this.pathname = pathname;
-        this.pageTemplateFilename = pageTemplateFilename;
-        this.includes = null;
-        this.partials = null;
-        this.etag = etag;
+        this.template = template;
+        this.partials = partials;
+        this.hash = hash;
 
-        // includes and partials are ContentObject instances; json() decodes the
-        // stored bytes and must be invoked, not read as a data property.
-        if (includes) {
-            this.includes = includes.json();
-        }
-        if (partials) {
-            this.partials = {
-                etag: partials.etag,
-                partials: partials.json(),
-            };
-        }
+        this.context = this.#formatPageContext(this.#mergeSources(
+            pageDataSources,
+            includes,
+            responseProps,
+        ));
     }
 
-    mergeSources(originalSources) {
+    #mergeSources(originalSources, includes, responseProps) {
         const pageContext = {};
 
         // Create a structured clone so that we can safely mutate the sources.
         const sources = structuredClone(originalSources);
-        const leafNode = sources[sources.length - 1];
 
         // Merge the pages together, with the more specific page data objects overriding
         // their parents. For the merge to work correctly, sources must be sorted
         // from grandparent -> grandchild
         for (const json of sources) {
-            // Includes and partials are page-relative, so only the leaf node can declare
-            // files that should be loaded for the requested pathname.
-            if (json !== leafNode) {
-                delete json.includes;
-                delete json.partials;
-            }
-
             deepMerge(pageContext, json);
         }
 
-        Object.assign(this.#pageContext, pageContext);
-
-        this.#pageContext.includes = this.includes;
+        pageContext.includes = includes;
 
         // Clone the response.props so we don't mutate the nested data structures
         // as part of the page context hydration process.
-        deepMerge(this.#pageContext, structuredClone(this.#responseProps));
+        deepMerge(pageContext, structuredClone(responseProps));
 
         // Compile the title template, if it exists.
-        if (isNonEmptyString(this.#pageContext.page?.title?.template)) {
-            this.#pageContext.page.title = this.#createMiniTemplate(
+        if (isNonEmptyString(pageContext.page?.title?.template)) {
+            pageContext.page.title = this.#createMiniTemplate(
                 `${ this.pathname }/page.title`,
-                this.#pageContext.page.title.template,
+                pageContext.page.title.template,
             );
         }
         // Compile the description template, if it exists.
-        if (isNonEmptyString(this.#pageContext.page?.description?.template)) {
-            this.#pageContext.page.description = this.#createMiniTemplate(
+        if (isNonEmptyString(pageContext.page?.description?.template)) {
+            pageContext.page.description = this.#createMiniTemplate(
                 `${ this.pathname }/page.description`,
-                this.#pageContext.page.description.template,
+                pageContext.page.description.template,
             );
         }
 
-        return this;
+        return pageContext;
     }
 
-    getPageContext() {
-        if (isUndefined(this.#pageContext.pathname)) {
-            this.#pageContext.pathname = this.pathname;
+    #formatPageContext(pageContext) {
+        if (isUndefined(pageContext.pathname)) {
+            pageContext.pathname = this.pathname;
         }
-        if (isUndefined(this.#pageContext.url_pathname)) {
-            this.#pageContext.url_pathname = this.url.pathname;
-        }
-
-        if (!isObjectNotNull(this.#pageContext.page)) {
-            this.#pageContext.page = {};
+        if (isUndefined(pageContext.url_pathname)) {
+            pageContext.url_pathname = this.url.pathname;
         }
 
-        const { page } = this.#pageContext;
+        if (!isObjectNotNull(pageContext.page)) {
+            pageContext.page = {};
+        }
+
+        const { page } = pageContext;
 
         // Set canonical URL from request URL if not already defined in page data;
         // excludes query string and hash to provide a stable reference.
@@ -120,10 +101,10 @@ export default class HyperviewPage {
 
         // Hydrate the title and description templates, if they exist.
         if (isFunction(page.title)) {
-            page.title = page.title(this.#pageContext);
+            page.title = page.title(pageContext);
         }
         if (isFunction(page.description)) {
-            page.description = page.description(this.#pageContext);
+            page.description = page.description(pageContext);
         }
 
         // Create the Open Graph object if it does not yet exist.
@@ -151,6 +132,6 @@ export default class HyperviewPage {
             open_graph.locale = page.locale;
         }
 
-        return this.#pageContext;
+        return pageContext;
     }
 }

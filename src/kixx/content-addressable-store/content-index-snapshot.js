@@ -92,7 +92,7 @@ export default class ContentIndexSnapshot {
         const results = await this.#store.getFiles(type, files);
 
         const pageDataFiles = [];
-        let pageTemplate = null;
+        let template = null;
         let partials = null;
         let includes = null;
 
@@ -116,14 +116,14 @@ export default class ContentIndexSnapshot {
                 includes = new JsonContentObject(bytes, stat);
             } else {
                 assert(
-                    pageTemplate === null,
+                    template === null,
                     `batchGetPageAssets(): found more than one page template in "${ directory }"`,
                 );
-                pageTemplate = new TextContentObject(bytes, stat);
+                template = new TextContentObject(bytes, stat);
             }
         }
 
         const hash = await hashFileStats(files);
-        return { hash, pageDataFiles, pageTemplate, partials, includes };
+        return { hash, pageDataFiles, template, partials, includes };
     }
 }

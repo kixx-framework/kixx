@@ -1,4 +1,204 @@
+
+// The get/read portion of an LRU cache on a Map.
+function getCachedEntry(cache, key) {
+    const entry = cache.get(key);
+
+    // Map iteration follows insertion order. Reinsert a cache hit so it becomes
+    // the most recently used entry at the end of that order.
+    cache.delete(key);
+    cache.set(key, entry);
+    return entry;
+}
+
+// The set/write portion of an LRU cache on a Map.
+function setCachedEntry(cache, key, entry, maxEntries) {
+    cache.set(key, entry);
+
+    // Cache hits are moved to the end, leaving the least recently used key at
+    // the front for eviction whenever the cache exceeds its size limit.
+    while (cache.size > maxEntries) {
+        cache.delete(cache.keys().next().value);
+    }
+    return entry;
+}
+
 export default class HyperviewService {
+
+    #customHelpers = new Map([
+        [ 'formatDate', formatDate ],
+        [ 'markup', markup ],
+        [ 'truncate', truncate ],
+    ]);
+
+    // Immutable compiled page partials, indexed by their content bundle etags.
+    #pagePartials = new Map();
+
+    // Immutable compiled page templates, indexed by normalized template filepath.
+    #pageTemplates = new Map();
+
+    #useTemplateCache;
+    #usePageCache;
+
+    #allowJsonResponse;
+
+    #pageCacheReadTtlSeconds;
+    #pageCacheExpirationSeconds;
+
+    #logger;
+    #contentStore;
+    #kvStore;
+
+    /**
+     * @param {Object} options
+     * @param {import('../logger/logger.js').default} options.logger - Root logger used to create a HyperviewService child logger
+     * @param {boolean} [options.useTemplateCache=false] - Reuse compiled templates until their content hash changes; fixed for the lifetime of the service
+     * @param {boolean} [options.usePageCache=false] - Default rendered-page cache policy; overridable per render
+     * @param {number} [options.pageCacheReadTtlSeconds=86400] - Default cache TTL for rendered-page reads, in seconds
+     * @param {number} [options.pageCacheExpirationSeconds=86400] - Default expiration for rendered-page writes, in seconds
+     * @param {boolean} [options.allowJsonResponse=false] - Allow explicit JSON requests to receive assembled page context by default
+     */
+    constructor(options) {
+        const {
+            logger,
+            useTemplateCache = false,
+            usePageCache = false,
+            pageCacheReadTtlSeconds = 60 * 60 * 24,
+            pageCacheExpirationSeconds = 60 * 60 * 24,
+            allowJsonResponse = false,
+        } = options ?? {};
+
+        assert(logger, 'HyperviewService requires a logger');
+
+        this.#logger = logger.createChild('HyperviewService');
+        this.#useTemplateCache = useTemplateCache;
+        this.#usePageCache = usePageCache;
+        this.#pageCacheReadTtlSeconds = pageCacheReadTtlSeconds;
+        this.#pageCacheExpirationSeconds = pageCacheExpirationSeconds;
+        this.#allowJsonResponse = allowJsonResponse;
+    }
+
+    /**
+     * Connects the dependencies required for content loading and rendered-page caching.
+     * @param {Object} args - Service dependencies
+     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store for rendered hypertext
+     * @param {import('../content-addressable-store/content-addressable-store.js').default} args.contentStore - A ContentAddressableStore interface
+     * @returns {void}
+     */
+    initialize(args) {
+        const { contentStore, kvStore } = args ?? {};
+        assert(kvStore, 'HyperviewService#initialize() requires a kvStore');
+        assert(contentStore, 'HyperviewService#initialize() requires a contentStore');
+
+        this.#contentStore = contentStore;
+        this.#kvStore = kvStore;
+    }
+
+    async #getPagePartials(file) {
+        if (!file) {
+            return new Map();
+        }
+
+        assertNonEmptyString(
+            file.hash,
+            `expects partials.hash to be present from "${ file.pathname }"`,
+        );
+        assertArray(
+            file.json,
+            `expects partials.json to be present from "${ file.pathname }"`,
+        );
+
+        const cacheKey = `${ file.pathname }#${ file.hash }`;
+
+        if (this.#useTemplateCache && this.#pagePartials.has(cacheKey)) {
+            return getCachedEntry(this.#pagePartials, cacheKey);
+        }
+
+        const pagePartials = new Map();
+
+        for (const { id, source } of file.json) {
+            assertNonEmptyString(
+                id,
+                `Missing or invalid "id" from page partials in "${ file.pathname }"`,
+            );
+            assertNonEmptyString(
+                source,
+                `Missing or invalid "source" from page partials in "${ file.pathname }"`,
+            );
+
+            const template = compileTemplate(id, source, this.#customHelpers);
+            pagePartials.set(id, template);
+        }
+
+        if (this.#useTemplateCache) {
+            setCachedEntry(
+                this.#pagePartials,
+                cacheKey,
+                pagePartials,
+                MAX_PAGE_PARTIAL_CACHE_ENTRIES,
+            );
+        }
+
+        return pagePartials;
+    }
+
+    async #getPageTemplate(file) {
+        assertNonEmptyString(
+            file.hash,
+            `expects template.hash to be present from "${ file.pathname }"`,
+        );
+        assertArray(
+            file.text,
+            `expects template.json to be present from "${ file.pathname }"`,
+        );
+
+        const cacheKey = `${ file.pathname }#${ file.hash }`;
+
+        if (this.#useTemplateCache && this.#pageTemplates.has(cacheKey)) {
+            return getCachedEntry(this.#pageTemplates, cacheKey);
+        }
+
+        const template = compileTemplate(file.pathname, file.text, this.#customHelpers);
+
+        if (this.#useTemplateCache) {
+            setCachedEntry(
+                this.#pageTemplates,
+                cacheKey,
+                template,
+                MAX_PAGE_TEMPLATE_CACHE_ENTRIES,
+            );
+        }
+
+        return template;
+    }
+
+    async #getPage(content, url, pathname, responseProps) {
+        const page = await content.batchGetPageAssets(pathname);
+
+        // A page directory can carry metadata with no template of its own; an ancestor
+        // directory published only to supply inherited defaults for its descendants.
+        // Requesting that pathname directly is a missing resource from the caller's
+        // perspective, so we return null as if the page itself was not found.
+        if (!page || !page.template) {
+            return null;
+        }
+
+        const pageDataSources = page.pageDataFiles.map((file) => file.json);
+        const partials = this.#getPagePartials(page.partials);
+        const template = this.#getPageTemplate(page.template);
+
+        return new HyperviewPage({
+            url,
+            pathname,
+            responseProps,
+            pageDataSources,
+            template,
+            partials,
+            includes: page.includes || {},
+            hash: page.hash,
+            createMiniTemplate: createMiniTemplate.bind(this),
+        });
+    }
+
     async respondWithHypertext(context, request, response, options) {
         options = options ?? {};
 
@@ -50,21 +250,21 @@ export default class HyperviewService {
             pathname = normalizePathname(requestPathname);
         }
 
-        this.#assertCanonicalIdentifier(
-            pathname,
+        assert(
+            isValidPathname(pathname),
             'HyperviewService#respondWithHypertext: pathname',
         );
 
         // We need to assert these identifiers are correct and safe here, because they
         // may not have been checked prior to reaching this routine.
         if (options.partial) {
-            this.#assertCanonicalIdentifier(
-                options.partial,
+            assert(
+                isValidPathname(options.partial),
                 'HyperviewService#respondWithHypertext: options.partial',
             );
         } else if (!options.skipBaseRender) {
-            this.#assertCanonicalIdentifier(
-                options.baseTemplateId,
+            assert(
+                isValidPathname(options.baseTemplateId),
                 'HyperviewService#respondWithHypertext options.baseTemplateId',
             );
         }
@@ -75,7 +275,7 @@ export default class HyperviewService {
         // exactly one request-scoped snapshot.
         const content = await this.#contentStore.openSnapshot(context);
 
-        const page = await getPage(content, url, pathname, response.props);
+        const page = await this.#getPage(content, url, pathname, response.props);
 
         if (!page) {
             throw new NotFoundError(`No page found for URL "${ url.href }"`, {
@@ -90,7 +290,7 @@ export default class HyperviewService {
             // The optional JSON response is intended for development and debugging.
             return response.respondWithJSON(
                 response.status,
-                page.getPageContext(),
+                page.context,
                 { whiteSpace: 4 },
             );
         }
@@ -110,7 +310,7 @@ export default class HyperviewService {
                 if (isFunction(options.propsHashFunction)) {
                     propsHash = await options.propsHashFunction(
                         page.pathname,
-                        page.getPageContext(),
+                        page.context,
                         response.props,
                     );
                 } else {
@@ -162,11 +362,10 @@ export default class HyperviewService {
             this.#logger.debug('render partial for page', { pathname, url: url.href, partial: options.partial });
 
             const globalPartials = await this.#loadGlobalPartials(content);
-            const pagePartials = page.getPartials();
-            const template = pagePartials.get(options.partial);
+            const template = page.partials.get(options.partial);
             assertFunction(template, `Partial template "${ options.partial }" does not exist in pages/${ pathname }`);
 
-            hypertext = template(page.getPageContext(), layerPartials(pagePartials, globalPartials));
+            hypertext = template(page.context, layerPartials(pagePartials, globalPartials));
             assertNonEmptyString(
                 hypertext,
                 `HyperviewService rendered empty hypertext for the partial "${ options.partial }" render of page "${ pathname }"`,
@@ -187,11 +386,10 @@ export default class HyperviewService {
             // for page transitions triggered from the browser with fetch().
             this.#logger.debug('skip base template render for page', { url: url.href, pathname });
 
-            const template = page.getTemplate();
-            const pagePartials = page.getPartials();
+            const template = page.template;
             const globalPartials = await this.#loadGlobalPartials(content);
 
-            hypertext = template(page.getPageContext(), layerPartials(pagePartials, globalPartials));
+            hypertext = template(page.context, layerPartials(page.partials, globalPartials));
             assertNonEmptyString(
                 hypertext,
                 `HyperviewService rendered empty hypertext for page template render of page "${ pathname }"`,
@@ -211,13 +409,11 @@ export default class HyperviewService {
 
         assertFunction(baseTemplate, `Base template "${ options.baseTemplateId }" does not exist`);
 
-        const pageContext = page.getPageContext();
-        const pageTemplate = page.getTemplate();
+        const pageContext = page.context;
         const globalPartials = await this.#loadGlobalPartials(content);
-        const pagePartials = page.getPartials();
-        const partials = layerPartials(pagePartials, globalPartials);
+        const partials = layerPartials(page.partials, globalPartials);
 
-        pageContext.body = pageTemplate(pageContext, partials);
+        pageContext.body = page.template(pageContext, partials);
         hypertext = baseTemplate(pageContext, partials);
         assertNonEmptyString(
             hypertext,
@@ -232,5 +428,24 @@ export default class HyperviewService {
         }
 
         return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
+    }
+
+    async renderEmail(context, pathname, props) {
+        assert(
+            isValidPathname(pathname),
+            'HyperviewService#renderEmail: pathname',
+        );
+
+        // A render reads all of its content, including cache-key inputs, through
+        // exactly one request-scoped snapshot.
+        const content = await this.#contentStore.openSnapshot(context);
+
+        const email = await getEmail(content, pathname, props);
+
+        const globalPartials = await this.#loadGlobalPartials(content);
+        const emailPartials = email.getPartials();
+        const partials = layerPartials(emailPartials, globalPartials);
+
+        return email.render(partials);
     }
 }
