@@ -1,7 +1,7 @@
 import {
     isString,
     isUndefined,
-} from '../../../kixx/assertions/mod.js';
+} from '../assertions/mod.js';
 
 /**
  * Identifies the current storage-key and digest wire format.
