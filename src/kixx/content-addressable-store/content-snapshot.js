@@ -72,16 +72,21 @@ export default class ContentSnapshot {
         return [ stat, bytes ];
     }
 
+    // The type selects the hash function and nothing else — the store derives
+    // the representation from the blob itself. An unrecognized type must throw
+    // rather than fall through: hashing nothing would content-address the blob
+    // by `undefined` and the mistake would only surface a layer down.
     async #putFile(context, type, pathname, bytes) {
-        let hash;
-        if (type === 'text') {
-            hash = await hashStringBlob(bytes);
-        }
-        if (type === 'arrayBuffer') {
-            hash = await hashArrayBufferBlob(bytes);
-        }
+        assert(
+            type === 'text' || type === 'arrayBuffer',
+            `Invalid type "${ type }" passed into ContentSnapshot#putFile()`,
+        );
 
-        await this.#store.putFile(context, type, pathname, hash, bytes);
+        const hash = type === 'text'
+            ? await hashStringBlob(bytes)
+            : await hashArrayBufferBlob(bytes);
+
+        await this.#store.putFile(context, pathname, hash, bytes);
 
         return {
             pathname,

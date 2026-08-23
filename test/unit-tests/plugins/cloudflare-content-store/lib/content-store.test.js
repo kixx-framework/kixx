@@ -468,22 +468,38 @@ describe('CloudflareContentStore', ({ describe }) => {
             const kvStore = makeKvStore(new Map());
             const store = makeStore();
 
-            await store.putFile(makeContext({ kvStore }), 'text', '/a.txt', 'hash-a', 'the bytes');
+            await store.putFile(makeContext({ kvStore }), '/a.txt', 'hash-a', 'the bytes');
 
             assertEqual('hash-a#1', kvStore.calls[0].key);
             assertEqual('the bytes', kvStore.calls[0].value);
+            // KV put() accepts expiration, expirationTtl, and metadata only.
+            // Passing a read-side `type` here would be silently ignored, and
+            // would suggest to a later reader that writes are type-tagged.
+            assertEqual(undefined, kvStore.calls[0].options);
         });
 
-        it('rejects a blob whose value does not match the declared type', async () => {
+        it('writes an ArrayBuffer blob', async () => {
+            const kvStore = makeKvStore(new Map());
+            const store = makeStore();
+            const blob = new ArrayBuffer(4);
+
+            await store.putFile(makeContext({ kvStore }), '/a.bin', 'hash-a', blob);
+
+            assertEqual('hash-a#1', kvStore.calls[0].key);
+            assertEqual(blob, kvStore.calls[0].value);
+        });
+
+        it('rejects a blob that is neither a string nor an ArrayBuffer', async () => {
             const kvStore = makeKvStore(new Map());
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.putFile(makeContext({ kvStore }), 'text', '/a.txt', 'hash-a', 42),
+                () => store.putFile(makeContext({ kvStore }), '/a.txt', 'hash-a', 42),
             );
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
+            assertEqual(0, kvStore.calls.length);
         });
 
         it('reads a blob as a stream, passing the type through to KV', async () => {
@@ -499,16 +515,19 @@ describe('CloudflareContentStore', ({ describe }) => {
         it('rejects a stream write, which KV has no way to accept', async () => {
             const kvStore = makeKvStore(new Map());
             const store = makeStore();
+            const stream = new ReadableStream();
 
             // Only getFile() can stream. A blob is stored under a hash of its
             // whole content, so the write side needs the bytes regardless.
+            // putFile() takes no type, so a stream is now refused by what the
+            // blob is rather than by what the caller called it.
             const caught = await catchAsyncError(
-                () => store.putFile(makeContext({ kvStore }), 'stream', '/a.txt', 'hash-a', 'the bytes'),
+                () => store.putFile(makeContext({ kvStore }), '/a.txt', 'hash-a', stream),
             );
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('stream', caught.message);
+            assertEqual(0, kvStore.calls.length);
         });
 
         it('rejects a bulk stream read, which KV does not support', async () => {

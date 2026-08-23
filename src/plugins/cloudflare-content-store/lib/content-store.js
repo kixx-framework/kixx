@@ -15,19 +15,14 @@ import {
  */
 
 
-const ACCEPTED_TYPES = [ 'text', 'arrayBuffer' ];
-
-// getFile() alone can stream. KV's single-key get() supports a 'stream' type,
-// but a bulk get() does not, and put() has no read-side type at all — so the
-// accepted set is per method rather than one shared list. Widening
-// ACCEPTED_TYPES instead would advertise a stream write and a bulk stream read
-// that the platform cannot serve.
-const GET_FILE_ACCEPTED_TYPES = ACCEPTED_TYPES.concat([ 'stream' ]);
-
-// KV's bulk get() is narrower still: it decodes 'text' and 'json' only, and
-// this store never reads JSON, so 'text' is the whole accepted set. An
-// 'arrayBuffer' bulk read raises a platform error, so it is rejected here
-// rather than advertised by the shared list and failing inside KV.
+// Type is a read-side concern, and every read method accepts a different set,
+// so there is no shared list to keep. A single-key KV get() decodes all three
+// of these; a bulk get() cannot stream and decodes 'text' and 'json' only
+// (this store never reads JSON, so 'text' is the whole bulk set); and putFile()
+// takes no type at all, because a write carries its own representation. One
+// widened list would advertise a stream write and a bulk stream read the
+// platform cannot serve.
+const GET_FILE_ACCEPTED_TYPES = [ 'text', 'arrayBuffer', 'stream' ];
 const GET_FILES_ACCEPTED_TYPES = [ 'text' ];
 
 // KV rejects a bulk get() carrying more than this many keys. Exceeding it is
@@ -287,25 +282,25 @@ export default class ContentStore {
     }
 
     /**
-     * Stores a content-addressed blob by type.
+     * Stores a content-addressed blob.
+     *
+     * Unlike the read methods, this takes no type: a write carries its own
+     * representation, so the blob itself is the only thing worth checking.
      * @param {RequestContext} context - Request context exposing the configured KV binding
-     * @param {'text'|'arrayBuffer'} type - Representation of the blob
      * @param {string} _pathname - Logical pathname retained for store interface compatibility
      * @param {string} hash - Content hash identifying the blob
-     * @param {string|ArrayBuffer} blob - Blob matching `type`
+     * @param {string|ArrayBuffer} blob - Blob to store
      * @returns {Promise<void>}
+     * @throws {AssertionError} When `blob` is neither a string nor an ArrayBuffer
      */
-    async putFile(context, type, _pathname, hash, blob) {
-        assertValidType(type, 'putFile');
-        if (type === 'text') {
-            assert(isString(blob), 'The blob passed into putFile() must be a string when type=text');
-        }
-        if (type === 'arrayBuffer') {
-            assert(blob instanceof ArrayBuffer, 'The blob passed into putFile() must be an ArrayBuffer when type=arrayBuffer');
-        }
+    async putFile(context, _pathname, hash, blob) {
+        assert(
+            isString(blob) || blob instanceof ArrayBuffer,
+            'The blob passed into putFile() must be a string or an ArrayBuffer',
+        );
         const kv = this.#resolveKvStore(context);
         const key = this.#buildFileKey(hash);
-        await kv.put(key, blob, { type });
+        await kv.put(key, blob);
     }
 
     /**
@@ -397,7 +392,7 @@ export default class ContentStore {
     }
 }
 
-function assertValidType(value, method, acceptedTypes = ACCEPTED_TYPES) {
+function assertValidType(value, method, acceptedTypes) {
     if (!acceptedTypes.includes(value)) {
         throw new AssertionError(`Invalid type "${ value }" passed into ContentStore#${ method }`);
     }
