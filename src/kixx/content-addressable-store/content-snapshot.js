@@ -30,6 +30,7 @@ import {
     assertEqual,
     assertArray,
     assertNonEmptyString,
+    isString,
     isPlainObject,
 } from '../assertions/mod.js';
 
@@ -44,7 +45,7 @@ export default class ContentSnapshot {
         this.#index = index;
     }
 
-    async #getPath(type, pathname) {
+    async #getFile(context, type, pathname) {
         const stat = this.#index.getNode(pathname);
 
         if (!stat) {
@@ -52,28 +53,30 @@ export default class ContentSnapshot {
         }
         assertEqual('blob', stat.kind, `Expected the  path "${ pathname }" to point to a file and not a directory`);
 
-        const bytes = await this.#store.getFile(type, stat);
-        assert(bytes, `The pathname "${ pathname }" references unreadable blob "${ stat.hash }"`);
+        const bytes = await this.#store.getFile(context, type, stat.pathname, stat.hash);
+        assert(
+            (isString(bytes) || bytes instanceof ArrayBuffer),
+            `The pathname "${ pathname }" references unreadable blob "${ stat.hash }"`,
+        );
 
         // `bytes` could be a String or ArrayBuffer, depending on the `type`.
         return [ stat, bytes ];
     }
 
-    async #putFile(type, pathname, bytes) {
+    async #putFile(context, type, pathname, bytes) {
         let hash;
         if (type === 'text') {
             hash = await hashStringBlob(bytes);
         }
-        if (type === 'arraybuffer') {
+        if (type === 'arrayBuffer') {
             hash = await hashArrayBufferBlob(bytes);
         }
 
-        const size = await this.#store.putFile(type, pathname, hash, bytes);
+        await this.#store.putFile(context, type, pathname, hash, bytes);
 
         return {
             pathname,
             hash,
-            size,
         };
     }
 
@@ -83,10 +86,10 @@ export default class ContentSnapshot {
         return this.#index.getNode(fullPathname);
     }
 
-    async getStaticAsset(pathname) {
+    async getStaticAsset(context, pathname) {
         assert(isValidPathname(pathname), 'getStaticAssetPath() requires a valid pathname');
         const fullPathname = getStaticAssetPath(pathname);
-        const result = await this.#getPath('stream', fullPathname);
+        const result = await this.#getFile(context, 'stream', fullPathname);
 
         if (!result) {
             return null;
@@ -96,15 +99,22 @@ export default class ContentSnapshot {
         return new StreamContentObject(stream, stat);
     }
 
+    async putStaticAsset(context, pathname, arrayBuffer) {
+        assert(isValidPathname(pathname), 'putStaticAsset() requires a valid pathname');
+        assert(arrayBuffer instanceof ArrayBuffer, 'putStaticAsset() requires an ArrayBuffer payload');
+        const fullPathname = getStaticAssetPath(pathname);
+        return await this.#putFile(context, 'arrayBuffer', fullPathname, arrayBuffer);
+    }
+
     statGlobalTemplatePartials() {
         const fullPathname = getGlobalTemplatePartialsPath();
         return this.#index.getNode(fullPathname);
     }
 
-    async getGlobalTemplatePartials() {
+    async getGlobalTemplatePartials(context) {
         const fullPathname = getGlobalTemplatePartialsPath();
 
-        const result = await this.#getPath('text', fullPathname);
+        const result = await this.#getFile(context, 'text', fullPathname);
 
         if (!result) {
             return null;
@@ -114,12 +124,12 @@ export default class ContentSnapshot {
         return new JsonContentObject(json, stat);
     }
 
-    async putGlobalTemplatePartials(pathname, bundle) {
+    async putGlobalTemplatePartials(context, pathname, bundle) {
         assert(isValidPathname(pathname), 'putGlobalTemplatePartials() requires a valid pathname');
         assertArray(bundle, 'putGlobalTemplatePartials() requires an Array bundle');
         const fullPathname = getGlobalTemplatePartialsPath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', fullPathname, json);
+        return await this.#putFile(context, 'text', fullPathname, json);
     }
 
     statBaseTemplates() {
@@ -127,10 +137,10 @@ export default class ContentSnapshot {
         return this.#index.getNode(fullPathname);
     }
 
-    async getBaseTemplates() {
+    async getBaseTemplates(context) {
         const fullPathname = getBaseTemplatesPath();
 
-        const result = await this.#getPath('text', fullPathname);
+        const result = await this.#getFile(context, 'text', fullPathname);
 
         if (!result) {
             return null;
@@ -140,12 +150,12 @@ export default class ContentSnapshot {
         return new JsonContentObject(json, stat);
     }
 
-    async putBaseTemplates(pathname, bundle) {
+    async putBaseTemplates(context, pathname, bundle) {
         assert(isValidPathname(pathname), 'putBaseTemplates() requires a valid pathname');
         assertArray(bundle, 'putBaseTemplates() requires an Array bundle');
         const fullPathname = getBaseTemplatesPath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', fullPathname, json);
+        return await this.#putFile(context, 'text', fullPathname, json);
     }
 
     async statPageMetadata(pathname) {
@@ -154,12 +164,12 @@ export default class ContentSnapshot {
         return this.#index.getNode(fullPathname);
     }
 
-    async putPageMetadata(pathname, obj) {
+    async putPageMetadata(context, pathname, obj) {
         assert(isValidPathname(pathname), 'putPageMetadata() requires a valid pathname');
         assert(isPlainObject(obj), 'putPageMetadata() requires a metadata object');
         const fullPathname = getPageMetadataPath(pathname);
         const json = canonicalize(obj);
-        return await this.#putFile('text', fullPathname, json);
+        return await this.#putFile(context, 'text', fullPathname, json);
     }
 
     async statPageIncludes(pathname) {
@@ -168,12 +178,12 @@ export default class ContentSnapshot {
         return this.#index.getNode(fullPathname);
     }
 
-    async putPageIncludes(pathname, bundle) {
+    async putPageIncludes(context, pathname, bundle) {
         assert(isValidPathname(pathname), 'putPageIncludes() requires a valid pathname');
         assert(isPlainObject(bundle), 'putPageIncludes() requires an Array bundle');
         const fullPathname = getPageIncludesPath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', fullPathname, json);
+        return await this.#putFile(context, 'text', fullPathname, json);
     }
 
     async statPagePartials(pathname) {
@@ -182,12 +192,12 @@ export default class ContentSnapshot {
         return this.#index.getNode(fullPathname);
     }
 
-    async putPagePartials(pathname, bundle) {
+    async putPagePartials(context, pathname, bundle) {
         assert(isValidPathname(pathname), 'putPagePartials() requires a valid pathname');
         assertArray(bundle, 'putPagePartials() requires an Array bundle');
         const fullPathname = getPagePartialsPath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', fullPathname, json);
+        return await this.#putFile(context, 'text', fullPathname, json);
     }
 
     async statPageTemplate(pathname) {
@@ -196,11 +206,11 @@ export default class ContentSnapshot {
         return this.#index.getNode(fullPathname);
     }
 
-    async putPageTemplate(pathname, source) {
+    async putPageTemplate(context, pathname, source) {
         assert(isValidPathname(pathname), 'putPageTemplate() requires a valid pathname');
         assertNonEmptyString(source, 'putPageTemplate() requires a non-empty source string');
         const fullPathname = getPageTemplatePath(pathname);
-        return await this.#putFile('text', fullPathname, source);
+        return await this.#putFile(context, 'text', fullPathname, source);
     }
 
     async statEmailAssets(pathname) {
@@ -209,15 +219,29 @@ export default class ContentSnapshot {
         return this.#index.getNode(fullPathname);
     }
 
-    async putEmailAssets(pathname, bundle) {
+    async getEmailAssets(context, pathname) {
+        assert(isValidPathname(pathname), 'getEmailAssets() requires a valid pathname');
+
+        const fullPathname = getEmailBundlePath(pathname);
+        const result = await this.#getFile(context, 'text', fullPathname);
+
+        if (!result) {
+            return null;
+        }
+
+        const [ stat, json ] = result;
+        return new JsonContentObject(json, stat);
+    }
+
+    async putEmailAssets(context, pathname, bundle) {
         assert(isValidPathname(pathname), 'putEmailAssets() requires a valid pathname');
         assert(isPlainObject(bundle), 'putEmailAssets() requires a plain object bundle');
         const fullPathname = getEmailBundlePath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', fullPathname, json);
+        return await this.#putFile(context, 'text', fullPathname, json);
     }
 
-    async batchGetPageAssets(pathname) {
+    async batchGetPageAssets(context, pathname) {
         assert(isValidPathname(pathname), 'batchGetPageAssets() requires a valid pathname');
 
         const parts = normalizePathname(pathname).split('/').filter((part) => part);
@@ -247,7 +271,7 @@ export default class ContentSnapshot {
             .concat(sourceFileStats)
             .filter((entry) => entry.kind === 'blob');
 
-        const results = await this.#store.getFiles('text', files);
+        const results = await this.#store.getFiles(context, 'text', files);
 
         const pageDataFiles = [];
         let template = null;
@@ -279,19 +303,5 @@ export default class ContentSnapshot {
 
         const hash = await hashSet(files);
         return { hash, pageDataFiles, template, partials, includes };
-    }
-
-    async getEmailAssets(pathname) {
-        assert(isValidPathname(pathname), 'batchGetEmailAssets() requires a valid pathname');
-
-        const fullPathname = getEmailBundlePath(pathname);
-        const result = await this.#getPath('text', fullPathname);
-
-        if (!result) {
-            return null;
-        }
-
-        const [ stat, json ] = result;
-        return new JsonContentObject(json, stat);
     }
 }
