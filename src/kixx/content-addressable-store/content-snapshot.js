@@ -1,3 +1,4 @@
+import { TextContentObject, JsonContentObject } from './content-object.js';
 import {
     isValidPathname,
     normalizePathname,
