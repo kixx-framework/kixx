@@ -91,7 +91,7 @@ export default class HyperviewService {
     #pageCacheExpirationSeconds;
 
     #logger;
-    #contentStore;
+    #contentAddressableStore;
     #kvStore;
 
     /**
@@ -128,15 +128,15 @@ export default class HyperviewService {
      * Call this once after construction and before rendering a page or email.
      * @param {Object} args - Rendering service dependencies
      * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store used to cache rendered hypertext
-     * @param {import('./hyperview-content-service.js').default} args.contentStore - Hyperview content service used to resolve pathnames, snapshots, and content hashes
+     * @param {import('./hyperview-content-service.js').default} args.contentAddressableStore - Hyperview content service used to resolve pathnames, snapshots, and content hashes
      * @returns {void}
      */
     initialize(args) {
-        const { contentStore, kvStore } = args ?? {};
+        const { contentAddressableStore, kvStore } = args ?? {};
         assert(kvStore, 'HyperviewService#initialize() requires a kvStore');
-        assert(contentStore, 'HyperviewService#initialize() requires a contentStore');
+        assert(contentAddressableStore, 'HyperviewService#initialize() requires a contentAddressableStore');
 
-        this.#contentStore = contentStore;
+        this.#contentAddressableStore = contentAddressableStore;
         this.#kvStore = kvStore;
     }
 
@@ -496,11 +496,11 @@ export default class HyperviewService {
                     requestPathname = requestPathname.slice(0, -'index'.length);
                 }
             }
-            pathname = this.#contentStore.normalizePathname(requestPathname);
+            pathname = this.#contentAddressableStore.normalizePathname(requestPathname);
         }
 
         assert(
-            this.#contentStore.isValidPathname(pathname),
+            this.#contentAddressableStore.isValidPathname(pathname),
             'HyperviewService#respondWithHypertext: pathname',
         );
 
@@ -508,12 +508,12 @@ export default class HyperviewService {
         // may not have been checked prior to reaching this routine.
         if (options.partial) {
             assert(
-                this.#contentStore.isValidPathname(options.partial),
+                this.#contentAddressableStore.isValidPathname(options.partial),
                 'HyperviewService#respondWithHypertext: options.partial',
             );
         } else if (!options.skipBaseRender) {
             assert(
-                this.#contentStore.isValidPathname(options.baseTemplateId),
+                this.#contentAddressableStore.isValidPathname(options.baseTemplateId),
                 'HyperviewService#respondWithHypertext options.baseTemplateId',
             );
         }
@@ -522,7 +522,7 @@ export default class HyperviewService {
 
         // A render reads all of its content, including cache-key inputs, through
         // exactly one request-scoped snapshot.
-        const content = await this.#contentStore.openSnapshot(context);
+        const content = await this.#contentAddressableStore.openSnapshot(context);
 
         const page = await this.#getPage(content, url, pathname, response.props);
 
@@ -551,7 +551,7 @@ export default class HyperviewService {
         // hashing; compiled-template cache validation remains in the loaders.
         if (usePageCache) {
             const partials = content.statGlobalTemplatePartials();
-            let hash = await this.#contentStore.hashString(`${ page.hash }#${ partials?.hash ?? '' }`);
+            let hash = await this.#contentAddressableStore.hashString(`${ page.hash }#${ partials?.hash ?? '' }`);
 
             // Optionally add the hash of the canonicalized props object.
             if (includePropsInCacheKey) {
@@ -563,9 +563,9 @@ export default class HyperviewService {
                         response.props,
                     );
                 } else {
-                    propsHash = await this.#contentStore.hashString(response.props);
+                    propsHash = await this.#contentAddressableStore.hashString(response.props);
                 }
-                hash = await this.#contentStore.hashString(`${ hash }#${ propsHash }`);
+                hash = await this.#contentAddressableStore.hashString(`${ hash }#${ propsHash }`);
             }
 
             // If the caller does not provide a custom cache key, we use the URL
@@ -582,7 +582,7 @@ export default class HyperviewService {
                 renderModeIdentity = 'PAGE_TEMPLATE_ONLY';
             } else {
                 const baseTemplates = content.statBaseTemplates();
-                hash = await this.#contentStore.hashString(`${ hash }#${ baseTemplates?.hash ?? '' }`);
+                hash = await this.#contentAddressableStore.hashString(`${ hash }#${ baseTemplates?.hash ?? '' }`);
                 renderModeIdentity = `FULL_PAGE#${ options.baseTemplateId }`;
             }
 
@@ -591,7 +591,7 @@ export default class HyperviewService {
             // is never used as the KV key or logged directly. Hashing it into a short,
             // opaque, fixed-length key also keeps every key within the portable
             // 512-byte KV key limit regardless of the input size.
-            const logicalCacheIdentity = await this.#contentStore.hashString(
+            const logicalCacheIdentity = await this.#contentAddressableStore.hashString(
                 `${ pageCacheIdentity }#${ renderModeIdentity }#${ hash }`,
             );
             pageCacheKey = `hyperview_page_cache#${ logicalCacheIdentity }`;
@@ -694,13 +694,13 @@ export default class HyperviewService {
      */
     async renderEmail(context, pathname, props) {
         assert(
-            this.#contentStore.isValidPathname(pathname),
+            this.#contentAddressableStore.isValidPathname(pathname),
             'HyperviewService#renderEmail: pathname',
         );
 
         // A render reads all of its content, including cache-key inputs, through
         // exactly one request-scoped snapshot.
-        const content = await this.#contentStore.openSnapshot(context);
+        const content = await this.#contentAddressableStore.openSnapshot(context);
 
         const email = await this.#getEmail(content, pathname);
 

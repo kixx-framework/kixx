@@ -1,4 +1,9 @@
-import ContentAddressableStore from './lib/content-addressable-store.js';
+// Plugins should make a best effort to avoid reaching into framework code
+// for logic, but there are cases like this, when we should make an
+// exception. The alternative is maintaining a wire FORMAT constant
+// here, which would run the risk of critical drift.
+import { FORMAT } from '../../kixx/content-addressable-store/addressing.js';
+import ContentStore from './lib/content-store.js';
 // Export the Cloudflare durable object.
 export { default as ContentAddressableIndexStore } from './lib/content-addressable-index-store.js';
 
@@ -11,11 +16,6 @@ const DEFAULTS = {
 };
 
 
-// Registers the generic content-addressable store. This plugin's public
-// surface is a generic content-addressable store: immutable blob storage, an
-// immutable index, and the digest wire format. No Hyperview vocabulary (page,
-// template, or bundle) belongs here — that content model lives in
-// `src/kixx/hyperview/` and is consumed through this service.
 export function register(context) {
     const { logger, config } = context;
     const {
@@ -23,15 +23,14 @@ export function register(context) {
         durableObjectBindingName,
         blobReadCacheTtlSeconds,
         indexCacheTtlSeconds,
-    } = config.env.CONTENT_ADDRESSABLE_STORE ?? {};
+    } = config.env.CONTENT_STORE ?? {};
 
-    const store = new ContentAddressableStore({
+    context.registerService('ContentStore', new ContentStore({
         logger,
         kvBindingName: kvBindingName ?? DEFAULTS.kvBindingName,
         durableObjectBindingName: durableObjectBindingName ?? DEFAULTS.durableObjectBindingName,
+        wireFormat: FORMAT,
         blobReadCacheTtlSeconds: blobReadCacheTtlSeconds ?? DEFAULTS.blobReadCacheTtlSeconds,
         indexCacheTtlSeconds: indexCacheTtlSeconds ?? DEFAULTS.indexCacheTtlSeconds,
-    });
-
-    context.registerService('ContentAddressableStore', store);
+    }));
 }

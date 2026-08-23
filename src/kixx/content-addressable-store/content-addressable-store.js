@@ -1,4 +1,4 @@
-import ContentAddressableIndex from './content-addressable-index.js';
+import ContentAddressableIndex, { getRootHash } from './content-addressable-index.js';
 import ContentSnapshot from './content-snapshot.js';
 import { hashString } from './addressing.js';
 import { normalizePathname, isValidPathname } from './content-layout.js';
@@ -55,8 +55,6 @@ export default class ContentAddressableStore {
         const entries = await ContentAddressableIndex.buildIndex(files);
         const rootHash = getRootHash(entries);
 
-        this.#logger.info('commit closure', { rootHash });
-
         await this.#store.saveIndex(context, rootHash, entries);
 
         return { rootHash, nodeCount: Object.keys(entries).length };
@@ -74,7 +72,6 @@ export default class ContentAddressableStore {
      * @throws {OperationalError} When the index store call fails or reports an unsuccessful result. An unknown `rootHash` asserts inside the Durable Object; crossing the Workers RPC boundary marks that error `remote`, so #callDurableObject wraps it and it surfaces here as an OperationalError with the assertion as its `cause`
      */
     async assignBuild(context, buildId, rootHash) {
-        this.#logger.info('assign build', { buildId, rootHash });
         await this.#store.assignBuild(context, buildId, rootHash);
     }
 

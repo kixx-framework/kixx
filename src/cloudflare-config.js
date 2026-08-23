@@ -51,7 +51,7 @@ export default {
                     },
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
+            CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 0,
                 indexCacheTtlSeconds: 0,
                 kvBindingName: 'CA_STORE_KV_STORE',
@@ -112,7 +112,7 @@ export default {
                     },
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
+            CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 60 * 60 * 24,
                 indexCacheTtlSeconds: 10,
                 kvBindingName: 'CA_STORE_KV_STORE',
@@ -173,7 +173,7 @@ export default {
                     },
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
+            CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 60 * 60 * 36,
                 indexCacheTtlSeconds: 10,
                 kvBindingName: 'CA_STORE_KV_STORE',
