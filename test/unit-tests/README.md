@@ -82,6 +82,21 @@ Prefer small file-local helpers over shared global fixtures:
 
 Use `before` when a group intentionally exercises one setup/action/result across several focused `it` blocks. Otherwise, keep setup inside the `it` so the test can be read in isolation.
 
+## Shared Conformance Suites
+
+The file-local rule above has one narrow exception: When a single interface has several implementations that must behave identically, the contract tests belong in one shared suite that every implementation runs, rather than being copied per implementation.
+
+`test/unit-tests/kixx/http-router/server-request-conformance.js` is the working example. Both the Node and Cloudflare `ServerRequest` adapters run it, so a regression in behavior inherited from `BaseServerRequest` fails on both platforms at once.
+
+Write a shared suite this way:
+
+- Name the file so the runner does not collect it. The runner only executes `*.test.js`, so a suite named `<subject>-conformance.js` runs only when a test file imports it. Mirror the source tree with the interface it covers.
+- Export a function taking the enclosing `describe` handle and a factory: `serverRequestConformance(describe, makeServerRequest)`. Call it from inside the implementation's top-level `describe` callback. kixx-test reports the full block path, so the enclosing block name identifies which implementation failed.
+- Define a factory options shape and let each implementation's factory absorb its own construction differences, so the suite never encodes one platform's shape.
+- Cover only shared behavior. Anything one implementation derives for itself stays in that implementation's own test file.
+
+This exception applies to one contract with several implementations. It is not a licence for shared fixtures generally: two test files that merely happen to build a similar object still prefer their own local helpers.
+
 ## Hook Semantics
 
 - `before(fn, opts?)` runs once before tests and child suites in its enclosing `describe`.

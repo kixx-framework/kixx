@@ -1,320 +1,40 @@
-import { isValidDate } from '../../../kixx/assertions/mod.js';
-import {
-    BadRequestError,
-    UnsupportedMediaTypeError,
-} from '../../../kixx/errors/mod.js';
-import deepFreeze from '../../../kixx/utils/deep-freeze.js';
+import BaseServerRequest from '../../../kixx/http-router/base-server-request.js';
 
 let serverRequestSequence = 0;
-
-const FORM_DATA_CONTENT_TYPES = Object.freeze([
-    'application/x-www-form-urlencoded',
-    'multipart/form-data',
-]);
 
 /**
  * Wraps a Cloudflare Workers `Request` with the Kixx HTTP router request contract.
  *
+ * Workers hands the adapter a Web `Request`, which already provides a parsed
+ * URL, a `Headers` instance, and the body surface the base class delegates to.
+ * The platform-specific work is therefore limited to the two values Cloudflare
+ * expresses through its own headers:
+ *
+ * - `id` is the Cloudflare Ray ID (`cf-ray`) when present, falling back to a
+ *   per-process value for local worker runtimes that omit the header.
+ * - `ip` comes from `CF-Connecting-IP`, or the Enterprise-only
+ *   `True-Client-IP`. `X-Forwarded-For` is deliberately ignored.
+ *
  * @implements {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface}
+ * @extends BaseServerRequest
  */
-export default class ServerRequest {
-
-    #nativeRequest = null;
-    #hostnameParams = Object.freeze({});
-    #pathnameParams = Object.freeze({});
+export default class ServerRequest extends BaseServerRequest {
 
     /**
      * @param {Request} nativeRequest - Cloudflare Workers request to adapt
      */
     constructor(nativeRequest) {
-
-        this.#nativeRequest = nativeRequest;
-
-        Object.defineProperties(this, {
-            /**
-             * Cloudflare Ray ID when available, otherwise a per-process fallback for local worker runtimes.
-             * @name id
-             * @type {string}
-             */
-            id: {
-                enumerable: true,
-                value: getRequestId(nativeRequest),
-            },
-            /**
-             * Originating client IP address, or null when it cannot be determined.
-             * @name ip
-             * @type {string|null}
-             */
-            ip: {
-                enumerable: true,
-                value: resolveClientIp(nativeRequest),
-            },
-            /**
-             * HTTP method normalized for router comparisons.
-             * @name method
-             * @type {string}
-             */
-            method: {
-                enumerable: true,
-                value: nativeRequest.method.toUpperCase(),
-            },
-            /**
-             * Fully parsed request URL.
-             * @name url
-             * @type {URL}
-             */
-            url: {
-                enumerable: true,
-                value: new URL(nativeRequest.url),
-            },
-            /**
-             * Request headers exposed through the Web API `Headers` interface.
-             * @name headers
-             * @type {Headers}
-             */
-            headers: {
-                enumerable: true,
-                value: nativeRequest.headers,
-            },
+        super({
+            id: getRequestId(nativeRequest),
+            ip: resolveClientIp(nativeRequest),
+            method: nativeRequest.method.toUpperCase(),
+            url: new URL(nativeRequest.url),
+            headers: nativeRequest.headers,
+            // The native Request already exposes the Web body surface, so it
+            // serves as the body delegate directly.
+            bodyDelegate: nativeRequest,
         });
     }
-
-    /**
-     * @type {ReadableStream|null}
-     */
-    get body() {
-        return this.#nativeRequest.body;
-    }
-
-    /**
-     * @type {Object<string, string|string[]>}
-     */
-    get hostnameParams() {
-        return this.#hostnameParams;
-    }
-
-    /**
-     * @type {Object<string, string|string[]>}
-     */
-    get pathnameParams() {
-        return this.#pathnameParams;
-    }
-
-    /**
-     * @type {Object<string, string|string[]>}
-     */
-    get queryParams() {
-        const params = {};
-        for (const key of this.url.searchParams.keys()) {
-            const vals = this.url.searchParams.getAll(key);
-            if (vals.length > 1) {
-                params[key] = vals;
-            } else {
-                params[key] = vals[0];
-            }
-        }
-        return params;
-    }
-
-    /**
-     * @returns {boolean} `true` when this request uses the HEAD method
-     */
-    isHeadRequest() {
-        return this.method === 'HEAD';
-    }
-
-    /**
-     * @returns {boolean} `true` when the request body is URL-encoded form data
-     */
-    isFormURLEncodedRequest() {
-        return this.getContentMediaType() === 'application/x-www-form-urlencoded';
-    }
-
-    /**
-     * Returns the request Content-Type media type without parameters.
-     * @returns {string} Normalized media type, or an empty string when absent
-     */
-    getContentMediaType() {
-        const contentType = this.headers.get('content-type') ?? '';
-        return contentType.split(';')[0].trim().toLowerCase();
-    }
-
-    /**
-     * Sets pathname pattern params extracted by the router.
-     * @param {Object<string, string|string[]>} params - Matched pathname params
-     * @returns {ServerRequest} This request for chaining
-     */
-    setPathnameParams(params) {
-        this.#pathnameParams = deepFreeze(structuredClone(params));
-        return this;
-    }
-
-    /**
-     * Sets hostname pattern params extracted by the router.
-     * @param {Object<string, string|string[]>} params - Matched hostname params
-     * @returns {ServerRequest} This request for chaining
-     */
-    setHostnameParams(params) {
-        this.#hostnameParams = deepFreeze(structuredClone(params));
-        return this;
-    }
-
-    /**
-     * Returns one cookie value by name.
-     * @param {string} keyname - Cookie name
-     * @returns {string|null} Cookie value, or `null` when absent
-     */
-    getCookie(keyname) {
-        const cookies = this.getCookies();
-        if (!cookies) {
-            return null;
-        }
-        return cookies[ keyname ] ?? null;
-    }
-
-    /**
-     * Parses the Cookie header into a name/value map.
-     * @returns {Object<string, string>|null} Cookie map, or `null` when the header is absent
-     */
-    getCookies() {
-        const cookies = this.headers.get('cookie');
-        if (!cookies) {
-            return null;
-        }
-
-        const cookieMap = cookies
-            .split(';')
-            .map((cookie) => cookie.trim())
-            .reduce((acc, cookie) => {
-                if (!cookie) {
-                    return acc;
-                }
-
-                const [ key, ...valueParts ] = cookie.split('=');
-
-                // Rejoin to preserve = signs in values (e.g., "data=user=john&role=admin")
-                const value = valueParts.join('=');
-                acc[ key.trim() ] = value.trim() || '';
-                return acc;
-            }, {});
-
-        return cookieMap;
-    }
-
-    /**
-     * Extracts an RFC 6750 Bearer token from the Authorization header.
-     * @returns {string|null} Bearer token without its scheme, or `null` when absent or malformed
-     */
-    getAuthorizationBearer() {
-        const authHeader = this.headers.get('authorization');
-        if (!authHeader) {
-            return null;
-        }
-
-        // Bearer credentials are a single token. Reject malformed values with
-        // embedded whitespace instead of silently truncating them.
-        const match = /^Bearer\s+(\S+)$/i.exec(authHeader.trim());
-        return match ? match[1] : null;
-    }
-
-    /**
-     * @type {Date|null}
-     */
-    get ifModifiedSince() {
-        const ifModifiedSince = this.headers.get('if-modified-since');
-        if (ifModifiedSince) {
-            const dt = new Date(ifModifiedSince);
-            return isValidDate(dt) ? dt : null;
-        }
-        return null;
-    }
-
-    /**
-     * @type {string|null}
-     */
-    get ifNoneMatch() {
-        const ifNoneMatch = this.headers.get('if-none-match');
-        if (!ifNoneMatch) {
-            return null;
-        }
-
-        const firstEtag = getFirstHeaderListValue(ifNoneMatch);
-
-        if (firstEtag.startsWith('"') && firstEtag.endsWith('"')) {
-            return firstEtag.slice(1, -1);
-        }
-
-        return firstEtag;
-    }
-
-    /**
-     * Reads and parses the request body as JSON.
-     * @returns {Promise<*>} Parsed JSON body
-     * @throws {BadRequestError} When the body cannot be parsed as JSON
-     */
-    async json() {
-        try {
-            const json = await this.#nativeRequest.json();
-            return json;
-        } catch (cause) {
-            throw new BadRequestError('Invalid JSON in request body', { cause }, this.json);
-        }
-    }
-
-    /**
-     * Reads the request body as a UTF-8 string.
-     * @returns {Promise<string>} The request body decoded as text
-     * @throws {BadRequestError} When the body cannot be read
-     */
-    async text() {
-        try {
-            return await this.#nativeRequest.text();
-        } catch (cause) {
-            throw new BadRequestError('Request body could not be read as text', { cause }, this.text);
-        }
-    }
-
-    /**
-     * Reads and parses the request body as form data.
-     * @returns {Promise<FormData>} Parsed form data
-     * @throws {UnsupportedMediaTypeError} When the content type is missing or unsupported.
-     * @throws {BadRequestError} When the body cannot be parsed as form data.
-     */
-    async formData() {
-        const contentType = this.getContentMediaType();
-
-        if (!FORM_DATA_CONTENT_TYPES.includes(contentType)) {
-            throw new UnsupportedMediaTypeError(
-                'Content-Type must be application/x-www-form-urlencoded or multipart/form-data',
-                { accept: FORM_DATA_CONTENT_TYPES },
-                this.formData,
-            );
-        }
-
-        try {
-            return await this.#nativeRequest.formData();
-        } catch (cause) {
-            throw new BadRequestError('Request body could not be parsed as form data', { cause }, this.formData);
-        }
-    }
-}
-
-function getFirstHeaderListValue(headerValue) {
-    let isQuoted = false;
-
-    for (let index = 0; index < headerValue.length; index += 1) {
-        const char = headerValue.charAt(index);
-
-        // If-None-Match is a comma-delimited list, but quoted ETag values may
-        // contain commas inside the opaque tag and must stay intact.
-        if (char === '"') {
-            isQuoted = !isQuoted;
-        } else if (char === ',' && !isQuoted) {
-            return headerValue.slice(0, index).trim();
-        }
-    }
-
-    return headerValue.trim();
 }
 
 // Cloudflare injects the client IP via CF-Connecting-IP on all proxied traffic;

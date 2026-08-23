@@ -50,7 +50,7 @@ The existing adapter test suites (563 + 693 lines) are the safety net for tasks 
 
 ### Task SR-1: Base class exists and the Cloudflare adapter extends it
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/kixx/http-router/server-request-interface.js`; `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`
 
@@ -83,11 +83,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `BaseServerRequest` implements: `body`, `hostnameParams`, `pathnameParams`, `queryParams`, `isHeadRequest()`, `isFormURLEncodedRequest()`, `getContentMediaType()`, `setPathnameParams()`, `setHostnameParams()`, `getCookie()`, `getCookies()`, `getAuthorizationBearer()`, `ifModifiedSince`, `ifNoneMatch`, `json()`, `text()`, `formData()`.
-- [ ] The Cloudflare adapter declares no method that merely calls `super`, and retains no copy of any hoisted logic.
-- [ ] `test/unit-tests/plugins/cloudflare-server-request/lib/server-request.test.js` passes with zero modifications.
-- [ ] The base class carries JSDoc meeting `src/docs/code-documentation-guide.md`, including a class-level block explaining the `bodyDelegate` contract and what a subclass is required to supply.
-- [ ] No new dependencies; imports resolve through relative paths only.
+- [x] `BaseServerRequest` implements: `body`, `hostnameParams`, `pathnameParams`, `queryParams`, `isHeadRequest()`, `isFormURLEncodedRequest()`, `getContentMediaType()`, `setPathnameParams()`, `setHostnameParams()`, `getCookie()`, `getCookies()`, `getAuthorizationBearer()`, `ifModifiedSince`, `ifNoneMatch`, `json()`, `text()`, `formData()`.
+- [x] The Cloudflare adapter declares no method that merely calls `super`, and retains no copy of any hoisted logic.
+- [x] `test/unit-tests/plugins/cloudflare-server-request/lib/server-request.test.js` passes with zero modifications.
+- [x] The base class carries JSDoc meeting `src/docs/code-documentation-guide.md`, including a class-level block explaining the `bodyDelegate` contract and what a subclass is required to supply.
+- [x] No new dependencies; imports resolve through relative paths only.
 
 **Validation**
 
@@ -97,19 +97,32 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of SR-1. `src/kixx/http-router/base-server-request.js` created (359 lines) holding every contract member expressible in Web `Headers`/`URL` terms. The Cloudflare adapter is rewritten to extend it and is now 69 lines (was 349), containing only its constructor plus `getRequestId()` and `resolveClientIp()`.
+- Current state: Complete and validated.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - **Pre-existing red baseline.** The full unit suite is not green at HEAD: 988 tests, 60 errors, all in `hyperview` / content-store (52 x `HyperviewService#initialize() requires a contentStore`, 5 x `sources is not iterable`, 3 others). These belong to the separate in-flight `content-store-owns-canonicalization` work; there is an uncommitted 48-line edit to `src/kixx/content-addressable-store/content-snapshot.js` in the working tree which was deliberately left untouched. The `node run-tests.js` acceptance check is therefore read as "no *new* failures beyond the 60-error baseline". After SR-1 the count and the error distribution are byte-identical to baseline.
+  - The base constructor takes a single options bag (`id`, `ip`, `method`, `url`, `headers`, `bodyDelegate`) and owns all five `Object.defineProperties` calls, so the immutability invariants now live in exactly one place.
+  - `bodyDelegate` is documented with a `@typedef {Object} BodyDelegate`. On Cloudflare the native `Request` satisfies it directly and is passed through as-is.
+  - Per-platform `id`/`ip` prose that previously annotated the property definitions was relocated into the Cloudflare adapter's class-level JSDoc, so the `cf-ray` and `CF-Connecting-IP`/`True-Client-IP` behavior (and the deliberate XFF omission) stays documented next to the code that implements it.
+  - `json()`/`text()`/`formData()` still pass the method reference as the third `BadRequestError` argument; it now resolves to the base prototype method, which is equivalent for call-site capture.
+  - No new runtime assertions were added, per the plan's behavior-preserving constraint.
+- Actual files changed:
+  - `src/kixx/http-router/base-server-request.js` — new.
+  - `src/plugins/cloudflare-server-request/lib/server-request.js` — rewritten to extend the base.
+  - No test files were modified (`git status test/` is clean), which is what makes the green Cloudflare suite meaningful.
+- Validation run:
+  - `node run-tests.js test/unit-tests/plugins/cloudflare-server-request` — 59 tests, 0 errors, test file unmodified.
+  - `node run-tests.js` — 988 tests, 60 errors: identical count and distribution to the pre-change baseline, so no regression.
+  - `node run-linter.js src/kixx/http-router/base-server-request.js src/plugins/cloudflare-server-request` — clean, exit 0.
+  - Structural checks: no `super.` delegation methods in the adapter; zero occurrences of hoisted logic remaining in it.
 - Blockers: None.
 
 ---
 
 ### Task SR-2: Node adapter extends the base class
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** SR-1
 **Documentation:** `src/kixx/http-router/server-request-interface.js` (the `ip` trust-boundary invariant); `src/docs/code-style-guide.md`
 
@@ -140,11 +153,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The Node adapter declares no method that merely calls `super`, and retains no copy of any hoisted logic.
-- [ ] `test/unit-tests/plugins/node-server-request/lib/server-request.test.js` passes with zero modifications.
-- [ ] `test/unit-tests/plugins/cloudflare-server-request/lib/server-request.test.js` still passes with zero modifications.
-- [ ] The combined line count of both adapters plus the base class is meaningfully below the current 802, and neither adapter contains logic present in the other.
-- [ ] The trust-boundary rationale for `resolveClientIp()` and the delegate-only rationale for the internal `Request` remain documented in the Node adapter.
+- [x] The Node adapter declares no method that merely calls `super`, and retains no copy of any hoisted logic.
+- [x] `test/unit-tests/plugins/node-server-request/lib/server-request.test.js` passes with zero modifications.
+- [x] `test/unit-tests/plugins/cloudflare-server-request/lib/server-request.test.js` still passes with zero modifications.
+- [x] The combined line count of both adapters plus the base class is meaningfully below the current 802, and neither adapter contains logic present in the other.
+- [x] The trust-boundary rationale for `resolveClientIp()` and the delegate-only rationale for the internal `Request` remain documented in the Node adapter.
 
 **Validation**
 
@@ -154,19 +167,31 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of SR-2. The Node adapter now extends `BaseServerRequest` and is 171 lines (was 453), holding only its constructor plus `buildHeaders()`, `resolveHost()`, `resolveProtocol()`, `resolveClientIp()`, `hasRequestBody()`, and `getRequestId()`.
+- Current state: Complete and validated.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - **The base contract needed no changes to accommodate Node.** This is the main finding of this task: the options bag designed against the simpler Cloudflare case absorbed the Node case unmodified, so `base-server-request.js` was not touched. The ordering check the plan called for (re-run Cloudflare after any base change) was therefore trivially satisfied, but both suites were re-run together regardless.
+  - `trustProxy` stayed entirely inside the Node constructor and never reaches `super()`, as required.
+  - The internal Web `Request` is now built as a local `const bodyDelegate` before `super()`, which works because it is derived from local values only. Both load-bearing comments were preserved verbatim: the "body-parsing delegate only / Host stripping" rationale and the "spoof its own IP" trust-boundary rationale.
+  - The `isValidDate` import dropped out of the adapter along with the `ifModifiedSince` getter; `isString` and `isNonEmptyString` are still used by the header and IP helpers. The linter confirms no unused imports remain.
+  - Combined line count is now 599 (base 359 + Cloudflare 69 + Node 171) against the original 802 for the two adapters, and neither adapter contains logic present in the other.
+- Actual files changed:
+  - `src/plugins/node-server-request/lib/server-request.js` — rewritten to extend the base.
+  - `src/kixx/http-router/base-server-request.js` — **not** changed; the Node case required no adjustment.
+  - No test files modified (`git status test/` clean).
+- Validation run:
+  - `node run-tests.js test/unit-tests/plugins/node-server-request test/unit-tests/plugins/cloudflare-server-request` — 130 tests, 0 errors, both test files unmodified.
+  - `node run-tests.js` — 988 tests, 60 errors; count and per-message distribution identical to the pre-change baseline, so no regression.
+  - `node run-linter.js src/kixx/http-router/base-server-request.js src/plugins/node-server-request src/plugins/cloudflare-server-request` — clean, exit 0.
+  - Structural checks: no `super.` delegation methods; zero hoisted-logic occurrences in either adapter.
 - Blockers: None.
 
 ---
 
 ### Task SR-3: Shared conformance suite replaces duplicated adapter tests
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** SR-2
 **Documentation:** `test/unit-tests/README.md`
 
@@ -201,11 +226,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The conformance suite runs against both real adapters and covers every member listed above.
-- [ ] Neither adapter test file still asserts shared behavior independently.
-- [ ] A deliberately introduced bug in one hoisted base method (for example, `getFirstHeaderListValue`) fails the suite under both adapters. Revert the bug afterward.
-- [ ] `test/unit-tests/README.md` documents the shared-suite exception and its boundaries.
-- [ ] Running only `node run-tests.js test/unit-tests/kixx/http-router` does not attempt to execute the suite module standalone.
+- [x] The conformance suite runs against both real adapters and covers every member listed above.
+- [x] Neither adapter test file still asserts shared behavior independently.
+- [x] A deliberately introduced bug in one hoisted base method (for example, `getFirstHeaderListValue`) fails the suite under both adapters. Revert the bug afterward.
+- [x] `test/unit-tests/README.md` documents the shared-suite exception and its boundaries.
+- [x] Running only `node run-tests.js test/unit-tests/kixx/http-router` does not attempt to execute the suite module standalone.
 
 **Validation**
 
@@ -216,19 +241,36 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of SR-3. `test/unit-tests/kixx/http-router/server-request-conformance.js` holds 47 shared cases, run against both real adapters. Both adapter test files now call it and keep only platform-specific cases.
+- Current state: Complete and validated.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - **Coverage grew; nothing was dropped.** Per-platform totals went 59 -> 62 (Cloudflare) and 71 -> 75 (Node); the full suite went 988 -> 995 tests. No case was removed as redundant, so the plan's "name any dropped case" clause has nothing to record.
+  - **`text()` had no coverage on either platform before this task.** The plan listed it in the suite's scope, which surfaced the gap. Two cases were added (UTF-8 decoding, and an empty string for a bodyless request), so both platforms now cover it.
+  - Two Node cases were added for behavior the plan named but that was untested: repeated header values being appended rather than replaced, and a POST framed with neither `Content-Length` nor `Transfer-Encoding` yielding a null body (the `hasRequestBody()` guard).
+  - **kixx-test reports the full block path** — verified with a throwaway probe test, which printed `Block [OuterPlatform - inner group - name]`. Nesting the suite inside each adapter's top-level `describe` is therefore enough to identify the failing platform; no extra label argument was needed, so the plan's `serverRequestConformance(describe, makeServerRequest)` signature was used unchanged. Suite groups are named `contract: <member>` to distinguish them from platform groups.
+  - Factory shape is `{ method, path, headers, body }`. Cloudflare resolves `path` against a fixed `ORIGIN` constant; Node passes it through as the request target and relies on `makeIncoming`'s default Host header. Node's factory still accepts `url`, `remoteAddress`, `encrypted`, and `trustProxy` for its own platform tests.
+  - The multipart case in the suite uses a hand-built payload with an explicit boundary, which works identically on both platforms. Cloudflare's original runtime-supplied-boundary variant (passing a `FormData` body and letting the runtime set the content-type) was kept in its own file as a platform extra rather than discarded.
+  - `catchError`/`catchAsyncError` are duplicated between the suite and the adapter files. That is deliberate: the README directs these to be file-local, they are three lines, and sharing them would create a second shared-test-helper module for no benefit.
+  - **Deliberate-bug check passed.** Disabling the quote tracking in `getFirstHeaderListValue` produced exactly two failures — `[Cloudflare ServerRequest - contract: ifNoneMatch - preserves a comma inside a quoted strong ETag]` and the identical Node block — proving a hoisted-behavior regression now fails on both platforms. The base class was restored from a scratchpad backup and re-verified clean.
+- Actual files changed:
+  - `test/unit-tests/kixx/http-router/server-request-conformance.js` — new; 47 shared cases.
+  - `test/unit-tests/plugins/cloudflare-server-request/lib/server-request.test.js` — 563 -> 178 lines; retains id, core properties, ip, body, and the runtime-boundary multipart case.
+  - `test/unit-tests/plugins/node-server-request/lib/server-request.test.js` — 693 -> 302 lines; retains id, core properties, ip (both trustProxy modes), and body framing.
+  - `test/unit-tests/README.md` — new "Shared Conformance Suites" section documenting the exception and its boundaries.
+- Validation run:
+  - `node run-tests.js` — 995 tests, 60 errors; the 60 are the unchanged pre-existing hyperview/content-store baseline, identical in count and per-message distribution.
+  - `node run-tests.js test/unit-tests/plugins/node-server-request` — 75 tests, 0 errors, confirming a narrowed run still pulls in the shared suite via import.
+  - `node run-tests.js test/unit-tests/kixx/http-router` — 141 tests, unchanged from before this task, confirming the runner does not collect the non-`.test.js` suite module standalone.
+  - `node run-linter.js test/unit-tests/kixx/http-router test/unit-tests/plugins` — clean, exit 0.
+  - Manual: the deliberate-bug check described above.
 - Blockers: None.
 
 ---
 
 ### Task SR-4: Documentation reflects the new layer
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** SR-3
 **Documentation:** `src/plugins/README.md`; `src/kixx/http-router/server-request-interface.js`
 
@@ -257,10 +299,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `src/plugins/README.md` names `BaseServerRequest`, its location, and the four things a new adapter must supply.
-- [ ] The new-platform checklist instructs extending the base class.
-- [ ] `server-request-interface.js` points to the base class without duplicating any invariant.
-- [ ] Every file path and line reference cited in the updated prose is accurate as of this change.
+- [x] `src/plugins/README.md` names `BaseServerRequest`, its location, and the four things a new adapter must supply.
+- [x] The new-platform checklist instructs extending the base class.
+- [x] `server-request-interface.js` points to the base class without duplicating any invariant.
+- [x] Every file path and line reference cited in the updated prose is accurate as of this change.
 
 **Validation**
 
@@ -270,10 +312,21 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of SR-4, and with it the whole plan.
+- Current state: Complete and validated.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - The "Adapters That Skip the Registry" section gained a paragraph naming `BaseServerRequest`, listing the four things an adapter supplies (`id`, `ip`, `url`/`headers`, `bodyDelegate`), stating that everything else is inherited, and citing the `base-context.js` precedent. It closes by reaffirming that this is still not a registry service, so the per-request lifecycle reasoning is preserved rather than contradicted.
+  - The new-platform checklist item 1 now directs a new adapter to start from the base class and the interface rather than from a copy of a sibling adapter — the specific failure mode this task exists to prevent.
+  - `server-request-interface.js` gained an "Implementing this contract" section plus an `@see` link. It states what the base class provides and what stays the adapter's responsibility without restating any invariant, keeping one normative source.
+  - The added prose cites file paths only, never line numbers, so it cannot go stale the way this plan's own citations did.
+  - **This plan's line citations are now stale**, as expected from its own edits: `src/plugins/README.md:157` (new-platform checklist) is now line 181, and `:168` (summary) is now 192. `:38` and `:42` are unchanged because the insert lands after them. Anchor by heading text, not line number, when reading those references.
+  - The inserted README paragraph was initially hard-wrapped and was reflowed to the file's long-line prose style.
+- Actual files changed:
+  - `src/plugins/README.md` — skip-the-registry section and the new-platform checklist.
+  - `src/kixx/http-router/server-request-interface.js` — implementation note and `@see` link.
+- Validation run:
+  - `node run-linter.js` over every file this plan touched (`src/kixx/http-router`, both server-request plugin packages, and their three test paths) — clean, exit 0. Note that linting `src/plugins` wholesale reports two errors in `cloudflare-content-addressable-store/lib/content-addressable-store.js` (`hashValue` unused, `hashString` undefined); that file is untouched by this plan and the errors are pre-existing.
+  - `node run-tests.js` — 995 tests, 60 errors; the unchanged pre-existing hyperview/content-store baseline.
+  - Manual: read the updated new-platform checklist and skip-the-registry section end to end; together they name the base class, its location, and the complete set of adapter responsibilities, which is sufficient to write a third adapter without opening either existing one.
 - Blockers: None.

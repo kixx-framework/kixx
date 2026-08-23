@@ -87,6 +87,21 @@
  * - `ifNoneMatch` MUST return `null` when the header is absent; MUST strip
  *   surrounding quotes from strong ETags (e.g., `"abc"` → `"abc"` without
  *   quotes); MUST return weak ETags (e.g., `W/"abc"`) as-is
+ *
+ * ## Implementing this contract
+ *
+ * This module is the normative contract. `./base-server-request.js` provides a
+ * conforming implementation of everything expressible in terms of the Web
+ * `Headers` and `URL` primitives: the application conveniences listed above and
+ * the router-facing `setHostnameParams()` / `setPathnameParams()` stamping.
+ *
+ * An adapter extends `BaseServerRequest` and supplies only what it alone can
+ * derive from its native request: `id`, `ip`, `url`, `headers`, and a body
+ * delegate exposing the Web `Request` body surface. Adapters must not
+ * re-implement an inherited member; shared behavior is fixed once in the base
+ * class so every platform receives the fix together.
+ *
+ * @see {@link ./base-server-request.js}
  */
 
 /**

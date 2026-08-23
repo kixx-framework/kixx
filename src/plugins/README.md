@@ -46,6 +46,8 @@ Each adapter package is self-contained: `plugin.js` is the lifecycle module the 
 
 Everything with a process lifetime goes through the registry. Everything that predates or outlives a single registry lookup does not.
 
+**`ServerRequest` adapters extend a framework base class.** The request contract is mostly expressible in terms of the Web `Headers` and `URL` primitives, and that half is identical on every platform, so it lives once in `kixx/http-router/base-server-request.js`. An adapter extends `BaseServerRequest` and supplies only what it alone can derive. Do not re-implement an inherited member in an adapter: a fix belongs in the base class so every platform receives it at once. This is not a registry service; the per-request lifecycle reasoning above is unchanged.
+
 ## General Plugins
 Not every plugin must be an adapter. Some plugins - called "general" plugins - use the plugin registration and initialization process without platform specific logic.
 
@@ -165,7 +167,7 @@ Do not add a port for something the application can do portably on its own. A po
 
 The matrix above is the checklist. A new target — Deno, Deno Deploy, AWS Lambda — needs:
 
-1. An adapter package per port, plus its logger-writer and server-request adapters.
+1. An adapter package per port, plus its logger-writer and server-request adapters. The server-request adapter extends `kixx/http-router/base-server-request.js` and supplies only `id`, `ip`, `url`, `headers`, and a body delegate — start from the base class and the interface, not from a copy of a sibling adapter.
 2. A `plugins/<platform>.js` registry mapping each package.
 3. A `<platform>-config.js` source config.
 4. A `<platform>-server.js` entry point that reads config, builds the `Logger` with the platform writer, builds the `ApplicationContext`, merges `generalPlugins` with the platform registry, runs the two registration phases, calls `app.register()`/`app.initialize()`, finalizes the logger, constructs the `HttpRouter`, and translates between native requests/responses and `ServerRequest`/`ServerResponse`.
