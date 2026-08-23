@@ -4,8 +4,8 @@ import { assert, assertEqual, assertMatches, assertNotEqual, assertUndefined } f
 import ContentAddressableIndex, {
     getRootHash,
     validateIndexSourceFiles,
-} from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js';
-import { FORMAT, compareStrings, hashEtag, hashTree } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
+} from '../../../../src/kixx/content-addressable-store/content-addressable-index.js';
+import { FORMAT, compareStrings, hashTree } from '../../../../src/kixx/content-addressable-store/addressing.js';
 
 
 async function catchAsyncError(fn) {
@@ -235,10 +235,9 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual('hash123', node.hash);
             assertEqual(42, node.size);
             assertEqual('text', node.metadata.type);
-            assertEqual(await hashEtag('hash123', { type: 'text' }), node.etag);
         });
 
-        it('uses the tree hash as its etag', async () => {
+        it('decodes a tree node with null size and metadata', async () => {
             const index = new ContentAddressableIndex({
                 '/': [ 'tree', 'root-hash' ],
                 '/a': [ 'tree', 'hashabc' ],
@@ -248,9 +247,11 @@ describe('ContentAddressableIndex', ({ describe }) => {
             const node = await index.getNode('/a');
 
             assertEqual('tree', node.kind);
+            assertEqual('hashabc', node.hash);
+            // A tree tuple carries no size or metadata slot, and the decoder
+            // defaults both to null rather than leaving them undefined.
             assertEqual(null, node.size);
             assertEqual(null, node.metadata);
-            assertEqual('hashabc', node.etag);
         });
 
         it('returns null when no entry exists at the pathname', async () => {
@@ -276,14 +277,14 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual(sorted.join(','), pathnames.join(','));
         });
 
-        it('includes etags for blobs and trees', async () => {
+        it('decodes the hash of every listed blob and tree', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
             const nodes = await index.listNodes('/dir', { recursive: false });
             const blob = nodes.find((node) => node.pathname === '/dir/b.txt');
             const tree = nodes.find((node) => node.pathname === '/dir/sub');
 
-            assertEqual(await hashEtag('h-b', null), blob.etag);
-            assertEqual('h-sub', tree.etag);
+            assertEqual('h-b', blob.hash);
+            assertEqual('h-sub', tree.hash);
         });
 
         it('recursively lists all nodes nested under a prefix, excluding the directory node itself', async () => {

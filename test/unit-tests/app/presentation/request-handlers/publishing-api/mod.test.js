@@ -11,7 +11,7 @@ import {
     normalizePathname,
     isValidPathname,
     isValidTemplateFilepath,
-} from '../../../../../../src/kixx/hyperview/content-layout.js';
+} from '../../../../../../src/kixx/content-addressable-store/content-layout.js';
 
 
 // Real content-layout pathname rules, not a loose stub, so path validation in

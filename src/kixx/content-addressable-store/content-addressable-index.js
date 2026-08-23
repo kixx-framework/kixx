@@ -44,7 +44,7 @@ export default class ContentAddressableIndex {
     /**
      * Looks up a single node by exact pathname.
      * @param {string} pathname - The pathname for the node, including a leading slash "/".
-     * @returns {Promise<IndexEntry|null>} The matching node, or null when no entry exists at that pathname.
+     * @returns {IndexEntry|null} The matching node, or null when no entry exists at that pathname.
      */
     getNode(pathname) {
         const tuple = this.#entries[pathname];
@@ -56,7 +56,7 @@ export default class ContentAddressableIndex {
      * @param {string} prefix - A prefix directory with a leading slash; a trailing slash "/" is added if missing. Pass '' to list from the root.
      * @param {Object} [options]
      * @param {boolean} [options.recursive=true] - When false, only list the prefix's immediate children — nested nodes are skipped.
-     * @returns {Promise<IndexEntry[]>} Matching nodes in pathname sort order.
+     * @returns {IndexEntry[]} Matching nodes in pathname sort order.
      */
     listNodes(prefix, options) {
         const { recursive = true } = options ?? {};
@@ -96,7 +96,7 @@ export default class ContentAddressableIndex {
         });
     }
 
-    async #decodeNode(pathname, tuple) {
+    #decodeNode(pathname, tuple) {
         const { kind, hash, size, metadata } = decodeIndexEntryTuple(tuple);
         return {
             pathname,

@@ -3,7 +3,6 @@ import { assert, assertEqual } from 'kixx-assert';
 
 import ApplicationContext from '../../../../src/kixx/context/application-context.js';
 import HyperviewService from '../../../../src/kixx/hyperview/hyperview-service.js';
-import HyperviewContentService from '../../../../src/kixx/hyperview/hyperview-content-service.js';
 import { register, initialize } from '../../../../src/plugins/hyperview/plugin.js';
 
 
@@ -20,13 +19,20 @@ function makeApplicationContext(env) {
     });
 }
 
+// Records the pathnames HyperviewService delegates for validation, and rejects
+// them all. Rejecting keeps the wiring assertion independent of everything the
+// service would do next: the call is recorded, then the service's own assertion
+// stops the render before it reaches content loading.
 function makeContentAddressableStore() {
     const calls = [];
     return {
         calls,
-        async hashValue(value) {
-            calls.push(value);
-            return `hashed:${ value }`;
+        normalizePathname(pathname) {
+            return pathname;
+        },
+        isValidPathname(pathname) {
+            calls.push(pathname);
+            return false;
         },
         async openSnapshot() {
             return {};
@@ -43,66 +49,50 @@ function catchError(fn) {
     return null;
 }
 
+async function catchAsyncError(fn) {
+    try {
+        await fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}
+
 
 describe('hyperview plugin', ({ describe }) => {
 
     describe('register()', ({ it }) => {
-        it('registers HyperviewContent and Hyperview services', () => {
+        it('registers the Hyperview service', () => {
             const context = makeApplicationContext();
 
             register(context);
 
-            assert(context.getService('HyperviewContent') instanceof HyperviewContentService);
             assert(context.getService('Hyperview') instanceof HyperviewService);
         });
     });
 
     describe('initialize()', ({ it }) => {
-        it('wires HyperviewContent to the registered ContentAddressableStore', async () => {
+        it('wires Hyperview to the registered ContentAddressableStore', async () => {
             const context = makeApplicationContext();
-            const contentStore = makeContentAddressableStore();
-            context.registerService('ContentAddressableStore', contentStore);
+            const contentAddressableStore = makeContentAddressableStore();
+            context.registerService('ContentAddressableStore', contentAddressableStore);
             context.registerService('KeyValueStore', {});
 
             register(context);
             initialize(context);
 
-            const hyperviewContent = context.getService('HyperviewContent');
-            const result = await hyperviewContent.hashValue('abc');
-
-            assertEqual('hashed:abc', result);
-            assertEqual(1, contentStore.calls.length);
-            assertEqual('abc', contentStore.calls[0]);
-        });
-
-        it('wires Hyperview to the same HyperviewContent instance it registered', () => {
-            const context = makeApplicationContext();
-            context.registerService('ContentAddressableStore', makeContentAddressableStore());
-            context.registerService('KeyValueStore', {});
-
-            register(context);
-
-            // Replace one method on the already-registered HyperviewContent
-            // instance with a spy before initialize() runs. Because
-            // initialize() passes this exact object by reference into
-            // HyperviewService#initialize(), the spy proves Hyperview's
-            // content-service dependency is this instance and not a
-            // separately constructed one, regardless of wiring order.
-            const hyperviewContent = context.getService('HyperviewContent');
-            const calls = [];
-            hyperviewContent.isValidPathname = (value) => {
-                calls.push(value);
-                return true;
-            };
-
-            initialize(context);
-
+            // HyperviewService delegates pathname validation to the store it was
+            // initialized with, so driving a render through the service proves it
+            // received this exact instance rather than one built separately.
             const hyperviewService = context.getService('Hyperview');
-            const result = hyperviewService.isValidPathname('/articles');
+            const caught = await catchAsyncError(
+                () => hyperviewService.renderEmail({}, '/welcome', {}),
+            );
 
-            assertEqual(true, result);
-            assertEqual(1, calls.length);
-            assertEqual('/articles', calls[0]);
+            assert(caught, 'expected the rejected pathname to throw');
+            assertEqual('AssertionError', caught.name);
+            assertEqual(1, contentAddressableStore.calls.length);
+            assertEqual('/welcome', contentAddressableStore.calls[0]);
         });
 
         it('fails clearly when ContentAddressableStore is not registered', () => {
