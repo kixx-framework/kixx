@@ -70,23 +70,6 @@ export default class ContentAddressableIndexStore extends DurableObject {
         `);
     }
 
-    /**
-     * Looks up the closure entries served by a build.
-     * @param {string} buildId - Build identifier to resolve
-     * @returns {Promise<{success: true, entries: (Object<string, IndexEntryTuple>|null)}>} Encoded index table, or null when the build is not registered
-     */
-    async getIndex(buildId) {
-        assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getIndex: buildId');
-
-        const rootHash = this.#getBuildRootHash(buildId);
-
-        if (!rootHash) {
-            return { success: true, entries: null };
-        }
-
-        return { success: true, entries: this.#getClosureEntries(rootHash) };
-    }
-
     #getBuildRootHash(buildId) {
         const cursor = this.#sql.exec('SELECT root_hash FROM builds WHERE build_id = ?', buildId);
         const [ row ] = cursor.toArray();
@@ -105,13 +88,19 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
         for (const row of cursor) {
             const { pathname, kind, hash, size, metadata } = row;
-            const parsedMetadata = isNonEmptyString(metadata) ? JSON.parse(metadata) : null;
-            entries[pathname] = {
-                kind,
-                hash,
-                size,
-                metadata: parsedMetadata,
-            };
+
+            // Encode the exact inverse of saveIndex()'s decode. Entries cross
+            // the RPC boundary as tuples, and the reader validates arity by
+            // kind: a tree tuple carries only its kind and hash, while a blob
+            // tuple also carries size and metadata. The row shape cannot record
+            // that difference, since a tree stores null in both columns, so the
+            // kind column is what the arity is restored from.
+            if (kind === 'tree') {
+                entries[pathname] = [ kind, hash ];
+            } else {
+                const parsedMetadata = isNonEmptyString(metadata) ? JSON.parse(metadata) : null;
+                entries[pathname] = [ kind, hash, size, parsedMetadata ];
+            }
         }
 
         this.#setClosureCacheEntry(rootHash, entries);
@@ -138,6 +127,23 @@ export default class ContentAddressableIndexStore extends DurableObject {
     }
 
     /**
+     * Looks up the closure entries served by a build.
+     * @param {string} buildId - Build identifier to resolve
+     * @returns {Promise<{success: true, entries: (Object<string, IndexEntryTuple>|null)}>} Encoded index table, or null when the build is not registered
+     */
+    async getIndex(buildId) {
+        assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getIndex: buildId');
+
+        const rootHash = this.#getBuildRootHash(buildId);
+
+        if (!rootHash) {
+            return { success: true, entries: null };
+        }
+
+        return { success: true, entries: this.#getClosureEntries(rootHash) };
+    }
+
+    /**
      * Persists an immutable closure under its root hash.
      *
      * Existing entries with the same root hash and pathname are preserved, so
@@ -146,7 +152,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
      * @param {Object<string, IndexEntryTuple>} index - Encoded index table keyed by pathname
      * @returns {Promise<{success: true}>} Successful commit result
      */
-    async commitClosure(rootHash, index) {
+    async saveIndex(rootHash, index) {
         assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#commitClosure: rootHash');
         assert(isPlainObject(index), 'ContentAddressableIndexStore#commitClosure: index must be a plain object');
 
