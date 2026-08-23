@@ -24,6 +24,18 @@ const ACCEPTED_TYPES = [ 'text', 'arrayBuffer' ];
 // that the platform cannot serve.
 const GET_FILE_ACCEPTED_TYPES = ACCEPTED_TYPES.concat([ 'stream' ]);
 
+// KV's bulk get() is narrower still: it decodes 'text' and 'json' only, and
+// this store never reads JSON, so 'text' is the whole accepted set. An
+// 'arrayBuffer' bulk read raises a platform error, so it is rejected here
+// rather than advertised by the shared list and failing inside KV.
+const GET_FILES_ACCEPTED_TYPES = [ 'text' ];
+
+// KV rejects a bulk get() carrying more than this many keys. Exceeding it is
+// treated as a programmer error rather than split across several calls: the
+// caller decides how many blobs a single read is worth, and silently fanning
+// one call out into many would hide that cost at the point where it is chosen.
+const KV_BULK_MAX_KEYS = 100;
+
 // WARNING: This names the Durable Object instance holding every committed
 // closure and build pointer. It only looks like it is derived from the class
 // name — it is a persistent storage identity, and changing it (by renaming
@@ -298,13 +310,22 @@ export default class ContentStore {
 
     /**
      * Retrieves multiple blobs while preserving the order of `files`.
+     *
+     * At most `KV_BULK_MAX_KEYS` blobs may be requested per call; a longer
+     * `files` list is a programmer error, not a read this store will split.
      * @param {RequestContext} context - Request context exposing the configured KV binding
-     * @param {'text'|'arrayBuffer'} type - Representation to return for every blob
+     * @param {'text'} type - Representation to return for every blob
      * @param {Array<{hash: string}>} files - Blob descriptors to retrieve
-     * @returns {Promise<Array<string|ArrayBuffer|null>>} Blobs aligned by position with `files`
+     * @returns {Promise<Array<string|null>>} Blobs aligned by position with `files`
+     * @throws {AssertionError} When `type` is unsupported, or more than `KV_BULK_MAX_KEYS` blobs are requested
      */
     async getFiles(context, type, files) {
-        assertValidType(type, 'getFiles');
+        assertValidType(type, 'getFiles', GET_FILES_ACCEPTED_TYPES);
+        assert(
+            files.length <= KV_BULK_MAX_KEYS,
+            `ContentStore#getFiles() accepts at most ${ KV_BULK_MAX_KEYS } files per call; received ${ files.length }`,
+        );
+
         const kv = this.#resolveKvStore(context);
 
         const keys = files.map(({ hash }) => this.#buildFileKey(hash));
@@ -314,7 +335,7 @@ export default class ContentStore {
             cacheTtl: this.#blobReadCacheTtlSeconds,
         });
 
-        return keys.map((key) => map.get(key));
+        return keys.map((key) => map.get(key) ?? null);
     }
 
     /**

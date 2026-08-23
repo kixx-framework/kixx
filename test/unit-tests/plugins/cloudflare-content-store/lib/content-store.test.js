@@ -395,6 +395,75 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('C,A,B', results.join(','));
         });
 
+        it('rejects a bulk read larger than the KV key cap', async () => {
+            const files = [];
+            for (let i = 0; i < 101; i += 1) {
+                files.push({ hash: `hash-${ i }` });
+            }
+            const kvStore = makeKvStore(new Map());
+            const store = makeStore();
+
+            // KV rejects a bulk get() of more than 100 keys. Deciding how many
+            // blobs one read is worth belongs to the caller, so this is a
+            // programmer error here rather than a read split behind their back.
+            const caught = await catchAsyncError(
+                () => store.getFiles(makeContext({ kvStore }), 'text', files),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('101', caught.message);
+            // The read must be refused before KV is touched at all.
+            assertEqual(0, kvStore.calls.length);
+        });
+
+        it('accepts a bulk read of exactly the KV key cap', async () => {
+            const files = [];
+            const values = new Map();
+            for (let i = 0; i < 100; i += 1) {
+                files.push({ hash: `hash-${ i }` });
+                values.set(`hash-${ i }#1`, `value-${ i }`);
+            }
+            const kvStore = makeKvStore(values);
+            const store = makeStore();
+
+            const results = await store.getFiles(makeContext({ kvStore }), 'text', files);
+
+            assertEqual(1, kvStore.calls.length);
+            assertEqual(100, results.length);
+            assertEqual('value-0', results[0]);
+            assertEqual('value-99', results[99]);
+        });
+
+        it('returns null for a key missing from a bulk read', async () => {
+            const kvStore = makeKvStore(new Map([ [ 'hash-b#1', 'the bytes' ] ]));
+            const store = makeStore();
+
+            const results = await store.getFiles(
+                makeContext({ kvStore }),
+                'text',
+                [ { hash: 'hash-a' }, { hash: 'hash-b' } ],
+            );
+
+            assertEqual(null, results[0]);
+            assertEqual('the bytes', results[1]);
+        });
+
+        it('rejects a bulk arrayBuffer read, which KV cannot decode in bulk', async () => {
+            const kvStore = makeKvStore(new Map());
+            const store = makeStore();
+
+            // getFile() accepts arrayBuffer; KV's bulk get() decodes text and
+            // json only, so the same type must be refused here.
+            const caught = await catchAsyncError(
+                () => store.getFiles(makeContext({ kvStore }), 'arrayBuffer', [ { hash: 'hash-a' } ]),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('arrayBuffer', caught.message);
+        });
+
         it('writes a blob under its content hash', async () => {
             const kvStore = makeKvStore(new Map());
             const store = makeStore();
