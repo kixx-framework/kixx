@@ -63,6 +63,15 @@ function catchError(fn) {
     return null;
 }
 
+async function catchAsyncError(fn) {
+    try {
+        await fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}
+
 
 describe('Node ServerRequest', ({ describe }) => {
 
@@ -297,6 +306,37 @@ describe('Node ServerRequest', ({ describe }) => {
             });
 
             assertEqual(null, request.body);
+        });
+
+        it('wraps a mid-stream read failure in BadRequestError', async () => {
+            // A body that fails partway through is the operational half of the
+            // read-error split: unlike a double read, it is the client's
+            // transfer that broke, so it must still surface as a 400. Only a
+            // Node stream can be made to fail this way, which is why this case
+            // lives here rather than in the shared conformance suite.
+            const incoming = makeIncoming({
+                method: 'POST',
+                headers: { 'content-type': 'text/plain', 'transfer-encoding': 'chunked' },
+                body: 'partial',
+            });
+
+            const failing = new Readable({
+                read() {
+                    this.destroy(new Error('socket reset'));
+                },
+            });
+            failing.method = incoming.method;
+            failing.url = incoming.url;
+            failing.headers = incoming.headers;
+            failing.socket = incoming.socket;
+
+            const request = new ServerRequest(failing);
+
+            const caught = await catchAsyncError(() => request.arrayBuffer());
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('BadRequestError', caught.name);
+            assert(caught.cause, 'expected the original error to be preserved as cause');
         });
     });
 });

@@ -34,7 +34,7 @@
  * `headers`, `body`, `ip`, `queryParams`, `ifModifiedSince`, `ifNoneMatch`,
  * `isHeadRequest`, `isFormURLEncodedRequest`,
  * `getContentMediaType`, `getCookie`, `getCookies`,
- * `getAuthorizationBearer`, `json`, `text`, `formData`.
+ * `getAuthorizationBearer`, `json`, `text`, `arrayBuffer`, `formData`.
  *
  * ## Invariants
  * - `id` MUST be immutable after construction; MUST be unique per request
@@ -78,6 +78,20 @@
  * - `text()` MUST resolve to the request body decoded as a UTF-8 string, and
  *   MUST reject with `BadRequestError` when the body cannot be read, so the
  *   error handler pipeline surfaces a 400 response automatically
+ * - `arrayBuffer()` MUST resolve to the request body as an `ArrayBuffer`, and
+ *   MUST resolve to a zero-length `ArrayBuffer` — never `null`, and never a
+ *   rejection — for a bodyless request. It MUST reject with `BadRequestError`
+ *   when the body cannot be read, so the error handler pipeline surfaces a 400
+ *   response automatically. It buffers the whole body with no size limit; a
+ *   caller needing a bounded read MUST enforce that bound itself
+ * - `json()`, `text()`, `arrayBuffer()`, and `formData()` MUST NOT report an
+ *   already-consumed body as a client error. A request body can be read only
+ *   once, so a second read — by any of the four, in any combination — is a bug
+ *   in the caller rather than a bad request; it MUST raise an unexpected error
+ *   (an assertion failure) rather than a `BadRequestError`, so that a 400 from
+ *   a read method always means the client really did send something
+ *   unreadable. Repeat reads of a bodyless request remain legal, because such
+ *   a request has no stream to consume
  * - `formData()` MUST reject with `UnsupportedMediaTypeError` when
  *   `Content-Type` is missing or not supported, and MUST reject with
  *   `BadRequestError` when the body cannot be parsed as submitted form data
@@ -205,6 +219,13 @@
  *   Reads the request body as a UTF-8 string. MUST reject with
  *   `BadRequestError` when the body cannot be read so the error handler
  *   pipeline surfaces a 400 response automatically.
+ *
+ * @property {function(): Promise<ArrayBuffer>} arrayBuffer
+ *   Reads the request body as raw bytes. Resolves with a zero-length
+ *   `ArrayBuffer` for a bodyless request. MUST reject with `BadRequestError`
+ *   when the body cannot be read so the error handler pipeline surfaces a 400
+ *   response automatically. Note that this rejects with `BadRequestError` where
+ *   the Web platform's `Request#arrayBuffer()` rejects with `TypeError`.
  *
  * @property {function(): Promise<FormData>} formData
  *   Reads and parses the request body as form data. Supports

@@ -2,6 +2,7 @@ import {
     assert,
     assertEqual,
     assertFalsy,
+    assertMatches,
     assertValidDate,
 } from 'kixx-assert';
 
@@ -399,6 +400,181 @@ export default function serverRequestConformance(describe, makeServerRequest) {
             const request = makeServerRequest();
 
             assertEqual('', await request.text());
+        });
+    });
+
+    describe('contract: one-shot body', ({ it }) => {
+        // A request body can be read only once. A second read is a bug in the
+        // middleware chain, so it must raise an unexpected error rather than a
+        // BadRequestError that would blame the client for our mistake.
+
+        it('throws AssertionError on a second json() read', async () => {
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ ok: true }),
+            });
+
+            await request.json();
+
+            const caught = await catchAsyncError(() => request.json());
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('ServerRequest#json()', caught.message);
+        });
+
+        it('throws AssertionError on a second text() read', async () => {
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'text/plain' },
+                body: 'once',
+            });
+
+            await request.text();
+
+            const caught = await catchAsyncError(() => request.text());
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('ServerRequest#text()', caught.message);
+        });
+
+        it('throws AssertionError on a second formData() read', async () => {
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: 'name=kris',
+            });
+
+            await request.formData();
+
+            const caught = await catchAsyncError(() => request.formData());
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('ServerRequest#formData()', caught.message);
+        });
+
+        it('throws AssertionError when a different method already read the body', async () => {
+            // This is the shape of the real bug: middleware consumes the body
+            // (as validateCsrfFormData does) and a handler then reads it again
+            // through a different method.
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: 'name=kris',
+            });
+
+            await request.text();
+
+            const caught = await catchAsyncError(() => request.formData());
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('ServerRequest#formData()', caught.message);
+        });
+
+        it('checks the formData() media type before the one-shot guard', async () => {
+            // An unsupported Content-Type describes the request as sent, so it
+            // stays a 415 even once the body is gone.
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: '{}',
+            });
+
+            await request.json();
+
+            const caught = await catchAsyncError(() => request.formData());
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('UnsupportedMediaTypeError', caught.name);
+        });
+
+        it('allows repeat reads of a bodyless request on every read method', async () => {
+            const request = makeServerRequest();
+
+            await request.text();
+            await request.arrayBuffer();
+
+            // A bodyless request has no stream to consume, so none of the read
+            // methods may trip the guard for one.
+            assertEqual('', await request.text());
+            assertEqual(0, (await request.arrayBuffer()).byteLength);
+        });
+    });
+
+    describe('contract: arrayBuffer', ({ it }) => {
+        it('resolves the exact body bytes', async () => {
+            // 'ö' is two bytes in UTF-8 (0xC3 0xB6), so a byte read and a
+            // character read disagree on length here.
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'text/plain; charset=utf-8' },
+                body: 'hö',
+            });
+
+            const buffer = await request.arrayBuffer();
+
+            assert(buffer instanceof ArrayBuffer, 'expected an ArrayBuffer');
+            assertEqual(3, buffer.byteLength);
+            assertEqual('104,195,182', Array.from(new Uint8Array(buffer)).join(','));
+        });
+
+        it('resolves an empty ArrayBuffer for a bodyless request', async () => {
+            const request = makeServerRequest();
+
+            const buffer = await request.arrayBuffer();
+
+            assert(buffer instanceof ArrayBuffer, 'expected an ArrayBuffer');
+            assertEqual(0, buffer.byteLength);
+        });
+
+        it('allows repeat reads of a bodyless request', async () => {
+            const request = makeServerRequest();
+
+            await request.arrayBuffer();
+            const buffer = await request.arrayBuffer();
+
+            // A bodyless request never sets bodyUsed, so the one-shot guard
+            // must not fire for one.
+            assertEqual(0, buffer.byteLength);
+        });
+
+        it('throws AssertionError when the body was already read', async () => {
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'text/plain' },
+                body: 'consumed',
+            });
+
+            await request.text();
+
+            const caught = await catchAsyncError(() => request.arrayBuffer());
+
+            assert(caught, 'expected an error to be thrown');
+            // A double read is a bug in the caller, not a bad request, so it
+            // must not be reported to the client as a 400.
+            assertEqual('AssertionError', caught.name);
+            assertMatches('ServerRequest#arrayBuffer()', caught.message);
+        });
+
+        it('throws AssertionError when the body stream is locked but unread', async () => {
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'text/plain' },
+                body: 'locked',
+            });
+
+            // getReader() locks the stream without disturbing it, which leaves
+            // bodyUsed false while still poisoning the delegate.
+            request.body.getReader();
+
+            const caught = await catchAsyncError(() => request.arrayBuffer());
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
         });
     });
 

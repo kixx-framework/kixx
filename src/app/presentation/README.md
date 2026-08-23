@@ -950,7 +950,7 @@ export async function getCreateBugForm(context, request, response) {
 }
 ```
 
-On POST handlers, call `validateCsrfFormData()` before constructing the Form. That helper owns `request.formData()` because request bodies are one-shot; do not call `request.formData()` again after it returns. Missing, expired, or mismatched CSRF data throws an expected HTTP error before domain logic runs.
+On POST handlers, call `validateCsrfFormData()` before constructing the Form. That helper owns `request.formData()` because request bodies are one-shot; do not call `request.formData()` again after it returns, and do not reach for `request.json()`, `request.text()`, or `request.arrayBuffer()` either — any of them reads the same consumed body. The second read raises an assertion failure, which the router treats as a programmer error. Missing, expired, or mismatched CSRF data throws an expected HTTP error before domain logic runs.
 
 ```js
 import { validateCsrfFormData } from '../lib/csrf.js';

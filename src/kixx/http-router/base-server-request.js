@@ -1,4 +1,4 @@
-import { isValidDate } from '../assertions/mod.js';
+import { assert, isValidDate } from '../assertions/mod.js';
 import {
     BadRequestError,
     UnsupportedMediaTypeError,
@@ -13,8 +13,10 @@ const FORM_DATA_CONTENT_TYPES = Object.freeze([
 /**
  * @typedef {Object} BodyDelegate
  * @property {ReadableStream|null} body - The request body stream, or null when the request has no body.
+ * @property {boolean} bodyUsed - Whether the body stream has already been consumed.
  * @property {Function} json - Resolves to the body parsed as JSON.
  * @property {Function} text - Resolves to the body decoded as UTF-8 text.
+ * @property {Function} arrayBuffer - Resolves to the body as an ArrayBuffer.
  * @property {Function} formData - Resolves to the body parsed as FormData.
  */
 
@@ -33,9 +35,10 @@ const FORM_DATA_CONTENT_TYPES = Object.freeze([
  * every platform receives it at once.
  *
  * The body delegate is any object exposing the Web `Request` body surface
- * (`body`, `json()`, `text()`, `formData()`). On an edge runtime the native
- * `Request` already satisfies it. An adapter whose native request is not a Web
- * `Request` constructs one to bridge its body stream, and passes that.
+ * (`body`, `bodyUsed`, `json()`, `text()`, `arrayBuffer()`, `formData()`). On an
+ * edge runtime the native `Request` already satisfies it. An adapter whose
+ * native request is not a Web `Request` constructs one to bridge its body
+ * stream, and passes that.
  *
  * @see {@link ./server-request-interface.js} for the normative contract and its invariants.
  */
@@ -294,6 +297,8 @@ export default class BaseServerRequest {
      * @throws {BadRequestError} When the body cannot be parsed as JSON
      */
     async json() {
+        this.#assertBodyUnread('json');
+
         try {
             const json = await this.#bodyDelegate.json();
             return json;
@@ -308,10 +313,40 @@ export default class BaseServerRequest {
      * @throws {BadRequestError} When the body cannot be read
      */
     async text() {
+        this.#assertBodyUnread('text');
+
         try {
             return await this.#bodyDelegate.text();
         } catch (cause) {
             throw new BadRequestError('Request body could not be read as text', { cause }, this.text);
+        }
+    }
+
+    /**
+     * Reads the request body as raw bytes.
+     *
+     * The whole body is buffered in memory with no size limit, matching the
+     * other read methods. A handler accepting untrusted uploads should use
+     * `bufferRequestBodyWithLimit()` from
+     * `app/presentation/lib/read-request-body.js` instead, which streams the
+     * body under a hard byte cap and aborts once the cap is crossed.
+     *
+     * A read failure rejects with `BadRequestError` rather than the `TypeError`
+     * the Web platform specifies for `Request#arrayBuffer()`. The deviation is
+     * deliberate: a truncated or unreadable body is a client fault, and the
+     * project error pipeline turns an expected error into a 400 while an
+     * unwrapped `TypeError` would surface as a 500.
+     *
+     * @returns {Promise<ArrayBuffer>} The request body bytes; empty for a bodyless request
+     * @throws {BadRequestError} When the body cannot be read
+     */
+    async arrayBuffer() {
+        this.#assertBodyUnread('arrayBuffer');
+
+        try {
+            return await this.#bodyDelegate.arrayBuffer();
+        } catch (cause) {
+            throw new BadRequestError('Request body could not be read as bytes', { cause }, this.arrayBuffer);
         }
     }
 
@@ -332,11 +367,42 @@ export default class BaseServerRequest {
             );
         }
 
+        // The media type check comes first: an unsupported Content-Type is a
+        // fact about the request as sent, and stays a 415 whether or not the
+        // body has already been consumed.
+        this.#assertBodyUnread('formData');
+
         try {
             return await this.#bodyDelegate.formData();
         } catch (cause) {
             throw new BadRequestError('Request body could not be parsed as form data', { cause }, this.formData);
         }
+    }
+
+    /**
+     * Asserts the body has not already been consumed.
+     *
+     * A request body can be read only once, so a second read is a bug in the
+     * middleware chain rather than a bad request, and must not be reported as
+     * one. The check runs before the delegate is called because the delegate
+     * signals reuse with a `TypeError` whose wording differs per platform;
+     * inspecting that error would make the classification platform-dependent.
+     *
+     * Both flags matter: `bodyUsed` covers a completed read, while a stream
+     * locked by `getReader()` but not yet pulled from leaves `bodyUsed` false
+     * and still poisons the delegate. A bodyless request trips neither, so
+     * repeated reads of one stay legal.
+     *
+     * @param {string} methodName - Calling method, named in the assertion message
+     * @throws {AssertionError} When the body has already been consumed
+     */
+    #assertBodyUnread(methodName) {
+        const delegate = this.#bodyDelegate;
+
+        assert(
+            !delegate.bodyUsed && !delegate.body?.locked,
+            `ServerRequest#${ methodName }(): the request body has already been read`,
+        );
     }
 }
 
