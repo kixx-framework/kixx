@@ -19,11 +19,18 @@ import {
     isPageIncludesPath,
     getEmailBundlePath,
 } from './content-layout.js';
-import { hashSet } from './addressing.js';
+import {
+    canonicalize,
+    hashSet,
+    hashStringBlob,
+    hashArrayBufferBlob,
+} from './addressing.js';
 import {
     assert,
     assertEqual,
+    assertArray,
     assertNonEmptyString,
+    isPlainObject,
 } from '../assertions/mod.js';
 
 
@@ -112,7 +119,7 @@ export default class ContentSnapshot {
         assertArray(bundle, 'putGlobalTemplatePartials() requires an Array bundle');
         const fullPathname = getGlobalTemplatePartialsPath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', pathname, json);
+        return await this.#putFile('text', fullPathname, json);
     }
 
     statBaseTemplates() {
@@ -138,7 +145,7 @@ export default class ContentSnapshot {
         assertArray(bundle, 'putBaseTemplates() requires an Array bundle');
         const fullPathname = getBaseTemplatesPath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', pathname, json);
+        return await this.#putFile('text', fullPathname, json);
     }
 
     async statPageMetadata(pathname) {
@@ -151,8 +158,8 @@ export default class ContentSnapshot {
         assert(isValidPathname(pathname), 'putPageMetadata() requires a valid pathname');
         assert(isPlainObject(obj), 'putPageMetadata() requires a metadata object');
         const fullPathname = getPageMetadataPath(pathname);
-        const json = canonicalize(bundle);
-        return await this.#putFile('text', pathname, json);
+        const json = canonicalize(obj);
+        return await this.#putFile('text', fullPathname, json);
     }
 
     async statPageIncludes(pathname) {
@@ -166,7 +173,7 @@ export default class ContentSnapshot {
         assert(isPlainObject(bundle), 'putPageIncludes() requires an Array bundle');
         const fullPathname = getPageIncludesPath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', pathname, json);
+        return await this.#putFile('text', fullPathname, json);
     }
 
     async statPagePartials(pathname) {
@@ -180,7 +187,7 @@ export default class ContentSnapshot {
         assertArray(bundle, 'putPagePartials() requires an Array bundle');
         const fullPathname = getPagePartialsPath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', pathname, json);
+        return await this.#putFile('text', fullPathname, json);
     }
 
     async statPageTemplate(pathname) {
@@ -193,7 +200,7 @@ export default class ContentSnapshot {
         assert(isValidPathname(pathname), 'putPageTemplate() requires a valid pathname');
         assertNonEmptyString(source, 'putPageTemplate() requires a non-empty source string');
         const fullPathname = getPageTemplatePath(pathname);
-        return await this.#putFile('text', pathname, source);
+        return await this.#putFile('text', fullPathname, source);
     }
 
     async statEmailAssets(pathname) {
@@ -207,7 +214,7 @@ export default class ContentSnapshot {
         assert(isPlainObject(bundle), 'putEmailAssets() requires a plain object bundle');
         const fullPathname = getEmailBundlePath(pathname);
         const json = canonicalize(bundle);
-        return await this.#putFile('text', pathname, json);
+        return await this.#putFile('text', fullPathname, json);
     }
 
     async batchGetPageAssets(pathname) {
