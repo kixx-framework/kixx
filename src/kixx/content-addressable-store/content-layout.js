@@ -131,6 +131,17 @@ function getPagesPath(relativePathname) {
 }
 
 /**
+ * Constructs the storage path for the a static asset.
+ * @param {string} pathname - Valid logical page pathname
+ * @returns {string} Canonical pathname beneath `/assets`
+ * @throws {AssertionError} When pathname is not a valid page pathname
+ */
+export function getStaticAssetPath(pathname) {
+    assert(isValidPathname(pathname), 'getStaticAssetPath() requires a valid page pathname');
+    return normalizePathname(`assets/${ pathname }`);
+}
+
+/**
  * Constructs the storage path for the base-template bundle.
  * @returns {string} Canonical pathname beneath `/templates`
  */

@@ -20,3 +20,10 @@ export class JsonContentObject extends ContentObject {
         this.json = JSON.parse(json);
     }
 }
+
+export class StreamContentObject extends ContentObject {
+    constructor(stream, stats) {
+        super(stats);
+        this.stream = stream;
+    }
+}

@@ -1,7 +1,12 @@
-import { TextContentObject, JsonContentObject } from './content-object.js';
+import {
+    TextContentObject,
+    JsonContentObject,
+    StreamContentObject,
+} from './content-object.js';
 import {
     isValidPathname,
     normalizePathname,
+    getStaticAssetPath,
     getGlobalTemplatePartialsPath,
     getBaseTemplatesPath,
     getPageDirectoryPath,
@@ -42,6 +47,23 @@ export default class ContentSnapshot {
 
         // `bytes` could be a String or ArrayBuffer, depending on the `type`.
         return [ stat, bytes ];
+    }
+
+    statStaticAsset(pathname) {
+        const fullPathname = getStaticAssetPath(pathname);
+        return this.#index.getNode(fullPathname);
+    }
+
+    getStaticAsset(pathname) {
+        const fullPathname = getStaticAssetPath(pathname);
+        const result = await this.#getPath('stream', fullPathname);
+
+        if (!result) {
+            return null;
+        }
+
+        const [ stat, stream ] = result;
+        return new StreamContentObject(stream, stat);
     }
 
     statGlobalTemplatePartials() {
