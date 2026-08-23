@@ -10,6 +10,11 @@ import {
 } from '../../../kixx/assertions/mod.js';
 
 
+/**
+ * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
+ */
+
+
 const ACCEPTED_TYPES = [ 'text', 'arrayBuffer' ];
 
 // WARNING: This names the Durable Object instance holding every committed
@@ -38,6 +43,14 @@ const DURABLE_OBJECT_BACKOFF_MAX_MS = 20000;
 const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
 
 
+/**
+ * Stores content-addressed blobs in Cloudflare KV and build indexes in a
+ * Durable Object.
+ *
+ * Blob and index keys include the configured wire format, isolating data
+ * written by format. Index reads use both isolate-local promise
+ * caching and Cloudflare's colo-local Cache API.
+ */
 export default class ContentStore {
 
     #logger;
@@ -51,6 +64,17 @@ export default class ContentStore {
 
     #pendingIndexes = new Map();
 
+    /**
+     * @param {Object} options - Store configuration
+     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create the adapter's child logger
+     * @param {string} options.kvBindingName - Name of the KV binding on each request context's environment
+     * @param {string} options.durableObjectBindingName - Name of the Durable Object namespace binding on each request context's environment
+     * @param {string} options.wireFormat - Format identifier appended to persisted blob and index keys
+     * @param {number} [options.blobReadCacheTtlSeconds=0] - Cloudflare KV cache TTL used for blob reads
+     * @param {number} [options.indexCacheTtlSeconds=0] - TTL used by isolate-local and colo-local index caches
+     * @param {Cache} [options.edgeCache] - Cache API implementation; defaults to the Workers runtime cache; helpful for testing
+     * @param {Scheduler} [options.scheduler] - Scheduler used for retry backoff; defaults to the Workers runtime scheduler; helpful for testing
+     */
     constructor(options) {
         this.#logger = options.logger.createChild('CloudflareContentStore');
         this.#kvBindingName = options.kvBindingName;
@@ -86,9 +110,7 @@ export default class ContentStore {
     // same failure. Only errors flagged .retryable are retried (never
     // .overloaded ones, which would worsen the overload), and only up to
     // DURABLE_OBJECT_MAX_ATTEMPTS, with jittered exponential backoff between
-    // attempts. This is safe because every ContentAddressableIndexStore
-    // method called through here (getIndex, commitClosure, assignBuild) is
-    // idempotent.
+    // attempts.
     async #callDurableObject(context, methodName, callback) {
         let attempt = 0;
 
@@ -171,6 +193,15 @@ export default class ContentStore {
         return entries;
     }
 
+    /**
+     * Retrieves the index assigned to a build, sharing in-flight and resolved
+     * reads within the configured index cache TTL.
+     * @param {RequestContext} context - Request context exposing the configured Cloudflare bindings
+     * @param {string} buildId - Build identifier whose index should be loaded
+     * @returns {Promise<Object>} Encoded index table keyed by pathname
+     * @throws {AssertionError} When no index is registered for the build
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     */
     async getIndex(context, buildId) {
         // Cache pending and resolved index promises in runtime memory, scoped
         // to the build which produced them. Freshness is checked lazily on
@@ -199,6 +230,14 @@ export default class ContentStore {
         return await promise;
     }
 
+    /**
+     * Retrieves a content-addressed blob by type.
+     * @param {RequestContext} context - Request context exposing the configured KV binding
+     * @param {'text'|'arrayBuffer'} type - Representation to return
+     * @param {string} _pathname - Logical pathname retained for store interface compatibility
+     * @param {string} hash - Content hash identifying the blob
+     * @returns {Promise<string|ArrayBuffer|null>} Stored blob, or null when it does not exist
+     */
     async getFile(context, type, _pathname, hash) {
         assertValidType(type, 'getFile');
         const kv = this.#resolveKvStore(context);
@@ -211,6 +250,15 @@ export default class ContentStore {
         });
     }
 
+    /**
+     * Stores a content-addressed blob by type.
+     * @param {RequestContext} context - Request context exposing the configured KV binding
+     * @param {'text'|'arrayBuffer'} type - Representation of the blob
+     * @param {string} _pathname - Logical pathname retained for store interface compatibility
+     * @param {string} hash - Content hash identifying the blob
+     * @param {string|ArrayBuffer} blob - Blob matching `type`
+     * @returns {Promise<void>}
+     */
     async putFile(context, type, _pathname, hash, blob) {
         assertValidType(type, 'putFile');
         if (type === 'text') {
@@ -224,6 +272,13 @@ export default class ContentStore {
         await kv.put(key, blob, { type });
     }
 
+    /**
+     * Retrieves multiple blobs while preserving the order of `files`.
+     * @param {RequestContext} context - Request context exposing the configured KV binding
+     * @param {'text'|'arrayBuffer'} type - Representation to return for every blob
+     * @param {Array<{hash: string}>} files - Blob descriptors to retrieve
+     * @returns {Promise<Array<string|ArrayBuffer|null>>} Blobs aligned by position with `files`
+     */
     async getFiles(context, type, files) {
         assertValidType(type, 'getFiles');
         const kv = this.#resolveKvStore(context);
@@ -238,6 +293,14 @@ export default class ContentStore {
         return keys.map((key) => map.get(key));
     }
 
+    /**
+     * Persists an immutable index closure under its root hash.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {string} rootHash - Content hash identifying the closure
+     * @param {Object} entries - Encoded index table keyed by pathname
+     * @returns {Promise<void>}
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     */
     async saveIndex(context, rootHash, entries) {
         assertNonEmptyString(rootHash, 'put index requires rootHash to be a non-empty string');
         assert(isPlainObject(entries), 'put index requires entries to be a plain Object');
@@ -251,6 +314,14 @@ export default class ContentStore {
         }
     }
 
+    /**
+     * Points a build at a previously persisted index closure.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {string} buildId - Build identifier to assign
+     * @param {string} rootHash - Root hash of the closure the build should serve
+     * @returns {Promise<void>}
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     */
     async assignBuild(context, buildId, rootHash) {
         assertNonEmptyString(buildId, 'put index requires buildId to be a non-empty string');
         assertNonEmptyString(rootHash, 'put index requires rootHash to be a non-empty string');

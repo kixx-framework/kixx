@@ -2,22 +2,24 @@ import { DurableObject } from 'cloudflare:workers';
 import { assert, assertNonEmptyString, isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
 
 
-/**
- * Durable persistence for content-addressable tree closures and the build
- * pointers that reference them.
- *
- * A "closure" is an immutable set of index entries identified by its own
- * root hash, independent of any build. A "build" is a single row mapping a
- * build ID to the root hash of the closure it currently serves. Deploying
- * or rolling back a build is always a single-row write to the build's
- * pointer; it never rewrites closure content.
- */
-
 // Maximum number of closures held in #closureCache at once. Bounds memory
 // in a long-lived Durable Object instance while keeping the working set
 // (the current build plus recent rollback targets) resident.
 const CLOSURE_CACHE_MAX_SIZE = 10;
 
+/**
+ * @typedef {['tree'|'blob', string, (number|null)?, (Object|null)?]} IndexEntryTuple
+ */
+
+/**
+ * Persists immutable content-addressable index closures and the build
+ * pointers that select them.
+ *
+ * A closure is identified by its root hash and is independent of any build.
+ * Assigning or rolling back a build updates only its pointer; it does not
+ * rewrite closure entries.
+ * @extends DurableObject
+ */
 export default class ContentAddressableIndexStore extends DurableObject {
 
     #sql;
@@ -36,17 +38,15 @@ export default class ContentAddressableIndexStore extends DurableObject {
         super(ctx, env);
         this.#sql = ctx.storage.sql;
 
-        // Use blockConcurrencyWhile() in the constructor to run migrations and
-        // initialize state before any requests are processed. This ensures the
-        // schema is ready and prevents race conditions during initialization.
+        // Durable Object requests must not observe a partially initialized
+        // schema.
         ctx.blockConcurrencyWhile(async () => {
             await this.migrate();
         });
     }
 
     /**
-     * Creates the closure_entries and builds tables if they do not already
-     * exist. Safe to call repeatedly; only the constructor does so.
+     * Creates the index schema without modifying existing rows.
      * @returns {Promise<void>}
      */
     async migrate() {
@@ -72,8 +72,8 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
     /**
      * Looks up the closure entries served by a build.
-     * @param {string} buildId - The build to resolve.
-     * @returns {Promise<{success: boolean, entries: (Object<string, import('./content-addressable-index.js').IndexEntryTuple>|null)}>} `entries` is null when no build is registered for `buildId`.
+     * @param {string} buildId - Build identifier to resolve
+     * @returns {Promise<{success: true, entries: (Object<string, IndexEntryTuple>|null)}>} Encoded index table, or null when the build is not registered
      */
     async getIndex(buildId) {
         assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getIndex: buildId');
@@ -81,7 +81,6 @@ export default class ContentAddressableIndexStore extends DurableObject {
         const rootHash = this.#getBuildRootHash(buildId);
 
         if (!rootHash) {
-            // Return null for the index if no build is registered for the given buildId.
             return { success: true, entries: null };
         }
 
@@ -139,12 +138,13 @@ export default class ContentAddressableIndexStore extends DurableObject {
     }
 
     /**
-     * Writes an immutable closure's entries, keyed by its own root hash.
-     * Idempotent: a closure already present under rootHash is left
-     * untouched, since the same hash always implies the same content.
-     * @param {string} rootHash - Root hash identifying the closure.
-     * @param {Object<string, import('./content-addressable-index.js').IndexEntryTuple>} index - Encoded index table to persist, keyed by pathname.
-     * @returns {Promise<{success: boolean}>}
+     * Persists an immutable closure under its root hash.
+     *
+     * Existing entries with the same root hash and pathname are preserved, so
+     * repeating a successful commit is idempotent.
+     * @param {string} rootHash - Root hash identifying the closure
+     * @param {Object<string, IndexEntryTuple>} index - Encoded index table keyed by pathname
+     * @returns {Promise<{success: true}>} Successful commit result
      */
     async commitClosure(rootHash, index) {
         assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#commitClosure: rootHash');
@@ -159,11 +159,8 @@ export default class ContentAddressableIndexStore extends DurableObject {
         for (const pathname of pathnames) {
             const [ kind, hash, size, metadata ] = index[pathname];
 
-            // Validate every column bound for insertion, not just metadata:
-            // closure_entries.kind and .hash are NOT NULL, and this statement
-            // uses INSERT OR IGNORE for commit idempotency, which would
-            // otherwise silently drop a malformed row on a NOT NULL
-            // violation instead of failing loudly.
+            // INSERT OR IGNORE also suppresses NOT NULL violations, so validate
+            // required columns before relying on it for idempotency.
             assert(
                 kind === 'tree' || kind === 'blob',
                 `ContentAddressableIndexStore#commitClosure: entry "${ pathname }" kind must be "tree" or "blob"`,
@@ -191,12 +188,10 @@ export default class ContentAddressableIndexStore extends DurableObject {
     }
 
     /**
-     * Atomically points a build at a closure. Used for both deploying a new
-     * version and rolling back to a previously committed one — in either
-     * case this is the only write a build ever needs.
-     * @param {string} buildId - The build to assign.
-     * @param {string} rootHash - Root hash of an already-committed closure.
-     * @returns {Promise<{success: boolean}>}
+     * Atomically points a build at a non-empty, previously committed closure.
+     * @param {string} buildId - Build identifier to assign
+     * @param {string} rootHash - Root hash of the closure the build should serve
+     * @returns {Promise<{success: true}>} Successful assignment result
      */
     async assignBuild(buildId, rootHash) {
         assertNonEmptyString(buildId, 'ContentAddressableIndexStore#assignBuild: buildId');
