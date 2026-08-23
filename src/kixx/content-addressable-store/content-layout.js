@@ -179,6 +179,39 @@ export function getPageMetadataPath(pathname) {
     return getPagesPath(`${ pathname }/page.json`);
 }
 
+/**
+ * Constructs the storage path for a page's partials bundle file.
+ * @param {string} pathname - Valid logical page pathname
+ * @returns {string} Canonical pathname beneath `/pages`
+ * @throws {AssertionError} When pathname is not a valid page pathname
+ */
+export function getPagePartialsPath(pathname) {
+    assert(isValidPathname(pathname), 'getPagePartialsPath() requires a valid page pathname');
+    return getPagesPath(`${ pathname }/${ PAGE_PARTIALS_BUNDLE }`);
+}
+
+/**
+ * Constructs the storage path for a page's includes bundle file.
+ * @param {string} pathname - Valid logical page pathname
+ * @returns {string} Canonical pathname beneath `/pages`
+ * @throws {AssertionError} When pathname is not a valid page pathname
+ */
+export function getPageIncludesPath(pathname) {
+    assert(isValidPathname(pathname), 'getPageIncludesPath() requires a valid page pathname');
+    return getPagesPath(`${ pathname }/${ PAGE_INCLUDES_BUNDLE }`);
+}
+
+/**
+ * Constructs the storage path for a page's template file.
+ * @param {string} pathname - Valid logical page pathname
+ * @returns {string} Canonical pathname beneath `/pages`
+ * @throws {AssertionError} When pathname is not a valid page pathname
+ */
+export function getPageTemplatePath(pathname) {
+    assert(isValidPathname(pathname), 'getPageTemplatePath() requires a valid page pathname');
+    return getPagesPath(pathname);
+}
+
 export function isPageMetadataPath(pathname) {
     return pathname.startsWith('/pages') && pathname.endsWith('/page.json');
 }

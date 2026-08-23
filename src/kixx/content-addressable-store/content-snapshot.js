@@ -11,6 +11,9 @@ import {
     getBaseTemplatesPath,
     getPageDirectoryPath,
     getPageMetadataPath,
+    getPagePartialsPath,
+    getPageIncludesPath,
+    getPageTemplatePath,
     isPageMetadataPath,
     isPagePartialsPath,
     isPageIncludesPath,
@@ -50,11 +53,13 @@ export default class ContentSnapshot {
     }
 
     statStaticAsset(pathname) {
+        assert(isValidPathname(pathname), 'statStaticAsset() requires a valid pathname');
         const fullPathname = getStaticAssetPath(pathname);
         return this.#index.getNode(fullPathname);
     }
 
-    getStaticAsset(pathname) {
+    async getStaticAsset(pathname) {
+        assert(isValidPathname(pathname), 'getStaticAssetPath() requires a valid pathname');
         const fullPathname = getStaticAssetPath(pathname);
         const result = await this.#getPath('stream', fullPathname);
 
@@ -100,6 +105,30 @@ export default class ContentSnapshot {
 
         const [ stat, json ] = result;
         return new JsonContentObject(json, stat);
+    }
+
+    async statPageMetadata(pathname) {
+        assert(isValidPathname(pathname), 'statPageMetadata() requires a valid pathname');
+        const fullPathname = getPageMetadataPath(pathname);
+        return this.#index.getNode(fullPathname);
+    }
+
+    async statPageIncludes(pathname) {
+        assert(isValidPathname(pathname), 'statPageIncludes() requires a valid pathname');
+        const fullPathname = getPageIncludesPath(pathname);
+        return this.#index.getNode(fullPathname);
+    }
+
+    async statPagePartials(pathname) {
+        assert(isValidPathname(pathname), 'statPagePartials() requires a valid pathname');
+        const fullPathname = getPagePartialsPath(pathname);
+        return this.#index.getNode(fullPathname);
+    }
+
+    async statPageTemplate(pathname) {
+        assert(isValidPathname(pathname), 'statPageTemplate() requires a valid pathname');
+        const fullPathname = getPageTemplatePath(pathname);
+        return this.#index.getNode(fullPathname);
     }
 
     async batchGetPageAssets(pathname) {
