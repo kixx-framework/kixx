@@ -417,17 +417,55 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('AssertionError', caught.name);
         });
 
-        it('rejects an unsupported representation type', async () => {
+        it('reads a blob as a stream, passing the type through to KV', async () => {
+            const kvStore = makeKvStore(new Map([ [ 'hash-a#1', 'a stream' ] ]));
+            const store = makeStore();
+
+            const result = await store.getFile(makeContext({ kvStore }), 'stream', '/a.txt', 'hash-a');
+
+            assertEqual('stream', kvStore.calls[0].options.type);
+            assertEqual('a stream', result);
+        });
+
+        it('rejects a stream write, which KV has no way to accept', async () => {
             const kvStore = makeKvStore(new Map());
             const store = makeStore();
 
+            // Only getFile() can stream. A blob is stored under a hash of its
+            // whole content, so the write side needs the bytes regardless.
             const caught = await catchAsyncError(
-                () => store.getFile(makeContext({ kvStore }), 'stream', '/a.txt', 'hash-a'),
+                () => store.putFile(makeContext({ kvStore }), 'stream', '/a.txt', 'hash-a', 'the bytes'),
             );
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
             assertMatches('stream', caught.message);
+        });
+
+        it('rejects a bulk stream read, which KV does not support', async () => {
+            const kvStore = makeKvStore(new Map());
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.getFiles(makeContext({ kvStore }), 'stream', [ { hash: 'hash-a' } ]),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('stream', caught.message);
+        });
+
+        it('rejects an unsupported representation type', async () => {
+            const kvStore = makeKvStore(new Map());
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.getFile(makeContext({ kvStore }), 'json', '/a.txt', 'hash-a'),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('json', caught.message);
         });
     });
 });

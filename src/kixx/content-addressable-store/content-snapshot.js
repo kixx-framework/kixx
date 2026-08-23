@@ -54,12 +54,21 @@ export default class ContentSnapshot {
         assertEqual('blob', stat.kind, `Expected the  path "${ pathname }" to point to a file and not a directory`);
 
         const bytes = await this.#store.getFile(context, type, stat.pathname, stat.hash);
+
+        // A 'stream' read yields a Web ReadableStream; every other type yields
+        // the bytes themselves. Either way a null means the index names a blob
+        // the store cannot produce, which is what this guard is really for.
+        const isReadable = type === 'stream'
+            ? bytes instanceof ReadableStream
+            : (isString(bytes) || bytes instanceof ArrayBuffer);
+
         assert(
-            (isString(bytes) || bytes instanceof ArrayBuffer),
+            isReadable,
             `The pathname "${ pathname }" references unreadable blob "${ stat.hash }"`,
         );
 
-        // `bytes` could be a String or ArrayBuffer, depending on the `type`.
+        // `bytes` could be a String, ArrayBuffer, or ReadableStream, depending
+        // on the `type`.
         return [ stat, bytes ];
     }
 
@@ -87,8 +96,16 @@ export default class ContentSnapshot {
     }
 
     async getStaticAsset(context, pathname) {
-        assert(isValidPathname(pathname), 'getStaticAssetPath() requires a valid pathname');
+        assert(isValidPathname(pathname), 'getStaticAsset() requires a valid pathname');
         const fullPathname = getStaticAssetPath(pathname);
+        // Static assets are the one read that streams: they are the largest
+        // blobs served and their bytes go straight to the response, so there is
+        // nothing to gain by buffering them into memory first. Writes stay
+        // buffered, because the content address is derived from the whole blob.
+        //
+        // The returned stream is single-use. A caller that does not consume it
+        // (a HEAD request, a 304) MUST cancel it to release the underlying
+        // binding or file handle.
         const result = await this.#getFile(context, 'stream', fullPathname);
 
         if (!result) {
@@ -265,11 +282,14 @@ export default class ContentSnapshot {
         });
 
         const directory = getPageDirectoryPath(pathname);
-        const sourceFileStats = this.#index.listStats(directory, { recursive: false });
+        const sourceFileStats = this.#index.listNodes(directory, { recursive: false });
 
         const files = parentStats
             .concat(sourceFileStats)
-            .filter((entry) => entry.kind === 'blob');
+            // Ancestor page metadata is optional: a nested page may sit beneath
+            // directories which publish no page.json of their own, and getNode()
+            // returns null for each of those.
+            .filter((entry) => entry !== null && entry.kind === 'blob');
 
         const results = await this.#store.getFiles(context, 'text', files);
 

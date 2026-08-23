@@ -17,6 +17,13 @@ import {
 
 const ACCEPTED_TYPES = [ 'text', 'arrayBuffer' ];
 
+// getFile() alone can stream. KV's single-key get() supports a 'stream' type,
+// but a bulk get() does not, and put() has no read-side type at all — so the
+// accepted set is per method rather than one shared list. Widening
+// ACCEPTED_TYPES instead would advertise a stream write and a bulk stream read
+// that the platform cannot serve.
+const GET_FILE_ACCEPTED_TYPES = ACCEPTED_TYPES.concat([ 'stream' ]);
+
 // WARNING: This names the Durable Object instance holding every committed
 // closure and build pointer. It only looks like it is derived from the class
 // name — it is a persistent storage identity, and changing it (by renaming
@@ -246,14 +253,17 @@ export default class ContentStore {
 
     /**
      * Retrieves a content-addressed blob by type.
+     *
+     * A 'stream' read resolves to a single-use Web ReadableStream; a caller that
+     * does not consume it must cancel it to release the underlying binding.
      * @param {RequestContext} context - Request context exposing the configured KV binding
-     * @param {'text'|'arrayBuffer'} type - Representation to return
+     * @param {'text'|'arrayBuffer'|'stream'} type - Representation to return
      * @param {string} _pathname - Logical pathname retained for store interface compatibility
      * @param {string} hash - Content hash identifying the blob
-     * @returns {Promise<string|ArrayBuffer|null>} Stored blob, or null when it does not exist
+     * @returns {Promise<string|ArrayBuffer|ReadableStream|null>} Stored blob, or null when it does not exist
      */
     async getFile(context, type, _pathname, hash) {
-        assertValidType(type, 'getFile');
+        assertValidType(type, 'getFile', GET_FILE_ACCEPTED_TYPES);
         const kv = this.#resolveKvStore(context);
 
         const key = this.#buildFileKey(hash);
@@ -366,8 +376,8 @@ export default class ContentStore {
     }
 }
 
-function assertValidType(value, method) {
-    if (!ACCEPTED_TYPES.includes(value)) {
+function assertValidType(value, method, acceptedTypes = ACCEPTED_TYPES) {
+    if (!acceptedTypes.includes(value)) {
         throw new AssertionError(`Invalid type "${ value }" passed into ContentStore#${ method }`);
     }
 }

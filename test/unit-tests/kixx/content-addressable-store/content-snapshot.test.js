@@ -3,7 +3,12 @@ import { assert, assertEqual } from 'kixx-assert';
 
 import ContentAddressableIndex from '../../../../src/kixx/content-addressable-store/content-addressable-index.js';
 import ContentSnapshot from '../../../../src/kixx/content-addressable-store/content-snapshot.js';
-import { getGlobalTemplatePartialsPath } from '../../../../src/kixx/content-addressable-store/content-layout.js';
+import {
+    getGlobalTemplatePartialsPath,
+    getPageMetadataPath,
+    getPageTemplatePath,
+    getStaticAssetPath,
+} from '../../../../src/kixx/content-addressable-store/content-layout.js';
 
 
 async function makeIndex(files) {
@@ -16,13 +21,39 @@ async function makeIndex(files) {
 function makeStore(blobsByHash) {
     const getFileCalls = [];
 
+    const getFilesCalls = [];
+
     return {
         getFileCalls,
+        getFilesCalls,
         async getFile(_context, type, pathname, hash) {
             getFileCalls.push({ type, pathname, hash });
             return blobsByHash.get(hash) ?? null;
         },
+        // The real store contract: results come back in the same order as the
+        // stats passed in, so the caller can pair each blob with its stat.
+        async getFiles(_context, type, stats) {
+            getFilesCalls.push({ type, stats });
+            return stats.map((stat) => blobsByHash.get(stat.hash) ?? null);
+        },
     };
+}
+
+function makeStream(bytes) {
+    return new ReadableStream({
+        start(controller) {
+            controller.enqueue(bytes);
+            controller.close();
+        },
+    });
+}
+
+async function drain(stream) {
+    const chunks = [];
+    for await (const chunk of stream) {
+        chunks.push(...chunk);
+    }
+    return chunks;
 }
 
 function makeSnapshot(index, blobsByHash) {
@@ -116,6 +147,116 @@ describe('ContentSnapshot', ({ describe, it }) => {
 
             assertEqual(null, await snapshot.getGlobalTemplatePartials({}));
             assertEqual(0, store.getFileCalls.length);
+        });
+    });
+    describe('getStaticAsset()', ({ it }) => {
+        it('reads the asset as a stream, without buffering the bytes', async () => {
+            const assetPath = getStaticAssetPath('/logo.png');
+            const bytes = new Uint8Array([ 137, 80, 78, 71 ]);
+            const index = await makeIndex([
+                { pathname: assetPath, hash: 'hash-logo', size: 4 },
+            ]);
+            const store = makeStore(new Map([ [ 'hash-logo', makeStream(bytes) ] ]));
+            const snapshot = new ContentSnapshot(store, index);
+
+            const asset = await snapshot.getStaticAsset({}, '/logo.png');
+
+            // Static assets are the one read that streams, so their bytes can go
+            // straight to the response instead of through memory first.
+            assertEqual('stream', store.getFileCalls[0].type);
+            assert(asset.stream instanceof ReadableStream);
+            assertEqual(assetPath, asset.pathname);
+            assertEqual('hash-logo', asset.hash);
+            // `size` comes from the index, so a caller can still set
+            // Content-Length without draining the stream to measure it.
+            assertEqual(4, asset.size);
+
+            // The stream carries the actual bytes, and carries them once.
+            assertEqual('137,80,78,71', (await drain(asset.stream)).join(','));
+        });
+
+        it('returns null for an asset absent from the index', async () => {
+            const index = await makeIndex([
+                { pathname: getStaticAssetPath('/logo.png'), hash: 'hash-logo', size: 4 },
+            ]);
+            const store = makeStore(new Map());
+            const snapshot = new ContentSnapshot(store, index);
+
+            assertEqual(null, await snapshot.getStaticAsset({}, '/missing.png'));
+            assertEqual(0, store.getFileCalls.length);
+        });
+    });
+
+    describe('batchGetPageAssets()', ({ it }) => {
+        it('collects the ancestor metadata and the leaf directory contents', async () => {
+            const rootMeta = getPageMetadataPath('/');
+            const blogMeta = getPageMetadataPath('/blog');
+            const postMeta = getPageMetadataPath('/blog/post');
+            const postTemplate = getPageTemplatePath('/blog/post/page.html');
+
+            const index = await makeIndex([
+                { pathname: rootMeta, hash: 'hash-root', size: 2 },
+                { pathname: blogMeta, hash: 'hash-blog', size: 2 },
+                { pathname: postMeta, hash: 'hash-post', size: 2 },
+                { pathname: postTemplate, hash: 'hash-template', size: 5 },
+            ]);
+            const store = makeStore(new Map([
+                [ 'hash-root', '{"a":1}' ],
+                [ 'hash-blog', '{"b":2}' ],
+                [ 'hash-post', '{"c":3}' ],
+                [ 'hash-template', '<h1></h1>' ],
+            ]));
+            const snapshot = new ContentSnapshot(store, index);
+
+            const result = await snapshot.batchGetPageAssets({}, '/blog/post');
+
+            assert(result, 'expected page assets for /blog/post');
+            // Ancestors first, in root-to-leaf order, so the page data cascade
+            // is applied in the order the caller expects.
+            assertEqual(3, result.pageDataFiles.length);
+            assertEqual(rootMeta, result.pageDataFiles[0].pathname);
+            assertEqual(blogMeta, result.pageDataFiles[1].pathname);
+            assertEqual(postMeta, result.pageDataFiles[2].pathname);
+            assertEqual('<h1></h1>', result.template.text);
+            assertEqual(null, result.partials);
+            assertEqual(null, result.includes);
+        });
+
+        it('skips ancestor directories which publish no page metadata', async () => {
+            const rootMeta = getPageMetadataPath('/');
+            const postMeta = getPageMetadataPath('/blog/post');
+            const postTemplate = getPageTemplatePath('/blog/post/page.html');
+
+            // No /pages/blog/page.json: getNode() returns null for that
+            // ancestor, and the entry must be dropped rather than dereferenced.
+            const index = await makeIndex([
+                { pathname: rootMeta, hash: 'hash-root', size: 2 },
+                { pathname: postMeta, hash: 'hash-post', size: 2 },
+                { pathname: postTemplate, hash: 'hash-template', size: 5 },
+            ]);
+            const store = makeStore(new Map([
+                [ 'hash-root', '{"a":1}' ],
+                [ 'hash-post', '{"c":3}' ],
+                [ 'hash-template', '<h1></h1>' ],
+            ]));
+            const snapshot = new ContentSnapshot(store, index);
+
+            const result = await snapshot.batchGetPageAssets({}, '/blog/post');
+
+            assertEqual(2, result.pageDataFiles.length);
+            assertEqual(rootMeta, result.pageDataFiles[0].pathname);
+            assertEqual(postMeta, result.pageDataFiles[1].pathname);
+        });
+
+        it('returns null when the leaf page has no metadata of its own', async () => {
+            const index = await makeIndex([
+                { pathname: getPageMetadataPath('/'), hash: 'hash-root', size: 2 },
+            ]);
+            const store = makeStore(new Map([ [ 'hash-root', '{"a":1}' ] ]));
+            const snapshot = new ContentSnapshot(store, index);
+
+            assertEqual(null, await snapshot.batchGetPageAssets({}, '/blog/post'));
+            assertEqual(0, store.getFilesCalls.length);
         });
     });
 });
