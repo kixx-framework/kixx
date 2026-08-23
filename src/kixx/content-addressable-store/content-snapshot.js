@@ -52,6 +52,24 @@ export default class ContentSnapshot {
         return [ stat, bytes ];
     }
 
+    async #putFile(type, pathname, bytes) {
+        let hash;
+        if (type === 'text') {
+            hash = await hashStringBlob(bytes);
+        }
+        if (type === 'arraybuffer') {
+            hash = await hashArrayBufferBlob(bytes);
+        }
+
+        const size = await this.#store.putFile(type, pathname, hash, bytes);
+
+        return {
+            pathname,
+            hash,
+            size,
+        };
+    }
+
     statStaticAsset(pathname) {
         assert(isValidPathname(pathname), 'statStaticAsset() requires a valid pathname');
         const fullPathname = getStaticAssetPath(pathname);
@@ -89,6 +107,14 @@ export default class ContentSnapshot {
         return new JsonContentObject(json, stat);
     }
 
+    async putGlobalTemplatePartials(pathname, bundle) {
+        assert(isValidPathname(pathname), 'putGlobalTemplatePartials() requires a valid pathname');
+        assertArray(bundle, 'putGlobalTemplatePartials() requires an Array bundle');
+        const fullPathname = getGlobalTemplatePartialsPath(pathname);
+        const json = canonicalize(bundle);
+        return await this.#putFile('text', pathname, json);
+    }
+
     statBaseTemplates() {
         const fullPathname = getBaseTemplatesPath();
         return this.#index.getNode(fullPathname);
@@ -107,10 +133,26 @@ export default class ContentSnapshot {
         return new JsonContentObject(json, stat);
     }
 
+    async putBaseTemplates(pathname, bundle) {
+        assert(isValidPathname(pathname), 'putBaseTemplates() requires a valid pathname');
+        assertArray(bundle, 'putBaseTemplates() requires an Array bundle');
+        const fullPathname = getBaseTemplatesPath(pathname);
+        const json = canonicalize(bundle);
+        return await this.#putFile('text', pathname, json);
+    }
+
     async statPageMetadata(pathname) {
         assert(isValidPathname(pathname), 'statPageMetadata() requires a valid pathname');
         const fullPathname = getPageMetadataPath(pathname);
         return this.#index.getNode(fullPathname);
+    }
+
+    async putPageMetadata(pathname, obj) {
+        assert(isValidPathname(pathname), 'putPageMetadata() requires a valid pathname');
+        assert(isPlainObject(obj), 'putPageMetadata() requires a metadata object');
+        const fullPathname = getPageMetadataPath(pathname);
+        const json = canonicalize(bundle);
+        return await this.#putFile('text', pathname, json);
     }
 
     async statPageIncludes(pathname) {
@@ -119,16 +161,53 @@ export default class ContentSnapshot {
         return this.#index.getNode(fullPathname);
     }
 
+    async putPageIncludes(pathname, bundle) {
+        assert(isValidPathname(pathname), 'putPageIncludes() requires a valid pathname');
+        assert(isPlainObject(bundle), 'putPageIncludes() requires an Array bundle');
+        const fullPathname = getPageIncludesPath(pathname);
+        const json = canonicalize(bundle);
+        return await this.#putFile('text', pathname, json);
+    }
+
     async statPagePartials(pathname) {
         assert(isValidPathname(pathname), 'statPagePartials() requires a valid pathname');
         const fullPathname = getPagePartialsPath(pathname);
         return this.#index.getNode(fullPathname);
     }
 
+    async putPagePartials(pathname, bundle) {
+        assert(isValidPathname(pathname), 'putPagePartials() requires a valid pathname');
+        assertArray(bundle, 'putPagePartials() requires an Array bundle');
+        const fullPathname = getPagePartialsPath(pathname);
+        const json = canonicalize(bundle);
+        return await this.#putFile('text', pathname, json);
+    }
+
     async statPageTemplate(pathname) {
         assert(isValidPathname(pathname), 'statPageTemplate() requires a valid pathname');
         const fullPathname = getPageTemplatePath(pathname);
         return this.#index.getNode(fullPathname);
+    }
+
+    async putPageTemplate(pathname, source) {
+        assert(isValidPathname(pathname), 'putPageTemplate() requires a valid pathname');
+        assertNonEmptyString(source, 'putPageTemplate() requires a non-empty source string');
+        const fullPathname = getPageTemplatePath(pathname);
+        return await this.#putFile('text', pathname, source);
+    }
+
+    async statEmailAssets(pathname) {
+        assert(isValidPathname(pathname), 'statEmailAssets() requires a valid pathname');
+        const fullPathname = getEmailBundlePath(pathname);
+        return this.#index.getNode(fullPathname);
+    }
+
+    async putEmailAssets(pathname, bundle) {
+        assert(isValidPathname(pathname), 'putEmailAssets() requires a valid pathname');
+        assert(isPlainObject(bundle), 'putEmailAssets() requires a plain object bundle');
+        const fullPathname = getEmailBundlePath(pathname);
+        const json = canonicalize(bundle);
+        return await this.#putFile('text', pathname, json);
     }
 
     async batchGetPageAssets(pathname) {
