@@ -29,6 +29,12 @@ const DURABLE_OBJECT_NAME = 'ContentAddressableStore';
 // never leave the colo that wrote them.
 const INDEX_CACHE_URL_PREFIX = 'https://content-addressable-store.internal/index';
 
+// KV rejects a cacheTtl below this floor outright, so a smaller configured
+// value cannot be passed through. Raising it to the floor is safe here in a way
+// it would not be for the index cache: blob keys carry the content hash, so a
+// changed blob is a different key and a longer TTL can never serve stale bytes.
+const KV_MIN_CACHE_TTL_SECONDS = 60;
+
 // Retry policy for Durable Object calls, per Cloudflare's documented
 // guidance: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
 const DURABLE_OBJECT_MAX_ATTEMPTS = 3;
@@ -70,7 +76,7 @@ export default class ContentStore {
      * @param {string} options.kvBindingName - Name of the KV binding on each request context's environment
      * @param {string} options.durableObjectBindingName - Name of the Durable Object namespace binding on each request context's environment
      * @param {string} options.wireFormat - Format identifier appended to persisted blob and index keys
-     * @param {number} [options.blobReadCacheTtlSeconds=0] - Cloudflare KV cache TTL used for blob reads
+     * @param {number} [options.blobReadCacheTtlSeconds=0] - Cloudflare KV cache TTL used for blob reads; raised to KV's 60 second floor when lower
      * @param {number} [options.indexCacheTtlSeconds=0] - TTL used by isolate-local and colo-local index caches
      * @param {Cache} [options.edgeCache] - Cache API implementation; defaults to the Workers runtime cache; helpful for testing
      * @param {Scheduler} [options.scheduler] - Scheduler used for retry backoff; defaults to the Workers runtime scheduler; helpful for testing
@@ -80,7 +86,10 @@ export default class ContentStore {
         this.#kvBindingName = options.kvBindingName;
         this.#durableObjectBindingName = options.durableObjectBindingName;
         this.#wireFormat = options.wireFormat;
-        this.#blobReadCacheTtlSeconds = options.blobReadCacheTtlSeconds ?? 0;
+        this.#blobReadCacheTtlSeconds = Math.max(
+            options.blobReadCacheTtlSeconds ?? 0,
+            KV_MIN_CACHE_TTL_SECONDS,
+        );
         this.#indexCacheTtlSeconds = options.indexCacheTtlSeconds ?? 0;
         // The Cache API's default cache is a true platform global rather than
         // a request-scoped context.env binding, so it is injectable here
@@ -183,12 +192,17 @@ export default class ContentStore {
             throw new AssertionError(`No registered content index for BUILD_ID ${ buildId }`);
         }
 
-        await cache.put(cacheKey, new Response(JSON.stringify(entries), {
-            headers: {
-                'content-type': 'application/json',
-                'cache-control': `max-age=${ this.indexCacheTtlSeconds }`,
-            },
-        }));
+        // A zero TTL means the entry would be stale the moment it is written, so
+        // skip the write instead of paying for a response the colo can never
+        // serve. This is the configured state in development.
+        if (this.#indexCacheTtlSeconds > 0) {
+            await cache.put(cacheKey, new Response(JSON.stringify(entries), {
+                headers: {
+                    'content-type': 'application/json',
+                    'cache-control': `max-age=${ this.#indexCacheTtlSeconds }`,
+                },
+            }));
+        }
 
         return entries;
     }
@@ -333,6 +347,22 @@ export default class ContentStore {
         if (!result.success) {
             throw new OperationalError(`ContentStore#assignBuild() was unsuccessful: ${ result.message }`);
         }
+
+        // Both index caches are keyed by build id, and this build id now
+        // resolves to a different closure, so every cached copy is stale.
+        // Invalidate after the assignment is durable, never before: a failed
+        // assignment leaves the old closure correct, and dropping the caches
+        // first would only force a re-fetch of what is already there.
+        await this.#invalidateIndexCaches(buildId);
+    }
+
+    // Rolling a build back to a prior closure reuses its build id, so waiting
+    // out a TTL would keep serving the superseded closure. Note that the Cache
+    // API is colo-local: this evicts only in the colo serving this request, and
+    // other colos still rely on the entry's max-age expiring.
+    async #invalidateIndexCaches(buildId) {
+        this.#pendingIndexes.delete(buildId);
+        await this.#edgeCache.delete(this.#buildIndexCacheRequest(buildId));
     }
 }
 

@@ -52,7 +52,10 @@ export default {
                 },
             },
             CONTENT_STORE: {
-                blobReadCacheTtlSeconds: 0,
+                // KV will not accept a cacheTtl below 60 seconds, so this is
+                // the shortest blob cache the platform allows. Blob keys carry
+                // the content hash, so caching them never hides an edit.
+                blobReadCacheTtlSeconds: 60,
                 indexCacheTtlSeconds: 0,
                 kvBindingName: 'CA_STORE_KV_STORE',
                 durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
