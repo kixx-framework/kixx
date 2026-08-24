@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches } from 'kixx-assert';
+import { assert, assertEqual, assertMatches, assertNotMatches } from 'kixx-assert';
 
 import ContentStore from '../../../../../src/plugins/cloudflare-content-store/lib/content-store.js';
 import ContentAddressableIndex from '../../../../../src/kixx/content-addressable-store/content-addressable-index.js';
@@ -194,7 +194,26 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('OperationalError', caught.name);
-            assertMatches('storage offline', caught.message);
+            assertEqual(
+                'ContentStore#fetchIndex() was unsuccessful: storage offline',
+                caught.message,
+            );
+        });
+
+        it('identifies a missing Durable Object namespace binding', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.getIndex({ env: {} }, 'build-1'),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches(
+                'CloudflareContentStore Durable Object namespace binding "CA_STORE_DURABLE_OBJECT" is not bound on context.env',
+                caught.message,
+            );
+            assertNotMatches('KV DurableObject', caught.message);
         });
 
         it('retries the next read after a failed fetch instead of caching the rejection', async () => {
@@ -361,7 +380,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('hash-a#1', kvStore.calls[0].key);
         });
 
-        it('never passes KV a cacheTtl below the platform minimum', async () => {
+        it('never passes KV a cacheTtl below the adapter minimum', async () => {
             const kvStore = makeKvStore(new Map());
             const store = makeStore({ blobReadCacheTtlSeconds: 0 });
 

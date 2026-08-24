@@ -43,10 +43,11 @@ const DURABLE_OBJECT_NAME = 'ContentAddressableStore';
 // never leave the colo that wrote them.
 const INDEX_CACHE_URL_PREFIX = 'https://content-addressable-store.internal/index';
 
-// KV rejects a cacheTtl below this floor outright, so a smaller configured
-// value cannot be passed through. Raising it to the floor is safe here in a way
-// it would not be for the index cache: blob keys carry the content hash, so a
-// changed blob is a different key and a longer TTL can never serve stale bytes.
+// The adapter keeps the historical 60-second blob-cache minimum even though
+// Cloudflare KV now accepts values as low as 30 seconds. Raising a configured
+// value is safe here in a way it would not be for the index cache: blob keys
+// carry the content hash, so a changed blob is a different key and a longer TTL
+// can never serve stale bytes.
 const KV_MIN_CACHE_TTL_SECONDS = 60;
 
 // Retry policy for Durable Object calls, per Cloudflare's documented
@@ -91,7 +92,7 @@ export default class ContentStore {
      * @param {string} options.kvBindingName - Name of the KV binding on each request context's environment
      * @param {string} options.durableObjectBindingName - Name of the Durable Object namespace binding on each request context's environment
      * @param {string} options.wireFormat - Format identifier appended to persisted blob and index keys
-     * @param {number} [options.blobReadCacheTtlSeconds=0] - Cloudflare KV cache TTL used for blob reads; raised to KV's 60 second floor when lower
+     * @param {number} [options.blobReadCacheTtlSeconds=0] - Cloudflare KV cache TTL used for blob reads; raised to this adapter's 60-second minimum when lower
      * @param {number} [options.indexCacheTtlSeconds=0] - TTL used by isolate-local and colo-local index caches
      * @param {Cache} [options.edgeCache] - Cache API implementation; defaults to the Workers runtime cache; helpful for testing
      * @param {Scheduler} [options.scheduler] - Scheduler used for retry backoff; defaults to the Workers runtime scheduler; helpful for testing
@@ -125,7 +126,7 @@ export default class ContentStore {
 
     #resolveDurableObject(context) {
         const namespace = context.env[this.#durableObjectBindingName];
-        assert(namespace, `CloudflareContentStore KV DurableObject Namespace "${ this.#durableObjectBindingName }" is not bound on context.env`);
+        assert(namespace, `CloudflareContentStore Durable Object namespace binding "${ this.#durableObjectBindingName }" is not bound on context.env`);
         return namespace.getByName(`${ DURABLE_OBJECT_NAME }#${ this.#wireFormat }`);
     }
 
@@ -198,7 +199,7 @@ export default class ContentStore {
             (durableObject) => durableObject.getIndex(buildId),
         );
         if (!result.success) {
-            throw new OperationalError(`ContentAddressableStore#fetchIndex() was unsuccessful: ${ result.message }`);
+            throw new OperationalError(`ContentStore#fetchIndex() was unsuccessful: ${ result.message }`);
         }
 
         const { entries } = result;
@@ -375,11 +376,12 @@ export default class ContentStore {
             throw new OperationalError(`ContentStore#assignBuild() was unsuccessful: ${ result.message }`);
         }
 
-        // Both index caches are keyed by build id, and this build id now
-        // resolves to a different closure, so every cached copy is stale.
-        // Invalidate after the assignment is durable, never before: a failed
-        // assignment leaves the old closure correct, and dropping the caches
-        // first would only force a re-fetch of what is already there.
+        // Both local index caches are keyed by build id, so make a best effort
+        // to evict the previous closure after the assignment is durable. A
+        // concurrent read can still repopulate the cache, and other colos have
+        // independent Cache API entries which expire on their configured TTL.
+        // Invalidating before assignment would be worse: a failed assignment
+        // leaves the old closure correct and would only force a redundant read.
         await this.#invalidateIndexCaches(buildId);
     }
 

@@ -133,19 +133,18 @@
  *
  * ## Caching and the consistency floor
  * An adapter MAY cache index reads, and the Cloudflare adapter caches at two
- * tiers. Any adapter that caches MUST invalidate its cached copy of a build when
- * `assignBuild()` reassigns it, after the assignment is durable. A rollback
- * reuses the build id it is rolling back, so a cache that waits out a TTL keeps
- * serving the closure being rolled back — for exactly as long as the TTL that
- * was meant to be an optimization.
+ * tiers. When `assignBuild()` reassigns a build, an adapter SHOULD make a best
+ * effort to invalidate its local cached copy after the assignment is durable.
+ * A concurrent read may repopulate a cache with the previous closure after
+ * invalidation, however, and a distributed cache may not support global
+ * eviction.
  *
- * The contract guarantees only that an assignment is immediately visible to the
- * instance that performed it. It makes no global visibility guarantee: an
- * adapter's cache may be node-local or colo-local, and other instances may serve
- * the previous closure until their own entries expire. This is the portable
- * floor, and it is why blob keys carry a content hash — a caller can never read
- * a stale index and a fresh blob into an inconsistent view, because a changed
- * blob is a different key.
+ * The contract therefore makes no immediate-visibility guarantee. Concurrent
+ * reads and other adapter instances or colos may serve the previous closure
+ * until their cache entries expire. This bounded staleness is safe because
+ * closures and blobs are immutable and content-addressed: an older index still
+ * names the exact blobs belonging to that coherent snapshot rather than mixing
+ * old index data with newly written blob content.
  *
  * ## Deletion is deliberately absent
  * There is no method to delete a blob, drop a closure, or unassign a build. A
@@ -240,7 +239,8 @@
  *   `assignBuild()` does that.
  *
  * @property {function(Object, string, string): Promise<void>} assignBuild
- *   Points a build id at a previously saved closure, and invalidates any cached
- *   index for that build. Rejects a root hash with no saved closure. Resolves
- *   with no value.
+ *   Points a build id at a previously saved closure and makes a best effort to
+ *   invalidate locally cached indexes for that build. Concurrent reads and
+ *   other instances may serve the previous closure until their cache entries
+ *   expire. Rejects a root hash with no saved closure. Resolves with no value.
  */
