@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
-import { assert, assertNonEmptyString, isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
+import { assert, assertNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
+import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
 
 
 // Maximum number of closures held in #closureCache at once. Bounds memory
@@ -8,7 +9,7 @@ import { assert, assertNonEmptyString, isNonEmptyString, isPlainObject } from '.
 const CLOSURE_CACHE_MAX_SIZE = 10;
 
 /**
- * @typedef {['tree'|'blob', string, (number|null)?, (Object|null)?]} IndexEntryTuple
+ * @typedef {import('./index-entry-codec.js').IndexEntryTuple} IndexEntryTuple
  */
 
 /**
@@ -87,20 +88,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
         const entries = {};
 
         for (const row of cursor) {
-            const { pathname, kind, hash, size, metadata } = row;
-
-            // Encode the exact inverse of saveIndex()'s decode. Entries cross
-            // the RPC boundary as tuples, and the reader validates arity by
-            // kind: a tree tuple carries only its kind and hash, while a blob
-            // tuple also carries size and metadata. The row shape cannot record
-            // that difference, since a tree stores null in both columns, so the
-            // kind column is what the arity is restored from.
-            if (kind === 'tree') {
-                entries[pathname] = [ kind, hash ];
-            } else {
-                const parsedMetadata = isNonEmptyString(metadata) ? JSON.parse(metadata) : null;
-                entries[pathname] = [ kind, hash, size, parsedMetadata ];
-            }
+            entries[row.pathname] = decodeStorageRow(row);
         }
 
         this.#setClosureCacheEntry(rootHash, entries);
@@ -163,31 +151,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
         const pathnames = Object.keys(index);
         for (const pathname of pathnames) {
-            const [ kind, hash, size, metadata ] = index[pathname];
-
-            // INSERT OR IGNORE also suppresses NOT NULL violations, so validate
-            // required columns before relying on it for idempotency.
-            assert(
-                kind === 'tree' || kind === 'blob',
-                `ContentAddressableIndexStore#saveIndex: entry "${ pathname }" kind must be "tree" or "blob"`,
-            );
-            assertNonEmptyString(hash, `ContentAddressableIndexStore#saveIndex: entry "${ pathname }" hash`);
-            assert(
-                metadata === null || isPlainObject(metadata),
-                `ContentAddressableIndexStore#saveIndex: entry "${ pathname }" metadata must be a plain object or null`,
-            );
-            // Only a blob carries a size; a tree tuple has no fourth or third
-            // element at all. Left unchecked, a missing size is stored as null
-            // and passes here, then fails much later on read, where
-            // assertValidIndexEntryTuple() demands a non-negative integer.
-            if (kind === 'blob') {
-                assert(
-                    Number.isInteger(size) && size >= 0,
-                    `ContentAddressableIndexStore#saveIndex: entry "${ pathname }" blob size must be a non-negative integer`,
-                );
-            }
-
-            const metadataJson = metadata === null ? null : JSON.stringify(metadata);
+            const { kind, hash, size, metadata } = encodeStorageRow(pathname, index[pathname]);
 
             this.#sql.exec(
                 sql,
@@ -195,8 +159,8 @@ export default class ContentAddressableIndexStore extends DurableObject {
                 pathname,
                 kind,
                 hash,
-                size ?? null,
-                metadataJson,
+                size,
+                metadata,
             );
         }
 
