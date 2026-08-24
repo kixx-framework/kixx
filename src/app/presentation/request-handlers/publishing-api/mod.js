@@ -18,8 +18,9 @@ function statHandlerWithPathname(type) {
     return async function statHandler(context, request, response) {
         const store = context.getService('ContentAddressableStore');
 
-        const segments = request.pathnameParams.path;
-        // TODO: Is this a programmer error or BadRequest error if we don't have segments?
+        // An optional `{/*path}` route group yields undefined, not [], when it
+        // doesn't match (e.g. a request for the root pathname).
+        const segments = request.pathnameParams.path ?? [];
         assertArray(segments, `Route for ${ request.url.pathname } must produce path segments`);
         const pathname = store.normalizePathname(segments.join('/'));
 
@@ -76,8 +77,9 @@ function putHandlerWithPathname(type, getPayload) {
     return async function putHandler(context, request, response) {
         const store = context.getService('ContentAddressableStore');
 
-        const segments = request.pathnameParams.path;
-        // TODO: Is this a programmer error or BadRequest error if we don't have segments?
+        // An optional `{/*path}` route group yields undefined, not [], when it
+        // doesn't match (e.g. a request for the root pathname).
+        const segments = request.pathnameParams.path ?? [];
         assertArray(segments, `Route for ${ request.url.pathname } must produce path segments`);
         const pathname = store.normalizePathname(segments.join('/'));
 

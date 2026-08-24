@@ -35,7 +35,7 @@ export default [
                 ],
             },
             {
-                pattern: '/static-asset',
+                pattern: '/static-asset/*path',
                 name: 'static-asset',
                 targets: [
                     {
@@ -133,7 +133,7 @@ export default [
         name: 'resources',
         routes: [
             {
-                pattern: '/static-asset',
+                pattern: '/static-asset/*path',
                 name: 'static-asset',
                 targets: [
                     {
