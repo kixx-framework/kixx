@@ -171,6 +171,10 @@ export const putGlobalTemplatePartials = putHandlerWithoutPathname('GlobalTempla
         err.push('The partials bundle must be an Array', 'attributes.bundle');
     }
 
+    if (err.length > 0) {
+        throw err;
+    }
+
     return templates;
 });
 
@@ -193,6 +197,10 @@ export const putBaseTemplates = putHandlerWithoutPathname('BaseTemplates', async
         }
     } else {
         err.push('The templates bundle must be an Array', 'attributes.bundle');
+    }
+
+    if (err.length > 0) {
+        throw err;
     }
 
     return templates;
