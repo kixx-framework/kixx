@@ -134,8 +134,81 @@ export const putStaticAsset = putHandlerWithPathname('StaticAsset', async (reque
 });
 
 export const putGlobalTemplatePartials = putHandlerWithoutPathname('GlobalTemplatePartials', async (request) => {
+    assertJsonApiContentType(request);
     const { attributes } = await parseJsonApiResource(request, 'GlobalTemplatePartials');
-    return attributes.bundle;
+    const templates = attributes.bundle;
+
+    const err = new ValidationError('PUT GlobalTemplatePartials payload validation error');
+
+    if (Array.isArray(includes)) {
+        for (let i = 0; i < includes.length; i += 1) {
+            const { id, source } = includes[i];
+            if (!isNonEmptyString(id)) {
+                err.push('A partial template must have an id string', `attributes.bundle.${ i }`);
+            }
+            if (!isNonEmptyString(source)) {
+                err.push('A partial template must have a source string', `attributes.bundle.${ i }`);
+            }
+        }
+    } else {
+        err.push('The partials bundle must be an Array', 'attributes.bundle');
+    }
+
+    return templates;
+});
+
+export const putBaseTemplates = putHandlerWithoutPathname('BaseTemplates', async (request) => {
+    assertJsonApiContentType(request);
+    const { attributes } = await parseJsonApiResource(request, 'BaseTemplates');
+    const templates = attributes.bundle;
+
+    const err = new ValidationError('PUT BaseTemplates payload validation error');
+
+    if (Array.isArray(includes)) {
+        for (let i = 0; i < includes.length; i += 1) {
+            const { id, source } = includes[i];
+            if (!isNonEmptyString(id)) {
+                err.push('A template must have an id string', `attributes.bundle.${ i }`);
+            }
+            if (!isNonEmptyString(source)) {
+                err.push('A template must have a source string', `attributes.bundle.${ i }`);
+            }
+        }
+    } else {
+        err.push('The templates bundle must be an Array', 'attributes.bundle');
+    }
+
+    return templates;
+});
+
+export const putPageMetadata = putHandlerWithPathname('PageMetadata', async (request) => {
+    assertJsonApiContentType(request);
+    const { attributes } = await parseJsonApiResource(request, 'PageMetadata');
+    return attributes;
+});
+
+export const putPageIncludes = putHandlerWithPathname('PageIncludes', async (request) => {
+    assertJsonApiContentType(request);
+    const { attributes } = await parseJsonApiResource(request, 'PageIncludes');
+    const includes = attributes.bundle;
+
+    const err = new ValidationError('PUT PageIncludes payload validation error');
+
+    if (isPlainObject(includes)) {
+        for (const key of Object.keys(includes)) {
+            if (!isString(includes[key])) {
+                err.push('A page include may only contain text content', `attributes.bundle.${ key }`);
+            }
+        }
+    } else {
+        err.push('The includes bundle must be a plain Object', 'attributes.bundle');
+    }
+
+    if (err.length > 0) {
+        throw err;
+    }
+
+    return includes;
 });
 
 // The six Hyperview content resources this API exposes, keyed by their
