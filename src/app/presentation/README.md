@@ -2,12 +2,7 @@
 
 This project is a Hypermedia Driven Application, which means the presentation layer is a web presentation, primarily following the Representational State Transfer (REST) and Hypermedia As The Engine Of Application State (HATEOAS) patterns.
 
-The primary view layer for the presentation is provided by mustache style templates called "Hyperview templates". For information about the template syntax, partials, and helpers see the template guide at `templates/README.md`. The Kixx Hyperview plugin is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `templates/`.
-
-Each Hyperview response opens one request-scoped content snapshot before loading
-its page data. Every page, template, partial, and rendered-page cache-key read
-for that response uses that snapshot, so a publish that reassigns the live build
-while rendering cannot combine content from two build versions.
+The primary view layer for the presentation is provided by mustache style templates called "Kixx templating". For information about the template syntax, partials, and helpers see the template guide at `templates/README.md`. The Kixx Hyperview plugin is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `templates/`.
 
 HTTP routes are defined in `virtual-hosts.js` with sub-trees defined in `routes/` and imported by `virtual-hosts.js`.
 
@@ -194,175 +189,9 @@ export async function redirectAfterSuccess(context, request, response, skip) {
 }
 ```
 
----
-
-The same path syntax is used for reverse pathname compilation through `HttpTarget.compilePathname(params)`. Provide string values for `:name` parameters and arrays for `*name` wildcard parameters:
-
-```js
-target.compilePathname({ id: 'BUG-123' }).pathname; // For '/bugs/:id' -> '/bugs/BUG-123'
-target.compilePathname({ path: [ 'releases', '2026', 'report.pdf' ] }).pathname; // For '/files/*path'
-```
-
-Pathname compilation encodes values for safe URL output, so non-ASCII text and reserved URL characters are escaped in the generated pathname.
-
----
-
-### Hyperview File Layout
-
-Hyperview content is authored in two application directories. As an example:
-
-```text
-pages/
-├── page.json
-├── template.html
-└── blog/
-    ├── page.json
-    └── hello-world/
-        ├── page.json
-        └── article.md
-
-templates/
-├── base/
-│   ├── article.html
-│   └── website.html
-└── partials/
-    └── website/
-        └── header.html
-```
-
-Use `pages/` for route-specific page metadata and text based content; `page.json` contains root or directory-level page data including a manifest for page specific partial templates and included content.
-
-Use `templates/` for page specific and shared templates.
-
-- `templates/base/` contains base templates.
-- `templates/partials/` contains shared partial templates.
-
-### Page Context Data
-
-When Hyperview renders a page, it loads page metadata for the requested pathname's ancestor directories, and leaf page metadata for the requested pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview attempts to load and merge:
-
-- `pages/page.json`
-- `pages/blog/page.json`
-- `pages/blog/reviews/page.json`
-- `pages/blog/reviews/music/page.json`
-- `pages/blog/reviews/music/led-zeppelin/page.json`
-
-Root and ancestor files are optional, but the final leaf `page.json` must exist or the request is treated as not found. More specific page data overrides earlier page data. Runtime response props, when present, are merged last and override all static page data.
-
-Optional top-level page data fields include:
-
-- `baseTemplate`: Overrides the default base template for this page. This value is a filename relative to `templates/base/`.
-- `pageTemplate`: Overrides the default page template filename. This value is a filename relative to `templates/pages/`.
-- `includes`: Loads additional text files from the current page directory under `application/pages/`.
-
-Included files can be used as raw text or rendered as mini templates against the assembled page data:
-
-```json
-{
-    "includes": {
-        "intro": { "filename": "intro.md" },
-        "sidebar": { "filename": "sidebar.html", "template": true }
-    }
-}
-```
-
-When a `page` object exists, Hyperview fills several metadata defaults:
-
-- `page.pathname` is the canonical lower-case request URL pathname.
-- `page.canonical_url` defaults to the canonical lower-case request URL without query string or hash.
-- `page.href` defaults to the full request URL exactly as requested.
-- `page.open_graph.url` defaults to `page.canonical_url`.
-- `page.open_graph.type` defaults to `website`.
-- `page.open_graph.title`, `description`, and `locale` default to the corresponding `page` values.
-
-`page.title` and `page.description` each accept either a plain string or a template object. When the template object form is used, Hyperview renders the `template` string against the assembled page data and replaces the object with the resulting string before the page template runs:
-
-```json
-{
-    "page": {
-        "title": { "template": "{{ page.author }} — kixx.dev" },
-        "description": "A static description string."
-    }
-}
-```
-
-### Hyperview Page-Data JSON Response
-
-Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request only when the pathname ends in `.json` (matched case-insensitively). There is no `Accept` header negotiation: the suffix is explicit, and it cannot be triggered by whatever a browser happens to send.
-
-This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data for development and debugging, but it is not the contract for application API endpoints.
-
----
-
-### Middleware vs. Request Handlers vs. Error Handlers
-
-- **Route middleware** (`inboundMiddleware`, `outboundMiddleware`) applies to every target in a route subtree. Use it for capabilities like authentication, session loading, request normalization, and shared response headers.
-- **Target `requestHandlers`** applies to one endpoint. Use them for loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect/JSON response — and, as the first entry in the chain, for authorization (see [Authentication Middleware vs. Authorization Gates](#authentication-middleware-vs-authorization-gates)).
-- **Route error handlers** (`errorHandlers`) when an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
-
-Execution order for a matched target runs in two phases — a **request phase** followed by an **outbound (response) phase**:
-
-1. Route inbound middleware (parent-first) — request phase
-2. Target `requestHandlers` (in order) — request phase
-3. Route outbound middleware (child-first) — outbound phase
-
-When middleware or a request handler throws, the router emits an `error` event; for logging and, for unexpected errors, to trigger the platform server's graceful shutdown. Separately, the router runs the error-handler cascade: target, then route, then the router's built-in fallback, stopping at the first one that returns a response. The router error event fires for every failure regardless of what the cascade produces, so a target or route handler is free to render a normal-looking response even for an unexpected error without delaying or preventing the shutdown. Only when every cascade level returns `false` does the error propagate out of the router for the platform server's last-resort fallback. A throw skips the outbound phase for that request.
-
-**The `skip()` callback** ends the **request phase** early: when called, no further inbound middleware or request handlers run. The **outbound phase still runs to completion**, so response post-processing such as formatting, shared headers, and logging is never bypassed by `skip()`. Use `skip()` when a request handler has committed a terminal response (a redirect or JSON document) and you want to stop a later request handler — such as a Hyperview render handler — from running. Do not reach for `skip()` merely because you committed a response; if no later request handler needs to be bypassed, just return the response. Outbound middleware is not passed `skip()` and cannot short-circuit the chain.
-
-```js
-export async function redirectAfterSuccess(context, request, response, skip) {
-    // Stops a later Hyperview render handler in this target from running, while
-    // still letting route outbound middleware post-process the redirect response.
-    skip();
-    return response.respondWithRedirect(303, '/account');
-}
-```
-
-### Authentication Middleware vs. Authorization Gates
-
-Authentication and authorization sit at different levels of the route tree, and the split is deliberate.
-
-**Authentication is route `inboundMiddleware`.** Establishing who is making the request is the same question for every target under a route, so `authenticateAdminUser`, `authenticateAdminApiRequest`, and `authenticatePublishingToken` attach once at the subtree root and set `context.user` for everything below.
-
-**Authorization is the first entry in a target's `requestHandlers`.** What a principal is allowed to do differs per target, not per route: one route can host a GET target that needs a read permission and a POST target that needs a write permission.
-
-```js
-{
-    pattern: '/invites',
-    name: 'invites',
-    targets: [
-        {
-            name: 'render-invite-list',
-            methods: [ 'GET', 'HEAD' ],
-            requestHandlers: [
-                AdminAuthorization.requireAdminUserInvitesRead,
-                AdminInvites.getAdminInvites,
-                HyperviewDynamicPageHandler(),
-            ],
-        },
-        {
-            name: 'create-invite',
-            methods: [ 'POST' ],
-            requestHandlers: [
-                AdminAuthorization.requireAdminUserInvitesWrite,
-                AdminInvites.postCreateAdminInvite,
-                HyperviewDynamicPageHandler(),
-            ],
-        },
-    ],
-}
-```
-
-Gates are built by `requirePermission({ action, resource })` in `app/presentation/middleware/require-permission.js`, which returns a `(context, request, response)` function and asserts the authenticated principal's permissions, throwing `ForbiddenError` when the decision fails. `resource` may be a static URN string or a `(context, request) => string` resolver when the resource depends on a route param; a resolver that throws (a `BadRequestError` for a malformed pathname, say) propagates untouched rather than being reframed as a 403. The spec is validated when the factory runs at route-module load time, so a misconfigured gate crashes at startup instead of on the first request that reaches it.
-
-`require-permission.js` lives in `middleware/` even though it is used in `requestHandlers`. Route middleware and request handlers share one signature, so the same function is valid in either position; the file sits with the middleware because authorization is a route-level concern in the same family as authentication, and only the *decision point* is per-target.
-
-Declare each action/resource pair once as a named export in `app/presentation/middleware/admin-authorization.js` and reuse it across every target that needs it, rather than calling `requirePermission()` inline in a route module. That is what keeps a single capability from being spelled two slightly different ways in two places.
-
 ## Reverse Routing
 
-The routing layer is also a source of truth for URLs. Instead of hardcoding pathname strings in handlers, forms, and templates, look up the `HttpTarget` that owns an endpoint and compile its pathname from parameters. This keeps every internal link, redirect `Location`, and form `action` correct when a route `pattern` changes — you edit the pattern in `virtual-hosts.js` and every caller that compiles through the target follows automatically.
+The routing layer is also a source of truth for URLs. Instead of hardcoding pathname strings look up the `HttpTarget` that owns an endpoint from the request context and compile its pathname from parameters. This keeps every internal link, redirect `Location`, and form `action` correct when a route `pattern` changes — you edit the pattern in `virtual-hosts.js` and every caller that compiles through the target follows automatically.
 
 The `RequestContext` exposes three lookup methods, and each `HttpTarget` can reverse-compile its own pathname.
 
@@ -389,7 +218,7 @@ Tags are declared per target in `virtual-hosts.js` and are useful for grouping e
     name: 'dashboard',
     methods: [ 'GET', 'HEAD' ],
     tags: [ 'admin-nav' ],
-    requestHandlers: [ getDashboard, HyperviewDynamicPageHandler() ],
+    requestHandlers: [ getDashboard, HyperviewPageHandler() ],
 }
 ```
 
@@ -468,20 +297,6 @@ Request handlers should not:
 - Build HTML strings when the response should be rendered by Hyperview templates.
 - Own browser application state that should instead be represented by links, forms, redirects, and server-rendered HTML.
 
-For GET and HEAD requests, request handlers should prepare render data and let the next handler in the chain, typically a HyperviewDynamicPageHandler, render the page:
-
-```js
-export async function getBugTicket(context, request, response) {
-    const { id } = request.pathnameParams;
-    const ticket = await getBugTicketScript(context, id);
-
-    return response.updateProps({
-        page: { title: ticket.title },
-        ticket,
-    });
-}
-```
-
 For write requests from HTML forms, parse and validate the form, call the Transaction Script, then redirect on success or re-render on validation failure:
 
 ```js
@@ -508,7 +323,7 @@ export async function handleCreateBugTicket(context, request, response, skip) {
 }
 ```
 
-When validation failure should re-render a page, `HyperviewDynamicPageHandler(...)` after this handler in the target chain will run automatically (since `skip()` was not called). When success returns a redirect, `skip()` prevents the Hyperview handler from running and needlessly rendering a page.
+When validation failure should re-render a page, `HyperviewPageHandler(...)` after this handler in the target chain will run automatically (since `skip()` was not called). When success returns a redirect, `skip()` prevents the Hyperview handler from running and needlessly rendering a page.
 
 ### Error Handling
 
@@ -1113,3 +928,88 @@ For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments,
 - `app/presentation/error-handlers/` contains application error handlers.
 - `app/presentation/forms/` contains form classes used to parse and validate inbound payloads.
 - `app/presentation/lib/` contains cross-cutting presentation helpers that are neither handlers, middleware, error handlers, nor forms — CSRF token handling, rate limiting, JSON:API parsing and serialization, session cookies, pagination, request body reading, and HTML error page rendering. Put a module here when more than one handler or middleware needs it and it belongs to the presentation layer rather than to a Transaction Script.
+
+### Hyperview File Layout
+
+Hyperview content is authored in two application directories. As an example:
+
+```text
+pages/
+├── page.json
+├── template.html
+└── blog/
+    ├── page.json
+    └── hello-world/
+        ├── page.json
+        └── article.md
+
+templates/
+├── base/
+│   ├── article.html
+│   └── website.html
+└── partials/
+    └── website/
+        └── header.html
+```
+
+Use `pages/` for route-specific page metadata and text based content; `page.json` contains root or directory-level page data including a manifest for page specific partial templates and included content.
+
+Use `templates/` for page specific and shared templates.
+
+- `templates/base/` contains base templates.
+- `templates/partials/` contains shared partial templates.
+
+### Page Context Data
+
+When Hyperview renders a page, it loads page metadata for the requested pathname's ancestor directories, and leaf page metadata for the requested pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview attempts to load and merge:
+
+- `pages/page.json`
+- `pages/blog/page.json`
+- `pages/blog/reviews/page.json`
+- `pages/blog/reviews/music/page.json`
+- `pages/blog/reviews/music/led-zeppelin/page.json`
+
+Root and ancestor files are optional, but the final leaf `page.json` must exist or the request is treated as not found. More specific page data overrides earlier page data. Runtime response props, when present, are merged last and override all static page data.
+
+Optional top-level page data fields include:
+
+- `baseTemplate`: Overrides the default base template for this page. This value is a filename relative to `templates/base/`.
+- `pageTemplate`: Overrides the default page template filename. This value is a filename relative to `templates/pages/`.
+- `includes`: Loads additional text files from the current page directory under `application/pages/`.
+
+Included files can be used as raw text or rendered as mini templates against the assembled page data:
+
+```json
+{
+    "includes": {
+        "intro": { "filename": "intro.md" },
+        "sidebar": { "filename": "sidebar.html", "template": true }
+    }
+}
+```
+
+When a `page` object exists, Hyperview fills several metadata defaults:
+
+- `page.pathname` is the canonical lower-case request URL pathname.
+- `page.canonical_url` defaults to the canonical lower-case request URL without query string or hash.
+- `page.href` defaults to the full request URL exactly as requested.
+- `page.open_graph.url` defaults to `page.canonical_url`.
+- `page.open_graph.type` defaults to `website`.
+- `page.open_graph.title`, `description`, and `locale` default to the corresponding `page` values.
+
+`page.title` and `page.description` each accept either a plain string or a template object. When the template object form is used, Hyperview renders the `template` string against the assembled page data and replaces the object with the resulting string before the page template runs:
+
+```json
+{
+    "page": {
+        "title": { "template": "{{ page.author }} — kixx.dev" },
+        "description": "A static description string."
+    }
+}
+```
+
+### Hyperview Page-Data JSON Response
+
+Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request only when the pathname ends in `.json` (matched case-insensitively). There is no `Accept` header negotiation: the suffix is explicit, and it cannot be triggered by whatever a browser happens to send.
+
+This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data for development and debugging, but it is not the contract for application API endpoints.
