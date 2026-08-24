@@ -1,4 +1,4 @@
-import { describe } from 'kixx-test';
+import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertNotMatches } from 'kixx-assert';
 
 import ContentStore from '../../../../../src/plugins/cloudflare-content-store/lib/content-store.js';
@@ -85,6 +85,16 @@ function makeStore(options) {
     });
 }
 
+function makeDeferredPromise() {
+    let resolve;
+    let reject;
+    const promise = new Promise((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+}
+
 async function catchAsyncError(fn) {
     try {
         await fn();
@@ -147,6 +157,98 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual(1, edgeCache.store.size);
             const [ response ] = Array.from(edgeCache.store.values());
             assertEqual('max-age=42', response.headers.get('cache-control'));
+        });
+
+        it('serves an index from the colo cache without calling the Durable Object', async () => {
+            const edgeCache = makeEdgeCache();
+            const cacheKey = new Request('https://content-addressable-store.internal/index/1/build-1');
+            await edgeCache.put(cacheKey, new Response(JSON.stringify(makeEntries('cached-hash'))));
+            const durableObject = {
+                async getIndex() {
+                    throw new Error('Durable Object should not be called');
+                },
+            };
+            const store = makeStore({ edgeCache });
+
+            const entries = await store.getIndex(makeContext({ durableObject }), 'build-1');
+
+            assertEqual('cached-hash', entries['/a.txt'][1]);
+        });
+
+        it('fetches a fresh index after the isolate cache TTL expires', async () => {
+            const tracker = new MockTracker();
+            let now = 1000;
+            tracker.method(Date, 'now', () => now);
+            let calls = 0;
+            const durableObject = {
+                async getIndex() {
+                    calls += 1;
+                    return { success: true, entries: makeEntries(`hash-${ calls }`) };
+                },
+            };
+            const edgeCache = makeEdgeCache();
+            const store = makeStore({ edgeCache, indexCacheTtlSeconds: 10 });
+            const context = makeContext({ durableObject });
+
+            const first = await store.getIndex(context, 'build-1');
+            edgeCache.store.clear();
+            now += 10001;
+            const second = await store.getIndex(context, 'build-1');
+            tracker.reset();
+
+            assertEqual('hash-1', first['/a.txt'][1]);
+            assertEqual('hash-2', second['/a.txt'][1]);
+            assertEqual(2, calls);
+        });
+
+        it('shares an in-flight index read between concurrent callers', async () => {
+            const deferred = makeDeferredPromise();
+            let calls = 0;
+            const durableObject = {
+                async getIndex() {
+                    calls += 1;
+                    return await deferred.promise;
+                },
+            };
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            const first = store.getIndex(context, 'build-1');
+            const second = store.getIndex(context, 'build-1');
+            deferred.resolve({ success: true, entries: makeEntries() });
+
+            assertEqual(await first, await second);
+            assertEqual(1, calls);
+        });
+
+        it('does not let an older failed read evict a newer cached read', async () => {
+            const tracker = new MockTracker();
+            let now = 1000;
+            tracker.method(Date, 'now', () => now);
+            const firstRead = makeDeferredPromise();
+            let calls = 0;
+            const durableObject = {
+                async getIndex() {
+                    calls += 1;
+                    if (calls === 1) {
+                        return await firstRead.promise;
+                    }
+                    return { success: true, entries: makeEntries('new-hash') };
+                },
+            };
+            const store = makeStore({ indexCacheTtlSeconds: 10 });
+            const context = makeContext({ durableObject });
+
+            const stalePromise = store.getIndex(context, 'build-1');
+            now += 10001;
+            await store.getIndex(context, 'build-1');
+            firstRead.reject(new TypeError('stale failure'));
+            await catchAsyncError(() => stalePromise);
+            const entries = await store.getIndex(context, 'build-1');
+            tracker.reset();
+
+            assertEqual('new-hash', entries['/a.txt'][1]);
+            assertEqual(2, calls);
         });
 
         it('does not write a colo cache entry when the TTL is zero', async () => {
@@ -239,6 +341,29 @@ describe('CloudflareContentStore', ({ describe }) => {
     });
 
     describe('assignBuild()', ({ it }) => {
+        it('uses the stable Durable Object name scoped by wire format', async () => {
+            let receivedName = null;
+            const context = {
+                env: {
+                    CA_STORE_DURABLE_OBJECT: {
+                        getByName(name) {
+                            receivedName = name;
+                            return {
+                                async assignBuild() {
+                                    return { success: true };
+                                },
+                            };
+                        },
+                    },
+                },
+            };
+            const store = makeStore({ wireFormat: 'format-2' });
+
+            await store.assignBuild(context, 'build-1', 'root-hash');
+
+            assertEqual('ContentAddressableStore#format-2', receivedName);
+        });
+
         it('invalidates both index caches so a rollback is visible immediately', async () => {
             let pointer = 'hash-new';
             let getIndexCalls = 0;
@@ -287,6 +412,42 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('OperationalError', caught.name);
             assertMatches('no such closure', caught.message);
         });
+
+        it('rejects an empty build id before calling the Durable Object', async () => {
+            let calls = 0;
+            const durableObject = {
+                async assignBuild() {
+                    calls += 1;
+                    return { success: true };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.assignBuild(makeContext({ durableObject }), '', 'root-hash'),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, calls);
+        });
+
+        it('rejects an empty root hash before calling the Durable Object', async () => {
+            let calls = 0;
+            const durableObject = {
+                async assignBuild() {
+                    calls += 1;
+                    return { success: true };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', ''),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, calls);
+        });
     });
 
     describe('saveIndex()', ({ it }) => {
@@ -305,6 +466,58 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('root-hash', received.rootHash);
             assertEqual('tree', received.index['/'][0]);
             assertEqual('hash-a', received.index['/a.txt'][1]);
+        });
+
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = {
+                async saveIndex() {
+                    return { success: false, message: 'write failed' };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.saveIndex(makeContext({ durableObject }), 'root-hash', makeEntries()),
+            );
+
+            assertEqual('OperationalError', caught.name);
+            assertMatches('write failed', caught.message);
+        });
+
+        it('rejects an empty root hash before calling the Durable Object', async () => {
+            let calls = 0;
+            const durableObject = {
+                async saveIndex() {
+                    calls += 1;
+                    return { success: true };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.saveIndex(makeContext({ durableObject }), '', makeEntries()),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, calls);
+        });
+
+        it('rejects a non-plain entry table before calling the Durable Object', async () => {
+            let calls = 0;
+            const durableObject = {
+                async saveIndex() {
+                    calls += 1;
+                    return { success: true };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.saveIndex(makeContext({ durableObject }), 'root-hash', []),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, calls);
         });
     });
 
@@ -350,6 +563,56 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('OperationalError', caught.name);
         });
 
+        it('stops after the maximum number of retryable failures', async () => {
+            let calls = 0;
+            const waits = [];
+            const durableObject = {
+                async getIndex() {
+                    calls += 1;
+                    const error = new Error('connection lost');
+                    error.retryable = true;
+                    throw error;
+                },
+            };
+            const store = makeStore({
+                scheduler: {
+                    async wait(delay) {
+                        waits.push(delay);
+                    },
+                },
+            });
+
+            const caught = await catchAsyncError(
+                () => store.getIndex(makeContext({ durableObject }), 'build-1'),
+            );
+
+            assertEqual(3, calls);
+            assertEqual(2, waits.length);
+            assertEqual('OperationalError', caught.name);
+            assertEqual('connection lost', caught.cause.message);
+        });
+
+        it('does not retry a remote failure which is not marked retryable', async () => {
+            let calls = 0;
+            const durableObject = {
+                async getIndex() {
+                    calls += 1;
+                    const error = new Error('remote failure');
+                    error.remote = true;
+                    throw error;
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.getIndex(makeContext({ durableObject }), 'build-1'),
+            );
+
+            assertEqual(1, calls);
+            assertEqual('OperationalError', caught.name);
+            assertEqual('remote failure', caught.cause.message);
+        });
+
         it('rethrows a local error untouched rather than treating it as a storage failure', async () => {
             const durableObject = {
                 async getIndex() {
@@ -378,6 +641,31 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             assertEqual('the bytes', result);
             assertEqual('hash-a#1', kvStore.calls[0].key);
+        });
+
+        it('identifies a missing KV namespace binding', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.getFile({ env: {} }, 'text', '/a.txt', 'hash-a'),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertMatches(
+                'CloudflareContentStore KV binding "CA_STORE_KV_STORE" is not bound on context.env',
+                caught.message,
+            );
+        });
+
+        it('reads a blob as an ArrayBuffer, passing the type through to KV', async () => {
+            const blob = new ArrayBuffer(4);
+            const kvStore = makeKvStore(new Map([ [ 'hash-a#1', blob ] ]));
+            const store = makeStore();
+
+            const result = await store.getFile(makeContext({ kvStore }), 'arrayBuffer', '/a.bin', 'hash-a');
+
+            assertEqual('arrayBuffer', kvStore.calls[0].options.type);
+            assertEqual(blob, result);
         });
 
         it('never passes KV a cacheTtl below the adapter minimum', async () => {
