@@ -30,6 +30,7 @@ const GET_FILES_ACCEPTED_TYPES = [ 'text' ];
 // caller decides how many blobs a single read is worth, and silently fanning
 // one call out into many would hide that cost at the point where it is chosen.
 const KV_BULK_MAX_KEYS = 100;
+const textEncoder = new TextEncoder();
 
 // WARNING: This names the Durable Object instance holding every committed
 // closure and build pointer. It only looks like it is derived from the class
@@ -292,7 +293,7 @@ export default class ContentStore {
      * @param {string} _pathname - Logical pathname retained for store interface compatibility
      * @param {string} hash - Content hash identifying the blob
      * @param {string|ArrayBuffer} blob - Blob to store
-     * @returns {Promise<void>}
+     * @returns {Promise<number>} Stored blob size in bytes
      * @throws {AssertionError} When `blob` is neither a string nor an ArrayBuffer
      */
     async putFile(context, _pathname, hash, blob) {
@@ -303,6 +304,7 @@ export default class ContentStore {
         const kv = this.#resolveKvStore(context);
         const key = this.#buildFileKey(hash);
         await kv.put(key, blob);
+        return isString(blob) ? textEncoder.encode(blob).byteLength : blob.byteLength;
     }
 
     /**

@@ -775,8 +775,9 @@ describe('CloudflareContentStore', ({ describe }) => {
             const kvStore = makeKvStore(new Map());
             const store = makeStore();
 
-            await store.putFile(makeContext({ kvStore }), '/a.txt', 'hash-a', 'the bytes');
+            const size = await store.putFile(makeContext({ kvStore }), '/a.txt', 'hash-a', 'the bytes');
 
+            assertEqual(9, size);
             assertEqual('hash-a#1', kvStore.calls[0].key);
             assertEqual('the bytes', kvStore.calls[0].value);
             // KV put() accepts expiration, expirationTtl, and metadata only.
@@ -790,10 +791,20 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
             const blob = new ArrayBuffer(4);
 
-            await store.putFile(makeContext({ kvStore }), '/a.bin', 'hash-a', blob);
+            const size = await store.putFile(makeContext({ kvStore }), '/a.bin', 'hash-a', blob);
 
+            assertEqual(4, size);
             assertEqual('hash-a#1', kvStore.calls[0].key);
             assertEqual(blob, kvStore.calls[0].value);
+        });
+
+        it('reports a string blob size in UTF-8 encoded bytes', async () => {
+            const kvStore = makeKvStore(new Map());
+            const store = makeStore();
+
+            const size = await store.putFile(makeContext({ kvStore }), '/wave.txt', 'hash-wave', '👋');
+
+            assertEqual(4, size);
         });
 
         it('rejects a blob that is neither a string nor an ArrayBuffer', async () => {

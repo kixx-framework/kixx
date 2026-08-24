@@ -28,7 +28,8 @@ async function makeIndex(files) {
 
 // Keyed by content hash, the way the real store is: two snapshots reading
 // different hashes read different bytes from one shared backing store.
-function makeStore(blobsByHash) {
+function makeStore(blobsByHash, options) {
+    const { putFileSize } = options ?? {};
     const getFileCalls = [];
 
     const getFilesCalls = [];
@@ -51,6 +52,12 @@ function makeStore(blobsByHash) {
         },
         async putFile(_context, pathname, hash, bytes) {
             putFileCalls.push({ pathname, hash, bytes });
+            if (putFileSize !== undefined) {
+                return putFileSize;
+            }
+            return bytes instanceof ArrayBuffer
+                ? bytes.byteLength
+                : new TextEncoder().encode(bytes).byteLength;
         },
     };
 }
@@ -277,14 +284,15 @@ describe('ContentSnapshot', ({ describe, it }) => {
     });
 
     describe('putGlobalTemplatePartials()', ({ it }) => {
-        it('takes no pathname, matching statGlobalTemplatePartials()/getGlobalTemplatePartials()', async () => {
+        it('returns the byte size reported by the content store', async () => {
             const index = await makeIndex([]);
-            const store = makeStore(new Map());
+            const store = makeStore(new Map(), { putFileSize: 37 });
             const snapshot = new ContentSnapshot(store, index);
 
             const result = await snapshot.putGlobalTemplatePartials({}, [ 'a' ]);
 
             assertEqual(getGlobalTemplatePartialsPath(), result.pathname);
+            assertEqual(37, result.size);
             assertEqual(getGlobalTemplatePartialsPath(), store.putFileCalls[0].pathname);
         });
 

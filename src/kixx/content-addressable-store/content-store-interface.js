@@ -228,10 +228,11 @@
  *   `files` and holding `null` for each blob that does not exist. Rejects a
  *   longer list rather than splitting the read.
  *
- * @property {function(Object, string, string, (string|ArrayBuffer)): Promise<void>} putFile
+ * @property {function(Object, string, string, (string|ArrayBuffer)): Promise<number>} putFile
  *   Stores a blob under its caller-supplied content hash. Idempotent, and never
  *   an update. The `pathname` argument is a hint and takes no part in
- *   addressing. Resolves with no value.
+ *   addressing. Resolves with the stored blob's byte size after the write
+ *   succeeds. String sizes are measured as UTF-8 encoded bytes.
  *
  * @property {function(Object, string, ContentIndexTable): Promise<void>} saveIndex
  *   Persists an immutable index closure under its root hash. Idempotent.

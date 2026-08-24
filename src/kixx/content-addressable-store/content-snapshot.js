@@ -133,11 +133,12 @@ export default class ContentSnapshot {
             ? await hashStringBlob(bytes)
             : await hashArrayBufferBlob(bytes);
 
-        await this.#store.putFile(context, pathname, hash, bytes);
+        const size = await this.#store.putFile(context, pathname, hash, bytes);
 
         return {
             pathname,
             hash,
+            size,
         };
     }
 
@@ -188,7 +189,7 @@ export default class ContentSnapshot {
      * @param {Object} context - Request or execution context
      * @param {string} pathname - Logical asset pathname
      * @param {ArrayBuffer} arrayBuffer - The asset's bytes
-     * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
+     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
     async putStaticAsset(context, pathname, arrayBuffer) {
@@ -232,7 +233,7 @@ export default class ContentSnapshot {
      * so that an unchanged bundle always hashes to the same address.
      * @param {Object} context - Request or execution context
      * @param {Array<*>} bundle - The partial-template bundle to publish
-     * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
+     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
     async putGlobalTemplatePartials(context, bundle) {
@@ -277,7 +278,7 @@ export default class ContentSnapshot {
      * an unchanged bundle always hashes to the same address.
      * @param {Object} context - Request or execution context
      * @param {Array<*>} bundle - The base-template bundle to publish
-     * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
+     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
     async putBaseTemplates(context, bundle) {
@@ -308,7 +309,7 @@ export default class ContentSnapshot {
      * @param {Object} context - Request or execution context
      * @param {string} pathname - Logical page pathname
      * @param {Object} obj - Page metadata to publish
-     * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
+     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
     async putPageMetadata(context, pathname, obj) {
@@ -336,7 +337,7 @@ export default class ContentSnapshot {
      * @param {Object} context - Request or execution context
      * @param {string} pathname - Logical page pathname
      * @param {Object} bundle - The include bundle to publish, keyed by include name
-     * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
+     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
     async putPageIncludes(context, pathname, bundle) {
@@ -364,7 +365,7 @@ export default class ContentSnapshot {
      * @param {Object} context - Request or execution context
      * @param {string} pathname - Logical page pathname
      * @param {Array<*>} bundle - The partial-template bundle to publish
-     * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
+     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
     async putPagePartials(context, pathname, bundle) {
@@ -395,7 +396,7 @@ export default class ContentSnapshot {
      * @param {Object} context - Request or execution context
      * @param {string} pathname - Logical template filepath, including the filename
      * @param {string} source - Template source text
-     * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
+     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
      * @throws {OperationalError} When the backing store fails
      * @see isValidTemplateFilepath in ./content-layout.js for the filepath rule
      */
@@ -445,7 +446,7 @@ export default class ContentSnapshot {
      * @param {Object} context - Request or execution context
      * @param {string} pathname - Logical email pathname
      * @param {Object} bundle - The email bundle to publish
-     * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
+     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
     async putEmailAssets(context, pathname, bundle) {
