@@ -287,7 +287,7 @@ Request handlers may:
 - Parse `FormData` or JSON:API payloads into form classes.
 - Validate forms and translate validation errors into response props, setting the response status on inline error re-renders (see [Response Status on Re-rendered Errors](#response-status-on-re-rendered-errors)).
 - Call Transaction Scripts in `app/transaction-scripts/` to load or mutate data.
-- Call `response.updateProps({ ... })` to pass render data to `HyperviewDynamicPageHandler` or `HyperviewStaticPageHandler`.
+- Call `response.updateProps({ ... })` to pass render data to `HyperviewPageHandler`.
 - Return redirects, JSON:API responses, or rendered HTML responses through Hyperview or error handlers.
 
 Request handlers should not:
@@ -324,6 +324,63 @@ export async function handleCreateBugTicket(context, request, response, skip) {
 ```
 
 When validation failure should re-render a page, `HyperviewPageHandler(...)` after this handler in the target chain will run automatically (since `skip()` was not called). When success returns a redirect, `skip()` prevents the Hyperview handler from running and needlessly rendering a page.
+
+### Rendering a Page with HyperviewPageHandler
+
+`HyperviewPageHandler()` (`app/presentation/request-handlers/hyperview/hyperview-page-handler.js`) is the request handler which renders a Hyperview page as the response. Place it **last** in a target's `requestHandlers` chain: earlier handlers read the request and accumulate render data with `response.updateProps()`, and this handler turns what they accumulated into hypertext.
+
+```js
+{
+    name: 'show',
+    pattern: '/bugs/:id',
+    methods: [ 'GET', 'HEAD' ],
+    requestHandlers: [ getBug, HyperviewPageHandler({ pathname: '/bugs/detail' }) ],
+}
+```
+
+Pass `pathname` whenever the route pattern contains dynamic segments. Without it the page is looked up by the request pathname, so `/bugs/BUG-123` would need its own `pages/` and `templates/pages/` directories. A stable `pathname` points every request at one published page.
+
+The response status is whatever an earlier handler set, so a re-rendered validation error keeps its 4xx.
+
+**Render modes.** The same page serves three granularities, and the client selects one by request header:
+
+| Request header | Rendered output | Used for |
+|---|---|---|
+| `kixx-partial: <partial-id>` | That page partial alone | Replacing a fragment of the current document in place |
+| `kixx-boosted` | The page template, without its base template | Swapping the body during a page transition |
+| Neither | The page template wrapped in the base template | A cold request for a complete document |
+
+A full-page render requires `baseTemplateId`; the other two modes ignore it.
+
+**Where the options come from.** Three sources are merged, later sources winning over earlier ones:
+
+1. The options passed to `HyperviewPageHandler(...)` — the route's own configuration, fixed at startup.
+2. `response.props.hyperviewOptions` — a per-request override set by an earlier handler through `response.updateProps()`. Merged key by key, so an override object replaces only the options it names. Use it when the render mode depends on what the request handler found, not on the route.
+3. The `kixx-partial` and `kixx-boosted` request headers, which win over both.
+
+```js
+// Re-render only the results table when the request handler knows the
+// client is asking for a filtered list.
+response.updateProps({ hyperviewOptions: { partial: 'results-table' }, results });
+```
+
+**Options.** All are optional.
+
+| Option | Effect |
+|---|---|
+| `pathname` | Canonical page identifier; defaults to the normalized request pathname |
+| `baseTemplateId` | Canonical base template identifier; required for full-page rendering |
+| `partial` | Canonical page-partial identifier to render instead of the page and base templates |
+| `skipBaseRender` | Render the page template without its base template |
+| `usePageCache` | Enable rendered-page cache reads and writes; defaults to the configured value |
+| `cacheKey` | Cache identity component; defaults to request origin, pathname, and query string |
+| `includePropsInCacheKey` | Include response props in the cache identity; defaults to true whenever page caching is on |
+| `propsHashFunction` | Custom response-props hash, used only with page caching and props-sensitive keys |
+| `pageCacheReadTtlSeconds`, `pageCacheExpirationSeconds` | Page-cache read TTL and write expiration; default to the configured values |
+| `allowJsonResponse` | Serve assembled page context for `.json` requests; defaults to the configured value |
+| `responseOptions` | `{ contentType, headers }` forwarded to the UTF-8 response method |
+
+Leave `includePropsInCacheKey` alone unless you are certain the page renders identically for every viewer. It defaults to `true` with page caching on precisely so a page rendered for one signed-in user is never served to the next.
 
 ### Error Handling
 
@@ -423,7 +480,7 @@ Pass `{ required: true }` to the string, integer, or float helpers when the appl
 - `response.body` — response body: string, Buffer, ReadableStream, or `null`
 - `response.headers` — Web API `Headers` instance; use `setHeader()`/`appendHeader()` instead of mutating directly
 
-**Passing data between middleware** — use `updateProps()` to accumulate render context without committing a response body. The rendering handler (usually HyperviewDynamicPageHandler) reads these props to render the page template. Earlier middleware's props are readable via `response.props` if a later handler needs them.
+**Passing data between middleware** — use `updateProps()` to accumulate render context without committing a response body. The rendering handler (usually `HyperviewPageHandler`) reads these props to render the page template. Earlier middleware's props are readable via `response.props` if a later handler needs them.
 
 ```js
 response.updateProps({ page: { title: 'My Page' }, ticket });
@@ -804,7 +861,7 @@ For a page whose content is assembled from page metadata, includes, and template
 3. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
 4. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
 
-Content-only Hyperview pages use the HyperviewStaticPageHandler, which should already be configured for the catch-all route (`"*"`) in `virtual-hosts.js`.
+Content-only Hyperview pages need no options: `HyperviewPageHandler()` renders the page published at the request pathname, and should already be configured for the catch-all route (`"*"`) in `virtual-hosts.js`.
 
 ### Dynamic Hyperview Page
 
@@ -813,8 +870,8 @@ For a page that needs route parameters, records loaded through Transaction Scrip
 1. Add or update the route in `virtual-hosts.js`.
 2. Add a request handler in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
 3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
-4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewDynamicPageHandler(...)`
-5. If the route pattern contains dynamic segments such as `/:id`, pass a stable Hyperview `pathname` option to HyperviewDynamicPageHandler so the handler can locate the appropriate `pages/**` and `templates/pages/**` directories, even when the path contains dynamic path segments.
+4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewPageHandler(...)`. See [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler).
+5. If the route pattern contains dynamic segments such as `/:id`, pass a stable `pathname` option to `HyperviewPageHandler` so the handler can locate the appropriate `pages/**` and `templates/pages/**` directories, even when the path contains dynamic path segments.
 6. Add the matching `pages/<stable-pathname>/page.json` and `templates/pages/<stable-pathname>/page.html` files.
 
 ### Form-Backed HTML Workflow
@@ -909,7 +966,7 @@ The default options (`throwNotFound: true`, `skipWhenFound: false`) suit a dedic
 ```js
 requestHandlers: [
     StaticFileRequestHandler({ throwNotFound: false, skipWhenFound: true }),
-    HyperviewStaticPageHandler(),
+    HyperviewPageHandler(),
 ]
 ```
 

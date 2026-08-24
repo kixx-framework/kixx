@@ -76,7 +76,7 @@ src/app/presentation/README.md
 - Handling route parameters, request payloads, redirects, response props, or form-backed HTML workflows.
 - Understanding how root, ancestor, leaf, include, and runtime response props are merged into the template context.
 
-**What this document provides:** The main presentation-layer guide for this Hypermedia Driven Application — where presentation files live, common recipes for static pages, dynamic pages, forms, and progressive enhancement, route matching behavior, middleware and request handler responsibilities, `HyperviewDynamicPageHandler` options, form conventions, request and response object APIs, and HTML error handler guidance.
+**What this document provides:** The main presentation-layer guide for this Hypermedia Driven Application — where presentation files live, common recipes for static pages, dynamic pages, forms, and progressive enhancement, route matching behavior, middleware and request handler responsibilities, `HyperviewPageHandler` options, form conventions, request and response object APIs, and HTML error handler guidance.
 
 ### Templating Guide
 

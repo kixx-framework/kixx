@@ -1,8 +1,4 @@
-import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from './kixx/hyperview/hyperview-request-handlers.js';
-import {
-    StaticAssetRequestHandler,
-    StaticFileRequestHandler,
-} from './kixx/static-file-server/static-file-server-request-handlers.js';
+import HyperviewPageHandler from './app/presentation/request-handlers/hyperview/hyperview-page-handler.js';
 import adminErrorHandler from './app/presentation/error-handlers/admin-error-handler.js';
 import adminAuthErrorHandler from './app/presentation/error-handlers/admin-auth-error-handler.js';
 import jsonApiErrorHandler from './app/presentation/error-handlers/json-api-error-handler.js';
@@ -42,7 +38,7 @@ export default [
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
                             AdminUsers.getNewAdminUserForm,
-                            HyperviewDynamicPageHandler(),
+                            HyperviewPageHandler(),
                         ],
                     },
                     {
@@ -50,7 +46,7 @@ export default [
                         methods: [ 'POST' ],
                         requestHandlers: [
                             AdminUsers.postNewAdminUserForm,
-                            HyperviewDynamicPageHandler(),
+                            HyperviewPageHandler(),
                         ],
                     },
                 ],
@@ -67,7 +63,7 @@ export default [
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
                             AdminUsers.getAdminUserLoginForm,
-                            HyperviewDynamicPageHandler(),
+                            HyperviewPageHandler(),
                         ],
                     },
                     {
@@ -75,7 +71,7 @@ export default [
                         methods: [ 'POST' ],
                         requestHandlers: [
                             AdminUsers.postAdminUserLoginForm,
-                            HyperviewDynamicPageHandler(),
+                            HyperviewPageHandler(),
                         ],
                     },
                 ],
@@ -99,40 +95,40 @@ export default [
                 ],
                 routes: publishingApiRoutes,
             },
-            {
-                pattern: '/assets/:build_id/*pathname',
-                name: 'build-assets',
-                targets: [
-                    {
-                        name: 'serve-asset',
-                        methods: [ 'GET', 'HEAD' ],
-                        requestHandlers: [
-                            StaticAssetRequestHandler(),
-                        ],
-                    },
-                ],
-            },
-            {
-                pattern: '*',
-                name: 'hyperview-static-catch-all',
-                targets: [
-                    {
-                        // Catch-all renderer for static Hyperview static pages, including the
-                        // site root, with optional JSON page data responses.
-                        name: 'render-static-page',
-                        methods: [ 'GET', 'HEAD' ],
-                        requestHandlers: [
-                            // Serve a public file when one matches; otherwise fall
-                            // through to the Hyperview page renderer rather than 404.
-                            StaticFileRequestHandler({
-                                throwNotFound: false,
-                                skipWhenFound: true,
-                            }),
-                            HyperviewStaticPageHandler(),
-                        ],
-                    },
-                ],
-            },
+            // {
+            //     pattern: '/assets/:build_id/*pathname',
+            //     name: 'build-assets',
+            //     targets: [
+            //         {
+            //             name: 'serve-asset',
+            //             methods: [ 'GET', 'HEAD' ],
+            //             requestHandlers: [
+            //                 StaticAssetRequestHandler(),
+            //             ],
+            //         },
+            //     ],
+            // },
+            // {
+            //     pattern: '*',
+            //     name: 'hyperview-static-catch-all',
+            //     targets: [
+            //         {
+            //             // Catch-all renderer for static Hyperview static pages, including the
+            //             // site root, with optional JSON page data responses.
+            //             name: 'render-static-page',
+            //             methods: [ 'GET', 'HEAD' ],
+            //             requestHandlers: [
+            //                 // Serve a public file when one matches; otherwise fall
+            //                 // through to the Hyperview page renderer rather than 404.
+            //                 StaticFileRequestHandler({
+            //                     throwNotFound: false,
+            //                     skipWhenFound: true,
+            //                 }),
+            //                 HyperviewStaticPageHandler(),
+            //             ],
+            //         },
+            //     ],
+            // },
         ],
     },
 ];
