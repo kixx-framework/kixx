@@ -5,10 +5,24 @@ import {
 
 /**
  * Identifies the current storage-key and digest wire format.
+ *
+ * Bump this whenever a change makes previously computed digests
+ * irreproducible or previously written keys unreadable. It namespaces blob
+ * keys (see {@link KEY}), the Cloudflare index cache URL and Durable Object
+ * instance name, and the root hash itself, so a bump re-isolates all of them
+ * together and old data is never read back under the new rules.
+ *
+ * History:
+ * - `1` — initial format.
+ * - `2` — the domain bytes below were renumbered when `hashBlob` was split
+ *   into `hashArrayBufferBlob` and `hashStringBlob`. Tree, set, and text-blob
+ *   digests all moved; array-buffer blob digests did not. Nothing had been
+ *   deployed at the time, so this bump records the change rather than
+ *   migrating anything.
  * @type {number}
  * @readonly
  */
-export const FORMAT = 1;
+export const FORMAT = 2;
 
 /**
  * Storage-key prefixes for each persisted content-addressing structure.
