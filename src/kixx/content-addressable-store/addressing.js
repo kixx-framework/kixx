@@ -4,6 +4,29 @@ import {
 } from '../assertions/mod.js';
 
 /**
+ * @module addressing
+ *
+ * Derives the content addresses everything else in this directory is keyed by.
+ *
+ * Two properties make the rest of the design work, and both are this module's
+ * responsibility alone:
+ *
+ * 1. **Identical across platforms.** Every deploy target must derive the same
+ *    digest from the same content, or a blob uploaded from one runtime is
+ *    unreachable from another. Nothing here uses a platform API beyond
+ *    `crypto.subtle` and `TextEncoder`, and the store deliberately never
+ *    computes a hash of its own.
+ * 2. **Stable across time.** Digests are persisted in published index closures,
+ *    so a change to the canonical byte sequence or the domain separators does
+ *    not merely produce different hashes — it orphans every closure already
+ *    published. That is what {@link FORMAT} exists to gate.
+ *
+ * Digests are SHA-256 truncated to 128 bits and rendered as lowercase base32, so
+ * they are safe in a URL path, a storage key, and a case-insensitive
+ * intermediary alike.
+ */
+
+/**
  * Identifies the current storage-key and digest wire format.
  *
  * Bump this whenever a change makes previously computed digests

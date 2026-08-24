@@ -3,6 +3,30 @@ import {
     isString,
 } from '../assertions/mod.js';
 
+/**
+ * @module content-layout
+ *
+ * The naming rules for the content-addressable index: what a pathname is
+ * allowed to look like, and where each kind of content lives inside it.
+ *
+ * The index is one flat table keyed by pathname, so the namespaces below are a
+ * convention rather than a storage feature. Concentrating the convention here is
+ * what keeps it enforceable: {@link ContentSnapshot} is the only caller, every
+ * one of its methods routes through exactly one of these builders, and nothing
+ * else in the framework composes a storage pathname by hand.
+ *
+ * Four reserved top-level namespaces divide the tree:
+ *
+ * - `/pages` — one directory per page, holding its `page.json` metadata, its
+ *   bundles, and its template file.
+ * - `/templates` — the two site-wide bundles shared by every render.
+ * - `/assets` — static files served straight to the browser.
+ * - `/emails` — email bundles.
+ *
+ * Bundle filenames are prefixed with a double underscore so they cannot collide
+ * with a published page template, whose filename comes from client input.
+ */
+
 // Path segments are restricted to a conservative filename-safe set. Anything
 // outside it (path separators beyond the segment split, query/fragment
 // characters, whitespace, shell or URL metacharacters) is rejected before the
@@ -38,7 +62,7 @@ export const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
 export const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
 
 /**
- * Reserved filename of an email assets bundle within its page directory.
+ * Reserved filename of an email assets bundle within the emails namespace.
  * @type {string}
  * @readonly
  */
@@ -46,7 +70,9 @@ export const EMAIL_ASSETS_BUNDLE = '__email-assets';
 
 /**
  * Filenames a page directory reserves for its own bundles. A page template
- * filename must not collide with one of these.
+ * filename must not collide with one of these, because the template shares the
+ * directory with them and `batchGetPageAssets()` identifies the template by
+ * elimination — any blob in the directory which is not one of these.
  * @type {Set<string>}
  * @readonly
  */
@@ -203,27 +229,60 @@ export function getPageIncludesPath(pathname) {
 
 /**
  * Constructs the storage path for a page's template file.
- * @param {string} pathname - Valid logical page pathname
+ *
+ * Unlike the other page builders, this takes a full filepath including the
+ * filename — `/blog/post/page.html`, not `/blog/post` — because the template is
+ * an ordinary file inside the page directory rather than a fixed reserved name.
+ * The filename must therefore avoid {@link RESERVED_PAGE_FILENAMES}, and the
+ * filepath must name a file rather than the namespace root.
+ * @param {string} pathname - Valid logical template filepath, including the filename
  * @returns {string} Canonical pathname beneath `/pages`
- * @throws {AssertionError} When pathname is not a valid page pathname
+ * @throws {AssertionError} When pathname is not a valid pathname
+ * @see isValidTemplateFilepath for the non-root filepath rule callers validate against
  */
 export function getPageTemplatePath(pathname) {
     assert(isValidPathname(pathname), 'getPageTemplatePath() requires a valid page pathname');
     return getPagesPath(pathname);
 }
 
+/**
+ * Reports whether a storage pathname names a page's metadata file. Used to sort
+ * the results of a bulk page read back into their roles.
+ * @param {string} pathname - Canonical storage pathname
+ * @returns {boolean} True when the pathname names a `page.json` beneath `/pages`
+ */
 export function isPageMetadataPath(pathname) {
     return pathname.startsWith('/pages') && pathname.endsWith('/page.json');
 }
 
+/**
+ * Reports whether a storage pathname names a page's partial-template bundle.
+ * @param {string} pathname - Canonical storage pathname
+ * @returns {boolean} True when the pathname names a page partials bundle beneath `/pages`
+ */
 export function isPagePartialsPath(pathname) {
     return pathname.startsWith('/pages') && pathname.endsWith(`/${ PAGE_PARTIALS_BUNDLE }`);
 }
 
+/**
+ * Reports whether a storage pathname names a page's include bundle.
+ * @param {string} pathname - Canonical storage pathname
+ * @returns {boolean} True when the pathname names a page includes bundle beneath `/pages`
+ */
 export function isPageIncludesPath(pathname) {
     return pathname.startsWith('/pages') && pathname.endsWith(`/${ PAGE_INCLUDES_BUNDLE }`);
 }
 
+/**
+ * Constructs the storage path for an email's assets bundle.
+ *
+ * NOTE: `pathname` is currently validated and then discarded, so every email
+ * resolves to the same single bundle path. See
+ * `agents/plans/content-addressable-store-issues.md` (CAS-1).
+ * @param {string} pathname - Valid logical email pathname
+ * @returns {string} Canonical pathname beneath `/emails`
+ * @throws {AssertionError} When pathname is not a valid pathname
+ */
 export function getEmailBundlePath(pathname) {
     assert(isValidPathname(pathname), 'getEmailBundlePath() requires a valid page pathname');
     return normalizePathname(`emails/${ EMAIL_ASSETS_BUNDLE }`);

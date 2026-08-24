@@ -10,9 +10,50 @@ import {
 } from '../assertions/mod.js';
 
 /**
+ * The compact, persisted form of one index entry. The arity distinguishes the
+ * two kinds, and {@link ContentStoreInterface} requires an adapter to preserve
+ * it across a storage round trip:
+ *
+ * - A tree (directory): `[ 'tree', hash ]`
+ * - A blob (file): `[ 'blob', hash, size, metadata ]`
+ *
+ * A tree's hash covers its canonicalized immediate-child list, so it changes
+ * whenever anything beneath it changes. A blob's hash covers its bytes.
+ * @typedef {Array} IndexEntryTuple
+ */
+
+/**
+ * One index entry decoded into named fields and paired with the pathname it is
+ * keyed by. Tree entries carry `size: null` and `metadata: null`.
+ * @typedef {Object} IndexEntry
+ * @property {string} pathname - Canonical pathname the entry is keyed by, with a leading slash
+ * @property {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file
+ * @property {string} hash - Content digest of the blob's bytes, or of the tree's canonicalized child list
+ * @property {number|null} size - Byte size of a blob; null for a tree
+ * @property {Object|null} metadata - Deep copy of the blob's metadata; null when absent or for a tree
+ */
+
+/**
+ * One file in the flat list {@link ContentAddressableIndex.buildIndex} derives
+ * an index from. Directories are never listed: they are implied by the
+ * pathnames and created by the build.
+ * @typedef {Object} IndexSourceFile
+ * @property {string} pathname - Canonical pathname of the file, with a leading slash and no trailing slash
+ * @property {string} hash - Content digest of the file's bytes, computed by the caller
+ * @property {number} size - Byte size of the file, as a non-negative integer
+ * @property {Object} [metadata] - Arbitrary metadata to persist alongside the entry; contributes to the tree hash when present
+ */
+
+/**
  * Read-only, in-memory snapshot of a persisted content-addressable index
  * table. Supports point lookups and prefix listings by pathname without
  * re-deriving the underlying directory structure.
+ *
+ * An instance is a defensive deep copy of the table it was constructed from and
+ * never mutates: the entries an index was opened with are the entries it will
+ * report for its whole lifetime, which is what lets a request pin itself to one
+ * coherent snapshot while a deploy reassigns the build pointer underneath it.
+ * @see getRootHash for naming a closure without constructing an index
  */
 export default class ContentAddressableIndex {
 
@@ -52,10 +93,17 @@ export default class ContentAddressableIndex {
     }
 
     /**
-     * Lists all the nodes under a given directory (the prefix), optionally recursively.
-     * @param {string} prefix - A prefix directory with a leading slash; a trailing slash "/" is added if missing. Pass '' to list from the root.
+     * Lists the nodes beneath a directory, optionally recursively. The prefix
+     * directory itself is never included, and a prefix naming nothing yields an
+     * empty array rather than throwing — an absent directory and an empty one
+     * are indistinguishable here, because the index stores no empty trees.
+     *
+     * The empty-string prefix is a separate mode: it matches the whole table,
+     * including the root node, and is only meaningful with `recursive: true`.
+     * To list the root's children, pass '/'.
+     * @param {string} prefix - Directory pathname with a leading slash; a trailing slash is appended when missing. Pass '/' to list from the root, or '' to dump every node.
      * @param {Object} [options]
-     * @param {boolean} [options.recursive=true] - When false, only list the prefix's immediate children — nested nodes are skipped.
+     * @param {boolean} [options.recursive=true] - When false, list only the prefix's immediate children — both blobs and the trees directly beneath it — and skip everything nested deeper.
      * @returns {IndexEntry[]} Matching nodes in pathname sort order.
      */
     listNodes(prefix, options) {
@@ -72,9 +120,9 @@ export default class ContentAddressableIndex {
         const matchingPaths = [];
         for (let i = start; i < paths.length; i += 1) {
             const path = paths[i];
-            // Sorted order guarantees every path matching path is contiguous, so the first
-            // miss past `start` means there are no more — stop instead of
-            // scanning the rest of the index.
+            // Sorted order guarantees every path sharing the prefix is
+            // contiguous, so the first miss past `start` means there are no
+            // more — stop instead of scanning the rest of the index.
             if (prefix !== '' && !path.startsWith(prefix)) {
                 break;
             }
@@ -400,7 +448,7 @@ function buildDirectoryTree(files) {
     nodeList.push(root);
 
     for (const entry of files) {
-        // entry.pathname is normalized (see addressing.js#normalizePathname): leading
+        // entry.pathname is normalized (see content-layout.js#normalizePathname): leading
         // slash, no trailing slash, no doubled slashes. Drop the leading empty
         // segment the split produces so directory pathnames don't get doubled.
         const parts = entry.pathname.split('/').slice(1);
