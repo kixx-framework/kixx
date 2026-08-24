@@ -273,20 +273,19 @@ export async function commitChanges(context, request, response) {
         buildId,
         staticAssets,
         globalTemplatePartials,
+        baseTemplates,
         pages,
         emails,
     } = attributes;
 
     const store = context.getService('ContentAddressableStore');
 
-    const { hash, nodeCount } = await store.commitChanges(context, {
-        buildId,
-        manifest: {
-            staticAssets,
-            globalTemplatePartials,
-            pages,
-            emails,
-        },
+    const { hash, nodeCount } = await store.commitChanges(context, buildId, {
+        staticAssets,
+        globalTemplatePartials,
+        baseTemplates,
+        pages,
+        emails,
     });
 
     const resource = jsonApiResource({
