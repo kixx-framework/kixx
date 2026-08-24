@@ -1,6 +1,6 @@
 import ContentAddressableIndex, { getRootHash } from './content-addressable-index.js';
 import ContentSnapshot from './content-snapshot.js';
-import { hashString } from './addressing.js';
+import { hashSet, hashString } from './addressing.js';
 import { normalizePathname, isValidPathname } from './content-layout.js';
 import { assert } from '../assertions/mod.js';
 
@@ -91,6 +91,18 @@ export default class ContentAddressableStore {
      */
     async hashString(value) {
         return await hashString(value);
+    }
+
+    /**
+     * Hashes a canonicalizable collection under the framework's set domain.
+     * Used for deriving a digest from a plain object or array, such as a
+     * page's props, rather than an already-composed string.
+     * @param {Object|Array<*>} value - Collection to canonicalize and hash
+     * @returns {Promise<string>} Digest in the current wire format
+     * @throws {TypeError} When value contains a value that cannot be canonicalized
+     */
+    async hashSet(value) {
+        return await hashSet(value);
     }
 
     /**

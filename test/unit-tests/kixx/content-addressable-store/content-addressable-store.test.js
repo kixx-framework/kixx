@@ -157,6 +157,23 @@ describe('ContentAddressableStore', ({ describe }) => {
         });
     });
 
+    describe('hashSet()', ({ it }) => {
+        it('hashes a canonicalizable collection', async () => {
+            const store = makeStore(makeContentStore());
+
+            assertEqual('muajbujkcmpjobtg22bjiwjrby', await store.hashSet([ 1, 2, 3 ]));
+        });
+
+        it('derives the same digest for objects with the same keys in different order', async () => {
+            const store = makeStore(makeContentStore());
+
+            const first = await store.hashSet({ a: 1, b: 2 });
+            const second = await store.hashSet({ b: 2, a: 1 });
+
+            assertEqual(first, second);
+        });
+    });
+
     describe('pathname helpers', ({ it }) => {
         it('delegates normalization and validation to the content layout rules', () => {
             const store = makeStore(makeContentStore());

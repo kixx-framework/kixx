@@ -563,7 +563,7 @@ export default class HyperviewService {
                         response.props,
                     );
                 } else {
-                    propsHash = await this.#contentAddressableStore.hashString(response.props);
+                    propsHash = await this.#contentAddressableStore.hashSet(response.props);
                 }
                 hash = await this.#contentAddressableStore.hashString(`${ hash }#${ propsHash }`);
             }

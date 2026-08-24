@@ -73,7 +73,8 @@ email content; afterwards it needs a `FORMAT` bump or a republish.
 
 ## CAS-2: `HyperviewService` calls every `ContentSnapshot` read without the `context` argument
 
-**Status:** Open
+**Status:** Won't Fix — out of scope for this work (the fix lives in
+`HyperviewService`, not the content-addressable-store).
 **Severity:** High — page rendering is broken on every platform
 **Location:** `src/kixx/hyperview/hyperview-service.js:146, 157, 198, 210, 329, 359`
 
@@ -134,7 +135,12 @@ catch an arity mismatch in a caller.
 
 ## CAS-3: `hashString()` is called with an object when props are folded into the page cache key
 
-**Status:** Open
+**Status:** Resolved — `ContentAddressableStore#hashSet()` now exposes
+`addressing.js`'s `hashSet()` (covered by new tests in
+`content-addressable-store.test.js`), and the `hyperview-service.js` call
+site uses it instead of `hashString()`. No render-path test was added for
+the call site itself: CAS-2 currently breaks every render before this line
+is reached, and CAS-2 is out of scope for this work.
 **Severity:** Medium — a documented option throws when used
 **Location:** `src/kixx/hyperview/hyperview-service.js:566`
 
