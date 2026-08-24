@@ -1,7 +1,21 @@
 import {
-    StatResource,
-    PutResource,
-    CommitChanges,
+    statStaticAsset,
+    statGlobalTemplatePartials,
+    statBaseTemplates,
+    statPageMetadata,
+    statPageIncludes,
+    statPagePartials,
+    statPageTemplate,
+    statEmailAssets,
+    putStaticAsset,
+    putGlobalTemplatePartials,
+    putBaseTemplates,
+    putPageMetadata,
+    putPageIncludes,
+    putPagePartials,
+    putPageTemplate,
+    putEmailAssets,
+    commitChanges,
 } from '../app/presentation/request-handlers/publishing-api/mod.js';
 
 export default [
@@ -16,22 +30,29 @@ export default [
                     {
                         name: 'commit-changes',
                         methods: [ 'PUT' ],
-                        requestHandlers: [
-                            CommitChanges(),
-                        ],
+                        requestHandlers: [ commitChanges ],
                     },
                 ],
             },
             {
-                pattern: '/template-partials',
-                name: 'template-partials',
+                pattern: '/static-asset',
+                name: 'static-asset',
                 targets: [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [
-                            StatResource({ type: 'template_partials' }),
-                        ],
+                        requestHandlers: [ statStaticAsset ],
+                    },
+                ],
+            },
+            {
+                pattern: '/global-template-partials',
+                name: 'global-template-partials',
+                targets: [
+                    {
+                        name: 'get-stats',
+                        methods: [ 'HEAD', 'GET' ],
+                        requestHandlers: [ statGlobalTemplatePartials ],
                     },
                 ],
             },
@@ -42,9 +63,7 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [
-                            StatResource({ type: 'base_templates' }),
-                        ],
+                        requestHandlers: [ statBaseTemplates ],
                     },
                 ],
             },
@@ -59,9 +78,7 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [
-                            StatResource({ type: 'page_metadata' }),
-                        ],
+                        requestHandlers: [ statPageMetadata ],
                     },
                 ],
             },
@@ -72,9 +89,7 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [
-                            StatResource({ type: 'page_partials' }),
-                        ],
+                        requestHandlers: [ statPagePartials ],
                     },
                 ],
             },
@@ -85,22 +100,29 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [
-                            StatResource({ type: 'page_includes' }),
-                        ],
+                        requestHandlers: [ statPageIncludes ],
                     },
                 ],
             },
             {
                 pattern: '/page-templates/*path',
-                name: 'page-templates',
+                name: 'page-template',
                 targets: [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [
-                            StatResource({ type: 'page_templates' }),
-                        ],
+                        requestHandlers: [ statPageTemplate ],
+                    },
+                ],
+            },
+            {
+                pattern: '/emails/*path',
+                name: 'email',
+                targets: [
+                    {
+                        name: 'get-stats',
+                        methods: [ 'HEAD', 'GET' ],
+                        requestHandlers: [ statEmailAssets ],
                     },
                 ],
             },
@@ -111,15 +133,24 @@ export default [
         name: 'resources',
         routes: [
             {
-                pattern: '/template-partials',
-                name: 'template-partials',
+                pattern: '/static-asset',
+                name: 'static-asset',
                 targets: [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [
-                            PutResource({ type: 'template_partials' }),
-                        ],
+                        requestHandlers: [ putStaticAsset ],
+                    },
+                ],
+            },
+            {
+                pattern: '/global-template-partials',
+                name: 'global-template-partials',
+                targets: [
+                    {
+                        name: 'put-resource',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [ putGlobalTemplatePartials ],
                     },
                 ],
             },
@@ -130,9 +161,7 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [
-                            PutResource({ type: 'base_templates' }),
-                        ],
+                        requestHandlers: [ putBaseTemplates ],
                     },
                 ],
             },
@@ -147,9 +176,7 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [
-                            PutResource({ type: 'page_metadata' }),
-                        ],
+                        requestHandlers: [ putPageMetadata ],
                     },
                 ],
             },
@@ -160,9 +187,7 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [
-                            PutResource({ type: 'page_partials' }),
-                        ],
+                        requestHandlers: [ putPagePartials ],
                     },
                 ],
             },
@@ -173,22 +198,29 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [
-                            PutResource({ type: 'page_includes' }),
-                        ],
+                        requestHandlers: [ putPageIncludes ],
                     },
                 ],
             },
             {
                 pattern: '/page-templates/*path',
-                name: 'page-templates',
+                name: 'page-template',
                 targets: [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [
-                            PutResource({ type: 'page_templates' }),
-                        ],
+                        requestHandlers: [ putPageTemplate ],
+                    },
+                ],
+            },
+            {
+                pattern: '/emails/*path',
+                name: 'emails',
+                targets: [
+                    {
+                        name: 'put-resource',
+                        methods: [ 'PUT' ],
+                        requestHandlers: [ putEmailAssets ],
                     },
                 ],
             },
