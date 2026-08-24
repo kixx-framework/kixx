@@ -1,9 +1,15 @@
-import { NotFoundError, ValidationError } from '../../../../kixx/errors/mod.js';
+import {
+    BadRequestError,
+    NotFoundError,
+    UnsupportedMediaTypeError,
+    ValidationError,
+} from '../../../../kixx/errors/mod.js';
 import {
     assertArray,
     isString,
     isPlainObject,
     isNonEmptyString,
+    isUndefined,
 } from '../../../../kixx/assertions/mod.js';
 import {
     JSON_API_CONTENT_TYPE,
@@ -135,8 +141,13 @@ export const statPageTemplate = statHandlerWithPathname('PageTemplate');
 export const statEmailAssets = statHandlerWithPathname('EmailAssets');
 
 export const putStaticAsset = putHandlerWithPathname('StaticAsset', async (request) => {
-    // TODO: Validate the payload
-    return await request.arrayBuffer();
+    const payload = await request.arrayBuffer();
+
+    if (payload.byteLength === 0) {
+        throw new BadRequestError('PUT StaticAsset payload must not be empty');
+    }
+
+    return payload;
 });
 
 export const putGlobalTemplatePartials = putHandlerWithoutPathname('GlobalTemplatePartials', async (request) => {
@@ -246,7 +257,13 @@ export const putPagePartials = putHandlerWithPathname('PagePartials', async (req
 });
 
 export const putPageTemplate = putHandlerWithPathname('PageTemplate', async (request) => {
-    // TODO: Validate the Content-Type as text/plain.
+    if (request.getContentMediaType() !== 'text/plain') {
+        throw new UnsupportedMediaTypeError(
+            'Request Content-Type must be text/plain.',
+            { accept: [ 'text/plain' ] },
+        );
+    }
+
     return await request.text();
 });
 
@@ -256,7 +273,38 @@ export const putEmailAssets = putHandlerWithPathname('EmailAssets', async (reque
 
     const err = new ValidationError('PUT EmailAssets payload validation error');
 
-    // TODO: Validate the attributes according to the rules in HyperviewService#getEmail()
+    // Mirrors the shape HyperviewService#getEmail() reads back out of this bundle.
+    const { htmlTemplate, textTemplate, partials, includes } = attributes;
+
+    if (!isUndefined(htmlTemplate)) {
+        validateEmailTemplate(err, htmlTemplate, 'attributes.htmlTemplate', 'HTML template');
+    }
+
+    if (!isUndefined(textTemplate)) {
+        validateEmailTemplate(err, textTemplate, 'attributes.textTemplate', 'text template');
+    }
+
+    if (!isUndefined(partials)) {
+        if (Array.isArray(partials)) {
+            partials.forEach((partial, i) => {
+                validateEmailTemplate(err, partial, `attributes.partials.${ i }`, 'partial');
+            });
+        } else {
+            err.push('The partials must be an Array', 'attributes.partials');
+        }
+    }
+
+    if (!isUndefined(includes)) {
+        if (isPlainObject(includes)) {
+            for (const key of Object.keys(includes)) {
+                if (!isString(includes[key])) {
+                    err.push('An email include may only contain text content', `attributes.includes.${ key }`);
+                }
+            }
+        } else {
+            err.push('The includes must be a plain Object', 'attributes.includes');
+        }
+    }
 
     if (err.length > 0) {
         throw err;
@@ -264,6 +312,20 @@ export const putEmailAssets = putHandlerWithPathname('EmailAssets', async (reque
 
     return attributes;
 });
+
+function validateEmailTemplate(err, template, source, label) {
+    if (!isPlainObject(template)) {
+        err.push(`A ${ label } must be a plain Object`, source);
+        return;
+    }
+
+    if (!isNonEmptyString(template.id)) {
+        err.push(`A ${ label } must have an id string`, `${ source }.id`);
+    }
+    if (!isNonEmptyString(template.source)) {
+        err.push(`A ${ label } must have a source string`, `${ source }.source`);
+    }
+}
 
 
 export async function commitChanges(context, request, response) {
