@@ -153,8 +153,8 @@ export default class ContentAddressableIndexStore extends DurableObject {
      * @returns {Promise<{success: true}>} Successful commit result
      */
     async saveIndex(rootHash, index) {
-        assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#commitClosure: rootHash');
-        assert(isPlainObject(index), 'ContentAddressableIndexStore#commitClosure: index must be a plain object');
+        assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#saveIndex: rootHash');
+        assert(isPlainObject(index), 'ContentAddressableIndexStore#saveIndex: index must be a plain object');
 
         const sql = `
             INSERT OR IGNORE INTO closure_entries (root_hash, pathname, kind, hash, size, metadata)
@@ -169,13 +169,23 @@ export default class ContentAddressableIndexStore extends DurableObject {
             // required columns before relying on it for idempotency.
             assert(
                 kind === 'tree' || kind === 'blob',
-                `ContentAddressableIndexStore#commitClosure: entry "${ pathname }" kind must be "tree" or "blob"`,
+                `ContentAddressableIndexStore#saveIndex: entry "${ pathname }" kind must be "tree" or "blob"`,
             );
-            assertNonEmptyString(hash, `ContentAddressableIndexStore#commitClosure: entry "${ pathname }" hash`);
+            assertNonEmptyString(hash, `ContentAddressableIndexStore#saveIndex: entry "${ pathname }" hash`);
             assert(
                 metadata === null || isPlainObject(metadata),
-                `ContentAddressableIndexStore#commitClosure: entry "${ pathname }" metadata must be a plain object or null`,
+                `ContentAddressableIndexStore#saveIndex: entry "${ pathname }" metadata must be a plain object or null`,
             );
+            // Only a blob carries a size; a tree tuple has no fourth or third
+            // element at all. Left unchecked, a missing size is stored as null
+            // and passes here, then fails much later on read, where
+            // assertValidIndexEntryTuple() demands a non-negative integer.
+            if (kind === 'blob') {
+                assert(
+                    Number.isInteger(size) && size >= 0,
+                    `ContentAddressableIndexStore#saveIndex: entry "${ pathname }" blob size must be a non-negative integer`,
+                );
+            }
 
             const metadataJson = metadata === null ? null : JSON.stringify(metadata);
 
