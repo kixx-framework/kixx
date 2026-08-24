@@ -16,7 +16,8 @@ import {
 } from '../assertions/mod.js';
 
 
-// Versioned bundles only coexist while requests finish across a publication.
+// Versioned bundles only coexist while requests finish across a publication, so
+// a handful of generations is enough to cover the overlap.
 const MAX_VERSIONED_TEMPLATE_CACHE_ENTRIES = 4;
 
 // Page-specific content can vary across many routes, so it needs a larger bound.
@@ -62,8 +63,65 @@ function compileTemplate(templateId, source, customHelpers) {
     return templating.createRenderFunction(null, helpers, tree);
 }
 
+/**
+ * Renders published site content into hypertext responses and email bodies.
+ *
+ * This is the only place the framework turns *content* into *output*. It owns
+ * three things and nothing else: choosing what to render, compiling and caching
+ * the templates that render it, and caching the rendered result. Where the
+ * content comes from belongs to the ContentAddressableStore; what the assembled
+ * template context looks like belongs to HyperviewPage.
+ *
+ * ## One snapshot per render
+ * Every render opens exactly one {@link ContentSnapshot} and reads everything
+ * through it — page assets, template bundles, and the hashes that become cache
+ * keys. A deploy landing mid-request is therefore invisible to a render already
+ * in flight: it cannot compose a document from a mix of two publications, and it
+ * cannot key a cache entry with hashes that never coexisted.
+ *
+ * ## The three render modes
+ * `respondWithHypertext()` serves one page three ways, because a hypermedia
+ * application asks for the same page at three granularities:
+ *
+ * - `options.partial` renders a single named page partial. The browser fetches
+ *   these to replace a fragment of the current document in place.
+ * - `options.skipBaseRender` renders the page template alone, without the
+ *   surrounding document. The browser fetches these for page transitions.
+ * - Neither option renders the page template and then wraps it in a base
+ *   template, producing the complete document a cold request needs.
+ *
+ * All three assemble the identical page context; only the outermost template
+ * changes. The render mode is part of the page-cache identity, so the three
+ * outputs for one URL never collide.
+ *
+ * ## Two caches, invalidated differently
+ * The compiled-template caches (global partials, base templates, page partials,
+ * page templates) live in this instance's memory and are keyed by the content
+ * hash of the bundle they were compiled from. Because content addresses are
+ * immutable, a stale entry is unreachable rather than wrong, and older
+ * generations are retained on purpose so a request pinned to an older snapshot
+ * can still finish. They are only populated when `useTemplateCache` is on, which
+ * is fixed for the lifetime of the service so development can edit templates
+ * without a restart.
+ *
+ * The rendered-page cache lives in the KV store, is shared across instances, and
+ * is keyed by a hash covering every content hash the render read plus — by
+ * default — the response props. That props default is a safety property, not an
+ * optimization: without it, a page rendered for one signed-in user would be
+ * served to the next.
+ *
+ * ## Lifecycle
+ * Constructed with its policy defaults before the services it reads through
+ * exist, so {@link HyperviewService#initialize} supplies those in a second
+ * phase. Every render method requires initialize() to have run.
+ * @see HyperviewPage in ./hyperview-page.js for how the template context is assembled
+ * @see ContentSnapshot in ../content-addressable-store/content-snapshot.js for the content reads
+ */
 export default class HyperviewService {
 
+    // Helpers available to every template this service compiles, including
+    // metadata mini templates. Documented for template authors in
+    // src/templates/README.md.
     #customHelpers = new Map([
         [ 'formatDate', formatDate ],
         [ 'markup', markup ],
@@ -127,8 +185,8 @@ export default class HyperviewService {
      * Connects the content and cache services required by the rendering methods.
      * Call this once after construction and before rendering a page or email.
      * @param {Object} args - Rendering service dependencies
-     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store used to cache rendered hypertext
-     * @param {import('./hyperview-content-service.js').default} args.contentAddressableStore - Hyperview content service used to resolve pathnames, snapshots, and content hashes
+     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store holding the rendered-page cache
+     * @param {import('../content-addressable-store/content-addressable-store.js').default} args.contentAddressableStore - Published content store used to open snapshots, normalize pathnames, and hash cache-key inputs
      * @returns {void}
      */
     initialize(args) {
@@ -140,6 +198,8 @@ export default class HyperviewService {
         this.#kvStore = kvStore;
     }
 
+    // Compiles the site-wide partial bundle, which every render layers beneath
+    // the page's own partials. Resolves an empty Map when no bundle is published.
     async #loadGlobalTemplatePartials(content) {
         // Check the bundle hash before fetching its bytes so a compiled-cache hit
         // avoids both the content read and template parsing.
@@ -192,6 +252,9 @@ export default class HyperviewService {
         return partials;
     }
 
+    // Resolves one base template — the outer document a full-page render wraps
+    // the page body in. Resolves undefined when the bundle names no such id, and
+    // null when no bundle is published at all; the caller reports both the same way.
     async #loadBaseTemplate(content, templateId) {
         // Base templates are published as one bundle, so compile and cache the
         // complete map even though this call returns only the requested template.
@@ -243,6 +306,8 @@ export default class HyperviewService {
         return templates.get(templateId);
     }
 
+    // Compiles a page's own partial bundle. A page publishing no partials is
+    // ordinary, so an absent bundle resolves an empty Map rather than failing.
     async #getPagePartials(file) {
         if (!file) {
             return new Map();
@@ -295,6 +360,8 @@ export default class HyperviewService {
         return partials;
     }
 
+    // Compiles the page's own template. Unlike the bundles this one is required:
+    // #getPage() has already established the page has a template blob.
     async #getPageTemplate(file) {
         assertNonEmptyString(
             file.text,
@@ -325,6 +392,9 @@ export default class HyperviewService {
         return template;
     }
 
+    // Reads every asset one page render needs in a single bulk fetch, compiles
+    // its templates, and hands the pieces to HyperviewPage for context assembly.
+    // Resolves null when there is no renderable page at this pathname.
     async #getPage(content, url, pathname, responseProps) {
         const page = await content.batchGetPageAssets(pathname);
 
@@ -355,6 +425,10 @@ export default class HyperviewService {
         });
     }
 
+    // Compiles an email bundle: the subject metadata plus whichever of the HTML
+    // and text representations were published, and the bundle's own partials.
+    // Nothing here is cached, because emails are rendered far less often than
+    // pages and there is no request-rate pressure to justify the retained memory.
     async #getEmail(content, pathname) {
         const bundle = await content.getEmailAssets(pathname);
 
@@ -427,6 +501,11 @@ export default class HyperviewService {
      * a rendered page partial, a rendered page template, or a complete page wrapped
      * by a base template. All content and cache-validator reads use one immutable,
      * request-scoped content snapshot.
+     *
+     * The rendered output carries the status already set on the response, so a
+     * caller rendering an error page sets that status before calling. Runtime
+     * values reach the template through `response.props`, which the assembled page
+     * context merges over the page's published metadata.
      *
      * @param {import('../context/request-context.js').default} context - Context for storage and cache operations
      * @param {import('../http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request used to select the page and response format
@@ -534,9 +613,13 @@ export default class HyperviewService {
         }
 
         // Serve JSON only when the deployment allows it and the client asked for
-        // it, by the ".json" path extension.
+        // it, by the ".json" path extension. This branch precedes the page cache
+        // deliberately: the context is cheap to serialize, and caching it would
+        // put a second representation of every page in the shared cache.
         if (isJsonPathRequest) {
             // The optional JSON response is intended for development and debugging.
+            // It exposes the assembled context, including merged response props,
+            // so deployments serving authenticated pages leave it disabled.
             return response.respondWithJSON(
                 response.status,
                 page.context,
@@ -550,6 +633,9 @@ export default class HyperviewService {
         // Disabling the rendered-page cache also skips its storage stats and
         // hashing; compiled-template cache validation remains in the loaders.
         if (usePageCache) {
+            // page.hash covers every file the page render read, but not the shared
+            // bundles layered over it, so an edit to a global partial would
+            // otherwise keep serving the old output.
             const partials = content.statGlobalTemplatePartials();
             let hash = await this.#contentAddressableStore.hashString(`${ page.hash }#${ partials?.hash ?? '' }`);
 
@@ -574,6 +660,9 @@ export default class HyperviewService {
                 ? options.cacheKey
                 : (url.origin + url.pathname + url.search);
 
+            // The three render modes produce different output for one URL, so the
+            // mode is part of the identity. Only a full-page render depends on the
+            // base template bundle, so only that branch folds its hash in.
             let renderModeIdentity;
 
             if (options.partial) {
@@ -617,6 +706,10 @@ export default class HyperviewService {
             assertFunction(template, `Partial template "${ options.partial }" does not exist in pages/${ pathname }`);
 
             hypertext = template(page.context, layerPartials(page.partials, globalPartials));
+
+            // Empty output is treated as a render failure rather than a valid
+            // response: it means a template resolved nothing, and caching it would
+            // pin the blank result for the life of the cache entry.
             assertNonEmptyString(
                 hypertext,
                 `HyperviewService rendered empty hypertext for the partial "${ options.partial }" render of page "${ pathname }"`,
@@ -665,7 +758,9 @@ export default class HyperviewService {
         const partials = layerPartials(page.partials, globalPartials);
 
         // Render the page body first and expose it through the shared context so
-        // the base template can compose the complete document around it.
+        // the base template can compose the complete document around it. This
+        // mutates the page context, which is why the two templates render against
+        // the same object rather than a copy: the base template needs to see it.
         pageContext.body = page.template(pageContext, partials);
         hypertext = baseTemplate(pageContext, partials);
         assertNonEmptyString(
@@ -687,6 +782,11 @@ export default class HyperviewService {
      * Renders the available subject, HTML body, and plain-text body for an email.
      * Caller props override static email context data, and every content read uses
      * one immutable, request-scoped content snapshot.
+     *
+     * The HTML and text bodies are independent representations: a bundle may
+     * publish either one, and the unpublished field resolves null so the caller
+     * can decide which variants to send without inspecting the source assets.
+     * Unlike page rendering, nothing here is cached or reused between calls.
      * @param {import('../context/request-context.js').default} context - Context for content access
      * @param {string} pathname - Canonical pathname identifying the email content
      * @param {Object} props - Runtime values merged into the email template context
@@ -709,6 +809,11 @@ export default class HyperviewService {
 
         // Runtime values take precedence over published defaults so callers can
         // supply recipient- and delivery-specific data.
+        //
+        // deepMerge() mutates its target, and the target here is the bundle's own
+        // contextData. That is only safe because #getEmail() parses the bundle
+        // fresh on every call; caching email bundles would leak one recipient's
+        // props into the next render.
         const contextData = deepMerge(email.contextData, { includes: email.includes }, props);
 
         let subject = null;
@@ -738,6 +843,11 @@ export default class HyperviewService {
     /**
      * Compiles template syntax for metadata fields which do not support partials,
      * such as page titles, descriptions, and email subject lines.
+     *
+     * The returned function is bound to an empty partial lookup, so a `{{> name }}`
+     * in one of these fields is a render error rather than an expansion. Metadata
+     * is interpolated into attributes, headers, and subject lines where a partial's
+     * markup would be meaningless. Custom helpers remain available.
      * @param {string} templateId - Identifier included in template error messages
      * @param {string} templateSource - Template source to compile
      * @returns {function(Object): string} Render function accepting the template context

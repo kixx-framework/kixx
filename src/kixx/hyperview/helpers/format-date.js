@@ -44,6 +44,26 @@ These presets use the example date of **October 14, 1983 at 13:30:23**.
 */
 
 
+/**
+ * Template helper which formats a date-like value with Luxon.
+ *
+ * Accepts an ISO string, a millisecond timestamp, a Date, or a Luxon object
+ * argument, so a page can carry whichever representation its data source
+ * produced.
+ *
+ * An unparseable value never throws. It renders an escaped diagnostic string in
+ * place, because a bad date in one field should not take down the page around
+ * it — and escaping matters here since helper output is not escaped by the
+ * renderer and the value came from published data.
+ * @param {Object} _context - Current template frame value; unused
+ * @param {Object} options - Named helper arguments
+ * @param {string} [options.format] - A preset name from the table above, `ISO`, `ISO_DATE`, `UTC`, or `DATE_MONTH_DATE`; an unrecognized value falls back to `DATETIME_SHORT`
+ * @param {string} [options.zone] - IANA time zone name, such as `America/New_York`
+ * @param {string} [options.locale] - BCP 47 locale tag, such as `en-US`
+ * @param {string|number|Date|Object} date - Value to format
+ * @returns {string} The formatted date, an empty string for an empty, null, or undefined value, or an escaped diagnostic string when the value cannot be parsed
+ * @see formatDate Helper in ../../../templates/README.md for template usage
+ */
 export default function formatDate(_context, options, date) {
     if (date === '' || date === null || typeof date === 'undefined') {
         return '';
