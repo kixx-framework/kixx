@@ -288,10 +288,7 @@ When a `page` object exists, Hyperview fills several metadata defaults:
 
 ### Hyperview Page-Data JSON Response
 
-Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request when either:
-
-- the pathname ends in `.json`; or
-- the `Accept` header includes `application/json`.
+Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request only when the pathname ends in `.json` (matched case-insensitively). There is no `Accept` header negotiation: the suffix is explicit, and it cannot be triggered by whatever a browser happens to send.
 
 This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data for development and debugging, but it is not the contract for application API endpoints.
 

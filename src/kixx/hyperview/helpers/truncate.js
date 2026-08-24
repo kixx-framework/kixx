@@ -1,4 +1,4 @@
-import { toFriendlyString } from '../../assertions/mod.js';
+import { isNumberNotNaN, toFriendlyString } from '../../assertions/mod.js';
 
 
 /**
@@ -14,9 +14,9 @@ import { toFriendlyString } from '../../assertions/mod.js';
  * @param {Object} _context - Current template frame value; unused
  * @param {Object} _options - Named helper arguments; unused
  * @param {string} str - String to shorten
- * @param {number} length - Maximum number of characters to keep
+ * @param {number} length - Maximum number of characters to keep; the string is returned unchanged when this is not a number
  * @param {string} [ellipsis='&hellip;'] - Suffix appended when the string is shortened; pass an empty string to append nothing
- * @returns {string} The original string when it is already short enough, the shortened string otherwise, an empty string for a falsy value, or a diagnostic string for a non-string value
+ * @returns {string} The original string when it is already short enough or no length was given, the shortened string otherwise, an empty string for a falsy value, or a diagnostic string for a non-string value
  * @see truncate Helper in ../../../templates/README.md for template usage
  */
 export default function truncate(_context, _options, str, length, ellipsis) {
@@ -25,7 +25,10 @@ export default function truncate(_context, _options, str, length, ellipsis) {
     }
 
     if (typeof str === 'string') {
-        if (str.length <= length) {
+        // A missing length would otherwise compare against undefined, fail, and
+        // then slice(0, undefined) the whole string — appending an ellipsis to
+        // text which was never shortened.
+        if (!isNumberNotNaN(length) || str.length <= length) {
             return str;
         }
 

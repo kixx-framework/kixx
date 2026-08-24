@@ -200,7 +200,7 @@ export default class HyperviewService {
 
     // Compiles the site-wide partial bundle, which every render layers beneath
     // the page's own partials. Resolves an empty Map when no bundle is published.
-    async #loadGlobalTemplatePartials(content) {
+    async #loadGlobalTemplatePartials(context, content) {
         // Check the bundle hash before fetching its bytes so a compiled-cache hit
         // avoids both the content read and template parsing.
         const stats = content.statGlobalTemplatePartials();
@@ -214,7 +214,7 @@ export default class HyperviewService {
             return getCachedEntry(this.#globalPartials, cacheKey);
         }
 
-        const file = await content.getGlobalTemplatePartials();
+        const file = await content.getGlobalTemplatePartials(context);
 
         const parts = file.pathname.split('/');
         parts.pop();
@@ -255,7 +255,7 @@ export default class HyperviewService {
     // Resolves one base template — the outer document a full-page render wraps
     // the page body in. Resolves undefined when the bundle names no such id, and
     // null when no bundle is published at all; the caller reports both the same way.
-    async #loadBaseTemplate(content, templateId) {
+    async #loadBaseTemplate(context, content, templateId) {
         // Base templates are published as one bundle, so compile and cache the
         // complete map even though this call returns only the requested template.
         const stats = content.statBaseTemplates();
@@ -270,13 +270,15 @@ export default class HyperviewService {
             return map.get(templateId);
         }
 
-        const file = await content.getBaseTemplates();
+        const file = await content.getBaseTemplates(context);
 
         const parts = file.pathname.split('/');
         parts.pop();
         const dirname = parts.join('/');
 
         const templates = new Map();
+
+        assertArray(file.json, `Base templates must be defined as an Array in "${ file.pathname }"`);
 
         for (const { id, source } of file.json) {
             assertNonEmptyString(
@@ -395,8 +397,8 @@ export default class HyperviewService {
     // Reads every asset one page render needs in a single bulk fetch, compiles
     // its templates, and hands the pieces to HyperviewPage for context assembly.
     // Resolves null when there is no renderable page at this pathname.
-    async #getPage(content, url, pathname, responseProps) {
-        const page = await content.batchGetPageAssets(pathname);
+    async #getPage(context, content, url, pathname, responseProps) {
+        const page = await content.batchGetPageAssets(context, pathname);
 
         // A page directory can carry metadata with no template of its own; an ancestor
         // directory published only to supply inherited defaults for its descendants.
@@ -409,8 +411,12 @@ export default class HyperviewService {
         // The snapshot returns metadata from the broadest ancestor to the leaf;
         // HyperviewPage relies on that order when applying merge precedence.
         const pageDataSources = page.pageDataFiles.map((file) => file.json);
-        const partials = this.#getPagePartials(page.partials);
-        const template = this.#getPageTemplate(page.template);
+        // Started together so the two compilations overlap; both must be awaited
+        // before HyperviewPage stores them, because it keeps what it is given verbatim.
+        const [ partials, template ] = await Promise.all([
+            this.#getPagePartials(page.partials),
+            this.#getPageTemplate(page.template),
+        ]);
 
         return new HyperviewPage({
             url,
@@ -419,7 +425,7 @@ export default class HyperviewService {
             pageDataSources,
             template,
             partials,
-            includes: page.includes || {},
+            includes: page.includes?.json ?? {},
             hash: page.hash,
             createMiniTemplate: this.createMiniTemplate.bind(this),
         });
@@ -429,8 +435,8 @@ export default class HyperviewService {
     // and text representations were published, and the bundle's own partials.
     // Nothing here is cached, because emails are rendered far less often than
     // pages and there is no request-rate pressure to justify the retained memory.
-    async #getEmail(content, pathname) {
-        const bundle = await content.getEmailAssets(pathname);
+    async #getEmail(context, content, pathname) {
+        const bundle = await content.getEmailAssets(context, pathname);
 
         if (!bundle) {
             return null;
@@ -603,7 +609,7 @@ export default class HyperviewService {
         // exactly one request-scoped snapshot.
         const content = await this.#contentAddressableStore.openSnapshot(context);
 
-        const page = await this.#getPage(content, url, pathname, response.props);
+        const page = await this.#getPage(context, content, url, pathname, response.props);
 
         if (!page) {
             throw new NotFoundError(`No page found for URL "${ url.href }"`, {
@@ -701,7 +707,7 @@ export default class HyperviewService {
             // updates from the browser with fetch().
             this.#logger.debug('render partial for page', { pathname, url: url.href, partial: options.partial });
 
-            const globalPartials = await this.#loadGlobalTemplatePartials(content);
+            const globalPartials = await this.#loadGlobalTemplatePartials(context, content);
             const template = page.partials.get(options.partial);
             assertFunction(template, `Partial template "${ options.partial }" does not exist in pages/${ pathname }`);
 
@@ -731,7 +737,7 @@ export default class HyperviewService {
             this.#logger.debug('skip base template render for page', { url: url.href, pathname });
 
             const template = page.template;
-            const globalPartials = await this.#loadGlobalTemplatePartials(content);
+            const globalPartials = await this.#loadGlobalTemplatePartials(context, content);
 
             hypertext = template(page.context, layerPartials(page.partials, globalPartials));
             assertNonEmptyString(
@@ -749,12 +755,12 @@ export default class HyperviewService {
             return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
         }
 
-        const baseTemplate = await this.#loadBaseTemplate(content, options.baseTemplateId);
+        const baseTemplate = await this.#loadBaseTemplate(context, content, options.baseTemplateId);
 
         assertFunction(baseTemplate, `Base template "${ options.baseTemplateId }" does not exist`);
 
         const pageContext = page.context;
-        const globalPartials = await this.#loadGlobalTemplatePartials(content);
+        const globalPartials = await this.#loadGlobalTemplatePartials(context, content);
         const partials = layerPartials(page.partials, globalPartials);
 
         // Render the page body first and expose it through the shared context so
@@ -791,6 +797,7 @@ export default class HyperviewService {
      * @param {string} pathname - Canonical pathname identifying the email content
      * @param {Object} props - Runtime values merged into the email template context
      * @returns {Promise<{subject: string|null, html: string|null, text: string|null}>} Rendered email fields; unavailable fields are null
+     * @throws {NotFoundError} When no email bundle is published at the pathname
      */
     async renderEmail(context, pathname, props) {
         assert(
@@ -802,9 +809,15 @@ export default class HyperviewService {
         // exactly one request-scoped snapshot.
         const content = await this.#contentAddressableStore.openSnapshot(context);
 
-        const email = await this.#getEmail(content, pathname);
+        const email = await this.#getEmail(context, content, pathname);
 
-        const globalPartials = await this.#loadGlobalTemplatePartials(content);
+        // An unpublished pathname is an ordinary outcome, not a programmer error;
+        // report it the same way respondWithHypertext() reports a missing page.
+        if (!email) {
+            throw new NotFoundError(`No email found for pathname "${ pathname }"`, { pathname });
+        }
+
+        const globalPartials = await this.#loadGlobalTemplatePartials(context, content);
         const partials = layerPartials(email.partials, globalPartials);
 
         // Runtime values take precedence over published defaults so callers can
@@ -845,15 +858,16 @@ export default class HyperviewService {
      * such as page titles, descriptions, and email subject lines.
      *
      * The returned function is bound to an empty partial lookup, so a `{{> name }}`
-     * in one of these fields is a render error rather than an expansion. Metadata
-     * is interpolated into attributes, headers, and subject lines where a partial's
-     * markup would be meaningless. Custom helpers remain available.
+     * in one of these fields expands to nothing — a missing partial renders as an
+     * empty string, per the Mustache spec. Metadata is interpolated into
+     * attributes, headers, and subject lines where a partial's markup would be
+     * meaningless. Custom helpers remain available.
      * @param {string} templateId - Identifier included in template error messages
      * @param {string} templateSource - Template source to compile
      * @returns {function(Object): string} Render function accepting the template context
      */
     createMiniTemplate(templateId, templateSource) {
-        const template = this.compileTemplate(templateId, templateSource, this.#customHelpers);
+        const template = compileTemplate(templateId, templateSource, this.#customHelpers);
         // An empty lookup deliberately prevents metadata templates from resolving
         // page or global partials.
         return (data) => template(data, new Map());

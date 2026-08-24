@@ -132,7 +132,7 @@ The wrapper restarts the child app server after the site has been idle for a few
 
 The dev server also serves CSS and JavaScript directly from `src/stylesheets/` and `src/javascript/`, allowing you to skip an asset build process. It recognizes `/assets/<build-id>/stylesheets/**` and `/assets/<build-id>/javascript/**` as source-file URLs in development, ignores the Build ID segment, and sends `Cache-Control: no-cache` so edits appear on reload. The bare `/stylesheets/**` and `/javascript/**` source-file URLs remain available too.
 
-Add `.json` to the end of any URL to get the template context object as JSON (ecluding includes content):
+Add `.json` to the end of any URL to get the template context object as JSON, including the page's includes content:
 
 `http://localhost:2026/index.json` -> context object for `http://localhost:2026/`
 `http://localhost:2026/users/admin/new.json` -> context object for `http://localhost:2026/users/admin/new`

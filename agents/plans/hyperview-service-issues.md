@@ -3,10 +3,12 @@
 Issues found during a documentation review of `src/kixx/hyperview/` on
 2026-08-24.
 
-Nothing in this document has been fixed. The review changed comments and JSDoc
-only; the linter is clean against `src/kixx/hyperview/` and all 931 unit tests
-pass — which is part of the finding, because none of these modules is covered by
-a test (HV-7) and the application cannot currently boot at all (HV-6).
+Everything except HV-6 is fixed; see the status note on each. HV-6 is open and
+deliberately deferred. The suite is now 1031 tests, 100 of them against
+`src/kixx/hyperview/`, and the linter is clean. Each fix below was checked by
+reverting it and confirming the new tests fail, so they are verified by
+execution rather than by reading — but only at the unit level. Nothing has run
+against a real request, because HV-6 means nothing imports the service yet.
 
 Most of what follows is one root cause: `HyperviewService` was written against
 the old `HyperviewContentSnapshot` API and only partially migrated to
@@ -19,6 +21,14 @@ Ordered by severity.
 ---
 
 ## HV-1: Every content read omits the `context` argument
+
+**Status:** Fixed. The request context is threaded through
+`#loadGlobalTemplatePartials(context, content)`,
+`#loadBaseTemplate(context, content, templateId)`,
+`#getPage(context, content, url, pathname, responseProps)`, and
+`#getEmail(context, content, pathname)`, and passed as the first argument to
+all four `ContentSnapshot` reads. Linter clean; 931 unit tests pass. Still
+unverified at runtime because of HV-6.
 
 **Severity:** Critical — no page, partial, or email can render
 **Location:** `src/kixx/hyperview/hyperview-service.js:217`, `:273`, `:399`, `:433`
@@ -81,6 +91,9 @@ Same for `#loadBaseTemplate(context, content, templateId)`,
 
 ## HV-2: `createMiniTemplate()` calls a method that does not exist
 
+**Status:** Fixed. `createMiniTemplate()` now calls the module-private
+`compileTemplate()` function.
+
 **Severity:** Critical — every templated title, description, or subject throws
 **Location:** `src/kixx/hyperview/hyperview-service.js:856`
 
@@ -118,6 +131,9 @@ const template = compileTemplate(templateId, templateSource, this.#customHelpers
 ---
 
 ## HV-3: `#getPage()` does not await the compiled template and partials
+
+**Status:** Fixed. Both compilations are awaited together through
+`Promise.all()`, preserving the concurrency.
 
 **Severity:** Critical — page renders receive Promises where functions are required
 **Location:** `src/kixx/hyperview/hyperview-service.js:412`
@@ -163,6 +179,9 @@ const [ partials, template ] = await Promise.all([
 
 ## HV-4: Page includes are passed to templates as a content object, not their content
 
+**Status:** Fixed. `#getPage()` now passes `page.includes?.json ?? {}`,
+matching what `#getEmail()` already did.
+
 **Severity:** High — silently renders nothing
 **Location:** `src/kixx/hyperview/hyperview-service.js:422`
 
@@ -202,6 +221,9 @@ what makes the page path's omission easy to miss.
 ---
 
 ## HV-5: `renderEmail()` does not handle an unpublished email
+
+**Status:** Fixed. `renderEmail()` throws `NotFoundError` when `#getEmail()`
+resolves null, and the JSDoc records it with `@throws`.
 
 **Severity:** Medium — wrong error class for an ordinary condition
 **Location:** `src/kixx/hyperview/hyperview-service.js:805`
@@ -280,6 +302,15 @@ implementation for reference, but it is written against the old content API.
 
 ## HV-7: No test coverage for `src/kixx/hyperview/`
 
+**Status:** Fixed. `test/unit-tests/kixx/hyperview/` covers the service and the
+three helpers with 100 tests, built on a file-local fake `ContentSnapshot` and
+fake content-addressable and KV stores. Every item on the recommended-minimum
+list below is covered, and each of the HV-1..HV-5, HV-8, and HV-10 fixes was
+confirmed to fail the suite when reverted. `src/kixx/hyperview/hyperview-page.js`
+has no test file of its own: its behavior is exercised through the service
+(merge precedence, mini templates, URL-derived defaults), which is how the
+application reaches it.
+
 **Severity:** Medium — the defects above are all silent
 **Location:** `test/unit-tests/` (no hyperview directory)
 
@@ -313,6 +344,9 @@ minimum:
 
 ## HV-8: The base-template bundle is not validated as an Array
 
+**Status:** Fixed. `#loadBaseTemplate()` now calls `assertArray()` on
+`file.json` like the other three loaders.
+
 **Severity:** Low — diagnostics only
 **Location:** `src/kixx/hyperview/hyperview-service.js:281`
 
@@ -338,6 +372,12 @@ Add the matching `assertArray()` call for symmetry.
 ---
 
 ## HV-9: Documented JSON-response behavior does not match the implementation
+
+**Status:** Fixed in the documents, as recommended — the `.json`-suffix-only
+rule stands. `src/app/presentation/README.md` no longer claims `Accept`-header
+negotiation, and `AGENTS.md` no longer claims includes are excluded (with HV-4
+fixed, the context carries the parsed includes bundle and the debug response
+serializes it).
 
 **Severity:** Low — documentation drift
 **Location:** `AGENTS.md`, `src/app/presentation/README.md:290`
@@ -373,6 +413,9 @@ exclude them at the response, not from the context, since templates need them.
 
 ## HV-10: Helper edge cases render diagnostic text into the page
 
+**Status:** Fixed. `markup` returns `''` for any falsy value, and `truncate`
+returns the string unchanged when `length` is not a number.
+
 **Severity:** Low
 **Location:** `src/kixx/hyperview/helpers/markup.js:30`, `src/kixx/hyperview/helpers/truncate.js:28`
 
@@ -403,3 +446,30 @@ template author will hit and then work around with `{{#if}}` wrappers.
 Give `markup` the same empty guard the other two helpers use (`if (!markdown)
 return ''`), and have `truncate` return the string unchanged when `length` is not
 a number.
+
+---
+
+## HV-11: `createMiniTemplate()` documents a render error it does not produce
+
+**Status:** Fixed in the JSDoc. Found while writing the HV-7 tests.
+
+**Severity:** Low — documentation only
+**Location:** `src/kixx/hyperview/hyperview-service.js:846`
+
+The JSDoc said a `{{> name }}` in a title, description, or subject "is a render
+error rather than an expansion". It is not. The empty partial lookup means the
+tag resolves nothing, and `compilePartial()` in the templating engine follows the
+Mustache spec: a missing partial renders as an empty string.
+
+**How it is triggered**
+
+Publishing a metadata field containing a partial tag. It renders as if the tag
+were not there.
+
+**Implications**
+
+The constraint the empty lookup enforces is real, but it is silent, not loud. An
+author following the JSDoc would expect to be told; instead the field renders
+short. Only the documentation was wrong, so only the documentation changed — the
+silent behavior is the engine's spec-conformant one and is now covered by a test
+that asserts it.
