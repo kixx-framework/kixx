@@ -8,6 +8,35 @@ import {
 } from '../../lib/json-api.js';
 
 
+export async function statStaticAsset(context, request, response) {
+    const store = context.getService('ContentAddressableStore');
+
+    const segments = request.pathnameParams.path;
+    // TODO: Is this a programmer error or BadRequest error if we don't have segments?
+    assertArray(segments, `Route for ${ request.url.pathname } must produce path segments`);
+    const pathname = store.normalizePathname(segments.join('/'));
+
+    const content = await store.openSnapshot(context);
+    const stats = content.statStaticAsset(pathname);
+
+    if (!stats) {
+        throw new NotFoundError(`StaticAsset resource not found at ${ pathname }`);
+    }
+
+    const resource = jsonApiResource({
+        type: 'StaticAsset',
+        id: stats.hash,
+        attributes: {
+            pathname,
+            hash: stats.hash,
+            size: stats.size,
+            metadata: stats.metadata,
+        },
+    });
+
+    return response.respondWithJSON(200, resource, { contentType: JSON_API_CONTENT_TYPE });
+}
+
 // The six Hyperview content resources this API exposes, keyed by their
 // canonical external identifier. `HyperviewContentService` and its layout
 // module assert their own path preconditions but do not translate bad client
