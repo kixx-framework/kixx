@@ -231,15 +231,13 @@ export default class ContentSnapshot {
      * Writes the global partial-template bundle to the blob store, canonicalized
      * so that an unchanged bundle always hashes to the same address.
      * @param {Object} context - Request or execution context
-     * @param {string} pathname - Ignored; the bundle occupies a single reserved pathname
      * @param {Array<*>} bundle - The partial-template bundle to publish
      * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
-    async putGlobalTemplatePartials(context, pathname, bundle) {
-        assert(isValidPathname(pathname), 'putGlobalTemplatePartials() requires a valid pathname');
+    async putGlobalTemplatePartials(context, bundle) {
         assertArray(bundle, 'putGlobalTemplatePartials() requires an Array bundle');
-        const fullPathname = getGlobalTemplatePartialsPath(pathname);
+        const fullPathname = getGlobalTemplatePartialsPath();
         const json = canonicalize(bundle);
         return await this.#putFile(context, 'text', fullPathname, json);
     }
@@ -278,15 +276,13 @@ export default class ContentSnapshot {
      * Writes the base-template bundle to the blob store, canonicalized so that
      * an unchanged bundle always hashes to the same address.
      * @param {Object} context - Request or execution context
-     * @param {string} pathname - Ignored; the bundle occupies a single reserved pathname
      * @param {Array<*>} bundle - The base-template bundle to publish
      * @returns {Promise<{pathname: string, hash: string}>} The storage pathname and content hash to record in the manifest
      * @throws {OperationalError} When the backing store fails
      */
-    async putBaseTemplates(context, pathname, bundle) {
-        assert(isValidPathname(pathname), 'putBaseTemplates() requires a valid pathname');
+    async putBaseTemplates(context, bundle) {
         assertArray(bundle, 'putBaseTemplates() requires an Array bundle');
-        const fullPathname = getBaseTemplatesPath(pathname);
+        const fullPathname = getBaseTemplatesPath();
         const json = canonicalize(bundle);
         return await this.#putFile(context, 'text', fullPathname, json);
     }
@@ -345,7 +341,7 @@ export default class ContentSnapshot {
      */
     async putPageIncludes(context, pathname, bundle) {
         assert(isValidPathname(pathname), 'putPageIncludes() requires a valid pathname');
-        assert(isPlainObject(bundle), 'putPageIncludes() requires an Array bundle');
+        assert(isPlainObject(bundle), 'putPageIncludes() requires a plain object bundle');
         const fullPathname = getPageIncludesPath(pathname);
         const json = canonicalize(bundle);
         return await this.#putFile(context, 'text', fullPathname, json);

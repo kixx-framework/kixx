@@ -8,7 +8,64 @@ import {
 } from '../../lib/json-api.js';
 
 
-export async function statStaticAsset(context, request, response) {
+function statHandlerWithPathname(type) {
+
+    return async function statHandler(context, request, response) {
+        const store = context.getService('ContentAddressableStore');
+
+        const segments = request.pathnameParams.path;
+        // TODO: Is this a programmer error or BadRequest error if we don't have segments?
+        assertArray(segments, `Route for ${ request.url.pathname } must produce path segments`);
+        const pathname = store.normalizePathname(segments.join('/'));
+
+        const content = await store.openSnapshot(context);
+        const stats = content[`stat${ type }`](pathname);
+
+        if (!stats) {
+            throw new NotFoundError(`${ type } resource not found at ${ pathname }`);
+        }
+
+        const resource = jsonApiResource({
+            type,
+            id: stats.hash,
+            attributes: {
+                pathname,
+                hash: stats.hash,
+                size: stats.size,
+                metadata: stats.metadata,
+            },
+        });
+
+        return response.respondWithJSON(200, resource, { contentType: JSON_API_CONTENT_TYPE });
+    };
+}
+
+
+function statHandlerWithoutPathname(type) {
+    return async function statHandler(context, request, response) {
+        const store = context.getService('ContentAddressableStore');
+        const content = await store.openSnapshot(context);
+        const stats = content[`stat${ type }`]();
+
+        if (!stats) {
+            throw new NotFoundError(`${ type } resource not found`);
+        }
+
+        const resource = jsonApiResource({
+            type,
+            id: stats.hash,
+            attributes: {
+                hash: stats.hash,
+                size: stats.size,
+                metadata: stats.metadata,
+            },
+        });
+
+        return response.respondWithJSON(200, resource, { contentType: JSON_API_CONTENT_TYPE });
+    };
+}
+
+export async function putStaticAsset(context, request, response) {
     const store = context.getService('ContentAddressableStore');
 
     const segments = request.pathnameParams.path;
@@ -17,25 +74,29 @@ export async function statStaticAsset(context, request, response) {
     const pathname = store.normalizePathname(segments.join('/'));
 
     const content = await store.openSnapshot(context);
-    const stats = content.statStaticAsset(pathname);
-
-    if (!stats) {
-        throw new NotFoundError(`StaticAsset resource not found at ${ pathname }`);
-    }
+    const stats = await content.putStaticAsset(context, pathname, request.arrayBuffer());
 
     const resource = jsonApiResource({
-        type: 'StaticAsset',
+        type,
         id: stats.hash,
         attributes: {
             pathname,
             hash: stats.hash,
             size: stats.size,
-            metadata: stats.metadata,
         },
     });
 
     return response.respondWithJSON(200, resource, { contentType: JSON_API_CONTENT_TYPE });
 }
+
+export const statStaticAsset = statHandlerWithPathname('StaticAsset');
+export const statGlobalTemplatePartials = statHandlerWithoutPathname('GlobalTemplatePartials');
+export const statBaseTemplates = statHandlerWithoutPathname('BaseTemplates');
+export const statPageMetadata = statHandlerWithPathname('PageMetadata');
+export const statPageIncludes = statHandlerWithPathname('PageIncludes');
+export const statPagePartials = statHandlerWithPathname('PagePartials');
+export const statPageTemplate = statHandlerWithPathname('PageTemplate');
+export const statEmailAssets = statHandlerWithPathname('EmailAssets');
 
 // The six Hyperview content resources this API exposes, keyed by their
 // canonical external identifier. `HyperviewContentService` and its layout

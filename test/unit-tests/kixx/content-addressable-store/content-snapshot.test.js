@@ -4,11 +4,21 @@ import { assert, assertEqual } from 'kixx-assert';
 import ContentAddressableIndex from '../../../../src/kixx/content-addressable-store/content-addressable-index.js';
 import ContentSnapshot from '../../../../src/kixx/content-addressable-store/content-snapshot.js';
 import {
+    getBaseTemplatesPath,
     getGlobalTemplatePartialsPath,
     getPageMetadataPath,
     getPageTemplatePath,
     getStaticAssetPath,
 } from '../../../../src/kixx/content-addressable-store/content-layout.js';
+
+async function catchError(fn) {
+    try {
+        await fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}
 
 
 async function makeIndex(files) {
@@ -23,9 +33,12 @@ function makeStore(blobsByHash) {
 
     const getFilesCalls = [];
 
+    const putFileCalls = [];
+
     return {
         getFileCalls,
         getFilesCalls,
+        putFileCalls,
         async getFile(_context, type, pathname, hash) {
             getFileCalls.push({ type, pathname, hash });
             return blobsByHash.get(hash) ?? null;
@@ -35,6 +48,9 @@ function makeStore(blobsByHash) {
         async getFiles(_context, type, stats) {
             getFilesCalls.push({ type, stats });
             return stats.map((stat) => blobsByHash.get(stat.hash) ?? null);
+        },
+        async putFile(_context, pathname, hash, bytes) {
+            putFileCalls.push({ pathname, hash, bytes });
         },
     };
 }
@@ -257,6 +273,68 @@ describe('ContentSnapshot', ({ describe, it }) => {
 
             assertEqual(null, await snapshot.batchGetPageAssets({}, '/blog/post'));
             assertEqual(0, store.getFilesCalls.length);
+        });
+    });
+
+    describe('putGlobalTemplatePartials()', ({ it }) => {
+        it('takes no pathname, matching statGlobalTemplatePartials()/getGlobalTemplatePartials()', async () => {
+            const index = await makeIndex([]);
+            const store = makeStore(new Map());
+            const snapshot = new ContentSnapshot(store, index);
+
+            const result = await snapshot.putGlobalTemplatePartials({}, [ 'a' ]);
+
+            assertEqual(getGlobalTemplatePartialsPath(), result.pathname);
+            assertEqual(getGlobalTemplatePartialsPath(), store.putFileCalls[0].pathname);
+        });
+
+        it('rejects a non-Array bundle', async () => {
+            const index = await makeIndex([]);
+            const snapshot = new ContentSnapshot(makeStore(new Map()), index);
+
+            const caught = await catchError(() => snapshot.putGlobalTemplatePartials({}, {}));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+    });
+
+    describe('putBaseTemplates()', ({ it }) => {
+        it('takes no pathname, matching statBaseTemplates()/getBaseTemplates()', async () => {
+            const index = await makeIndex([]);
+            const store = makeStore(new Map());
+            const snapshot = new ContentSnapshot(store, index);
+
+            const result = await snapshot.putBaseTemplates({}, [ 'a' ]);
+
+            assertEqual(getBaseTemplatesPath(), result.pathname);
+            assertEqual(getBaseTemplatesPath(), store.putFileCalls[0].pathname);
+        });
+
+        it('rejects a non-Array bundle', async () => {
+            const index = await makeIndex([]);
+            const snapshot = new ContentSnapshot(makeStore(new Map()), index);
+
+            const caught = await catchError(() => snapshot.putBaseTemplates({}, {}));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+    });
+
+    describe('putPageIncludes()', ({ it }) => {
+        it('reports a plain-object bundle requirement when the bundle is not a plain object', async () => {
+            const index = await makeIndex([]);
+            const snapshot = new ContentSnapshot(makeStore(new Map()), index);
+
+            const caught = await catchError(() => snapshot.putPageIncludes({}, '/blog/post', []));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assert(
+                caught.message.includes('requires a plain object bundle'),
+                `expected a plain-object message, got "${ caught.message }"`,
+            );
         });
     });
 });

@@ -189,7 +189,11 @@ renders with `includePropsInCacheKey` and no `propsHashFunction`.
 
 ## CAS-4: `ContentSnapshot#putGlobalTemplatePartials()` and `#putBaseTemplates()` accept a `pathname` they discard
 
-**Status:** Open
+**Status:** Resolved — both methods now take `(context, bundle)`, matching
+`statGlobalTemplatePartials()`/`getGlobalTemplatePartials()` and
+`statBaseTemplates()`/`getBaseTemplates()`. Covered by new tests in
+`content-snapshot.test.js`, confirmed red against the prior signature before
+the fix landed.
 **Severity:** Low — misleading API, no incorrect behavior today
 **Location:** `src/kixx/content-addressable-store/content-snapshot.js` — `putGlobalTemplatePartials()`, `putBaseTemplates()`
 
@@ -235,7 +239,10 @@ costs nothing to change now and is a breaking change later.
 
 ## CAS-5: `putPageIncludes()` asserts a plain object but reports "Array bundle"
 
-**Status:** Open
+**Status:** Resolved — the message now reads `'putPageIncludes() requires a
+plain object bundle'`, matching `putEmailAssets()`. Covered by a new test in
+`content-snapshot.test.js`, confirmed red against the prior message before
+the fix landed.
 **Severity:** Low — misleading diagnostic
 **Location:** `src/kixx/content-addressable-store/content-snapshot.js` — `putPageIncludes()`
 
