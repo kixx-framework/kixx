@@ -274,16 +274,13 @@ export function isPageIncludesPath(pathname) {
 }
 
 /**
- * Constructs the storage path for an email's assets bundle.
- *
- * NOTE: `pathname` is currently validated and then discarded, so every email
- * resolves to the same single bundle path. See
- * `agents/plans/content-addressable-store-issues.md` (CAS-1).
+ * Constructs the storage path for an email's assets bundle, within its own
+ * directory beneath `/emails`.
  * @param {string} pathname - Valid logical email pathname
  * @returns {string} Canonical pathname beneath `/emails`
  * @throws {AssertionError} When pathname is not a valid pathname
  */
 export function getEmailBundlePath(pathname) {
-    assert(isValidPathname(pathname), 'getEmailBundlePath() requires a valid page pathname');
-    return normalizePathname(`emails/${ EMAIL_ASSETS_BUNDLE }`);
+    assert(isValidPathname(pathname), 'getEmailBundlePath() requires a valid email pathname');
+    return normalizePathname(`emails/${ pathname }/${ EMAIL_ASSETS_BUNDLE }`);
 }

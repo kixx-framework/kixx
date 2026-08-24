@@ -14,7 +14,10 @@ Ordered by severity.
 
 ## CAS-1: `getEmailBundlePath()` discards its argument, collapsing every email onto one bundle
 
-**Status:** Open
+**Status:** Resolved — `getEmailBundlePath()` now nests the bundle beneath the
+email pathname (`/emails/<pathname>/__email-assets`), the doc block was
+corrected, and `content-layout.test.js` covers distinct pathnames, the new
+path shape, and the assertion on an invalid pathname.
 **Severity:** High — silent data loss
 **Location:** `src/kixx/content-addressable-store/content-layout.js:227`
 
