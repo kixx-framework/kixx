@@ -1,64 +1,108 @@
+import { ValidationError } from '../errors/mod.js';
+import {
+    isValidPathname,
+    normalizePathname,
+    getStaticAssetPath,
+    getGlobalTemplatePartialsPath,
+    getBaseTemplatesPath,
+    getPageMetadataPath,
+    getPagePartialsPath,
+    getPageIncludesPath,
+    getPageTemplatePath,
+    getEmailBundlePath,
+} from './content-layout.js';
+import { FORMAT, hashTree, compareStrings } from './addressing.js';
 import {
     assert,
     assertArray,
-    isNonEmptyString,
-    isPlainObject,
     isUndefined,
-} from '../../../kixx/assertions/mod.js';
-import { ValidationError } from '../../../kixx/errors/mod.js';
-import {
-    FORMAT,
-    compareStrings,
-    hashEtag,
-    hashTree,
-    isValidPathname,
-    normalizePathname,
-} from './addressing.js';
+    isPlainObject,
+    isNonEmptyString,
+} from '../assertions/mod.js';
 
 /**
- * Encoded directory entry containing only the fields which apply to trees.
- * @typedef {['tree', string]} TreeIndexEntryTuple
+ * The compact, persisted form of one index entry. The arity distinguishes the
+ * two kinds, and {@link ContentStoreInterface} requires an adapter to preserve
+ * it across a storage round trip:
+ *
+ * - A tree (directory): `[ 'tree', hash ]`
+ * - A blob (file): `[ 'blob', hash, size, metadata ]`
+ *
+ * A tree's hash covers its canonicalized immediate-child list, so it changes
+ * whenever anything beneath it changes. A blob's hash covers its bytes.
+ * @typedef {Array} IndexEntryTuple
  */
 
 /**
- * Encoded file entry with its content attributes in a fixed order.
- * @typedef {['blob', string, number, (Object|null)]} BlobIndexEntryTuple
- */
-
-/**
- * Compact encoded index-table value used to keep the persisted table small.
- * @typedef {TreeIndexEntryTuple|BlobIndexEntryTuple} IndexEntryTuple
- */
-
-/**
- * A decoded content-addressable index node.
+ * One index entry decoded into named fields and paired with the pathname it is
+ * keyed by. Tree entries carry `size: null` and `metadata: null`.
  * @typedef {Object} IndexEntry
- * @property {string} pathname - Normalized pathname for the node, with a leading slash "/".
- * @property {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file.
- * @property {string} hash - Content digest of the blob's bytes, or of the tree's canonicalized child list.
- * @property {string} etag - Digest of a blob's content hash and canonicalized metadata, or the content hash for a tree.
- * @property {number|null} size - Byte size of a blob, or null for a tree.
- * @property {Object|null} metadata - Caller-supplied metadata for a blob, or null.
+ * @property {string} pathname - Canonical pathname the entry is keyed by, with a leading slash
+ * @property {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file
+ * @property {string} hash - Content digest of the blob's bytes, or of the tree's canonicalized child list
+ * @property {number|null} size - Byte size of a blob; null for a tree
+ * @property {Object|null} metadata - Deep copy of the blob's metadata; null when absent or for a tree
  */
 
 /**
- * A file to include when building an index, before directory nodes are derived.
+ * One file in the flat list {@link ContentAddressableIndex.buildIndex} derives
+ * an index from. Directories are never listed: they are implied by the
+ * pathnames and created by the build.
  * @typedef {Object} IndexSourceFile
- * @property {string} pathname - Normalized pathname for the file, with a leading slash "/".
- * @property {string} hash - Content digest of the file bytes, computed by the caller (see hashBlob in addressing.js).
- * @property {number} size - Byte size of the file.
- * @property {Object} [metadata] - Caller-supplied metadata to associate with the file.
+ * @property {string} pathname - Canonical pathname of the file, with a leading slash and no trailing slash
+ * @property {string} hash - Content digest of the file's bytes, computed by the caller
+ * @property {number} size - Byte size of the file, as a non-negative integer
+ * @property {Object} [metadata] - Arbitrary metadata to persist alongside the entry; contributes to the tree hash when present
+ */
+
+/**
+ * A `{hash, size, metadata}` reference to one piece of content, matching what
+ * the publishing API's `stat*` resources already expose to a client.
+ * @typedef {Object} ContentTreeReference
+ * @property {string} hash - Content digest of the referenced file's bytes
+ * @property {number} size - Byte size of the referenced file
+ * @property {Object|null} [metadata] - Arbitrary metadata to persist alongside the entry
+ */
+
+/**
+ * One page's facets within a {@link ContentTree} commit. Every facet is
+ * optional; an absent facet means it is not part of this commit, not that it
+ * should be deleted.
+ * @typedef {Object} ContentTreePageEntry
+ * @property {ContentTreeReference} [metadata] - The page's `page.json` metadata file
+ * @property {ContentTreeReference} [partials] - The page's partial-template bundle
+ * @property {ContentTreeReference} [includes] - The page's include bundle
+ * @property {ContentTreeReference} [template] - The page's template file. Carries its own `pathname` (the full filepath, including the filename) because a page's template filename cannot be derived from the page's logical pathname alone.
+ */
+
+/**
+ * The structured commit payload the publishing API's `commitChanges` request
+ * handler assembles from a parsed JSON:API resource, grouped by content kind
+ * and keyed by logical pathname. {@link flattenContentTree} converts this
+ * into the flat {@link IndexSourceFile} list {@link ContentAddressableIndex.buildIndex}
+ * consumes.
+ * @typedef {Object} ContentTree
+ * @property {Object<string, ContentTreeReference>} [staticAssets] - Static assets keyed by logical pathname
+ * @property {ContentTreeReference} [globalTemplatePartials] - The site-wide partial-template bundle
+ * @property {ContentTreeReference} [baseTemplates] - The site-wide base-template bundle
+ * @property {Object<string, ContentTreePageEntry>} [pages] - Pages keyed by logical pathname
+ * @property {Object<string, ContentTreeReference>} [emails] - Email bundles keyed by logical pathname
  */
 
 /**
  * Read-only, in-memory snapshot of a persisted content-addressable index
  * table. Supports point lookups and prefix listings by pathname without
  * re-deriving the underlying directory structure.
+ *
+ * An instance is a defensive deep copy of the table it was constructed from and
+ * never mutates: the entries an index was opened with are the entries it will
+ * report for its whole lifetime, which is what lets a request pin itself to one
+ * coherent snapshot while a deploy reassigns the build pointer underneath it.
+ * @see getRootHash for naming a closure without constructing an index
  */
 export default class ContentAddressableIndex {
 
     #entries;
-    #etagPromises = new Map();
     #sortedPaths;
 
     /**
@@ -86,21 +130,28 @@ export default class ContentAddressableIndex {
     /**
      * Looks up a single node by exact pathname.
      * @param {string} pathname - The pathname for the node, including a leading slash "/".
-     * @returns {Promise<IndexEntry|null>} The matching node, or null when no entry exists at that pathname.
+     * @returns {IndexEntry|null} The matching node, or null when no entry exists at that pathname.
      */
-    async getNode(pathname) {
+    getNode(pathname) {
         const tuple = this.#entries[pathname];
-        return tuple ? await this.#decodeNode(pathname, tuple) : null;
+        return tuple ? this.#decodeNode(pathname, tuple) : null;
     }
 
     /**
-     * Lists all the nodes under a given directory (the prefix), optionally recursively.
-     * @param {string} prefix - A prefix directory with a leading slash; a trailing slash "/" is added if missing. Pass '' to list from the root.
+     * Lists the nodes beneath a directory, optionally recursively. The prefix
+     * directory itself is never included, and a prefix naming nothing yields an
+     * empty array rather than throwing — an absent directory and an empty one
+     * are indistinguishable here, because the index stores no empty trees.
+     *
+     * The empty-string prefix is a separate mode: it matches the whole table,
+     * including the root node, and is only meaningful with `recursive: true`.
+     * To list the root's children, pass '/'.
+     * @param {string} prefix - Directory pathname with a leading slash; a trailing slash is appended when missing. Pass '/' to list from the root, or '' to dump every node.
      * @param {Object} [options]
-     * @param {boolean} [options.recursive=true] - When false, only list the prefix's immediate children — nested nodes are skipped.
-     * @returns {Promise<IndexEntry[]>} Matching nodes in pathname sort order.
+     * @param {boolean} [options.recursive=true] - When false, list only the prefix's immediate children — both blobs and the trees directly beneath it — and skip everything nested deeper.
+     * @returns {IndexEntry[]} Matching nodes in pathname sort order.
      */
-    async listNodes(prefix, options) {
+    listNodes(prefix, options) {
         const { recursive = true } = options ?? {};
 
         // The prefix must end with a slash "/".
@@ -114,9 +165,9 @@ export default class ContentAddressableIndex {
         const matchingPaths = [];
         for (let i = start; i < paths.length; i += 1) {
             const path = paths[i];
-            // Sorted order guarantees every path matching path is contiguous, so the first
-            // miss past `start` means there are no more — stop instead of
-            // scanning the rest of the index.
+            // Sorted order guarantees every path sharing the prefix is
+            // contiguous, so the first miss past `start` means there are no
+            // more — stop instead of scanning the rest of the index.
             if (prefix !== '' && !path.startsWith(prefix)) {
                 break;
             }
@@ -133,31 +184,20 @@ export default class ContentAddressableIndex {
             matchingPaths.push(path);
         }
 
-        return await Promise.all(matchingPaths.map((path) => {
+        return matchingPaths.map((path) => {
             return this.#decodeNode(path, this.#entries[path]);
-        }));
+        });
     }
 
-    async #decodeNode(pathname, tuple) {
+    #decodeNode(pathname, tuple) {
         const { kind, hash, size, metadata } = decodeIndexEntryTuple(tuple);
-        const etag = kind === 'blob' ? await this.#getEtag(pathname, hash, metadata) : hash;
         return {
             pathname,
             kind,
             hash,
-            etag,
             size,
             metadata: metadata === null ? null : structuredClone(metadata),
         };
-    }
-
-    async #getEtag(pathname, hash, metadata) {
-        let promise = this.#etagPromises.get(pathname);
-        if (!promise) {
-            promise = hashEtag(hash, metadata);
-            this.#etagPromises.set(pathname, promise);
-        }
-        return await promise;
     }
 
     #getSortedPaths() {
@@ -409,6 +449,154 @@ export function validateIndexSourceFiles(files) {
 }
 
 /**
+ * Converts a structured {@link ContentTree} commit payload into the flat
+ * {@link IndexSourceFile} list {@link ContentAddressableIndex.buildIndex}
+ * consumes, deriving each entry's storage pathname via `content-layout.js`'s
+ * builders.
+ *
+ * Every key or facet pathname in `contentTree` originates in an HTTP request
+ * body, so a malformed one is an expected operational failure reported as a
+ * single ValidationError collecting every violation — mirroring
+ * {@link validateIndexSourceFiles}. `contentTree` itself and its dictionary
+ * values are treated as an already-validated internal contract and only
+ * asserted; only pathname-shaped values are user input. `hash`/`size`/`metadata`
+ * are passed through unvalidated: `buildIndex()` already validates that shape
+ * and remains the single source of truth for it.
+ * @param {ContentTree} contentTree - Structured commit payload to flatten.
+ * @returns {IndexSourceFile[]} Flat file list, ready for {@link ContentAddressableIndex.buildIndex}.
+ * @throws {AssertionError} When `contentTree` or one of its dictionary values is not a plain object
+ * @throws {ValidationError} When a key or a template facet's pathname is unsafe or not canonical
+ */
+export function flattenContentTree(contentTree) {
+    assert(isPlainObject(contentTree), 'flattenContentTree: contentTree must be a plain object');
+
+    const {
+        staticAssets,
+        globalTemplatePartials,
+        baseTemplates,
+        pages,
+        emails,
+    } = contentTree;
+
+    const error = new ValidationError('The content tree contains invalid pathnames');
+
+    validateKeyedPathnames(error, 'staticAssets', staticAssets);
+    validateKeyedPathnames(error, 'emails', emails);
+    validatePages(error, pages);
+
+    if (error.length) {
+        throw error;
+    }
+
+    const files = [];
+
+    if (staticAssets) {
+        for (const [ pathname, reference ] of Object.entries(staticAssets)) {
+            files.push(toIndexSourceFile(getStaticAssetPath(pathname), reference));
+        }
+    }
+
+    if (globalTemplatePartials) {
+        files.push(toIndexSourceFile(getGlobalTemplatePartialsPath(), globalTemplatePartials));
+    }
+
+    if (baseTemplates) {
+        files.push(toIndexSourceFile(getBaseTemplatesPath(), baseTemplates));
+    }
+
+    if (pages) {
+        for (const [ pathname, page ] of Object.entries(pages)) {
+            if (page.metadata) {
+                files.push(toIndexSourceFile(getPageMetadataPath(pathname), page.metadata));
+            }
+            if (page.partials) {
+                files.push(toIndexSourceFile(getPagePartialsPath(pathname), page.partials));
+            }
+            if (page.includes) {
+                files.push(toIndexSourceFile(getPageIncludesPath(pathname), page.includes));
+            }
+            if (page.template) {
+                files.push(toIndexSourceFile(getPageTemplatePath(page.template.pathname), page.template));
+            }
+        }
+    }
+
+    if (emails) {
+        for (const [ pathname, reference ] of Object.entries(emails)) {
+            files.push(toIndexSourceFile(getEmailBundlePath(pathname), reference));
+        }
+    }
+
+    return files;
+}
+
+// Validates the keys of a ContentTree dictionary facet (staticAssets, emails),
+// collecting every invalid key into `error` rather than throwing immediately,
+// so a caller sees every problem in the tree at once.
+function validateKeyedPathnames(error, kindName, dict) {
+    if (!dict) {
+        return;
+    }
+    assert(isPlainObject(dict), `flattenContentTree: ${ kindName } must be a plain object`);
+
+    for (const pathname of Object.keys(dict)) {
+        if (!isValidPathname(pathname) || normalizePathname(pathname) !== pathname) {
+            error.push(
+                `${ kindName } key "${ pathname }" must be a safe, canonical pathname`,
+                `${ kindName }["${ pathname }"]`,
+            );
+        }
+    }
+}
+
+// Validates page keys and each page's template facet pathname. The other
+// three page facets (metadata, partials, includes) derive their storage
+// pathname from the already-validated page key, so they need no pathname
+// validation of their own.
+function validatePages(error, pages) {
+    if (!pages) {
+        return;
+    }
+    assert(isPlainObject(pages), 'flattenContentTree: pages must be a plain object');
+
+    for (const [ pathname, page ] of Object.entries(pages)) {
+        assert(isPlainObject(page), `flattenContentTree: pages["${ pathname }"] must be a plain object`);
+
+        if (!isValidPathname(pathname) || normalizePathname(pathname) !== pathname) {
+            error.push(
+                `pages key "${ pathname }" must be a safe, canonical pathname`,
+                `pages["${ pathname }"]`,
+            );
+        }
+
+        const { template } = page;
+        if (!template) {
+            continue;
+        }
+        assert(isPlainObject(template), `flattenContentTree: pages["${ pathname }"].template must be a plain object`);
+
+        const { pathname: templatePathname } = template;
+        if (!isNonEmptyString(templatePathname)
+            || !isValidPathname(templatePathname)
+            || normalizePathname(templatePathname) !== templatePathname) {
+            error.push(
+                `pages["${ pathname }"].template.pathname must be a safe, canonical pathname`,
+                `pages["${ pathname }"].template.pathname`,
+            );
+        }
+    }
+}
+
+function toIndexSourceFile(pathname, reference) {
+    return {
+        pathname,
+        hash: reference.hash,
+        size: reference.size,
+        metadata: reference.metadata,
+    };
+}
+
+/**
  * Encodes a decoded node's fields into its compact tuple representation.
  * @param {('tree'|'blob')} kind - 'tree' for a directory, 'blob' for a file.
  * @param {Object} node
@@ -417,7 +605,7 @@ export function validateIndexSourceFiles(files) {
  * @param {Object|null} [node.metadata] - Caller-supplied metadata for a blob; ignored for a tree.
  * @returns {IndexEntryTuple} The compact tuple representation.
  */
-export function encodeIndexEntry(kind, node) {
+function encodeIndexEntry(kind, node) {
     const { hash } = node;
     if (kind === 'tree') {
         return [ kind, hash ];
@@ -434,7 +622,7 @@ export function encodeIndexEntry(kind, node) {
  * @param {IndexEntryTuple} tuple - The compact tuple representation.
  * @returns {{kind: ('tree'|'blob'), hash: string, size: (number|null), metadata: (Object|null)}}
  */
-export function decodeIndexEntryTuple(tuple) {
+function decodeIndexEntryTuple(tuple) {
     const [ kind, hash, size = null, metadata = null ] = tuple;
     return { kind, hash, size, metadata };
 }
@@ -453,7 +641,7 @@ function buildDirectoryTree(files) {
     nodeList.push(root);
 
     for (const entry of files) {
-        // entry.pathname is normalized (see addressing.js#normalizePathname): leading
+        // entry.pathname is normalized (see content-layout.js#normalizePathname): leading
         // slash, no trailing slash, no doubled slashes. Drop the leading empty
         // segment the split produces so directory pathnames don't get doubled.
         const parts = entry.pathname.split('/').slice(1);

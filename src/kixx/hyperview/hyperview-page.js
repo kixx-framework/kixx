@@ -6,107 +6,138 @@ import {
     isNonEmptyString,
 } from '../assertions/mod.js';
 
+/**
+ * One page's compiled templates and its fully assembled template context.
+ *
+ * The context is assembled once, in the constructor, and is the whole point of
+ * the class: a render must not compose a page from data that arrives at
+ * different times, so everything a template can see is resolved before any
+ * template runs.
+ *
+ * ## Merge precedence
+ * Later sources override earlier ones:
+ *
+ * 1. Page metadata, from the broadest ancestor directory down to the leaf page.
+ *    This is what makes a value published at `/blog/page.json` a default for
+ *    everything beneath it.
+ * 2. The page's includes, exposed as `includes`.
+ * 3. The runtime response props supplied by request handlers.
+ *
+ * Metadata and props are deep-copied before merging, so nothing here can reach
+ * back and mutate a caller's data or a cached content object.
+ *
+ * ## Metadata mini templates
+ * `page.title` and `page.description` may be published as `{ template }` objects
+ * rather than strings. Those compile during the merge and are then rendered
+ * against the merged context, so a title can interpolate values the page data
+ * and response props supplied. They are replaced in place, so a template always
+ * sees a plain string.
+ *
+ * ## Mutation
+ * `context` is a live object, not a snapshot. A full-page render assigns the
+ * rendered page body to `context.body` before running the base template.
+ * @see HyperviewService in ./hyperview-service.js for how a page is loaded and rendered
+ */
 export default class HyperviewPage {
 
-    #pageContext = {};
-    #responseProps = null;
     #createMiniTemplate;
 
+    /**
+     * @param {Object} spec
+     * @param {URL} spec.url - Request URL, used for the canonical URL and href defaults
+     * @param {string} spec.pathname - Canonical page pathname, used as the page identity and in template error messages
+     * @param {Object} spec.responseProps - Runtime values merged last, overriding all published page data
+     * @param {Array<Object>} spec.pageDataSources - Parsed page metadata ordered from the broadest ancestor to the leaf
+     * @param {function(Object, Map): string} spec.template - Compiled page template
+     * @param {Map<string, Function>} spec.partials - Compiled page-local partials, layered over the global partials at render time
+     * @param {Object} spec.includes - Published include fragments keyed by include name
+     * @param {string} spec.hash - Content hash covering every file this page was assembled from
+     * @param {function(string, string): function(Object): string} spec.createMiniTemplate - Compiles a metadata field which cannot resolve partials
+     */
     constructor(spec) {
         const {
             url,
             pathname,
             responseProps,
-            pageTemplateFilename,
+            pageDataSources,
+            template,
             partials,
             includes,
-            etag,
+            hash,
             createMiniTemplate,
         } = spec;
 
-        this.#responseProps = responseProps;
         this.#createMiniTemplate = createMiniTemplate;
 
         this.url = url;
         this.pathname = pathname;
-        this.pageTemplateFilename = pageTemplateFilename;
-        this.includes = null;
-        this.partials = null;
-        this.etag = etag;
+        this.template = template;
+        this.partials = partials;
+        this.hash = hash;
 
-        // includes and partials are ContentObject instances; json() decodes the
-        // stored bytes and must be invoked, not read as a data property.
-        if (includes) {
-            this.includes = includes.json();
-        }
-        if (partials) {
-            this.partials = {
-                etag: partials.etag,
-                partials: partials.json(),
-            };
-        }
+        this.context = this.#formatPageContext(this.#mergeSources(
+            pageDataSources,
+            includes,
+            responseProps,
+        ));
     }
 
-    mergeSources(originalSources) {
+    #mergeSources(originalSources, includes, responseProps) {
         const pageContext = {};
 
-        // Create a structured clone so that we can safely mutate the sources.
+        // The sources belong to content objects which may be shared across
+        // requests, so clone before anything downstream can mutate them.
         const sources = structuredClone(originalSources);
-        const leafNode = sources[sources.length - 1];
 
         // Merge the pages together, with the more specific page data objects overriding
         // their parents. For the merge to work correctly, sources must be sorted
         // from grandparent -> grandchild
         for (const json of sources) {
-            // Includes and partials are page-relative, so only the leaf node can declare
-            // files that should be loaded for the requested pathname.
-            if (json !== leafNode) {
-                delete json.includes;
-                delete json.partials;
-            }
-
             deepMerge(pageContext, json);
         }
 
-        Object.assign(this.#pageContext, pageContext);
-
-        this.#pageContext.includes = this.includes;
+        pageContext.includes = includes;
 
         // Clone the response.props so we don't mutate the nested data structures
         // as part of the page context hydration process.
-        deepMerge(this.#pageContext, structuredClone(this.#responseProps));
+        deepMerge(pageContext, structuredClone(responseProps));
 
-        // Compile the title template, if it exists.
-        if (isNonEmptyString(this.#pageContext.page?.title?.template)) {
-            this.#pageContext.page.title = this.#createMiniTemplate(
+        // Compile the title and description templates here, but do not render
+        // them: they interpolate the merged context, which is not finished until
+        // #formatPageContext() has filled in the URL-derived defaults. Storing the
+        // compiled function in the field is what defers the render to that step.
+        if (isNonEmptyString(pageContext.page?.title?.template)) {
+            pageContext.page.title = this.#createMiniTemplate(
                 `${ this.pathname }/page.title`,
-                this.#pageContext.page.title.template,
+                pageContext.page.title.template,
             );
         }
-        // Compile the description template, if it exists.
-        if (isNonEmptyString(this.#pageContext.page?.description?.template)) {
-            this.#pageContext.page.description = this.#createMiniTemplate(
+        if (isNonEmptyString(pageContext.page?.description?.template)) {
+            pageContext.page.description = this.#createMiniTemplate(
                 `${ this.pathname }/page.description`,
-                this.#pageContext.page.description.template,
+                pageContext.page.description.template,
             );
         }
 
-        return this;
+        return pageContext;
     }
 
-    getPageContext() {
-        if (isUndefined(this.#pageContext.pathname)) {
-            this.#pageContext.pathname = this.pathname;
+    // Fills in the context values derived from the request rather than published
+    // with the page. Every default is applied only when the merged sources left
+    // the field undefined, so page data and response props always win.
+    #formatPageContext(pageContext) {
+        if (isUndefined(pageContext.pathname)) {
+            pageContext.pathname = this.pathname;
         }
-        if (isUndefined(this.#pageContext.url_pathname)) {
-            this.#pageContext.url_pathname = this.url.pathname;
+        if (isUndefined(pageContext.url_pathname)) {
+            pageContext.url_pathname = this.url.pathname;
         }
 
-        if (!isObjectNotNull(this.#pageContext.page)) {
-            this.#pageContext.page = {};
+        if (!isObjectNotNull(pageContext.page)) {
+            pageContext.page = {};
         }
 
-        const { page } = this.#pageContext;
+        const { page } = pageContext;
 
         // Set canonical URL from request URL if not already defined in page data;
         // excludes query string and hash to provide a stable reference.
@@ -118,12 +149,14 @@ export default class HyperviewPage {
             page.href = this.url.href;
         }
 
-        // Hydrate the title and description templates, if they exist.
+        // Render the deferred metadata templates now that the context is complete,
+        // replacing each compiled function with its string so a template never sees
+        // a function in these fields.
         if (isFunction(page.title)) {
-            page.title = page.title(this.#pageContext);
+            page.title = page.title(pageContext);
         }
         if (isFunction(page.description)) {
-            page.description = page.description(this.#pageContext);
+            page.description = page.description(pageContext);
         }
 
         // Create the Open Graph object if it does not yet exist.
@@ -151,6 +184,6 @@ export default class HyperviewPage {
             open_graph.locale = page.locale;
         }
 
-        return this.#pageContext;
+        return pageContext;
     }
 }

@@ -4,8 +4,9 @@ import { assert, assertEqual, assertMatches, assertNotEqual, assertUndefined } f
 import ContentAddressableIndex, {
     getRootHash,
     validateIndexSourceFiles,
-} from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/content-addressable-index.js';
-import { FORMAT, compareStrings, hashEtag, hashTree } from '../../../../../src/plugins/cloudflare-content-addressable-store/lib/addressing.js';
+    flattenContentTree,
+} from '../../../../src/kixx/content-addressable-store/content-addressable-index.js';
+import { FORMAT, compareStrings, hashTree } from '../../../../src/kixx/content-addressable-store/addressing.js';
 
 
 async function catchAsyncError(fn) {
@@ -235,10 +236,9 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual('hash123', node.hash);
             assertEqual(42, node.size);
             assertEqual('text', node.metadata.type);
-            assertEqual(await hashEtag('hash123', { type: 'text' }), node.etag);
         });
 
-        it('uses the tree hash as its etag', async () => {
+        it('decodes a tree node with null size and metadata', async () => {
             const index = new ContentAddressableIndex({
                 '/': [ 'tree', 'root-hash' ],
                 '/a': [ 'tree', 'hashabc' ],
@@ -248,9 +248,11 @@ describe('ContentAddressableIndex', ({ describe }) => {
             const node = await index.getNode('/a');
 
             assertEqual('tree', node.kind);
+            assertEqual('hashabc', node.hash);
+            // A tree tuple carries no size or metadata slot, and the decoder
+            // defaults both to null rather than leaving them undefined.
             assertEqual(null, node.size);
             assertEqual(null, node.metadata);
-            assertEqual('hashabc', node.etag);
         });
 
         it('returns null when no entry exists at the pathname', async () => {
@@ -276,14 +278,14 @@ describe('ContentAddressableIndex', ({ describe }) => {
             assertEqual(sorted.join(','), pathnames.join(','));
         });
 
-        it('includes etags for blobs and trees', async () => {
+        it('decodes the hash of every listed blob and tree', async () => {
             const index = new ContentAddressableIndex(makeListingEntries());
             const nodes = await index.listNodes('/dir', { recursive: false });
             const blob = nodes.find((node) => node.pathname === '/dir/b.txt');
             const tree = nodes.find((node) => node.pathname === '/dir/sub');
 
-            assertEqual(await hashEtag('h-b', null), blob.etag);
-            assertEqual('h-sub', tree.etag);
+            assertEqual('h-b', blob.hash);
+            assertEqual('h-sub', tree.hash);
         });
 
         it('recursively lists all nodes nested under a prefix, excluding the directory node itself', async () => {
@@ -748,6 +750,184 @@ describe('ContentAddressableIndex', ({ describe }) => {
                 'files[1].pathname,files[2].hash,files[2].size,files[3]',
                 caught.errors.map(({ source }) => source).join(','),
             );
+        });
+    });
+
+    describe('flattenContentTree()', ({ it }) => {
+
+        it('returns an empty array for an empty content tree', () => {
+            assertEqual(0, flattenContentTree({}).length);
+        });
+
+        it('flattens a static asset into its storage pathname', () => {
+            const files = flattenContentTree({
+                staticAssets: {
+                    '/logo.png': { hash: 'hash-logo', size: 10 },
+                },
+            });
+
+            assertEqual(1, files.length);
+            assertEqual('/assets/logo.png', files[0].pathname);
+            assertEqual('hash-logo', files[0].hash);
+            assertEqual(10, files[0].size);
+        });
+
+        it('flattens global template partials into the templates namespace', () => {
+            const files = flattenContentTree({
+                globalTemplatePartials: { hash: 'hash-partials', size: 1 },
+            });
+
+            assertEqual(1, files.length);
+            assertEqual('/templates/__template-partials-bundle', files[0].pathname);
+        });
+
+        it('flattens base templates into the templates namespace', () => {
+            const files = flattenContentTree({
+                baseTemplates: { hash: 'hash-base', size: 1 },
+            });
+
+            assertEqual(1, files.length);
+            assertEqual('/templates/__base-templates-bundle', files[0].pathname);
+        });
+
+        it('flattens an email bundle into the emails namespace', () => {
+            const files = flattenContentTree({
+                emails: {
+                    '/welcome': { hash: 'hash-email', size: 1 },
+                },
+            });
+
+            assertEqual(1, files.length);
+            assertEqual('/emails/welcome/__email-assets', files[0].pathname);
+        });
+
+        it('flattens each page facet into its own storage pathname', () => {
+            const files = flattenContentTree({
+                pages: {
+                    '/blog/post': {
+                        metadata: { hash: 'hash-meta', size: 1 },
+                        partials: { hash: 'hash-partials', size: 2 },
+                        includes: { hash: 'hash-includes', size: 3 },
+                        template: { hash: 'hash-template', size: 4, pathname: '/blog/post/page.html' },
+                    },
+                },
+            });
+
+            const byPathname = new Map(files.map((file) => [ file.pathname, file ]));
+
+            assertEqual(4, files.length);
+            assertEqual('hash-meta', byPathname.get('/pages/blog/post/page.json').hash);
+            assertEqual('hash-partials', byPathname.get('/pages/blog/post/__page-partials-bundle').hash);
+            assertEqual('hash-includes', byPathname.get('/pages/blog/post/__page-includes-bundle').hash);
+            assertEqual('hash-template', byPathname.get('/pages/blog/post/page.html').hash);
+        });
+
+        it('produces entries only for the page facets which are present', () => {
+            const files = flattenContentTree({
+                pages: {
+                    '/about': {
+                        metadata: { hash: 'hash-meta', size: 1 },
+                    },
+                },
+            });
+
+            assertEqual(1, files.length);
+            assertEqual('/pages/about/page.json', files[0].pathname);
+        });
+
+        it('throws a ValidationError for an invalid staticAssets key', () => {
+            const caught = catchError(() => flattenContentTree({
+                staticAssets: {
+                    'no-leading-slash.png': { hash: 'hash-a', size: 1 },
+                },
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('VALIDATION_ERROR', caught.code);
+        });
+
+        it('throws a ValidationError for an invalid pages key', () => {
+            const caught = catchError(() => flattenContentTree({
+                pages: {
+                    'no-leading-slash': {
+                        metadata: { hash: 'hash-a', size: 1 },
+                    },
+                },
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('VALIDATION_ERROR', caught.code);
+        });
+
+        it('throws a ValidationError for an invalid emails key', () => {
+            const caught = catchError(() => flattenContentTree({
+                emails: {
+                    'no-leading-slash': { hash: 'hash-a', size: 1 },
+                },
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('VALIDATION_ERROR', caught.code);
+        });
+
+        it('throws a ValidationError for an invalid template pathname', () => {
+            const caught = catchError(() => flattenContentTree({
+                pages: {
+                    '/about': {
+                        template: { hash: 'hash-a', size: 1, pathname: 'no-leading-slash.html' },
+                    },
+                },
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('VALIDATION_ERROR', caught.code);
+        });
+
+        it('collects every invalid key across kinds into a single ValidationError', () => {
+            const caught = catchError(() => flattenContentTree({
+                staticAssets: {
+                    'bad-asset.png': { hash: 'hash-a', size: 1 },
+                },
+                pages: {
+                    'bad-page': {
+                        metadata: { hash: 'hash-b', size: 1 },
+                        template: { hash: 'hash-c', size: 1, pathname: 'bad-template.html' },
+                    },
+                },
+                emails: {
+                    'bad-email': { hash: 'hash-d', size: 1 },
+                },
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('VALIDATION_ERROR', caught.code);
+            assertEqual(4, caught.errors.length);
+        });
+
+        it('does not validate hash or size shape, deferring that to buildIndex()', () => {
+            const caught = catchError(() => flattenContentTree({
+                staticAssets: {
+                    '/logo.png': { hash: '', size: -1 },
+                },
+            }));
+
+            assertEqual(null, caught);
+        });
+
+        it('passes metadata through unchanged whether omitted, null, or an object', () => {
+            const files = flattenContentTree({
+                staticAssets: {
+                    '/a.png': { hash: 'hash-a', size: 1 },
+                    '/b.png': { hash: 'hash-b', size: 1, metadata: null },
+                    '/c.png': { hash: 'hash-c', size: 1, metadata: { lang: 'en' } },
+                },
+            });
+
+            const byPathname = new Map(files.map((file) => [ file.pathname, file ]));
+
+            assertUndefined(byPathname.get('/assets/a.png').metadata);
+            assertEqual(null, byPathname.get('/assets/b.png').metadata);
+            assertEqual('en', byPathname.get('/assets/c.png').metadata.lang);
         });
     });
 });

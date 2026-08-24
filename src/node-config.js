@@ -42,7 +42,7 @@ export default {
                     uploads: {},
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
+            CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 0,
                 indexCacheTtlSeconds: 0,
                 pagesDirectory: './pages',
@@ -92,7 +92,7 @@ export default {
                     uploads: {},
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
+            CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 60 * 60 * 24,
                 indexCacheTtlSeconds: 10,
                 pagesDirectory: './pages',
@@ -142,7 +142,7 @@ export default {
                     uploads: {},
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
+            CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 60 * 60 * 36,
                 indexCacheTtlSeconds: 10,
                 pagesDirectory: './pages',

@@ -1,2670 +1,1373 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual } from 'kixx-assert';
+import {
+    assert,
+    assertEqual,
+    assertFalsy,
+    assertMatches,
+    assertNotEqual,
+} from 'kixx-assert';
 
 import HyperviewService from '../../../../src/kixx/hyperview/hyperview-service.js';
+import {
+    JsonContentObject,
+    TextContentObject,
+} from '../../../../src/kixx/content-addressable-store/content-object.js';
+import ServerResponse from '../../../../src/kixx/http-router/server-response.js';
+import {
+    isValidPathname,
+    normalizePathname,
+} from '../../../../src/kixx/content-addressable-store/content-layout.js';
 
+
+// A sentinel rather than a real RequestContext. Every content read is supposed
+// to receive this exact object, so identity is what the tests assert on.
+const CONTEXT = { name: 'test-request-context' };
+
+
+function catchAsyncError(fn) {
+    return fn().then(
+        () => null,
+        (error) => error,
+    );
+}
+
+function makeStats(pathname, hash) {
+    return { pathname, hash, size: 0, metadata: null };
+}
+
+function makeJsonObject(pathname, hash, value) {
+    return new JsonContentObject(JSON.stringify(value), makeStats(pathname, hash));
+}
+
+function makeTextObject(pathname, hash, text) {
+    return new TextContentObject(text, makeStats(pathname, hash));
+}
 
 function makeLogger() {
-    return {
-        createChild() {
-            return { debug() {} };
-        },
-    };
+    const noop = () => {};
+    const child = { debug: noop, info: noop, warn: noop, error: noop };
+    return { createChild: () => child };
 }
 
-// Lets a test control exactly when an awaited store call resolves, so two
-// concurrent HyperviewService calls can be driven through a specific
-// interleaving instead of relying on real timing.
-function makeDeferred() {
-    let resolve;
-    const promise = new Promise((res) => {
-        resolve = res;
-    });
-    return { promise, resolve };
-}
+/**
+ * A fake ContentSnapshot.
+ *
+ * The spec describes published content in the shape a test wants to talk about;
+ * this converts it into the ContentObject instances the real snapshot returns,
+ * and records every call so the tests can assert on the context argument and on
+ * how often the service went back to the store.
+ */
+function makeContentSnapshot(spec) {
+    const {
+        pages = {},
+        globalPartials = null,
+        globalPartialsHash = 'global-partials-hash-1',
+        baseTemplates = null,
+        baseTemplatesHash = 'base-templates-hash-1',
+        emails = {},
+    } = spec ?? {};
 
-// Content reads now run through request-scoped snapshots. This adapter keeps
-// focused test doubles concise while matching the production boundary: pure
-// helpers stay on the store and all content reads are exposed by a snapshot.
-function makeSnapshot(store) {
-    const readMethods = [
-        'getPage',
-        'statTemplatePartials',
-        'getTemplatePartials',
-        'statBaseTemplates',
-        'getBaseTemplates',
-        'statPageTemplate',
-        'getPageTemplate',
-    ];
-    const snapshot = {};
+    const calls = [];
 
-    for (const methodName of readMethods) {
-        if (typeof store[methodName] === 'function') {
-            snapshot[methodName] = (...args) => store[methodName](undefined, ...args);
-        }
+    function record(method, context, pathname) {
+        calls.push({ method, context, pathname });
     }
 
-    return snapshot;
-}
-
-function makeContentService(store) {
     return {
-        ...store,
-        async openSnapshot() {
-            return makeSnapshot(store);
+        calls,
+
+        callsTo(method) {
+            return calls.filter((entry) => entry.method === method);
+        },
+
+        statGlobalTemplatePartials() {
+            if (!globalPartials) {
+                return null;
+            }
+            return makeStats('/templates/partials.json', globalPartialsHash);
+        },
+
+        async getGlobalTemplatePartials(context) {
+            record('getGlobalTemplatePartials', context);
+            if (!globalPartials) {
+                return null;
+            }
+            return makeJsonObject('/templates/partials.json', globalPartialsHash, globalPartials);
+        },
+
+        statBaseTemplates() {
+            if (!baseTemplates) {
+                return null;
+            }
+            return makeStats('/templates/base-templates.json', baseTemplatesHash);
+        },
+
+        async getBaseTemplates(context) {
+            record('getBaseTemplates', context);
+            if (!baseTemplates) {
+                return null;
+            }
+            return makeJsonObject('/templates/base-templates.json', baseTemplatesHash, baseTemplates);
+        },
+
+        async batchGetPageAssets(context, pathname) {
+            record('batchGetPageAssets', context, pathname);
+
+            const page = pages[pathname];
+            if (!page) {
+                return null;
+            }
+
+            const hash = page.hash ?? `${ pathname }-hash-1`;
+            const directory = pathname === '/' ? '' : pathname;
+
+            const pageDataFiles = (page.pageData ?? []).map((json, index) => {
+                return makeJsonObject(`/pages${ directory }/page.json#${ index }`, `${ hash }-data-${ index }`, json);
+            });
+
+            let template = null;
+            if (page.template) {
+                template = makeTextObject(
+                    `/pages${ directory }/page.html`,
+                    page.templateHash ?? `${ hash }-template`,
+                    page.template,
+                );
+            }
+
+            let partials = null;
+            if (page.partials) {
+                partials = makeJsonObject(
+                    `/pages${ directory }/partials.json`,
+                    page.partialsHash ?? `${ hash }-partials`,
+                    page.partials,
+                );
+            }
+
+            let includes = null;
+            if (page.includes) {
+                includes = makeJsonObject(
+                    `/pages${ directory }/includes.json`,
+                    `${ hash }-includes`,
+                    page.includes,
+                );
+            }
+
+            return { hash, pageDataFiles, template, partials, includes };
+        },
+
+        async getEmailAssets(context, pathname) {
+            record('getEmailAssets', context, pathname);
+
+            const email = emails[pathname];
+            if (!email) {
+                return null;
+            }
+
+            return makeJsonObject(
+                `/emails${ pathname }.json`,
+                email.hash ?? `${ pathname }-email-hash`,
+                email.bundle,
+            );
         },
     };
 }
 
-// A minimal page-and-store pair for cache-key tests. The hashValue() stub
-// serializes objects so that two distinct props objects produce two distinct
-// hashes, which is what makes a props-sensitive cache key observable.
-function makePropsCacheKeyFixtures() {
-    const pageContent = {
-        pageTemplateFilename: 'page.html',
-        partials: null,
-        includes: null,
-        etag: 'page-etag-1',
-        pageDataFiles: [
-            { json() {
-                return { page: {} };
-            } },
+// A fake ContentAddressableStore. The pure pathname and hashing methods
+// delegate to nothing platform-specific, so they are implemented here in the
+// same terms the real store uses rather than mocked away.
+function makeContentAddressableStore(snapshot) {
+    return {
+        snapshot,
+
+        openSnapshotCalls: [],
+
+        normalizePathname,
+
+        isValidPathname,
+
+        async hashString(value) {
+            return `H(${ value })`;
+        },
+
+        async hashSet(value) {
+            return `S(${ JSON.stringify(value) })`;
+        },
+
+        async openSnapshot(context) {
+            this.openSnapshotCalls.push(context);
+            return snapshot;
+        },
+    };
+}
+
+function makeKvStore(seed) {
+    const store = new Map(Object.entries(seed ?? {}));
+    const gets = [];
+    const puts = [];
+
+    return {
+        gets,
+        puts,
+
+        async get(context, key, options) {
+            gets.push({ context, key, options });
+            return store.has(key) ? store.get(key) : null;
+        },
+
+        async put(context, key, value, options) {
+            puts.push({ context, key, value, options });
+            store.set(key, value);
+        },
+    };
+}
+
+function makeRequest(href) {
+    return { url: new URL(href ?? 'https://www.example.com/') };
+}
+
+function makeSubject(spec, options) {
+    const snapshot = makeContentSnapshot(spec);
+    const contentAddressableStore = makeContentAddressableStore(snapshot);
+    const kvStore = makeKvStore(options?.kvSeed);
+
+    const service = new HyperviewService({
+        logger: makeLogger(),
+        ...options?.serviceOptions,
+    });
+
+    service.initialize({ contentAddressableStore, kvStore });
+
+    return { service, snapshot, contentAddressableStore, kvStore };
+}
+
+// The content spec every render-mode test starts from: one page with its own
+// template and partials, one global partial the page overrides, and one base
+// template.
+function makeDefaultSpec() {
+    return {
+        pages: {
+            '/': {
+                pageData: [{ page: { title: 'Home' } }],
+                template: '<main>{{> byline }}{{> footer }}</main>',
+                partials: [
+                    { id: 'byline', source: '<p>{{ page.title }}</p>' },
+                ],
+            },
+        },
+        globalPartials: [
+            { id: 'byline', source: '<p>GLOBAL BYLINE</p>' },
+            { id: 'footer', source: '<footer>{{ page.title }}</footer>' },
+        ],
+        baseTemplates: [
+            { id: 'main', source: '<html><body>{{{ body }}}</body></html>' },
         ],
     };
-
-    const store = {
-        isValidPathname(value) {
-            return typeof value === 'string' && value.length > 0;
-        },
-        normalizePathname(value) {
-            return value;
-        },
-        async getPage() {
-            return pageContent;
-        },
-        async statTemplatePartials() {
-            return null;
-        },
-        async getTemplatePartials() {
-            return null;
-        },
-        async hashValue(value) {
-            if (typeof value === 'string') {
-                return `hash:${ value }`;
-            }
-            return `hash:${ JSON.stringify(value) }`;
-        },
-        async statPageTemplate() {
-            return null;
-        },
-        async getPageTemplate() {
-            return {
-                text() {
-                    return 'PAGE BODY';
-                },
-                etag: 'page-template-etag-1',
-            };
-        },
-    };
-
-    return { pageContent, store };
 }
 
-// Simulates the content-addressable store's deterministic hashing capability:
-// fixed-length output regardless of input size, so a mocked store behaves like
-// the real one for tests that depend on the KV key being bounded and opaque.
-function makeOpaqueHashValue() {
-    return async function hashValue(value) {
-        const str = typeof value === 'string' ? value : JSON.stringify(value);
-        let hash = 0;
-        for (let i = 0; i < str.length; i += 1) {
-            hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
-        }
-        return `h${ (hash >>> 0).toString(16).padStart(8, '0') }`;
-    };
+function makeFullPageOptions(overrides) {
+    return { baseTemplateId: 'main', ...overrides };
 }
 
-// A KV-store double which enforces the real portable 512-byte UTF-8 key limit,
-// so a test using it fails for the same reason the platform adapters would.
-function makeSizeBoundedKvStore() {
-    const KV_KEY_BYTE_LIMIT = 512;
-
-    function assertKeyWithinLimit(key) {
-        const byteLength = new TextEncoder().encode(key).length;
-        assert(
-            byteLength <= KV_KEY_BYTE_LIMIT,
-            `KV key exceeds the portable ${ KV_KEY_BYTE_LIMIT }-byte limit (${ byteLength } bytes)`,
-        );
-    }
-
-    return {
-        async get(_context, key) {
-            assertKeyWithinLimit(key);
-            return null;
-        },
-        async put(_context, key) {
-            assertKeyWithinLimit(key);
-        },
-    };
-}
-
-async function catchAsyncError(fn) {
-    try {
-        await fn();
-    } catch (error) {
-        return error;
-    }
-    return null;
-}
 
 describe('HyperviewService', ({ describe }) => {
 
-    describe('construction and initialization', ({ it }) => {
-        it('requires a logger when constructed', async () => {
-            const caught = await catchAsyncError(() => new HyperviewService());
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assert(caught.message.includes('logger'), `expected logger in "${ caught.message }"`);
-        });
-
-        it('requires both dependencies when initialized', async () => {
-            const service = new HyperviewService({ logger: makeLogger() });
-
-            const missingKvStore = await catchAsyncError(() => {
-                return service.initialize({ contentService: {} });
-            });
-            const missingContentService = await catchAsyncError(() => {
-                return service.initialize({ kvStore: {} });
-            });
-
-            assertEqual('AssertionError', missingKvStore.name);
-            assert(missingKvStore.message.includes('kvStore'));
-            assertEqual('AssertionError', missingContentService.name);
-            assert(missingContentService.message.includes('contentService'));
-        });
-    });
-
-    describe('template creation', ({ it }) => {
-        it('renders a mini template with the supplied page context', () => {
-            const service = new HyperviewService({ logger: makeLogger() });
-            const template = service.createMiniTemplate('page.title', 'Welcome, {{ viewer.name }}!');
-
-            assertEqual('Welcome, Ada!', template({ viewer: { name: 'Ada' } }));
-        });
-
-        it('reuses a current base template when template caching is enabled', async () => {
-            let baseTemplateLoads = 0;
-            const store = {
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async statBaseTemplates() {
-                    return { etag: 'base-v1' };
-                },
-                async getBaseTemplates() {
-                    baseTemplateLoads += 1;
-                    return {
-                        etag: 'base-v1',
-                        json() {
-                            return [ { id: 'layout', source: '<main>{{ body }}</main>' } ];
-                        },
-                    };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const first = await service.getBaseTemplate(makeSnapshot(store), 'layout');
-            const second = await service.getBaseTemplate(makeSnapshot(store), 'layout');
-
-            assertEqual(1, baseTemplateLoads);
-            assertEqual(first, second);
-            assertEqual('<main>Body</main>', first({ body: 'Body' }, new Map()));
-        });
-    });
-
-    describe('getPagePartials', ({ it }) => {
-        it('returns a fresh empty Map for a page which declares no partials', async () => {
-            const store = {};
-            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const page = { pathname: '/articles/example', partials: null };
-
-            const first = await service.getPagePartials(page);
-            const second = await service.getPagePartials(page);
-
-            assertEqual(0, first.size);
-            assert(first !== second, 'expected a new per-render Map');
-        });
-
-        it('keeps a cached bundle immutable when a page stops declaring partials', async () => {
-            const store = {};
-            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const page = {
-                pathname: '/articles/example',
-                partials: {
-                    etag: 'page-v1',
-                    partials: [
-                        { id: 'page.html', source: 'PAGE PARTIAL' },
-                    ],
-                },
-            };
-
-            const populated = await service.getPagePartials(page);
-            assertEqual(1, populated.size);
-
-            page.partials = null;
-            const emptied = await service.getPagePartials(page);
-
-            assert(populated !== emptied, 'expected the prior bundle to remain independent');
-            assertEqual(1, populated.size);
-            assertEqual(0, emptied.size);
-        });
-
-        it('does not retain a partials Map when useTemplateCache is disabled', async () => {
-            const store = {};
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const page = { pathname: '/articles/example', partials: null };
-
-            const first = await service.getPagePartials(page);
-            const second = await service.getPagePartials(page);
-
-            assertEqual(0, first.size);
-            assert(first !== second, 'expected a fresh Map instance on each call');
-        });
-
-        it('reuses compiled page partials across a global-partials change', async () => {
-            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentService: makeContentService({}), kvStore: {} });
-            const page = {
-                pathname: '/articles/example',
-                partials: {
-                    etag: 'page-v1',
-                    partials: [ { id: 'page.html', source: '{{> global.html }}' } ],
-                },
-            };
-
-            const first = await service.getPagePartials(page);
-            const second = await service.getPagePartials(page);
-
-            assert(first === second, 'expected the page-partials bundle to be reused by its own etag');
-            assertEqual('global-v2', first.get('page.html')({}, new Map([
-                [ 'global.html', () => 'global-v2' ],
-                ...first,
-            ])));
-        });
-    });
-
-    describe('snapshot consistency', ({ it }) => {
-        it('does not share global-partials loads across snapshots with different etags', async () => {
-            const firstLoad = makeDeferred();
-            const secondLoad = makeDeferred();
-            let loads = 0;
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({
-                contentService: makeContentService({}),
-                kvStore: {},
-            });
-            const firstSnapshot = {
-                async statTemplatePartials() {
-                    return { etag: 'global-v1' };
-                },
-                async getTemplatePartials() {
-                    loads += 1;
-                    return firstLoad.promise;
-                },
-            };
-            const secondSnapshot = {
-                async statTemplatePartials() {
-                    return { etag: 'global-v2' };
-                },
-                async getTemplatePartials() {
-                    loads += 1;
-                    return secondLoad.promise;
-                },
-            };
-
-            const first = service.loadGlobalPartials(firstSnapshot);
-            const second = service.loadGlobalPartials(secondSnapshot);
-
-            firstLoad.resolve({
-                etag: 'global-v1',
-                json() { return [] },
-            });
-            secondLoad.resolve({
-                etag: 'global-v2',
-                json() { return [] },
-            });
-
-            await Promise.all([first, second]);
-            assertEqual(2, loads);
-        });
-    });
-
-    describe('loadGlobalPartials', ({ it }) => {
-        it('reads the snapshot stat when useTemplateCache is disabled', async () => {
-            let statCalls = 0;
-            let getCalls = 0;
-            const store = {
-                async statTemplatePartials() {
-                    statCalls += 1;
-                    return { etag: 'global-v1' };
-                },
-                async getTemplatePartials() {
-                    getCalls += 1;
-                    return {
-                        etag: 'global-v1',
-                        json() {
-                            return [ { id: 'global.html', source: 'hello' } ];
-                        },
-                    };
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const partials = await service.loadGlobalPartials(makeSnapshot(store));
-
-            assertEqual(1, statCalls);
-            assertEqual(1, getCalls);
-            assertEqual('hello', partials.get('global.html')({}, new Map()));
-        });
-    });
-
-    describe('getBaseTemplate', ({ it }) => {
-        it('reads the snapshot stat when useTemplateCache is disabled', async () => {
-            let statCalls = 0;
-            let getCalls = 0;
-            const store = {
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async statBaseTemplates() {
-                    statCalls += 1;
-                    return { etag: 'base-v1' };
-                },
-                async getBaseTemplates() {
-                    getCalls += 1;
-                    return {
-                        etag: 'base-v1',
-                        json() {
-                            return [ { id: 'layout', source: 'LAYOUT' } ];
-                        },
-                    };
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const template = await service.getBaseTemplate(makeSnapshot(store), 'layout');
-
-            assertEqual(1, statCalls);
-            assertEqual(1, getCalls);
-            assertEqual('LAYOUT', template({}, new Map()));
-        });
-    });
-
-    describe('getPageTemplate', ({ it }) => {
-        it('skips the stat() call when useTemplateCache is disabled', async () => {
-            let statCalls = 0;
-            let getCalls = 0;
-            const store = {
-                normalizePathname(value) {
-                    return value;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async statPageTemplate() {
-                    statCalls += 1;
-                    return { etag: 'page-template-v1' };
-                },
-                async getPageTemplate() {
-                    getCalls += 1;
-                    return {
-                        text() {
-                            return 'PAGE BODY';
-                        },
-                        etag: 'page-template-v1',
-                    };
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const page = {
-                pathname: '/articles/example',
-                pageTemplateFilename: 'page.html',
-                partials: null,
-            };
-
-            const template = await service.getPageTemplate(makeSnapshot(store), page);
-
-            assertEqual(1, statCalls);
-            assertEqual(1, getCalls);
-            assertEqual('PAGE BODY', template({}, new Map()));
-        });
-
-        it('reuses a page template when only its page-partials bundle changes', async () => {
-            const page = {
-                pathname: '/articles/example',
-                pageTemplateFilename: 'page.html',
-                partials: {
-                    etag: 'page-partials-v1',
-                    partials: [ { id: 'x.html', source: 'V1 CONTENT' } ],
-                },
-            };
-
-            const store = {
-                normalizePathname(value) {
-                    return value;
-                },
-                async statPageTemplate() {
-                    return { etag: 'page-template-v1' };
-                },
-                async getPageTemplate() {
-                    return {
-                        text() {
-                            return '{{> x.html }}';
-                        },
-                        etag: 'page-template-v1',
-                    };
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const template = await service.getPageTemplate(makeSnapshot(store), page);
-            const pagePartials = await service.getPagePartials(page);
-
-            assertEqual('V1 CONTENT', template({}, pagePartials));
-
-            page.partials = {
-                etag: 'page-partials-v2',
-                partials: [ { id: 'x.html', source: 'V2 CONTENT' } ],
-            };
-
-            const secondTemplate = await service.getPageTemplate(makeSnapshot(store), page);
-            const secondPagePartials = await service.getPagePartials(page);
-
-            assert(template === secondTemplate, 'expected the compiled page template to be reused');
-            assertEqual('V2 CONTENT', secondTemplate({}, secondPagePartials));
-        });
-
-        it('does not force a redundant recompile on a second request for a page with no partials', async () => {
-            let templateFetchCount = 0;
-            const store = {
-                normalizePathname(value) {
-                    return value;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async statPageTemplate() {
-                    return { etag: 'page-template-v1' };
-                },
-                async getPageTemplate() {
-                    templateFetchCount += 1;
-                    return {
-                        text() {
-                            return 'PAGE BODY';
-                        },
-                        etag: 'page-template-v1',
-                    };
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const page = {
-                pathname: '/articles/example',
-                pageTemplateFilename: 'page.html',
-                partials: null,
-            };
-
-            await service.getPageTemplate(makeSnapshot(store), page);
-            await service.getPageTemplate(makeSnapshot(store), page);
-
-            assertEqual(1, templateFetchCount);
-        });
-
-        it('recompiles a page template when its own etag changes', async () => {
-            let etag = 'page-template-v1';
-            let source = 'V1';
-            const store = {
-                normalizePathname(value) {
-                    return value;
-                },
-                async statPageTemplate() {
-                    return { etag };
-                },
-                async getPageTemplate() {
-                    return {
-                        etag,
-                        text() {
-                            return source;
-                        },
-                    };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-            const page = {
-                pathname: '/articles/example',
-                pageTemplateFilename: 'page.html',
-                partials: null,
-            };
-
-            const first = await service.getPageTemplate(makeSnapshot(store), page);
-            etag = 'page-template-v2';
-            source = 'V2';
-            const second = await service.getPageTemplate(makeSnapshot(store), page);
-
-            assert(first !== second, 'expected a new compiled function for a new template etag');
-            assertEqual('V2', second({}, new Map()));
-        });
-    });
-
-    describe('getPage', ({ it }) => {
-        it('returns null when the page metadata declares no page template', async () => {
-            // A page directory can carry page.json metadata with no template of
-            // its own -- an ancestor directory published only to supply
-            // inherited defaults for its descendants, for example. Requesting
-            // that pathname directly must resolve as "nothing to render here",
-            // not crash the process.
-            const store = {
-                async getPage() {
-                    return {
-                        pageTemplateFilename: null,
-                        partials: null,
-                        includes: null,
-                        etag: 'page-etag-1',
-                        pageDataFiles: [
-                            { json() {
-                                return { page: {} };
-                            } },
-                        ],
-                    };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const page = await service.getPage(makeSnapshot(store), new URL('https://example.com/blog'), '/blog', {});
-
-            assertEqual(null, page);
-        });
-
-        it('returns the loaded page when a page template is declared', async () => {
-            const store = {
-                async getPage() {
-                    return {
-                        pageTemplateFilename: 'page.html',
-                        partials: null,
-                        includes: null,
-                        etag: 'page-etag-1',
-                        pageDataFiles: [
-                            { json() {
-                                return { page: {} };
-                            } },
-                        ],
-                    };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const page = await service.getPage(makeSnapshot(store), new URL('https://example.com/blog'), '/blog', {});
-
-            assert(page, 'expected a page to be returned');
-            assertEqual('page.html', page.pageTemplateFilename);
-        });
-    });
-
-    describe('assertCanonicalIdentifier', ({ it }) => {
-        it('rejects an empty identifier even when the store accepts it', async () => {
-            // The underlying isValidPathname() returns true for an empty string, so
-            // this method must reject it on its own. It exists to validate
-            // identifiers which may not have been checked by any earlier layer.
-            const store = {
-                isValidPathname() {
-                    return true;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const caught = await catchAsyncError(() => {
-                return service.assertCanonicalIdentifier('', 'test identifier');
-            });
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assert(
-                caught.message.includes('test identifier'),
-                `expected the caller context in the message; got "${ caught.message }"`,
+    describe('respondWithHypertext() full page render', ({ it }) => {
+
+        it('wraps the rendered page template in the base template', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                makeFullPageOptions(),
+            );
+
+            assertEqual(
+                '<html><body><main><p>Home</p><footer>Home</footer></main></body></html>',
+                response.body,
             );
         });
 
-        it('accepts a non-empty identifier the store considers valid', async () => {
-            const store = {
-                isValidPathname() {
-                    return true;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
+        it('passes the request context to every content read', async () => {
+            const { snapshot } = await renderDefaultPage();
 
-            const caught = await catchAsyncError(() => {
-                return service.assertCanonicalIdentifier('/articles/example', 'test identifier');
-            });
+            assert(snapshot.calls.length > 0, 'expected content reads');
 
-            assertEqual(null, caught);
-        });
-    });
-
-    describe('respondWithHypertext', ({ it }) => {
-        it('renders a global partial referenced by a page partial', async () => {
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return {
-                        pageTemplateFilename: 'page.html',
-                        partials: {
-                            etag: 'page-partials-v1',
-                            json() {
-                                return [ { id: 'fragment.html', source: '{{> global.html }}' } ];
-                            },
-                        },
-                        includes: null,
-                        etag: 'page-v1',
-                        pageDataFiles: [ {
-                            json() {
-                                return { page: {} };
-                            },
-                        } ],
-                    };
-                },
-                async statTemplatePartials() {
-                    return { etag: 'global-partials-v1' };
-                },
-                async getTemplatePartials() {
-                    return {
-                        etag: 'global-partials-v1',
-                        json() {
-                            return [ { id: 'global.html', source: 'GLOBAL' } ];
-                        },
-                    };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, {
-                headers: new Headers(),
-                url: new URL('https://example.com/articles/example'),
-            }, response, { partial: 'fragment.html' });
-
-            assertEqual('GLOBAL', response.hypertext);
-        });
-
-        it('recognizes JSON requests by representation suffix or Accept header', () => {
-            const service = new HyperviewService({ logger: makeLogger() });
-
-            assert(service.isJsonRequest({
-                url: new URL('https://example.com/articles.json'),
-                headers: new Headers(),
-            }));
-            assert(service.isJsonRequest({
-                url: new URL('https://example.com/articles'),
-                headers: new Headers({ accept: 'text/html, application/json' }),
-            }));
-            assert(!service.isJsonRequest({
-                url: new URL('https://example.com/articles'),
-                headers: new Headers({ accept: 'text/html' }),
-            }));
-        });
-
-        it('opens exactly one snapshot for JSON and rendered-page cache-hit responses', async () => {
-            let openSnapshotCalls = 0;
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-v1',
-                pageDataFiles: [ {
-                    json() { return { page: {} } },
-                } ],
-            };
-            const snapshot = {
-                async getPage() { return pageContent },
-                async statTemplatePartials() { return null },
-                async statBaseTemplates() { return { etag: 'base-v1' } },
-            };
-            const store = {
-                isValidPathname(value) { return typeof value === 'string' && value.length > 0 },
-                normalizePathname(value) { return value },
-                async openSnapshot() {
-                    openSnapshotCalls += 1;
-                    return snapshot;
-                },
-                async hashValue(value) { return `hash:${ value }` },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true, usePageCache: true });
-            service.initialize({
-                contentService: store,
-                kvStore: { async get() { return 'cached' } },
-            });
-            const jsonResponse = {
-                props: {},
-                status: 200,
-                respondWithJSON() { return this },
-            };
-            const htmlResponse = {
-                props: {},
-                status: 200,
-                respondWithUtf8() { return this },
-            };
-
-            await service.respondWithHypertext({}, {
-                url: new URL('https://example.com/articles'),
-                headers: new Headers({ accept: 'application/json' }),
-            }, jsonResponse, { baseTemplateId: 'layout' });
-            await service.respondWithHypertext({}, {
-                url: new URL('https://example.com/articles'), headers: new Headers(),
-            }, htmlResponse, { baseTemplateId: 'layout' });
-
-            assertEqual(2, openSnapshotCalls);
-        });
-
-        it('renders and keys a response from the snapshot that loaded its page', async () => {
-            let v2Published = false;
-            const hashInputs = [];
-            const snapshot = {
-                async getPage() {
-                    v2Published = true;
-                    return {
-                        pageTemplateFilename: 'page.html',
-                        partials: null,
-                        includes: null,
-                        etag: 'page-v1',
-                        pageDataFiles: [ {
-                            json() { return { page: {} } },
-                        } ],
-                    };
-                },
-                async statTemplatePartials() {
-                    assert(v2Published, 'expected V2 publication after page loading');
-                    return { etag: 'partials-v1' };
-                },
-                async getTemplatePartials() { return null },
-                async statPageTemplate() {
-                    assert(v2Published, 'expected V2 publication before template loading');
-                    return { etag: 'template-v1' };
-                },
-                async getPageTemplate() {
-                    assert(v2Published, 'expected V2 publication before template loading');
-                    return {
-                        etag: 'template-v1',
-                        text() { return 'V1 BODY' },
-                    };
-                },
-            };
-            const store = {
-                isValidPathname(value) { return typeof value === 'string' && value.length > 0 },
-                normalizePathname(value) { return value },
-                async openSnapshot() { return snapshot },
-                async hashValue(value) {
-                    hashInputs.push(value);
-                    return `hash:${ hashInputs.length }`;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({
-                contentService: store,
-                kvStore: {
-                    async get() { return null },
-                    async put() {},
-                },
-            });
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, {
-                url: new URL('https://example.com/articles/example'), headers: new Headers(),
-            }, response, { skipBaseRender: true });
-
-            assertEqual('V1 BODY', response.hypertext);
-            assert(hashInputs.includes('page-v1#partials-v1'));
-            assert(!hashInputs.some((input) => String(input).includes('v2')));
-        });
-
-        it('keeps concurrent V1 and V2 renders, partials, and page-cache writes separate', async () => {
-            const firstPartialsStarted = makeDeferred();
-            const releaseFirstPartials = makeDeferred();
-            const cacheWrites = [];
-            let snapshotsOpened = 0;
-
-            function makeVersionedSnapshot(version, waitForPartials) {
-                return {
-                    async getPage() {
-                        return {
-                            pageTemplateFilename: 'page.html',
-                            partials: {
-                                etag: `page-partials-${ version }`,
-                                json() {
-                                    return [ {
-                                        id: 'page.html',
-                                        source: '{{> global.html }}',
-                                    } ];
-                                },
-                            },
-                            includes: null,
-                            etag: `page-${ version }`,
-                            pageDataFiles: [ {
-                                json() { return { page: {} } },
-                            } ],
-                        };
-                    },
-                    async statTemplatePartials() {
-                        return { etag: `global-${ version }` };
-                    },
-                    async getTemplatePartials() {
-                        if (waitForPartials) {
-                            firstPartialsStarted.resolve();
-                            await releaseFirstPartials.promise;
-                        }
-                        return {
-                            etag: `global-${ version }`,
-                            json() {
-                                return [ { id: 'global.html', source: version } ];
-                            },
-                        };
-                    },
-                    async statPageTemplate() {
-                        return { etag: `template-${ version }` };
-                    },
-                    async getPageTemplate() {
-                        return {
-                            etag: `template-${ version }`,
-                            text() { return '{{> page.html }}' },
-                        };
-                    },
-                };
+            for (const call of snapshot.calls) {
+                assertEqual(CONTEXT, call.context, `${ call.method } received the context`);
             }
-
-            const v1 = makeVersionedSnapshot('V1', true);
-            const v2 = makeVersionedSnapshot('V2', false);
-            const store = {
-                isValidPathname(value) { return typeof value === 'string' && value.length > 0 },
-                normalizePathname(value) { return value },
-                async openSnapshot() {
-                    snapshotsOpened += 1;
-                    return snapshotsOpened === 1 ? v1 : v2;
-                },
-                async hashValue(value) { return `hash:${ value }` },
-            };
-            const service = new HyperviewService({
-                logger: makeLogger(),
-                usePageCache: true,
-                useTemplateCache: true,
-            });
-            service.initialize({
-                contentService: store,
-                kvStore: {
-                    async get() { return null },
-                    async put(_context, key, value) {
-                        cacheWrites.push({ key, value });
-                    },
-                },
-            });
-            const request = {
-                headers: new Headers(),
-                url: new URL('https://example.com/articles/example'),
-            };
-            const firstResponse = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-            const secondResponse = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            const firstRender = service.respondWithHypertext({}, request, firstResponse, { skipBaseRender: true });
-            await firstPartialsStarted.promise;
-            const secondRender = service.respondWithHypertext({}, request, secondResponse, { skipBaseRender: true });
-            await secondRender;
-            releaseFirstPartials.resolve();
-            await firstRender;
-
-            assertEqual('V1', firstResponse.hypertext);
-            assertEqual('V2', secondResponse.hypertext);
-            assertEqual(2, cacheWrites.length);
-            assert(cacheWrites.some(({ key, value }) => key.includes('page-V1#global-V1') && value === 'V1'));
-            assert(cacheWrites.some(({ key, value }) => key.includes('page-V2#global-V2') && value === 'V2'));
         });
 
-        it('returns assembled page context for an allowed JSON Accept request', async () => {
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return {
-                        pageTemplateFilename: 'page.html',
-                        partials: null,
-                        includes: null,
-                        etag: 'page-v1',
-                        pageDataFiles: [ {
-                            json() {
-                                return { page: { title: 'Article' } };
-                            },
-                        } ],
-                    };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-            const response = {
-                props: { viewer: { name: 'Ada' } },
-                status: 200,
-                respondWithJSON(status, body, options) {
-                    this.json = { status, body, options };
-                    return this;
-                },
-            };
+        it('reads the page assets under the normalized request pathname', async () => {
+            const { snapshot } = await renderDefaultPage({ href: 'https://www.example.com/' });
 
-            await service.respondWithHypertext({}, {
-                url: new URL('https://example.com/articles/example'),
-                headers: new Headers({ accept: 'application/json' }),
-            }, response, { skipBaseRender: true });
-
-            assertEqual(200, response.json.status);
-            assertEqual('Article', response.json.body.page.title);
-            assertEqual('Ada', response.json.body.viewer.name);
-            assertEqual(4, response.json.options.whiteSpace);
+            assertEqual('/', snapshot.callsTo('batchGetPageAssets')[0].pathname);
         });
 
-        it('renders a named page partial with the assembled page context', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: {
-                    etag: 'partials-v1',
-                    json() {
-                        return [ { id: 'card.html', source: '<article>{{ viewer.name }}</article>' } ];
-                    },
-                },
-                includes: null,
-                etag: 'page-v1',
-                pageDataFiles: [ {
-                    json() {
-                        return { page: {} };
-                    },
-                } ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-            const response = {
-                props: { viewer: { name: 'Ada' } },
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, {
-                url: new URL('https://example.com/articles/example'),
-                headers: new Headers(),
-            }, response, { partial: 'card.html' });
-
-            assertEqual('<article>Ada</article>', response.hypertext);
-        });
-
-        it('serves a rendered-page cache hit without loading the page template', async () => {
-            let pageTemplateLoads = 0;
-            const { store } = makePropsCacheKeyFixtures();
-            const kvStore = {
-                async get(_context, key, options) {
-                    this.key = key;
-                    this.options = options;
-                    return 'CACHED PAGE';
-                },
-                async put() {
-                    throw new Error('must not write after a cache hit');
-                },
-            };
-            const originalGetPageTemplate = store.getPageTemplate;
-            store.getPageTemplate = async function getPageTemplate() {
-                pageTemplateLoads += 1;
-                return await originalGetPageTemplate();
-            };
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, {
-                url: new URL('https://example.com/articles/example'),
-                headers: new Headers(),
-            }, response, { skipBaseRender: true, pageCacheReadTtlSeconds: 120 });
-
-            assertEqual('CACHED PAGE', response.hypertext);
-            assertEqual(0, pageTemplateLoads);
-            assertEqual('text', kvStore.options.type);
-            assertEqual(120, kvStore.options.cacheTtl);
-        });
-
-        it('writes a successful rendered page to the cache with the configured expiration', async () => {
-            const { store } = makePropsCacheKeyFixtures();
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key, value, options) {
-                    this.write = { key, value, options };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, {
-                url: new URL('https://example.com/articles/example'),
-                headers: new Headers(),
-            }, response, { skipBaseRender: true, pageCacheExpirationSeconds: 240 });
-
-            assertEqual('PAGE BODY', response.hypertext);
-            assertEqual('PAGE BODY', kvStore.write.value);
-            assertEqual('text', kvStore.write.options.type);
-            assertEqual(240, kvStore.write.options.ttlSeconds);
-        });
-
-        it('uses refreshed partials without recompiling cached page and base templates', async () => {
-            let pagePartialDefs = [
-                { id: 'page.html', source: 'first page partial' },
-            ];
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: {
-                    etag: 'page-partials-v1',
-                    json() {
-                        return pagePartialDefs;
-                    },
-                },
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const globalPartials = {
-                etag: 'global-partials-v1',
-                templates: [
-                    { id: 'global.html', source: 'first global partial' },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return { etag: globalPartials.etag };
-                },
-                async getTemplatePartials() {
-                    return {
-                        etag: globalPartials.etag,
-                        json() {
-                            return globalPartials.templates;
-                        },
-                    };
-                },
-                async statPageTemplate() {
-                    return { etag: 'page-template-v1' };
-                },
-                async getPageTemplate() {
-                    return {
-                        etag: 'page-template-v1',
-                        text() {
-                            return '{{> global.html }} / {{> page.html }}';
-                        },
-                    };
-                },
-                async statBaseTemplates() {
-                    return { etag: 'base-template-v1' };
-                },
-                async getBaseTemplates() {
-                    return {
-                        etag: 'base-template-v1',
-                        json() {
-                            return [ { id: 'layout', source: '{{ body }}' } ];
-                        },
-                    };
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), useTemplateCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-            const compileTemplate = service.compileTemplate.bind(service);
-            let compilationCount = 0;
-            service.compileTemplate = (...args) => {
-                compilationCount += 1;
-                return compileTemplate(...args);
-            };
-
-            const request = {
-                headers: new Headers(),
-                url: new URL('https://example.com/articles/example'),
-            };
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, request, response, { baseTemplateId: 'layout' });
-            assertEqual('first global partial / first page partial', response.hypertext);
-            const firstCompilationCount = compilationCount;
-
-            globalPartials.etag = 'global-partials-v2';
-            globalPartials.templates = [
-                { id: 'global.html', source: 'second global partial' },
-            ];
-            pageContent.partials.etag = 'page-partials-v2';
-            pagePartialDefs = [
-                { id: 'page.html', source: 'second page partial' },
-            ];
-
-            await service.respondWithHypertext({}, request, response, { baseTemplateId: 'layout' });
-
-            assertEqual('second global partial / second page partial', response.hypertext);
-            assertEqual(firstCompilationCount + 2, compilationCount);
-        });
-
-        it('loads the matching page for a .json request', async () => {
-            const requestedPathnames = [];
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage(_context, pathname) {
-                    requestedPathnames.push(pathname);
-                    return pageContent;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const response = {
-                props: {},
-                status: 200,
-                respondWithJSON() {
-                    return this;
-                },
-            };
+        it('layers page partials over global partials of the same name', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
+            const response = new ServerResponse();
 
             await service.respondWithHypertext(
-                {},
-                {
-                    headers: new Headers(),
-                    url: new URL('https://example.com/articles/example.json'),
-                },
+                CONTEXT,
+                makeRequest(),
                 response,
-                { skipBaseRender: true },
-            );
-            await service.respondWithHypertext(
-                {},
-                {
-                    headers: new Headers(),
-                    url: new URL('https://example.com/index.json'),
-                },
-                response,
-                { skipBaseRender: true },
+                makeFullPageOptions(),
             );
 
-            assertEqual('/articles/example', requestedPathnames[0]);
-            assertEqual('/', requestedPathnames[1]);
+            // The page publishes its own "byline"; the global bundle's is shadowed.
+            assertMatches('<p>Home</p>', response.body);
+            assertFalsy(response.body.includes('GLOBAL BYLINE'));
+            // "footer" exists only globally, so it still resolves.
+            assertMatches('<footer>Home</footer>', response.body);
         });
 
-        it('resolves a nested "index.json" request to its directory page', async () => {
-            // "/index" names a directory page, not a page called "index", at every
-            // depth. Handling only the root would leave the ".json" affordance
-            // broken for every directory page below it.
-            const requestedPathnames = [];
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                // Mirror the real store: fold a trailing slash, except at the root.
-                normalizePathname(value) {
-                    return value.length > 1 ? value.replace(/\/+$/, '') : value;
-                },
-                async getPage(_context, pathname) {
-                    requestedPathnames.push(pathname);
-                    return pageContent;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
+        it('exposes the published includes content to the template', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].template = '<main>{{ includes.intro }}</main>';
+            spec.pages['/'].includes = { intro: 'An introduction.' };
 
-            const response = {
-                props: {},
-                status: 200,
-                respondWithJSON() {
-                    return this;
-                },
-            };
+            const { service } = makeSubject(spec);
+            const response = new ServerResponse();
 
             await service.respondWithHypertext(
-                {},
-                {
-                    headers: new Headers(),
-                    url: new URL('https://example.com/blog/index.json'),
-                },
+                CONTEXT,
+                makeRequest(),
                 response,
-                { skipBaseRender: true },
-            );
-            await service.respondWithHypertext(
-                {},
-                {
-                    headers: new Headers(),
-                    url: new URL('https://example.com/index.json'),
-                },
-                response,
-                { skipBaseRender: true },
+                makeFullPageOptions(),
             );
 
-            assertEqual('/blog', requestedPathnames[0]);
-            assertEqual('/', requestedPathnames[1]);
+            assertMatches('An introduction.', response.body);
         });
 
-        it('loads the matching page for an uppercase ".JSON" request', async () => {
-            const requestedPathnames = [];
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage(_context, pathname) {
-                    requestedPathnames.push(pathname);
-                    return pageContent;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
+        it('renders an empty string for includes when the page publishes none', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].template = '<main>[{{ includes.intro }}]</main>';
 
-            const response = {
-                props: {},
-                status: 200,
-                respondWithJSON() {
-                    return this;
-                },
-            };
+            const { service } = makeSubject(spec);
+            const response = new ServerResponse();
 
             await service.respondWithHypertext(
-                {},
-                {
-                    headers: new Headers(),
-                    url: new URL('https://example.com/articles/example.JSON'),
-                },
+                CONTEXT,
+                makeRequest(),
                 response,
-                { skipBaseRender: true },
+                makeFullPageOptions(),
             );
 
-            assertEqual('/articles/example', requestedPathnames[0]);
+            assertMatches('<main>[]</main>', response.body);
         });
 
-        it('resolves a nested "index.JSON" request to its directory page', async () => {
-            const requestedPathnames = [];
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                // Mirror the real store: fold a trailing slash, except at the root.
-                normalizePathname(value) {
-                    return value.length > 1 ? value.replace(/\/+$/, '') : value;
-                },
-                async getPage(_context, pathname) {
-                    requestedPathnames.push(pathname);
-                    return pageContent;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), allowJsonResponse: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
+        it('renders response props into the page context', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].template = '<main>{{ greeting }}</main>';
 
-            const response = {
-                props: {},
-                status: 200,
-                respondWithJSON() {
-                    return this;
-                },
-            };
+            const { service } = makeSubject(spec);
+            const response = new ServerResponse();
+            response.updateProps({ greeting: 'Hello' });
 
             await service.respondWithHypertext(
-                {},
-                {
-                    headers: new Headers(),
-                    url: new URL('https://example.com/blog/index.JSON'),
-                },
+                CONTEXT,
+                makeRequest(),
                 response,
-                { skipBaseRender: true },
+                makeFullPageOptions(),
             );
 
-            assertEqual('/blog', requestedPathnames[0]);
+            assertMatches('<main>Hello</main>', response.body);
         });
 
-        it('does not strip the ".json" extension when allowJsonResponse is disabled', async () => {
-            // The ".json" extension is a development affordance. When JSON responses are
-            // disabled the extension must stay part of the pathname, so the request
-            // resolves no page instead of silently serving the HTML page at the
-            // extensionless pathname under a second, non-canonical URL.
-            const requestedPathnames = [];
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage(_context, pathname) {
-                    requestedPathnames.push(pathname);
-                    return null;
-                },
-            };
+        it('carries the status already set on the response', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
+            const response = new ServerResponse();
+            response.status = 404;
 
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                makeFullPageOptions(),
+            );
 
-            const request = {
-                headers: new Headers(),
-                url: new URL('https://example.com/articles/example.json'),
-            };
-            const response = { props: {}, status: 200 };
+            assertEqual(404, response.status);
+        });
+
+        it('throws NotFoundError when no page is published at the pathname', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
-            });
-
-            assertEqual('/articles/example.json', requestedPathnames[0]);
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('NotFoundError', caught.name);
-        });
-
-        it('does not remap "/index.json" to "/" when allowJsonResponse is disabled', async () => {
-            const requestedPathnames = [];
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage(_context, pathname) {
-                    requestedPathnames.push(pathname);
-                    return null;
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const request = {
-                headers: new Headers(),
-                url: new URL('https://example.com/index.json'),
-            };
-            const response = { props: {}, status: 200 };
-
-            const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
-            });
-
-            assertEqual('/index.json', requestedPathnames[0]);
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('NotFoundError', caught.name);
-        });
-
-        it('does not strip an uppercase ".JSON" extension when allowJsonResponse is disabled', async () => {
-            const requestedPathnames = [];
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage(_context, pathname) {
-                    requestedPathnames.push(pathname);
-                    return null;
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const request = {
-                headers: new Headers(),
-                url: new URL('https://example.com/articles/example.JSON'),
-            };
-            const response = { props: {}, status: 200 };
-
-            const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
-            });
-
-            assertEqual('/articles/example.JSON', requestedPathnames[0]);
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('NotFoundError', caught.name);
-        });
-
-        it('renders skipBaseRender without requiring options.baseTemplateId', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-                async statPageTemplate() {
-                    return null;
-                },
-                async getPageTemplate() {
-                    return {
-                        text() {
-                            return 'PAGE BODY';
-                        },
-                        etag: 'page-template-etag-1',
-                    };
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-
-            let respondedWith;
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8(status, hypertext, responseOptions) {
-                    respondedWith = { status, hypertext, responseOptions };
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, request, response, { skipBaseRender: true });
-
-            assertEqual('PAGE BODY', respondedWith.hypertext);
-        });
-
-        it('throws when options.baseTemplateId is missing for full-page rendering', async () => {
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-            const response = { props: {}, status: 200 };
-
-            const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, {});
-            });
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-        });
-
-        it('skips rendered-page cache work when page caching is disabled', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async statBaseTemplates() {
-                    return { etag: 'base-etag-1' };
-                },
-                async getBaseTemplates() {
-                    return {
-                        etag: 'base-etag-1',
-                        json() {
-                            return [ { id: 'layout', source: 'LAYOUT[{{ body }}]' } ];
-                        },
-                    };
-                },
-                async hashValue() {
-                    throw new Error('unexpected rendered-page cache operation');
-                },
-                async statPageTemplate() {
-                    return { etag: 'page-template-etag-1' };
-                },
-                async getPageTemplate() {
-                    return {
-                        text() {
-                            return 'PAGE BODY';
-                        },
-                        etag: 'page-template-etag-1',
-                    };
-                },
-            };
-            const kvStore = {
-                async get() {
-                    throw new Error('unexpected rendered-page cache operation');
-                },
-                async put() {
-                    throw new Error('unexpected rendered-page cache operation');
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, request, response, { baseTemplateId: 'layout' });
-
-            assertEqual('LAYOUT[PAGE BODY]', response.hypertext);
-        });
-
-        it('skips rendered-page cache work when page caching is disabled per call', async () => {
-            const { store } = makePropsCacheKeyFixtures();
-            store.statTemplatePartials = async function statTemplatePartials() {
-                return null;
-            };
-            store.hashValue = async function hashValue() {
-                throw new Error('unexpected rendered-page cache operation');
-            };
-
-            const kvStore = {
-                async get() {
-                    throw new Error('unexpected rendered-page cache operation');
-                },
-                async put() {
-                    throw new Error('unexpected rendered-page cache operation');
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, request, response, {
-                skipBaseRender: true,
-                usePageCache: false,
-            });
-
-            assertEqual('PAGE BODY', response.hypertext);
-        });
-
-        it('partitions the rendered-page cache by request origin', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-                async statPageTemplate() {
-                    return null;
-                },
-                async getPageTemplate() {
-                    return {
-                        text() {
-                            return 'PAGE BODY';
-                        },
-                        etag: 'page-template-etag-1',
-                    };
-                },
-            };
-
-            const putKeys = [];
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key) {
-                    putKeys.push(key);
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const responseA = {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            };
-            const requestA = { url: new URL('https://host-a.example/articles/example') };
-            await service.respondWithHypertext({}, requestA, responseA, { skipBaseRender: true });
-
-            const responseB = {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            };
-            const requestB = { url: new URL('https://host-b.example/articles/example') };
-            await service.respondWithHypertext({}, requestB, responseB, { skipBaseRender: true });
-
-            assertEqual(2, putKeys.length);
-            // The key is a hashed, opaque identity (see Issue 3), so partitioning is
-            // observed as distinct keys, not as the raw origin appearing in the key.
-            assert(putKeys[0] !== putKeys[1], 'expected different cache keys for different origins');
-        });
-
-        it('keeps the rendered-page cache key within the portable 512-byte KV limit for a very long URL', async () => {
-            const { store } = makePropsCacheKeyFixtures();
-            store.hashValue = makeOpaqueHashValue();
-
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore: makeSizeBoundedKvStore() });
-
-            const longSegment = 'x'.repeat(2000);
-            const request = { url: new URL(`https://example.com/articles/${ longSegment }?query=${ longSegment }`) };
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            };
-
-            const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
-            });
-
-            assertEqual(null, caught);
-        });
-
-        it('does not leak the raw query string into the cache key or debug logs', async () => {
-            const { store } = makePropsCacheKeyFixtures();
-            store.hashValue = makeOpaqueHashValue();
-
-            const debugCalls = [];
-            const logger = {
-                createChild() {
-                    return {
-                        debug(message, fields) {
-                            debugCalls.push({ message, fields });
-                        },
-                    };
-                },
-            };
-
-            const putKeys = [];
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key) {
-                    putKeys.push(key);
-                },
-            };
-
-            const service = new HyperviewService({ logger, usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const secret = 'SUPER-SECRET-QUERY-VALUE';
-            const request = { url: new URL(`https://example.com/articles/example?token=${ secret }`) };
-            const response = {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            };
-
-            await service.respondWithHypertext({}, request, response, { skipBaseRender: true });
-
-            assertEqual(1, putKeys.length);
-            assert(!putKeys[0].includes(secret), `expected no raw query string in the cache key; got "${ putKeys[0] }"`);
-
-            assert(debugCalls.length > 0, 'expected at least one debug log call');
-            for (const call of debugCalls) {
-                const serialized = JSON.stringify(call);
-                assert(
-                    !serialized.includes(secret),
-                    `expected no raw query string in a cache diagnostic log; got "${ serialized }"`,
+                return service.respondWithHypertext(
+                    CONTEXT,
+                    makeRequest('https://www.example.com/missing'),
+                    new ServerResponse(),
+                    makeFullPageOptions(),
                 );
-            }
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
+            assertMatches('/missing', caught.message);
         });
 
-        it('partitions the rendered-page cache by render mode', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: {
-                    etag: 'page-partials-v1',
-                    json() {
-                        return [ { id: 'header.html', source: 'HEADER' } ];
-                    },
-                },
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-                async statPageTemplate() {
-                    return null;
-                },
-                async getPageTemplate() {
-                    return {
-                        text() {
-                            return 'PAGE BODY';
-                        },
-                        etag: 'page-template-etag-1',
-                    };
-                },
-                async statBaseTemplates() {
-                    return null;
-                },
-                async getBaseTemplates() {
-                    return {
-                        etag: 'base-etag-1',
-                        json() {
-                            return [ { id: 'layout', source: 'LAYOUT[{{ body }}]' } ];
-                        },
-                    };
-                },
-            };
+        it('throws NotFoundError when the page directory publishes no template', async () => {
+            // An ancestor directory may publish metadata to supply defaults for its
+            // descendants without being a page in its own right.
+            const spec = makeDefaultSpec();
+            spec.pages['/blog'] = { pageData: [{ page: { title: 'Blog' } }] };
 
-            const putKeys = [];
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key) {
-                    putKeys.push(key);
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-
-            await service.respondWithHypertext({}, request, {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { partial: 'header.html' });
-
-            await service.respondWithHypertext({}, request, {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { skipBaseRender: true });
-
-            await service.respondWithHypertext({}, request, {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { baseTemplateId: 'layout' });
-
-            assertEqual(3, putKeys.length);
-            assertEqual(3, new Set(putKeys).size);
-        });
-
-        it('partitions the rendered-page cache by the selected partial identifier', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: {
-                    etag: 'page-partials-v1',
-                    json() {
-                        return [
-                            { id: 'header.html', source: 'HEADER' },
-                            { id: 'footer.html', source: 'FOOTER' },
-                        ];
-                    },
-                },
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-            };
-
-            const putKeys = [];
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key) {
-                    putKeys.push(key);
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-
-            await service.respondWithHypertext({}, request, {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { partial: 'header.html' });
-
-            await service.respondWithHypertext({}, request, {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { partial: 'footer.html' });
-
-            assertEqual(2, putKeys.length);
-            assert(putKeys[0] !== putKeys[1], 'expected different cache keys for different partial identifiers');
-        });
-
-        it('partitions the rendered-page cache by page content etag', async () => {
-            const { pageContent, store } = makePropsCacheKeyFixtures();
-
-            const putKeys = [];
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key) {
-                    putKeys.push(key);
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-
-            await service.respondWithHypertext({}, request, {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { skipBaseRender: true });
-
-            pageContent.etag = 'page-etag-2';
-
-            await service.respondWithHypertext({}, request, {
-                props: {},
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { skipBaseRender: true });
-
-            assertEqual(2, putKeys.length);
-            assert(putKeys[0] !== putKeys[1], 'expected different cache keys for different page content etags');
-        });
-
-        it('throws NotFoundError, not a crash, when the page has metadata but no page template', async () => {
-            // A page directory can carry page.json metadata with no template of
-            // its own -- an ancestor directory published only to supply
-            // inherited defaults for its descendants, for example. A direct
-            // request for that pathname is a missing resource from the caller's
-            // perspective, the same as no page metadata at all -- contrast with
-            // the next test, where the metadata names a template that the blob
-            // store fails to produce, which is a build invariant violation.
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return {
-                        pageTemplateFilename: null,
-                        partials: null,
-                        includes: null,
-                        etag: 'page-etag-1',
-                        pageDataFiles: [
-                            { json() {
-                                return { page: {} };
-                            } },
-                        ],
-                    };
-                },
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const request = { url: new URL('https://example.com/blog') };
-            const response = { props: {}, status: 200 };
+            const { service } = makeSubject(spec);
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
+                return service.respondWithHypertext(
+                    CONTEXT,
+                    makeRequest('https://www.example.com/blog'),
+                    new ServerResponse(),
+                    makeFullPageOptions(),
+                );
             });
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('NotFoundError', caught.name);
         });
 
-        it('throws a labeled assertion when the page template blob is absent', async () => {
-            // The page metadata declares a pageTemplateFilename, so a missing blob
-            // violates an invariant the build is supposed to guarantee. It must fail
-            // as a labeled assertion naming the page, not as a TypeError raised by
-            // calling text() on null.
-            const { store } = makePropsCacheKeyFixtures();
-
-            store.getPageTemplate = async function getPageTemplate() {
-                return null;
-            };
-
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-            const response = { props: {}, status: 200 };
+        it('throws when the requested base template is not published', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
+                return service.respondWithHypertext(
+                    CONTEXT,
+                    makeRequest(),
+                    new ServerResponse(),
+                    makeFullPageOptions({ baseTemplateId: 'nope' }),
+                );
             });
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assert(
-                caught.message.includes('page.html'),
-                `expected the page template filename in the message; got "${ caught.message }"`,
+            assertMatches('nope', caught.message);
+        });
+    });
+
+    describe('respondWithHypertext() partial render', ({ it }) => {
+
+        it('renders only the named page partial', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                { partial: 'byline' },
             );
-            assert(
-                caught.message.includes('/articles/example'),
-                `expected the page pathname in the message; got "${ caught.message }"`,
-            );
+
+            assertEqual('<p>Home</p>', response.body);
         });
 
-        it('honors the constructor-level includePropsInCacheKey default', async () => {
-            // Response props are merged into the page context and change rendered
-            // output, so a deployment which caches pages while passing per-request
-            // props must be able to set this once, in the constructor, rather than
-            // relying on every call site to remember the per-call option.
-            const { store } = makePropsCacheKeyFixtures();
-
-            const putKeys = [];
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key) {
-                    putKeys.push(key);
-                },
-            };
-
-            const service = new HyperviewService({
-                logger: makeLogger(),
-                usePageCache: true,
-                includePropsInCacheKey: true,
-            });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-
-            await service.respondWithHypertext({}, request, {
-                props: { viewer: 'alice' },
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { skipBaseRender: true });
-
-            await service.respondWithHypertext({}, request, {
-                props: { viewer: 'bob' },
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, { skipBaseRender: true });
-
-            assertEqual(2, putKeys.length);
-            assert(
-                putKeys[0] !== putKeys[1],
-                'expected different cache keys for different response props',
-            );
-        });
-
-        it('allows a per-call includePropsInCacheKey to override the constructor default', async () => {
-            const { store } = makePropsCacheKeyFixtures();
-
-            const putKeys = [];
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key) {
-                    putKeys.push(key);
-                },
-            };
-
-            const service = new HyperviewService({
-                logger: makeLogger(),
-                usePageCache: true,
-                includePropsInCacheKey: true,
-            });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-            const options = { skipBaseRender: true, includePropsInCacheKey: false };
-
-            await service.respondWithHypertext({}, request, {
-                props: { viewer: 'alice' },
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, options);
-
-            await service.respondWithHypertext({}, request, {
-                props: { viewer: 'bob' },
-                status: 200,
-                respondWithUtf8() {
-                    return this;
-                },
-            }, options);
-
-            assertEqual(2, putKeys.length);
-            assertEqual(putKeys[0], putKeys[1]);
-        });
-
-        it('includes options.baseTemplateId in the full-page cache key', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-
-            // Both layouts live in the same bundle, so statBaseTemplates() reports
-            // one bundle-wide etag regardless of which templateId is selected.
-            const baseTemplatesBundle = [
-                { id: 'layout-a', source: 'LAYOUT-A[{{ body }}]' },
-                { id: 'layout-b', source: 'LAYOUT-B[{{ body }}]' },
+        it('resolves partials referenced from within the rendered partial', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].partials = [
+                { id: 'byline', source: '<p>{{ page.title }}{{> footer }}</p>' },
             ];
 
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-                async statPageTemplate() {
-                    return null;
-                },
-                async getPageTemplate() {
-                    return {
-                        text() {
-                            return 'PAGE BODY';
-                        },
-                        etag: 'page-template-etag-1',
-                    };
-                },
-                async statBaseTemplates() {
-                    return { etag: 'base-etag-1' };
-                },
-                async getBaseTemplates() {
-                    return {
-                        etag: 'base-etag-1',
-                        json() {
-                            return baseTemplatesBundle;
-                        },
-                    };
-                },
-            };
+            const { service } = makeSubject(spec);
+            const response = new ServerResponse();
 
-            const putKeys = [];
-            const kvStore = {
-                async get() {
-                    return null;
-                },
-                async put(_context, key) {
-                    putKeys.push(key);
-                },
-            };
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                { partial: 'byline' },
+            );
 
-            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
-            service.initialize({ contentService: makeContentService(store), kvStore });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-
-            const responseA = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-            await service.respondWithHypertext({}, request, responseA, { baseTemplateId: 'layout-a' });
-
-            const responseB = {
-                props: {},
-                status: 200,
-                respondWithUtf8(_status, hypertext) {
-                    this.hypertext = hypertext;
-                    return this;
-                },
-            };
-            await service.respondWithHypertext({}, request, responseB, { baseTemplateId: 'layout-b' });
-
-            assertEqual(2, putKeys.length);
-            assert(putKeys[0] !== putKeys[1], 'expected different cache keys for different base templates');
-            assertEqual('LAYOUT-A[PAGE BODY]', responseA.hypertext);
-            assertEqual('LAYOUT-B[PAGE BODY]', responseB.hypertext);
+            assertEqual('<p>Home<footer>Home</footer></p>', response.body);
         });
 
-        it('throws when a named partial renders empty', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: {
-                    etag: 'page-partials-v1',
-                    json() {
-                        // Non-empty source that renders to an empty string, so the
-                        // failure comes from the render-output check under test,
-                        // not the earlier non-empty-source assertion.
-                        return [ { id: 'empty.html', source: '{{#missing}}content{{/missing}}' } ];
+        it('never reads the base templates', async () => {
+            const { service, snapshot } = makeSubject(makeDefaultSpec());
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                new ServerResponse(),
+                { partial: 'byline' },
+            );
+
+            assertEqual(0, snapshot.callsTo('getBaseTemplates').length);
+        });
+
+        it('throws when the named partial is not published by the page', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
+
+            const caught = await catchAsyncError(() => {
+                return service.respondWithHypertext(
+                    CONTEXT,
+                    makeRequest(),
+                    new ServerResponse(),
+                    { partial: 'nope' },
+                );
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('nope', caught.message);
+        });
+    });
+
+    describe('respondWithHypertext() skipBaseRender', ({ it }) => {
+
+        it('renders the page template without the surrounding document', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                { skipBaseRender: true },
+            );
+
+            assertEqual('<main><p>Home</p><footer>Home</footer></main>', response.body);
+        });
+
+        it('never reads the base templates', async () => {
+            const { service, snapshot } = makeSubject(makeDefaultSpec());
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                new ServerResponse(),
+                { skipBaseRender: true },
+            );
+
+            assertEqual(0, snapshot.callsTo('getBaseTemplates').length);
+        });
+    });
+
+    describe('respondWithHypertext() metadata mini templates', ({ it }) => {
+
+        it('renders a templated page title against the merged context', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].pageData = [
+                {
+                    page: { title: { template: '{{ author }} — Example' } },
+                    author: 'Rakim',
+                },
+            ];
+            spec.pages['/'].template = '<main>{{ page.title }}</main>';
+
+            const { service } = makeSubject(spec);
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                makeFullPageOptions(),
+            );
+
+            assertMatches('<main>Rakim — Example</main>', response.body);
+        });
+
+        it('renders a templated title against values supplied by response props', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].pageData = [
+                { page: { title: { template: 'Post: {{ post.name }}' } } },
+            ];
+            spec.pages['/'].template = '<main>{{ page.title }}</main>';
+
+            const { service } = makeSubject(spec);
+            const response = new ServerResponse();
+            response.updateProps({ post: { name: 'Follow the Leader' } });
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                makeFullPageOptions(),
+            );
+
+            assertMatches('<main>Post: Follow the Leader</main>', response.body);
+        });
+
+        it('renders a templated page description', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].pageData = [
+                {
+                    page: { description: { template: 'About {{ subject }}' } },
+                    subject: 'hypermedia',
+                },
+            ];
+            spec.pages['/'].template = '<main>{{ page.description }}</main>';
+
+            const { service } = makeSubject(spec);
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                makeFullPageOptions(),
+            );
+
+            assertMatches('<main>About hypermedia</main>', response.body);
+        });
+
+        it('leaves a plain-string title untouched', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].template = '<main>{{ page.title }}</main>';
+
+            const { service } = makeSubject(spec);
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                makeFullPageOptions(),
+            );
+
+            assertMatches('<main>Home</main>', response.body);
+        });
+    });
+
+    describe('respondWithHypertext() JSON response', ({ it }) => {
+
+        it('returns the assembled page context for a ".json" pathname', async () => {
+            const { service } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { allowJsonResponse: true },
+            });
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest('https://www.example.com/index.json'),
+                response,
+                makeFullPageOptions(),
+            );
+
+            const context = JSON.parse(response.body);
+            assertEqual('Home', context.page.title);
+            assertEqual('/', context.pathname);
+        });
+
+        it('carries the includes content in the JSON context', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].includes = { intro: 'An introduction.' };
+
+            const { service } = makeSubject(spec, {
+                serviceOptions: { allowJsonResponse: true },
+            });
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest('https://www.example.com/index.json'),
+                response,
+                makeFullPageOptions(),
+            );
+
+            const context = JSON.parse(response.body);
+            assertEqual('An introduction.', context.includes.intro);
+        });
+
+        it('does not strip the ".json" suffix when JSON responses are disabled', async () => {
+            // With the suffix left in place the pathname names no published page,
+            // which is the behavior that keeps the affordance off by default.
+            const { service } = makeSubject(makeDefaultSpec());
+
+            const caught = await catchAsyncError(() => {
+                return service.respondWithHypertext(
+                    CONTEXT,
+                    makeRequest('https://www.example.com/index.json'),
+                    new ServerResponse(),
+                    makeFullPageOptions(),
+                );
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
+        });
+
+        it('renders hypertext when the client asks by Accept header alone', async () => {
+            // There is no content negotiation: only the pathname suffix selects JSON.
+            const { service } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { allowJsonResponse: true },
+            });
+            const request = makeRequest();
+            request.headers = new Headers({ accept: 'application/json' });
+            const response = new ServerResponse();
+
+            await service.respondWithHypertext(CONTEXT, request, response, makeFullPageOptions());
+
+            assertMatches('<html>', response.body);
+        });
+
+        it('never reads or writes the page cache', async () => {
+            const { service, kvStore } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { allowJsonResponse: true, usePageCache: true },
+            });
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest('https://www.example.com/index.json'),
+                new ServerResponse(),
+                makeFullPageOptions(),
+            );
+
+            assertEqual(0, kvStore.gets.length);
+            assertEqual(0, kvStore.puts.length);
+        });
+    });
+
+    describe('respondWithHypertext() page cache', ({ it }) => {
+
+        async function renderForCacheKey(options, spec) {
+            const { service, kvStore } = makeSubject(spec ?? makeDefaultSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                new ServerResponse(),
+                options,
+            );
+
+            assertEqual(1, kvStore.puts.length);
+            return kvStore.puts[0].key;
+        }
+
+        it('writes the rendered page under a hashed key', async () => {
+            const key = await renderForCacheKey(makeFullPageOptions());
+
+            assertMatches('hyperview_page_cache#', key);
+        });
+
+        it('gives the three render modes three distinct keys for one URL', async () => {
+            const fullPage = await renderForCacheKey(makeFullPageOptions());
+            const pageTemplate = await renderForCacheKey({ skipBaseRender: true });
+            const partial = await renderForCacheKey({ partial: 'byline' });
+
+            assertNotEqual(fullPage, pageTemplate);
+            assertNotEqual(fullPage, partial);
+            assertNotEqual(pageTemplate, partial);
+        });
+
+        it('gives two partials of one page distinct keys', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].partials = [
+                { id: 'byline', source: '<p>{{ page.title }}</p>' },
+                { id: 'aside', source: '<aside>{{ page.title }}</aside>' },
+            ];
+
+            const byline = await renderForCacheKey({ partial: 'byline' }, spec);
+            const aside = await renderForCacheKey({ partial: 'aside' }, spec);
+
+            assertNotEqual(byline, aside);
+        });
+
+        it('changes the key when the page content changes', async () => {
+            const before = await renderForCacheKey(makeFullPageOptions());
+
+            const spec = makeDefaultSpec();
+            spec.pages['/'].hash = 'a-different-page-hash';
+            const after = await renderForCacheKey(makeFullPageOptions(), spec);
+
+            assertNotEqual(before, after);
+        });
+
+        it('changes the key when the global partial bundle changes', async () => {
+            // page.hash covers only the page's own files, so the shared bundle has
+            // to be folded in separately or an edited global partial would keep
+            // serving the old output.
+            const before = await renderForCacheKey(makeFullPageOptions());
+
+            const spec = makeDefaultSpec();
+            spec.globalPartialsHash = 'global-partials-hash-2';
+            const after = await renderForCacheKey(makeFullPageOptions(), spec);
+
+            assertNotEqual(before, after);
+        });
+
+        it('changes the full-page key when the base template bundle changes', async () => {
+            const before = await renderForCacheKey(makeFullPageOptions());
+
+            const spec = makeDefaultSpec();
+            spec.baseTemplatesHash = 'base-templates-hash-2';
+            const after = await renderForCacheKey(makeFullPageOptions(), spec);
+
+            assertNotEqual(before, after);
+        });
+
+        it('leaves the page-template key unchanged when the base templates change', async () => {
+            // Only a full-page render depends on the base template bundle.
+            const before = await renderForCacheKey({ skipBaseRender: true });
+
+            const spec = makeDefaultSpec();
+            spec.baseTemplatesHash = 'base-templates-hash-2';
+            const after = await renderForCacheKey({ skipBaseRender: true }, spec);
+
+            assertEqual(before, after);
+        });
+
+        it('changes the key when the base template id changes', async () => {
+            const spec = makeDefaultSpec();
+            spec.baseTemplates = [
+                { id: 'main', source: '<html><body>{{{ body }}}</body></html>' },
+                { id: 'bare', source: '<html>{{{ body }}}</html>' },
+            ];
+
+            const main = await renderForCacheKey(makeFullPageOptions(), spec);
+            const bare = await renderForCacheKey(makeFullPageOptions({ baseTemplateId: 'bare' }), spec);
+
+            assertNotEqual(main, bare);
+        });
+
+        it('returns the cached hypertext without rendering on a hit', async () => {
+            const { service, kvStore } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+
+            const first = new ServerResponse();
+            await service.respondWithHypertext(CONTEXT, makeRequest(), first, makeFullPageOptions());
+
+            const key = kvStore.puts[0].key;
+            const seeded = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { usePageCache: true },
+                kvSeed: { [key]: 'CACHED OUTPUT' },
+            });
+
+            const second = new ServerResponse();
+            await seeded.service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                second,
+                makeFullPageOptions(),
+            );
+
+            assertEqual('CACHED OUTPUT', second.body);
+            assertEqual(0, seeded.kvStore.puts.length);
+            // A hit still costs the page read, because the page hash is part of
+            // the key it was looked up by.
+            assertEqual(0, seeded.snapshot.callsTo('getBaseTemplates').length);
+        });
+
+        it('reads with the configured cache TTL', async () => {
+            const { service, kvStore } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { usePageCache: true, pageCacheReadTtlSeconds: 60 },
+            });
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                new ServerResponse(),
+                makeFullPageOptions(),
+            );
+
+            assertEqual(60, kvStore.gets[0].options.cacheTtl);
+        });
+
+        it('writes with the configured expiration', async () => {
+            const { service, kvStore } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { usePageCache: true, pageCacheExpirationSeconds: 120 },
+            });
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                new ServerResponse(),
+                makeFullPageOptions(),
+            );
+
+            assertEqual(120, kvStore.puts[0].options.ttlSeconds);
+        });
+
+        it('neither reads nor writes when the page cache is off', async () => {
+            const { service, kvStore } = makeSubject(makeDefaultSpec());
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                new ServerResponse(),
+                makeFullPageOptions(),
+            );
+
+            assertEqual(0, kvStore.gets.length);
+            assertEqual(0, kvStore.puts.length);
+        });
+
+        it('uses a custom cacheKey in place of the URL', async () => {
+            const fromUrl = await renderForCacheKey(makeFullPageOptions());
+            const custom = await renderForCacheKey(makeFullPageOptions({ cacheKey: 'custom-identity' }));
+
+            assertNotEqual(fromUrl, custom);
+        });
+
+        it('distinguishes two URLs of the same page by query string', async () => {
+            const { service, kvStore } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest('https://www.example.com/?page=1'),
+                new ServerResponse(),
+                makeFullPageOptions(),
+            );
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest('https://www.example.com/?page=2'),
+                new ServerResponse(),
+                makeFullPageOptions(),
+            );
+
+            assertNotEqual(kvStore.puts[0].key, kvStore.puts[1].key);
+        });
+    });
+
+    describe('respondWithHypertext() props in the page cache key', ({ it }) => {
+
+        async function keyForProps(props, options) {
+            const { service, kvStore } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+            const response = new ServerResponse();
+            response.updateProps(props);
+
+            await service.respondWithHypertext(
+                CONTEXT,
+                makeRequest(),
+                response,
+                makeFullPageOptions(options),
+            );
+
+            return kvStore.puts[0].key;
+        }
+
+        it('includes the props by default whenever the page cache is on', async () => {
+            // This default is a safety property, not an optimization: without it a
+            // page rendered for one signed-in user is served to the next.
+            const alice = await keyForProps({ viewer: 'alice' });
+            const bob = await keyForProps({ viewer: 'bob' });
+
+            assertNotEqual(alice, bob);
+        });
+
+        it('produces one key for equal props', async () => {
+            const first = await keyForProps({ viewer: 'alice' });
+            const second = await keyForProps({ viewer: 'alice' });
+
+            assertEqual(first, second);
+        });
+
+        it('collapses differing props into one key when explicitly disabled', async () => {
+            const alice = await keyForProps({ viewer: 'alice' }, { includePropsInCacheKey: false });
+            const bob = await keyForProps({ viewer: 'bob' }, { includePropsInCacheKey: false });
+
+            assertEqual(alice, bob);
+        });
+
+        it('uses a supplied propsHashFunction to derive the props component', async () => {
+            const seen = [];
+
+            function propsHashFunction(pathname, pageContext, props) {
+                seen.push({ pathname, pageContext, props });
+                return 'CONSTANT';
+            }
+
+            const alice = await keyForProps({ viewer: 'alice' }, { propsHashFunction });
+            const bob = await keyForProps({ viewer: 'bob' }, { propsHashFunction });
+
+            assertEqual(alice, bob);
+            assertEqual('/', seen[0].pathname);
+            assertEqual('alice', seen[0].props.viewer);
+            assertEqual('Home', seen[0].pageContext.page.title);
+        });
+    });
+
+    describe('respondWithHypertext() template cache', ({ it }) => {
+
+        it('re-reads the shared bundles on every render when the cache is off', async () => {
+            const { service, snapshot } = makeSubject(makeDefaultSpec());
+
+            await renderTwice(service);
+
+            assertEqual(2, snapshot.callsTo('getGlobalTemplatePartials').length);
+            assertEqual(2, snapshot.callsTo('getBaseTemplates').length);
+        });
+
+        it('reads the shared bundles once when the cache is on', async () => {
+            const { service, snapshot } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { useTemplateCache: true },
+            });
+
+            await renderTwice(service);
+
+            assertEqual(1, snapshot.callsTo('getGlobalTemplatePartials').length);
+            assertEqual(1, snapshot.callsTo('getBaseTemplates').length);
+        });
+
+        it('re-reads a bundle whose content hash changed', async () => {
+            const service = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { useTemplateCache: true },
+            }).service;
+
+            // A second snapshot standing in for a later publication. The service
+            // holds the compiled cache across both, keyed by content hash.
+            const republished = makeContentSnapshot({
+                ...makeDefaultSpec(),
+                globalPartialsHash: 'global-partials-hash-2',
+            });
+
+            await renderWithSnapshot(service, makeContentSnapshot(makeDefaultSpec()));
+            await renderWithSnapshot(service, republished);
+
+            assertEqual(1, republished.callsTo('getGlobalTemplatePartials').length);
+        });
+
+        it('serves a compiled bundle from the cache when an older hash comes back', async () => {
+            // A request pinned to an older snapshot must still find its compiled
+            // templates after a newer bundle has been published.
+            const service = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { useTemplateCache: true },
+            }).service;
+
+            await renderWithSnapshot(service, makeContentSnapshot(makeDefaultSpec()));
+            await renderWithSnapshot(service, makeContentSnapshot({
+                ...makeDefaultSpec(),
+                globalPartialsHash: 'global-partials-hash-2',
+            }));
+
+            const original = makeContentSnapshot(makeDefaultSpec());
+            await renderWithSnapshot(service, original);
+
+            assertEqual(0, original.callsTo('getGlobalTemplatePartials').length);
+        });
+
+        it('evicts the least recently used bundle generation', async () => {
+            // Only a handful of generations are retained; the fifth publication
+            // pushes the first back out of the cache.
+            const service = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { useTemplateCache: true },
+            }).service;
+
+            for (let i = 1; i <= 5; i += 1) {
+                await renderWithSnapshot(service, makeContentSnapshot({
+                    ...makeDefaultSpec(),
+                    globalPartialsHash: `global-partials-hash-${ i }`,
+                }));
+            }
+
+            const first = makeContentSnapshot(makeDefaultSpec());
+            await renderWithSnapshot(service, first);
+
+            assertEqual(1, first.callsTo('getGlobalTemplatePartials').length);
+        });
+    });
+
+    describe('respondWithHypertext() malformed bundles', ({ it }) => {
+
+        it('names the pathname when the global partial bundle is not an Array', async () => {
+            const spec = makeDefaultSpec();
+            spec.globalPartials = { byline: '<p>Nope</p>' };
+
+            const caught = await catchAsyncError(() => {
+                return renderSpec(spec);
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('/templates/partials.json', caught.message);
+        });
+
+        it('names the pathname when the base template bundle is not an Array', async () => {
+            const spec = makeDefaultSpec();
+            spec.baseTemplates = { main: '<html></html>' };
+
+            const caught = await catchAsyncError(() => {
+                return renderSpec(spec);
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('/templates/base-templates.json', caught.message);
+        });
+
+        it('names the pathname when the page partial bundle is not an Array', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].partials = { byline: '<p>Nope</p>' };
+
+            const caught = await catchAsyncError(() => {
+                return renderSpec(spec);
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('partials.json', caught.message);
+        });
+    });
+
+    describe('renderEmail()', ({ it }) => {
+
+        function makeEmailSpec() {
+            return {
+                globalPartials: [
+                    { id: 'footer', source: '<footer>Example</footer>' },
+                ],
+                emails: {
+                    '/welcome': {
+                        bundle: {
+                            contextData: { subject: 'Welcome', product: 'Kixx' },
+                            htmlTemplate: { id: 'welcome.html', source: '<p>Hello {{ name }}{{> footer }}</p>' },
+                            textTemplate: { id: 'welcome.txt', source: 'Hello {{ name }}' },
+                        },
                     },
                 },
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
             };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
+        }
 
-            const request = { url: new URL('https://example.com/articles/example') };
-            const response = { props: {}, status: 200 };
+        it('renders the subject, HTML body, and text body', async () => {
+            const { service } = makeSubject(makeEmailSpec());
 
-            const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { partial: 'empty.html' });
-            });
+            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
 
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assert(
-                caught.message.includes('partial "empty.html"'),
-                `expected the render mode in the message; got "${ caught.message }"`,
-            );
-            assert(
-                caught.message.includes('/articles/example'),
-                `expected the page pathname in the message; got "${ caught.message }"`,
-            );
+            assertEqual('Welcome', email.subject);
+            assertEqual('<p>Hello Rakim<footer>Example</footer></p>', email.html);
+            assertEqual('Hello Rakim', email.text);
         });
 
-        it('throws when the page template renders empty without a base template', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-                async statPageTemplate() {
-                    return null;
-                },
-                async getPageTemplate() {
-                    return {
-                        text() {
-                            return '';
-                        },
-                        etag: 'page-template-etag-1',
-                    };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
+        it('passes the request context to every content read', async () => {
+            const { service, snapshot } = makeSubject(makeEmailSpec());
 
-            const request = { url: new URL('https://example.com/articles/example') };
-            const response = { props: {}, status: 200 };
+            await service.renderEmail(CONTEXT, '/welcome', {});
 
-            const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { skipBaseRender: true });
-            });
+            assert(snapshot.calls.length > 0, 'expected content reads');
 
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assert(
-                caught.message.includes('page template'),
-                `expected the render mode in the message; got "${ caught.message }"`,
-            );
-            assert(
-                caught.message.includes('/articles/example'),
-                `expected the page pathname in the message; got "${ caught.message }"`,
-            );
+            for (const call of snapshot.calls) {
+                assertEqual(CONTEXT, call.context, `${ call.method } received the context`);
+            }
         });
 
-        it('throws when the full page renders empty', async () => {
-            const pageContent = {
-                pageTemplateFilename: 'page.html',
-                partials: null,
-                includes: null,
-                etag: 'page-etag-1',
-                pageDataFiles: [
-                    { json() {
-                        return { page: {} };
-                    } },
-                ],
-            };
-            const store = {
-                isValidPathname(value) {
-                    return typeof value === 'string' && value.length > 0;
-                },
-                normalizePathname(value) {
-                    return value;
-                },
-                async getPage() {
-                    return pageContent;
-                },
-                async statTemplatePartials() {
-                    return null;
-                },
-                async getTemplatePartials() {
-                    return null;
-                },
-                async hashValue(value) {
-                    return `hash:${ value }`;
-                },
-                async statPageTemplate() {
-                    return null;
-                },
-                async getPageTemplate() {
-                    return {
-                        text() {
-                            return 'PAGE BODY';
-                        },
-                        etag: 'page-template-etag-1',
-                    };
-                },
-                async statBaseTemplates() {
-                    return null;
-                },
-                async getBaseTemplates() {
-                    return {
-                        etag: 'base-etag-1',
-                        json() {
-                            // Non-empty source that renders to an empty string; see the
-                            // partial test above for why this avoids the source assertion.
-                            return [ { id: 'empty-layout', source: '{{#missing}}content{{/missing}}' } ];
-                        },
-                    };
-                },
-            };
-            const service = new HyperviewService({ logger: makeLogger() });
-            service.initialize({ contentService: makeContentService(store), kvStore: {} });
-
-            const request = { url: new URL('https://example.com/articles/example') };
-            const response = { props: {}, status: 200 };
+        it('throws NotFoundError when no bundle is published at the pathname', async () => {
+            const { service } = makeSubject(makeEmailSpec());
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext({}, request, response, { baseTemplateId: 'empty-layout' });
+                return service.renderEmail(CONTEXT, '/missing', {});
             });
 
             assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
+            assertMatches('/missing', caught.message);
+        });
+
+        it('resolves null for an unpublished representation', async () => {
+            const spec = makeEmailSpec();
+            delete spec.emails['/welcome'].bundle.textTemplate;
+
+            const { service } = makeSubject(spec);
+
+            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
+
+            assertEqual(null, email.text);
+            assertMatches('Hello Rakim', email.html);
+        });
+
+        it('renders a templated subject against the merged context', async () => {
+            const spec = makeEmailSpec();
+            spec.emails['/welcome'].bundle.contextData.subject = {
+                template: 'Welcome to {{ product }}, {{ name }}',
+            };
+
+            const { service } = makeSubject(spec);
+
+            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
+
+            assertEqual('Welcome to Kixx, Rakim', email.subject);
+        });
+
+        it('lets caller props override published context data', async () => {
+            const spec = makeEmailSpec();
+            spec.emails['/welcome'].bundle.htmlTemplate.source = '<p>{{ product }}</p>';
+
+            const { service } = makeSubject(spec);
+
+            const email = await service.renderEmail(CONTEXT, '/welcome', { product: 'Overridden' });
+
+            assertEqual('<p>Overridden</p>', email.html);
+        });
+
+        it('layers the bundle partials over the global partials', async () => {
+            const spec = makeEmailSpec();
+            spec.emails['/welcome'].bundle.partials = [
+                { id: 'footer', source: '<footer>Bundle</footer>' },
+            ];
+
+            const { service } = makeSubject(spec);
+
+            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
+
+            assertMatches('<footer>Bundle</footer>', email.html);
+        });
+
+        it('exposes the bundle includes to the templates', async () => {
+            const spec = makeEmailSpec();
+            spec.emails['/welcome'].bundle.includes = { signoff: 'Thanks.' };
+            spec.emails['/welcome'].bundle.htmlTemplate.source = '<p>{{ includes.signoff }}</p>';
+
+            const { service } = makeSubject(spec);
+
+            const email = await service.renderEmail(CONTEXT, '/welcome', {});
+
+            assertEqual('<p>Thanks.</p>', email.html);
+        });
+
+        it('does not leak one render\'s props into the next', async () => {
+            // The bundle context data is mutated by the merge, so it has to be
+            // parsed fresh on every call.
+            const spec = makeEmailSpec();
+            spec.emails['/welcome'].bundle.htmlTemplate.source = '<p>[{{ name }}]</p>';
+
+            const { service } = makeSubject(spec);
+
+            await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
+            const second = await service.renderEmail(CONTEXT, '/welcome', {});
+
+            assertEqual('<p>[]</p>', second.html);
+        });
+
+        it('reads nothing from the page cache', async () => {
+            const { service, kvStore } = makeSubject(makeEmailSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+
+            await service.renderEmail(CONTEXT, '/welcome', {});
+
+            assertEqual(0, kvStore.gets.length);
+            assertEqual(0, kvStore.puts.length);
+        });
+    });
+
+    describe('createMiniTemplate()', ({ it }) => {
+
+        it('compiles and renders template source against a context', () => {
+            const { service } = makeSubject(makeDefaultSpec());
+
+            const template = service.createMiniTemplate('test.title', 'Hello {{ name }}');
+
+            assertEqual('Hello Rakim', template({ name: 'Rakim' }));
+        });
+
+        it('makes the custom helpers available', () => {
+            const { service } = makeSubject(makeDefaultSpec());
+
+            const template = service.createMiniTemplate('test.title', '{{ truncate name 4 "..." }}');
+
+            assertEqual('Eric...', template({ name: 'Eric B. & Rakim' }));
+        });
+
+        it('never expands a partial', () => {
+            // The empty partial lookup means a partial tag in metadata resolves
+            // nothing. Per the Mustache spec a missing partial renders as an empty
+            // string, so this is silent rather than an error.
+            const { service } = makeSubject(makeDefaultSpec());
+
+            const template = service.createMiniTemplate('test.title', 'Hello [{{> byline }}]');
+
+            assertEqual('Hello []', template({}));
+        });
+    });
+
+    describe('initialize()', ({ it }) => {
+
+        it('requires a kvStore', () => {
+            const service = new HyperviewService({ logger: makeLogger() });
+
+            let caught = null;
+            try {
+                service.initialize({ contentAddressableStore: {} });
+            } catch (error) {
+                caught = error;
+            }
+
+            assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assert(
-                caught.message.includes('full page'),
-                `expected the render mode in the message; got "${ caught.message }"`,
-            );
-            assert(
-                caught.message.includes('/articles/example'),
-                `expected the page pathname in the message; got "${ caught.message }"`,
-            );
+            assertMatches('kvStore', caught.message);
+        });
+
+        it('requires a contentAddressableStore', () => {
+            const service = new HyperviewService({ logger: makeLogger() });
+
+            let caught = null;
+            try {
+                service.initialize({ kvStore: {} });
+            } catch (error) {
+                caught = error;
+            }
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('contentAddressableStore', caught.message);
         });
     });
 });
+
+
+// Renders the default page once and returns the fixture, for tests which assert
+// on what the render did rather than on what it produced.
+async function renderDefaultPage(args) {
+    const subject = makeSubject(makeDefaultSpec());
+
+    await subject.service.respondWithHypertext(
+        CONTEXT,
+        makeRequest(args?.href),
+        new ServerResponse(),
+        makeFullPageOptions(),
+    );
+
+    return subject;
+}
+
+async function renderSpec(spec) {
+    const { service } = makeSubject(spec);
+
+    return await service.respondWithHypertext(
+        CONTEXT,
+        makeRequest(),
+        new ServerResponse(),
+        makeFullPageOptions(),
+    );
+}
+
+async function renderTwice(service) {
+    await service.respondWithHypertext(
+        CONTEXT,
+        makeRequest(),
+        new ServerResponse(),
+        makeFullPageOptions(),
+    );
+    await service.respondWithHypertext(
+        CONTEXT,
+        makeRequest(),
+        new ServerResponse(),
+        makeFullPageOptions(),
+    );
+}
+
+// Drives one render against a specific snapshot, standing in for a request
+// which resolved that publication.
+async function renderWithSnapshot(service, snapshot) {
+    const contentAddressableStore = makeContentAddressableStore(snapshot);
+
+    service.initialize({
+        contentAddressableStore,
+        kvStore: makeKvStore(),
+    });
+
+    await service.respondWithHypertext(
+        CONTEXT,
+        makeRequest(),
+        new ServerResponse(),
+        makeFullPageOptions(),
+    );
+}

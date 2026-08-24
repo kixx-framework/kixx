@@ -51,8 +51,11 @@ export default {
                     },
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
-                blobReadCacheTtlSeconds: 0,
+            CONTENT_STORE: {
+                // The content-store adapter clamps blob cache TTLs to at least
+                // 60 seconds. Blob keys carry the content hash, so caching them
+                // never hides an edit.
+                blobReadCacheTtlSeconds: 60,
                 indexCacheTtlSeconds: 0,
                 kvBindingName: 'CA_STORE_KV_STORE',
                 durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
@@ -112,7 +115,7 @@ export default {
                     },
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
+            CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 60 * 60 * 24,
                 indexCacheTtlSeconds: 10,
                 kvBindingName: 'CA_STORE_KV_STORE',
@@ -173,7 +176,7 @@ export default {
                     },
                 },
             },
-            CONTENT_ADDRESSABLE_STORE: {
+            CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 60 * 60 * 36,
                 indexCacheTtlSeconds: 10,
                 kvBindingName: 'CA_STORE_KV_STORE',

@@ -6,10 +6,10 @@ import {
     assertEqual,
     assertFalsy,
     assertMatches,
-    assertValidDate,
 } from 'kixx-assert';
 
 import ServerRequest from '../../../../../src/plugins/node-server-request/lib/server-request.js';
+import serverRequestConformance from '../../../kixx/http-router/server-request-conformance.js';
 
 
 // Build a stand-in for http.IncomingMessage: a Readable stream carrying the body
@@ -33,7 +33,9 @@ function makeIncoming(options) {
 
     const incoming = hasBody ? Readable.from([ Buffer.from(opts.body) ]) : Readable.from([]);
     incoming.method = opts.method ?? 'GET';
-    incoming.url = opts.url ?? '/';
+    // `path` is the conformance suite's request-target option; `url` is the
+    // equivalent used by the platform-specific tests below.
+    incoming.url = opts.url ?? opts.path ?? '/';
     incoming.headers = headers;
     // remoteAddress mirrors the TCP peer address Node exposes on the socket; the
     // adapter falls back to it when no X-Forwarded-For header is present.
@@ -42,6 +44,9 @@ function makeIncoming(options) {
     return incoming;
 }
 
+// Satisfies the conformance suite's factory contract. Node takes a request
+// target plus a Host header rather than an absolute URL, and makeIncoming
+// supplies the default Host.
 function makeServerRequest(options) {
     const opts = options ?? {};
     // trustProxy rides on the same options bag for convenience but is a
@@ -69,6 +74,9 @@ async function catchAsyncError(fn) {
 
 
 describe('Node ServerRequest', ({ describe }) => {
+
+    // The platform-independent contract, shared with every other adapter.
+    serverRequestConformance(describe, makeServerRequest);
 
     describe('id', ({ it }) => {
         it('uses the x-request-id header when present', () => {
@@ -162,6 +170,12 @@ describe('Node ServerRequest', ({ describe }) => {
             // confirming no stamped header name carries the pseudo-header colon.
             const names = Array.from(request.headers.keys());
             assertFalsy(names.some((name) => name.startsWith(':')));
+        });
+
+        it('appends repeated header values rather than replacing them', () => {
+            const request = makeServerRequest({ headers: { 'x-multi': [ 'one', 'two' ] } });
+
+            assertEqual('one, two', request.headers.get('x-multi'));
         });
     });
 
@@ -282,412 +296,47 @@ describe('Node ServerRequest', ({ describe }) => {
 
             assertEqual(null, request.body);
         });
-    });
 
-    describe('hostnameParams and pathnameParams defaults', ({ it }) => {
-        it('default to empty immutable objects at construction', () => {
-            const request = makeServerRequest();
-
-            assertEqual(0, Object.keys(request.hostnameParams).length);
-            assertEqual(0, Object.keys(request.pathnameParams).length);
-            assert(Object.isFrozen(request.hostnameParams));
-            assert(Object.isFrozen(request.pathnameParams));
-        });
-    });
-
-    describe('setPathnameParams', ({ it }) => {
-        it('returns this for chaining', () => {
-            const request = makeServerRequest();
-
-            assertEqual(request, request.setPathnameParams({ id: '1' }));
-        });
-
-        it('exposes the stamped string params', () => {
-            const request = makeServerRequest();
-
-            request.setPathnameParams({ id: '42' });
-
-            assertEqual('42', request.pathnameParams.id);
-        });
-
-        it('stores a clone so later mutation of the source has no effect', () => {
-            const request = makeServerRequest();
-            const source = { id: '42' };
-
-            request.setPathnameParams(source);
-            source.id = 'mutated';
-
-            assertEqual('42', request.pathnameParams.id);
-        });
-
-        it('returns a stable object identity across reads', () => {
-            const request = makeServerRequest();
-
-            request.setPathnameParams({ id: '42' });
-
-            assertEqual(request.pathnameParams, request.pathnameParams);
-        });
-
-        it('preserves wildcard params as arrays', () => {
-            const request = makeServerRequest();
-
-            request.setPathnameParams({ path: [ 'a', 'b', 'c' ] });
-
-            assertEqual('a,b,c', request.pathnameParams.path.join(','));
-        });
-
-        it('deep-freezes so a wildcard array param cannot be mutated', () => {
-            const request = makeServerRequest();
-
-            request.setPathnameParams({ path: [ 'a', 'b' ] });
-
-            assert(Object.isFrozen(request.pathnameParams.path));
-
-            const pushed = catchError(() => request.pathnameParams.path.push('c'));
-            assertEqual('TypeError', pushed.name);
-
-            const assigned = catchError(() => {
-                request.pathnameParams.path[0] = 'z';
-            });
-            assertEqual('TypeError', assigned.name);
-
-            assertEqual('a,b', request.pathnameParams.path.join(','));
-        });
-
-        it('freezes the top-level params object against reassignment', () => {
-            const request = makeServerRequest();
-
-            request.setPathnameParams({ id: '42' });
-
-            const caught = catchError(() => {
-                request.pathnameParams.id = 'changed';
-            });
-
-            assertEqual('TypeError', caught.name);
-        });
-    });
-
-    describe('setHostnameParams', ({ it }) => {
-        it('returns this for chaining', () => {
-            const request = makeServerRequest();
-
-            assertEqual(request, request.setHostnameParams({ tenant: 'acme' }));
-        });
-
-        it('exposes the stamped params and deep-freezes nested values', () => {
-            const request = makeServerRequest();
-
-            request.setHostnameParams({ tenant: 'acme', labels: [ 'www', 'eu' ] });
-
-            assertEqual('acme', request.hostnameParams.tenant);
-            assert(Object.isFrozen(request.hostnameParams.labels));
-
-            const caught = catchError(() => request.hostnameParams.labels.push('x'));
-            assertEqual('TypeError', caught.name);
-        });
-    });
-
-    describe('queryParams', ({ it }) => {
-        it('returns a string for a single-valued key', () => {
-            const request = makeServerRequest({ url: '/?q=hello' });
-
-            assertEqual('hello', request.queryParams.q);
-        });
-
-        it('returns an array for a repeated key', () => {
-            const request = makeServerRequest({ url: '/?tag=a&tag=b' });
-
-            assertEqual('a,b', request.queryParams.tag.join(','));
-        });
-
-        it('returns an empty object when there is no query string', () => {
-            const request = makeServerRequest({ url: '/path' });
-
-            assertEqual(0, Object.keys(request.queryParams).length);
-        });
-    });
-
-    describe('isHeadRequest', ({ it }) => {
-        it('is true for a HEAD request', () => {
-            const request = makeServerRequest({ method: 'HEAD' });
-
-            assert(request.isHeadRequest());
-        });
-
-        it('is false for a non-HEAD request', () => {
-            const request = makeServerRequest({ method: 'GET' });
-
-            assertFalsy(request.isHeadRequest());
-        });
-    });
-
-    describe('isFormURLEncodedRequest', ({ it }) => {
-        it('is true for a urlencoded content type, ignoring parameters', () => {
-            const request = makeServerRequest({
-                method: 'POST',
-                headers: { 'content-type': 'application/x-www-form-urlencoded; charset=utf-8' },
-                body: 'a=1',
-            });
-
-            assert(request.isFormURLEncodedRequest());
-        });
-
-        it('is false for a non-urlencoded content type', () => {
+        it('returns null for a POST framed with neither Content-Length nor Transfer-Encoding', () => {
+            // makeIncoming only adds Content-Length when a body is supplied, so an
+            // unframed POST exercises the hasRequestBody() guard directly.
             const request = makeServerRequest({
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: '{}',
             });
 
-            assertFalsy(request.isFormURLEncodedRequest());
+            assertEqual(null, request.body);
         });
-    });
 
-    describe('getContentMediaType', ({ it }) => {
-        it('returns the content media type without parameters', () => {
-            const request = makeServerRequest({
+        it('wraps a mid-stream read failure in BadRequestError', async () => {
+            // A body that fails partway through is the operational half of the
+            // read-error split: unlike a double read, it is the client's
+            // transfer that broke, so it must still surface as a 400. Only a
+            // Node stream can be made to fail this way, which is why this case
+            // lives here rather than in the shared conformance suite.
+            const incoming = makeIncoming({
                 method: 'POST',
-                headers: { 'content-type': 'text/html; charset=utf-8' },
-                body: '<h1>Hello</h1>',
+                headers: { 'content-type': 'text/plain', 'transfer-encoding': 'chunked' },
+                body: 'partial',
             });
 
-            assertEqual('text/html', request.getContentMediaType());
-        });
-
-        it('trims and lowercases the content media type', () => {
-            const request = makeServerRequest({
-                method: 'POST',
-                headers: { 'content-type': ' Text/Plain ; charset=utf-8' },
-                body: 'hello',
+            const failing = new Readable({
+                read() {
+                    this.destroy(new Error('socket reset'));
+                },
             });
+            failing.method = incoming.method;
+            failing.url = incoming.url;
+            failing.headers = incoming.headers;
+            failing.socket = incoming.socket;
 
-            assertEqual('text/plain', request.getContentMediaType());
-        });
+            const request = new ServerRequest(failing);
 
-        it('returns an empty string when the Content-Type header is absent', () => {
-            const request = makeServerRequest();
-
-            assertEqual('', request.getContentMediaType());
-        });
-    });
-
-    describe('getCookies', ({ it }) => {
-        it('returns null when the Cookie header is absent', () => {
-            const request = makeServerRequest();
-
-            assertEqual(null, request.getCookies());
-        });
-
-        it('parses multiple cookies into a name/value map', () => {
-            const request = makeServerRequest({ headers: { cookie: 'sid=abc; theme=dark' } });
-
-            const cookies = request.getCookies();
-
-            assertEqual('abc', cookies.sid);
-            assertEqual('dark', cookies.theme);
-        });
-
-        it('preserves equals signs within a cookie value', () => {
-            const request = makeServerRequest({ headers: { cookie: 'data=user=john&role=admin' } });
-
-            assertEqual('user=john&role=admin', request.getCookies().data);
-        });
-    });
-
-    describe('getCookie', ({ it }) => {
-        it('returns the named cookie value', () => {
-            const request = makeServerRequest({ headers: { cookie: 'sid=abc; theme=dark' } });
-
-            assertEqual('abc', request.getCookie('sid'));
-        });
-
-        it('returns null when the named cookie is absent', () => {
-            const request = makeServerRequest({ headers: { cookie: 'sid=abc' } });
-
-            assertEqual(null, request.getCookie('theme'));
-        });
-
-        it('returns null when there is no Cookie header', () => {
-            const request = makeServerRequest();
-
-            assertEqual(null, request.getCookie('sid'));
-        });
-    });
-
-    describe('getAuthorizationBearer', ({ it }) => {
-        it('returns the token from a Bearer authorization header', () => {
-            const request = makeServerRequest({ headers: { authorization: 'Bearer abc.def.ghi' } });
-
-            assertEqual('abc.def.ghi', request.getAuthorizationBearer());
-        });
-
-        it('matches the Bearer scheme case-insensitively', () => {
-            const request = makeServerRequest({ headers: { authorization: 'bearer abc.def.ghi' } });
-
-            assertEqual('abc.def.ghi', request.getAuthorizationBearer());
-        });
-
-        it('returns null when the header is absent', () => {
-            const request = makeServerRequest();
-
-            assertEqual(null, request.getAuthorizationBearer());
-        });
-
-        it('returns null for a non-Bearer scheme', () => {
-            const request = makeServerRequest({ headers: { authorization: 'Basic dXNlcjpwYXNz' } });
-
-            assertEqual(null, request.getAuthorizationBearer());
-        });
-
-        it('returns null for a malformed token with embedded whitespace', () => {
-            const request = makeServerRequest({ headers: { authorization: 'Bearer two tokens' } });
-
-            assertEqual(null, request.getAuthorizationBearer());
-        });
-    });
-
-    describe('ifModifiedSince', ({ it }) => {
-        it('returns a Date for a valid header value', () => {
-            const value = 'Wed, 21 Oct 2015 07:28:00 GMT';
-            const request = makeServerRequest({ headers: { 'if-modified-since': value } });
-
-            assertValidDate(request.ifModifiedSince);
-            assertEqual(new Date(value), request.ifModifiedSince);
-        });
-
-        it('returns null when the header is absent', () => {
-            const request = makeServerRequest();
-
-            assertEqual(null, request.ifModifiedSince);
-        });
-
-        it('returns null when the header is an unparseable date', () => {
-            const request = makeServerRequest({ headers: { 'if-modified-since': 'not-a-date' } });
-
-            assertEqual(null, request.ifModifiedSince);
-        });
-    });
-
-    describe('ifNoneMatch', ({ it }) => {
-        it('returns null when the header is absent', () => {
-            const request = makeServerRequest();
-
-            assertEqual(null, request.ifNoneMatch);
-        });
-
-        it('strips surrounding quotes from a strong ETag', () => {
-            const request = makeServerRequest({ headers: { 'if-none-match': '"abc123"' } });
-
-            assertEqual('abc123', request.ifNoneMatch);
-        });
-
-        it('returns a weak ETag unchanged', () => {
-            const request = makeServerRequest({ headers: { 'if-none-match': 'W/"abc123"' } });
-
-            assertEqual('W/"abc123"', request.ifNoneMatch);
-        });
-
-        it('returns the first ETag when several are present', () => {
-            const request = makeServerRequest({ headers: { 'if-none-match': '"first", "second"' } });
-
-            assertEqual('first', request.ifNoneMatch);
-        });
-
-        it('preserves a comma inside a quoted strong ETag', () => {
-            const request = makeServerRequest({ headers: { 'if-none-match': '"first,still-first", "second"' } });
-
-            assertEqual('first,still-first', request.ifNoneMatch);
-        });
-    });
-
-    describe('json', ({ it }) => {
-        it('parses a valid JSON body', async () => {
-            const request = makeServerRequest({
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ ok: true, n: 7 }),
-            });
-
-            const result = await request.json();
-
-            assertEqual(true, result.ok);
-            assertEqual(7, result.n);
-        });
-
-        it('rejects with BadRequestError on invalid JSON', async () => {
-            const request = makeServerRequest({
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: '{ not valid json',
-            });
-
-            const caught = await catchAsyncError(() => request.json());
+            const caught = await catchAsyncError(() => request.arrayBuffer());
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('BadRequestError', caught.name);
-        });
-    });
-
-    describe('formData', ({ it }) => {
-        it('parses a urlencoded form body', async () => {
-            const request = makeServerRequest({
-                method: 'POST',
-                headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                body: 'name=kris&role=admin',
-            });
-
-            const form = await request.formData();
-
-            assertEqual('kris', form.get('name'));
-            assertEqual('admin', form.get('role'));
-        });
-
-        it('parses a multipart form body', async () => {
-            const boundary = '----kixxBoundary';
-            const body = [
-                `--${ boundary }`,
-                'Content-Disposition: form-data; name="name"',
-                '',
-                'kris',
-                `--${ boundary }--`,
-                '',
-            ].join('\r\n');
-
-            const request = makeServerRequest({
-                method: 'POST',
-                headers: { 'content-type': `multipart/form-data; boundary=${ boundary }` },
-                body,
-            });
-
-            const form = await request.formData();
-
-            assertEqual('kris', form.get('name'));
-        });
-
-        it('rejects with UnsupportedMediaTypeError for an unsupported content type', async () => {
-            const request = makeServerRequest({
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: '{}',
-            });
-
-            const caught = await catchAsyncError(() => request.formData());
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('UnsupportedMediaTypeError', caught.name);
-        });
-
-        it('rejects with BadRequestError when the body cannot be parsed as form data', async () => {
-            const request = makeServerRequest({
-                method: 'POST',
-                headers: { 'content-type': 'multipart/form-data; boundary=----kixxBoundary' },
-                body: 'this is not a valid multipart payload',
-            });
-
-            const caught = await catchAsyncError(() => request.formData());
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('BadRequestError', caught.name);
+            assert(caught.cause, 'expected the original error to be preserved as cause');
         });
     });
 });

@@ -1,19 +1,6 @@
 // General plugin: pure framework logic with no platform variant of its own.
-// It registers and wires the two Hyperview services in a fixed order —
-// HyperviewContentService, then HyperviewService, which depends on it.
-//
-// HyperviewContentService is implemented entirely over the generic
-// `ContentAddressableStore` port (see agents/plans/hyperview-content-service.md),
-// so this plugin restricts Hyperview to whichever platform registers that
-// service. Today only `src/plugins/cloudflare.js` does, through
-// `cloudflare-content-addressable-store`; `src/plugins/node.js` registers no
-// content-addressable store, so the general Hyperview plugin cannot
-// initialize on the Node target yet. A future Node adapter must implement
-// `src/kixx/content-store/content-addressable-store-interface.js` and
-// register itself as `ContentAddressableStore` to close this gap. It is free
-// to choose its own digest and serialization format; the port fixes neither.
+
 import HyperviewService from '../../kixx/hyperview/hyperview-service.js';
-import HyperviewContentService from '../../kixx/hyperview/hyperview-content-service.js';
 
 
 const DEFAULTS = {
@@ -36,8 +23,6 @@ export function register(context) {
         allowJsonResponse,
     } = config.env.HYPERVIEW ?? {};
 
-    context.registerService('HyperviewContent', new HyperviewContentService());
-
     context.registerService('Hyperview', new HyperviewService({
         logger,
         useTemplateCache: useTemplateCache ?? DEFAULTS.useTemplateCache,
@@ -49,11 +34,8 @@ export function register(context) {
 }
 
 export function initialize(context) {
-    const contentStore = context.getService('ContentAddressableStore');
-    const hyperviewContent = context.getService('HyperviewContent');
-    hyperviewContent.initialize({ contentStore });
-
+    const contentAddressableStore = context.getService('ContentAddressableStore');
     const kvStore = context.getService('KeyValueStore');
     const hyperviewService = context.getService('Hyperview');
-    hyperviewService.initialize({ kvStore, contentService: hyperviewContent });
+    hyperviewService.initialize({ kvStore, contentAddressableStore });
 }
