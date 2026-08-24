@@ -1,5 +1,16 @@
 import { ValidationError } from '../errors/mod.js';
-import { isValidPathname, normalizePathname } from './content-layout.js';
+import {
+    isValidPathname,
+    normalizePathname,
+    getStaticAssetPath,
+    getGlobalTemplatePartialsPath,
+    getBaseTemplatesPath,
+    getPageMetadataPath,
+    getPagePartialsPath,
+    getPageIncludesPath,
+    getPageTemplatePath,
+    getEmailBundlePath,
+} from './content-layout.js';
 import { FORMAT, hashTree, compareStrings } from './addressing.js';
 import {
     assert,
@@ -42,6 +53,40 @@ import {
  * @property {string} hash - Content digest of the file's bytes, computed by the caller
  * @property {number} size - Byte size of the file, as a non-negative integer
  * @property {Object} [metadata] - Arbitrary metadata to persist alongside the entry; contributes to the tree hash when present
+ */
+
+/**
+ * A `{hash, size, metadata}` reference to one piece of content, matching what
+ * the publishing API's `stat*` resources already expose to a client.
+ * @typedef {Object} ContentTreeReference
+ * @property {string} hash - Content digest of the referenced file's bytes
+ * @property {number} size - Byte size of the referenced file
+ * @property {Object|null} [metadata] - Arbitrary metadata to persist alongside the entry
+ */
+
+/**
+ * One page's facets within a {@link ContentTree} commit. Every facet is
+ * optional; an absent facet means it is not part of this commit, not that it
+ * should be deleted.
+ * @typedef {Object} ContentTreePageEntry
+ * @property {ContentTreeReference} [metadata] - The page's `page.json` metadata file
+ * @property {ContentTreeReference} [partials] - The page's partial-template bundle
+ * @property {ContentTreeReference} [includes] - The page's include bundle
+ * @property {ContentTreeReference} [template] - The page's template file. Carries its own `pathname` (the full filepath, including the filename) because a page's template filename cannot be derived from the page's logical pathname alone.
+ */
+
+/**
+ * The structured commit payload the publishing API's `commitChanges` request
+ * handler assembles from a parsed JSON:API resource, grouped by content kind
+ * and keyed by logical pathname. {@link flattenContentTree} converts this
+ * into the flat {@link IndexSourceFile} list {@link ContentAddressableIndex.buildIndex}
+ * consumes.
+ * @typedef {Object} ContentTree
+ * @property {Object<string, ContentTreeReference>} [staticAssets] - Static assets keyed by logical pathname
+ * @property {ContentTreeReference} [globalTemplatePartials] - The site-wide partial-template bundle
+ * @property {ContentTreeReference} [baseTemplates] - The site-wide base-template bundle
+ * @property {Object<string, ContentTreePageEntry>} [pages] - Pages keyed by logical pathname
+ * @property {Object<string, ContentTreeReference>} [emails] - Email bundles keyed by logical pathname
  */
 
 /**
@@ -401,6 +446,154 @@ export function validateIndexSourceFiles(files) {
     if (error.length) {
         throw error;
     }
+}
+
+/**
+ * Converts a structured {@link ContentTree} commit payload into the flat
+ * {@link IndexSourceFile} list {@link ContentAddressableIndex.buildIndex}
+ * consumes, deriving each entry's storage pathname via `content-layout.js`'s
+ * builders.
+ *
+ * Every key or facet pathname in `contentTree` originates in an HTTP request
+ * body, so a malformed one is an expected operational failure reported as a
+ * single ValidationError collecting every violation — mirroring
+ * {@link validateIndexSourceFiles}. `contentTree` itself and its dictionary
+ * values are treated as an already-validated internal contract and only
+ * asserted; only pathname-shaped values are user input. `hash`/`size`/`metadata`
+ * are passed through unvalidated: `buildIndex()` already validates that shape
+ * and remains the single source of truth for it.
+ * @param {ContentTree} contentTree - Structured commit payload to flatten.
+ * @returns {IndexSourceFile[]} Flat file list, ready for {@link ContentAddressableIndex.buildIndex}.
+ * @throws {AssertionError} When `contentTree` or one of its dictionary values is not a plain object
+ * @throws {ValidationError} When a key or a template facet's pathname is unsafe or not canonical
+ */
+export function flattenContentTree(contentTree) {
+    assert(isPlainObject(contentTree), 'flattenContentTree: contentTree must be a plain object');
+
+    const {
+        staticAssets,
+        globalTemplatePartials,
+        baseTemplates,
+        pages,
+        emails,
+    } = contentTree;
+
+    const error = new ValidationError('The content tree contains invalid pathnames');
+
+    validateKeyedPathnames(error, 'staticAssets', staticAssets);
+    validateKeyedPathnames(error, 'emails', emails);
+    validatePages(error, pages);
+
+    if (error.length) {
+        throw error;
+    }
+
+    const files = [];
+
+    if (staticAssets) {
+        for (const [ pathname, reference ] of Object.entries(staticAssets)) {
+            files.push(toIndexSourceFile(getStaticAssetPath(pathname), reference));
+        }
+    }
+
+    if (globalTemplatePartials) {
+        files.push(toIndexSourceFile(getGlobalTemplatePartialsPath(), globalTemplatePartials));
+    }
+
+    if (baseTemplates) {
+        files.push(toIndexSourceFile(getBaseTemplatesPath(), baseTemplates));
+    }
+
+    if (pages) {
+        for (const [ pathname, page ] of Object.entries(pages)) {
+            if (page.metadata) {
+                files.push(toIndexSourceFile(getPageMetadataPath(pathname), page.metadata));
+            }
+            if (page.partials) {
+                files.push(toIndexSourceFile(getPagePartialsPath(pathname), page.partials));
+            }
+            if (page.includes) {
+                files.push(toIndexSourceFile(getPageIncludesPath(pathname), page.includes));
+            }
+            if (page.template) {
+                files.push(toIndexSourceFile(getPageTemplatePath(page.template.pathname), page.template));
+            }
+        }
+    }
+
+    if (emails) {
+        for (const [ pathname, reference ] of Object.entries(emails)) {
+            files.push(toIndexSourceFile(getEmailBundlePath(pathname), reference));
+        }
+    }
+
+    return files;
+}
+
+// Validates the keys of a ContentTree dictionary facet (staticAssets, emails),
+// collecting every invalid key into `error` rather than throwing immediately,
+// so a caller sees every problem in the tree at once.
+function validateKeyedPathnames(error, kindName, dict) {
+    if (!dict) {
+        return;
+    }
+    assert(isPlainObject(dict), `flattenContentTree: ${ kindName } must be a plain object`);
+
+    for (const pathname of Object.keys(dict)) {
+        if (!isValidPathname(pathname) || normalizePathname(pathname) !== pathname) {
+            error.push(
+                `${ kindName } key "${ pathname }" must be a safe, canonical pathname`,
+                `${ kindName }["${ pathname }"]`,
+            );
+        }
+    }
+}
+
+// Validates page keys and each page's template facet pathname. The other
+// three page facets (metadata, partials, includes) derive their storage
+// pathname from the already-validated page key, so they need no pathname
+// validation of their own.
+function validatePages(error, pages) {
+    if (!pages) {
+        return;
+    }
+    assert(isPlainObject(pages), 'flattenContentTree: pages must be a plain object');
+
+    for (const [ pathname, page ] of Object.entries(pages)) {
+        assert(isPlainObject(page), `flattenContentTree: pages["${ pathname }"] must be a plain object`);
+
+        if (!isValidPathname(pathname) || normalizePathname(pathname) !== pathname) {
+            error.push(
+                `pages key "${ pathname }" must be a safe, canonical pathname`,
+                `pages["${ pathname }"]`,
+            );
+        }
+
+        const { template } = page;
+        if (!template) {
+            continue;
+        }
+        assert(isPlainObject(template), `flattenContentTree: pages["${ pathname }"].template must be a plain object`);
+
+        const { pathname: templatePathname } = template;
+        if (!isNonEmptyString(templatePathname)
+            || !isValidPathname(templatePathname)
+            || normalizePathname(templatePathname) !== templatePathname) {
+            error.push(
+                `pages["${ pathname }"].template.pathname must be a safe, canonical pathname`,
+                `pages["${ pathname }"].template.pathname`,
+            );
+        }
+    }
+}
+
+function toIndexSourceFile(pathname, reference) {
+    return {
+        pathname,
+        hash: reference.hash,
+        size: reference.size,
+        metadata: reference.metadata,
+    };
 }
 
 /**

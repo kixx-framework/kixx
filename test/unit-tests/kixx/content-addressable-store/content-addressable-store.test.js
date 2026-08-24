@@ -2,7 +2,6 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
 import ContentAddressableStore from '../../../../src/kixx/content-addressable-store/content-addressable-store.js';
-import { getGlobalTemplatePartialsPath } from '../../../../src/kixx/content-addressable-store/content-layout.js';
 
 
 // Records what the framework hands the adapter, and replays it back on read.
@@ -74,9 +73,11 @@ describe('ContentAddressableStore', ({ describe }) => {
             const contentStore = makeContentStore();
             const store = makeStore(contentStore);
 
-            await store.commitChanges({}, 'build-1', [
-                { pathname: '/a.txt', hash: 'hash-a', size: 1 },
-            ]);
+            await store.commitChanges({}, 'build-1', {
+                staticAssets: {
+                    '/a.txt': { hash: 'hash-a', size: 1 },
+                },
+            });
 
             // Order matters: a build pointed at a closure that is not yet
             // durable would resolve to nothing for any reader that got there
@@ -84,48 +85,77 @@ describe('ContentAddressableStore', ({ describe }) => {
             assertEqual('saveIndex,assignBuild', contentStore.calls.join(','));
         });
 
-        it('reports the root hash and node count of the committed closure', async () => {
+        it('reports the hash and node count of the committed closure', async () => {
             const contentStore = makeContentStore();
             const store = makeStore(contentStore);
 
-            const result = await store.commitChanges({}, 'build-1', [
-                { pathname: '/a.txt', hash: 'hash-a', size: 1 },
-                { pathname: '/dir/b.txt', hash: 'hash-b', size: 2 },
-            ]);
+            const result = await store.commitChanges({}, 'build-1', {
+                staticAssets: {
+                    '/a.txt': { hash: 'hash-a', size: 1 },
+                    '/dir/b.txt': { hash: 'hash-b', size: 2 },
+                },
+            });
 
-            // Two blobs plus the root and the "/dir" tree.
-            assertEqual(4, result.nodeCount);
-            assertEqual(contentStore.builds.get('build-1'), result.rootHash);
+            // Two blobs plus the root, the "/assets" tree, and the "/assets/dir" tree.
+            assertEqual(5, result.nodeCount);
+            assertEqual(contentStore.builds.get('build-1'), result.hash);
         });
 
-        it('derives an identical root hash for identical content', async () => {
+        it('derives an identical hash for identical content', async () => {
             const store = makeStore(makeContentStore());
-            const files = [ { pathname: '/a.txt', hash: 'hash-a', size: 1 } ];
+            const contentTree = {
+                staticAssets: {
+                    '/a.txt': { hash: 'hash-a', size: 1 },
+                },
+            };
 
-            const first = await store.commitChanges({}, 'build-1', files);
-            const second = await store.commitChanges({}, 'build-2', files);
+            const first = await store.commitChanges({}, 'build-1', contentTree);
+            const second = await store.commitChanges({}, 'build-2', contentTree);
 
-            assertEqual(first.rootHash, second.rootHash);
+            assertEqual(first.hash, second.hash);
         });
 
-        it('derives a different root hash when content changes', async () => {
+        it('derives a different hash when a referenced hash changes', async () => {
             const store = makeStore(makeContentStore());
 
-            const first = await store.commitChanges({}, 'build-1', [
-                { pathname: '/a.txt', hash: 'hash-a', size: 1 },
-            ]);
-            const second = await store.commitChanges({}, 'build-2', [
-                { pathname: '/a.txt', hash: 'hash-changed', size: 1 },
-            ]);
+            const first = await store.commitChanges({}, 'build-1', {
+                staticAssets: {
+                    '/a.txt': { hash: 'hash-a', size: 1 },
+                },
+            });
+            const second = await store.commitChanges({}, 'build-2', {
+                staticAssets: {
+                    '/a.txt': { hash: 'hash-changed', size: 1 },
+                },
+            });
 
-            assert(first.rootHash !== second.rootHash, 'expected the root hash to change');
+            assert(first.hash !== second.hash, 'expected the hash to change');
         });
 
-        it('rejects a malformed file list', async () => {
+        it('rejects a content tree with an invalid pathname key', async () => {
             const store = makeStore(makeContentStore());
 
             const caught = await catchAsyncError(
-                () => store.commitChanges({}, 'build-1', [ { pathname: '/a.txt' } ]),
+                () => store.commitChanges({}, 'build-1', {
+                    staticAssets: {
+                        'no-leading-slash.txt': { hash: 'hash-a', size: 1 },
+                    },
+                }),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ValidationError', caught.name);
+        });
+
+        it('rejects a content tree with a malformed hash or size', async () => {
+            const store = makeStore(makeContentStore());
+
+            const caught = await catchAsyncError(
+                () => store.commitChanges({}, 'build-1', {
+                    staticAssets: {
+                        '/a.txt': { hash: '', size: -1 },
+                    },
+                }),
             );
 
             assert(caught, 'expected an error to be thrown');
@@ -137,11 +167,10 @@ describe('ContentAddressableStore', ({ describe }) => {
         it('reads back a snapshot over the table that was committed', async () => {
             const contentStore = makeContentStore();
             const store = makeStore(contentStore);
-            const partialsPath = getGlobalTemplatePartialsPath();
 
-            await store.commitChanges({}, 'build-1', [
-                { pathname: partialsPath, hash: 'hash-partials', size: 4 },
-            ]);
+            await store.commitChanges({}, 'build-1', {
+                globalTemplatePartials: { hash: 'hash-partials', size: 4 },
+            });
 
             // The whole write-then-read contract in one assertion: whatever
             // commitChanges() encoded has to survive the store round trip in a

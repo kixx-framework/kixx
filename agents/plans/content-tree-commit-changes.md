@@ -66,7 +66,7 @@ Cross-cutting invariants to preserve throughout:
 
 ### Task 1: Add `ContentTree` typedef and `flattenContentTree()` to `content-addressable-index.js`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** src/docs/code-style-guide.md, src/docs/code-documentation-guide.md, src/docs/server-error-handling.md, test/unit-tests/README.md
 
@@ -187,19 +187,36 @@ whole transformation and its validation behavior in isolation, independent of
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `ContentTree`/`ContentTreeReference`/`ContentTreePageEntry` JSDoc
+  typedefs and `flattenContentTree()` added and exported from
+  `content-addressable-index.js`. Full unit test block added (18 new tests)
+  covering the empty tree, each of the five kinds and four page facets,
+  partial page facets, per-kind and combined `ValidationError` collection,
+  pass-through of unvalidated `hash`/`size`, and metadata pass-through.
+  Confirmed red (import error for missing export) before implementing, then
+  green after.
+- Current state: Done. All acceptance criteria met.
+- Remaining: Nothing for this task.
+- Decisions and discoveries: `pages[key]` and `pages[key].template` values are
+  asserted with `isPlainObject` (internal-contract shapes), not collected as
+  `ValidationError` sources, per the plan's invariant — only pathname-shaped
+  values (dictionary keys, `template.pathname`) are treated as operational
+  input. The three non-template page facets (`metadata`, `partials`,
+  `includes`) need no pathname validation of their own since they derive
+  their storage pathname from the already-validated page key.
+- Actual files changed:
+  - `src/kixx/content-addressable-store/content-addressable-index.js`
+  - `test/unit-tests/kixx/content-addressable-store/content-addressable-index.test.js`
+- Validation run:
+  - `node run-tests.js test/unit-tests/kixx/content-addressable-store/content-addressable-index.test.js` — 72 tests, all passing.
+  - `node run-linter.js src/kixx/content-addressable-store/content-addressable-index.js test/unit-tests/kixx/content-addressable-store/content-addressable-index.test.js` — clean.
 - Blockers: None.
 
 ---
 
 ### Task 2: Change `ContentAddressableStore#commitChanges()` to accept `ContentTree`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 1
 **Documentation:** src/docs/code-style-guide.md, src/docs/code-documentation-guide.md, test/unit-tests/README.md
 
@@ -280,19 +297,34 @@ already destructures `{ hash, nodeCount }`.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `commitChanges()` now takes `(context, buildId, contentTree)`,
+  calls `flattenContentTree()` before `ContentAddressableIndex.buildIndex()`,
+  and returns `{ hash, nodeCount }` (renamed from `{ rootHash, nodeCount }`).
+  JSDoc updated, including a `@typedef {import('./content-addressable-index.js').ContentTree} ContentTree`
+  re-export for the parameter type. Every `commitChanges()` test rewritten to
+  pass a `ContentTree` object and assert `result.hash`. Confirmed red first
+  (assertArray/AssertionError failures against the old array-only
+  implementation), then green after the change.
+- Current state: Done. All acceptance criteria met.
+- Remaining: Nothing for this task.
+- Decisions and discoveries: The publishing API handler
+  (`src/app/presentation/request-handlers/publishing-api/mod.js:283`) already
+  destructures `{ hash, nodeCount }`, confirmed by inspection — no edit
+  needed there, matching the plan's prediction.
+- Actual files changed:
+  - `src/kixx/content-addressable-store/content-addressable-store.js`
+  - `test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js`
+- Validation run:
+  - `node run-tests.js test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js` — 11 tests, all passing.
+  - `node run-tests.js` (full suite) — 911 tests, all passing.
+  - `node run-linter.js src/kixx/content-addressable-store/content-addressable-store.js test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js` — clean.
 - Blockers: None.
 
 ---
 
 ### Task 3: Full-suite verification and cleanup pass
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 1, Task 2
 **Documentation:** README.md (Linting, Testing)
 
@@ -341,10 +373,24 @@ test suite and linter are clean.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Grepped for `commitChanges(` and `rootHash` across `src/` and
+  `test/`. Every `commitChanges(` call site uses the new `ContentTree`
+  argument shape (the publishing API handler and the rewritten unit tests).
+  Remaining `rootHash` hits are all a different, pre-existing concept — the
+  `ContentAddressableIndex#rootHash` getter, and the `rootHash` parameter
+  name used internally by the Cloudflare content-store plugin and its tests
+  — not the `commitChanges()` return-value field this plan renamed to
+  `hash`; none of them needed changes. Confirmed
+  `src/app/presentation/request-handlers/publishing-api/mod.js` needed no
+  edit (already destructures `{ hash, nodeCount }`). Ran the full test suite
+  and full linter.
+- Current state: Done. All acceptance criteria met. No source changes were
+  needed beyond Tasks 1 and 2, confirming the plan's assumptions held.
+- Remaining: Nothing.
+- Decisions and discoveries: None beyond what Tasks 1–2 already recorded.
+- Actual files changed: None (verification only).
+- Validation run:
+  - `node run-tests.js` — 911 tests, all passing.
+  - `node run-linter.js` — warnings-only (5 pre-existing `no-warning-comments`
+    TODOs in `publishing-api/mod.js`, unrelated to this change), exit 0.
 - Blockers: None.

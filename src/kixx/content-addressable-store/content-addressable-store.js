@@ -1,9 +1,12 @@
-import ContentAddressableIndex, { getRootHash } from './content-addressable-index.js';
+import ContentAddressableIndex, { getRootHash, flattenContentTree } from './content-addressable-index.js';
 import ContentSnapshot from './content-snapshot.js';
 import { hashSet, hashString } from './addressing.js';
 import { normalizePathname, isValidPathname } from './content-layout.js';
 import { assert } from '../assertions/mod.js';
 
+/**
+ * @typedef {import('./content-addressable-index.js').ContentTree} ContentTree
+ */
 
 /**
  * The framework-facing entry point to published site content.
@@ -125,35 +128,36 @@ export default class ContentAddressableStore {
     }
 
     /**
-     * Publishes a closure built from a flat file manifest and points a build id
-     * at it.
+     * Publishes a closure built from a structured content tree and points a
+     * build id at it.
      *
-     * The blobs the manifest names must already have been written through a
-     * snapshot's `put*` methods; this call publishes only the index that makes
-     * them reachable. It is idempotent in content terms — committing the same
-     * files always produces the same root hash — but not in effect, because the
-     * build pointer moves.
+     * The blobs the content tree references must already have been written
+     * through a snapshot's `put*` methods; this call publishes only the index
+     * that makes them reachable. It is idempotent in content terms —
+     * committing the same content tree always produces the same hash — but
+     * not in effect, because the build pointer moves.
      * @param {Object} context - Request or execution context, passed through to the store
      * @param {string} buildId - Build id to point at the new closure
-     * @param {IndexSourceFile[]} files - Flat manifest of every file in the published site
-     * @returns {Promise<{rootHash: string, nodeCount: number}>} The published closure's root hash and its total node count, counting directories
-     * @throws {ValidationError} When a manifest entry is malformed or collides with another
+     * @param {ContentTree} contentTree - Structured commit payload naming every file in the published site
+     * @returns {Promise<{hash: string, nodeCount: number}>} The published closure's root hash and its total node count, counting directories
+     * @throws {ValidationError} When a content tree entry is malformed or collides with another
      * @throws {OperationalError} When the backing store fails
      */
-    async commitChanges(context, buildId, files) {
-        // buildIndex() validates `files` and derives the encoded table persisted
-        // in the store. The table is persisted as-is rather than wrapped in a
-        // ContentAddressableIndex.
+    async commitChanges(context, buildId, contentTree) {
+        // flattenContentTree() derives the flat manifest buildIndex() validates
+        // and builds the encoded table persisted in the store. The table is
+        // persisted as-is rather than wrapped in a ContentAddressableIndex.
+        const files = flattenContentTree(contentTree);
         const entries = await ContentAddressableIndex.buildIndex(files);
-        const rootHash = getRootHash(entries);
+        const hash = getRootHash(entries);
 
         // Order matters and the port makes no atomicity guarantee across the
         // two calls: the closure must exist before a build can name it, and a
         // failure between them leaves an unreferenced closure, which is inert
-        // because a retry re-derives the identical root hash.
-        await this.#store.saveIndex(context, rootHash, entries);
-        await this.#store.assignBuild(context, buildId, rootHash);
+        // because a retry re-derives the identical hash.
+        await this.#store.saveIndex(context, hash, entries);
+        await this.#store.assignBuild(context, buildId, hash);
 
-        return { rootHash, nodeCount: Object.keys(entries).length };
+        return { hash, nodeCount: Object.keys(entries).length };
     }
 }
