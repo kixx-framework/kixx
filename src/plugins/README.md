@@ -51,12 +51,7 @@ Everything with a process lifetime goes through the registry. Everything that pr
 ## General Plugins
 Not every plugin must be an adapter. Some plugins - called "general" plugins - use the plugin registration and initialization process without platform specific logic.
 
-The `hyperview` general plugin (`plugins/hyperview/plugin.js`) is a good example. The Hyperview content model — the `/pages` and `/templates` namespace, resource reads and writes, and manifest validation — is framework-owned; it does not live in any adapter package, and no platform-specific vocabulary appears in it. The plugin registers and wires two framework services in a fixed order:
-
-- **`HyperviewContent`** (`HyperviewContentService`, `src/kixx/hyperview/hyperview-content-service.js`) — owns the complete Hyperview content model, implemented entirely over the generic `ContentAddressableStoreInterface` port (`src/kixx/content-store/content-addressable-store-interface.js`).
-- **`Hyperview`** (`HyperviewService`, `src/kixx/hyperview/hyperview-service.js`) — renders pages and assembled JSON page context; depends on `HyperviewContent` for every content read and on `KeyValueStore` for the rendered-page cache.
-
-`register()` constructs and registers both services before either is initialized. `initialize()` resolves `ContentAddressableStore`, initializes `HyperviewContent` with it as the backing store, then initializes `Hyperview` with `HyperviewContent` and `KeyValueStore` — in that order, so `Hyperview` never receives a content service that has not itself been initialized. Neither service is platform-specific, so this plugin has no adapter package of its own; it only needs whatever platform registry has already registered `ContentAddressableStore` and `KeyValueStore` under those names.
+The `hyperview` general plugin (`plugins/hyperview/plugin.js`) is a good example. The Hyperview content model — the `/pages` and `/templates` namespace, resource reads and writes, and manifest validation — is framework-owned; it does not live in any adapter package, and no platform-specific vocabulary appears in it.
 
 ## The Plugin Module Contract
 

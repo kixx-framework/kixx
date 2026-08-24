@@ -70,6 +70,7 @@ const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
  * Blob and index keys include the configured wire format, isolating data
  * written by format. Index reads use both isolate-local promise
  * caching and Cloudflare's colo-local Cache API.
+ * @implements {import('../../../kixx/content-addressable-store/content-store-interface.js').ContentStoreInterface}
  */
 export default class ContentStore {
 
