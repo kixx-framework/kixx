@@ -4,6 +4,7 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import {
     getEmailBundlePath,
     isValidPathname,
+    isValidTemplateFilepath,
     normalizePathname,
 } from '../../../../src/kixx/content-addressable-store/content-layout.js';
 
@@ -80,6 +81,22 @@ describe('content-layout', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('TypeError', caught.name);
             assertMatches('An identifier must be a string', caught.message);
+        });
+    });
+
+    describe('isValidTemplateFilepath()', ({ it }) => {
+        it('accepts an ordinary template filepath', () => {
+            assert(isValidTemplateFilepath('/blog/post/page.html'));
+        });
+
+        it('rejects the namespace root', () => {
+            assertEqual(false, isValidTemplateFilepath('/'));
+        });
+
+        it('rejects a filepath naming a reserved page filename', () => {
+            assertEqual(false, isValidTemplateFilepath('/blog/post/page.json'));
+            assertEqual(false, isValidTemplateFilepath('/blog/post/__page-partials-bundle'));
+            assertEqual(false, isValidTemplateFilepath('/blog/post/__page-includes-bundle'));
         });
     });
 

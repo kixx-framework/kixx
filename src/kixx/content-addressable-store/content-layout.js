@@ -139,13 +139,19 @@ export function normalizePathname(value) {
 
 /**
  * Reports whether a value is a canonical template filepath: it must satisfy
- * the canonical pathname rules and must name a non-root file, so a page
- * template can never resolve to the `/pages` namespace root.
+ * the canonical pathname rules, must name a non-root file so a page template
+ * can never resolve to the `/pages` namespace root, and must not name one of
+ * {@link RESERVED_PAGE_FILENAMES}, which the page directory reserves for its
+ * own bundles.
  * @param {string} value - The filepath to check
- * @returns {boolean} True when the value is a valid, non-root template filepath
+ * @returns {boolean} True when the value is a valid, non-root, non-reserved template filepath
  */
 export function isValidTemplateFilepath(value) {
-    return isValidPathname(value) && normalizePathname(value) !== '/';
+    if (!isValidPathname(value) || normalizePathname(value) === '/') {
+        return false;
+    }
+    const filename = normalizePathname(value).split('/').pop();
+    return !RESERVED_PAGE_FILENAMES.has(filename);
 }
 
 function getTemplatesPath(relativePathname) {

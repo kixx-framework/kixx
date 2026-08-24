@@ -65,28 +65,58 @@ function statHandlerWithoutPathname(type) {
     };
 }
 
-export async function putStaticAsset(context, request, response) {
-    const store = context.getService('ContentAddressableStore');
 
-    const segments = request.pathnameParams.path;
-    // TODO: Is this a programmer error or BadRequest error if we don't have segments?
-    assertArray(segments, `Route for ${ request.url.pathname } must produce path segments`);
-    const pathname = store.normalizePathname(segments.join('/'));
+function putHandlerWithPathname(type, getPayload) {
 
-    const content = await store.openSnapshot(context);
-    const stats = await content.putStaticAsset(context, pathname, request.arrayBuffer());
+    return async function putHandler(context, request, response) {
+        const store = context.getService('ContentAddressableStore');
 
-    const resource = jsonApiResource({
-        type,
-        id: stats.hash,
-        attributes: {
-            pathname,
-            hash: stats.hash,
-            size: stats.size,
-        },
-    });
+        const segments = request.pathnameParams.path;
+        // TODO: Is this a programmer error or BadRequest error if we don't have segments?
+        assertArray(segments, `Route for ${ request.url.pathname } must produce path segments`);
+        const pathname = store.normalizePathname(segments.join('/'));
 
-    return response.respondWithJSON(200, resource, { contentType: JSON_API_CONTENT_TYPE });
+        const payload = await getPayload(request);
+
+        const content = await store.openSnapshot(context);
+        const stats = content[`put${ type }`](context, pathname, payload);
+
+        const resource = jsonApiResource({
+            type,
+            id: stats.hash,
+            attributes: {
+                pathname,
+                hash: stats.hash,
+                size: stats.size,
+            },
+        });
+
+        return response.respondWithJSON(201, resource, { contentType: JSON_API_CONTENT_TYPE });
+    };
+}
+
+
+function putHandlerWithoutPathname(type, getPayload) {
+    return async function putHandler(context, request, response) {
+        const store = context.getService('ContentAddressableStore');
+
+        const payload = await getPayload(request);
+
+        const content = await store.openSnapshot(context);
+        const stats = content[`put${ type }`](context, payload);
+
+        const resource = jsonApiResource({
+            type,
+            id: stats.hash,
+            attributes: {
+                pathname,
+                hash: stats.hash,
+                size: stats.size,
+            },
+        });
+
+        return response.respondWithJSON(201, resource, { contentType: JSON_API_CONTENT_TYPE });
+    };
 }
 
 export const statStaticAsset = statHandlerWithPathname('StaticAsset');
@@ -97,6 +127,16 @@ export const statPageIncludes = statHandlerWithPathname('PageIncludes');
 export const statPagePartials = statHandlerWithPathname('PagePartials');
 export const statPageTemplate = statHandlerWithPathname('PageTemplate');
 export const statEmailAssets = statHandlerWithPathname('EmailAssets');
+
+export const putStaticAsset = putHandlerWithPathname('StaticAsset', async (request) => {
+    // TODO: Validate the payload
+    return await request.arrayBuffer();
+});
+
+export const putGlobalTemplatePartials = putHandlerWithoutPathname('GlobalTemplatePartials', async (request) => {
+    const { attributes } = await parseJsonApiResource(request, 'GlobalTemplatePartials');
+    return attributes.bundle;
+});
 
 // The six Hyperview content resources this API exposes, keyed by their
 // canonical external identifier. `HyperviewContentService` and its layout

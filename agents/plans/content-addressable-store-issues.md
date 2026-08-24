@@ -272,7 +272,7 @@ correctly.
 
 ## CAS-6: The write half of `ContentSnapshot` has no live caller
 
-**Status:** Open — informational
+**Status:** Won't Fix — out of scope for this work.
 **Severity:** Informational
 **Location:** `src/app/presentation/request-handlers/publishing-api/mod.js`
 
@@ -307,7 +307,11 @@ it is a genuine adapting layer, not a pass-through.
 
 ## CAS-7: `RESERVED_PAGE_FILENAMES` is exported but never enforced
 
-**Status:** Open
+**Status:** Resolved — `isValidTemplateFilepath()` now rejects any filepath
+whose filename is in `RESERVED_PAGE_FILENAMES`, so the publishing API's
+existing validation hook (`publishing-api/mod.js:190`) turns a reserved
+filename into a `BadRequestError` at the boundary. Covered by new tests in
+`content-layout.test.js`, confirmed red before the fix landed.
 **Severity:** Low — a stated invariant with nothing checking it
 **Location:** `src/kixx/content-addressable-store/content-layout.js:53`
 
