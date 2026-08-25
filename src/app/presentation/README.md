@@ -568,9 +568,9 @@ getDynamicFieldMetadata() {
 }
 ```
 
-The merge is deliberately narrow. Dynamic metadata overrides static schema keys, but `getFormContext()` applies the field `name`, `value`, and `error` afterward, so a subclass can neither defeat the `writeOnly` omission nor forge a field error. A metadata key naming a field the schema does not declare throws an `AssertionError` rather than rendering a silently missing control.
+The merge is deliberately narrow. Dynamic metadata overrides static schema keys, but `getFormContext()` applies the field `name`, `value`, and `error` afterward, so a subclass can neither defeat the `writeOnly` omission nor forge a field error.
 
-The hook is synchronous, matching `getFormContext()`. When the metadata needs I/O — a list of records rather than a registry — load it in the request handler, assign it to the form instance, and read it from `this` in the hook. Do not push the I/O into the render path.
+The hook is synchronous, matching `getFormContext()`. When the metadata needs I/O, load it in the request handler, assign it to the form instance, and read it from `this` in the hook. Do not push the I/O into the render path.
 
 ### Schema HTML Metadata
 
@@ -615,6 +615,8 @@ A form that mints a record from server-derived data only — no operator-entered
 ## API-Only Forms
 
 Forms used only by JSON:API endpoints do **not** extend `BaseForm` and do not declare `method`, `target`, or `getFormContext()`, because they are never rendered as HTML and never compile a browser form action. They keep the rest of the anatomy: a `schema`, a normalizing constructor (reuse the `utils.js` helpers), a `validate()` that accumulates field errors on a `ValidationError`, a `fromJsonApi(resource)` static constructor that reads `resource.attributes`, and a `toJSON()` that returns server-consumable data. Because these forms have no `BaseForm` to inherit `fromFormData()` from, `fromJsonApi()` is their only entry point.
+
+A form can serve both entry points when the same fields arrive over HTML and JSON:API — extend `BaseForm` for the HTML side and add a `fromJsonApi()` that maps the API attribute names onto the constructor's field names.
 
 ```js
 import { isString } from '../../../../kixx/assertions/mod.js';
@@ -686,8 +688,6 @@ export default class CreateApiTokenForm {
     }
 }
 ```
-
-A form can serve both entry points when the same fields arrive over HTML and JSON:API — extend `BaseForm` for the HTML side and add a `fromJsonApi()` that maps the API attribute names onto the constructor's field names (the new-admin-user form does this, accepting `emailAddress` from JSON:API and a separate bearer invite token).
 
 ## CSRF-Protected HTML Forms
 
