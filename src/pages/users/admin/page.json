@@ -1,5 +1,4 @@
 {
-    "baseTemplate": "admin-login.html",
     "pageTemplate": "",
     "page": {
         "title": { "template": "{{ subpage.title }} | Admin" }

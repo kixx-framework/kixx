@@ -23,7 +23,7 @@ export function register(context) {
         allowJsonResponse,
     } = config.env.HYPERVIEW ?? {};
 
-    context.registerService('Hyperview', new HyperviewService({
+    context.registerService('HyperviewService', new HyperviewService({
         logger,
         useTemplateCache: useTemplateCache ?? DEFAULTS.useTemplateCache,
         usePageCache: usePageCache ?? DEFAULTS.usePageCache,
@@ -36,6 +36,6 @@ export function register(context) {
 export function initialize(context) {
     const contentAddressableStore = context.getService('ContentAddressableStore');
     const kvStore = context.getService('KeyValueStore');
-    const hyperviewService = context.getService('Hyperview');
+    const hyperviewService = context.getService('HyperviewService');
     hyperviewService.initialize({ kvStore, contentAddressableStore });
 }

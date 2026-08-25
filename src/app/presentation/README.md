@@ -8,7 +8,7 @@ The primary view layer for the presentation is provided by mustache style templa
 
 **Template context data and rendering**
 
-The Kixx Hyperview Service is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `templates/`.
+The Kixx Hyperview Service assembles page context and rendered hypertext from page metadata and text based content in `pages/` with templates in `templates/`. The presentation facade commits that result to the HTTP response.
 
 **HTTP Routing**
 
@@ -335,7 +335,7 @@ When validation failure should re-render a page, `HyperviewPageHandler(...)` aft
 
 ### Rendering a Page with HyperviewPageHandler
 
-`HyperviewPageHandler()` (`app/presentation/request-handlers/hyperview/hyperview-page-handler.js`) is the request handler which renders a Hyperview page as the response. Place it **last** in a target's `requestHandlers` chain: earlier handlers read the request and accumulate render data with `response.updateProps()`, and this handler turns what they accumulated into hypertext.
+`HyperviewPageHandler()` (`app/presentation/request-handlers/hyperview/hyperview-page-handler.js`) is the route adapter which renders a Hyperview page as the response. Place it **last** in a target's `requestHandlers` chain: earlier handlers read the request, add template data with `response.updateProps()`, add rendering controls with `response.setRenderingOptions()`, and this handler delegates rendering to the shared presentation facade.
 
 ```js
 {
@@ -360,17 +360,20 @@ The response status is whatever an earlier handler set, so a re-rendered validat
 
 A full-page render requires `baseTemplateId`; the other two modes ignore it.
 
-**Where the options come from.** Three sources are merged, later sources winning over earlier ones:
+**Where the options come from.** Three sources are merged by `respondWithHyperviewPage()`, later sources winning over earlier ones:
 
 1. The options passed to `HyperviewPageHandler(...)` — the route's own configuration, fixed at startup.
-2. `response.props.hyperviewOptions` — a per-request override set by an earlier handler through `response.updateProps()`. Merged key by key, so an override object replaces only the options it names. Use it when the render mode depends on what the request handler found, not on the route.
+2. `response.renderingOptions` — a per-request replacement set by an earlier handler through `response.setRenderingOptions()`. Use it when the render mode depends on what the request handler found, not on the route.
 3. The `kixx-partial` and `kixx-boosted` request headers, which win over both.
 
 ```js
 // Re-render only the results table when the request handler knows the
 // client is asking for a filtered list.
-response.updateProps({ hyperviewOptions: { partial: 'results-table' }, results });
+response.setRenderingOptions({ partial: 'results-table' });
+response.updateProps({ results });
 ```
+
+`respondWithHyperviewPage(context, request, response, defaultOptions)` is also available from `app/presentation/lib/respond-with-hyperview-page.js` for terminal presentation code such as error handlers. It uses the same option precedence and service lookup as `HyperviewPageHandler`; call it directly only when the normal request-handler phase cannot continue. It passes `request.url` and `response.props` to `HyperviewService#renderPage()`, then owns JSON serialization and HTTP status, headers, content type, and body commitment.
 
 **Options.** All are optional.
 
@@ -386,7 +389,7 @@ response.updateProps({ hyperviewOptions: { partial: 'results-table' }, results }
 | `propsHashFunction` | Custom response-props hash, used only with page caching and props-sensitive keys |
 | `pageCacheReadTtlSeconds`, `pageCacheExpirationSeconds` | Page-cache read TTL and write expiration; default to the configured values |
 | `allowJsonResponse` | Serve assembled page context for `.json` requests; defaults to the configured value |
-| `responseOptions` | `{ contentType, headers }` forwarded to the UTF-8 response method |
+| `responseOptions` | `{ contentType, headers }` used only by the facade when it commits hypertext |
 
 Leave `includePropsInCacheKey` alone unless you are certain the page renders identically for every viewer. It defaults to `true` with page caching on precisely so a page rendered for one signed-in user is never served to the next.
 
@@ -486,13 +489,19 @@ Pass `{ required: true }` to the string, integer, or float helpers when the appl
 - `response.body` — response body: string, Buffer, ReadableStream, or `null`
 - `response.headers` — Web API `Headers` instance; use `setHeader()`/`appendHeader()` instead of mutating directly
 
-**Passing data between middleware** — use `updateProps()` to accumulate render context without committing a response body. The rendering handler (usually `HyperviewPageHandler`) reads these props to render the page template. Earlier middleware's props are readable via `response.props` if a later handler needs them.
+**Passing template data between middleware** — use `updateProps()` to accumulate render context without committing a response body. The rendering handler (usually `HyperviewPageHandler`) reads these props to render the page template. Earlier middleware's props are readable via `response.props` if a later handler needs them.
 
 ```js
 response.updateProps({ page: { title: 'My Page' }, ticket });
 ```
 
 `updateProps()` deep-merges using `structuredClone`. Pass plain objects only — functions, class instances, and other non-cloneable values will cause it to throw. Nested objects merge rather than replace.
+
+**Passing rendering controls** — use `setRenderingOptions()` for rendering behavior that must not become template context or page-context JSON data. It replaces every prior rendering option with a shallow copy, so use `{}` to clear state before rendering another representation. Functions and other non-cloneable option values are allowed.
+
+```js
+response.setRenderingOptions({ partial: 'results-table' });
+```
 
 **Committing a response** — use the `respond*` methods to set status, headers, and body together:
 
@@ -514,7 +523,7 @@ response.clearCookie('session', { path: '/' });
 
 `setCookie` defaults to `Secure; HttpOnly; SameSite=Lax`. Pass `secure: false` for local development. Pass `httpOnly: false` for client-readable cookies.
 
-**Chaining** — all `respond*`, `setHeader`, `appendHeader`, `setCookie`, `clearCookie`, and `updateProps` methods return `this`, so they can be chained or returned directly:
+**Chaining** — all `respond*`, `setHeader`, `appendHeader`, `setCookie`, `clearCookie`, `updateProps`, and `setRenderingOptions` methods return `this`, so they can be chained or returned directly:
 
 ```js
 return response.updateProps({ page: { title: ticket.title }, ticket });

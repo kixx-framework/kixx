@@ -1,4 +1,4 @@
-import { HyperviewStaticPageHandler, HyperviewDynamicPageHandler } from '../kixx/hyperview/hyperview-request-handlers.js';
+import HyperviewPageHandler from '../app/presentation/request-handlers/hyperview/hyperview-page-handler.js';
 import * as AdminInvites from '../app/presentation/request-handlers/admin-panel/admin-invites.js';
 import * as AdminPublishingApiTokens from '../app/presentation/request-handlers/admin-panel/admin-publishing-api-tokens.js';
 import * as AdminAuthorization from '../app/presentation/middleware/admin-authorization.js';
@@ -13,7 +13,7 @@ export default [
                 name: 'render-style-guide-page',
                 methods: [ 'GET', 'HEAD' ],
                 requestHandlers: [
-                    HyperviewStaticPageHandler(),
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
         ],
@@ -44,7 +44,7 @@ export default [
                 requestHandlers: [
                     AdminAuthorization.requireAdminUserInvitesRead,
                     AdminInvites.getAdminInvites,
-                    HyperviewDynamicPageHandler(),
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
             {
@@ -53,7 +53,7 @@ export default [
                 requestHandlers: [
                     AdminAuthorization.requireAdminUserInvitesWrite,
                     AdminInvites.postCreateAdminInvite,
-                    HyperviewDynamicPageHandler(),
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
         ],
@@ -84,7 +84,7 @@ export default [
                 requestHandlers: [
                     AdminAuthorization.requirePublishingApiTokensRead,
                     AdminPublishingApiTokens.getPublishingApiTokens,
-                    HyperviewDynamicPageHandler(),
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
             {
@@ -93,7 +93,7 @@ export default [
                 requestHandlers: [
                     AdminAuthorization.requirePublishingApiTokensWrite,
                     AdminPublishingApiTokens.postCreatePublishingApiToken,
-                    HyperviewDynamicPageHandler(),
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
         ],
@@ -106,7 +106,7 @@ export default [
                 name: 'render-static-page',
                 methods: [ 'GET', 'HEAD' ],
                 requestHandlers: [
-                    HyperviewStaticPageHandler(),
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
         ],

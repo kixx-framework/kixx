@@ -7,11 +7,48 @@ import {
 import {
     BadRequestError,
     ConflictError,
+    UnauthenticatedError,
     UnsupportedMediaTypeError,
 } from '../../../kixx/errors/mod.js';
 
 
 export const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
+
+
+/**
+ * Parses HTTP Basic credentials from an Authorization header.
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
+ * @returns {{ username: string, password: string }} Decoded username and password.
+ * @throws {UnauthenticatedError} When the Authorization header is absent or malformed.
+ */
+export function parseBasicAuthCredentials(request) {
+    const authorization = request.headers.get('authorization')?.trim();
+    const match = /^Basic\s+([A-Za-z0-9+/]+={0,2})$/i.exec(authorization);
+
+    if (!match) {
+        throw new UnauthenticatedError('HTTP Basic credentials are required.');
+    }
+
+    let credentials;
+    try {
+        credentials = new TextDecoder().decode(Uint8Array.from(
+            atob(match[1]),
+            (character) => character.charCodeAt(0),
+        ));
+    } catch (cause) {
+        throw new UnauthenticatedError('HTTP Basic credentials are malformed.', { cause });
+    }
+
+    const separatorIndex = credentials.indexOf(':');
+    if (separatorIndex < 1 || separatorIndex === credentials.length - 1) {
+        throw new UnauthenticatedError('HTTP Basic credentials are malformed.');
+    }
+
+    return {
+        username: credentials.slice(0, separatorIndex),
+        password: credentials.slice(separatorIndex + 1),
+    };
+}
 
 
 /**

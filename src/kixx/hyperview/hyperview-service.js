@@ -11,6 +11,7 @@ import {
     assertFunction,
     assertNonEmptyString,
     isFunction,
+    isPlainObject,
     isUndefined,
     isNonEmptyString,
 } from '../assertions/mod.js';
@@ -64,7 +65,7 @@ function compileTemplate(templateId, source, customHelpers) {
 }
 
 /**
- * Renders published site content into hypertext responses and email bodies.
+ * Renders published site content into Hyperview page results and email bodies.
  *
  * This is the only place the framework turns *content* into *output*. It owns
  * three things and nothing else: choosing what to render, compiling and caching
@@ -80,7 +81,7 @@ function compileTemplate(templateId, source, customHelpers) {
  * cannot key a cache entry with hashes that never coexisted.
  *
  * ## The three render modes
- * `respondWithHypertext()` serves one page three ways, because a hypermedia
+ * `renderPage()` serves one page three ways, because a hypermedia
  * application asks for the same page at three granularities:
  *
  * - `options.partial` renders a single named page partial. The browser fetches
@@ -106,7 +107,7 @@ function compileTemplate(templateId, source, customHelpers) {
  *
  * The rendered-page cache lives in the KV store, is shared across instances, and
  * is keyed by a hash covering every content hash the render read plus — by
- * default — the response props. That props default is a safety property, not an
+ * default — the runtime props. That props default is a safety property, not an
  * optimization: without it, a page rendered for one signed-in user would be
  * served to the next.
  *
@@ -503,39 +504,34 @@ export default class HyperviewService {
 
 
     /**
-     * Mutates and returns the supplied response with assembled page-context JSON,
-     * a rendered page partial, a rendered page template, or a complete page wrapped
-     * by a base template. All content and cache-validator reads use one immutable,
-     * request-scoped content snapshot.
-     *
-     * The rendered output carries the status already set on the response, so a
-     * caller rendering an error page sets that status before calling. Runtime
-     * values reach the template through `response.props`, which the assembled page
-     * context merges over the page's published metadata.
+     * Renders assembled page-context JSON, a page partial, a page template, or a
+     * complete page wrapped by a base template. All content and cache-validator
+     * reads use one immutable, request-scoped content snapshot.
      *
      * @param {import('../context/request-context.js').default} context - Context for storage and cache operations
-     * @param {import('../http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request used to select the page and response format
-     * @param {import('../http-router/server-response.js').default} response - Mutable response carrying the status and page props
-     * @param {Object} [options]
-     * @param {string} [options.pathname] - Canonical page identifier; defaults to the normalized request pathname
+     * @param {Object} options - Render inputs independent of HTTP request and response objects
+     * @param {URL} options.url - Requested URL used to select the page and default cache identity
+     * @param {Object} options.props - Plain runtime template props merged over published page metadata
+     * @param {string} [options.pathname] - Canonical page identifier; defaults to the normalized URL pathname
      * @param {string} [options.baseTemplateId] - Canonical base template identifier required for full-page rendering
      * @param {string} [options.partial] - Canonical page-partial identifier to render instead of the page and base templates
      * @param {boolean} [options.skipBaseRender=false] - Render the page template without its base template
      * @param {boolean} [options.usePageCache] - Enable rendered-page cache preparation, reads, and writes; defaults to the constructor value
      * @param {string} [options.cacheKey] - Cache identity component used only when page caching is enabled; defaults to request origin, pathname, and query string, then becomes part of an opaque hashed KV key
-     * @param {boolean} [options.includePropsInCacheKey] - Include response props in the rendered-page cache identity; defaults to true when page caching is enabled and false otherwise
-     * @param {function(string, Object, Object): (string|Promise<string>)} [options.propsHashFunction] - Returns the response-props hash from the page pathname, merged page context, and response props; used only when page caching and props-sensitive keys are enabled
+     * @param {boolean} [options.includePropsInCacheKey] - Include runtime props in the rendered-page cache identity; defaults to true when page caching is enabled and false otherwise
+     * @param {function(string, Object, Object): (string|Promise<string>)} [options.propsHashFunction] - Returns the runtime-props hash from the page pathname, merged page context, and runtime props; used only when page caching and props-sensitive keys are enabled
      * @param {number} [options.pageCacheReadTtlSeconds] - Cache TTL passed to enabled page-cache reads; defaults to the constructor value
      * @param {number} [options.pageCacheExpirationSeconds] - Expiration passed to enabled page-cache writes; defaults to the constructor value
      * @param {boolean} [options.allowJsonResponse] - Serve assembled page context for explicit JSON requests and treat `.json` as a representation suffix; defaults to the constructor value
-     * @param {Object} [options.responseOptions] - Options forwarded to the UTF-8 response method
-     * @param {string} [options.responseOptions.contentType='text/plain'] - Response MIME type; a UTF-8 charset is appended
-     * @param {Object|Headers|Array<[string,string]>} [options.responseOptions.headers] - Additional response headers
-     * @returns {Promise<import('../http-router/server-response.js').default>} Resolves to the mutated response
+     * @returns {Promise<{type: 'hypertext', hypertext: string}|{type: 'page-context', pageContext: Object}>} Rendered representation, without HTTP response state
      * @throws {NotFoundError} When no page exists for the resolved pathname
-     */
-    async respondWithHypertext(context, request, response, options) {
-        options = options ?? {};
+    */
+    async renderPage(context, options) {
+        assert(isPlainObject(options), 'HyperviewService#renderPage: options must be a plain object');
+        const { props, url } = options;
+
+        assert(url instanceof URL, 'HyperviewService#renderPage: options.url must be a URL');
+        assert(isPlainObject(props), 'HyperviewService#renderPage: options.props must be a plain object');
 
         // Each caller may override the constructor-level default for its own call.
         const usePageCache = options.usePageCache ?? this.#usePageCache;
@@ -562,13 +558,13 @@ export default class HyperviewService {
         // and render it as HTML whenever JSON responses are disabled, exposing
         // every page under a second, non-canonical URL instead of
         // reporting it as not found.
-        const isJsonPathRequest = allowJsonResponse && request.url.pathname.toLowerCase().endsWith('.json');
+        const isJsonPathRequest = allowJsonResponse && url.pathname.toLowerCase().endsWith('.json');
 
         let pathname;
         if (isNonEmptyString(options.pathname)) {
             pathname = options.pathname;
         } else {
-            let requestPathname = request.url.pathname;
+            let requestPathname = url.pathname;
             if (isJsonPathRequest) {
                 // Slicing by length rather than matching on ".json" literally, so
                 // this strips whichever case of the extension isJsonPathRequest matched.
@@ -586,7 +582,7 @@ export default class HyperviewService {
 
         assert(
             this.#contentAddressableStore.isValidPathname(pathname),
-            'HyperviewService#respondWithHypertext: pathname',
+            'HyperviewService#renderPage: pathname',
         );
 
         // We need to assert these identifiers are correct and safe here, because they
@@ -594,22 +590,20 @@ export default class HyperviewService {
         if (options.partial) {
             assert(
                 this.#contentAddressableStore.isValidPathname(options.partial),
-                'HyperviewService#respondWithHypertext: options.partial',
+                'HyperviewService#renderPage: options.partial',
             );
         } else if (!options.skipBaseRender) {
             assert(
                 this.#contentAddressableStore.isValidPathname(options.baseTemplateId),
-                'HyperviewService#respondWithHypertext options.baseTemplateId',
+                'HyperviewService#renderPage options.baseTemplateId',
             );
         }
-
-        const { url } = request;
 
         // A render reads all of its content, including cache-key inputs, through
         // exactly one request-scoped snapshot.
         const content = await this.#contentAddressableStore.openSnapshot(context);
 
-        const page = await this.#getPage(context, content, url, pathname, response.props);
+        const page = await this.#getPage(context, content, url, pathname, props);
 
         if (!page) {
             throw new NotFoundError(`No page found for URL "${ url.href }"`, {
@@ -624,13 +618,9 @@ export default class HyperviewService {
         // put a second representation of every page in the shared cache.
         if (isJsonPathRequest) {
             // The optional JSON response is intended for development and debugging.
-            // It exposes the assembled context, including merged response props,
+            // It exposes the assembled context, including merged runtime props,
             // so deployments serving authenticated pages leave it disabled.
-            return response.respondWithJSON(
-                response.status,
-                page.context,
-                { whiteSpace: 4 },
-            );
+            return { type: 'page-context', pageContext: page.context };
         }
 
         let pageCacheKey;
@@ -652,10 +642,10 @@ export default class HyperviewService {
                     propsHash = await options.propsHashFunction(
                         page.pathname,
                         page.context,
-                        response.props,
+                        props,
                     );
                 } else {
-                    propsHash = await this.#contentAddressableStore.hashSet(response.props);
+                    propsHash = await this.#contentAddressableStore.hashSet(props);
                 }
                 hash = await this.#contentAddressableStore.hashString(`${ hash }#${ propsHash }`);
             }
@@ -697,7 +687,7 @@ export default class HyperviewService {
             });
             if (hypertext) {
                 this.#logger.debug('cached page hit', { url: url.href, pathname, key: pageCacheKey });
-                return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
+                return { type: 'hypertext', hypertext };
             }
             this.#logger.info('cached page miss', { url: url.href, pathname, key: pageCacheKey });
         }
@@ -728,7 +718,7 @@ export default class HyperviewService {
                 });
             }
 
-            return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
+            return { type: 'hypertext', hypertext };
         }
 
         if (options.skipBaseRender) {
@@ -752,7 +742,7 @@ export default class HyperviewService {
                 });
             }
 
-            return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
+            return { type: 'hypertext', hypertext };
         }
 
         const baseTemplate = await this.#loadBaseTemplate(context, content, options.baseTemplateId);
@@ -781,7 +771,7 @@ export default class HyperviewService {
             });
         }
 
-        return response.respondWithUtf8(response.status, hypertext, options.responseOptions);
+        return { type: 'hypertext', hypertext };
     }
 
     /**
@@ -812,7 +802,7 @@ export default class HyperviewService {
         const email = await this.#getEmail(context, content, pathname);
 
         // An unpublished pathname is an ordinary outcome, not a programmer error;
-        // report it the same way respondWithHypertext() reports a missing page.
+        // report it the same way renderPage() reports a missing page.
         if (!email) {
             throw new NotFoundError(`No email found for pathname "${ pathname }"`, { pathname });
         }

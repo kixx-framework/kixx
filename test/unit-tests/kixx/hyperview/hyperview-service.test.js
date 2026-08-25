@@ -271,22 +271,37 @@ function makeFullPageOptions(overrides) {
 
 describe('HyperviewService', ({ describe }) => {
 
-    describe('respondWithHypertext() full page render', ({ it }) => {
+    describe('renderPage() full page render', ({ it }) => {
+
+        it('requires a URL and plain runtime props', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
+
+            const withoutUrl = await catchAsyncError(() => service.renderPage(CONTEXT, { props: {} }));
+            const withoutProps = await catchAsyncError(() => service.renderPage(CONTEXT, {
+                url: makeRequest().url,
+            }));
+
+            assertEqual('AssertionError', withoutUrl.name);
+            assertMatches('options.url', withoutUrl.message);
+            assertEqual('AssertionError', withoutProps.name);
+            assertMatches('options.props', withoutProps.message);
+        });
 
         it('wraps the rendered page template in the base template', async () => {
             const { service } = makeSubject(makeDefaultSpec());
-            const response = new ServerResponse();
-
-            await service.respondWithHypertext(
+            const result = await service.renderPage(
                 CONTEXT,
-                makeRequest(),
-                response,
-                makeFullPageOptions(),
+                {
+                    ...makeFullPageOptions(),
+                    props: {},
+                    url: makeRequest().url,
+                },
             );
 
+            assertEqual('hypertext', result.type);
             assertEqual(
                 '<html><body><main><p>Home</p><footer>Home</footer></main></body></html>',
-                response.body,
+                result.hypertext,
             );
         });
 
@@ -310,7 +325,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(makeDefaultSpec());
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -332,7 +347,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(spec);
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -349,7 +364,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(spec);
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -367,7 +382,7 @@ describe('HyperviewService', ({ describe }) => {
             const response = new ServerResponse();
             response.updateProps({ greeting: 'Hello' });
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -377,26 +392,30 @@ describe('HyperviewService', ({ describe }) => {
             assertMatches('<main>Hello</main>', response.body);
         });
 
-        it('carries the status already set on the response', async () => {
+        it('returns a value without accepting or mutating a response', async () => {
             const { service } = makeSubject(makeDefaultSpec());
             const response = new ServerResponse();
             response.status = 404;
 
-            await service.respondWithHypertext(
+            const result = await service.renderPage(
                 CONTEXT,
-                makeRequest(),
-                response,
-                makeFullPageOptions(),
+                {
+                    ...makeFullPageOptions(),
+                    props: response.props,
+                    url: makeRequest().url,
+                },
             );
 
+            assertEqual('hypertext', result.type);
             assertEqual(404, response.status);
+            assertEqual(null, response.body);
         });
 
         it('throws NotFoundError when no page is published at the pathname', async () => {
             const { service } = makeSubject(makeDefaultSpec());
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext(
+                return renderPageToResponse(service,
                     CONTEXT,
                     makeRequest('https://www.example.com/missing'),
                     new ServerResponse(),
@@ -418,7 +437,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(spec);
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext(
+                return renderPageToResponse(service,
                     CONTEXT,
                     makeRequest('https://www.example.com/blog'),
                     new ServerResponse(),
@@ -434,7 +453,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(makeDefaultSpec());
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext(
+                return renderPageToResponse(service,
                     CONTEXT,
                     makeRequest(),
                     new ServerResponse(),
@@ -448,13 +467,13 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('respondWithHypertext() partial render', ({ it }) => {
+    describe('renderPage() partial render', ({ it }) => {
 
         it('renders only the named page partial', async () => {
             const { service } = makeSubject(makeDefaultSpec());
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -473,7 +492,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(spec);
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -486,7 +505,7 @@ describe('HyperviewService', ({ describe }) => {
         it('never reads the base templates', async () => {
             const { service, snapshot } = makeSubject(makeDefaultSpec());
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 new ServerResponse(),
@@ -500,7 +519,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(makeDefaultSpec());
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext(
+                return renderPageToResponse(service,
                     CONTEXT,
                     makeRequest(),
                     new ServerResponse(),
@@ -514,13 +533,13 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('respondWithHypertext() skipBaseRender', ({ it }) => {
+    describe('renderPage() skipBaseRender', ({ it }) => {
 
         it('renders the page template without the surrounding document', async () => {
             const { service } = makeSubject(makeDefaultSpec());
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -533,7 +552,7 @@ describe('HyperviewService', ({ describe }) => {
         it('never reads the base templates', async () => {
             const { service, snapshot } = makeSubject(makeDefaultSpec());
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 new ServerResponse(),
@@ -544,7 +563,7 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('respondWithHypertext() metadata mini templates', ({ it }) => {
+    describe('renderPage() metadata mini templates', ({ it }) => {
 
         it('renders a templated page title against the merged context', async () => {
             const spec = makeDefaultSpec();
@@ -559,7 +578,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(spec);
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -580,7 +599,7 @@ describe('HyperviewService', ({ describe }) => {
             const response = new ServerResponse();
             response.updateProps({ post: { name: 'Follow the Leader' } });
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -603,7 +622,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(spec);
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -620,7 +639,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(spec);
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -631,24 +650,24 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('respondWithHypertext() JSON response', ({ it }) => {
+    describe('renderPage() JSON response', ({ it }) => {
 
         it('returns the assembled page context for a ".json" pathname', async () => {
             const { service } = makeSubject(makeDefaultSpec(), {
                 serviceOptions: { allowJsonResponse: true },
             });
-            const response = new ServerResponse();
-
-            await service.respondWithHypertext(
+            const result = await service.renderPage(
                 CONTEXT,
-                makeRequest('https://www.example.com/index.json'),
-                response,
-                makeFullPageOptions(),
+                {
+                    ...makeFullPageOptions(),
+                    props: {},
+                    url: makeRequest('https://www.example.com/index.json').url,
+                },
             );
 
-            const context = JSON.parse(response.body);
-            assertEqual('Home', context.page.title);
-            assertEqual('/', context.pathname);
+            assertEqual('page-context', result.type);
+            assertEqual('Home', result.pageContext.page.title);
+            assertEqual('/', result.pageContext.pathname);
         });
 
         it('carries the includes content in the JSON context', async () => {
@@ -660,7 +679,7 @@ describe('HyperviewService', ({ describe }) => {
             });
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest('https://www.example.com/index.json'),
                 response,
@@ -677,7 +696,7 @@ describe('HyperviewService', ({ describe }) => {
             const { service } = makeSubject(makeDefaultSpec());
 
             const caught = await catchAsyncError(() => {
-                return service.respondWithHypertext(
+                return renderPageToResponse(service,
                     CONTEXT,
                     makeRequest('https://www.example.com/index.json'),
                     new ServerResponse(),
@@ -698,7 +717,7 @@ describe('HyperviewService', ({ describe }) => {
             request.headers = new Headers({ accept: 'application/json' });
             const response = new ServerResponse();
 
-            await service.respondWithHypertext(CONTEXT, request, response, makeFullPageOptions());
+            await renderPageToResponse(service, CONTEXT, request, response, makeFullPageOptions());
 
             assertMatches('<html>', response.body);
         });
@@ -708,7 +727,7 @@ describe('HyperviewService', ({ describe }) => {
                 serviceOptions: { allowJsonResponse: true, usePageCache: true },
             });
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest('https://www.example.com/index.json'),
                 new ServerResponse(),
@@ -720,14 +739,14 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('respondWithHypertext() page cache', ({ it }) => {
+    describe('renderPage() page cache', ({ it }) => {
 
         async function renderForCacheKey(options, spec) {
             const { service, kvStore } = makeSubject(spec ?? makeDefaultSpec(), {
                 serviceOptions: { usePageCache: true },
             });
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 new ServerResponse(),
@@ -830,7 +849,7 @@ describe('HyperviewService', ({ describe }) => {
             });
 
             const first = new ServerResponse();
-            await service.respondWithHypertext(CONTEXT, makeRequest(), first, makeFullPageOptions());
+            await renderPageToResponse(service, CONTEXT, makeRequest(), first, makeFullPageOptions());
 
             const key = kvStore.puts[0].key;
             const seeded = makeSubject(makeDefaultSpec(), {
@@ -839,7 +858,7 @@ describe('HyperviewService', ({ describe }) => {
             });
 
             const second = new ServerResponse();
-            await seeded.service.respondWithHypertext(
+            await renderPageToResponse(seeded.service,
                 CONTEXT,
                 makeRequest(),
                 second,
@@ -858,7 +877,7 @@ describe('HyperviewService', ({ describe }) => {
                 serviceOptions: { usePageCache: true, pageCacheReadTtlSeconds: 60 },
             });
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 new ServerResponse(),
@@ -873,7 +892,7 @@ describe('HyperviewService', ({ describe }) => {
                 serviceOptions: { usePageCache: true, pageCacheExpirationSeconds: 120 },
             });
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 new ServerResponse(),
@@ -886,7 +905,7 @@ describe('HyperviewService', ({ describe }) => {
         it('neither reads nor writes when the page cache is off', async () => {
             const { service, kvStore } = makeSubject(makeDefaultSpec());
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 new ServerResponse(),
@@ -909,13 +928,13 @@ describe('HyperviewService', ({ describe }) => {
                 serviceOptions: { usePageCache: true },
             });
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest('https://www.example.com/?page=1'),
                 new ServerResponse(),
                 makeFullPageOptions(),
             );
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest('https://www.example.com/?page=2'),
                 new ServerResponse(),
@@ -926,7 +945,7 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('respondWithHypertext() props in the page cache key', ({ it }) => {
+    describe('renderPage() props in the page cache key', ({ it }) => {
 
         async function keyForProps(props, options) {
             const { service, kvStore } = makeSubject(makeDefaultSpec(), {
@@ -935,7 +954,7 @@ describe('HyperviewService', ({ describe }) => {
             const response = new ServerResponse();
             response.updateProps(props);
 
-            await service.respondWithHypertext(
+            await renderPageToResponse(service,
                 CONTEXT,
                 makeRequest(),
                 response,
@@ -986,7 +1005,7 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('respondWithHypertext() template cache', ({ it }) => {
+    describe('renderPage() template cache', ({ it }) => {
 
         it('re-reads the shared bundles on every render when the cache is off', async () => {
             const { service, snapshot } = makeSubject(makeDefaultSpec());
@@ -1066,7 +1085,7 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('respondWithHypertext() malformed bundles', ({ it }) => {
+    describe('renderPage() malformed bundles', ({ it }) => {
 
         it('names the pathname when the global partial bundle is not an Array', async () => {
             const spec = makeDefaultSpec();
@@ -1318,7 +1337,7 @@ describe('HyperviewService', ({ describe }) => {
 async function renderDefaultPage(args) {
     const subject = makeSubject(makeDefaultSpec());
 
-    await subject.service.respondWithHypertext(
+    await renderPageToResponse(subject.service,
         CONTEXT,
         makeRequest(args?.href),
         new ServerResponse(),
@@ -1328,10 +1347,24 @@ async function renderDefaultPage(args) {
     return subject;
 }
 
+async function renderPageToResponse(service, context, request, response, options) {
+    const result = await service.renderPage(context, {
+        ...options,
+        props: response.props,
+        url: request.url,
+    });
+
+    if (result.type === 'hypertext') {
+        return response.respondWithUtf8(response.status, result.hypertext);
+    }
+
+    return response.respondWithJSON(response.status, result.pageContext, { whiteSpace: 4 });
+}
+
 async function renderSpec(spec) {
     const { service } = makeSubject(spec);
 
-    return await service.respondWithHypertext(
+    return await renderPageToResponse(service,
         CONTEXT,
         makeRequest(),
         new ServerResponse(),
@@ -1340,13 +1373,13 @@ async function renderSpec(spec) {
 }
 
 async function renderTwice(service) {
-    await service.respondWithHypertext(
+    await renderPageToResponse(service,
         CONTEXT,
         makeRequest(),
         new ServerResponse(),
         makeFullPageOptions(),
     );
-    await service.respondWithHypertext(
+    await renderPageToResponse(service,
         CONTEXT,
         makeRequest(),
         new ServerResponse(),
@@ -1364,7 +1397,7 @@ async function renderWithSnapshot(service, snapshot) {
         kvStore: makeKvStore(),
     });
 
-    await service.respondWithHypertext(
+    await renderPageToResponse(service,
         CONTEXT,
         makeRequest(),
         new ServerResponse(),

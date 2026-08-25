@@ -11,7 +11,7 @@ This web application provides two different entry points for users:
 
 The public website is the default presentation surface. Static public pages should use the default base template, `templates/base/default.html`, and the public stylesheet entrypoint, `/stylesheets/stylesheet.css`, through `templates/partials/common-site-styles.html`. The current homepage is the canonical example of this default path: root page metadata in `pages/page.json`, public page content in `pages/body.html`, route-level markup in `templates/pages/page.html`, and page-local CSS in `pages/page.css`.
 
-Admin pages are an extension of the public foundation, not the baseline every page inherits. Admin panel pages opt into their shell with `baseTemplate: "admin.html"`, while standalone admin authentication pages opt into `baseTemplate: "admin-login.html"`. Those admin base templates load the admin stylesheet entrypoint, `/stylesheets/admin.css`, which layers admin shell and style-guide rules over the shared public foundations.
+Admin pages are an extension of the public foundation, not the baseline every page inherits. Admin panel routes opt into their shell with `HyperviewPageHandler({ baseTemplateId: 'admin.html' })`, while standalone admin authentication routes use `baseTemplateId: 'admin-login.html'`. Those admin base templates load the admin stylesheet entrypoint, `/stylesheets/admin.css`, which layers admin shell and style-guide rules over the shared public foundations.
 
 ## Follow the Style Guide
 

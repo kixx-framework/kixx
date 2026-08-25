@@ -1,5 +1,5 @@
-import { HyperviewDynamicPageHandler } from '../../../kixx/hyperview/hyperview-request-handlers.js';
-import { assertNonEmptyString, isNonEmptyString, isNumberNotNaN } from '../../../kixx/assertions/mod.js';
+import { assert, assertNonEmptyString, isNonEmptyString, isNumberNotNaN, isPlainObject } from '../../../kixx/assertions/mod.js';
+import respondWithHyperviewPage from './respond-with-hyperview-page.js';
 
 
 const UNEXPECTED_ERROR_PAGE = {
@@ -32,12 +32,23 @@ const STATUS_HEADINGS = {
  * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current server request.
  * @param {import('../../../kixx/http-router/server-response.js').default} response - Mutable server response.
  * @param {Error} error - Error being handled by the router cascade.
- * @param {string} pathname - Fixed Hyperview pathname for the error page template.
- * @param {string} [scope] - Optional scope label appended to the page title, e.g. `'Admin'`.
+ * @param {Object} options - Fixed rendering options for the error page.
+ * @param {string} options.pathname - Fixed Hyperview pathname for the error page template.
+ * @param {string} options.baseTemplateId - Base template for the error document.
+ * @param {string} [options.scope] - Optional scope label appended to the page title, e.g. `'Admin'`.
  * @returns {Promise<import('../../../kixx/http-router/server-response.js').default|false>} Rendered response, or false to continue the error cascade for JSON requests.
  */
-export async function renderHtmlErrorPage(context, request, response, error, pathname, scope) {
+export async function renderHtmlErrorPage(context, request, response, error, options) {
+    assert(isPlainObject(options), 'renderHtmlErrorPage: options must be a plain object');
+
+    const {
+        pathname,
+        baseTemplateId,
+        scope,
+    } = options;
+
     assertNonEmptyString(pathname, 'renderHtmlErrorPage: pathname');
+    assertNonEmptyString(baseTemplateId, 'renderHtmlErrorPage: baseTemplateId');
 
     if (request.isJSONRequest()) {
         return false;
@@ -63,9 +74,15 @@ export async function renderHtmlErrorPage(context, request, response, error, pat
             classification,
         },
     });
+    response.setRenderingOptions({
+        pathname,
+        baseTemplateId,
+        allowJsonResponse: false,
+        usePageCache: false,
+    });
 
     try {
-        return await HyperviewDynamicPageHandler({ pathname, allowJSON: false })(context, request, response);
+        return await respondWithHyperviewPage(context, request, response);
     } catch (cause) {
         context.logger.warn(
             'error rendering html error page',

@@ -62,12 +62,12 @@ async function catchAsyncError(fn) {
 describe('hyperview plugin', ({ describe }) => {
 
     describe('register()', ({ it }) => {
-        it('registers the Hyperview service', () => {
+        it('registers the HyperviewService', () => {
             const context = makeApplicationContext();
 
             register(context);
 
-            assert(context.getService('Hyperview') instanceof HyperviewService);
+            assert(context.getService('HyperviewService') instanceof HyperviewService);
         });
     });
 
@@ -84,7 +84,7 @@ describe('hyperview plugin', ({ describe }) => {
             // HyperviewService delegates pathname validation to the store it was
             // initialized with, so driving a render through the service proves it
             // received this exact instance rather than one built separately.
-            const hyperviewService = context.getService('Hyperview');
+            const hyperviewService = context.getService('HyperviewService');
             const caught = await catchAsyncError(
                 () => hyperviewService.renderEmail({}, '/welcome', {}),
             );
