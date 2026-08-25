@@ -219,7 +219,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
             await recordSignupFailure(context, request);
             // This inline re-render owns its status: a field-invalid submission is
             // a 422, not the default 200, even though the page renders normally.
-            response.status = error.httpStatusCode || 500;
+            response.status = 422;
             return response.updateProps({
                 inviteValid: true,
                 form: await getCsrfFormContext(context, request, response, form, error),
@@ -241,7 +241,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
         if (error.code === 'InviteSpentInEmailRace') {
             // The conflict is openly reported in the body, so the status matches
             // the outcome: a 409, not the default 200.
-            response.status = error.httpStatusCode || 500;
+            response.status = 409;
             return renderInviteSpentByRace(context, response);
         }
 
@@ -252,7 +252,7 @@ export async function postNewAdminUserForm(context, request, response, skip) {
             // The duplicate-email conflict is openly reported in the body (this
             // invite-gated flow does not hide account existence), so the status
             // matches the outcome: a 409, not the default 200.
-            response.status = error.httpStatusCode || 500;
+            response.status = 409;
             return response.updateProps({
                 inviteValid: true,
                 form: await getCsrfFormContext(context, request, response, form, error.code),
@@ -366,7 +366,7 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
             // A missing/malformed field is a 422, not the default 200. This is a
             // shape error, distinct from the deliberately-200 invalid-credentials
             // and throttled branches below, which must not leak an outcome signal.
-            response.status = error.httpStatusCode || 500;
+            response.status = 422;
             return response.updateProps({
                 form: await getCsrfFormContext(context, request, response, form, error),
             });

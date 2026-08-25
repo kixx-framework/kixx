@@ -19,6 +19,22 @@ and ADMIN-4 are independent cleanups and may proceed without that decision.
 Each implementation task adds focused tests in a new admin-users handler test
 file; no such tests exist today.
 
+Work the remaining issues in this order:
+
+1. **ADMIN-3 — Replace unreachable status fallbacks.** This is ready now and
+   establishes the admin-users handler test file while locking down the
+   security-sensitive response statuses needed by later work.
+2. **ADMIN-1 — Define login behavior for an existing session.** Make the
+   maintainer decision, then implement and test it against the status
+   invariants established by ADMIN-3.
+3. **ADMIN-4 — Remove the dead already-logged-in prop.** Do this last because
+   ADMIN-1 may reuse or reshape the helper for the login page. Waiting avoids
+   editing and testing the helper twice.
+
+ADMIN-3 may be implemented while the ADMIN-1 decision is pending. Do not start
+ADMIN-4 before ADMIN-1 unless the maintainer first decides that login will not
+use the already-logged-in state.
+
 HTTP status codes are part of the security surface. Invalid credentials and
 throttled login attempts render at 200 deliberately so they do not expose a
 credential-validity signal. Invalid form shape renders at 422, and openly
@@ -130,7 +146,7 @@ files. Record actual files changed in the handoff notes.
 
 ### Task ADMIN-3: Replace unreachable status fallbacks
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/docs/server-error-handling.md`,
 `src/kixx/errors/README.md`
@@ -173,10 +189,10 @@ files. Record actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] No `error.httpStatusCode || 500` remains in `admin-users.js`.
-- [ ] Affected branches respond with 422, 409, 409, and 422.
-- [ ] Invalid-credentials and throttled login branches remain 200.
-- [ ] Unexpected errors still propagate.
+- [x] No `error.httpStatusCode || 500` remains in `admin-users.js`.
+- [x] Affected branches respond with 422, 409, 409, and 422.
+- [x] Invalid-credentials and throttled login branches remain 200.
+- [x] Unexpected errors still propagate.
 
 **Validation**
 
@@ -188,13 +204,19 @@ files. Record actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Reverified all four occurrences and originating error contracts.
-- Current state: Ready for implementation.
-- Remaining: Replace assignments and add focused tests.
+- Completed: Replaced all four fallbacks with handler-owned literal statuses and
+  added focused coverage for those statuses, deliberate login 200 responses,
+  and unexpected-error propagation.
+- Current state: Complete.
+- Remaining: Nothing.
 - Decisions and discoveries: No admin-users handler unit test exists; the old
   tracker's claim that existing assertions prove these statuses is false.
-- Actual files changed: None yet.
-- Validation run: Read-only source review only.
+- Actual files changed:
+  `src/app/presentation/request-handlers/admin-panel/admin-users.js`,
+  `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`,
+  and this tracker.
+- Validation run: Focused tests (7 passed), focused lint (clean), and full unit
+  suite (1122 passed).
 - Blockers: None.
 
 
