@@ -13,5 +13,9 @@ import { renderHtmlErrorPage } from '../lib/html-error-page.js';
  * @returns {Promise<import('../../../kixx/http-router/server-response.js').default|false>} Rendered response, or false to continue the cascade for a JSON request.
  */
 export default async function adminAuthErrorHandler(context, request, response, error) {
-    return await renderHtmlErrorPage(context, request, response, error, '/login/admin/errors', 'Admin');
+    return await renderHtmlErrorPage(context, request, response, error, {
+        pathname: '/login/admin/errors',
+        baseTemplateId: 'admin-login.html',
+        scope: 'Admin',
+    });
 }

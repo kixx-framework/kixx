@@ -1,6 +1,7 @@
 import { WrappedError } from '../errors/mod.js';
 import deepMerge from '../utils/deep-merge.js';
 import {
+    assert,
     assertMatches,
     assertNumberNotNaN,
     assertNonEmptyString,
@@ -25,6 +26,12 @@ export default class ServerResponse {
      * @type {Object}
      */
     #props = {};
+
+    /**
+     * Rendering controls kept separate from template props.
+     * @type {Object}
+     */
+    #renderingOptions = {};
 
     constructor() {
 
@@ -66,6 +73,18 @@ export default class ServerResponse {
     }
 
     /**
+     * Rendering controls for the presentation handler.
+     *
+     * The returned object is mutable; use setRenderingOptions() to replace it.
+     *
+     * @public
+     * @returns {Object} The response rendering options.
+     */
+    get renderingOptions() {
+        return this.#renderingOptions;
+    }
+
+    /**
      * Deeply merges new properties into the response's custom properties object.
      * @public
      * @param {Object} params - Plain object properties to merge into existing custom properties.
@@ -81,6 +100,23 @@ export default class ServerResponse {
                 { cause },
             );
         }
+        return this;
+    }
+
+    /**
+     * Replaces the response rendering controls with a shallow copy of options.
+     *
+     * Rendering options are intentionally separate from template props and may
+     * include values such as functions that cannot be structured-cloned.
+     *
+     * @public
+     * @param {Object} options - Plain rendering options that replace all prior values.
+     * @returns {ServerResponse} This response instance for method chaining.
+     */
+    setRenderingOptions(options) {
+        assert(isPlainObject(options), 'ServerResponse#setRenderingOptions: options must be a plain object');
+
+        this.#renderingOptions = { ...options };
         return this;
     }
 

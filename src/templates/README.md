@@ -10,13 +10,12 @@ One intentional difference from core Mustache: plain object sections iterate ove
 
 ## Hyperview Context
 
-Hyperview page data comes from merged `pages/**/page.json` files, optional page-local `includes` files for additional text content, and runtime props on the response object supplied by request handlers with `response.updateProps()`. The assembled data object is passed to the page template and then to the base template.
+Hyperview page data comes from merged `pages/**/page.json` files, optional page-local `includes` files for additional text content, and runtime props on the response object supplied by request handlers with `response.updateProps()`. `HyperviewService#renderPage()` assembles this data into a page-context or hypertext result; the presentation facade serializes or commits that result. The assembled data object is passed to the page template and then to the base template selected by the route's `baseTemplateId` rendering option.
 
 Static page data:
 
 ```json
 {
-    "baseTemplate": "website.html",
     "page": {
         "title": "Album Notes",
         "description": "Notes for selected albums.",

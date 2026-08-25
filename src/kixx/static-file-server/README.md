@@ -4,6 +4,7 @@ Use the `StaticFileRequestHandler` handler to serve static files from your reque
 
 ```js
 import { StaticFileRequestHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+import HyperviewPageHandler from './app/presentation/request-handlers/hyperview/hyperview-page-handler.js';
 
 export default [
     {
@@ -91,7 +92,7 @@ export default [
                                 throwNotFound: false,
                                 skipWhenFound: true,
                             }),
-                            HyperviewStaticPageHandler(),
+                            HyperviewPageHandler({ baseTemplateId: 'default.html' }),
                         ],
                     },
                 ],

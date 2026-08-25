@@ -38,7 +38,7 @@ export default [
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
                             AdminUsers.getNewAdminUserForm,
-                            HyperviewPageHandler(),
+                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
                         ],
                     },
                     {
@@ -46,7 +46,7 @@ export default [
                         methods: [ 'POST' ],
                         requestHandlers: [
                             AdminUsers.postNewAdminUserForm,
-                            HyperviewPageHandler(),
+                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
                         ],
                     },
                 ],
@@ -63,7 +63,7 @@ export default [
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
                             AdminUsers.getAdminUserLoginForm,
-                            HyperviewPageHandler(),
+                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
                         ],
                     },
                     {
@@ -71,7 +71,7 @@ export default [
                         methods: [ 'POST' ],
                         requestHandlers: [
                             AdminUsers.postAdminUserLoginForm,
-                            HyperviewPageHandler(),
+                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
                         ],
                     },
                 ],
@@ -124,7 +124,7 @@ export default [
             //                     throwNotFound: false,
             //                     skipWhenFound: true,
             //                 }),
-            //                 HyperviewStaticPageHandler(),
+            //                 HyperviewPageHandler({ baseTemplateId: 'default.html' }),
             //             ],
             //         },
             //     ],

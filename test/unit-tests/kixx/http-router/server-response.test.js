@@ -26,13 +26,15 @@ function getCookie(response) {
 describe('ServerResponse', ({ describe }) => {
 
     describe('constructor', ({ it }) => {
-        it('initializes status, body, headers, and props', () => {
+        it('initializes status, body, headers, props, and rendering options', () => {
             const response = new ServerResponse();
 
             assertEqual(200, response.status);
             assertEqual(null, response.body);
             assert(response.headers instanceof Headers);
             assertEqual(0, Object.keys(response.props).length);
+            assertEqual(0, Object.keys(response.renderingOptions).length);
+            assert(response.props !== response.renderingOptions);
         });
     });
 
@@ -55,6 +57,44 @@ describe('ServerResponse', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('WrappedError', caught.name);
+        });
+    });
+
+    describe('setRenderingOptions', ({ it }) => {
+        it('replaces options with a shallow copy and returns this for chaining', () => {
+            const response = new ServerResponse();
+            const nested = { enabled: true };
+            const options = { pathname: '/account', nested };
+
+            response.setRenderingOptions({ partial: 'summary' });
+            const returned = response.setRenderingOptions(options);
+            options.pathname = '/other';
+
+            assertEqual(response, returned);
+            assertEqual('/account', response.renderingOptions.pathname);
+            assertEqual(nested, response.renderingOptions.nested);
+            assertEqual(undefined, response.renderingOptions.partial);
+        });
+
+        it('stores functions without cloning them into template props', () => {
+            const response = new ServerResponse();
+            const propsHashFunction = () => 'props-hash';
+
+            response.updateProps({ page: { title: 'Account' } });
+            response.setRenderingOptions({ propsHashFunction });
+
+            assertEqual(propsHashFunction, response.renderingOptions.propsHashFunction);
+            assertEqual(undefined, response.props.propsHashFunction);
+            assertEqual('Account', response.props.page.title);
+        });
+
+        it('throws an AssertionError for a non-plain option bag', () => {
+            const response = new ServerResponse();
+
+            const caught = catchError(() => response.setRenderingOptions(new Headers()));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
         });
     });
 

@@ -67,7 +67,7 @@ tests.
 
 ### Task HVR-1: Separate rendering options from template props
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/app/presentation/README.md` ServerResponse section;
 `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`;
@@ -138,18 +138,18 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Completed: Added the independent rendering-option bag, accessor, and replacement setter; documented the two response data channels; and added focused contract tests.
+- Current state: Complete.
+- Remaining: Nothing for this task.
 - Decisions and discoveries: Rendering options use replacement and a shallow
   copy so error handlers can reset state and callable cache options remain valid.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Actual files changed: `src/kixx/http-router/server-response.js`, `test/unit-tests/kixx/http-router/server-response.test.js`, `src/app/presentation/README.md`, `agents/plans/hyperview-rendering-boundary.md`.
+- Validation run: `node run-linter.js src/kixx/http-router/server-response.js test/unit-tests/kixx/http-router/server-response.test.js` passed; `node run-tests.js test/unit-tests/kixx/http-router/server-response.test.js` passed (32 tests); `git diff --check` passed; presentation guide read-through completed.
 - Blockers: None.
 
 ### Task HVR-2: Introduce the shared Hyperview presentation facade
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HVR-1
 **Documentation:** `src/app/presentation/README.md` Request Handlers and
 Rendering sections; `src/plugins/README.md`; `src/docs/code-style-guide.md`;
@@ -238,19 +238,19 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Completed: Added `respondWithHyperviewPage`, reduced `HyperviewPageHandler` to a facade adapter, migrated service registration to `HyperviewService`, documented option precedence, and added focused facade/handler tests.
+- Current state: Complete.
+- Remaining: Nothing for this task.
 - Decisions and discoveries: The current plugin registers `Hyperview`, while the
   new handler already looks up `HyperviewService`; this task resolves the split
   in favor of `HyperviewService` without an alias.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Actual files changed: `src/app/presentation/lib/respond-with-hyperview-page.js`, `src/app/presentation/request-handlers/hyperview/hyperview-page-handler.js`, `src/plugins/hyperview/plugin.js`, `test/unit-tests/app/presentation/lib/respond-with-hyperview-page.test.js`, `test/unit-tests/app/presentation/request-handlers/hyperview/hyperview-page-handler.test.js`, `test/unit-tests/plugins/hyperview/plugin.test.js`, `src/app/presentation/README.md`, `agents/plans/hyperview-rendering-boundary.md`.
+- Validation run: `node run-linter.js src/app/presentation/lib/respond-with-hyperview-page.js src/app/presentation/request-handlers/hyperview/hyperview-page-handler.js src/plugins/hyperview/plugin.js test/unit-tests/app/presentation test/unit-tests/plugins/hyperview/plugin.test.js` passed; `node run-tests.js test/unit-tests/app/presentation test/unit-tests/plugins/hyperview/plugin.test.js test/unit-tests/kixx/http-router/server-response.test.js` passed (80 tests); deprecated lookup search and `git diff --check` passed.
 - Blockers: HVR-1.
 
 ### Task HVR-3: Migrate application rendering and base-template ownership
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HVR-2
 **Documentation:** `src/app/presentation/README.md`; `src/templates/README.md`;
 `src/docs/frontend-development-guide.md`; `src/docs/server-error-handling.md`;
@@ -369,19 +369,22 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Completed: Migrated active routes and error rendering to the facade with explicit base-template IDs; removed all page-metadata base-template selection; updated affected guides; and added error-rendering and route-import coverage.
+- Current state: Complete.
+- Remaining: Nothing for this task.
 - Decisions and discoveries: Base-template content files remain published and
   cacheable; only page-context selection through `baseTemplate` is removed.
-  Route options use the existing published IDs ending in `.html`.
-- Actual files changed: None yet.
-- Validation run: None yet.
+  Route options use the existing published IDs ending in `.html`. The new route
+  import test exposed a pre-existing missing `parseBasicAuthCredentials` export;
+  it was restored with UTF-8 and malformed-input coverage because that defect
+  prevented `virtual-hosts.js` from importing.
+- Actual files changed: `src/virtual-hosts.js`, `src/routes/admin-panel.js`, `src/app/presentation/lib/html-error-page.js`, `src/app/presentation/error-handlers/admin-error-handler.js`, `src/app/presentation/error-handlers/admin-auth-error-handler.js`, `src/app/presentation/lib/json-api.js`, `src/pages/page.json`, `src/pages/admin/page.json`, `src/pages/admin/errors/page.json`, `src/pages/admin/style-guide/page.json`, `src/pages/users/admin/page.json`, `src/pages/login/admin/page.json`, `src/pages/login/admin/errors/page.json`, `src/templates/README.md`, `src/docs/frontend-development-guide.md`, `src/kixx/static-file-server/README.md`, `test/unit-tests/app/presentation/lib/html-error-page.test.js`, `test/unit-tests/app/presentation/lib/json-api.test.js`, `test/unit-tests/app/presentation/route-manifests.test.js`, `agents/plans/hyperview-rendering-boundary.md`.
+- Validation run: `node run-linter.js src/virtual-hosts.js src/routes/admin-panel.js src/app/presentation/lib/html-error-page.js src/app/presentation/lib/json-api.js src/app/presentation/error-handlers test/unit-tests/app/presentation` passed; `node run-tests.js test/unit-tests/app/presentation test/unit-tests/kixx/http-router test/unit-tests/plugins/hyperview` passed (199 tests); deprecated-handler/base-template search and `git diff --check` passed; full `node run-linter.js` passed; full `node run-tests.js` passed (1113 tests, with Node's SQLite experimental warning).
 - Blockers: HVR-2.
 
 ### Task HVR-4: Replace the HTTP-coupled service API with renderPage
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** HVR-3
 **Documentation:** `src/app/presentation/README.md` rendering contract;
 `src/plugins/README.md`; `src/docs/code-style-guide.md`;
@@ -470,23 +473,23 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] `HyperviewService` exposes `renderPage()` and `renderEmail()` as its
+- [x] `HyperviewService` exposes `renderPage()` and `renderEmail()` as its
       rendering entry points.
-- [ ] `renderPage()` neither accepts nor mutates a server request/response.
-- [ ] Hypertext and page-context results have the documented discriminated
+- [x] `renderPage()` neither accepts nor mutates a server request/response.
+- [x] Hypertext and page-context results have the documented discriminated
       shapes.
-- [ ] The facade, not the service, owns response status, headers, content type,
+- [x] The facade, not the service, owns response status, headers, content type,
       JSON serialization, and body commitment.
-- [ ] Full-document rendering selects the base template only from
+- [x] Full-document rendering selects the base template only from
       `baseTemplateId` options.
-- [ ] `.json`, full-document, partial, boosted/page-only, metadata mini-template,
+- [x] `.json`, full-document, partial, boosted/page-only, metadata mini-template,
       snapshot, template-cache, page-cache, and props-cache-key behavior retain
       focused unit coverage.
-- [ ] `respondWithHypertext()` and all references to it are deleted with no
+- [x] `respondWithHypertext()` and all references to it are deleted with no
       compatibility API.
-- [ ] `HyperviewService` is the only service registry name throughout source,
+- [x] `HyperviewService` is the only service registry name throughout source,
       tests, and documentation.
-- [ ] Full lint and unit test suites pass.
+- [x] Full lint and unit test suites pass.
 
 **Validation**
 
@@ -500,13 +503,30 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Backward compatibility is explicitly a non-goal;
-  the old method and service registry name are removed rather than aliased.
-  `.json` remains within `renderPage()` and yields a page-context result for the
-  facade to serialize.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: HVR-3.
+- Completed: Replaced `respondWithHypertext()` with transport-neutral
+  `renderPage(context, options)`. The service returns discriminated hypertext or
+  page-context results; the facade now supplies the URL and props, serializes
+  page context, and commits hypertext with response-only options. Migrated
+  service, facade, handler, and error-rendering tests and updated rendering
+  documentation.
+- Current state: Complete.
+- Remaining: Nothing for this task.
+- Decisions and discoveries: `renderPage()` requires a URL and plain props in
+  its options object. Page-context results retain their existing cache bypass;
+  `responseOptions` is removed before service invocation, leaving response
+  status, headers, content type, serialization, and commitment in the facade.
+  Backward compatibility is explicitly a non-goal; the old method is removed
+  rather than aliased.
+- Actual files changed: `src/kixx/hyperview/hyperview-service.js`,
+  `src/app/presentation/lib/respond-with-hyperview-page.js`,
+  `src/app/presentation/README.md`, `src/templates/README.md`,
+  `test/unit-tests/kixx/hyperview/hyperview-service.test.js`,
+  `test/unit-tests/app/presentation/lib/respond-with-hyperview-page.test.js`,
+  `test/unit-tests/app/presentation/request-handlers/hyperview/hyperview-page-handler.test.js`,
+  `test/unit-tests/app/presentation/lib/html-error-page.test.js`,
+  `agents/plans/hyperview-rendering-boundary.md`.
+- Validation run: Focused lint passed; focused unit tests passed (124 tests);
+  `node run-linter.js` passed; `node run-tests.js` passed (1115 tests; Node
+  emitted its expected experimental SQLite warning); deprecated API search and
+  `git diff --check` passed; renderPage JSDoc read-through completed.
+- Blockers: None.

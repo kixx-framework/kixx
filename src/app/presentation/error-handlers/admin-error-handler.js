@@ -22,5 +22,9 @@ export default async function adminErrorHandler(context, request, response, erro
         return response.respondWithRedirect(303, loginTarget.compilePathname().pathname);
     }
 
-    return await renderHtmlErrorPage(context, request, response, error, '/admin/errors', 'Admin');
+    return await renderHtmlErrorPage(context, request, response, error, {
+        pathname: '/admin/errors',
+        baseTemplateId: 'admin.html',
+        scope: 'Admin',
+    });
 }
