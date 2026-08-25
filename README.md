@@ -42,6 +42,8 @@ The dev server also serves CSS and JavaScript directly from `src/stylesheets/` a
 
 The wrapper accepts the same `--environment` and `--dotenv` options as `src/node-server.js`. Change `--port` to avoid local port conflicts.
 
+The default `development` configuration enables the source-backed content store. Page metadata, templates, includes, static assets, and email templates are read from `src/` on each request.
+
 ### Linting
 
 Linting is configured in `./eslint.config.js`.

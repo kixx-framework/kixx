@@ -96,6 +96,11 @@ export default class HyperviewPage {
             deepMerge(pageContext, json);
         }
 
+        // These fields direct content assembly rather than rendering. Remove
+        // published values before response props can reuse either name.
+        delete pageContext.template;
+        delete pageContext.partials;
+
         pageContext.includes = includes;
 
         // Clone the response.props so we don't mutate the nested data structures

@@ -24,11 +24,12 @@ function makeLogger() {
     return new Logger({ name: 'Test', level: 'NONE' });
 }
 
-function makeContext(contentStoreConfig, resolveFilepath) {
+function makeContext(contentStoreConfig, resolveFilepath, environment) {
     const registered = {};
     return {
         context: {
             config: {
+                environment,
                 env: { CONTENT_STORE: contentStoreConfig },
                 resolveFilepath,
             },
@@ -89,6 +90,32 @@ describe('node-content-store plugin', ({ after, it }) => {
         await registered.service.saveIndex({}, 'root', { '/': [ 'tree', 'root' ] });
         assertEqual('directory', (await fsp.stat(rootDirectory)).isDirectory() ? 'directory' : 'missing');
         assertEqual('file', (await fsp.stat(path.join(rootDirectory, `format-${ FORMAT }`, 'index.sqlite'))).isFile() ? 'file' : 'missing');
+    });
+
+    it('registers DeveloperContentStore with resolved source directories', () => {
+        const tracker = new MockTracker();
+        const resolveFilepath = tracker.fn((value) => `/project/${ value.slice(2) }`);
+        const { context, registered } = makeContext({ developerMode: true }, resolveFilepath, 'development');
+
+        register(context);
+        stores.push(registered.service);
+
+        assertEqual('ContentStore', registered.name);
+        assertEqual('DeveloperContentStore', registered.service.constructor.name);
+        assertEqual(4, resolveFilepath.mock.callCount());
+        assertEqual('./src/pages', resolveFilepath.mock.getCall(0).arguments[0]);
+        assertEqual('./src/templates', resolveFilepath.mock.getCall(1).arguments[0]);
+        assertEqual('./src/static-assets', resolveFilepath.mock.getCall(2).arguments[0]);
+        assertEqual('./src/emails', resolveFilepath.mock.getCall(3).arguments[0]);
+    });
+
+    it('rejects developer mode outside the development environment', () => {
+        const { context } = makeContext({ developerMode: true }, (value) => value, 'production');
+
+        const error = catchError(() => register(context));
+
+        assertEqual('AssertionError', error.name);
+        assertMatches('development environment', error.message);
     });
 
     it('rejects missing configured root directories and resolvers', () => {

@@ -99,7 +99,7 @@ repeat requests from re-parsing unchanged JSON.
 
 ### Task 1: Page build directives get clean names and leave the template context
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/kixx/hyperview/hyperview-page.js`; `src/app/presentation/README.md`; `test/unit-tests/README.md`
 
@@ -156,12 +156,12 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] No `pageTemplate` key remains anywhere in the repository.
-- [ ] `template` and `partials` published in `page.json` are absent from the
+- [x] No `pageTemplate` key remains anywhere in the repository.
+- [x] `template` and `partials` published in `page.json` are absent from the
       assembled context, at the leaf and at every inherited ancestor.
-- [ ] A response prop named `template` or `partials` survives into the context.
-- [ ] `includes` still resolves to content, not to the `{ filename }` manifest.
-- [ ] Existing rendering behavior is otherwise unchanged; the full suite passes.
+- [x] A response prop named `template` or `partials` survives into the context.
+- [x] `includes` still resolves to content, not to the `{ filename }` manifest.
+- [x] Existing rendering behavior is otherwise unchanged; the full suite passes.
 
 **Validation**
 
@@ -173,19 +173,19 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Renamed all published metadata keys to `template`; removed published `template` and `partials` directives before response props merge; documented directive shape and context behavior; added direct merge-contract unit coverage.
+- Current state: Complete.
+- Remaining: None. The manual dev-server check was not run because repository instructions prohibit dev-server verification.
+- Decisions and discoveries: The repository also contained two published metadata fixtures using the legacy key under `test/end-to-end/`; both require migration even though the plan anticipated only the five application `page.json` files. Local variables named `pageTemplate` describe rendered output and are not metadata keys.
+- Actual files changed: `src/kixx/hyperview/hyperview-page.js`; `src/pages/page.json`; `src/pages/admin/page.json`; `src/pages/admin/style-guide/page.json`; `src/pages/users/admin/page.json`; `src/pages/login/admin/page.json`; `src/app/presentation/README.md`; `test/unit-tests/kixx/hyperview/hyperview-page.test.js`; `test/end-to-end/fixtures/publishing-api/page-metadata.json`; `test/end-to-end/020-publishing-api/put-page-include.test.js`; `agents/plans/node-developer-content-store.md`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/hyperview/hyperview-page.test.js` — 3 passed; `node run-linter.js src/kixx/hyperview/hyperview-page.js test/unit-tests/kixx/hyperview/hyperview-page.test.js` — clean; `node run-tests.js` — 1,133 passed; `node run-linter.js` — clean; `git diff --check` — clean.
 - Blockers: None.
 
 ---
 
 ### Task 2: Source scanner produces a manifest of the developer's tree
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 1
 **Documentation:** `src/kixx/content-addressable-store/content-layout.js`; `src/docs/server-error-handling.md`; `src/docs/code-style-guide.md`
 
@@ -199,7 +199,7 @@ source-layout convention; no later task re-derives a pathname.
 **Scope**
 
 - In: directory walking, stat collection, `page.json` / `email.json` parsing and
-  caching, `template` and `partials` inheritance resolution, mapping source
+  caching, leaf `template` and `partials` resolution, mapping source
   filepaths to storage pathnames, source validation.
 - Out: hashing, index table construction (Task 3), blob materialization
   (Task 3), the store class (Task 4), plugin wiring (Task 5).
@@ -212,11 +212,10 @@ source-layout convention; no later task re-derives a pathname.
   plus the stats of every manifest file that determined membership. Editing
   `includes` in `page.json` must change the bundle's hash even when no constituent
   file changed; including `page.json`'s own stat in the recipe achieves this.
-- `template` and `partials` are resolved by merging `page.json` from the root
-  down to the leaf, matching `HyperviewPage`'s precedence. A nearer declaration
-  wins; `""` means "no template" and clears an inherited value.
-- `template` names a filepath relative to `src/templates/pages/`. `partials` maps
-  id to a filepath relative to the same root.
+- Build directives come only from the leaf `page.json`; ancestor metadata is
+  published independently for runtime context assembly.
+- `template` names a filepath relative to `src/templates/pages/`. `partials` is
+  an array of unique `{ id, filename }` objects naming files under the same root.
 - The template's storage pathname is `/pages/<p>/<basename of template>`. Assert
   the basename is not in `RESERVED_PAGE_FILENAMES`.
 - Partial and base-template ids include the extension
@@ -237,41 +236,41 @@ source-layout convention; no later task re-derives a pathname.
 
 **Acceptance criteria**
 
-- [ ] Scanning `src/pages`, `src/templates`, `src/static-assets`, `src/emails`
+- [x] Scanning `src/pages`, `src/templates`, `src/static-assets`, `src/emails`
       yields a manifest whose keys are canonical storage pathnames.
-- [ ] `/admin/style-guide/copy-fields` resolves its template to
+- [x] `/admin/style-guide/copy-fields` resolves its template to
       `style-guide-wrapper.html` through two levels of inheritance.
-- [ ] `/admin` (with `"template": ""`) emits `page.json` but no template blob.
-- [ ] A page directory never emits a blob for an includes source file.
-- [ ] A missing `src/static-assets/` or `src/emails/` yields no entries and no error.
-- [ ] A source filename outside the valid pathname character set raises a
+- [x] `/admin` (with `"template": ""`) emits `page.json` but no template blob.
+- [x] A page directory never emits a blob for an includes source file.
+- [x] A missing `src/static-assets/` or `src/emails/` yields no entries and no error.
+- [x] A source filename outside the valid pathname character set raises a
       `ValidationError` naming the filepath.
-- [ ] A malformed `page.json` raises a `ValidationError` naming the filepath.
-- [ ] A `template` basename colliding with a reserved page filename raises.
-- [ ] Repeat scans of an unchanged tree do not re-parse cached manifest JSON.
+- [x] A malformed `page.json` raises a `ValidationError` naming the filepath.
+- [x] A `template` basename colliding with a reserved page filename raises.
+- [x] Repeat scans of an unchanged tree do not re-parse cached manifest JSON.
 
 **Validation**
 
 - `node run-tests.js test/unit-tests/plugins/node-content-store` — scanner behavior
 - `node run-linter.js src/plugins/node-content-store test/unit-tests/plugins/node-content-store`
-- Unit coverage for inheritance, the closed-page-directory rule, missing roots,
-  and each validation failure.
+- Unit coverage for leaf directive ownership, unique partial ids, the
+  closed-page-directory rule, missing roots, and validation failures.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added a stateful developer source scanner covering pages, leaf template/partial directives, page bundles, global template bundles, static assets, and email manifests. Added deterministic traversal, canonical pathname validation, missing-root handling, JSON identity caching, and filesystem error translation. Added fixture-backed tests for leaf directive ownership, closed page directories, missing roots, invalid names, malformed JSON, reserved collisions, and cache reuse.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: Recipes use `{ kind, sources, manifests }`; each source identity contains `filepath`, `mtimeMs`, and `size`, with role-specific `id`, `name`, or `role` fields. Page recipes carry only the leaf manifest. Page and email manifests name partials with unique `{ id, filename }` objects; materialized bundles use `{ id, source }`. Existing `src/static-assets/` and `src/emails/` roots are absent as anticipated.
+- Actual files changed: `src/plugins/node-content-store/lib/developer-source-scanner.js`; `test/unit-tests/plugins/node-content-store/developer-source-scanner.test.js`; `agents/plans/node-developer-content-store.md`.
+- Validation run: `node run-tests.js test/unit-tests/plugins/node-content-store/developer-source-scanner.test.js` — 8 passed; targeted linter — clean; `node run-tests.js` — 1,153 passed; `git diff --check` — clean.
 - Blockers: None.
 
 ---
 
 ### Task 3: Manifest becomes an index table and blob bytes
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 2
 **Documentation:** `src/kixx/content-addressable-store/content-addressable-index.js`; `src/kixx/content-addressable-store/addressing.js`; `src/kixx/hyperview/hyperview-service.js` (bundle shapes)
 
@@ -323,15 +322,15 @@ serialized form is.
 
 **Acceptance criteria**
 
-- [ ] The produced table is accepted by `new ContentAddressableIndex(table)`.
-- [ ] Touching a source file changes exactly the hashes of the entries that
+- [x] The produced table is accepted by `new ContentAddressableIndex(table)`.
+- [x] Touching a source file changes exactly the hashes of the entries that
       depend on it, and the hashes of its ancestor trees.
-- [ ] Editing `includes` in `page.json` changes the includes-bundle hash.
-- [ ] An unchanged tree produces a byte-identical table across scans.
-- [ ] Each bundle's serialized form round-trips through the corresponding
+- [x] Editing `includes` in `page.json` changes the includes-bundle hash.
+- [x] An unchanged tree produces a byte-identical table across scans.
+- [x] Each bundle's serialized form round-trips through the corresponding
       `HyperviewService` parser without assertion failure.
-- [ ] A `'stream'` read of a static asset yields a cancellable `ReadableStream`.
-- [ ] A read whose source file has been deleted since the scan resolves `null`
+- [x] A `'stream'` read of a static asset yields a cancellable `ReadableStream`.
+- [x] A read whose source file has been deleted since the scan resolves `null`
       rather than throwing, matching the port's absence semantics.
 
 **Validation**
@@ -343,19 +342,19 @@ serialized form is.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added manifest-to-index derivation using shared hashing and `ContentAddressableIndex.buildIndex()`. Added lazy file and derived-bundle materialization for text, exact ArrayBuffers, and cancellable streams, including deletion-race handling. Added focused coverage for stable tables, dependency-scoped hash changes, every bundle shape, binary reads, streams, and missing files.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: Hash inputs intentionally strip recipe roles and ids to the planned ordered `{ filepath, mtimeMs, size }` identities; governing manifest identity captures role/id/membership edits. Materialization verifies governing manifests still exist before assembling a derived bundle. Serializer tests parse the produced JSON shapes, while the full existing HyperviewService suite exercises the real compile paths for those same shapes. An unrelated untracked `src/app/permissions/` directory remains untouched.
+- Actual files changed: `src/plugins/node-content-store/lib/developer-index.js`; `src/plugins/node-content-store/lib/developer-blobs.js`; `test/unit-tests/plugins/node-content-store/developer-index.test.js`; `test/unit-tests/plugins/node-content-store/developer-blobs.test.js`; `agents/plans/node-developer-content-store.md`.
+- Validation run: `node run-tests.js test/unit-tests/plugins/node-content-store` — 39 passed; `node run-linter.js src/plugins/node-content-store test/unit-tests/plugins/node-content-store` — clean; `node run-tests.js` — 1,145 passed; `git diff --check` — clean. Full `node run-linter.js` reaches an unrelated user-owned error in untracked `src/app/permissions/roles.js` (`deepFreeze` is not defined).
 - Blockers: None.
 
 ---
 
 ### Task 4: DeveloperContentStore implements the port
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 3
 **Documentation:** `src/kixx/content-addressable-store/content-store-interface.js`; `src/docs/server-error-handling.md`
 
@@ -400,19 +399,19 @@ and a full page render work against it unchanged.
 
 **Acceptance criteria**
 
-- [ ] `new ContentAddressableIndex(await store.getIndex(ctx, null))` succeeds
+- [x] `new ContentAddressableIndex(await store.getIndex(ctx, null))` succeeds
       against the repository's own `src/` tree.
-- [ ] A `ContentSnapshot` over that index resolves `batchGetPageAssets('/')` with
+- [x] A `ContentSnapshot` over that index resolves `batchGetPageAssets('/')` with
       metadata, template, and includes populated.
-- [ ] `batchGetPageAssets('/admin/style-guide/copy-fields')` resolves the
-      inherited template.
-- [ ] Editing a source file between two `getIndex()` calls changes the returned
+- [x] `batchGetPageAssets('/admin/style-guide/copy-fields')` resolves the
+      template named by that leaf page.
+- [x] Editing a source file between two `getIndex()` calls changes the returned
       table without a restart.
-- [ ] `putFile`, `saveIndex`, and `assignBuild` each throw `AssertionError`.
-- [ ] `getFiles()` rejects a list longer than 100 and preserves positional
+- [x] `putFile`, `saveIndex`, and `assignBuild` each throw `AssertionError`.
+- [x] `getFiles()` rejects a list longer than 100 and preserves positional
       alignment, including `null` holes.
-- [ ] An unsupported read type throws `AssertionError`.
-- [ ] A filesystem failure that is not `ENOENT` surfaces as `OperationalError`
+- [x] An unsupported read type throws `AssertionError`.
+- [x] A filesystem failure that is not `ENOENT` surfaces as `OperationalError`
       with `cause` set.
 
 **Validation**
@@ -424,19 +423,19 @@ and a full page render work against it unchanged.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added the read-only `DeveloperContentStore`, including rescanned manifest lifecycle, pathname reads, positional bulk reads with the 100-file cap, type checks, write rejection, and close behavior. Added integration coverage using a real `ContentAddressableIndex` and `ContentSnapshot` against the repository source tree, plus rescan, alignment, error, and write tests.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: Bulk descriptors supplied by `ContentSnapshot` include `pathname` even though the base port typedef requires only `hash`; developer mode necessarily uses that pathname under its documented addressing deviation. The optional filesystem injection is shared by scanning and blob reads so tests can exercise operational failure translation at the adapter boundary.
+- Actual files changed: `src/plugins/node-content-store/lib/developer-content-store.js`; `test/unit-tests/plugins/node-content-store/developer-content-store.test.js`; `agents/plans/node-developer-content-store.md`.
+- Validation run: `node run-tests.js test/unit-tests/plugins/node-content-store` — 44 passed; `node run-linter.js src/plugins/node-content-store test/unit-tests/plugins/node-content-store` — clean; `node run-tests.js` — 1,150 passed; `git diff --check` — clean. Full-tree lint remains blocked by the unrelated user-owned `src/app/permissions/roles.js` error recorded in Task 3.
 - Blockers: None.
 
 ---
 
 ### Task 5: Plugin selects the adapter from configuration
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 4
 **Documentation:** `src/plugins/README.md`; `src/node-config.js`
 
@@ -475,13 +474,13 @@ any entry point, while staging and production keep the SQLite adapter.
 
 **Acceptance criteria**
 
-- [ ] With `developerMode: true`, the plugin registers `DeveloperContentStore`.
-- [ ] Without it, the plugin registers the SQLite `ContentStore` unchanged.
-- [ ] Developer mode does not require `rootDirectory`; production mode still
+- [x] With `developerMode: true`, the plugin registers `DeveloperContentStore`.
+- [x] Without it, the plugin registers the SQLite `ContentStore` unchanged.
+- [x] Developer mode does not require `rootDirectory`; production mode still
       asserts it.
-- [ ] `developerMode: true` outside the `development` environment raises at
+- [x] `developerMode: true` outside the `development` environment raises at
       registration.
-- [ ] Existing `node-content-store` tests pass unchanged.
+- [x] Existing `node-content-store` tests pass unchanged.
 
 **Validation**
 
@@ -494,19 +493,19 @@ any entry point, while staging and production keep the SQLite adapter.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added environment-aware plugin selection, default and configurable developer source roots, development configuration, and tests for both adapter branches and the deployment guard. Runtime config now exposes the selected environment name as `config.environment`.
+- Current state: Complete.
+- Remaining: None. The plan's manual dev-server check was not run because repository instructions prohibit dev-server verification.
+- Decisions and discoveries: Runtime config previously retained selected values as `config.env` but not the selected environment name. `readConfig()` now exposes that already-validated name as `config.environment`, allowing the plugin to enforce the development-only invariant. Production registration remains unchanged and continues to require `rootDirectory`.
+- Actual files changed: `src/plugins/node-content-store/plugin.js`; `src/node-config.js`; `src/kixx/config/read-config.js`; `test/unit-tests/plugins/node-content-store/plugin.test.js`; `agents/plans/node-developer-content-store.md`.
+- Validation run: `node run-tests.js test/unit-tests/plugins/node-content-store test/unit-tests/kixx/config` — 58 passed; scoped `node run-linter.js` — clean; `node run-tests.js` — 1,152 passed; `git diff --check` — clean. Full-tree lint remains blocked by the unrelated user-owned `src/app/permissions/roles.js` error recorded in Task 3.
 - Blockers: None.
 
 ---
 
 ### Task 6: Document the source layout and the port deviations
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 5
 **Documentation:** `src/plugins/README.md`; `src/app/presentation/README.md`; `README.md`
 
@@ -546,11 +545,11 @@ the implementation.
 
 **Acceptance criteria**
 
-- [ ] A source-layout table maps every storage namespace to its source location.
-- [ ] The `email.json` manifest is documented with an example.
-- [ ] The three port deviations are stated with their justification.
-- [ ] The deferred `src/public/` deprecation is recorded.
-- [ ] JSDoc on every new exported symbol follows
+- [x] A source-layout table maps every storage namespace to its source location.
+- [x] The `email.json` manifest is documented with an example.
+- [x] The three port deviations are stated with their justification.
+- [x] The deferred `src/public/` deprecation is recorded.
+- [x] JSDoc on every new exported symbol follows
       `src/docs/code-documentation-guide.md`.
 
 **Validation**
@@ -561,10 +560,10 @@ the implementation.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added the complete storage-to-source layout table, corrected existing presentation recipes to the relocated template model, documented `email.json` with an example, documented developer-mode configuration and port exceptions, and recorded deferred `src/public/` deprecation.
+- Current state: Complete. All implementation-plan tasks are complete.
+- Remaining: None.
+- Decisions and discoveries: The presentation guide's existing Hyperview layout described page templates as living beside `page.json`; it was corrected rather than leaving contradictory guidance. Developer mode is enabled by the default Node development configuration, while staging and production retain SQLite.
+- Actual files changed: `src/kixx/content-addressable-store/content-store-interface.js`; `src/plugins/README.md`; `src/app/presentation/README.md`; `README.md`; `agents/plans/node-developer-content-store.md`.
+- Validation run: `node run-tests.js` — 1,152 passed; scoped `node run-linter.js` over all changed JavaScript and related tests — clean; `git diff --check` — clean. Full-tree lint remains blocked by the unrelated user-owned `src/app/permissions/roles.js` error recorded in Task 3.
 - Blockers: None.

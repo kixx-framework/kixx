@@ -43,7 +43,11 @@ export default {
                 },
             },
             CONTENT_STORE: {
-                rootDirectory: './data/nodejs_app/content_store',
+                developerMode: true,
+                pagesDirectory: './src/pages',
+                templatesDirectory: './src/templates',
+                staticAssetsDirectory: './src/static-assets',
+                emailsDirectory: './src/emails',
             },
             STATIC_FILE_STORE: {
                 directory: './public',

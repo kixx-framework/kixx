@@ -14,7 +14,7 @@ import deepFreeze from '../utils/deep-freeze.js';
  * @param {string} environment - Environment name to select
  * @param {Object} [options] - Runtime-specific config reader options
  * @param {Function} [options.resolveFilepath] - Resolves config-relative file paths for runtimes with a local filesystem
- * @returns {Object} Frozen config with the selected environment exposed as `env`
+ * @returns {Object} Frozen config with the selected environment name and values exposed as `environment` and `env`
  * @throws {OperationalError} When the source config does not define the selected environment
  */
 export function readConfig(config, environment, options) {
@@ -58,6 +58,7 @@ export function readConfig(config, environment, options) {
 
     const resolvedConfig = {
         ...configFields,
+        environment,
         env: selectedEnvironment,
     };
 
