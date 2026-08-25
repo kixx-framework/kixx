@@ -544,26 +544,33 @@ Forms that back HTML pages extend `BaseForm` (`app/presentation/forms/base-form.
 - **`static method`** — the HTTP method for the submission, almost always `'POST'`.
 - **`static schema`** — JSON Schema extended with HTML render metadata per property.
 
-`BaseForm` provides the two pieces every HTML form would otherwise duplicate:
+`BaseForm` provides the pieces every HTML form would otherwise duplicate:
 
 - **`getFormContext(context, error)`** builds the template render context: it resolves `static target` to an `HttpTarget`, compiles the action `url` (passing the form instance so any route params are hydrated), and projects each schema property into a `fields` map carrying the current value, render metadata, and any per-field error message. Pass it the `ValidationError` caught in the request handler to re-render with inline field errors, or a domain error code string for a form-level message.
-- **`static fromFormData(formData)`** hydrates the subclass from submitted `FormData`, treating each field as a scalar (last value wins on duplicates). Override it when a form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
+- **`getDynamicFieldMetadata(context)`** is the hook for render metadata that cannot be declared statically in the schema. It returns partial field metadata keyed by field name, which `getFormContext()` merges over the schema metadata.
+- **`static fromFormData(formData)`** hydrates the subclass from submitted `FormData`, treating each field as a scalar (last value wins on duplicates).
 
-The subclass declares its shape and rules; `BaseForm` supplies `getFormContext()` and `fromFormData()`. Do not re-implement either from scratch in a subclass. There are two reasons to override:
+**Never override `getFormContext()`.** It owns the action-URL compilation, the per-field error projection, and the `writeOnly` value omission, and a subclass that rebuilds or patches the context it returns can break any of them — including echoing a submitted password back into a re-rendered form. There are exactly two extension points:
 
-- **`fromFormData()`** — when the form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
-- **`getFormContext()`** — when a field's render metadata is sourced dynamically at request time rather than declared statically in the schema. The canonical case is a `select` whose `options` come from a registry (`AdminInviteCreateForm` fills `role_preset` from the role-preset registry) so the rendered choices cannot drift from what the Transaction Script accepts. An override must call `super.getFormContext(context, error)` first and only decorate the returned context — never rebuild it — so action-URL compilation, per-field errors, and the `writeOnly` value omission stay intact.
+- **`getDynamicFieldMetadata(context)`** — when a field's render metadata is sourced at request time rather than declared statically in the schema. The canonical case is a `select` whose `options` come from a registry (`AdminInviteCreateForm` fills `role_preset` from the role-preset registry) so the rendered choices cannot drift from what the Transaction Script accepts.
+- **`static fromFormData(formData)`** — when the form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
 
 ```js
-getFormContext(context, error) {
-    const formContext = super.getFormContext(context, error);
+getDynamicFieldMetadata() {
     const options = listRolePresets().map((preset) => ({ value: preset.name, label: preset.name }));
 
-    formContext.fields.role_preset = Object.assign({}, formContext.fields.role_preset, { options });
-
-    return formContext;
+    return {
+        role_preset: {
+            label: 'Role preset',
+            options,
+        },
+    };
 }
 ```
+
+The merge is deliberately narrow. Dynamic metadata overrides static schema keys, but `getFormContext()` applies the field `name`, `value`, and `error` afterward, so a subclass can neither defeat the `writeOnly` omission nor forge a field error. A metadata key naming a field the schema does not declare throws an `AssertionError` rather than rendering a silently missing control.
+
+The hook is synchronous, matching `getFormContext()`. When the metadata needs I/O — a list of records rather than a registry — load it in the request handler, assign it to the form instance, and read it from `this` in the hook. Do not push the I/O into the render path.
 
 ### Schema HTML Metadata
 

@@ -1,4 +1,4 @@
-import { isString } from '../../../kixx/assertions/mod.js';
+import { assert, isString } from '../../../kixx/assertions/mod.js';
 
 /**
  * @typedef {Object} FormRenderContext
@@ -25,9 +25,12 @@ export default class BaseForm {
      * @param {import('../../../kixx/errors/lib/validation-error.js').default|string|null} [error] -
      * ValidationError from validate(), domain error code string, or null.
      * @returns {FormRenderContext} Form context for template rendering.
-     * @throws {AssertionError} When the subclass target is missing or not registered.
+     * @throws {AssertionError} When the subclass target is missing or not registered,
+     * or dynamic metadata names a field the schema does not declare.
      */
     getFormContext(context, error) {
+        const properties = this.constructor.schema.properties;
+        const dynamicMetadata = this.getDynamicFieldMetadata(context) ?? {};
         const fields = {};
         const fieldErrors = new Map();
 
@@ -42,15 +45,33 @@ export default class BaseForm {
             errorCode = error;
         }
 
-        for (const [ name, field ] of Object.entries(this.constructor.schema.properties)) {
-            fields[name] = Object.assign({}, field, { name });
+        // A metadata key naming an undeclared field is a subclass mistake which
+        // would otherwise render as a silently missing control.
+        for (const name of Object.keys(dynamicMetadata)) {
+            assert(
+                Object.hasOwn(properties, name),
+                `Dynamic field metadata for undeclared ${ this.constructor.name } field "${ name }"`,
+            );
+        }
 
-            if (field.writeOnly !== true) {
+        for (const [ name, field ] of Object.entries(properties)) {
+            // Dynamic metadata overrides the static schema, but is applied before
+            // the value and error below, so a subclass cannot defeat the writeOnly
+            // omission or clobber a field error.
+            fields[name] = Object.assign({}, field, dynamicMetadata[name], { name });
+
+            if (field.writeOnly === true) {
+                // A submitted secret is never echoed back into a re-rendered
+                // form, including through a value dynamic metadata supplied.
+                delete fields[name].value;
+            } else {
                 fields[name].value = this[name];
             }
 
             if (fieldErrors.has(name)) {
                 fields[name].error = fieldErrors.get(name);
+            } else {
+                delete fields[name].error;
             }
         }
 
@@ -65,6 +86,28 @@ export default class BaseForm {
             errorCode,
             fields,
         };
+    }
+
+    /**
+     * Returns render metadata which cannot be declared statically in the schema,
+     * keyed by field name and merged over the schema metadata by getFormContext().
+     *
+     * Override this instead of getFormContext() when a field's metadata is
+     * resolved at request time — the canonical case is a `select` whose `options`
+     * come from a registry, so the rendered choices cannot drift from what the
+     * Transaction Script accepts. Overriding this hook rather than the render
+     * method keeps action-URL compilation, per-field errors, and the `writeOnly`
+     * value omission out of a subclass's reach.
+     *
+     * This hook is synchronous. When the metadata requires I/O, load it in the
+     * request handler, assign it to the form instance, and read it from `this`
+     * here.
+     *
+     * @param {import('../../../kixx/context/request-context.js').default} _context - Current request context.
+     * @returns {Object<string, Object>|null} Partial field metadata keyed by declared field name, or null.
+     */
+    getDynamicFieldMetadata(_context) {
+        return null;
     }
 
     /**

@@ -78,27 +78,23 @@ export default class AdminInviteCreateForm extends BaseForm {
     }
 
     /**
-     * Builds the form render context, filling the `role_preset` field's options
-     * with every registered role preset. The options are not filtered per user:
-     * any admin who passes the invite-write authorization gate may confer any
-     * preset. Presets are read from the registry rather than duplicated as a
-     * static schema enum, so the rendered choices and what
-     * `createAdminInvite()` will accept cannot drift apart.
-     * @param {import('../../../../kixx/context/request-context.js').default} context - Current request context.
-     * @param {import('../../../../kixx/errors/lib/validation-error.js').default|string|null} [error] -
-     * ValidationError from validate(), domain error code string, or null.
-     * @returns {import('../base-form.js').FormRenderContext} Form context for template rendering.
+     * Fills the `role_preset` field's options with every registered role preset.
+     * The options are not filtered per user: any admin who passes the
+     * invite-write authorization gate may confer any preset. Presets are read
+     * from the registry rather than duplicated as a static schema enum, so the
+     * rendered choices and what `createAdminInvite()` will accept cannot drift
+     * apart.
+     * @returns {Object<string, Object>} Partial field metadata keyed by field name.
      */
-    getFormContext(context, error) {
-        const formContext = super.getFormContext(context, error);
+    getDynamicFieldMetadata() {
         const options = listRolePresets().map((preset) => ({ value: preset.name, label: preset.name }));
 
-        formContext.fields.role_preset = Object.assign({}, formContext.fields.role_preset, {
-            label: 'Role preset',
-            options,
-        });
-
-        return formContext;
+        return {
+            role_preset: {
+                label: 'Role preset',
+                options,
+            },
+        };
     }
 }
 
