@@ -91,10 +91,10 @@
  * call into five would hide that decision at exactly the point it is being made.
  *
  * ## Index entries are stored, not interpreted
- * `saveIndex()` receives an encoded index table and `getIndex()` returns one.
- * The store MAY validate that a table is well-formed enough to persist, and MUST
- * reject one it cannot store faithfully rather than storing a lossy version of
- * it. It MUST NOT reinterpret entries.
+ * `saveIndex()` receives an encoded index table already validated by the
+ * framework, and `getIndex()` returns one. An adapter remains responsible for
+ * rejecting a value its backing representation cannot store faithfully, but it
+ * MUST NOT reinterpret entries.
  *
  * Concretely, the table that comes back MUST be structurally identical to the
  * one that went in, **including tuple arity**: a tree entry has exactly two
@@ -235,9 +235,10 @@
  *   succeeds. String sizes are measured as UTF-8 encoded bytes.
  *
  * @property {function(Object, string, ContentIndexTable): Promise<void>} saveIndex
- *   Persists an immutable index closure under its root hash. Idempotent.
- *   Resolves with no value, and does not make the closure reachable — only
- *   `assignBuild()` does that.
+ *   Persists a framework-validated immutable index closure under its root hash.
+ *   Idempotent. Resolves with no value, and does not make the closure reachable
+ *   — only `assignBuild()` does that. Adapters reject values their backing
+ *   representation cannot store faithfully.
  *
  * @property {function(Object, string, string): Promise<void>} assignBuild
  *   Points a build id at a previously saved closure and makes a best effort to

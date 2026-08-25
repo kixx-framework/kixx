@@ -15,9 +15,11 @@ import { FORMAT, hashTree, compareStrings } from './addressing.js';
 import {
     assert,
     assertArray,
+    isBoolean,
     isUndefined,
     isPlainObject,
     isNonEmptyString,
+    isString,
 } from '../assertions/mod.js';
 
 /**
@@ -109,13 +111,7 @@ export default class ContentAddressableIndex {
      * @param {Object<string, IndexEntryTuple>} entries - Encoded index table to validate and copy, typically loaded from durable storage or produced by {@link ContentAddressableIndex.buildIndex}.
      */
     constructor(entries) {
-        assert(isPlainObject(entries), 'ContentAddressableIndex: entries must be a plain object');
-
-        for (const [ pathname, tuple ] of Object.entries(entries)) {
-            assertValidIndexEntryTuple(pathname, tuple);
-        }
-        assertValidTreeStructure(entries);
-
+        assertValidIndexTable(entries);
         this.#entries = structuredClone(entries);
     }
 
@@ -255,6 +251,26 @@ export default class ContentAddressableIndex {
     }
 }
 
+/**
+ * Asserts that an encoded index table can be safely persisted and reopened.
+ *
+ * This is the framework's single validation boundary for encoded tables. It
+ * validates both the content-addressable tree and the JSON fidelity storage
+ * adapters require, without giving adapters ownership of index semantics.
+ * @param {Object<string, IndexEntryTuple>} entries - Encoded table to validate.
+ * @returns {void}
+ * @throws {AssertionError} When the table is malformed or cannot round-trip through JSON faithfully
+ */
+export function assertValidIndexTable(entries) {
+    assert(isPlainObject(entries), 'ContentAddressableIndex: entries must be a plain object');
+
+    for (const [ pathname, tuple ] of Object.entries(entries)) {
+        assertValidIndexEntryTuple(pathname, tuple);
+    }
+    assertValidTreeStructure(entries);
+    assertJsonFidelity(entries, 'entries', new Set());
+}
+
 function assertValidIndexEntryTuple(pathname, tuple) {
     const messagePrefix = `ContentAddressableIndex: entry "${ pathname }"`;
     assert(
@@ -313,6 +329,60 @@ function assertValidTreeStructure(entries) {
             );
         }
     }
+}
+
+function assertJsonFidelity(value, pathname, ancestors) {
+    if (value === null || (isString(value) && Object(value) !== value)) {
+        return;
+    }
+    if ((isBoolean(value) && Object(value) !== value) || Number.isFinite(value)) {
+        return;
+    }
+
+    if (Array.isArray(value)) {
+        assert(!ancestors.has(value), `${ pathname } must not contain a cycle`);
+        ancestors.add(value);
+
+        const propertyNames = Object.getOwnPropertyNames(value);
+        assert(
+            propertyNames.length === value.length + 1,
+            `${ pathname } must be a dense array without extra properties`,
+        );
+
+        for (let index = 0; index < value.length; index += 1) {
+            const descriptor = Object.getOwnPropertyDescriptor(value, `${ index }`);
+            assert(
+                descriptor && descriptor.enumerable && 'value' in descriptor,
+                `${ pathname } must be a dense array of data values`,
+            );
+            assertJsonFidelity(descriptor.value, `${ pathname }[${ index }]`, ancestors);
+        }
+        assertNoSymbolProperties(value, pathname);
+        ancestors.delete(value);
+        return;
+    }
+
+    assert(isPlainObject(value), `${ pathname } must contain only JSON values`);
+    assert(!ancestors.has(value), `${ pathname } must not contain a cycle`);
+    ancestors.add(value);
+
+    for (const propertyName of Object.getOwnPropertyNames(value)) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, propertyName);
+        assert(
+            descriptor.enumerable && 'value' in descriptor,
+            `${ pathname }.${ propertyName } must be an enumerable data property`,
+        );
+        assertJsonFidelity(descriptor.value, `${ pathname }.${ propertyName }`, ancestors);
+    }
+    assertNoSymbolProperties(value, pathname);
+    ancestors.delete(value);
+}
+
+function assertNoSymbolProperties(value, pathname) {
+    assert(
+        Object.getOwnPropertySymbols(value).length === 0,
+        `${ pathname } must not contain symbol properties`,
+    );
 }
 
 /**

@@ -1,6 +1,7 @@
-import { describe } from 'kixx-test';
+import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
+import ContentAddressableIndex from '../../../../src/kixx/content-addressable-store/content-addressable-index.js';
 import ContentAddressableStore from '../../../../src/kixx/content-addressable-store/content-addressable-store.js';
 
 
@@ -83,6 +84,32 @@ describe('ContentAddressableStore', ({ describe }) => {
             // durable would resolve to nothing for any reader that got there
             // first.
             assertEqual('saveIndex,assignBuild', contentStore.calls.join(','));
+        });
+
+        it('does not persist an invalid completed index table', async () => {
+            const tracker = new MockTracker();
+            const contentStore = makeContentStore();
+            const store = makeStore(contentStore);
+
+            tracker.method(ContentAddressableIndex, 'buildIndex', async () => {
+                return {
+                    '/': [ 'tree', 'root-hash' ],
+                    '/file.txt': [ 'blob', 'blob-hash', 1, { invalid: undefined } ],
+                };
+            });
+
+            let caught;
+            try {
+                caught = await catchAsyncError(
+                    () => store.commitChanges({}, 'build-1', {}),
+                );
+            } finally {
+                tracker.reset();
+            }
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertEqual('', contentStore.calls.join(','));
         });
 
         it('reports the hash and node count of the committed closure', async () => {

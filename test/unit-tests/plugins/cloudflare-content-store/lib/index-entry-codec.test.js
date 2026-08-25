@@ -60,6 +60,18 @@ describe('index-entry-codec', ({ describe }) => {
             assertEqual(null, caught);
         });
 
+        it('rejects tuples with extra elements', () => {
+            for (const tuple of [
+                [ 'tree', 'tree-hash', null ],
+                [ 'blob', 'blob-hash', 12, null, null ],
+            ]) {
+                const caught = catchError(() => encodeStorageRow('/entry', tuple));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+            }
+        });
+
         it('rejects an unrecognized kind', () => {
             const caught = catchError(() => encodeStorageRow('/a.txt', [ 'symlink', 'some-hash' ]));
 
@@ -77,12 +89,12 @@ describe('index-entry-codec', ({ describe }) => {
             assertMatches('/a.txt', caught.message);
         });
 
-        it('rejects a blob with no size, which would only fail later on read', () => {
+        it('rejects a blob with missing tuple elements', () => {
             const caught = catchError(() => encodeStorageRow('/a.txt', [ 'blob', 'blob-hash' ]));
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('size', caught.message);
+            assertMatches('exactly 4 elements', caught.message);
         });
 
         it('rejects a negative blob size', () => {

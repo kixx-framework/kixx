@@ -114,7 +114,7 @@ Cross-cutting decisions settled with the user:
 
 ### Task CS-1: Centralize encoded-index validation before persistence
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/kixx/content-addressable-store/content-store-interface.js`; `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`; `src/docs/server-error-handling.md`; `test/unit-tests/README.md`
 
@@ -198,19 +198,19 @@ files. Record actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Exported and centralized encoded-index validation, added JSON-fidelity assertions, documented persistence ownership, and added focused tests.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: JSON-fidelity validation rejects non-data properties and cycles before storage while preserving the existing structural validator and commit ordering.
+- Actual files changed: `src/kixx/content-addressable-store/content-addressable-index.js`, `src/kixx/content-addressable-store/content-addressable-store.js`, `src/kixx/content-addressable-store/content-store-interface.js`, `test/unit-tests/kixx/content-addressable-store/content-addressable-index.test.js`, `test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js`.
+- Validation run: `node run-linter.js src/kixx/content-addressable-store test/unit-tests/kixx/content-addressable-store` (passed); `node run-tests.js test/unit-tests/kixx/content-addressable-store` (156 passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task CS-2: Align Cloudflare ContentStore with the portable contract
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** CS-1
 **Documentation:** `src/kixx/content-addressable-store/content-store-interface.js`; `src/plugins/README.md`; `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`; `src/docs/server-error-handling.md`; `test/unit-tests/README.md`
 
@@ -284,17 +284,17 @@ files. Record actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Malformed build IDs, hashes, descriptors, tuple arity, and thrown JSON
+- [x] Malformed build IDs, hashes, descriptors, tuple arity, and thrown JSON
       serialization errors fail as `AssertionError` before RPC.
-- [ ] Assigning an absent closure fails as `AssertionError`, not
+- [x] Assigning an absent closure fails as `AssertionError`, not
       `OperationalError`, while genuine Durable Object failures retain existing
       retry and operational wrapping behavior.
-- [ ] Valid tree and blob tuples return with their exact respective arity.
-- [ ] The shared conformance suite runs against Cloudflare without encoding
+- [x] Valid tree and blob tuples return with their exact respective arity.
+- [x] The shared conformance suite runs against Cloudflare without encoding
       Cloudflare-specific APIs or guarantees.
-- [ ] Existing blob/index cache, retry, invalidation, and wire-format tests
+- [x] Existing blob/index cache, retry, invalidation, and wire-format tests
       remain green.
-- [ ] No change is made to `src/plugins/README.md`.
+- [x] No change is made to `src/plugins/README.md`.
 
 **Validation**
 
@@ -305,19 +305,19 @@ files. Record actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added and invoked the portable ContentStore conformance suite; made logger construction an explicit adapter assertion; validated all Cloudflare contract boundaries and existing behavior.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: CS-1 supplies framework-level encoded-table validation. The Durable Object returns `{ success: false, missingClosure: true }` for an absent closure, allowing the outer adapter to classify only that condition as an `AssertionError`. The shared suite receives an isolated adapter/context factory plus a loggerless-construction factory, keeping platform bindings and cache behavior out of portable tests.
+- Actual files changed: `src/plugins/cloudflare-content-store/lib/content-store.js`, `src/plugins/cloudflare-content-store/lib/content-addressable-index-store.js`, `src/plugins/cloudflare-content-store/lib/index-entry-codec.js`, `test/unit-tests/kixx/content-addressable-store/content-store-conformance.js`, `test/unit-tests/plugins/cloudflare-content-store/lib/content-store.test.js`, `test/unit-tests/plugins/cloudflare-content-store/lib/index-entry-codec.test.js`.
+- Validation run: `node run-linter.js src/plugins/cloudflare-content-store test/unit-tests/plugins/cloudflare-content-store test/unit-tests/kixx/content-addressable-store/content-store-conformance.js` (passed); `node run-tests.js test/unit-tests/plugins/cloudflare-content-store test/unit-tests/kixx/content-addressable-store` (231 passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task CS-3: Implement durable Node filesystem and SQLite storage
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** CS-2
 **Documentation:** `src/kixx/content-addressable-store/content-store-interface.js`; `src/plugins/README.md`; `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`; `src/docs/server-error-handling.md`; `test/unit-tests/README.md`
 
@@ -416,24 +416,24 @@ files. Record actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Blob paths match the accepted format namespace and two-character shard
+- [x] Blob paths match the accepted format namespace and two-character shard
       layout, and pathname never participates in addressing.
-- [ ] Text, ArrayBuffer, Web stream, missing-file, and positional bulk reads
+- [x] Text, ArrayBuffer, Web stream, missing-file, and positional bulk reads
       satisfy the shared contract.
-- [ ] Writes are atomic, no-replacement, durably synchronized, idempotent under
+- [x] Writes are atomic, no-replacement, durably synchronized, idempotent under
       repeats/races, and return payload-derived UTF-8 byte sizes.
-- [ ] Temporary files are removed on normal paths; post-publication cleanup
+- [x] Temporary files are removed on normal paths; post-publication cleanup
       failure only warns; no crash-orphan scan exists.
-- [ ] Schema version 1, SQLite pragmas, lazy initialization, serialized
+- [x] Schema version 1, SQLite pragmas, lazy initialization, serialized
       migration, insert-if-absent closures, conditional atomic assignment, and
       cross-instance immediate reassignment visibility are covered with real
       temporary storage.
-- [ ] Missing builds/closures, unsupported types, invalid hashes/descriptors,
+- [x] Missing builds/closures, unsupported types, invalid hashes/descriptors,
       corrupt JSON, unsupported schema versions, and post-close operations
       throw the agreed programmer errors.
-- [ ] Filesystem/SQLite failures are operational errors preserving `cause`.
-- [ ] Owned and injected connection lifecycle semantics are tested.
-- [ ] The Node adapter passes the shared ContentStore conformance suite.
+- [x] Filesystem/SQLite failures are operational errors preserving `cause`.
+- [x] Owned and injected connection lifecycle semantics are tested.
+- [x] The Node adapter passes the shared ContentStore conformance suite.
 
 **Validation**
 
@@ -444,19 +444,19 @@ files. Record actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Implemented the Node ContentStore and its real filesystem/SQLite test suite, including the shared portable conformance suite.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: Blob publication stages and synchronizes a shard-local temporary file, creates the final name through a no-replacement hard link, then synchronizes the shard. A pre-existing final path is also synchronized so a retry can complete a prior writer's interrupted directory-durability step. Closures are stored as one immutable JSON row, preserving encoded tuples without reconstruction. The adapter uses a manual file-handle Web stream so EOF and cancellation close the handle.
+- Actual files changed: `agents/plans/node-content-store-adapter.md`, `src/plugins/node-content-store/lib/content-store.js`, `test/unit-tests/plugins/node-content-store/lib/content-store.test.js`.
+- Validation run: `node run-linter.js src/plugins/node-content-store test/unit-tests/plugins/node-content-store` (passed); `node run-tests.js test/unit-tests/plugins/node-content-store test/unit-tests/kixx/content-addressable-store` (179 passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task CS-4: Register and configure the Node ContentStore
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** CS-3
 **Documentation:** `src/plugins/README.md`; `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`; `src/docs/server-error-handling.md`; `test/unit-tests/README.md`
 
@@ -522,21 +522,21 @@ files. Record actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] The Node registry supplies `ContentStore` through the new
+- [x] The Node registry supplies `ContentStore` through the new
       `nodeContentStore` plugin.
-- [ ] Missing/invalid configured or resolved `rootDirectory` and missing
+- [x] Missing/invalid configured or resolved `rootDirectory` and missing
       resolver fail during registration with assertions naming the exact config
       path.
-- [ ] `FORMAT`, resolved root directory, logger, and optional SQLite options
+- [x] `FORMAT`, resolved root directory, logger, and optional SQLite options
       reach the adapter constructor.
-- [ ] Registration causes no filesystem/database side effects.
-- [ ] All three Node environments contain only the agreed ContentStore root
+- [x] Registration causes no filesystem/database side effects.
+- [x] All three Node environments contain only the agreed ContentStore root
       settings; obsolete cache/page/template fields are absent.
-- [ ] Fresh storage is not bootstrapped and missing-build behavior remains the
+- [x] Fresh storage is not bootstrapped and missing-build behavior remains the
       port-defined startup-class assertion.
-- [ ] No dependencies, `src/plugins/README.md` edits, dev-server checks, or E2E
+- [x] No dependencies, `src/plugins/README.md` edits, dev-server checks, or E2E
       tests are introduced.
-- [ ] All changed JavaScript passes lint and the complete unit test suite passes.
+- [x] All changed JavaScript passes lint and the complete unit test suite passes.
 
 **Validation**
 
@@ -550,10 +550,10 @@ files. Record actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Registered the Node ContentStore plugin and platform entry, replaced all obsolete Node ContentStore settings with the agreed root directories, and added registration tests.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: Registration has no storage side effects; the adapter lazily creates `format-<FORMAT>/index.sqlite` only on its first operation. The Node registry test verifies the new plugin name, while the registration test verifies the exact `FORMAT` namespace after first use.
+- Actual files changed: `agents/plans/node-content-store-adapter.md`, `src/plugins/node-content-store/plugin.js`, `src/plugins/node.js`, `src/node-config.js`, `test/unit-tests/plugins/node-content-store/plugin.test.js`.
+- Validation run: `node run-linter.js src/plugins/node-content-store src/plugins/node.js src/node-config.js test/unit-tests/plugins/node-content-store` (passed); `node run-tests.js test/unit-tests/plugins/node-content-store/plugin.test.js` (4 passed); `node run-linter.js` (passed); `node run-tests.js` (1100 passed); `git diff --check` (passed).
 - Blockers: None.

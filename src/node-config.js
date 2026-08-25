@@ -43,10 +43,7 @@ export default {
                 },
             },
             CONTENT_STORE: {
-                blobReadCacheTtlSeconds: 0,
-                indexCacheTtlSeconds: 0,
-                pagesDirectory: './pages',
-                templatesDirectory: './templates',
+                rootDirectory: './data/nodejs_app/content_store',
             },
             STATIC_FILE_STORE: {
                 directory: './public',
@@ -93,10 +90,7 @@ export default {
                 },
             },
             CONTENT_STORE: {
-                blobReadCacheTtlSeconds: 60 * 60 * 24,
-                indexCacheTtlSeconds: 10,
-                pagesDirectory: './pages',
-                templatesDirectory: './templates',
+                rootDirectory: '../data/nodejs_app/content_store',
             },
             STATIC_FILE_STORE: {
                 directory: './public',
@@ -143,10 +137,7 @@ export default {
                 },
             },
             CONTENT_STORE: {
-                blobReadCacheTtlSeconds: 60 * 60 * 36,
-                indexCacheTtlSeconds: 10,
-                pagesDirectory: './pages',
-                templatesDirectory: './templates',
+                rootDirectory: '../data/nodejs_app/content_store',
             },
             STATIC_FILE_STORE: {
                 directory: './public',

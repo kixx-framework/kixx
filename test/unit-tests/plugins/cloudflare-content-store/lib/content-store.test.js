@@ -3,6 +3,7 @@ import { assert, assertEqual, assertMatches, assertNotMatches } from 'kixx-asser
 
 import ContentStore from '../../../../../src/plugins/cloudflare-content-store/lib/content-store.js';
 import ContentAddressableIndex from '../../../../../src/kixx/content-addressable-store/content-addressable-index.js';
+import contentStoreConformance from '../../../kixx/content-addressable-store/content-store-conformance.js';
 
 
 const SILENT_LOGGER = {
@@ -85,6 +86,67 @@ function makeStore(options) {
     });
 }
 
+function makeConformanceStore() {
+    const blobs = new Map();
+    const closures = new Map();
+    const builds = new Map();
+    const kvStore = {
+        async get(key, { type }) {
+            if (Array.isArray(key)) {
+                return new Map(key.map((item) => [ item, decodeBlob(blobs.get(item), type) ]));
+            }
+            return decodeBlob(blobs.get(key), type);
+        },
+        async put(key, blob) {
+            blobs.set(key, blob);
+        },
+    };
+    const durableObject = {
+        async getIndex(buildId) {
+            const rootHash = builds.get(buildId);
+            return { success: true, entries: rootHash ? cloneJson(closures.get(rootHash)) : null };
+        },
+        async saveIndex(rootHash, entries) {
+            if (!closures.has(rootHash)) {
+                closures.set(rootHash, cloneJson(entries));
+            }
+            return { success: true };
+        },
+        async assignBuild(buildId, rootHash) {
+            if (!closures.has(rootHash)) {
+                return { success: false, missingClosure: true };
+            }
+            builds.set(buildId, rootHash);
+            return { success: true };
+        },
+    };
+
+    return {
+        store: makeStore({ indexCacheTtlSeconds: 0 }),
+        context: makeContext({ durableObject, kvStore }),
+        createStoreWithoutLogger() {
+            return new ContentStore({});
+        },
+    };
+}
+
+function decodeBlob(blob, type) {
+    if (typeof blob === 'undefined') {
+        return null;
+    }
+    if (type === 'text') {
+        return typeof blob === 'string' ? blob : new TextDecoder().decode(blob);
+    }
+    if (type === 'arrayBuffer') {
+        return typeof blob === 'string' ? new TextEncoder().encode(blob).buffer : blob;
+    }
+    return new Blob([ blob ]).stream();
+}
+
+function cloneJson(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+
 function makeDeferredPromise() {
     let resolve;
     let reject;
@@ -107,7 +169,17 @@ async function catchAsyncError(fn) {
 
 describe('CloudflareContentStore', ({ describe }) => {
 
+    contentStoreConformance(describe, makeConformanceStore);
+
     describe('getIndex()', ({ it }) => {
+        it('rejects an empty build id before accessing the cache or Durable Object', async () => {
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getIndex({ env: {} }, ''));
+
+            assertEqual('AssertionError', caught.name);
+        });
+
         it('returns an entry table the framework index accepts', async () => {
             const durableObject = {
                 async getIndex() {
@@ -341,6 +413,22 @@ describe('CloudflareContentStore', ({ describe }) => {
     });
 
     describe('assignBuild()', ({ it }) => {
+        it('translates a missing closure result into an AssertionError', async () => {
+            const durableObject = {
+                async assignBuild() {
+                    return { success: false, missingClosure: true };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', 'missing-hash'),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertMatches('missing-hash', caught.message);
+        });
+
         it('uses the stable Durable Object name scoped by wire format', async () => {
             let receivedName = null;
             const context = {
@@ -519,6 +607,26 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('AssertionError', caught.name);
             assertEqual(0, calls);
         });
+
+        it('rejects tuples whose arity cannot survive the Durable Object row format', async () => {
+            let calls = 0;
+            const durableObject = {
+                async saveIndex() {
+                    calls += 1;
+                    return { success: true };
+                },
+            };
+            const store = makeStore();
+            const entries = makeEntries();
+            entries['/'].push(null);
+
+            const caught = await catchAsyncError(
+                () => store.saveIndex(makeContext({ durableObject }), 'root-hash', entries),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, calls);
+        });
     });
 
     describe('Durable Object retries', ({ it }) => {
@@ -633,6 +741,18 @@ describe('CloudflareContentStore', ({ describe }) => {
     });
 
     describe('blob reads and writes', ({ it }) => {
+        it('rejects an empty hash before KV access', async () => {
+            const kvStore = makeKvStore(new Map());
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.getFile(makeContext({ kvStore }), 'text', '/a.txt', ''),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, kvStore.calls.length);
+        });
+
         it('reads a blob by content hash', async () => {
             const kvStore = makeKvStore(new Map([ [ 'hash-a#1', 'the bytes' ] ]));
             const store = makeStore();
@@ -721,6 +841,18 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('AssertionError', caught.name);
             assertMatches('101', caught.message);
             // The read must be refused before KV is touched at all.
+            assertEqual(0, kvStore.calls.length);
+        });
+
+        it('rejects malformed bulk file descriptors before KV access', async () => {
+            const kvStore = makeKvStore(new Map());
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.getFiles(makeContext({ kvStore }), 'text', [ { hash: '' } ]),
+            );
+
+            assertEqual('AssertionError', caught.name);
             assertEqual(0, kvStore.calls.length);
         });
 

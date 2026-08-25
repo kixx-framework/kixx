@@ -3,6 +3,7 @@ import { assert, assertEqual, assertMatches, assertNotEqual, assertUndefined } f
 
 import ContentAddressableIndex, {
     getRootHash,
+    assertValidIndexTable,
     validateIndexSourceFiles,
     flattenContentTree,
 } from '../../../../src/kixx/content-addressable-store/content-addressable-index.js';
@@ -41,6 +42,63 @@ function makeListingEntries() {
 
 
 describe('ContentAddressableIndex', ({ describe }) => {
+
+    describe('assertValidIndexTable()', ({ it }) => {
+        it('accepts nested plain-object and dense-array metadata unchanged', () => {
+            const entries = {
+                '/': [ 'tree', 'root-hash' ],
+                '/file.txt': [ 'blob', 'blob-hash', 1, {
+                    attributes: {
+                        languages: [ 'en', 'fr' ],
+                    },
+                } ],
+            };
+
+            assertValidIndexTable(entries);
+            assertEqual('fr', entries['/file.txt'][3].attributes.languages[1]);
+        });
+
+        it('rejects values which cannot round-trip through JSON faithfully', () => {
+            const invalidMetadata = [
+                undefined,
+                () => {},
+                Symbol('metadata'),
+                1n,
+                NaN,
+                Infinity,
+                new Date(),
+                { toJSON() {} },
+            ];
+
+            for (const metadata of invalidMetadata) {
+                const caught = catchError(() => assertValidIndexTable({
+                    '/': [ 'tree', 'root-hash' ],
+                    '/file.txt': [ 'blob', 'blob-hash', 1, { metadata } ],
+                }));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+            }
+        });
+
+        it('rejects sparse arrays, symbol properties, and cycles', () => {
+            const sparse = [ 'first', , 'third' ];
+            const withSymbol = { metadata: 'value' };
+            withSymbol[Symbol('key')] = 'value';
+            const cyclic = {};
+            cyclic.self = cyclic;
+
+            for (const metadata of [ sparse, withSymbol, cyclic ]) {
+                const caught = catchError(() => assertValidIndexTable({
+                    '/': [ 'tree', 'root-hash' ],
+                    '/file.txt': [ 'blob', 'blob-hash', 1, metadata ],
+                }));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+            }
+        });
+    });
 
     describe('constructor', ({ it }) => {
         it('accepts an empty root tree', () => {
