@@ -67,7 +67,6 @@ async function hasValidAdminSession(context, request) {
 function renderAlreadyLoggedIn(response) {
     return response.updateProps({
         alreadyLoggedIn: true,
-        inviteValid: false,
     });
 }
 

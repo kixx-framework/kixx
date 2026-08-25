@@ -234,7 +234,7 @@ files. Record actual files changed in the handoff notes.
 
 ### Task ADMIN-4: Remove the dead already-logged-in prop
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** ADMIN-1 only if ADMIN-1 adds this state to the login page;
 otherwise none
 **Documentation:** `src/templates/README.md`
@@ -268,9 +268,9 @@ files. Record actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] The helper sets no unused template-selection prop.
-- [ ] The already-logged-in signup page renders unchanged.
-- [ ] Other no-form helpers retain `inviteValid: false`.
+- [x] The helper sets no unused template-selection prop.
+- [x] The already-logged-in signup page renders unchanged.
+- [x] Other no-form helpers retain `inviteValid: false`.
 
 **Validation**
 
@@ -282,14 +282,23 @@ files. Record actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Reverified the helper against the current signup template.
-- Current state: Ready for implementation, subject to ADMIN-1's shape.
-- Remaining: Remove the prop and add focused coverage.
-- Decisions and discoveries: The `alreadyLoggedIn` branch remains
-  self-contained; `inviteValid` is not evaluated on that path.
-- Actual files changed: None yet.
-- Validation run: Read-only source and template review only.
-- Blockers: None unless ADMIN-1 changes helper ownership.
+- Completed: Removed the unused `inviteValid` prop from the already-logged-in
+  state and added focused handler coverage for its exact runtime props and
+  early-return boundary.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: ADMIN-1 redirects authenticated login requests and
+  does not share this helper. The signup template's `alreadyLoggedIn` branch is
+  self-contained, so removing `inviteValid` does not change rendered output.
+  Other no-form helpers still set `inviteValid: false` to select their live
+  template branches.
+- Actual files changed:
+  `src/app/presentation/request-handlers/admin-panel/admin-users.js`,
+  `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`,
+  and this tracker.
+- Validation run: Focused tests (15 passed), focused lint (clean), and full unit
+  suite (1130 passed).
+- Blockers: None.
 
 
 Reviewed and Rejected

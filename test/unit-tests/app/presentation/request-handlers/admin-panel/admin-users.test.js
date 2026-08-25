@@ -2,6 +2,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 import {
     getAdminUserLoginForm,
+    getNewAdminUserForm,
     postAdminUserLoginForm,
     postNewAdminUserForm,
 } from '../../../../../../src/app/presentation/request-handlers/admin-panel/admin-users.js';
@@ -13,6 +14,19 @@ const VALID_INVITE = 'valid-invite';
 
 
 describe('Admin users request handlers', ({ it }) => {
+    it('renders authenticated signup with only the already-logged-in state', async () => {
+        const response = makeResponse();
+        const context = makeContext({ adminSession: makeAdminSession() });
+        const request = makeRequest(null, { adminSessionId: 'valid-session' });
+
+        await getNewAdminUserForm(context, request, response);
+
+        assertEqual('alreadyLoggedIn', Object.keys(response.props).join(','));
+        assertEqual(true, response.props.alreadyLoggedIn);
+        assertEqual(0, context.calls.getService);
+        assertEqual(0, context.calls.rateLimit);
+    });
+
     it('redirects an authenticated login GET before creating form state', async () => {
         const response = makeResponse();
         const context = makeContext({ adminSession: makeAdminSession() });
