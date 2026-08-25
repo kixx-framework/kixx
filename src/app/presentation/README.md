@@ -2,7 +2,15 @@
 
 This project is a Hypermedia Driven Application, which means the presentation layer is a web presentation, primarily following the Representational State Transfer (REST) and Hypermedia As The Engine Of Application State (HATEOAS) patterns.
 
-The primary view layer for the presentation is provided by mustache style templates called "Kixx templating". For information about the template syntax, partials, and helpers see the template guide at `templates/README.md`. The Kixx Hyperview plugin is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `templates/`.
+**Templates**
+
+The primary view layer for the presentation is provided by mustache style templates called "Kixx templates" as defined in `kixx/templating/`. For information about the template syntax, partials, and helpers see the template guide at `templates/README.md`.
+
+**Template context data and rendering**
+
+The Kixx Hyperview Service is responsible for rendering server-side HTML by combining page metadata and text based content from `pages/` with templates in `templates/`.
+
+**HTTP Routing**
 
 HTTP routes are defined in `virtual-hosts.js` with sub-trees defined in `routes/` and imported by `virtual-hosts.js`.
 
@@ -10,7 +18,7 @@ HTTP routes are defined in `virtual-hosts.js` with sub-trees defined in `routes/
 
 Routes are defined in `virtual-hosts.js` as an array of virtual host specification objects. The HTTP router resolves every request through a four-level hierarchy: **HttpRouter → VirtualHost → HttpRoute → HttpTarget**.
 
-`virtual-hosts.js` is a thin top-level shell: it declares the virtual hosts, their hostnames, and the route subtrees mounted under each one. The route subtrees themselves live in `routes/`, one module per API or UI surface. Add a route to the module that owns the surface it belongs to, and reserve edits to `virtual-hosts.js` for mounting a new subtree, adding a virtual host, or changing subtree-level middleware and error handlers.
+`virtual-hosts.js` Declares the virtual hosts, their hostnames, and the route subtrees mounted under each one. The route subtrees themselves live in `routes/`, one module per API or UI surface. Add a route to the module that owns the surface it belongs to, and reserve edits to `virtual-hosts.js` for mounting a new subtree, adding a virtual host, or changing subtree-level middleware and error handlers.
 
 - **VirtualHost** matches the request by hostname. If no hostname match is found, the first virtual configured will be used.
 - **HttpRoute** matches the URL pathname using `path-to-regexp` pattern syntax (e.g. `/users/:id`). Named segments are captured and available as `request.pathnameParams`.
@@ -389,7 +397,7 @@ Every error a request handler or middlware encounters must be classified into on
 - **Expected errors** - also known as "operational errors" - are errors the Requset Handler logic is prepared for and will handle internally.
 - **Unexpected errors** - also known as "programmer errors" - are errors which come from code paths the Request Handler logic assumes should be unreachable, or should not be present in a healthy system.
 
-A Request Handler should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Request Handler may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging. A RequestHandler MUST wrap the unexpected error and rethrow it as an AssertionError if the cause.expected flag is truthy. This will result in an HTTP 500 status code for the response and a sever crash, which is the intended outcome.
+A Request Handler should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Request Handler may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging. A RequestHandler MUST wrap the unexpected error and rethrow it as an AssertionError if the cause.expected flag is truthy. This will result in an HTTP 500 status code for the response and a sever crash, which is the intended outcome for unexpected errors.
 
 A Request Handler should act with discretion when expected operational errors occur. Depending on the context:
 
@@ -410,13 +418,13 @@ Be sure to set the status yourself in each inline error re-render branch in a re
 
 Enumeration-sensitive re-renders — throttled, invalid-invite/verification, and invalid-credentials states — should stay `200` on purpose so the status line does not become an identity or rate-limit oracle. These flows collapse valid, unknown, expired, and throttled outcomes into one indistinguishable response; a distinct `403`/`404`/`429` status would leak exactly the signal the identical HTML bodies work to hide.
 
-## Request and Response Objects
+## RequestContext, Request and Response Objects
 
 Every middleware function and request handler receives `(context, request, response)`. All three objects are described below.
 
 ### RequestContext
 
-`context` is a `RequestContext` instance. It is created once per request and carries the request environment, logger, authenticated user, and registered services and collections.
+`context` is a `RequestContext` instance. It is created once per request and carries the request environment, logger, authenticated principle, and registered services and collections.
 
 **Properties:**
 
@@ -430,9 +438,7 @@ Every middleware function and request handler receives `(context, request, respo
 
 **Authenticated Principals:**
 
-Authentication middleware should store the current authenticated principal on `context.user` with `context.setUser(principal)`. The principal is often a human user, but it may also represent an API token, service account, webhook sender, or another non-user credential. In those cases, use the same `context.user` property and include enough stable fields for downstream handlers to authorize and audit the request, such as `id`, `type`, `permissions`, `createdBy`, `scopes`, or credential timestamps.
-
-Use `type` to make the principal kind explicit (`'AdminUser'`, `'PublishingApiToken'`, etc.) and avoid assuming every authenticated request is backed by a browser user. Middleware should keep secrets out of the principal: store token ids, hashes, grants, owner ids, and expiry metadata, but never store plaintext bearer tokens or passwords on `context.user`.
+Authentication middleware should store the current authenticated principal on `context.user` with `context.setUser(principal)`. The principal is often a human user, but it may also represent an API token, service account, webhook sender, or another non-user credential.
 
 **Methods:**
 
@@ -518,7 +524,7 @@ return response.updateProps({ page: { title: ticket.title }, ticket });
 
 Forms are the primary organizing logic for getting data into the application. Any data input into the system — HTML form submissions, JSON:API requests, webhooks, external APIs — should go through a form. A form owns one responsibility: turn an untrusted payload into a normalized, validated value object that a Transaction Script can consume. Keep domain logic, storage access, and CSRF handling out of the form.
 
-Form files live in `app/presentation/forms/`, grouped into a subdirectory per feature (`admin-users/`, `publishing-api-tokens/`, `pages/`, `migrations/`). A single file may export more than one form when the forms belong to the same UI — for example a create form as the `default` export and a companion revoke form as a named export.
+Form files live in `app/presentation/forms/`, grouped into a subdirectory per feature (`admin-users/`, `publishing-api-tokens/`, `migrations/`). A single file may export more than one form when the forms belong to the same UI — for example a create form as the `default` export and a companion revoke form as a named export.
 
 ### Anatomy of a Form
 
@@ -543,30 +549,6 @@ Forms that back HTML pages extend `BaseForm` (`app/presentation/forms/base-form.
 - **`getFormContext(context, error)`** builds the template render context: it resolves `static target` to an `HttpTarget`, compiles the action `url` (passing the form instance so any route params are hydrated), and projects each schema property into a `fields` map carrying the current value, render metadata, and any per-field error message. Pass it the `ValidationError` caught in the request handler to re-render with inline field errors, or a domain error code string for a form-level message.
 - **`static fromFormData(formData)`** hydrates the subclass from submitted `FormData`, treating each field as a scalar (last value wins on duplicates). Override it when a form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
 
-### Schema HTML Metadata
-
-`getFormContext()` copies each property's schema keys onto the rendered field, so templates read whatever metadata you declare. Conventions used across the codebase:
-
-- **`label`** — human label for the control.
-- **`fieldType`** — the control kind the template should render (`'text'`, `'textarea'`, `'select'`, `'hidden'`).
-- **`inputType`** — the HTML `<input type>` (`'email'`, `'password'`), kept distinct from `fieldType` so a template can choose the control independently of the input type.
-- **`autocomplete`** — the browser autofill hint (`'email'`, `'new-password'`, `'current-password'`).
-- **`hint`** — help text shown near the field.
-- **`options`** — value/label pairs for `select` controls.
-- **`writeOnly: true`** — a security convention, not decoration: `getFormContext()` omits the field's `value` from the render context so a submitted secret (a password) is never echoed back into a re-rendered form after a validation error.
-
-### Normalization Helpers
-
-Constructors normalize with the shared helpers in `app/presentation/forms/utils.js` rather than re-implementing trimming inline. Each helper returns the original value unchanged when it is not usable, which is what keeps invalid input intact for `validate()`:
-
-- **`normalizeStringAttribute(value)`** — trims a required string.
-- **`normalizeLowerCaseStringAttribute(value)`** — trims and lowercases; use for email addresses so lookups are case-insensitive.
-- **`normalizeSecretStringAttribute(value)`** — coerces to a primitive string but does **not** trim, preserving a password exactly as entered.
-- **`normalizeOptionalStringAttribute(value)`** — trims and collapses absent or blank input to `null`.
-- **`validateEmailAddressField(error, value, name)`** — pushes a field error when an email value is missing or malformed; call it from `validate()`.
-
-Prefer these to hand-written normalization so behavior stays consistent, and add a new shared helper here when a normalization pattern appears in more than one form.
-
 The subclass declares its shape and rules; `BaseForm` supplies `getFormContext()` and `fromFormData()`. Do not re-implement either from scratch in a subclass. There are two reasons to override:
 
 - **`fromFormData()`** — when the form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
@@ -583,128 +565,29 @@ getFormContext(context, error) {
 }
 ```
 
-```js
-import { isString } from '../../../../kixx/assertions/mod.js';
-import { ValidationError } from '../../../../kixx/errors/mod.js';
-import BaseForm from '../base-form.js';
-import {
-    normalizeStringAttribute,
-    normalizeSecretStringAttribute,
-    normalizeLowerCaseStringAttribute,
-    validateEmailAddressField,
-} from '../utils.js';
+### Schema HTML Metadata
 
+`getFormContext()` copies each property's schema keys onto the rendered field, so templates read whatever metadata you declare. Conventions used across the codebase:
 
-/**
- * Normalizes and validates the bug ticket creation fields.
- * @extends BaseForm
- */
-export default class CreateBugTicketForm extends BaseForm {
+- **`label`** — human label for the control.
+- **`fieldType`** — the control kind the template should render (`'text'`, `'textarea'`, `'select'`, `'hidden'`).
+- **`inputType`** — the HTML `<input type>` (`'email'`, `'password'`), kept distinct from `fieldType` so a template can choose the control independently of the input type.
+- **`autocomplete`** — the browser autofill hint (`'email'`, `'new-password'`, `'current-password'`).
+- **`hint`** — help text shown near the field.
+- **`options`** — value/label pairs for `select` controls.
+- **`writeOnly: true`** — a security convention, not decoration: `getFormContext()` omits the field's `value` from the render context so a submitted secret (a password) is never echoed back into a re-rendered form after a validation error.
 
-    /**
-     * HttpTarget name used to compile the form action path.
-     * @type {string}
-     * @static
-     * @readonly
-     */
-    static target = 'bugs/submit';
+### Normalization Helpers
 
-    /**
-     * HTTP method used for browser form submissions.
-     * @type {string}
-     * @static
-     * @readonly
-     */
-    static method = 'POST';
+Constructors normalize with the shared helpers in `app/presentation/forms/utils.js` rather than re-implementing it. Each helper returns the original value unchanged when it is not usable, which is what keeps invalid input intact for `validate()`:
 
-    /**
-     * JSON Schema extended with HTML render metadata (label, fieldType, etc.).
-     * @type {Object}
-     * @static
-     * @readonly
-     */
-    static schema = {
-        type: 'object',
-        properties: {
-            title: {
-                type: 'string',
-                label: 'Title',
-                fieldType: 'text',
-            },
-            description: {
-                type: 'string',
-                label: 'Description',
-                fieldType: 'textarea',
-            },
-            priority: {
-                type: 'string',
-                enum: [ 'critical', 'high', 'medium', 'low' ],
-                fieldType: 'select',
-                label: 'Priority',
-            },
-        },
-        required: [ 'title', 'description' ],
-    };
+- **`normalizeStringAttribute(value)`** — trims a required string.
+- **`normalizeLowerCaseStringAttribute(value)`** — trims and lowercases; use for email addresses so lookups are case-insensitive.
+- **`normalizeSecretStringAttribute(value)`** — coerces to a primitive string but does **not** trim, preserving a password exactly as entered.
+- **`normalizeOptionalStringAttribute(value)`** — trims and collapses absent or blank input to `null`.
+- **`validateEmailAddressField(error, value, name)`** — pushes a field error when an email value is missing or malformed; call it from `validate()`.
 
-    /**
-     * @param {Object} [attributes] - Raw submitted ticket attributes.
-     * @param {*} [attributes.title] - Ticket title input value.
-     * @param {*} [attributes.description] - Ticket description input value.
-     * @param {*} [attributes.priority] - Selected priority.
-     */
-    constructor(attributes) {
-        super();
-
-        const { title, description, priority } = attributes ?? {};
-
-        // Normalize shape only; keep invalid input intact for validate().
-        this.title = normalizeStringAttribute(title);
-        this.description = normalizeStringAttribute(description);
-        this.priority = normalizeLowerCaseStringAttribute(priority);
-    }
-
-    /**
-     * Validates the normalized ticket fields.
-     * @returns {void}
-     * @throws {ValidationError} When a field is missing or invalid.
-     */
-    validate() {
-        const error = new ValidationError('The bug ticket form contains invalid fields');
-        // Read the allowed values from the schema rather than duplicating them.
-        const priorities = this.constructor.schema.properties.priority.enum;
-
-        if (!isString(this.title) || this.title.length === 0) {
-            error.push('Title is required', 'title');
-        }
-
-        if (!isString(this.description) || this.description.length === 0) {
-            error.push('Description is required', 'description');
-        }
-
-        if (this.priority && !priorities.includes(this.priority)) {
-            error.push('Priority is invalid', 'priority');
-        }
-
-        if (error.length) {
-            throw error;
-        }
-    }
-
-    /**
-     * Returns the normalized fields consumed by the Transaction Script.
-     * @returns {{ title: *, description: *, priority: * }} Plain JSON form values.
-     */
-    toJSON() {
-        return {
-            title: this.title,
-            description: this.description,
-            priority: this.priority,
-        };
-    }
-}
-```
-
-The `validateEmailAddressField` and `normalizeSecretStringAttribute` helpers imported above are unused in this minimal example; a real form pulls in only the helpers its fields need (login and registration forms use both for email and password fields).
+Prefer these to hand-written normalization so behavior stays consistent, and add a new shared helper here when a normalization pattern appears in more than one form.
 
 ### Companion Forms in One File
 
