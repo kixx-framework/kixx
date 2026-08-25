@@ -319,15 +319,17 @@ export async function handleCreateBugTicket(context, request, response, skip) {
         form.validate();
     } catch (err) {
         if (err.name === 'ValidationError') {
+            response.status = err.httpStatusCode;
             return response.updateProps({ form: form.getFormContext(context, err) });
         }
         throw err;
     }
 
     const ticket = await createBugTicket(context, form);
+    const ticketTarget = context.getHttpTarget('bugs/show');
 
     skip();
-    return response.respondWithRedirect(303, `/bugs/${ ticket.id }`);
+    return response.respondWithRedirect(303, ticketTarget.compilePathname({ id: ticket.id }).pathname);
 }
 ```
 
@@ -400,7 +402,9 @@ Every error a request handler or middlware encounters must be classified into on
 - **Expected errors** - also known as "operational errors" - are errors the Requset Handler logic is prepared for and will handle internally.
 - **Unexpected errors** - also known as "programmer errors" - are errors which come from code paths the Request Handler logic assumes should be unreachable, or should not be present in a healthy system.
 
-A Request Handler should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Request Handler may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging. A RequestHandler MUST wrap the unexpected error and rethrow it as an AssertionError if the cause.expected flag is truthy. This will result in an HTTP 500 status code for the response and a sever crash, which is the intended outcome for unexpected errors.
+A Request Handler should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Request Handler may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging.
+
+A truthy `error.expected` flag means the error was considered operational from where it was thrown. Wrap a caught expected error as an `AssertionError` (with `cause`) and rethrow only when it arrives from a code path whose occurrence violates the handler's own invariant — one the handler assumed could not produce that error. This is what results in an HTTP 500 and a server crash, which is the intended outcome once an assumed-unreachable path turns out to be reachable.
 
 A Request Handler should act with discretion when expected operational errors occur. Depending on the context:
 
@@ -433,6 +437,7 @@ Every middleware function and request handler receives `(context, request, respo
 
 | Property | Type | Notes |
 |---|---|---|
+| `config` | `Object` | Resolved application configuration |
 | `env` | `Object` | Platform specific environment bindings |
 | `logger` | `Logger` | Root application logger; use for structured log output |
 | `requestId` | `string\|undefined` | Matches `request.id`; use for log correlation |
@@ -473,7 +478,9 @@ Use the helper that matches the type your code expects:
 - `getEnvFloat(key, options)` returns a number from a numeric value or float string, or `undefined` when the env var is missing.
 - `getEnvBoolean(key)` returns `true` only for `true`, `1`, `"true"`, or `"1"`. Missing and unrecognized values return `false`.
 
-Pass `{ required: true }` to the string, integer, or float helpers when the application cannot run without that value. Required helpers throw an `AssertionError` when the env var is missing or empty. Numeric helpers also throw an `AssertionError` when a present value cannot be parsed as the expected number type.
+`getEnvInteger()` and `getEnvFloat()` parse a string value with `Number.parseInt()`/`Number.parseFloat()`, which only consume a leading numeric prefix — they do not require the whole string to be numeric. `getEnvInteger()` returns `1` for `"1.5"` and `12` for `"12px"`; `getEnvFloat()` returns `1.5` for `"1.5px"`. Only a value with no parseable leading number (e.g. `"abc"`) throws. Set the env var to a strictly numeric string if you need the value validated as such.
+
+Pass `{ required: true }` to the string, integer, or float helpers when the application cannot run without that value. Required helpers throw an `AssertionError` when the env var is missing or empty. Numeric helpers also throw an `AssertionError` when a present value has no parseable leading number of the expected type.
 
 ### ServerRequest
 
@@ -755,19 +762,20 @@ Templates should render the hidden field directly inside the protected `<form>`:
 
 For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
 
-1. Add or update `src/pages/<pathname>/page.json` for metadata and page context, including its `template` directive.
-2. Add or update the named template under `src/templates/pages/` for route-specific markup.
-3. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-4. Put page-local partial sources under `src/templates/pages/` and reference them from `partials` in `page.json`.
-5. Add shared layout changes to `src/templates/base/` or `src/templates/partials/` only when the change should affect multiple pages.
+1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html' })`. See [Routing](#routing).
+2. Add or update `src/pages/<pathname>/page.json` for metadata and page context, including its `template` directive.
+3. Add or update the named template under `src/templates/pages/` for route-specific markup.
+4. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
+5. Put page-local partial sources under `src/templates/pages/` and reference them from `partials` in `page.json`.
+6. Add shared layout changes to `src/templates/base/` or `src/templates/partials/` only when the change should affect multiple pages.
 
-Content-only Hyperview pages need no options: `HyperviewPageHandler()` renders the page published at the request pathname, and should already be configured for the catch-all route (`"*"`) in `virtual-hosts.js`.
+`baseTemplateId` is required for a full-page render (see [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler)); a bare `HyperviewPageHandler()` fails an assertion on a normal request. Because the route pattern matches the page's pathname exactly, no `pathname` option is needed — the page is looked up by the request pathname.
 
 ### Dynamic Page
 
 For a page that needs route parameters, records loaded through Transaction Scripts, session state, or other request-specific data:
 
-1. Add or update the route in `virtual-hosts.js`.
+1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`. Reserve edits to `virtual-hosts.js` itself for mounting a new subtree, adding a virtual host, or changing subtree-level configuration. See [Routing](#routing).
 2. Add a request handler in the appropriate barrel file in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
 3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
 4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewPageHandler(...)`. See [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler).
@@ -828,14 +836,7 @@ import { StaticFileRequestHandler } from './kixx/static-file-server/static-file-
 - `skipWhenFound` — skip the remaining request handlers on the route when a file is served. `false` by default.
 - `pathname` — override the URL pathname for every request, rewriting which file key is read.
 
-The default options (`throwNotFound: true`, `skipWhenFound: false`) suit a dedicated route that owns its path, such as `/favicon.ico`. For a root-served catch-all, set `throwNotFound: false` and `skipWhenFound: true` and place the handler before the Hyperview renderer so a static file is served when one matches and the request otherwise falls through to page rendering:
-
-```js
-requestHandlers: [
-    StaticFileRequestHandler({ throwNotFound: false, skipWhenFound: true }),
-    HyperviewPageHandler(),
-]
-```
+The default options (`throwNotFound: true`, `skipWhenFound: false`) suit a dedicated route that owns its path, such as `/favicon.ico`.
 
 For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments, and the Node.js (filesystem + `manifest.json`) and Cloudflare (dedicated KV binding) adapters, see `src/kixx/static-file-server/README.md`.
 
@@ -975,8 +976,9 @@ Build directives direct source assembly and are not exposed in the assembled tem
 
 Hyperview creates a `page` object and fills several metadata defaults:
 
-- `page.pathname` is the canonical lower-case request URL pathname.
-- `page.canonical_url` defaults to the canonical lower-case request URL without query string or hash.
+- `pathname` (top-level, not under `page`) defaults to the canonical content pathname used to look up the page.
+- `url_pathname` (top-level, not under `page`) defaults to the raw request URL pathname.
+- `page.canonical_url` defaults to the request protocol, host, and raw pathname, without query string or hash. It is not lower-cased and does not use the canonical content pathname, so case, duplicate slashes, and a `.json` suffix pass through unchanged.
 - `page.href` defaults to the full request URL exactly as requested.
 - `page.open_graph.url` defaults to `page.canonical_url`.
 - `page.open_graph.type` defaults to `website`.
