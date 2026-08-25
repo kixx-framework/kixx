@@ -41,6 +41,11 @@ function getAdminLoginFormLink(context) {
     return target.compilePathname().pathname;
 }
 
+function getAdminPanelLink(context) {
+    const target = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
+    return target.compilePathname().pathname;
+}
+
 async function hasValidAdminSession(context, request) {
     const sessionId = request.getCookie(ADMIN_SESSION_COOKIE_NAME);
 
@@ -296,15 +301,27 @@ export async function postNewAdminUserForm(context, request, response, skip) {
 /**
  * Renders the admin login form.
  *
+ * A request carrying a valid admin session is redirected to the admin panel with
+ * a 302 before form or CSRF state is created. Missing and invalid sessions proceed
+ * to the login form normally.
+ *
  * An unrecognized `notice` query parameter is discarded rather than echoed, so a
  * post-redirect notice cannot inject arbitrary text into the page.
  *
  * @param {import('../../../../kixx/context/request-context.js').default} context - Active request context.
  * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request.
  * @param {import('../../../../kixx/http-router/server-response.js').default} response - Current response state.
- * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} Response carrying the login form and any recognized notice.
+ * @param {Function} skip - Ends the request phase, so the Hyperview page handler does not render over the redirect.
+ * @returns {Promise<import('../../../../kixx/http-router/server-response.js').default>} 302 redirect for an authenticated admin, or a response carrying the login form and any recognized notice.
  */
-export async function getAdminUserLoginForm(context, request, response) {
+export async function getAdminUserLoginForm(context, request, response, skip) {
+    // An authenticated browser has no login work to perform. Check before
+    // interpreting notices or creating CSRF state, and leave all auth state intact.
+    if (await hasValidAdminSession(context, request)) {
+        skip();
+        return response.respondWithRedirect(302, getAdminPanelLink(context));
+    }
+
     const form = new AdminUserLoginForm();
 
     // Reads an optional `notice` query parameter to surface post-redirect notices
@@ -332,6 +349,10 @@ async function renderLoginThrottled(context, request, response, form, retryAfter
 /**
  * Authenticates admin credentials and establishes a session.
  *
+ * A request carrying a valid admin session is redirected to the admin panel with
+ * a 303 before its body is parsed or any CSRF, throttle, credential, or session
+ * state is read or changed. Missing and invalid sessions proceed normally.
+ *
  * Invalid credentials and throttled attempts both re-render with a single generic
  * message and a deliberate 200, so neither response reveals whether an account
  * exists; only a malformed submission reports a distinguishable 422. Failures are
@@ -347,6 +368,13 @@ async function renderLoginThrottled(context, request, response, form, retryAfter
  * @throws {ForbiddenError} When CSRF validation fails.
  */
 export async function postAdminUserLoginForm(context, request, response, skip) {
+    // Do not parse credentials or mutate login state for a browser that already
+    // has a valid session. Replacing it would also leave the prior session alive.
+    if (await hasValidAdminSession(context, request)) {
+        skip();
+        return response.respondWithRedirect(303, getAdminPanelLink(context));
+    }
+
     const formData = await validateCsrfFormData(context, request);
     const form = AdminUserLoginForm.fromFormData(formData);
 
@@ -403,7 +431,6 @@ export async function postAdminUserLoginForm(context, request, response, skip) {
     await clearLoginThrottle(context, request, form.email_address);
     clearCsrfToken(request, response);
 
-    const adminTarget = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
     skip();
-    return response.respondWithRedirect(303, adminTarget.compilePathname().pathname);
+    return response.respondWithRedirect(303, getAdminPanelLink(context));
 }

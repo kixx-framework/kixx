@@ -72,7 +72,7 @@ The old plan's references to `HyperviewDynamicPageHandler`,
 
 ### Task ADMIN-1: Define login behavior for an existing session
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/app/presentation/README.md`,
 `src/docs/server-error-handling.md`
@@ -118,10 +118,10 @@ files. Record actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Login GET and POST follow a documented, coherent existing-session
+- [x] Login GET and POST follow a documented, coherent existing-session
       policy.
-- [ ] Valid, absent, and invalid session cookies are covered where applicable.
-- [ ] Invalid credentials and throttling remain 200; malformed form data
+- [x] Valid, absent, and invalid session cookies are covered where applicable.
+- [x] Invalid credentials and throttling remain 200; malformed form data
       remains 422.
 
 **Validation**
@@ -134,14 +134,26 @@ files. Record actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Current behavior and the signup/login asymmetry were reverified.
-- Current state: Awaiting a product decision.
-- Remaining: Decide, implement, document, and test the policy.
-- Decisions and discoveries: Login GET and POST perform no session check. A
-  successful POST creates a new session and replaces the cookie.
-- Actual files changed: None yet.
-- Validation run: Read-only source review only.
-- Blockers: Maintainer must decide whether re-login is intended.
+- Completed: Valid admin sessions now redirect before login-page or submission
+  work. GET and HEAD use 302; POST uses 303. Focused coverage locks down valid,
+  absent, invalid, and unexpectedly failing session checks and the redirect's
+  no-mutation boundary.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: Re-login is deliberately prohibited because it
+  creates a replacement session without revoking the prior session. Both
+  handlers redirect to the reverse-routed admin style-guide landing page. The
+  redirect does not refresh or clear cookies, CSRF state, sessions, or throttle
+  state. Invalid sessions proceed normally without clearing the stale cookie;
+  unexpected authentication failures propagate. No login-template or logout
+  work is included.
+- Actual files changed:
+  `src/app/presentation/request-handlers/admin-panel/admin-users.js`,
+  `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`,
+  and this tracker.
+- Validation run: Focused tests (14 passed), focused lint (clean), and full unit
+  suite (1129 passed).
+- Blockers: None.
 
 
 ### Task ADMIN-3: Replace unreachable status fallbacks
