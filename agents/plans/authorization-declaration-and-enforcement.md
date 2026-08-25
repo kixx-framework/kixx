@@ -31,7 +31,10 @@ vocabulary, the framework owns declaration, dispatch, and a completeness
 invariant, while the application owns evaluation behind a registered
 `Authorizer` service — a port in the sense of `src/plugins/README.md`. The
 router refuses to boot when any target declares a decision and no `Authorizer`
-is registered, so the port cannot be quietly left unwired.
+is supplied from the initialized service registry, so the port cannot be quietly
+left unwired. Target specification parsing remains service-independent: the
+router first builds the route tree, then validates its authorization declarations
+against the supplied `Authorizer` before accepting requests.
 
 **What is and is not verified.** Boot-time validation proves *coverage* (every
 target declares something) and *vocabulary* (declared URNs are registered). A
@@ -39,9 +42,18 @@ post-request-phase invariant proves *completion* (a decision was actually
 evaluated for the declared action). Nothing proves *correctness of scope* — that
 the resource URN was derived from the right data. That remains a test
 obligation, and the plan adds the tests rather than pretending the machine
-covers it. Note also that the completion invariant fires after the handler has
-already done its work, so on a write the write has landed; its value is that CI
-fails loudly on the first run rather than the gap sitting unnoticed.
+covers it. Note also that the completion invariant fires after the handlers have
+already done their work. A write may have landed, another side effect may have
+occurred, or a terminal presentation handler may already have rendered and
+committed the response representation. Its value is that CI fails loudly on the
+first run rather than the gap sitting unnoticed.
+
+Hyperview rendering is terminal presentation behavior, not another protected
+resource operation. `HyperviewPageHandler` runs after target authorization, and
+direct `respondWithHyperviewPage()` calls from an error handler render the error
+representation without declaring or evaluating a second authorization decision.
+The completion invariant applies to the matched target's request phase only; it
+does not apply recursively to error-handler rendering.
 
 Per `src/docs/server-error-handling.md`, a missing or incomplete decision is a
 programmer error, not an operational one: it throws `AssertionError` and is
@@ -184,15 +196,22 @@ left unwired by omission — the same failure this whole plan exists to remove.
   `{ action, resource }`. Returns nothing on success; throws on denial. The
   framework does not interpret the thrown error — `ForbiddenError` reaching the
   registered error handlers is the application's business.
-- A second method, `assertVocabulary(declaration)`, is called once per target at
-  route-tree construction so the application can reject an action or resource
-  URN that no registered role could ever grant. This is what makes "vocabulary"
-  machine-checked without teaching the framework about URNs. A typo in a route
-  file then fails at boot instead of denying every request at runtime.
-- Boot-time presence check: while building the route tree, if any target
-  declares something other than `'public'` and no `Authorizer` is registered,
-  throw. Registering it must not be optional for an application that uses
-  authorization at all.
+- A second method, `assertVocabulary(declaration)`, is called once per protected
+  target during `HttpRouter` construction, after the route tree has been built.
+  The application can therefore reject an action or resource URN that no
+  registered role could ever grant. This makes "vocabulary" machine-checked
+  without teaching the framework about URNs. A typo in a route file fails at
+  boot instead of denying every request at runtime.
+- Target and route construction remain service-independent. `HttpRouter`
+  accepts an optional `authorizer` constructor dependency. The Node and
+  Cloudflare composition roots run plugin and application initialization first,
+  retrieve the registered `Authorizer`, and pass it to the router alongside the
+  virtual-host specifications.
+- After building the route tree, `HttpRouter` walks every target declaration.
+  If any target is protected and no authorizer was supplied, construction
+  throws and names the first offending target. If an authorizer was supplied,
+  the router calls `assertVocabulary()` once for every protected target. A
+  completely public downstream application may omit the dependency.
 - Dispatch point is the head of the request phase in
   `HttpTarget#invokeMiddleware()` (`http-target.js:170`), before the
   `#middleware` loop. Running before inbound middleware would break it —
@@ -210,11 +229,14 @@ left unwired by omission — the same failure this whole plan exists to remove.
 **Expected touch points**
 
 - `src/kixx/http-router/authorizer-interface.js` — new interface contract
-- `src/kixx/http-router/http-target.js` — middleware-segment split, dispatch, boot check
-- `src/kixx/http-router/http-route.js`, `virtual-host.js` — thread the segments through construction
+- `src/kixx/http-router/http-target.js` — middleware-segment split and dispatch
+- `src/kixx/http-router/http-route.js`, `virtual-host.js` — thread the segments through construction and expose built targets for router validation
+- `src/kixx/http-router/http-router.js` — accept the optional authorizer, require it for protected routes, and validate vocabulary
 - `src/app/lib/authorizer.js` — application implementation
 - Application bootstrap / plugin registration — register `Authorizer`
-- `test/unit-tests/kixx/http-router/http-target.test.js` — dispatch order, boot check
+- `src/node-server.js`, `src/cloudflare-server.js` — pass the initialized registered service to `HttpRouter`
+- `test/unit-tests/kixx/http-router/http-target.test.js` — dispatch order
+- `test/unit-tests/kixx/http-router/http-router.test.js` — authorizer presence and vocabulary validation at boot
 - New `test/unit-tests/app/lib/authorizer.test.js`
 
 Treat this list as orientation, not permission to ignore other necessary files.
@@ -225,8 +247,9 @@ Record the actual files changed in the handoff notes.
 - [ ] A target with a fixed declaration calls `Authorizer#authorize` exactly once, after inbound middleware and before the first request handler.
 - [ ] A denial thrown by the authorizer propagates to the error-handler cascade; no request handler runs.
 - [ ] A `'public'` target never calls the authorizer.
-- [ ] Building a tree with a non-`'public'` declaration and no registered `Authorizer` throws, naming the offending target.
-- [ ] `assertVocabulary` is called once per declared target at construction; an unregistered action or resource URN fails the boot.
+- [ ] Constructing `HttpRouter` with a non-`'public'` declaration and no supplied `Authorizer` throws, naming the offending target.
+- [ ] `assertVocabulary` is called once per protected target during router construction; an unregistered action or resource URN fails the boot.
+- [ ] A route tree containing only `'public'` targets can be constructed without an `Authorizer`.
 - [ ] `skip()` semantics and the always-runs outbound phase are unchanged for both authorized and public targets.
 - [ ] The application `Authorizer` denies via `ForbiddenError` and adds no logic beyond delegating to `permissions.js`.
 
@@ -235,7 +258,7 @@ Record the actual files changed in the handoff notes.
 - `node run-tests.js test/unit-tests/kixx/http-router test/unit-tests/app` — dispatch order, boot check, delegation
 - `node run-tests.js` — full suite
 - `node run-linter.js src/kixx/http-router src/app/lib`
-- Unit coverage: dispatch ordering relative to inbound middleware (use `MockTracker` call order), the missing-authorizer boot failure, vocabulary rejection.
+- Unit coverage: dispatch ordering relative to inbound middleware (use `MockTracker` call order), the missing-authorizer boot failure, the all-public case, and vocabulary rejection.
 
 **Progress and handoff**
 
@@ -309,8 +332,9 @@ acceptable at all.
 
   Nothing in the tree today needs an exemption. The three admin skip sites sit
   on targets with fixed declarations, which the router satisfies before the
-  request phase runs; the two form handlers skip on `'public'` targets; the
-  publishing targets are single-handler and check before responding. A future
+  request phase runs; the four form targets in `src/virtual-hosts.js` are
+  `'public'`; the publishing targets are single-handler and check before
+  responding. A future
   chain that legitimately needs to terminate early must move its check earlier
   or change its declaration — that is the conversation the author should be
   forced into, rather than reaching for `skip()`.
@@ -319,6 +343,15 @@ acceptable at all.
   triggers the platform fatal-error policy.
 - The message must name the target and the unsatisfied action, since the whole
   point is fast diagnosis.
+- The invariant governs only the matched target's request phase. Error handlers
+  may call `respondWithHyperviewPage()` directly to render a denial or other
+  failure without declaring or recording another decision. This avoids a
+  recursive authorization requirement for the error representation.
+- Because `HyperviewPageHandler` is a terminal request handler which delegates
+  response commitment to `respondWithHyperviewPage()`, an unsatisfied deferred
+  declaration may be detected after rendering has completed. The invariant is
+  a diagnostic backstop, not a transaction boundary or a guarantee that no
+  response representation was prepared before the programmer error.
 
 **Expected touch points**
 
@@ -338,7 +371,7 @@ Record the actual files changed in the handoff notes.
 - [ ] Recording a decision for a *different* action does not satisfy the declaration.
 - [ ] A fixed declaration is satisfied by the router's own dispatch, with no handler cooperation required.
 - [ ] A request phase ended by `skip()` is still subject to the invariant: a target declaring a deferred decision whose chain skips before evaluating it throws.
-- [ ] The three existing admin `skip()` sites and both `'public'` form handlers still pass unchanged, proving the no-exemption rule costs nothing today.
+- [ ] The three existing admin `skip()` sites and all four `'public'` form targets in `src/virtual-hosts.js` still pass unchanged, proving the no-exemption rule costs nothing today.
 - [ ] `'public'` targets are never subject to the invariant.
 - [ ] The invariant runs before outbound middleware.
 
@@ -371,14 +404,16 @@ Record the actual files changed in the handoff notes.
 
 The admin panel and admin API enforce exactly the permissions they enforce
 today, but through target declarations evaluated by the router instead of gate
-functions hand-placed in `requestHandlers`. The pre-bound gates in
+functions hand-placed in `requestHandlers`. Nine current gate placements use
+six distinct pre-bound decisions. The pre-bound gates in
 `admin-authorization.js` and the middleware role of `requirePermission` are
 retired, leaving one way to express an authorization decision instead of two.
 
 **Scope**
 
-- In: replacing the six `AdminAuthorization.*` gate entries across the admin
-  route files with declarations, retiring `admin-authorization.js` and
+- In: replacing the nine `AdminAuthorization.*` gate entries across the admin
+  route files with declarations, retiring the six exports in
+  `admin-authorization.js` and
   `require-permission.js`, and the corresponding unit tests.
 - Out: any change to which role may do what — this task is behavior-preserving
   for admin, and a diff that changes an effective permission is a bug in the
@@ -388,7 +423,8 @@ retired, leaving one way to express an authorization decision instead of two.
 
 - Every current gate is a fixed decision with a constant resource (see the
   module comment in `admin-authorization.js`, which says so explicitly), so all
-  six migrate to the `{ action, resource }` form with no deferral.
+  nine placements migrate to the `{ action, resource }` form with no deferral.
+  Repeated placements may use the same one of the six distinct decisions.
 - The action and resource strings must be copied verbatim. Any drift silently
   changes who can do what.
 - `requirePermission`'s resolver-function form (`resource` as a callback) has no
@@ -398,9 +434,11 @@ retired, leaving one way to express an authorization decision instead of two.
   invariant.
 - `assertPermission` and `evaluatePermissions` in `src/app/lib/permissions.js`
   stay exactly as they are; they are now reached through the `Authorizer`.
-- Confirm no admin target is left `'public'` by accident during the T1
-  mechanical pass — the T1 migration used `'public'` as a placeholder for
-  "ungated today" and that placeholder must not survive here.
+- Confirm none of the nine currently gated target placements is left `'public'`
+  by accident during the T1 mechanical pass. Targets which are deliberately
+  ungated today, such as invite acceptance and authenticated static page
+  rendering, remain `'public'` in authorization terms so this task does not
+  silently introduce a new permission requirement.
 
 **Expected touch points**
 
@@ -414,9 +452,9 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] All six admin decisions are declared on their targets with verbatim action and resource URNs.
+- [ ] All nine admin gate placements are replaced by declarations with verbatim action and resource URNs, preserving the six distinct decisions.
 - [ ] `admin-authorization.js` and `require-permission.js` are deleted with no remaining importers.
-- [ ] No admin target declares `'public'`.
+- [ ] None of the nine formerly gated target placements declares `'public'`; deliberately ungated admin-named targets remain behaviorally unchanged.
 - [ ] The admin end-to-end suite passes unchanged — no test edits, which is the evidence that behavior was preserved.
 - [ ] Stale comments referring to target-head gates are corrected.
 
@@ -567,10 +605,20 @@ adds a gate the old way.
   identity in a stored record → transaction script. Give the reason — the layer
   that first knows the resource identity — so the rule generalizes instead of
   being three memorized cases.
+- State the terminal presentation boundary explicitly: authorization precedes
+  `HyperviewPageHandler`; neither it nor `respondWithHyperviewPage()` derives or
+  evaluates resource authorization. A handler responsible for a deferred
+  decision must authorize the normalized resource before adding render data or
+  allowing terminal rendering to run.
+- Explain that direct Hyperview facade calls from error handlers render the
+  failure representation outside the target request phase. They do not require
+  a second declaration or decision after the original request was denied.
 - Be explicit about the limits, in the documentation and not only in this plan:
   coverage and vocabulary are machine-checked at boot; completion is checked at
   runtime per request; **scope correctness is not checked and is a test
-  obligation**; and the invariant fires after a write has already landed. Note
+  obligation**; and the invariant fires after handler work, so a write may have
+  landed, another side effect may have occurred, or a terminal representation
+  may already have been rendered. Note
   also that `skip()` can still jump over a deferred check — the invariant turns
   that into a loud failure rather than a silent one, but it does not prevent the
   chain from being written that way. A reader who believes
@@ -593,7 +641,8 @@ Record the actual files changed in the handoff notes.
 **Acceptance criteria**
 
 - [ ] The three-case placement rule and its underlying reason are documented.
-- [ ] The verified/not-verified boundary is stated explicitly, including the `skip()` bypass shape and the after-the-write timing.
+- [ ] The terminal rendering and error-rendering boundaries are documented; neither rendering path is presented as a second authorization operation.
+- [ ] The verified/not-verified boundary is stated explicitly, including the `skip()` bypass shape and the post-handler timing.
 - [ ] The `Authorizer` port is documented alongside the other ports.
 - [ ] No documentation references `requirePermission` or `admin-authorization.js`.
 - [ ] A reader can follow the docs to add a new authorized route without reading this plan.
