@@ -171,7 +171,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
      * Atomically points a build at a non-empty, previously committed closure.
      * @param {string} buildId - Build identifier to assign
      * @param {string} rootHash - Root hash of the closure the build should serve
-     * @returns {Promise<{success: true}>} Successful assignment result
+     * @returns {Promise<{success: true}|{success: false, missingClosure: true}>} Successful assignment result, or a missing closure result
      */
     async assignBuild(buildId, rootHash) {
         assertNonEmptyString(buildId, 'ContentAddressableIndexStore#assignBuild: buildId');
@@ -181,10 +181,9 @@ export default class ContentAddressableIndexStore extends DurableObject {
             'SELECT 1 FROM closure_entries WHERE root_hash = ? LIMIT 1',
             rootHash,
         ).toArray();
-        assert(
-            closureRows.length > 0,
-            `ContentAddressableIndexStore#assignBuild: no closure exists for root hash "${ rootHash }"`,
-        );
+        if (closureRows.length === 0) {
+            return { success: false, missingClosure: true };
+        }
 
         this.#sql.exec(`
             INSERT INTO builds (build_id, root_hash)

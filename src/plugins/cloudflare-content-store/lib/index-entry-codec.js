@@ -1,4 +1,4 @@
-import { assert, assertNonEmptyString, isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
+import { assert, assertArray, assertNonEmptyString, isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
 
 /**
  * @module index-entry-codec
@@ -63,6 +63,7 @@ export function decodeStorageRow(row) {
 export function encodeStorageRow(pathname, tuple) {
     const messagePrefix = `encodeStorageRow: entry "${ pathname }"`;
 
+    assertArray(tuple, `${ messagePrefix } must be a tuple`);
     const [ kind, hash, size, metadata ] = tuple;
 
     // INSERT OR IGNORE also suppresses NOT NULL violations, so validate
@@ -74,9 +75,11 @@ export function encodeStorageRow(pathname, tuple) {
     // both remaining columns are null and neither is checked. Validating them
     // for a tree would reject the arity the tree tuple is defined to have.
     if (kind === 'tree') {
+        assert(tuple.length === 2, `${ messagePrefix } tree tuple must contain exactly 2 elements`);
         return { kind, hash, size: null, metadata: null };
     }
 
+    assert(tuple.length === 4, `${ messagePrefix } blob tuple must contain exactly 4 elements`);
     // Left unchecked, a missing size is stored as null and passes here, then
     // fails much later on read, where the index demands a non-negative integer.
     assert(

@@ -4,6 +4,7 @@ import {
 } from '../../../kixx/errors/mod.js';
 import {
     assert,
+    assertArray,
     assertNonEmptyString,
     isString,
     isPlainObject,
@@ -96,10 +97,12 @@ export default class ContentStore {
      * @param {number} [options.blobReadCacheTtlSeconds=0] - Cloudflare KV cache TTL used for blob reads; raised to this adapter's 60-second minimum when lower
      * @param {number} [options.indexCacheTtlSeconds=0] - TTL used by isolate-local and colo-local index caches
      * @param {Cache} [options.edgeCache] - Cache API implementation; defaults to the Workers runtime cache; helpful for testing
-     * @param {Scheduler} [options.scheduler] - Scheduler used for retry backoff; defaults to the Workers runtime scheduler; helpful for testing
-     */
+    * @param {Scheduler} [options.scheduler] - Scheduler used for retry backoff; defaults to the Workers runtime scheduler; helpful for testing
+    */
     constructor(options) {
-        this.#logger = options.logger.createChild('CloudflareContentStore');
+        const { logger } = options ?? {};
+        assert(logger, 'CloudflareContentStore requires a logger');
+        this.#logger = logger.createChild('CloudflareContentStore');
         this.#kvBindingName = options.kvBindingName;
         this.#durableObjectBindingName = options.durableObjectBindingName;
         this.#wireFormat = options.wireFormat;
@@ -234,6 +237,8 @@ export default class ContentStore {
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      */
     async getIndex(context, buildId) {
+        assertNonEmptyString(buildId, 'ContentStore#getIndex: buildId');
+
         // Cache pending and resolved index promises in runtime memory, scoped
         // to the build which produced them. Freshness is checked lazily on
         // read (against cachedAt) rather than through a scheduled eviction.
@@ -274,6 +279,7 @@ export default class ContentStore {
      */
     async getFile(context, type, _pathname, hash) {
         assertValidType(type, 'getFile', GET_FILE_ACCEPTED_TYPES);
+        assertNonEmptyString(hash, 'ContentStore#getFile: hash');
         const kv = this.#resolveKvStore(context);
 
         const key = this.#buildFileKey(hash);
@@ -297,6 +303,7 @@ export default class ContentStore {
      * @throws {AssertionError} When `blob` is neither a string nor an ArrayBuffer
      */
     async putFile(context, _pathname, hash, blob) {
+        assertNonEmptyString(hash, 'ContentStore#putFile: hash');
         assert(
             isString(blob) || blob instanceof ArrayBuffer,
             'The blob passed into putFile() must be a string or an ArrayBuffer',
@@ -320,6 +327,11 @@ export default class ContentStore {
      */
     async getFiles(context, type, files) {
         assertValidType(type, 'getFiles', GET_FILES_ACCEPTED_TYPES);
+        assertArray(files, 'ContentStore#getFiles: files');
+        for (const [ index, file ] of files.entries()) {
+            assert(isPlainObject(file), `ContentStore#getFiles: files[${ index }] must be a plain object`);
+            assertNonEmptyString(file.hash, `ContentStore#getFiles: files[${ index }].hash`);
+        }
         assert(
             files.length <= KV_BULK_MAX_KEYS,
             `ContentStore#getFiles() accepts at most ${ KV_BULK_MAX_KEYS } files per call; received ${ files.length }`,
@@ -348,6 +360,8 @@ export default class ContentStore {
     async saveIndex(context, rootHash, entries) {
         assertNonEmptyString(rootHash, 'put index requires rootHash to be a non-empty string');
         assert(isPlainObject(entries), 'put index requires entries to be a plain Object');
+        assertValidTupleArity(entries);
+        assertJsonSerializable(entries);
         const result = await this.#callDurableObject(
             context,
             'saveIndex',
@@ -374,6 +388,9 @@ export default class ContentStore {
             'assignBuild',
             (durableObject) => durableObject.assignBuild(buildId, rootHash),
         );
+        if (result.missingClosure) {
+            throw new AssertionError(`ContentStore#assignBuild(): no closure exists for root hash "${ rootHash }"`);
+        }
         if (!result.success) {
             throw new OperationalError(`ContentStore#assignBuild() was unsuccessful: ${ result.message }`);
         }
@@ -400,5 +417,24 @@ export default class ContentStore {
 function assertValidType(value, method, acceptedTypes) {
     if (!acceptedTypes.includes(value)) {
         throw new AssertionError(`Invalid type "${ value }" passed into ContentStore#${ method }`);
+    }
+}
+
+function assertValidTupleArity(entries) {
+    for (const [ pathname, tuple ] of Object.entries(entries)) {
+        const kind = tuple?.[0];
+        const expectedLength = kind === 'tree' ? 2 : 4;
+        assert(
+            Array.isArray(tuple) && tuple.length === expectedLength,
+            `ContentStore#saveIndex(): entry "${ pathname }" must have exactly ${ expectedLength } elements`,
+        );
+    }
+}
+
+function assertJsonSerializable(entries) {
+    try {
+        JSON.stringify(entries);
+    } catch (cause) {
+        throw new AssertionError('ContentStore#saveIndex(): entries must be JSON serializable', { cause });
     }
 }

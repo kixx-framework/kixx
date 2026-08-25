@@ -1,4 +1,8 @@
-import ContentAddressableIndex, { getRootHash, flattenContentTree } from './content-addressable-index.js';
+import ContentAddressableIndex, {
+    assertValidIndexTable,
+    getRootHash,
+    flattenContentTree,
+} from './content-addressable-index.js';
 import ContentSnapshot from './content-snapshot.js';
 import { hashSet, hashString } from './addressing.js';
 import { normalizePathname, isValidPathname } from './content-layout.js';
@@ -149,6 +153,7 @@ export default class ContentAddressableStore {
         // persisted as-is rather than wrapped in a ContentAddressableIndex.
         const files = flattenContentTree(contentTree);
         const entries = await ContentAddressableIndex.buildIndex(files);
+        assertValidIndexTable(entries);
         const hash = getRootHash(entries);
 
         // Order matters and the port makes no atomicity guarantee across the
