@@ -272,7 +272,7 @@ describe('PUT a mixed case include and render it through canonical page metadata
         metadataResult = await putPageMetadata(metadataUrl, {
             version: crypto.randomUUID(),
             baseTemplate: 'default.html',
-            pageTemplate: 'default.html',
+            template: 'default.html',
             page: {
                 title: 'Canonical Include Round-Trip',
                 description: 'End-to-end canonical include identifier coverage',

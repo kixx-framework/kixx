@@ -1,4 +1,5 @@
 {
+    "template": "admin/style-guide/style-guide-wrapper.html",
     "subpage": {
         "title": "Layout"
     },

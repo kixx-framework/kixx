@@ -755,11 +755,11 @@ Templates should render the hidden field directly inside the protected `<form>`:
 
 For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
 
-1. Add or update `pages/<pathname>/page.json` for metadata and page context.
-2. Add or update `pages/<pathname>/page.html` as the page template for route-specific markup.
+1. Add or update `src/pages/<pathname>/page.json` for metadata and page context, including its `template` directive.
+2. Add or update the named template under `src/templates/pages/` for route-specific markup.
 3. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-4. Put page-local supporting template partials next to the page and reference them from `partials` in `page.json`.
-5. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
+4. Put page-local partial sources under `src/templates/pages/` and reference them from `partials` in `page.json`.
+5. Add shared layout changes to `src/templates/base/` or `src/templates/partials/` only when the change should affect multiple pages.
 
 Content-only Hyperview pages need no options: `HyperviewPageHandler()` renders the page published at the request pathname, and should already be configured for the catch-all route (`"*"`) in `virtual-hosts.js`.
 
@@ -771,12 +771,12 @@ For a page that needs route parameters, records loaded through Transaction Scrip
 2. Add a request handler in the appropriate barrel file in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
 3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
 4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewPageHandler(...)`. See [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler).
-5. If the route pattern contains dynamic segments such as `/:id`, pass a stable `pathname` option to `HyperviewPageHandler` so the handler can locate the appropriate `pages/**` directory.
-6. Add or update `pages/<pathname>/page.json` for metadata and page context.
-7. Add or update `pages/<pathname>/page.html` as the page template for route-specific markup.
+5. If the route pattern contains dynamic segments such as `/:id`, pass a stable `pathname` option to `HyperviewPageHandler` so the handler can locate the appropriate `src/pages/**` directory.
+6. Add or update `src/pages/<pathname>/page.json` for metadata and page context, including its `template` directive.
+7. Add or update the named template under `src/templates/pages/` for route-specific markup.
 8. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-9. Put page-local supporting template partials next to the page and reference them from `partials` in `page.json`.
-10. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
+9. Put page-local partial sources under `src/templates/pages/` and reference them from `partials` in `page.json`.
+10. Add shared layout changes to `src/templates/base/` or `src/templates/partials/` only when the change should affect multiple pages.
 
 ### Form-Backed HTML Workflow
 
@@ -841,9 +841,10 @@ For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments,
 
 ## Where Presentation Changes Belong
 
-- `pages/` contains route-specific page metadata, page template, partial templates, and included content files.
-- `templates/base/` contains shared HTML document frames.
-- `templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
+- `src/pages/` contains route-specific page metadata and included content files.
+- `src/templates/pages/` contains page templates and page-local partial source files.
+- `src/templates/base/` contains shared HTML document frames.
+- `src/templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
 - `virtual-hosts.js` declares the virtual hosts and mounts the route subtrees under each one.
 - `routes/` contains the route subtrees themselves — one module per API or UI surface — connecting patterns and HTTP methods to middleware and request handlers.
 - `app/presentation/request-handlers/` contains application request handlers.
@@ -854,56 +855,116 @@ For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments,
 
 ### Hyperview File Layout
 
-Hyperview content is authored in two application directories. As an example:
+Developer-mode Hyperview content is authored under `src/`. The source layout is
+translated into the immutable storage layout used by `ContentSnapshot`:
+
+| Storage namespace | Developer source | Behavior |
+| --- | --- | --- |
+| `/pages/<pathname>/page.json` | `src/pages/<pathname>/page.json` | Direct file |
+| `/pages/<pathname>/<template basename>` | `src/templates/pages/<template>` | Relocated from the template named by the leaf `page.json` |
+| `/pages/<pathname>/__page-includes-bundle` | Files named by leaf `page.json` `includes` | Assembled JSON bundle |
+| `/pages/<pathname>/__page-partials-bundle` | Files named by leaf `page.json` `partials` | Assembled JSON bundle |
+| `/templates/__template-partials-bundle` | `src/templates/partials/**` | Assembled JSON bundle |
+| `/templates/__base-templates-bundle` | `src/templates/base/**` | Assembled JSON bundle |
+| `/assets/**` | `src/static-assets/**` | Direct file |
+| `/emails/<pathname>/__email-assets` | `src/emails/<pathname>/email.json` and named files | Assembled JSON bundle |
+
+For example:
 
 ```text
-pages/
-├── page.json
-├── template.html
-└── blog/
-    ├── page.json
-    └── hello-world/
-        ├── page.json
-        └── article.md
-
-templates/
-├── base/
-│   ├── article.html
-│   └── website.html
-└── partials/
-    └── website/
-        └── header.html
+src/
+├── pages/
+│   ├── page.json
+│   ├── intro.md
+│   └── blog/
+│       └── hello-world/
+│           └── page.json
+├── static-assets/
+│   └── images/
+│       └── logo.svg
+├── emails/
+│   └── welcome/
+│       ├── email.json
+│       ├── message.html
+│       └── message.txt
+└── templates/
+    ├── pages/
+    │   └── article.html
+    ├── base/
+    │   └── website.html
+    └── partials/
+        └── website-header.html
 ```
 
-Use `pages/` for route-specific page metadata and text based content; `page.json` contains root or directory-level page data including a manifest for page specific partial templates and included content.
+Use `src/pages/` for route-specific metadata and included text content.
+`page.json` names page templates and page-specific partial sources under
+`src/templates/pages/`; template source files do not live beside page metadata.
+Use `src/templates/base/` and `src/templates/partials/` for shared templates.
+Static assets belong under `src/static-assets/`.
 
-Use `templates/` for page specific and shared templates.
+An email directory contains `email.json` and the files it names. The HTML and
+text representations are independent; either may be omitted. `partials` lists
+template ids and filenames in the same email directory. `contextData` supplies
+static render data:
 
-- `templates/base/` contains base templates.
-- `templates/partials/` contains shared partial templates.
+```json
+{
+    "contextData": {
+        "subject": "Welcome",
+        "product": "Kixx"
+    },
+    "htmlTemplate": {
+        "id": "welcome.html",
+        "filename": "message.html"
+    },
+    "textTemplate": {
+        "id": "welcome.txt",
+        "filename": "message.txt"
+    },
+    "partials": [
+        {
+            "id": "signature.html",
+            "filename": "signature.html"
+        }
+    ]
+}
+```
+
+The existing `src/public/` directory is not part of this source-backed content
+layout. Its deprecation is intentionally deferred.
 
 ### Page Context Data
 
 When Hyperview renders a page, it loads page metadata for the requested pathname's ancestor directories, and leaf page metadata for the requested pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview attempts to load and merge:
 
-- `pages/page.json`
-- `pages/blog/page.json`
-- `pages/blog/reviews/page.json`
-- `pages/blog/reviews/music/page.json`
-- `pages/blog/reviews/music/led-zeppelin/page.json`
+- `src/pages/page.json`
+- `src/pages/blog/page.json`
+- `src/pages/blog/reviews/page.json`
+- `src/pages/blog/reviews/music/page.json`
+- `src/pages/blog/reviews/music/led-zeppelin/page.json`
 
 Root and ancestor files are optional, but the final leaf `page.json` must exist or the request is treated as not found. More specific page data overrides earlier page data. Runtime response props, when present, are merged last and override all static page data.
 
-Optional top-level page data fields include:
+Top-level build directives include:
 
-- `partials`: Loads additional partial templates from the current page directory.
-- `includes`: Loads additional text files from the current page directory.
+- `template`: Names the page template relative to `src/templates/pages/`.
+- `partials`: Lists page-local partial ids and template filenames relative to `src/templates/pages/`.
+- `includes`: Maps context names to text files in the current page directory.
+
+Build directives direct source assembly and are not exposed in the assembled template context. Runtime response props named `template` or `partials` remain available because response props are merged after the published directives are removed. The `includes` directive is replaced by the resolved content under `includes`.
 
 ```json
 {
+    "template": "blog/article.html",
     "partials": [
-        "widget-list-item.html",
-        "feed-item.xml"
+        {
+            "id": "widget-list-item.html",
+            "filename": "blog/widget-list-item.html"
+        },
+        {
+            "id": "feed-item.xml",
+            "filename": "blog/feed-item.xml"
+        }
     ],
     "includes": {
         "intro": { "filename": "intro.md" },

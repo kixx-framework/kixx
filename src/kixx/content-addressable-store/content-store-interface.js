@@ -57,6 +57,14 @@
  * hint, not part of the key, and deduplication across pathnames is a guarantee
  * of this port rather than an accident of one adapter.
  *
+ * ## Developer-mode exception
+ * A local developer adapter MAY bend three rules which depend on immutable
+ * publication: it may address reads by `pathname` instead of `hash`, reject all
+ * writes, and ignore `buildId`. Mutable source files cannot be addressed by a
+ * stale hash, publishing through a source-backed server is a configuration bug,
+ * and the local disk is the only closure. This exception is restricted to local
+ * development; deployed adapters preserve the full contract above.
+ *
  * ## Explicit typing on reads
  * The store records no type metadata, so a caller declares the representation it
  * wants on every read. There is no inference, and the accepted set differs by
