@@ -691,9 +691,9 @@ export default class CreateApiTokenForm {
 
 ## CSRF-Protected HTML Forms
 
-Use `app/presentation/lib/csrf.js` for browser HTML forms that mutate state or establish authentication. CSRF validation belongs in request handlers before constructing a Form and before calling any Transaction Script. Transaction Scripts should continue to receive already-validated Forms and should not be concerned with CSRF cookies or hidden fields.
+Use `app/presentation/lib/csrf.js` for browser HTML forms that mutate state or establish authentication. CSRF validation belongs in request handlers before constructing a Form and before calling any Transaction Script.
 
-CSRF tokens are stateless: `app/presentation/lib/csrf-token-signer.js` signs and verifies an HMAC envelope binding a browser-side `sid` cookie value and an expiration, so validating a submission touches no storage. Renders set the `sid` on every response; the value is not sensitive on its own since forging a token for it still requires the deploy-time signing secret.
+CSRF tokens are stateless: `app/presentation/lib/csrf-token-signer.js` signs and verifies an HMAC envelope binding a browser-side `sid` cookie value and an expiration, so validating a submission touches no storage. Renders set the `sid` on every response since the value is not sensitive on its own.
 
 On GET handlers, render the form through `getCsrfFormContext()`. The helper calls `form.getFormContext(context, error)`, mints a fresh CSRF token, sets the browser CSRF cookie, and returns the usual form context with `form.csrf.fieldName` and `form.csrf.token` added:
 
@@ -709,7 +709,7 @@ export async function getCreateBugForm(context, request, response) {
 }
 ```
 
-On POST handlers, call `validateCsrfFormData()` before constructing the Form. That helper owns `request.formData()` because request bodies are one-shot; do not call `request.formData()` again after it returns, and do not reach for `request.json()`, `request.text()`, or `request.arrayBuffer()` either — any of them reads the same consumed body. The second read raises an assertion failure, which the router treats as a programmer error. Missing, expired, or mismatched CSRF data throws an expected HTTP error before domain logic runs.
+On POST handlers, call `validateCsrfFormData()` before constructing the Form. That helper owns `request.formData()` because request bodies are one-shot; do not call `request.formData()` again after it returns, and do not reach for `request.json()`, `request.text()`, or `request.arrayBuffer()` either — any of them reads the same consumed body. Missing, expired, or mismatched CSRF data throws an expected HTTP error before domain logic runs.
 
 ```js
 import { validateCsrfFormData } from '../lib/csrf.js';
@@ -730,9 +730,9 @@ On validation or domain errors that re-render the form, call `getCsrfFormContext
 
 The CSRF cookie is browser-wide, so a render does not replace its `sid`: each render mints a fresh token bound to the existing `sid`, and a submission remains valid for as long as the token's expiration allows — it is not spent on use. Opening a second tab, reloading, or rendering several forms on one page therefore leaves every other open form submittable, and a resubmission (e.g. a back-button retry) is accepted rather than rejected. Rotating the signing secret invalidates every form currently open.
 
-A token can still be rejected: the cookie is missing, the submitted field is missing, the token is forged, it is expired, or it was minted for a different `sid` (for example after the cookie was cleared or replaced). Left uncaught, that `ForbiddenError` reaches the route error handler and replaces the whole page with a generic error page, costing the operator their place. Where the surface can recover, catch `error.code === 'InvalidCsrfTokenError'` and hand back a usable page instead: re-render inline with a fresh token when the route owns a page, or redirect to the page that does and carry a notice code (see `admin-invites.js`, which does both).
+A token can still be rejected: the cookie is missing, the submitted field is missing, the token is forged, it is expired, or it was minted for a different `sid` (for example after the cookie was cleared or replaced). Left uncaught, that `ForbiddenError` reaches the route error handler and replaces the whole page with a generic error page, costing the operator their place. Where the surface can recover, catch `error.code === 'InvalidCsrfTokenError'` and hand back a usable page instead: re-render inline with a fresh token when the route owns a page, or redirect to the page that does and carry a notice code.
 
-Templates render the hidden field directly inside the protected `<form>`:
+Templates should render the hidden field directly inside the protected `<form>`:
 
 ```html
 {{#if form.csrf}}
@@ -742,27 +742,32 @@ Templates render the hidden field directly inside the protected `<form>`:
 
 ## Common Task Recipes
 
-### Content-Only Hyperview Page
+### Content-Only Page
 
 For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
 
 1. Add or update `pages/<pathname>/page.json` for metadata and page context.
-2. Add or update `templates/pages/<pathname>/page.html` for route-specific markup.
+2. Add or update `pages/<pathname>/page.html` as the page template for route-specific markup.
 3. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-4. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
+4. Put page-local supporting template partials next to the page and reference them from `partials` in `page.json`.
+5. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
 
 Content-only Hyperview pages need no options: `HyperviewPageHandler()` renders the page published at the request pathname, and should already be configured for the catch-all route (`"*"`) in `virtual-hosts.js`.
 
-### Dynamic Hyperview Page
+### Dynamic Page
 
 For a page that needs route parameters, records loaded through Transaction Scripts, session state, or other request-specific data:
 
 1. Add or update the route in `virtual-hosts.js`.
-2. Add a request handler in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
+2. Add a request handler in the appropriate barrel file in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
 3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
 4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewPageHandler(...)`. See [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler).
-5. If the route pattern contains dynamic segments such as `/:id`, pass a stable `pathname` option to `HyperviewPageHandler` so the handler can locate the appropriate `pages/**` and `templates/pages/**` directories, even when the path contains dynamic path segments.
-6. Add the matching `pages/<stable-pathname>/page.json` and `templates/pages/<stable-pathname>/page.html` files.
+5. If the route pattern contains dynamic segments such as `/:id`, pass a stable `pathname` option to `HyperviewPageHandler` so the handler can locate the appropriate `pages/**` directory.
+6. Add or update `pages/<pathname>/page.json` for metadata and page context.
+7. Add or update `pages/<pathname>/page.html` as the page template for route-specific markup.
+8. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
+9. Put page-local supporting template partials next to the page and reference them from `partials` in `page.json`.
+10. Add shared layout changes to `/templates/base/` or `templates/partials/` only when the change should affect multiple pages.
 
 ### Form-Backed HTML Workflow
 
@@ -779,45 +784,8 @@ For an application API endpoint that accepts or returns JSON:API documents:
 
 1. Add a route subtree or leaf route in `virtual-hosts.js` and attach `jsonApiErrorHandler` from `app/presentation/error-handlers/json-api-error-handler.js` at the route level. This keeps expected HTTP errors serialized as JSON:API `errors` documents for the whole API surface while unexpected errors continue to propagate to the router fallback.
 2. In the request handler, call `assertJsonApiContentType(request)` before parsing a JSON:API request body. JSON:API requests must use `Content-Type: application/vnd.api+json`; optional media-type parameters are ignored by the helper.
-3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the whole returned resource into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script. `fromJsonApi(resource)` always takes the resource and reads `resource.attributes` itself — the form owns the mapping from wire shape to domain shape, so a handler never destructures on its behalf.
+3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the whole returned resource into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script. `fromJsonApi(resource)` always takes the resource and reads `resource.attributes` itself — the form owns the mapping from wire shape to domain shape. If destructuring the JSON API payload is trivial, it can be done in the request handler, otherwise use an API form.
 4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
-5. Do not add a Hyperview request handler after an API handler that commits a JSON response, so the committed JSON response is terminal for the target. Just return the JSON response — the outbound phase still runs either way.
-
-```js
-import {
-    JSON_API_CONTENT_TYPE,
-    assertJsonApiContentType,
-    jsonApiResource,
-    parseJsonApiResource,
-} from '../lib/json-api.js';
-import ExampleApiForm from '../forms/example-api-form.js';
-import { createExample } from '../../transaction-scripts/examples/create-example.js';
-
-export async function exampleJsonApiHandler(context, request, response) {
-    assertJsonApiContentType(request);
-
-    const resource = await parseJsonApiResource(request, 'Example');
-    const form = ExampleApiForm.fromJsonApi(resource);
-    form.validate();
-
-    const example = await createExample(context, form);
-
-    // No Hyperview handler follows this target, so the committed JSON response
-    // is terminal. Returning normally (without skip()) lets route outbound
-    // middleware still run.
-    return response.respondWithJSON(
-        201,
-        jsonApiResource({
-            type: 'Example',
-            id: example.id,
-            attributes: {
-                title: example.title,
-            },
-        }),
-        { contentType: JSON_API_CONTENT_TYPE },
-    );
-}
-```
 
 ### Serving Static Files
 
@@ -864,17 +832,16 @@ For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments,
 
 ## Where Presentation Changes Belong
 
-- `pages/` contains route-specific page metadata, and included content files.
+- `pages/` contains route-specific page metadata, page template, partial templates, and included content files.
 - `templates/base/` contains shared HTML document frames.
 - `templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
-- `templates/pages/` contains templates for specific pages.
 - `virtual-hosts.js` declares the virtual hosts and mounts the route subtrees under each one.
 - `routes/` contains the route subtrees themselves — one module per API or UI surface — connecting patterns and HTTP methods to middleware and request handlers.
 - `app/presentation/request-handlers/` contains application request handlers.
 - `app/presentation/middleware/` contains application inbound and outbound middleware.
 - `app/presentation/error-handlers/` contains application error handlers.
 - `app/presentation/forms/` contains form classes used to parse and validate inbound payloads.
-- `app/presentation/lib/` contains cross-cutting presentation helpers that are neither handlers, middleware, error handlers, nor forms — CSRF token handling, rate limiting, JSON:API parsing and serialization, session cookies, pagination, request body reading, and HTML error page rendering. Put a module here when more than one handler or middleware needs it and it belongs to the presentation layer rather than to a Transaction Script.
+- `app/presentation/lib/` contains cross-cutting presentation helpers that are neither handlers, middleware, error handlers, nor forms. Put a module here when more than one handler or middleware needs it and it belongs to the presentation layer rather than to a Transaction Script.
 
 ### Hyperview File Layout
 
@@ -920,22 +887,23 @@ Root and ancestor files are optional, but the final leaf `page.json` must exist 
 
 Optional top-level page data fields include:
 
-- `baseTemplate`: Overrides the default base template for this page. This value is a filename relative to `templates/base/`.
-- `pageTemplate`: Overrides the default page template filename. This value is a filename relative to `templates/pages/`.
-- `includes`: Loads additional text files from the current page directory under `application/pages/`.
-
-Included files can be used as raw text or rendered as mini templates against the assembled page data:
+- `partials`: Loads additional partial templates from the current page directory.
+- `includes`: Loads additional text files from the current page directory.
 
 ```json
 {
+    "partials": [
+        "widget-list-item.html",
+        "feed-item.xml"
+    ],
     "includes": {
         "intro": { "filename": "intro.md" },
-        "sidebar": { "filename": "sidebar.html", "template": true }
+        "sidebar": { "filename": "sidebar.html" }
     }
 }
 ```
 
-When a `page` object exists, Hyperview fills several metadata defaults:
+Hyperview creates a `page` object and fills several metadata defaults:
 
 - `page.pathname` is the canonical lower-case request URL pathname.
 - `page.canonical_url` defaults to the canonical lower-case request URL without query string or hash.
@@ -957,6 +925,6 @@ When a `page` object exists, Hyperview fills several metadata defaults:
 
 ### Hyperview Page-Data JSON Response
 
-Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request only when the pathname ends in `.json` (matched case-insensitively). There is no `Accept` header negotiation: the suffix is explicit, and it cannot be triggered by whatever a browser happens to send.
+Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request only when the pathname ends in `.json` (matched case-insensitively).
 
 This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data for development and debugging, but it is not the contract for application API endpoints.
