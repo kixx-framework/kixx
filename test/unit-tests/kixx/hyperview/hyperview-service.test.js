@@ -64,10 +64,13 @@ function makeContentSnapshot(spec) {
         globalPartialsHash = 'global-partials-hash-1',
         baseTemplates = null,
         baseTemplatesHash = 'base-templates-hash-1',
+        staticAssets = null,
+        staticAssetsHash = 'static-assets-hash-1',
         emails = {},
     } = spec ?? {};
 
     const calls = [];
+    let listStaticAssetsCalls = 0;
 
     function record(method, context, pathname) {
         calls.push({ method, context, pathname });
@@ -75,6 +78,10 @@ function makeContentSnapshot(spec) {
 
     return {
         calls,
+
+        get listStaticAssetsCalls() {
+            return listStaticAssetsCalls;
+        },
 
         callsTo(method) {
             return calls.filter((entry) => entry.method === method);
@@ -108,6 +115,18 @@ function makeContentSnapshot(spec) {
                 return null;
             }
             return makeJsonObject('/templates/base-templates.json', baseTemplatesHash, baseTemplates);
+        },
+
+        statStaticAssets() {
+            if (!staticAssets) {
+                return null;
+            }
+            return makeStats('/assets', staticAssetsHash);
+        },
+
+        listStaticAssets() {
+            listStaticAssetsCalls += 1;
+            return staticAssets ?? [];
         },
 
         async batchGetPageAssets(context, pathname) {
@@ -739,6 +758,37 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
+    describe('static asset context', ({ it }) => {
+        it('builds one asset map per assets tree hash across renders', async () => {
+            const spec = makeDefaultSpec();
+            spec.staticAssets = [ { pathname: '/site.css', hash: 'asset-hash' } ];
+            const { service, snapshot } = makeSubject(spec);
+
+            await renderPageToResponse(service, CONTEXT, makeRequest(), new ServerResponse(), makeFullPageOptions());
+            await renderPageToResponse(service, CONTEXT, makeRequest(), new ServerResponse(), makeFullPageOptions());
+
+            assertEqual(1, snapshot.listStaticAssetsCalls);
+        });
+
+        it('resolves assetUrl in an each section and a partial', async () => {
+            const spec = makeDefaultSpec();
+            spec.staticAssets = [ { pathname: '/site.css', hash: 'asset-hash' } ];
+            spec.pages['/'].pageData = [ { values: [ { path: '/site.css' } ] } ];
+            spec.pages['/'].template = '{{#each values as |item| }}{{ assetUrl assets item.path }}{{/each}}{{> asset }}';
+            spec.pages['/'].partials = [ { id: 'asset', source: '{{ assetUrl assets "/site.css" }}' } ];
+            spec.baseTemplates = [ { id: 'main', source: '{{{ body }}}' } ];
+            const { service } = makeSubject(spec);
+
+            const result = await service.renderPage(CONTEXT, {
+                ...makeFullPageOptions(),
+                props: {},
+                url: makeRequest().url,
+            });
+
+            assertEqual('/assets/asset-hash/site.css/assets/asset-hash/site.css', result.hypertext);
+        });
+    });
+
     describe('renderPage() page cache', ({ it }) => {
 
         async function renderForCacheKey(options, spec) {
@@ -804,6 +854,17 @@ describe('HyperviewService', ({ describe }) => {
 
             const spec = makeDefaultSpec();
             spec.globalPartialsHash = 'global-partials-hash-2';
+            const after = await renderForCacheKey(makeFullPageOptions(), spec);
+
+            assertNotEqual(before, after);
+        });
+
+        it('changes the key when only the static assets tree changes', async () => {
+            const before = await renderForCacheKey(makeFullPageOptions());
+
+            const spec = makeDefaultSpec();
+            spec.staticAssets = [ { pathname: '/site.css', hash: 'asset-hash' } ];
+            spec.staticAssetsHash = 'static-assets-hash-2';
             const after = await renderForCacheKey(makeFullPageOptions(), spec);
 
             assertNotEqual(before, after);

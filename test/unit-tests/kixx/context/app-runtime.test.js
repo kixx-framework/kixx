@@ -141,8 +141,8 @@ describe('AppRuntime', ({ describe }) => {
             assertMatches('server', caught.message);
         });
 
-        it('throws an AssertionError for malformed or reserved Build IDs', () => {
-            for (const buildId of [ '', 'build/child', 'dev' ]) {
+        it('throws an AssertionError for malformed Build IDs', () => {
+            for (const buildId of [ '', 'build/child' ]) {
                 const caught = catchError(() => new AppRuntime({
                     server: {},
                     build: { id: buildId },

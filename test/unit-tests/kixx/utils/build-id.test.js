@@ -3,7 +3,6 @@ import { assert, assertEqual } from 'kixx-assert';
 
 import {
     isValidBuildId,
-    NO_BUILD_ID_SEGMENT,
     validateBuildId,
 } from '../../../../src/kixx/utils/build-id.js';
 
@@ -27,14 +26,9 @@ describe('Build ID utilities', ({ it }) => {
         }
     });
 
-    it('rejects only the exact no-build placeholder as reserved', () => {
-        assertEqual(false, isValidBuildId(NO_BUILD_ID_SEGMENT));
-
-        const caught = catchError(() => validateBuildId(NO_BUILD_ID_SEGMENT));
-        assert(caught, 'expected an error to be thrown');
-        assertEqual('BadRequestError', caught.name);
-        assertEqual('ReservedBuildId', caught.code);
-        assertEqual(true, isValidBuildId('DEV'));
+    it('accepts a Build ID formerly reserved by the static file store', () => {
+        assertEqual(true, isValidBuildId('dev'));
+        assertEqual('dev', validateBuildId('dev'));
     });
 });
 

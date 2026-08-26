@@ -4,8 +4,8 @@ import ContentAddressableIndex, {
     flattenContentTree,
 } from './content-addressable-index.js';
 import ContentSnapshot from './content-snapshot.js';
-import { hashSet, hashString } from './addressing.js';
-import { normalizePathname, isValidPathname } from './content-layout.js';
+import { hashSet, hashString, isValidHash } from './addressing.js';
+import { getStaticAssetPath, normalizePathname, isValidPathname } from './content-layout.js';
 import { assert } from '../assertions/mod.js';
 
 /**
@@ -24,12 +24,14 @@ import { assert } from '../assertions/mod.js';
  * actually changed, then moves a single pointer — the build id — to name the new
  * closure. Rolling back moves that pointer back and re-uploads nothing.
  *
- * This class owns two operations against that model and nothing else:
+ * This class owns three operations against that model:
  *
  * - {@link ContentAddressableStore#commitChanges} publishes a closure and points
  *   a build id at it.
  * - {@link ContentAddressableStore#openSnapshot} resolves a build id to the
  *   closure it names and returns a {@link ContentSnapshot} for reading it.
+ * - {@link ContentAddressableStore#getStaticAssetByHash} reads an asset blob by
+ *   content address without resolving a closure.
  *
  * Everything about *how* content is persisted lives behind the
  * {@link ContentStoreInterface} port supplied at initialization, so the same
@@ -40,7 +42,10 @@ import { assert } from '../assertions/mod.js';
  * mid-request reassigns the build pointer, but an in-flight render keeps reading
  * the index it opened with, so it can never compose a page from a mix of two
  * publications. This is the reason reads are not exposed as methods on this
- * class: there would be no request-scoped boundary to pin them to.
+ * class: there would be no request-scoped boundary to pin them to. The sole
+ * exception is a direct static-asset blob read by its content address. That
+ * read is deliberately closure-independent, so putting it on a snapshot would
+ * force an index read solely to bypass the index.
  *
  * ## Lifecycle
  * The instance is registered as a service before the store it depends on is
@@ -129,6 +134,35 @@ export default class ContentAddressableStore {
         const entries = await this.#store.getIndex(context, buildId);
         const index = new ContentAddressableIndex(entries);
         return new ContentSnapshot(this.#store, index);
+    }
+
+    /**
+     * Reads a static asset blob directly by content hash, without loading an
+     * index or resolving the running build's closure.
+     * @param {Object} context - Request or execution context, passed through to the store
+     * @param {string} pathname - Logical asset pathname, used by pathname-backed adapters
+     * @param {string} hash - Content address of the blob to read
+     * @returns {Promise<ReadableStream|null>} The blob stream, or null when the blob is absent
+     * @throws {AssertionError} When pathname or hash is invalid, or a present blob is not a stream
+     * @throws {OperationalError} When the backing store fails
+     */
+    async getStaticAssetByHash(context, pathname, hash) {
+        assert(isValidPathname(pathname), 'getStaticAssetByHash() requires a valid pathname');
+        assert(isValidHash(hash), 'getStaticAssetByHash() requires a valid hash');
+
+        const stream = await this.#store.getFile(
+            context,
+            'stream',
+            getStaticAssetPath(pathname),
+            hash,
+        );
+
+        assert(
+            stream === null || stream instanceof ReadableStream,
+            `The static asset hash "${ hash }" references unreadable content`,
+        );
+
+        return stream;
     }
 
     /**

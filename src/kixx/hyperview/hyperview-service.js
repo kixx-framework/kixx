@@ -4,6 +4,7 @@ import * as templating from '../templating/mod.js';
 import formatDate from './helpers/format-date.js';
 import markup from './helpers/markup.js';
 import truncate from './helpers/truncate.js';
+import assetUrl from './helpers/asset-url.js';
 import deepMerge from '../utils/deep-merge.js';
 import {
     assert,
@@ -127,6 +128,7 @@ export default class HyperviewService {
         [ 'formatDate', formatDate ],
         [ 'markup', markup ],
         [ 'truncate', truncate ],
+        [ 'assetUrl', assetUrl ],
     ]);
 
     // Immutable partial maps, indexed by their content bundle etags.
@@ -140,6 +142,11 @@ export default class HyperviewService {
 
     // Immutable compiled page templates, indexed by normalized template filepath.
     #pageTemplates = new Map();
+
+    // Asset maps are immutable for one /assets tree hash, just like compiled
+    // template bundles. Keep a few generations so in-flight old snapshots can
+    // still render the URL shape matching their own closure.
+    #staticAssets = new Map();
 
     #useTemplateCache;
     #usePageCache;
@@ -398,7 +405,22 @@ export default class HyperviewService {
     // Reads every asset one page render needs in a single bulk fetch, compiles
     // its templates, and hands the pieces to HyperviewPage for context assembly.
     // Resolves null when there is no renderable page at this pathname.
-    async #getPage(context, content, url, pathname, responseProps) {
+    #getStaticAssets(content) {
+        const stats = content.statStaticAssets();
+        const cacheKey = stats?.hash ?? '';
+
+        if (this.#staticAssets.has(cacheKey)) {
+            return getCachedEntry(this.#staticAssets, cacheKey);
+        }
+
+        const assets = Object.fromEntries(content.listStaticAssets().map(({ pathname, hash }) => {
+            return [ pathname, hash ];
+        }));
+
+        return setCachedEntry(this.#staticAssets, cacheKey, assets, MAX_VERSIONED_TEMPLATE_CACHE_ENTRIES);
+    }
+
+    async #getPage(context, content, url, pathname, responseProps, assets) {
         const page = await content.batchGetPageAssets(context, pathname);
 
         // A page directory can carry metadata with no template of its own; an ancestor
@@ -423,6 +445,7 @@ export default class HyperviewService {
             url,
             pathname,
             responseProps,
+            assets,
             pageDataSources,
             template,
             partials,
@@ -603,7 +626,8 @@ export default class HyperviewService {
         // exactly one request-scoped snapshot.
         const content = await this.#contentAddressableStore.openSnapshot(context);
 
-        const page = await this.#getPage(context, content, url, pathname, props);
+        const assets = this.#getStaticAssets(content);
+        const page = await this.#getPage(context, content, url, pathname, props, assets);
 
         if (!page) {
             throw new NotFoundError(`No page found for URL "${ url.href }"`, {
@@ -633,7 +657,10 @@ export default class HyperviewService {
             // bundles layered over it, so an edit to a global partial would
             // otherwise keep serving the old output.
             const partials = content.statGlobalTemplatePartials();
-            let hash = await this.#contentAddressableStore.hashString(`${ page.hash }#${ partials?.hash ?? '' }`);
+            const staticAssets = content.statStaticAssets();
+            let hash = await this.#contentAddressableStore.hashString(
+                `${ page.hash }#${ partials?.hash ?? '' }#${ staticAssets?.hash ?? '' }`,
+            );
 
             // Optionally add the hash of the canonicalized props object.
             if (includePropsInCacheKey) {

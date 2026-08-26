@@ -11,6 +11,7 @@ import {
     hashTree,
     hashSet,
     hashString,
+    isValidHash,
     canonicalize,
     compareStrings,
 } from '../../../../src/kixx/content-addressable-store/addressing.js';
@@ -65,6 +66,18 @@ describe('addressing', ({ describe }) => {
 
         it('returns 0 for equal strings', () => {
             assertEqual(0, compareStrings('a', 'a'));
+        });
+    });
+
+    describe('isValidHash()', ({ it }) => {
+        it('accepts a well-formed content digest', () => {
+            assertEqual(true, isValidHash('ny2axhh7wn5jrhffittlw6akfq'));
+        });
+
+        it('rejects malformed values', () => {
+            for (const value of [ '', '.', '..', 'a/b', 'a\\b', 'a\u0000b' ]) {
+                assertEqual(false, isValidHash(value));
+            }
         });
     });
 

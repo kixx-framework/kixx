@@ -22,6 +22,7 @@ import {
  *    everything beneath it.
  * 2. The page's includes, exposed as `includes`.
  * 3. The runtime response props supplied by request handlers.
+ * 4. The reserved `assets` map generated from the content snapshot.
  *
  * Metadata and props are deep-copied before merging, so nothing here can reach
  * back and mutate a caller's data or a cached content object.
@@ -47,6 +48,7 @@ export default class HyperviewPage {
      * @param {URL} spec.url - Request URL, used for the canonical URL and href defaults
      * @param {string} spec.pathname - Canonical page pathname, used as the page identity and in template error messages
      * @param {Object} spec.responseProps - Runtime values merged last, overriding all published page data
+     * @param {Object<string, string>} spec.assets - Reserved logical pathname-to-hash static asset map
      * @param {Array<Object>} spec.pageDataSources - Parsed page metadata ordered from the broadest ancestor to the leaf
      * @param {function(Object, Map): string} spec.template - Compiled page template
      * @param {Map<string, Function>} spec.partials - Compiled page-local partials, layered over the global partials at render time
@@ -59,6 +61,7 @@ export default class HyperviewPage {
             url,
             pathname,
             responseProps,
+            assets,
             pageDataSources,
             template,
             partials,
@@ -79,10 +82,11 @@ export default class HyperviewPage {
             pageDataSources,
             includes,
             responseProps,
+            assets,
         ));
     }
 
-    #mergeSources(originalSources, includes, responseProps) {
+    #mergeSources(originalSources, includes, responseProps, assets) {
         const pageContext = {};
 
         // The sources belong to content objects which may be shared across
@@ -106,6 +110,10 @@ export default class HyperviewPage {
         // Clone the response.props so we don't mutate the nested data structures
         // as part of the page context hydration process.
         deepMerge(pageContext, structuredClone(responseProps));
+
+        // Published data and runtime props must not choose asset URLs. The map
+        // comes from this snapshot's index and is always the final merge layer.
+        pageContext.assets = assets;
 
         // Compile the title and description templates here, but do not render
         // them: they interpolate the merged context, which is not finished until
