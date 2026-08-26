@@ -1,4 +1,5 @@
 {
+    "template": "login/admin/new/page.html",
     "subpage": {
         "title": "Login"
     }

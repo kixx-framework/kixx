@@ -1,4 +1,5 @@
 {
+    "template": "users/admin/new/page.html",
     "subpage": {
         "title": "New Account"
     }
