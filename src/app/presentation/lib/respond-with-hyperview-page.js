@@ -25,7 +25,11 @@ export default async function respondWithHyperviewPage(context, request, respons
         options.skipBaseRender = true;
     }
 
-    const { responseOptions, ...renderOptions } = options;
+    const { responseOptions: configuredResponseOptions, ...renderOptions } = options;
+    const responseOptions = {
+        ...configuredResponseOptions,
+        contentType: configuredResponseOptions?.contentType ?? 'text/html',
+    };
     const hyperviewService = context.getService('HyperviewService');
     const result = await hyperviewService.renderPage(context, {
         ...renderOptions,

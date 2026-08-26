@@ -66,6 +66,7 @@ describe('respondWithHyperviewPage', ({ it }) => {
         assertEqual(request.url, calls[0].options.url);
         assertEqual(response.props, calls[0].options.props);
         assertEqual('<main>Account</main>', response.body);
+        assertEqual('text/html; charset=utf-8', response.headers.get('content-type'));
     });
 
     it('does not place rendering controls in template props', async () => {
@@ -79,6 +80,20 @@ describe('respondWithHyperviewPage', ({ it }) => {
         assertEqual('/account', calls[0].options.pathname);
         assertEqual(undefined, response.props.pathname);
         assertEqual('Account', response.props.page.title);
+    });
+
+    it('preserves an explicit hypertext content type', async () => {
+        const { context } = makeSubject();
+        const response = new ServerResponse();
+
+        await respondWithHyperviewPage(
+            context,
+            makeRequest(),
+            response,
+            { responseOptions: { contentType: 'application/xml' } },
+        );
+
+        assertEqual('application/xml; charset=utf-8', response.headers.get('content-type'));
     });
 
     it('serializes a page-context result without passing response options to the service', async () => {
