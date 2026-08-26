@@ -47,7 +47,7 @@ describe('DeveloperContentStore', ({ it }) => {
         assert(home.template, 'expected root template');
         assert(home.includes, 'expected root includes');
         assert(copyFields.template, 'expected copy-fields template');
-        assertMatches('style-guide-wrapper.html', copyFields.template.pathname);
+        assertEqual('/pages/admin/style-guide/copy-fields/page.html', copyFields.template.pathname);
     });
 
     it('rescans edits without recreating the store', async () => {

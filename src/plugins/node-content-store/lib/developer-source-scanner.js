@@ -49,8 +49,8 @@ export default class DeveloperSourceScanner {
 
     /**
      * @param {Object} options - Source roots and optional filesystem implementation
-     * @param {string} options.pagesDirectory - Root of page metadata and includes
-     * @param {string} options.templatesDirectory - Root containing pages, partials, and base templates
+     * @param {string} options.pagesDirectory - Root of page metadata, templates, partials, and includes
+     * @param {string} options.templatesDirectory - Root containing shared partials and base templates
      * @param {string} options.staticAssetsDirectory - Root of directly served static assets
      * @param {string} options.emailsDirectory - Root of email manifests and assets
      * @param {Object} [options.fileSystem] - Promise-based filesystem API used by tests
@@ -120,7 +120,7 @@ export default class DeveloperSourceScanner {
 
             if (template) {
                 const templateFile = await this.#getNamedFile(
-                    path.join(this.#templatesDirectory, 'pages'),
+                    path.dirname(page.file.filepath),
                     template,
                 );
                 const filename = path.posix.basename(template);
@@ -136,7 +136,7 @@ export default class DeveloperSourceScanner {
             const sortedPartials = partials.slice().sort((left, right) => compareStrings(left.id, right.id));
             for (const { id, filename } of sortedPartials) {
                 const sourceFile = await this.#getNamedFile(
-                    path.join(this.#templatesDirectory, 'pages'),
+                    path.dirname(page.file.filepath),
                     filename,
                 );
                 partialSources.push({ id, ...makeFileIdentity(sourceFile.filepath, sourceFile.stats) });

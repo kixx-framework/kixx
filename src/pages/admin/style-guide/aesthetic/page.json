@@ -1,5 +1,5 @@
 {
-    "template": "admin/style-guide/style-guide-wrapper.html",
+    "template": "page.html",
     "subpage": {
         "title": "Aesthetic"
     },

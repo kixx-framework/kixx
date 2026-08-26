@@ -1,5 +1,5 @@
 {
-    "template": "admin/errors/page.html",
+    "template": "page.html",
     "page": {
         "title": "Error | Admin"
     }

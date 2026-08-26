@@ -1,5 +1,5 @@
 {
-    "template": "admin/invites/page.html",
+    "template": "page.html",
     "subpage": {
         "title": "Admin User Invites"
     }
