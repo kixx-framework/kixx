@@ -1,6 +1,6 @@
 import authenticateAdminApiRequest from '../app/presentation/middleware/authenticate-admin-api-request.js';
+import authorize from '../app/presentation/middleware/authorize.js';
 import * as AdminAPI from '../app/presentation/request-handlers/admin-api/mod.js';
-import * as AdminAuthorization from '../app/presentation/middleware/admin-authorization.js';
 
 
 export default [
@@ -19,7 +19,12 @@ export default [
                         name: 'get',
                         methods: [ 'GET' ],
                         requestHandlers: [
-                            AdminAuthorization.requireMigrationsRead,
+                            authorize([
+                                {
+                                    action: 'urn:kixx:list',
+                                    resource: 'urn:kixx:admin:migrations',
+                                },
+                            ]),
                             AdminAPI.listMigrations,
                         ],
                     },
@@ -33,7 +38,12 @@ export default [
                         name: 'post',
                         methods: [ 'POST' ],
                         requestHandlers: [
-                            AdminAuthorization.requireMigrationsWrite,
+                            authorize([
+                                {
+                                    action: 'urn:kixx:run',
+                                    resource: 'urn:kixx:admin:migrations',
+                                },
+                            ]),
                             AdminAPI.runMigration,
                         ],
                     },
@@ -65,7 +75,12 @@ export default [
                 name: 'create',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    AdminAuthorization.requirePublishingApiTokensWrite,
+                    authorize([
+                        {
+                            action: 'urn:kixx:create',
+                            resource: 'urn:kixx:admin:api-tokens:publishing',
+                        },
+                    ]),
                     AdminAPI.createPublishingApiToken,
                 ],
             },

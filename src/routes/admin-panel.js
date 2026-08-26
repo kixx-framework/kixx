@@ -1,7 +1,7 @@
+import authorize from '../app/presentation/middleware/authorize.js';
 import HyperviewPageHandler from '../app/presentation/request-handlers/hyperview/hyperview-page-handler.js';
 import * as AdminInvites from '../app/presentation/request-handlers/admin-panel/admin-invites.js';
 import * as AdminPublishingApiTokens from '../app/presentation/request-handlers/admin-panel/admin-publishing-api-tokens.js';
-import * as AdminAuthorization from '../app/presentation/middleware/admin-authorization.js';
 
 
 export default [
@@ -28,7 +28,12 @@ export default [
                 name: 'revoke',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    AdminAuthorization.requireAdminUserInvitesWrite,
+                    authorize([
+                        {
+                            action: 'urn:kixx:revoke',
+                            resource: 'urn:kixx:admin:user-invites',
+                        },
+                    ]),
                     AdminInvites.postRevokeAdminInvite,
                 ],
             },
@@ -42,7 +47,12 @@ export default [
                 name: 'render-invite-list',
                 methods: [ 'GET', 'HEAD' ],
                 requestHandlers: [
-                    AdminAuthorization.requireAdminUserInvitesRead,
+                    authorize([
+                        {
+                            action: 'urn:kixx:list',
+                            resource: 'urn:kixx:admin:user-invites',
+                        },
+                    ]),
                     AdminInvites.getAdminInvites,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
@@ -51,7 +61,12 @@ export default [
                 name: 'create-invite',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    AdminAuthorization.requireAdminUserInvitesWrite,
+                    authorize([
+                        {
+                            action: 'urn:kixx:create',
+                            resource: 'urn:kixx:admin:user-invites',
+                        },
+                    ]),
                     AdminInvites.postCreateAdminInvite,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
@@ -68,7 +83,12 @@ export default [
                 name: 'revoke',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    AdminAuthorization.requirePublishingApiTokensWrite,
+                    authorize([
+                        {
+                            action: 'urn:kixx:revoke',
+                            resource: 'urn:kixx:admin:api-tokens:publishing',
+                        },
+                    ]),
                     AdminPublishingApiTokens.postRevokePublishingApiToken,
                 ],
             },
@@ -82,7 +102,12 @@ export default [
                 name: 'render-token-list',
                 methods: [ 'GET', 'HEAD' ],
                 requestHandlers: [
-                    AdminAuthorization.requirePublishingApiTokensRead,
+                    authorize([
+                        {
+                            action: 'urn:kixx:list',
+                            resource: 'urn:kixx:admin:api-tokens:publishing',
+                        },
+                    ]),
                     AdminPublishingApiTokens.getPublishingApiTokens,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
@@ -91,7 +116,12 @@ export default [
                 name: 'create-token',
                 methods: [ 'POST' ],
                 requestHandlers: [
-                    AdminAuthorization.requirePublishingApiTokensWrite,
+                    authorize([
+                        {
+                            action: 'urn:kixx:create',
+                            resource: 'urn:kixx:admin:api-tokens:publishing',
+                        },
+                    ]),
                     AdminPublishingApiTokens.postCreatePublishingApiToken,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],

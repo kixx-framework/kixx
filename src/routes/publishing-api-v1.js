@@ -1,3 +1,4 @@
+import authorize from '../app/presentation/middleware/authorize.js';
 import {
     statStaticAsset,
     statGlobalTemplatePartials,
@@ -30,7 +31,15 @@ export default [
                     {
                         name: 'commit-changes',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ commitChanges ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:index',
+                                },
+                            ]),
+                            commitChanges,
+                        ],
                     },
                 ],
             },
@@ -41,7 +50,15 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [ statStaticAsset ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:publishing:stats:files',
+                                },
+                            ]),
+                            statStaticAsset,
+                        ],
                     },
                 ],
             },
@@ -52,7 +69,15 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [ statGlobalTemplatePartials ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:publishing:stats:templates',
+                                },
+                            ]),
+                            statGlobalTemplatePartials,
+                        ],
                     },
                 ],
             },
@@ -63,7 +88,15 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [ statBaseTemplates ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:publishing:stats:templates',
+                                },
+                            ]),
+                            statBaseTemplates,
+                        ],
                     },
                 ],
             },
@@ -78,7 +111,15 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [ statPageMetadata ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:publishing:stats:page',
+                                },
+                            ]),
+                            statPageMetadata,
+                        ],
                     },
                 ],
             },
@@ -89,7 +130,15 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [ statPagePartials ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:publishing:stats:page',
+                                },
+                            ]),
+                            statPagePartials,
+                        ],
                     },
                 ],
             },
@@ -100,7 +149,15 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [ statPageIncludes ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:publishing:stats:page',
+                                },
+                            ]),
+                            statPageIncludes,
+                        ],
                     },
                 ],
             },
@@ -111,7 +168,15 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [ statPageTemplate ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:publishing:stats:page',
+                                },
+                            ]),
+                            statPageTemplate,
+                        ],
                     },
                 ],
             },
@@ -122,7 +187,15 @@ export default [
                     {
                         name: 'get-stats',
                         methods: [ 'HEAD', 'GET' ],
-                        requestHandlers: [ statEmailAssets ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:publishing:stats:email',
+                                },
+                            ]),
+                            statEmailAssets,
+                        ],
                     },
                 ],
             },
@@ -139,7 +212,15 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ putStaticAsset ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:resources:files',
+                                },
+                            ]),
+                            putStaticAsset,
+                        ],
                     },
                 ],
             },
@@ -150,7 +231,15 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ putGlobalTemplatePartials ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:resources:templates',
+                                },
+                            ]),
+                            putGlobalTemplatePartials,
+                        ],
                     },
                 ],
             },
@@ -161,7 +250,15 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ putBaseTemplates ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:resources:templates',
+                                },
+                            ]),
+                            putBaseTemplates,
+                        ],
                     },
                 ],
             },
@@ -176,7 +273,15 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ putPageMetadata ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:resources:page',
+                                },
+                            ]),
+                            putPageMetadata,
+                        ],
                     },
                 ],
             },
@@ -187,7 +292,15 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ putPagePartials ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:resources:page',
+                                },
+                            ]),
+                            putPagePartials,
+                        ],
                     },
                 ],
             },
@@ -198,7 +311,15 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ putPageIncludes ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:resources:page',
+                                },
+                            ]),
+                            putPageIncludes,
+                        ],
                     },
                 ],
             },
@@ -209,7 +330,15 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ putPageTemplate ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:resources:page',
+                                },
+                            ]),
+                            putPageTemplate,
+                        ],
                     },
                 ],
             },
@@ -220,7 +349,15 @@ export default [
                     {
                         name: 'put-resource',
                         methods: [ 'PUT' ],
-                        requestHandlers: [ putEmailAssets ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:create',
+                                    resource: 'urn:kixx:publishing:resources:email',
+                                },
+                            ]),
+                            putEmailAssets,
+                        ],
                     },
                 ],
             },

@@ -1,5 +1,16 @@
 import deepFreeze from '../../kixx/utils/deep-freeze.js';
 
+// Actions are bare verb URNs and resources carry every bit of specificity, so
+// the two sides of a decision stay readable at the route. The verb set is
+// closed: 'get', 'list', 'create', 'run', 'revoke', and 'grant-role'. Add a
+// verb here before using it in a route, or the route denies every principal
+// but Root Admin.
+//
+// A resource URN naming a whole resource ('urn:kixx:admin:migrations') is
+// distinct from one naming a scope within it ('urn:kixx:admin:api-tokens:*').
+// A trailing ':*' keeps its colon when matching, so a scoped grant never
+// matches the bare resource; grant whichever form the routes request.
+
 export const roles = deepFreeze([
     {
         name: 'Root Admin',
@@ -7,35 +18,35 @@ export const roles = deepFreeze([
         categories: [],
         permissions: [
             {
-                actions: [ '*' ],
+                action: '*',
                 resource: '*',
             },
         ],
     },
     {
         name: 'Developer',
-        id: 'devloper-admin',
+        id: 'developer-admin',
         categories: [ 'developer' ],
         permissions: [
             {
-                actions: [ 'urn:kixx:grant-role' ],
+                action: 'urn:kixx:grant-role',
                 resource: 'urn:kixx:admin:role:*',
             },
             {
-                actions: [ '*' ],
-                resource: 'urn:kixx:admin:user-invites:*',
+                action: '*',
+                resource: 'urn:kixx:admin:user-invites',
             },
             {
-                actions: [ 'urn:kixx:write', 'urn:kixx:read' ],
+                action: [ 'urn:kixx:get', 'urn:kixx:create' ],
                 resource: 'urn:kixx:publishing:*',
             },
             {
-                actions: [ '*' ],
+                action: '*',
                 resource: 'urn:kixx:admin:api-tokens:*',
             },
             {
-                actions: [ '*' ],
-                resource: 'urn:kixx:admin:migrations:*',
+                action: '*',
+                resource: 'urn:kixx:admin:migrations',
             },
         ],
     },
@@ -45,15 +56,15 @@ export const roles = deepFreeze([
         categories: [ 'admin' ],
         permissions: [
             {
-                actions: [ 'urn:kixx:grant-role' ],
+                action: 'urn:kixx:grant-role',
                 resource: 'urn:kixx:admin:role:*',
             },
             {
-                actions: [ '*' ],
-                resource: 'urn:kixx:admin:user-invites:*',
+                action: '*',
+                resource: 'urn:kixx:admin:user-invites',
             },
             {
-                actions: [ 'urn:kixx:write', 'urn:kixx:read' ],
+                action: [ 'urn:kixx:get', 'urn:kixx:create' ],
                 resource: 'urn:kixx:publishing:*',
             },
         ],
@@ -64,7 +75,7 @@ export const roles = deepFreeze([
         categories: [ 'admin', 'editor' ],
         permissions: [
             {
-                actions: [ 'urn:kixx:write', 'urn:kixx:read' ],
+                action: [ 'urn:kixx:get', 'urn:kixx:create' ],
                 resource: 'urn:kixx:publishing:*',
             },
         ],
