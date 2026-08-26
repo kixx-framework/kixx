@@ -50,29 +50,29 @@
             <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
             {{/if}}
 
-            <div class="field{{#if form.fields.role_preset.error}} field--error{{/if}}">
-                <label class="field__label" for="role-preset">{{ form.fields.role_preset.label }}</label>
+            <div class="field{{#if form.fields.role_id.error}} field--error{{/if}}">
+                <label class="field__label" for="role-id">{{ form.fields.role_id.label }}</label>
                 <select
                     class="field__input"
-                    id="role-preset"
-                    name="role_preset"
+                    id="role-id"
+                    name="role_id"
                     required
-                    {{#if form.fields.role_preset.error}}aria-describedby="role-preset-error" aria-invalid="true"{{/if}}
+                    {{#if form.fields.role_id.error}}aria-describedby="role-id-error" aria-invalid="true"{{/if}}
                 >
                 {{!--
                     The placeholder must lead the list. Without it the browser
                     preselects the first real option, so an untouched submit would
-                    silently mint the most capable preset. An empty submission
+                    silently mint the most capable role. An empty submission
                     instead hits the form's required-field error. It yields its
                     `selected` state when the form re-renders with a prior choice.
                 --}}
-                    <option value="" disabled {{#unless form.fields.role_preset.value}}selected{{/unless}}>Choose a role preset</option>
-                {{#each form.fields.role_preset.options as |option| }}
-                    <option value="{{ option.value }}" {{#ifEqual option.value form.fields.role_preset.value}}selected{{/ifEqual}}>{{ option.label }}</option>
+                    <option value="" disabled {{#unless form.fields.role_id.value}}selected{{/unless}}>Choose a role</option>
+                {{#each form.fields.role_id.options as |option| }}
+                    <option value="{{ option.value }}" {{#ifEqual option.value form.fields.role_id.value}}selected{{/ifEqual}}>{{ option.label }}</option>
                 {{/each}}
                 </select>
-                {{#if form.fields.role_preset.error}}
-                <p class="field__error" id="role-preset-error" role="alert">{{ form.fields.role_preset.error }}</p>
+                {{#if form.fields.role_id.error}}
+                <p class="field__error" id="role-id-error" role="alert">{{ form.fields.role_id.error }}</p>
                 {{/if}}
             </div>
 
@@ -86,11 +86,11 @@
         {{#each invites as |invite| }}
             <li class="card flow">
                 <p class="type-label">{{ invite.status }}</p>
-                {{!-- Bootstrap markers carry no preset, so the line is omitted rather than
+                {{!-- Bootstrap markers carry no roles, so the line is omitted rather than
                       rendered empty. --}}
-                {{#if invite.rolePreset}}
+                {{#if invite.roles}}
                 <p class="type-body-sm">
-                    Grants: <span class="type-label">{{ invite.rolePreset }}</span>
+                    Grants: <span class="type-label">{{ invite.roles }}</span>
                 </p>
                 {{/if}}
                 <p class="type-body-sm">

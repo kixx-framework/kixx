@@ -1,16 +1,19 @@
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
 import BaseForm from '../base-form.js';
-import { listRolePresets } from '../../../lib/roles.js';
+import { listAttachableRoles } from '../../../permissions/roles.js';
 import { normalizeStringAttribute } from '../utils.js';
+
+
+const ADMIN_ROLE_CATEGORY = 'admin';
 
 
 /**
  * Backs the "create invite" control in the admin invite management UI.
  *
  * The owner is taken from the authenticated session, so the only operator
- * input is the role preset to confer. Checking that the submitted name is a
- * registered preset is not this form's job: it is a security decision owned by
+ * input is the role to confer. Checking that the submitted id is attachable is
+ * not this form's job: it is a security decision owned by
  * `createAdminInvite()`, which fails closed with a 403 (not a 422 field
  * error) on anything the rendered options should never have offered. This
  * form's own `validate()` only enforces that a selection was made.
@@ -35,7 +38,7 @@ export default class AdminInviteCreateForm extends BaseForm {
     static method = 'POST';
 
     /**
-     * JSON Schema for the single role preset selection.
+     * JSON Schema for the single role selection.
      * @type {Object}
      * @static
      * @readonly
@@ -43,33 +46,33 @@ export default class AdminInviteCreateForm extends BaseForm {
     static schema = {
         type: 'object',
         properties: {
-            role_preset: { type: 'string', fieldType: 'select' },
+            role_id: { type: 'string', fieldType: 'select' },
         },
-        required: [ 'role_preset' ],
+        required: [ 'role_id' ],
     };
 
     /**
      * @param {Object} [attributes] - Raw submitted invite attributes.
-     * @param {*} [attributes.role_preset] - Selected role preset name to confer.
+     * @param {*} [attributes.role_id] - Selected role id to confer.
      */
     constructor(attributes) {
         super();
 
-        const { role_preset } = attributes ?? {};
-        this.role_preset = normalizeStringAttribute(role_preset);
+        const { role_id } = attributes ?? {};
+        this.role_id = normalizeStringAttribute(role_id);
     }
 
     /**
-     * Validates that a preset selection was submitted. Whether the selection is
-     * a registered preset is checked by `createAdminInvite()`, not here.
+     * Validates that a role selection was submitted. Whether the selection is
+     * attachable is checked by `createAdminInvite()`, not here.
      * @returns {void}
-     * @throws {ValidationError} When no role preset was selected.
+     * @throws {ValidationError} When no role was selected.
      */
     validate() {
         const error = new ValidationError('The create invite request is invalid');
 
-        if (!isNonEmptyString(this.role_preset)) {
-            error.push('A role preset selection is required', 'role_preset');
+        if (!isNonEmptyString(this.role_id)) {
+            error.push('A role selection is required', 'role_id');
         }
 
         if (error.length) {
@@ -78,20 +81,22 @@ export default class AdminInviteCreateForm extends BaseForm {
     }
 
     /**
-     * Fills the `role_preset` field's options with every registered role preset.
-     * The options are not filtered per user: any admin who passes the
-     * invite-write authorization gate may confer any preset. Presets are read
+     * Fills the `role_id` field's options with every role attachable to an
+     * invite. The options are not filtered per user: any admin who passes the
+     * invite-write authorization gate may confer any of them. Roles are read
      * from the registry rather than duplicated as a static schema enum, so the
      * rendered choices and what `createAdminInvite()` will accept cannot drift
-     * apart.
+     * apart. Root Admin carries no category, so it is absent here for the same
+     * reason it is refused there.
      * @returns {Object<string, Object>} Partial field metadata keyed by field name.
      */
     getDynamicFieldMetadata() {
-        const options = listRolePresets().map((preset) => ({ value: preset.name, label: preset.name }));
+        const options = listAttachableRoles(ADMIN_ROLE_CATEGORY)
+            .map((role) => ({ value: role.id, label: role.name }));
 
         return {
-            role_preset: {
-                label: 'Role preset',
+            role_id: {
+                label: 'Role',
                 options,
             },
         };

@@ -1,6 +1,6 @@
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { UnauthenticatedError } from '../../../kixx/errors/mod.js';
-import { deriveRolePermissions } from '../../lib/roles.js';
+import { deriveRolePermissions } from '../../permissions/roles.js';
 import { authenticatePublishingToken as authenticatePublishingTokenScript } from '../../transaction-scripts/publishing-api-tokens/authenticate-publishing-token.js';
 
 
@@ -29,7 +29,7 @@ export default async function authenticatePublishingToken(context, request, resp
         id: record.id,
         type: record.type,
         roles,
-        // Derived fresh on every request from the stored role names, never
+        // Derived fresh on every request from the stored role ids, never
         // persisted; editing a role's grants in code changes every holder's
         // capabilities on the next deploy with no data migration.
         permissions: deriveRolePermissions(roles),

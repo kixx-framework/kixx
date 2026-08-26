@@ -1,4 +1,14 @@
 import { AssertionError } from '../../../kixx/errors/mod.js';
+import { listAttachableRoles } from '../../permissions/roles.js';
+
+const ADMIN_ROLE_CATEGORY = 'admin';
+
+// Display names for the ids stored on an invite. An id the registry no longer
+// offers falls back to itself, so a retired role still renders as something an
+// operator can read rather than vanishing from the row.
+const ROLE_NAMES_BY_ID = new Map(
+    listAttachableRoles(ADMIN_ROLE_CATEGORY).map((role) => [ role.id, role.name ]),
+);
 
 // Keeps the admin invites management page to a short, scannable list per page
 // rather than the collection's general-purpose default page size.
@@ -63,6 +73,17 @@ async function getCreatedByEmailsById(context, adminUsers, records) {
     return emailsById;
 }
 
+// Joins the invite's role ids into one display string, or null when it carries
+// none. A bootstrap marker has no roles, so its row omits the line entirely
+// instead of rendering an empty one.
+function presentRoleNames(roles) {
+    if (!Array.isArray(roles) || roles.length === 0) {
+        return null;
+    }
+
+    return roles.map((id) => ROLE_NAMES_BY_ID.get(id) ?? id).join(', ');
+}
+
 // Falls back to the raw createdBy id when the authoring admin user has since
 // been deleted, so the invite list still renders instead of showing blank.
 function presentInvite(record, createdByEmailsById) {
@@ -72,7 +93,7 @@ function presentInvite(record, createdByEmailsById) {
         kind: record.get('kind'),
         status: record.getStatus(),
         createdBy: createdByEmailsById.get(createdBy) ?? createdBy,
-        rolePreset: record.get('rolePreset'),
+        roles: presentRoleNames(record.get('roles')),
         createdAt: record.get('inviteCreationDate'),
         expiresAt: record.get('inviteExpirationDate'),
         consumedAt: record.get('consumedAt'),

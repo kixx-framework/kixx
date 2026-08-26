@@ -1,5 +1,5 @@
 import { parseBasicAuthCredentials } from '../lib/json-api.js';
-import { deriveRolePermissions } from '../../lib/roles.js';
+import { deriveRolePermissions } from '../../permissions/roles.js';
 import { verifyAdminCredentials } from '../../transaction-scripts/admin-users/verify-admin-credentials.js';
 
 
@@ -20,7 +20,7 @@ export default async function authenticateAdminApiRequest(context, request, resp
     });
 
     // Grants are derived fresh on every request from the user's stored role
-    // names, never persisted; editing a role's grants in code changes every
+    // ids, never persisted; editing a role's grants in code changes every
     // holder's capabilities on the next deploy with no data migration.
     context.setUser(Object.assign({}, admin, {
         permissions: deriveRolePermissions(admin.roles),

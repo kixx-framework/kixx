@@ -71,11 +71,7 @@ export default class AdminInviteRecord extends Record {
             roles: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Role name(s) this invite confers on redemption',
-            },
-            rolePreset: {
-                type: [ 'string', 'null' ],
-                description: 'Name of the role preset the invite was created from, or null when none applies',
+                description: 'Role id(s) this invite confers on redemption',
             },
         },
         required: [
@@ -86,7 +82,6 @@ export default class AdminInviteRecord extends Record {
             'consumedAt',
             'revokedAt',
             'roles',
-            'rolePreset',
         ],
     };
 
@@ -103,23 +98,17 @@ export default class AdminInviteRecord extends Record {
         const consumedAt = this.get('consumedAt');
         const revokedAt = this.get('revokedAt');
         const roles = this.get('roles');
-        const rolePreset = this.get('rolePreset');
 
         if (!INVITE_KINDS.has(kind)) {
             error.push('AdminInvite kind must be "invite" or "bootstrap"', 'kind');
         }
         // Empty roles is valid, and membership in the role registry is not
-        // checked here so a retired role name does not brick an existing
-        // record (see roles.js: unknown names simply derive no permissions).
+        // checked here so a retired role id does not brick an existing record
+        // (see permissions/roles.js: unknown ids simply derive no
+        // permissions). Whether an id may be conferred at all is decided by
+        // createAdminInvite(), before the record is ever built.
         if (!Array.isArray(roles) || !roles.every(isNonEmptyString)) {
             error.push('AdminInvite roles must be an array of non-empty strings', 'roles');
-        }
-        // rolePreset is a display and audit label only; `roles` is what the
-        // invite actually confers. Like `roles` above, the value is not checked
-        // against the preset registry, so redefining or retiring a preset later
-        // cannot invalidate an invite already issued under the old name.
-        if (rolePreset !== null && rolePreset !== undefined && !isNonEmptyString(rolePreset)) {
-            error.push('AdminInvite rolePreset must be a non-empty string when present', 'rolePreset');
         }
         if (!isNonEmptyString(this.get('createdBy'))) {
             error.push('AdminInvite createdBy is required', 'createdBy');

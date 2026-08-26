@@ -1,7 +1,7 @@
 import { sha256Hex } from '../../../kixx/utils/crypto.js';
 import { resolveAdminInvite } from './resolve-admin-invite.js';
 import { AssertionError, ForbiddenError } from '../../../kixx/errors/mod.js';
-import { ROLE_ROOT_ADMIN } from '../../lib/roles.js';
+import { ROLE_ROOT_ADMIN } from '../../permissions/roles.js';
 
 
 // Client-safe, non-enumerating message: the same text covers invalid, expired,
@@ -21,7 +21,7 @@ const INVALID_INVITE_CODE = 'InvalidInvite';
  *
  * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
  * @param {string} token - Raw bearer token presented by the signup request.
- * @returns {Promise<{ roles: string[] }>} The role names the redeemed token confers.
+ * @returns {Promise<{ roles: string[] }>} The role ids the redeemed token confers.
  * @throws {ForbiddenError} With code `InvalidInvite` when the token is not redeemable or was spent concurrently.
  * @throws {AssertionError} When an unexpected storage failure occurs while consuming the token.
  */

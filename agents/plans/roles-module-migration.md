@@ -81,7 +81,7 @@ from.
 
 ### Task R1: Id-keyed role registry
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/docs/code-style-guide.md`, `src/docs/code-documentation-guide.md`, `test/unit-tests/README.md`
 
@@ -129,12 +129,12 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] The five exports exist and nothing else is exported.
-- [ ] `deriveRolePermissions` returns `[]` for a non-array, an unknown id, and an
+- [x] The five exports exist and nothing else is exported.
+- [x] `deriveRolePermissions` returns `[]` for a non-array, an unknown id, and an
       old role name; grants carry no `effect`; mutating a result cannot affect the table.
-- [ ] `listAttachableRoles('admin')` omits `root-admin`.
-- [ ] Each load-time invariant fails the import when deliberately violated.
-- [ ] No file outside the module and its test imports it.
+- [x] `listAttachableRoles('admin')` omits `root-admin`.
+- [x] Each load-time invariant fails the import when deliberately violated.
+- [x] No file outside the module and its test imports it.
 
 **Validation**
 
@@ -144,19 +144,20 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Implemented the private, frozen id-keyed registry and its five-export API. Added tests for fail-closed derivation, copy safety, attachment listing, exact exports, and deliberately corrupted import-time definitions. Removed the obsolete raw-table reachability checks from the route test; R2 owns replacing them with derived-principal coverage.
+- Current state: Complete.
+- Remaining: Nothing for R1.
+- Decisions and discoveries: Canonical ids will match current role names: `root-admin`, `developer`, `admin`, and `editor`. The stated editor-domain assertion conflicts with the corrected bare-verb action vocabulary if read as requiring the publishing prefix on actions. R1 therefore confines editor grants by requiring actions from the closed publishing verb set (`urn:kixx:get`, `urn:kixx:create`) and resources under `urn:kixx:publishing:`.
+- Actual files changed: `src/app/permissions/roles.js`, `test/unit-tests/app/permissions/roles.test.js`, `test/unit-tests/app/presentation/route-authorization.test.js`, `agents/plans/roles-module-migration.md`.
+- Validation run: `node run-tests.js test/unit-tests/app/permissions` passed (11 tests); `node run-linter.js src test` passed; `node run-tests.js` passed (1204 tests, 0 disabled).
+- Amended during R3: `developer` originally carried `categories: [ 'developer' ]`. No consumer reads that category, so the role was attachable to nothing and unreachable by any invite. It now carries `[ 'admin' ]`. The `listAttachableRoles('admin')` expectation and the non-array-category import fixture in `roles.test.js` were updated to match.
 - Blockers: None.
 
 ---
 
 ### Task R2: Authentication and publishing tokens on role ids
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** R1
 **Documentation:** `src/app/presentation/README.md`, `src/app/collections/README.md`
 
@@ -203,11 +204,11 @@ the first time.
 
 **Acceptance criteria**
 
-- [ ] Every route decision is reachable by its intended role through a real derived
+- [x] Every route decision is reachable by its intended role through a real derived
       principal, not merely against the raw table.
-- [ ] Token creation accepts the Editor id and rejects `admin`, `developer`,
+- [x] Token creation accepts the Editor id and rejects `admin`, `developer`,
       `root-admin`, an unregistered id, and an empty list.
-- [ ] A principal holding an unregistered role is denied, not crashed.
+- [x] A principal holding an unregistered role is denied, not crashed.
 
 **Validation**
 
@@ -217,19 +218,19 @@ the first time.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Repointed all three authentication middlewares at `permissions/roles.js` and corrected their comment vocabulary from role names to role ids. Collapsed the publishing token collection's three role checks into `isRoleId(id, 'editor')`, with a comment naming R1's load-time assertion as the reason the other two are gone. Moved both publishing token Forms onto the Editor id and rewrote the JSON:API validation message. Added derived-principal reachability coverage to the route test and new suites for the creation Form and the collection.
+- Current state: Complete.
+- Remaining: Nothing for R2.
+- Decisions and discoveries: The developer role reaches all 26 declared route decisions; the editor role reaches the 17 publishing API decisions and no admin decision; the admin role reaches the invite decisions and neither the API token nor migration decisions. A non-array `roles` submission to `CreatePublishingApiTokenForm` normalizes to the Editor id rather than failing validation — pre-existing behavior, left as is because it defaults to the least capable publishing role and cannot widen a token. The collection tests construct the Collection with a stub `db`, which is sufficient because every role assertion runs before store access; the accept case is proven by the failure moving past the role assertion.
+- Actual files changed: `src/app/presentation/middleware/authenticate-admin-user.js`, `src/app/presentation/middleware/authenticate-admin-api-request.js`, `src/app/presentation/middleware/authenticate-publishing-token.js`, `src/app/collections/publishing-api-token-collection.js`, `src/app/presentation/forms/publishing-api-tokens/create-publishing-api-token-form.js`, `src/app/presentation/forms/publishing-api-tokens/publishing-api-token-admin-form.js`, `test/unit-tests/app/presentation/route-authorization.test.js`, `test/unit-tests/app/presentation/forms/publishing-api-tokens/create-publishing-api-token-form.test.js` (new), `test/unit-tests/app/collections/publishing-api-token-collection.test.js` (new), `agents/plans/roles-module-migration.md`.
+- Validation run: `node run-tests.js` passed (1216 tests, 0 disabled); `node run-linter.js src test` clean. `grep -rn "lib/roles.js" src test` now matches only the three invite-path importers R3 owns.
 - Blockers: None.
 
 ---
 
 ### Task R3: Invites confer a role id, and the preset layer is deleted
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** R1, R2
 **Documentation:** `src/app/transaction-scripts/README.md`, `src/app/presentation/README.md`
 
@@ -275,11 +276,11 @@ is gone, and `src/app/lib/roles.js` is deleted with no importers left behind.
 
 **Acceptance criteria**
 
-- [ ] An invite names a role id; an unregistered or non-`admin`-category id is refused.
-- [ ] `root-admin` cannot be conferred by an invite.
-- [ ] A redeemed invite writes role ids onto the new admin user.
-- [ ] The bootstrap path still confers Root Admin.
-- [ ] `grep -rn "lib/roles.js" src test` returns no matches.
+- [x] An invite names a role id; an unregistered or non-`admin`-category id is refused.
+- [x] `root-admin` cannot be conferred by an invite.
+- [x] A redeemed invite writes role ids onto the new admin user.
+- [x] The bootstrap path still confers Root Admin.
+- [x] `grep -rn "lib/roles.js" src test` returns no matches.
 
 **Validation**
 
@@ -289,12 +290,16 @@ is gone, and `src/app/lib/roles.js` is deleted with no importers left behind.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `createAdminInvite()` takes one `roleId` validated with `isRoleId(id, 'admin')` and refuses anything else with `ForbiddenError` code `AdminInviteRoleForbidden`. The invite Form renders `listAttachableRoles('admin')`, submitting the id and displaying the name. The `rolePreset` attribute is gone from the invite record schema, its required list, its validation, and both collection write paths. `consumeAdminInvite()` reads `ROLE_ROOT_ADMIN` from the new registry. `src/app/lib/roles.js` is deleted with no importers left.
+- Current state: Complete.
+- Remaining: Nothing for R3.
+- Decisions and discoveries:
+  - **R1's table had to change.** `developer` carried `categories: [ 'developer' ]`, a category no consumer reads, which made the Developer role attachable to nothing at all — no invite could confer it and there was no other path to a Developer account. It now carries `[ 'admin' ]` like every other invite-attachable role. R1's `listAttachableRoles('admin')` test was updated to expect Developer first, and its non-array-category import fixture was re-anchored on the Editor role because the string it targeted no longer exists.
+  - The form field is `role_id` (was `role_preset`); the Transaction Script argument is `roleId` (was `rolePreset`).
+  - Removing `rolePreset` cost the invite list its human-readable "Grants" label. `list-admin-invites.js` now builds an id-to-name map from `listAttachableRoles('admin')` and presents `roles` as a joined display string, or `null` when the invite carries none, so a bootstrap marker still omits the line and the roles API stays at five exports. An id the registry no longer offers falls back to rendering as itself.
+  - The `rolePreset` vocabulary reached beyond the plan's touch points into `list-admin-invites.js`, the admin invites request handler, `src/templates/pages/admin/invites/page.html`, `src/app/presentation/README.md`, and two end-to-end helpers. All were updated; the end-to-end helper now invites `developer`.
+- Actual files changed: `src/app/permissions/roles.js`, `src/app/transaction-scripts/admin-invites/create-admin-invite.js`, `src/app/transaction-scripts/admin-invites/consume-admin-invite.js`, `src/app/transaction-scripts/admin-invites/list-admin-invites.js`, `src/app/collections/admin-invite-collection.js`, `src/app/collections/admin-invite-record.js`, `src/app/presentation/forms/admin-invites/admin-invite-form.js`, `src/app/presentation/request-handlers/admin-panel/admin-invites.js`, `src/app/presentation/README.md`, `src/templates/pages/admin/invites/page.html`, `src/app/lib/roles.js` (deleted), `test/unit-tests/app/permissions/roles.test.js`, `test/unit-tests/app/transaction-scripts/admin-invites/create-admin-invite.test.js` (new), `test/unit-tests/app/transaction-scripts/admin-invites/consume-admin-invite.test.js` (new), `test/end-to-end/001-sanity-checks/020-admin-user-invites.test.js`, `test/end-to-end/test-helpers/authenticate.js`, `agents/plans/roles-module-migration.md`.
+- Validation run: `node run-tests.js` passed (1221 tests, 0 disabled); `node run-linter.js src test` clean; `grep -rn "lib/roles.js" src test` returns no matches, as does a grep for `rolePreset`, `role_preset`, and every dropped legacy export name.
 - Blockers: None.
 
 ---

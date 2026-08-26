@@ -110,7 +110,7 @@ describe('POST /admin/invites create super admin as root', ({ before, it }) => {
 
         form = new FormData();
         form.append('csrf_token', formCsrfToken);
-        form.append('role_preset', 'Developer Admin');
+        form.append('role_id', 'developer');
 
         // Construct the URL here so the test fails if it is invalid
         // instead of crashing the whole test run.

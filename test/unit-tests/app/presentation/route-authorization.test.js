@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
+import { deriveRolePermissions, ROLE_EDITOR } from '../../../../src/app/permissions/roles.js';
 import { evaluatePermissions } from '../../../../src/kixx/permissions/permission-validation.js';
-import { roles } from '../../../../src/app/permissions/roles.js';
 import adminPanelRoutes from '../../../../src/routes/admin-panel.js';
 import adminApiRoutes from '../../../../src/routes/admin-api-v1.js';
 import publishingApiRoutes from '../../../../src/routes/publishing-api-v1.js';
@@ -18,9 +18,6 @@ const SUPPORTED_ACTIONS = new Set([
     'urn:kixx:revoke',
     'urn:kixx:grant-role',
 ]);
-
-const ROOT_ADMIN = 'Root Admin';
-
 
 function collectDecisions(routes, trail) {
     const collected = [];
@@ -41,13 +38,6 @@ function collectDecisions(routes, trail) {
 
     return collected;
 }
-
-function rolesAllowing(decision) {
-    return roles
-        .filter((role) => evaluatePermissions(role.permissions, decision))
-        .map((role) => role.name);
-}
-
 
 describe('route authorization decisions', ({ it }) => {
 
@@ -74,24 +64,66 @@ describe('route authorization decisions', ({ it }) => {
         assertEqual(0, unsupported.length, `unsupported action verbs: ${ unsupported.join(', ') }`);
     });
 
-    it('grants every decision to a role other than Root Admin', () => {
-        // Root Admin holds '*' on '*', so it satisfies any decision including a
-        // misspelled one. Requiring a second role is what makes this a test.
-        const unreachable = decisions
-            .filter((decision) => {
-                const allowed = rolesAllowing(decision);
-                return !allowed.some((name) => name !== ROOT_ADMIN);
-            })
-            .map((decision) => `${ decision.route }: ${ decision.action } @ ${ decision.resource }`);
+    // Reachability is checked through deriveRolePermissions() rather than the
+    // role table, because a principal is what the gate actually evaluates. A
+    // grant vocabulary that drifts from the manifests would still read as
+    // correct against the raw table.
+    it('is fully reachable by a developer principal', () => {
+        const unreachable = unsatisfiedBy(decisions, [ 'developer' ]);
 
-        assertEqual(0, unreachable.length, `no role can reach: ${ unreachable.join(', ') }`);
+        assertEqual(0, unreachable.length, `unreachable by developer: ${ unreachable.join(', ') }`);
     });
 
-    it('keeps Root Admin able to reach every decision', () => {
-        const denied = decisions
-            .filter((decision) => !rolesAllowing(decision).includes(ROOT_ADMIN))
-            .map((decision) => `${ decision.route }: ${ decision.action }`);
+    it('grants an editor principal the publishing API and nothing else', () => {
+        const publishingDecisions = decisions.filter(isPublishingApiDecision);
+        const adminDecisions = decisions.filter((decision) => !isPublishingApiDecision(decision));
 
-        assertEqual(0, denied.length, `Root Admin denied: ${ denied.join(', ') }`);
+        assert(publishingDecisions.length > 0, 'expected publishing API decisions');
+
+        const unreachable = unsatisfiedBy(publishingDecisions, [ ROLE_EDITOR ]);
+        assertEqual(0, unreachable.length, `unreachable by editor: ${ unreachable.join(', ') }`);
+
+        const reachable = adminDecisions.length - unsatisfiedBy(adminDecisions, [ ROLE_EDITOR ]).length;
+        assertEqual(0, reachable, 'expected an editor principal to reach no admin decision');
     });
+
+    it('grants an admin principal the invite decisions but no developer decisions', () => {
+        const invites = decisions.filter((decision) => {
+            return decision.resource === 'urn:kixx:admin:user-invites';
+        });
+        const developerOnly = decisions.filter((decision) => {
+            return decision.resource.startsWith('urn:kixx:admin:api-tokens') ||
+                decision.resource === 'urn:kixx:admin:migrations';
+        });
+
+        assert(invites.length > 0, 'expected invite decisions');
+        assert(developerOnly.length > 0, 'expected developer-only decisions');
+
+        assertEqual(0, unsatisfiedBy(invites, [ 'admin' ]).length);
+        assertEqual(developerOnly.length, unsatisfiedBy(developerOnly, [ 'admin' ]).length);
+    });
+
+    it('denies every decision to a principal holding an unregistered role', () => {
+        const unsatisfied = unsatisfiedBy(decisions, [ 'Developer Admin', 'not-a-role' ]);
+
+        assertEqual(decisions.length, unsatisfied.length);
+    });
+
 });
+
+function isPublishingApiDecision(decision) {
+    return decision.resource.startsWith('urn:kixx:publishing:');
+}
+
+function unsatisfiedBy(decisions, roleIds) {
+    const user = { permissions: deriveRolePermissions(roleIds) };
+
+    return decisions
+        .filter((decision) => {
+            return !evaluatePermissions(user.permissions, {
+                action: decision.action,
+                resource: decision.resource,
+            });
+        })
+        .map((decision) => `${ decision.route }: ${ decision.action } ${ decision.resource }`);
+}

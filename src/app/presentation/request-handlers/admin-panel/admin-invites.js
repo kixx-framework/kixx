@@ -139,7 +139,7 @@ export async function postCreateAdminInvite(context, request, response) {
 
     const form = AdminInviteCreateForm.fromFormData(formData);
 
-    // An unselected role preset is a correctable field error, so re-render this
+    // An unselected role is a correctable field error, so re-render this
     // page inline
     try {
         form.validate();
@@ -149,7 +149,7 @@ export async function postCreateAdminInvite(context, request, response) {
         }
 
         // Passing the caught error back through the form context is what
-        // populates fields.role_preset.error for the template.
+        // populates fields.role_id.error for the template.
         return await renderWithFreshCsrf(context, request, response, {
             form,
             props: await getFirstPageListProps(context),
@@ -159,7 +159,7 @@ export async function postCreateAdminInvite(context, request, response) {
 
     const created = await createAdminInvite(context, {
         createdBy: context.user.id,
-        rolePreset: form.role_preset,
+        roleId: form.role_id,
     });
     const inviteUrl = buildSignupInviteUrl(context, request, created.token);
 
