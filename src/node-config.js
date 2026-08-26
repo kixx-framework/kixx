@@ -44,10 +44,10 @@ export default {
             },
             CONTENT_STORE: {
                 developerMode: true,
-                pagesDirectory: './src/pages',
-                templatesDirectory: './src/templates',
-                staticAssetsDirectory: './src/static-assets',
-                emailsDirectory: './src/emails',
+                pagesDirectory: './pages',
+                templatesDirectory: './templates',
+                staticAssetsDirectory: './static-assets',
+                emailsDirectory: './emails',
             },
         },
         staging: {
