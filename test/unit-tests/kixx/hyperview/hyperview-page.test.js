@@ -9,12 +9,14 @@ function makePage(args) {
         pageDataSources,
         responseProps = {},
         includes = {},
+        assets = {},
     } = args;
 
     return new HyperviewPage({
         url: new URL('https://example.com/articles/example'),
         pathname: '/articles/example',
         responseProps,
+        assets,
         pageDataSources,
         template: () => '',
         partials: new Map(),
@@ -63,5 +65,16 @@ describe('HyperviewPage', ({ it }) => {
         });
 
         assertEqual(includes, page.context.includes);
+    });
+
+    it('reserves the assets context key over published data and response props', () => {
+        const assets = { '/site.css': 'asset-hash' };
+        const page = makePage({
+            pageDataSources: [ { assets: { '/site.css': 'published-hash' } } ],
+            responseProps: { assets: { '/site.css': 'runtime-hash' } },
+            assets,
+        });
+
+        assertEqual(assets, page.context.assets);
     });
 });

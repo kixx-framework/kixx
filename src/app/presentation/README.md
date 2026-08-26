@@ -804,41 +804,31 @@ For an application API endpoint that accepts or returns JSON:API documents:
 3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the whole returned resource into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script. `fromJsonApi(resource)` always takes the resource and reads `resource.attributes` itself — the form owns the mapping from wire shape to domain shape. If destructuring the JSON API payload is trivial, it can be done in the request handler, otherwise use an API form.
 4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
 
-### Serving Static Files
+### Serving Static Assets
 
-For files that ship with the deployment (favicons, images, fonts), wire the framework `StaticFileRequestHandler` into a route in `virtual-hosts.js`. The handler reads the request pathname (query string and hash excluded) as the file key, looks the file up through the registered `StaticFileStore` service, and maps the result onto the response — setting `Content-Type`, `Cache-Control`, `ETag`, and `Last-Modified`, answering conditional requests (`If-None-Match`, then `If-Modified-Since`) with `304`, and serving HEAD as headers only.
+`StaticAssetRequestHandler` serves content-addressable blobs from the registered `ContentAddressableStore`. Wire it twice: a fingerprinted `/assets/:hash/*pathname` route before the catch-all, then pathname mode ahead of `HyperviewPageHandler` for fixed URLs such as `/favicon.ico`.
 
 ```js
-// Wired in virtual-hosts.js, alongside the other route handler imports.
-import { StaticFileRequestHandler } from './kixx/static-file-server/static-file-server-request-handlers.js';
+import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
 
 {
-    pattern: '/css/images/*pathname',
-    name: 'css-images',
+    pattern: '/assets/:hash/*pathname',
+    name: 'fingerprinted-assets',
     targets: [
         {
             name: 'serve',
             methods: [ 'GET', 'HEAD' ],
             requestHandlers: [
-                StaticFileRequestHandler({ cacheControl: 'public, max-age=86400' }),
+                StaticAssetRequestHandler({ fingerprinted: true }),
             ],
         },
     ],
 }
 ```
 
-`StaticFileRequestHandler(options)` accepts:
+Fingerprint URLs carry an immutable content hash, use an immutable cache policy, and can return `304` for a matching `If-None-Match` without reading storage. Pathname URLs resolve through the current snapshot and revalidate by default.
 
-- `contentType` — force the `Content-Type` instead of deriving it from the file extension. Takes precedence over the store's value.
-- `cacheControl` — force the `Cache-Control` header. Defaults to `public, max-age=0, must-revalidate` (cacheable, but revalidate every time).
-- `computeEtag` — compute the `ETag` as a hash of the file contents when the store has no precomputed one. `true` by default; set `false` to skip ETag work.
-- `throwNotFound` — throw `NotFoundError` (→ 404) when the file is absent. `true` by default; set `false` to defer to the next request handler instead.
-- `skipWhenFound` — skip the remaining request handlers on the route when a file is served. `false` by default.
-- `pathname` — override the URL pathname for every request, rewriting which file key is read.
-
-The default options (`throwNotFound: true`, `skipWhenFound: false`) suit a dedicated route that owns its path, such as `/favicon.ico`.
-
-For the `StaticFileStore` contract, Build ID namespacing for Atomic Deployments, and the Node.js (filesystem + `manifest.json`) and Cloudflare (dedicated KV binding) adapters, see `src/kixx/static-file-server/README.md`.
+For lookup and caching details, see `kixx/static-assets/README.md`.
 
 ## Where Presentation Changes Belong
 

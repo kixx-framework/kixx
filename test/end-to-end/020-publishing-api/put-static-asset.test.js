@@ -139,15 +139,9 @@ describe('PUT /publishing-api/v1/assets/*filepath with happy path', ({ before, i
         assertEqual('image/png', result.body.data.attributes.contentType);
     });
 
-    // The cache validators are the store's own product, not the handler's echo of
-    // the request: StaticFileStore.write() computes them from the buffered bytes
-    // and persists them so later reads serve them without re-hashing. Recomputing
-    // them here checks that the bytes the store hashed are the bytes this test
-    // sent — a store that truncated or re-encoded the body would still report a
-    // well formed etag, just not this one.
-    //
-    // Both runtime adapters use the same scheme (quoted SHA-256 via sha256Hex),
-    // so these assertions hold against a Node.js and a Cloudflare target alike.
+    // The publishing API reports the content-store hash for the uploaded bytes.
+    // Recomputing it checks that the bytes stored by the CAS are the bytes this
+    // test sent.
     it('returns cache validators computed from the written bytes', async () => {
         assertEqual(bytes.byteLength, result.body.data.attributes.contentLength);
         assertEqual(await computeStrongEtag(bytes), result.body.data.attributes.etag);

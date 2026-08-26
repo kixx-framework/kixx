@@ -62,6 +62,8 @@ const DIGEST_BYTES = 16;
 // Our Base32 encoding alphabet.
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 
+const DIGEST_PATTERN = /^[a-z2-7]{26}$/;
+
 // A domain byte makes the semantic type part of the hashed input. Without it,
 // a blob containing the canonical bytes of a tree, set or value would have the
 // same digest as that object. Domains separate types; they do not increase the
@@ -89,6 +91,20 @@ export function compareStrings(a, b) {
         return 1;
     }
     return 0;
+}
+
+/**
+ * Reports whether a value is a digest in the current content-address format.
+ *
+ * The predicate lets callers reject malformed addresses before an adapter sees
+ * them. Adapters assert on invalid hashes because that is an internal contract
+ * violation; an HTTP handler instead needs to report malformed input as a
+ * client error.
+ * @param {*} value - Value to check
+ * @returns {boolean} True when value is a lowercase, unpadded digest
+ */
+export function isValidHash(value) {
+    return isString(value) && DIGEST_PATTERN.test(value);
 }
 
 /**

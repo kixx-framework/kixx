@@ -837,8 +837,23 @@ Hyperview registers these helpers in addition to the core Kixx helpers:
 | `formatDate` | Inline | `helpers/format-date.js` | Format ISO strings, millisecond timestamps, JavaScript Dates, or Luxon object values |
 | `markup` | Inline | `helpers/markup.js` | Convert Markdown text to raw HTML with the vendored `marked` parser |
 | `truncate` | Inline | `helpers/truncate.js` | Shorten a string to a maximum character count |
+| `assetUrl` | Inline | `helpers/asset-url.js` | Render a fingerprinted static-asset URL from the reserved `assets` map |
 
 These helpers are available in Hyperview page templates, base templates, partials, page metadata mini templates, and templated `includes`. Metadata mini templates and templated `includes` compile without partials, so avoid `{{> partial }}` inside those fields.
+
+### assetUrl Helper
+
+Use `assetUrl` with the explicit `assets` map and a logical asset pathname:
+
+```html
+<link rel="stylesheet" href="{{ assetUrl assets "/stylesheets/stylesheet.css" }}">
+```
+
+For a published asset it renders `/assets/<hash>/<pathname>`. An unpublished
+pathname renders unchanged so development can use source-file URLs before build
+tooling publishes assets to the content-addressable store. `assets` is a
+reserved page-context key supplied by Hyperview after published page data and
+runtime response props, so neither can shadow it. Helper output is escaped.
 
 ### formatDate Helper
 

@@ -8,6 +8,7 @@ import * as AdminUsers from './app/presentation/request-handlers/admin-panel/adm
 import adminPanelRoutes from './routes/admin-panel.js';
 import adminApiRoutes from './routes/admin-api-v1.js';
 import publishingApiRoutes from './routes/publishing-api-v1.js';
+import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
 
 
 export default [
@@ -95,40 +96,36 @@ export default [
                 ],
                 routes: publishingApiRoutes,
             },
-            // {
-            //     pattern: '/assets/:build_id/*pathname',
-            //     name: 'build-assets',
-            //     targets: [
-            //         {
-            //             name: 'serve-asset',
-            //             methods: [ 'GET', 'HEAD' ],
-            //             requestHandlers: [
-            //                 StaticAssetRequestHandler(),
-            //             ],
-            //         },
-            //     ],
-            // },
-            // {
-            //     pattern: '*',
-            //     name: 'hyperview-static-catch-all',
-            //     targets: [
-            //         {
-            //             // Catch-all renderer for static Hyperview static pages, including the
-            //             // site root, with optional JSON page data responses.
-            //             name: 'render-static-page',
-            //             methods: [ 'GET', 'HEAD' ],
-            //             requestHandlers: [
-            //                 // Serve a public file when one matches; otherwise fall
-            //                 // through to the Hyperview page renderer rather than 404.
-            //                 StaticFileRequestHandler({
-            //                     throwNotFound: false,
-            //                     skipWhenFound: true,
-            //                 }),
-            //                 HyperviewPageHandler({ baseTemplateId: 'default.html' }),
-            //             ],
-            //         },
-            //     ],
-            // },
+            {
+                pattern: '/assets/:hash/*pathname',
+                name: 'fingerprinted-assets',
+                targets: [
+                    {
+                        name: 'serve-asset',
+                        methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            StaticAssetRequestHandler({ fingerprinted: true }),
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '*',
+                name: 'hyperview-static-catch-all',
+                targets: [
+                    {
+                        name: 'render-static-page',
+                        methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            StaticAssetRequestHandler({
+                                throwNotFound: false,
+                                skipWhenFound: true,
+                            }),
+                            HyperviewPageHandler({ baseTemplateId: 'default.html' }),
+                        ],
+                    },
+                ],
+            },
         ],
     },
 ];

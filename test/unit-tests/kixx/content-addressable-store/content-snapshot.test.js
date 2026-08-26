@@ -210,6 +210,44 @@ describe('ContentSnapshot', ({ describe, it }) => {
         });
     });
 
+    describe('static asset listings', ({ it }) => {
+        it('returns the assets tree entry when assets are published', async () => {
+            const index = await makeIndex([
+                { pathname: getStaticAssetPath('/logo.png'), hash: 'hash-logo', size: 4 },
+            ]);
+            const snapshot = makeSnapshot(index, new Map());
+
+            const stat = snapshot.statStaticAssets();
+
+            assert(stat, 'expected the assets tree entry');
+            assertEqual('/assets', stat.pathname);
+            assertEqual('tree', stat.kind);
+        });
+
+        it('returns null and an empty list when no assets are published', async () => {
+            const snapshot = makeSnapshot(await makeIndex([]), new Map());
+
+            assertEqual(null, snapshot.statStaticAssets());
+            assertEqual(0, snapshot.listStaticAssets().length);
+        });
+
+        it('lists only blobs with logical asset pathnames', async () => {
+            const index = await makeIndex([
+                { pathname: getStaticAssetPath('/logo.png'), hash: 'hash-logo', size: 4 },
+                { pathname: getStaticAssetPath('/images/banner.png'), hash: 'hash-banner', size: 7 },
+            ]);
+            const snapshot = makeSnapshot(index, new Map());
+
+            const assets = snapshot.listStaticAssets();
+
+            assertEqual(2, assets.length);
+            assertEqual('/images/banner.png', assets[0].pathname);
+            assertEqual('blob', assets[0].kind);
+            assertEqual('/logo.png', assets[1].pathname);
+            assertEqual('blob', assets[1].kind);
+        });
+    });
+
     describe('batchGetPageAssets()', ({ it }) => {
         it('collects the ancestor metadata and the leaf directory contents', async () => {
             const rootMeta = getPageMetadataPath('/');

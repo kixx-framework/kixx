@@ -309,15 +309,8 @@ describe('PUT /publishing-api/v1/assets/*filepath with a reserved filepath', ({ 
         assertEqual(result.url.href, result.response.url);
     });
 
-    // `.meta` is the subtree the Node store keeps its per-asset validator
-    // sidecars in, and StaticFileStore.write() refuses a key that would collide
-    // with it — loudly, as an AssertionError, because a caller that got that far
-    // skipped its path validation. This asserts the edge check shadows it: the
-    // request is turned away as the client error it is (400) rather than
-    // surfacing the store's internal invariant as a 500.
-    //
-    // validatePathname() rejects it for the ordinary reason — a segment may not
-    // begin with a dot — so the same 400 covers dotfiles generally.
+    // validatePathname() rejects dotfiles before the publishing API can use the
+    // pathname in the content-addressable index.
     it('returns the error in a well formatted JSON:API payload', () => {
         assertSingleJsonApiError(result, {
             status: '400',

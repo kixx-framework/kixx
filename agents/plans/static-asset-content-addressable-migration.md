@@ -78,13 +78,13 @@ These were decided deliberately. Do not "fix" them without a new decision.
    `[a-z0-9_.-]` — so a page URL such as `/my%20page` (WHATWG `URL` does not
    percent-decode `pathname`) currently returns `400` from the static handler
    instead of reaching the page renderer.
-6. **`asset_url` receives the asset map as an explicit argument.** Template
+6. **`assetUrl` receives the asset map as an explicit argument.** Template
    helpers cannot reach request-scoped state: they are handed only
    `frame.value` (`create-render-function.js:391`), and they are bound at
    compile time into render functions cached across requests, so a helper
    closing over a snapshot would capture the first request's snapshot forever.
    Positional arguments *are* resolved through the full frame stack via
-   `resolveCompiledArgument()`, so `{{ asset_url assets "/path" }}` is correct
+   `resolveCompiledArgument()`, so `{{ assetUrl assets "/path" }}` is correct
    in every scope including inside `{{#each}}`. The templating engine is a
    separate upstream project (its `README.md` documents an `npm test` and a
    Mustache spec baseline that do not exist in this repo) and is **not**
@@ -100,7 +100,7 @@ Build tooling that publishes `src/stylesheets/` and `src/javascript/` into the
 CAS `/assets` namespace **does not exist yet**. After this work lands:
 
 - **Development works.** `src/static-assets/` does not exist, so the developer
-  asset index is empty, every `asset_url` lookup misses, and the fallback
+  asset index is empty, every `assetUrl` lookup misses, and the fallback
   renders the bare source path (`/stylesheets/stylesheet.css`), which
   `tools/devserver.js` already serves from source with `Cache-Control:
   no-cache`. This is the intended development path, not an error path.
@@ -128,7 +128,7 @@ done. T4 requires both T2 and T3.
 
 ### Task 1: Content-access surface for hash-addressed and index-listed assets
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/plugins/README.md` (port and adapter boundaries); `src/app/collections/README.md` is not relevant
 
@@ -208,19 +208,19 @@ and a listing of published assets. Callers never reach past
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added hash validation, direct hash-addressed static-asset reads, the static-assets tree stat, and logical-pathname asset listings.
+- Current state: Complete.
+- Remaining: Nothing in this task.
+- Decisions and discoveries: `listNodes('/assets')` includes the assets tree and nested directory entries, so `listStaticAssets()` filters to blobs and strips the `/assets` prefix. The direct read validates its public arguments and verifies the port returns a stream or `null`.
+- Actual files changed: `src/kixx/content-addressable-store/addressing.js`; `src/kixx/content-addressable-store/content-addressable-store.js`; `src/kixx/content-addressable-store/content-snapshot.js`; `test/unit-tests/kixx/content-addressable-store/addressing.test.js`; `test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js`; `test/unit-tests/kixx/content-addressable-store/content-snapshot.test.js`.
+- Validation run: `node run-linter.js src/kixx/content-addressable-store test/unit-tests/kixx/content-addressable-store` passed; `node run-tests.js test/unit-tests/kixx/content-addressable-store` passed (163 tests, 0 disabled).
 - Blockers: None.
 
 ---
 
 ### Task 2: Unified static asset request handler
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `src/docs/server-error-handling.md`; `src/app/presentation/README.md`
 
@@ -328,19 +328,19 @@ is gone.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Replaced the two legacy request-handler factories with one CAS-backed handler supporting fingerprinted and pathname reads. Moved MIME inference and added a new module README and focused unit coverage.
+- Current state: Complete.
+- Remaining: Nothing in this task.
+- Decisions and discoveries: Pathname-mode `HEAD` and `304` are answered from the index before a stream is opened; fingerprinted `HEAD` reads and cancels its stream to prove blob existence. The fingerprinted helper asserts a missing route hash as a wiring failure but reports a malformed supplied hash as `BadRequestError`.
+- Actual files changed: `src/kixx/static-assets/static-asset-request-handler.js`; `src/kixx/static-assets/mime-types.js`; `src/kixx/static-assets/README.md`; deleted `src/kixx/static-file-server/static-file-server-request-handlers.js` and `src/kixx/static-file-server/mime-types.js`; deleted `test/unit-tests/kixx/static-file-server/static-file-server-request-handlers.test.js`; added `test/unit-tests/kixx/static-assets/static-asset-request-handler.test.js`.
+- Validation run: `node run-linter.js src/kixx/static-assets test/unit-tests/kixx/static-assets` passed; `node run-tests.js test/unit-tests/kixx/static-assets` passed (10 tests, 0 disabled).
 - Blockers: None.
 
 ---
 
-### Task 3: `asset_url` template helper and the page-context asset map
+### Task 3: `assetUrl` template helper and the page-context asset map
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `src/templates/README.md`; `src/kixx/templating/README.md`
 
@@ -351,7 +351,7 @@ asset correctly invalidates the rendered-page cache.
 
 **Scope**
 
-- In: the `asset_url` helper; the `assets` map in the page context; memoization
+- In: the `assetUrl` helper; the `assets` map in the page context; memoization
   of that map; the `/assets` tree hash as a page-cache-key input; helper
   documentation in `src/templates/README.md`.
 - Out: the templating engine itself (explicitly unmodified); base template
@@ -361,7 +361,7 @@ asset correctly invalidates the rendered-page cache.
 
 - **Do not modify `src/kixx/templating/`.** It is a separate upstream project.
   The helper works within the existing contract.
-- Helper signature: `{{ asset_url assets "/stylesheets/stylesheet.css" }}`. The
+- Helper signature: `{{ assetUrl assets "/stylesheets/stylesheet.css" }}`. The
   map is passed explicitly because helpers receive only `frame.value` and are
   compile-time bound into cached render functions; positional arguments resolve
   through the full frame stack, so this form is correct in every scope.
@@ -402,7 +402,7 @@ asset correctly invalidates the rendered-page cache.
 
 **Acceptance criteria**
 
-- [ ] `{{ asset_url assets "/x.css" }}` renders `/assets/<hash>/x.css` for a
+- [ ] `{{ assetUrl assets "/x.css" }}` renders `/assets/<hash>/x.css` for a
       published asset.
 - [ ] An unpublished pathname renders the bare pathname.
 - [ ] The helper renders correctly inside `{{#each}}` and inside a partial.
@@ -426,19 +426,19 @@ asset correctly invalidates the rendered-page cache.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added the `assetUrl` helper, a tree-hash-keyed asset-map cache, reserved `assets` context injection, and assets-tree page-cache invalidation. Documented the helper and added unit coverage.
+- Current state: Complete.
+- Remaining: Nothing in this task.
+- Decisions and discoveries: The map is cached independently of compiled-template caching because it is a small immutable index projection. Pathname-to-hash mapping is injected after runtime props so neither page metadata nor response props can shadow it.
+- Actual files changed: `src/kixx/hyperview/helpers/asset-url.js`; `src/kixx/hyperview/hyperview-service.js`; `src/kixx/hyperview/hyperview-page.js`; `src/templates/README.md`; `test/unit-tests/kixx/hyperview/helpers/asset-url.test.js`; `test/unit-tests/kixx/hyperview/hyperview-page.test.js`; `test/unit-tests/kixx/hyperview/hyperview-service.test.js`.
+- Validation run: `node run-linter.js src/kixx/hyperview test/unit-tests/kixx/hyperview` passed; `node run-tests.js test/unit-tests/kixx/hyperview` passed (111 tests, 0 disabled).
 - Blockers: None.
 
 ---
 
 ### Task 4: Route wiring and base templates
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T2, T3
 **Documentation:** `src/app/presentation/README.md`
 
@@ -446,7 +446,7 @@ asset correctly invalidates the rendered-page cache.
 
 The application serves fingerprinted assets on a dedicated route and
 unfingerprinted assets from the catch-all, and base templates request their
-stylesheets and scripts through `asset_url`.
+stylesheets and scripts through `assetUrl`.
 
 **Scope**
 
@@ -463,7 +463,7 @@ stylesheets and scripts through `asset_url`.
   `HyperviewPageHandler`. It exists for assets whose URLs are externally fixed —
   `/favicon.ico`, `/robots.txt` — and for hand-written content references.
 - Base templates replace `/assets/{{ build_id }}/stylesheets/...` and
-  `/assets/{{ build_id }}/javascript/site.js` with `asset_url` calls. `build_id`
+  `/assets/{{ build_id }}/javascript/site.js` with `assetUrl` calls. `build_id`
   is referenced by three templates and supplied by nothing, so every reference
   is removed; no `build_id` plumbing exists to clean up.
 - `tools/devserver.js:69` strips `/assets/<any-segment>/` before its source-file
@@ -473,7 +473,7 @@ stylesheets and scripts through `asset_url`.
 **Expected touch points**
 
 - `src/virtual-hosts.js` — uncomment and rewrite both route blocks
-- `src/templates/base/default.html` — `asset_url` for stylesheet and script
+- `src/templates/base/default.html` — `assetUrl` for stylesheet and script
 - `src/templates/base/admin.html` — same
 - `src/templates/base/admin-login.html` — same
 
@@ -496,19 +496,19 @@ stylesheets and scripts through `asset_url`.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Wired the fingerprinted route and catch-all pathname handler, converted all three base templates to `assetUrl`, and updated interim legacy plugin imports to the moved MIME module so the full suite stays loadable until T5 deletes those plugins.
+- Current state: Complete.
+- Remaining: Nothing in this task.
+- Decisions and discoveries: The route order preserves the fingerprinted handler before the catch-all. The MIME import updates are temporary dependencies of the legacy plugins and are removed with those plugins in T5.
+- Actual files changed: `src/virtual-hosts.js`; `src/templates/base/default.html`; `src/templates/base/admin.html`; `src/templates/base/admin-login.html`; `src/plugins/node-static-file-server/lib/static-file-server-store.js`; `src/plugins/cloudflare-static-file-server/lib/static-file-server-store.js`.
+- Validation run: `node run-linter.js src/virtual-hosts.js` passed; `node run-tests.js` passed (1217 tests, 0 disabled); `rg -n "build_id" src/templates/` returned no matches.
 - Blockers: None.
 
 ---
 
 ### Task 5: Remove the legacy static file stack
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T4
 **Documentation:** `src/plugins/README.md`
 
@@ -583,19 +583,19 @@ config for something load-bearing.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Deleted the legacy framework module, both platform adapter packages, their registrations and config, obsolete ETag test, and Build-ID placeholder. Updated affected unit and e2e test comments.
+- Current state: Complete.
+- Remaining: Nothing in this task.
+- Decisions and discoveries: The legacy Node adapter's `./public` directory is no longer a serving source; deployment assets must be published to the CAS. No standalone plugin test suites existed for the deleted adapters.
+- Actual files changed: deleted `src/kixx/static-file-server/`; deleted `src/plugins/node-static-file-server/`; deleted `src/plugins/cloudflare-static-file-server/`; `src/plugins/node.js`; `src/plugins/cloudflare.js`; `src/node-config.js`; `src/cloudflare-config.js`; `src/kixx/utils/build-id.js`; `test/unit-tests/kixx/utils/build-id.test.js`; `test/unit-tests/kixx/context/app-runtime.test.js`; `test/end-to-end/020-publishing-api/put-static-asset.test.js`; `test/end-to-end/020-publishing-api/put-static-asset-errors.test.js`.
+- Validation run: `node run-linter.js` passed; `node run-tests.js` passed (1216 tests, 0 disabled); all four stale-reference sweeps returned no matches.
 - Blockers: None.
 
 ---
 
 ### Task 6: Documentation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T2, T3, T4, T5
 **Documentation:** `src/docs/code-documentation-guide.md`
 
@@ -650,10 +650,10 @@ fingerprinted design, and none describes the removed stack.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added the CAS static-assets module README and rewrote the presentation-layer serving section for the unified handler.
+- Current state: Complete.
+- Remaining: Nothing in this task.
+- Decisions and discoveries: The documentation records that hash-addressed reads are bearer capabilities, fingerprinted responses have no `Content-Length`, no mode uses `Last-Modified`, and build tooling has not yet published source assets to the CAS.
+- Actual files changed: `src/kixx/static-assets/README.md`; `src/app/presentation/README.md`.
+- Validation run: `rg -n "static-file-server" src/ test/` returned no matches; manually checked both documents against the handler options and behavior.
 - Blockers: None.

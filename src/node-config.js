@@ -49,9 +49,6 @@ export default {
                 staticAssetsDirectory: './src/static-assets',
                 emailsDirectory: './src/emails',
             },
-            STATIC_FILE_STORE: {
-                directory: './public',
-            },
         },
         staging: {
             HYPERVIEW: {
@@ -96,9 +93,6 @@ export default {
             CONTENT_STORE: {
                 rootDirectory: '../data/nodejs_app/content_store',
             },
-            STATIC_FILE_STORE: {
-                directory: './public',
-            },
         },
         production: {
             HYPERVIEW: {
@@ -142,9 +136,6 @@ export default {
             },
             CONTENT_STORE: {
                 rootDirectory: '../data/nodejs_app/content_store',
-            },
-            STATIC_FILE_STORE: {
-                directory: './public',
             },
         },
     },

@@ -60,11 +60,6 @@ export default {
                 kvBindingName: 'CA_STORE_KV_STORE',
                 durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
             },
-            STATIC_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'STATIC_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
         },
         staging: {
             HYPERVIEW: {
@@ -121,11 +116,6 @@ export default {
                 kvBindingName: 'CA_STORE_KV_STORE',
                 durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
             },
-            STATIC_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'STATIC_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
-            },
         },
         production: {
             HYPERVIEW: {
@@ -181,11 +171,6 @@ export default {
                 indexCacheTtlSeconds: 10,
                 kvBindingName: 'CA_STORE_KV_STORE',
                 durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
-            },
-            STATIC_FILE_STORE: {
-                type: 'kv_namespace',
-                bindingName: 'STATIC_FILE_STORE',
-                namespaceId: 'a-kv-namespace-uuid',
             },
         },
     },

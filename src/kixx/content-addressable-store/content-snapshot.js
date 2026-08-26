@@ -155,6 +155,31 @@ export default class ContentSnapshot {
     }
 
     /**
+     * Reads the static-assets directory entry without fetching any bytes.
+     * @returns {import('./content-addressable-index.js').IndexEntry|null} The assets tree entry, or null when no assets are published
+     */
+    statStaticAssets() {
+        return this.#index.getNode(getStaticAssetPath('/'));
+    }
+
+    /**
+     * Lists the static asset blobs in this snapshot with logical pathnames.
+     * @returns {import('./content-addressable-index.js').IndexEntry[]} Asset entries in pathname sort order
+     */
+    listStaticAssets() {
+        const assetsPath = getStaticAssetPath('/');
+
+        return this.#index.listNodes(assetsPath)
+            .filter(({ kind }) => kind === 'blob')
+            .map((entry) => {
+                return {
+                    ...entry,
+                    pathname: entry.pathname.slice(assetsPath.length),
+                };
+            });
+    }
+
+    /**
      * Reads a static asset as a stream of its bytes.
      * @param {Object} context - Request or execution context
      * @param {string} pathname - Logical asset pathname

@@ -213,6 +213,35 @@ describe('ContentAddressableStore', ({ describe }) => {
         });
     });
 
+    describe('getStaticAssetByHash()', ({ it }) => {
+        it('reads a blob directly by hash with its assets storage pathname', async () => {
+            const stream = new ReadableStream();
+            const calls = [];
+            const store = makeStore({
+                async getFile(context, type, pathname, hash) {
+                    calls.push({ context, type, pathname, hash });
+                    return stream;
+                },
+            });
+
+            assertEqual(stream, await store.getStaticAssetByHash({}, '/images/logo.svg', 'ny2axhh7wn5jrhffittlw6akfq'));
+            assertEqual(1, calls.length);
+            assertEqual('stream', calls[0].type);
+            assertEqual('/assets/images/logo.svg', calls[0].pathname);
+            assertEqual('ny2axhh7wn5jrhffittlw6akfq', calls[0].hash);
+        });
+
+        it('returns null when the addressed blob is absent', async () => {
+            const store = makeStore({
+                async getFile() {
+                    return null;
+                },
+            });
+
+            assertEqual(null, await store.getStaticAssetByHash({}, '/missing.svg', 'ny2axhh7wn5jrhffittlw6akfq'));
+        });
+    });
+
     describe('hashSet()', ({ it }) => {
         it('hashes a canonicalizable collection', async () => {
             const store = makeStore(makeContentStore());

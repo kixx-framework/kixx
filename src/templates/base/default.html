@@ -4,10 +4,7 @@
         {{>common-site-meta.html}}
         {{>common-seo-meta.html}}
 
-        {{!--
-            The Build ID namespaces this asset URL, so it can use an immutable
-            cache policy without changing the asset named by this page. --}}
-        <link href="/assets/{{ build_id }}/stylesheets/stylesheet.css" rel="stylesheet">
+        <link href="{{ assetUrl assets "/stylesheets/stylesheet.css" }}" rel="stylesheet">
 
         {{#if includes.page_stylesheet }}
         <style>{{{ includes.page_stylesheet }}}</style>
@@ -26,9 +23,6 @@
             <p>No content.</p>
         {{/if}}{{/if}}
 
-        {{!--
-            The Build ID namespaces this asset URL, so it can use an immutable
-            cache policy without changing the asset named by this page. --}}
-        <script type="module" src="/assets/{{ build_id }}/javascript/site.js"></script>
+        <script type="module" src="{{ assetUrl assets "/javascript/site.js" }}"></script>
     </body>
 </html>
