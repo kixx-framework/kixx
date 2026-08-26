@@ -871,8 +871,13 @@ src/
 │       └── hello-world/
 │           └── page.json
 ├── static-assets/
-│   └── images/
-│       └── logo.svg
+│   ├── images/
+│   │   └── logo.svg
+│   ├── javascript/
+│   │   └── site.js
+│   └── stylesheets/
+│       ├── stylesheet.css
+│       └── lib/
 ├── emails/
 │   └── welcome/
 │       ├── email.json
@@ -887,16 +892,9 @@ src/
         └── website-header.html
 ```
 
-Use `src/pages/` for route-specific metadata and included text content.
-`page.json` names page templates and page-specific partial sources under
-`src/templates/pages/`; template source files do not live beside page metadata.
-Use `src/templates/base/` and `src/templates/partials/` for shared templates.
-Static assets belong under `src/static-assets/`.
+Use `src/pages/` for route-specific metadata and included text content. `page.json` names page templates and page-specific partial sources under `src/templates/pages/`; template source files do not live beside page metadata. Use `src/templates/base/` and `src/templates/partials/` for shared templates. Static assets belong under `src/static-assets/`. Browser stylesheet and JavaScript sources belong under its `stylesheets/` and `javascript/` directories respectively; their browser URLs remain `/stylesheets/**` and `/javascript/**`.
 
-An email directory contains `email.json` and the files it names. The HTML and
-text representations are independent; either may be omitted. `partials` lists
-template ids and filenames in the same email directory. `contextData` supplies
-static render data:
+An email directory contains `email.json` and the files it names. The HTML and text representations are independent; either may be omitted. `partials` lists template ids and filenames in the same email directory. `contextData` supplies static render data:
 
 ```json
 {
@@ -920,9 +918,6 @@ static render data:
     ]
 }
 ```
-
-The existing `src/public/` directory is not part of this source-backed content
-layout. Its deprecation is intentionally deferred.
 
 ### Page Context Data
 

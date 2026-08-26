@@ -1,4 +1,4 @@
-import kQuery from './lib/kquery.js';
+import kQuery from '/javascript/lib/kquery.js';
 
 // Set up the theme toggle.
 (function () {

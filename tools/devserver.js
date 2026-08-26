@@ -4,7 +4,6 @@ import util from 'node:util';
 import { isNonEmptyString } from '../src/kixx/assertions/mod.js';
 import { OperationalError } from '../src/kixx/errors/mod.js';
 import AppServerProcess from './devserver/app-server-process.js';
-import { serveSourceFile } from './devserver/source-file-handler.js';
 
 
 // Mirrors src/node-server.js's CLI surface so this script is a drop-in
@@ -62,19 +61,6 @@ const devServer = http.createServer((request, response) => {
 });
 
 async function handleRequest(request, response) {
-    // Retain dot segments for the source-file handlers' validation rather than
-    // letting URL normalization collapse a traversal attempt before it reaches
-    // their shared path-safety guard.
-    const pathname = request.url.split(/[?#]/)[0];
-    const assetPathname = pathname.replace(/^\/assets\/[^/]+(?=\/)/, '');
-    const sourcePathname = assetPathname === pathname ? pathname : assetPathname;
-
-    // Browser CSS and JavaScript are not copied into public/ by a development
-    // build step, so serve recognized paths directly from their source roots.
-    if (await serveSourceFile(request, response, sourcePathname)) {
-        return;
-    }
-
     try {
         await appServerProcess.ensureFresh();
     } catch (cause) {

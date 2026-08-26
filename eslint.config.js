@@ -342,10 +342,9 @@ export default [
             'run-tests.js',
         ],
         ignores: [
-            'src/javascript/',
             'src/pages/',
             'src/public/',
-            'src/stylesheets/',
+            'src/static-assets/',
             'src/templates/',
         ],
         languageOptions: {
@@ -381,10 +380,9 @@ export default [
     {
         // For Web browsers
         files: [
-            'src/javascript/',
             'src/pages/',
             'src/public/',
-            'src/stylesheets/',
+            'src/static-assets/',
             'src/templates/',
         ],
         languageOptions: {

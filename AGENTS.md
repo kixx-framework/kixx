@@ -100,7 +100,7 @@ src/docs/frontend-development-guide.md
 - Deciding where a new CSS rule belongs — an existing primitive, a new shared utility, or a page-local stylesheet.
 - Naming classes, adding design tokens, or tuning a component's custom properties.
 
-**What this document provides:** The frontend conventions for this project — how to use the live style guide as the design reference, the no-inline-styles resolution order, how `src/stylesheets/` is organized into shared vs. admin-only files, BEM class naming, the three-tier design token system, the Every Layout–style layout primitives, and the page-local `page_stylesheet` include pattern.
+**What this document provides:** The frontend conventions for this project — how to use the live style guide as the design reference, the no-inline-styles resolution order, how `src/static-assets/stylesheets/` is organized into shared vs. admin-only files, BEM class naming, the three-tier design token system, the Every Layout–style layout primitives, and the page-local `page_stylesheet` include pattern.
 
 ### Plugins and Cross-Platform Architecture
 
@@ -128,9 +128,9 @@ Use this wrapper for normal development instead of running `src/node-server.js` 
 
 Change the --port option to avoid port conflicts if needed.
 
-The wrapper restarts the child app server after the site has been idle for a few seconds, so JavaScript source changes are picked up on the next request without manually restarting the command. Server restarts are not needed for changes to `templates/`, `pages/` data, or source stylesheets under `src/stylesheets/`.
+The wrapper restarts the child app server after the site has been idle for a few seconds, so JavaScript source changes are picked up on the next request without manually restarting the command. Server restarts are not needed for changes to templates, page data, or browser assets under `src/static-assets/`.
 
-The dev server also serves CSS and JavaScript directly from `src/stylesheets/` and `src/javascript/`, allowing you to skip an asset build process. It recognizes `/assets/<build-id>/stylesheets/**` and `/assets/<build-id>/javascript/**` as source-file URLs in development, ignores the Build ID segment, and sends `Cache-Control: no-cache` so edits appear on reload. The bare `/stylesheets/**` and `/javascript/**` source-file URLs remain available too.
+The developer content store scans browser assets under `src/static-assets/stylesheets/` and `src/static-assets/javascript/`. `assetUrl` fingerprints template-linked entrypoints, while their root-relative `/stylesheets/**` and `/javascript/**` imports use pathname mode and revalidate independently. The devserver only proxies asset requests; cache policy comes from the application. This does not build or publish production assets.
 
 Add `.json` to the end of any URL to get the template context object as JSON, including the page's includes content:
 

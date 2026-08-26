@@ -29,32 +29,32 @@ Do not use inline `style="..."` attributes in HTML templates. Inline styles bypa
 When you need styling, resolve it in this order:
 
 1. **Reuse an existing component, utility, or layout primitive.** Most page structure is a composition of the primitives described below.
-2. **Extend an existing shared stylesheet.** If nothing fits and the rule is reusable, add a well-named class to the appropriate file in `stylesheets/lib/`.
+2. **Extend an existing shared stylesheet.** If nothing fits and the rule is reusable, add a well-named class to the appropriate file in `src/static-assets/stylesheets/lib/`.
 3. **Use a page-local `page_stylesheet` include for genuinely localized styles.** When a style truly belongs to one page and is not reusable, supply it through the `page_stylesheet` include instead of an inline `style` attribute. See app/presentation/README.md to learn how to use page includes.
 
 This rule also applies to CSS custom properties. Do not tune a component with an inline `style` attribute. Put the custom-property override in a modifier class, a reusable class, or the page's local stylesheet.
 
 ## File Organization
 
-CSS lives under `stylesheets/`, served directly by the development server. There are two style sheet bundles with a dedicated entry point for each one:
+CSS source lives under `src/static-assets/stylesheets/`. There are two stylesheet bundles with a dedicated entrypoint for each one:
 
-- stylesheets/admin.css
-- stylesheets/stylesheet.css
+- `src/static-assets/stylesheets/admin.css`
+- `src/static-assets/stylesheets/stylesheet.css`
 
 ```text
-stylesheets/
+src/static-assets/stylesheets/
 ├── admin.css
 ├── stylesheet.css
 └── lib/             # Source library for admin.css and stylesheet.css
 ```
 
-When importing source files from stylesheets/lib/ into the bundle entry points, keep the bundle ordered from low-level foundations to higher-level components.
+Templates link to public logical URLs such as `/stylesheets/stylesheet.css`; source imports use root-relative logical URLs such as `/stylesheets/lib/layout.css`. Keep the bundle ordered from low-level foundations to higher-level components.
 
 Before adding a new file to `lib/`, prefer extending one of the existing files. The project favors a handful of well-documented stylesheets over many small files, so related rules stay close to the examples and comments that explain them.
 
 ## CSS Formatting
 
-Use the formatting already present in `stylesheets/`:
+Use the formatting already present in `src/static-assets/stylesheets/`:
 
 - Four spaces for indentation.
 - One selector per line when a selector list has multiple selectors.
@@ -214,4 +214,4 @@ To supply page-local CSS, add a `page_stylesheet` entry to the page's `includes`
 
 `pages/admin/style-guide/colors/` is a working example of this pattern: `colors/page.json` includes both `body.html` and `page.css`, keeping one-page layout rules out of the shared stylesheets.
 
-This is the supported pattern for localized styles. Reach for `page_stylesheet` only when the styling is specific to one page and is not worth generalizing into `stylesheets/lib/`.
+This is the supported pattern for localized styles. Reach for `page_stylesheet` only when the styling is specific to one page and is not worth generalizing into `src/static-assets/stylesheets/lib/`.

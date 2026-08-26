@@ -21,3 +21,23 @@ StaticAssetRequestHandler({
 Options are `fingerprinted`, `cacheControl`, `contentType`, `throwNotFound`, and `skipWhenFound`. `throwNotFound` and `skipWhenFound` matter primarily in pathname mode. Fingerprinted route input is machine-minted and malformed input returns 400; a missing blob returns 404.
 
 Hash-addressed reads deliberately bypass the snapshot index. Production adapters key this read by hash alone, so the hash is a bearer capability and the pathname is not access control.
+
+## Development browser assets
+
+Developer mode scans `src/static-assets/` into the current content snapshot.
+Browser sources live in `src/static-assets/stylesheets/` and
+`src/static-assets/javascript/`, while their public logical pathnames remain
+`/stylesheets/**` and `/javascript/**`.
+
+`assetUrl` gives template-linked entrypoints their own fingerprinted URL and
+immutable cache policy. An entrypoint must import dependencies through a
+root-relative logical pathname, such as `/stylesheets/lib/layout.css` or
+`/javascript/lib/kquery.js`, rather than a relative URL. A relative import
+would inherit the entrypoint hash, but hash-addressed storage reads key on that
+hash alone and would return the entrypoint blob for a dependency request.
+
+These pathname-mode dependencies resolve from the current snapshot and
+revalidate independently. Editing an asset changes its developer content hash
+on the next scan without an asset build or devserver restart. This only enables
+development use of the content-addressable store: production build and
+publishing tooling is not available yet.

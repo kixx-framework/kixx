@@ -67,6 +67,9 @@ describe('DeveloperSourceScanner', ({ it }) => {
             'templates/partials/common/site.html': 'Common partial',
             'templates/base/default.html': 'Base template',
             'static-assets/images/logo.svg': '<svg></svg>',
+            'static-assets/stylesheets/stylesheet.css': 'Stylesheet',
+            'static-assets/stylesheets/admin.css': 'Admin stylesheet',
+            'static-assets/javascript/site.js': 'Site JavaScript',
             'emails/welcome/email.json': JSON.stringify({
                 htmlTemplate: { id: 'welcome.html', filename: 'message.html' },
                 partials: [
@@ -92,6 +95,9 @@ describe('DeveloperSourceScanner', ({ it }) => {
             assert(manifest.has('/templates/__template-partials-bundle'));
             assert(manifest.has('/templates/__base-templates-bundle'));
             assert(manifest.has('/assets/images/logo.svg'));
+            assert(manifest.has('/assets/stylesheets/stylesheet.css'));
+            assert(manifest.has('/assets/stylesheets/admin.css'));
+            assert(manifest.has('/assets/javascript/site.js'));
             assertEqual('htmlTemplate,partial,partial', email.sources.map(({ role }) => role).join(','));
             assertEqual('welcome.html,legal.html,signature.html', email.sources.map(({ id }) => id).join(','));
             assertFalsy(manifest.has('/pages/admin/style-guide/copy-fields/body.html'));

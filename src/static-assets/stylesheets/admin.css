@@ -7,6 +7,6 @@
     style-guide rules layer on top.
 ----------------------------------------------------------------------------- */
 
-@import "./stylesheet.css";
-@import "./lib/admin-shell.css";
-@import "./lib/admin-style-guide.css";
+@import "/stylesheets/stylesheet.css";
+@import "/stylesheets/lib/admin-shell.css";
+@import "/stylesheets/lib/admin-style-guide.css";
