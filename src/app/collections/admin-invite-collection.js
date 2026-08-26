@@ -53,18 +53,17 @@ export default class AdminInviteCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {Object} args - Creation arguments.
      * @param {string} args.createdBy - Admin user id that authored the invite.
-     * @param {string[]} [args.roles=[]] - Role name(s) the invite confers on redemption.
-     * @param {string|null} [args.rolePreset=null] - Name of the preset these roles were expanded from.
+     * @param {string[]} [args.roles=[]] - Role id(s) the invite confers on redemption.
      * @returns {Promise<{ token: string, record: AdminInviteRecord }>} The raw token (shown once) and stored record.
      * @throws {AssertionError} When createdBy is not a non-empty string.
      * @throws {ValidationError} When the generated record fails validation.
      * @throws {DocumentAlreadyExistsError} When the generated token hash already exists.
      */
     async createInvite(context, args) {
-        // Default the optional fields at this create-call boundary (not in
-        // AdminInviteRecord#validate()); the roles and the preset name they were
-        // expanded from are both chosen by the calling Transaction Script.
-        const { createdBy, roles = [], rolePreset = null } = args ?? {};
+        // Default roles at this create-call boundary (not in
+        // AdminInviteRecord#validate()); which roles an invite confers is
+        // chosen by the calling Transaction Script.
+        const { createdBy, roles = [] } = args ?? {};
         assertNonEmptyString(createdBy, 'AdminInviteCollection#createInvite() createdBy');
 
         const nowMs = Date.now();
@@ -82,7 +81,6 @@ export default class AdminInviteCollection extends Collection {
             consumedAt: null,
             revokedAt: null,
             roles,
-            rolePreset,
         });
 
         return { token, record };
@@ -141,11 +139,10 @@ export default class AdminInviteCollection extends Collection {
             inviteExpirationDate: now,
             consumedAt: now,
             revokedAt: null,
-            // The bootstrap marker never carries a chosen role or preset —
-            // bootstrap redemption confers Root Admin directly, not from this
-            // record, and Root Admin is reachable through no preset at all.
+            // The bootstrap marker never carries a chosen role — bootstrap
+            // redemption confers Root Admin directly, not from this record,
+            // and Root Admin carries no category, so no invite can name it.
             roles: [],
-            rolePreset: null,
         });
     }
 

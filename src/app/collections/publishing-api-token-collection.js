@@ -2,10 +2,11 @@ import { generateSecretToken, sha256Hex } from '../../kixx/utils/crypto.js';
 import Collection from './base-document-store-collection.js';
 import PublishingApiTokenRecord from './publishing-api-token-record.js';
 import { assert, assertNonEmptyString } from '../../kixx/assertions/mod.js';
-import { areRoleGrantsWithinDomain, isRegisteredRoleName } from '../lib/roles.js';
+import { isRoleId } from '../permissions/roles.js';
 
 
 const PUBLISHING_API_TOKEN_PREFIX = 'kxpat_';
+const EDITOR_ROLE_CATEGORY = 'editor';
 
 
 /**
@@ -36,12 +37,12 @@ export default class PublishingApiTokenCollection extends Collection {
      * @param {Object} context - Request or execution context passed through to the document store.
      * @param {Object} args - Creation arguments.
      * @param {string} args.createdBy - Admin user id that minted the token.
-     * @param {string[]} args.roles - Role names granted to this token.
+     * @param {string[]} args.roles - Role ids granted to this token.
      * @param {string|null} [args.description] - Operator-facing token description.
      * @param {number} args.ttlSeconds - Positive token lifetime in seconds.
      * @returns {Promise<{ token: string, record: PublishingApiTokenRecord }>} The raw token and stored record.
-     * @throws {AssertionError} When required creation arguments are invalid, a role name is
-     *   unregistered, or a role's grants are not confined to the publishing domain.
+     * @throws {AssertionError} When required creation arguments are invalid or a role id is
+     *   not attachable to a publishing token.
      * @throws {ValidationError} When the generated record fails validation.
      * @throws {DocumentAlreadyExistsError} When the generated token hash already exists.
      */
@@ -62,13 +63,14 @@ export default class PublishingApiTokenCollection extends Collection {
             Array.isArray(roles) && roles.length > 0,
             'PublishingApiTokenCollection#createToken() roles must be a non-empty array',
         );
+        // One check, not three. An unregistered id carries no category, so it
+        // fails this one already, and the role registry proves at import that
+        // every editor-category role's grants stay inside the publishing URN
+        // domain. Reintroducing either check here would re-derive on every
+        // token write what is already true before the first request is served.
         assert(
-            roles.every(isRegisteredRoleName),
-            'PublishingApiTokenCollection#createToken() roles must be registered role names',
-        );
-        assert(
-            roles.every((name) => areRoleGrantsWithinDomain(name, 'publishing')),
-            'PublishingApiTokenCollection#createToken() roles must be confined to the publishing domain',
+            roles.every((id) => isRoleId(id, EDITOR_ROLE_CATEGORY)),
+            'PublishingApiTokenCollection#createToken() roles must be attachable publishing role ids',
         );
 
         const nowMs = Date.now();

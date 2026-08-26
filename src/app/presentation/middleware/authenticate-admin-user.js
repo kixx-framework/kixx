@@ -1,7 +1,7 @@
 import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { UnauthenticatedError } from '../../../kixx/errors/mod.js';
 import { ADMIN_SESSION_COOKIE_NAME } from '../lib/admin-session-cookie.js';
-import { deriveRolePermissions } from '../../lib/roles.js';
+import { deriveRolePermissions } from '../../permissions/roles.js';
 import { authenticateAdminSession } from '../../transaction-scripts/admin-users/authenticate-admin-session.js';
 
 
@@ -26,7 +26,7 @@ export default async function authenticateAdminUser(context, request, response) 
     const user = await authenticateAdminSession(context, sessionId);
 
     // Grants are derived fresh on every request from the user's stored role
-    // names, never persisted; editing a role's grants in code changes every
+    // ids, never persisted; editing a role's grants in code changes every
     // holder's capabilities on the next deploy with no data migration.
     context.setUser(Object.assign({}, user, {
         permissions: deriveRolePermissions(user.roles),

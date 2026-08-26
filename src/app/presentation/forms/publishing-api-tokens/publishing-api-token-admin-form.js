@@ -1,7 +1,7 @@
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import { isNonEmptyString, isUndefined, isString } from '../../../../kixx/assertions/mod.js';
 import BaseForm from '../base-form.js';
-import { ROLE_EDITOR } from '../../../lib/roles.js';
+import { ROLE_EDITOR } from '../../../permissions/roles.js';
 import { normalizeOptionalStringAttribute, normalizeStringAttribute } from '../utils.js';
 import {
     DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS,
@@ -12,9 +12,9 @@ import {
 const ONE_DAY_IN_SECONDS = 60 * 60 * 24;
 const INTEGER_STRING_PATTERN = /^[0-9]+$/u;
 
-// 'Editor' is the only publishing role today, so every admin-panel-created
+// Editor is the only publishing role today, so every admin-panel-created
 // token is assigned it directly with no picker. A live role selector is
-// deferred until a second publishing role exists (see roles.js).
+// deferred until a second publishing role exists (see permissions/roles.js).
 const DEFAULT_ROLES = Object.freeze([ ROLE_EDITOR ]);
 
 // Common lifetime choices for the admin panel select control. The longest
@@ -31,7 +31,7 @@ const TIME_TO_LIVE_OPTIONS = [
 /**
  * Backs the "create token" control in the Publishing API token management UI.
  *
- * Every admin-panel-created token is assigned the 'Editor' role — the only
+ * Every admin-panel-created token is assigned the Editor role — the only
  * publishing role today — so this form exposes no role field, only an
  * operator description and a bounded TTL.
  * @extends BaseForm
@@ -123,7 +123,7 @@ export default class PublishingApiTokenCreateForm extends BaseForm {
 
     /**
      * Returns the fields consumed by createPublishingApiToken(), always assigning the
-     * 'Editor' role since the admin panel exposes no role field.
+     * Editor role since the admin panel exposes no role field.
      * @returns {{ roles: string[], description: string|null, timeToLiveSeconds: number }} Plain JSON form values.
      */
     toJSON() {

@@ -1,19 +1,19 @@
 import { isString, isUndefined } from '../../../../kixx/assertions/mod.js';
 import { ValidationError } from '../../../../kixx/errors/mod.js';
-import { isRoleName } from '../../../lib/roles.js';
+import { ROLE_EDITOR, isRoleId } from '../../../permissions/roles.js';
 import { normalizeOptionalStringAttribute } from '../utils.js';
 
 
 export const DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 export const MAX_PUBLISHING_API_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 365;
 
-// 'Editor' is the only publishing role today, so an omitted or empty roles
+// Editor is the only publishing role today, so an omitted or empty roles
 // submission defaults to it rather than requiring every JSON:API caller to
 // spell it out. A live role picker is deferred until a second publishing
-// role exists (see roles.js).
-export const DEFAULT_PUBLISHING_API_TOKEN_ROLE = 'Editor';
+// role exists (see permissions/roles.js).
+export const DEFAULT_PUBLISHING_API_TOKEN_ROLE = ROLE_EDITOR;
 
-const PUBLISHING_ROLE_CATEGORY = 'publishing';
+const EDITOR_ROLE_CATEGORY = 'editor';
 
 
 /**
@@ -36,7 +36,7 @@ export default class CreatePublishingApiTokenForm {
             roles: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Publishing role names for the minted token; defaults to ["Editor"] when omitted or empty.',
+                description: `Publishing role ids for the minted token; defaults to ["${ ROLE_EDITOR }"] when omitted or empty.`,
             },
             timeToLiveSeconds: {
                 type: 'integer',
@@ -54,7 +54,7 @@ export default class CreatePublishingApiTokenForm {
 
     /**
      * @param {Object} [attributes] - JSON:API token-creation attributes.
-     * @param {*} [attributes.roles] - Publishing role names for the minted token.
+     * @param {*} [attributes.roles] - Publishing role ids for the minted token.
      * @param {*} [attributes.timeToLiveSeconds] - Optional token lifetime in seconds.
      * @param {*} [attributes.description] - Optional operator-facing description.
      */
@@ -81,9 +81,9 @@ export default class CreatePublishingApiTokenForm {
         if (
             !Array.isArray(this.roles) ||
             this.roles.length === 0 ||
-            !this.roles.every((name) => isRoleName(name, PUBLISHING_ROLE_CATEGORY))
+            !this.roles.every((id) => isRoleId(id, EDITOR_ROLE_CATEGORY))
         ) {
-            error.push('Roles must be one or more registered publishing role names', 'roles');
+            error.push('Roles must be one or more publishing role ids', 'roles');
         }
 
         if (!Number.isInteger(this.timeToLiveSeconds)) {

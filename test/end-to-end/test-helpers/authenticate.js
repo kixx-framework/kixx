@@ -9,8 +9,8 @@ import CookieJar from './cookie-jar.js';
 export const SUPER_ADMIN_USERNAME = `${ crypto.randomUUID() }@kixx-test.name`;
 export const SUPER_ADMIN_PASSWORD = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
 
-// Create a super admin with the Developer Admin preset.
-const USER_ROLES_PRESET = 'Developer Admin';
+// Create a super admin carrying the Developer role.
+const USER_ROLE_ID = 'developer';
 
 let cachedRootAdmin = null;
 let cachedSuperAdmin = null;
@@ -143,7 +143,7 @@ export async function createSuperAdmin(rootUserCookies, username, password) {
 
     const inviteForm = new FormData();
     inviteForm.append('csrf_token', inviteCsrfToken);
-    inviteForm.append('role_preset', USER_ROLES_PRESET);
+    inviteForm.append('role_id', USER_ROLE_ID);
 
     const createInviteResponse = await fetch(inviteUrl, {
         method: 'POST',

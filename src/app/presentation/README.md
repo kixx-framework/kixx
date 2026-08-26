@@ -568,16 +568,16 @@ Forms that back HTML pages extend `BaseForm` (`app/presentation/forms/base-form.
 
 **Never override `getFormContext()`.** It owns the action-URL compilation, the per-field error projection, and the `writeOnly` value omission, and a subclass that rebuilds or patches the context it returns can break any of them — including echoing a submitted password back into a re-rendered form. There are exactly two extension points:
 
-- **`getDynamicFieldMetadata(context)`** — when a field's render metadata is sourced at request time rather than declared statically in the schema. The canonical case is a `select` whose `options` come from a registry (`AdminInviteCreateForm` fills `role_preset` from the role-preset registry) so the rendered choices cannot drift from what the Transaction Script accepts.
+- **`getDynamicFieldMetadata(context)`** — when a field's render metadata is sourced at request time rather than declared statically in the schema. The canonical case is a `select` whose `options` come from a registry (`AdminInviteCreateForm` fills `role_id` from the role registry) so the rendered choices cannot drift from what the Transaction Script accepts.
 - **`static fromFormData(formData)`** — when the form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
 
 ```js
 getDynamicFieldMetadata() {
-    const options = listRolePresets().map((preset) => ({ value: preset.name, label: preset.name }));
+    const options = listAttachableRoles('admin').map((role) => ({ value: role.id, label: role.name }));
 
     return {
-        role_preset: {
-            label: 'Role preset',
+        role_id: {
+            label: 'Role',
             options,
         },
     };
