@@ -11,6 +11,10 @@ import {
     assertGreaterThan,
 } from '../assertions/mod.js';
 
+
+const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
+
+
 /**
  * @typedef {import('../context/request-context.js').default} RequestContext
  */
@@ -203,7 +207,10 @@ export default class HttpRouter {
             response.setHeader('allow', error.allowedMethods.join(', '));
         }
 
-        return response.respondWithJSON(statusCode, { errors }, { whiteSpace: 4 });
+        return response.respondWithJSON(statusCode, { errors }, {
+            contentType: JSON_API_CONTENT_TYPE,
+            whiteSpace: 4,
+        });
     }
 
     #findTargetForRequest(request, route) {

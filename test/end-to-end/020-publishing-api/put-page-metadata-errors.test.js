@@ -187,9 +187,9 @@ describe('PUT /publishing-api/v1/pages/*pathname with an unsupported content typ
         assertEqual(result.url.href, result.response.url);
     });
 
-    // UnsupportedMediaTypeError carries an `accept` list, but neither
-    // mapErrorToJsonApiError() nor jsonApiErrorHandler() puts it on the wire, so
-    // there is nothing to assert about it here.
+    // UnsupportedMediaTypeError carries an `accept` list, but the router's
+    // JSON:API fallback does not put it on the wire, so there is nothing to
+    // assert about it here.
     it('returns the error in a well formatted JSON:API payload', () => {
         assertSingleJsonApiError(result, {
             status: '415',

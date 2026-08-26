@@ -1,7 +1,6 @@
 import HyperviewPageHandler from './app/presentation/request-handlers/hyperview/hyperview-page-handler.js';
 import adminErrorHandler from './app/presentation/error-handlers/admin-error-handler.js';
 import adminAuthErrorHandler from './app/presentation/error-handlers/admin-auth-error-handler.js';
-import jsonApiErrorHandler from './app/presentation/error-handlers/json-api-error-handler.js';
 import authenticateAdminUser from './app/presentation/middleware/authenticate-admin-user.js';
 import authenticatePublishingToken from './app/presentation/middleware/authenticate-publishing-token.js';
 import * as AdminUsers from './app/presentation/request-handlers/admin-panel/admin-users.js';
@@ -80,9 +79,6 @@ export default [
             {
                 pattern: '/admin-api/v1',
                 name: 'admin-api',
-                errorHandlers: [
-                    jsonApiErrorHandler,
-                ],
                 routes: adminApiRoutes,
             },
             {
@@ -90,9 +86,6 @@ export default [
                 name: 'publishing-api',
                 inboundMiddleware: [
                     authenticatePublishingToken,
-                ],
-                errorHandlers: [
-                    jsonApiErrorHandler,
                 ],
                 routes: publishingApiRoutes,
             },

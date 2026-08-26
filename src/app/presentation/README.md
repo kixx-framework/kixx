@@ -799,7 +799,7 @@ For a workflow that accepts user input:
 
 For an application API endpoint that accepts or returns JSON:API documents:
 
-1. Add a route subtree or leaf route in `virtual-hosts.js` and attach `jsonApiErrorHandler` from `app/presentation/error-handlers/json-api-error-handler.js` at the route level. This keeps expected HTTP errors serialized as JSON:API `errors` documents for the whole API surface while unexpected errors continue to propagate to the router fallback.
+1. Add a route subtree or leaf route in `virtual-hosts.js`. Expected errors not handled by a route or target error handler reach the router fallback, which serializes them as JSON:API `errors` documents. Unexpected errors continue to propagate to the platform server's fatal-error policy.
 2. In the request handler, call `assertJsonApiContentType(request)` before parsing a JSON:API request body. JSON:API requests must use `Content-Type: application/vnd.api+json`; optional media-type parameters are ignored by the helper.
 3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the whole returned resource into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script. `fromJsonApi(resource)` always takes the resource and reads `resource.attributes` itself — the form owns the mapping from wire shape to domain shape. If destructuring the JSON API payload is trivial, it can be done in the request handler, otherwise use an API form.
 4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.

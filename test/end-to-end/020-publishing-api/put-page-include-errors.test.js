@@ -175,9 +175,9 @@ describe('PUT /publishing-api/v1/includes/*filepath with an unsupported content 
     // The happy-path file publishes a `text/markdown` include, which is what
     // makes this a boundary rather than a blanket rejection.
     //
-    // UnsupportedMediaTypeError carries an `accept` list, but neither
-    // mapErrorToJsonApiError() nor jsonApiErrorHandler() puts it on the wire, so
-    // there is nothing to assert about it here.
+    // UnsupportedMediaTypeError carries an `accept` list, but the router's
+    // JSON:API fallback does not put it on the wire, so there is nothing to
+    // assert about it here.
     it('returns the error in a well formatted JSON:API payload', () => {
         assertSingleJsonApiError(result, {
             status: '415',
