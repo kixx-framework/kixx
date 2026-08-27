@@ -228,6 +228,38 @@ describe('Admin users request handlers', ({ it }) => {
         assertEqual('AssertionError', caught.name);
         assertEqual(unexpected, caught.cause);
     });
+
+    it('does not create an admin user when signup CSRF validation fails', async () => {
+        const response = makeResponse();
+        const context = makeContext({ csrfValid: false });
+        const request = makeRequest(makeValidSignupFields());
+
+        const caught = await catchAsyncError(() => {
+            return postNewAdminUserForm(context, request, response, () => {});
+        });
+
+        assert(caught, 'expected signup to reject');
+        assertEqual('InvalidCsrfTokenError', caught.code);
+        assertEqual(0, context.calls.createAdminUser);
+        assertEqual(0, context.calls.getAdminUserByEmailAddress);
+    });
+
+    it('does not authenticate credentials when login CSRF validation fails', async () => {
+        const response = makeResponse();
+        const context = makeContext({ csrfValid: false });
+        const request = makeRequest({
+            email_address: VALID_EMAIL,
+            password: VALID_PASSWORD,
+        });
+
+        const caught = await catchAsyncError(() => {
+            return postAdminUserLoginForm(context, request, response, () => {});
+        });
+
+        assert(caught, 'expected login to reject');
+        assertEqual('InvalidCsrfTokenError', caught.code);
+        assertEqual(0, context.calls.getAdminUserByEmailAddress);
+    });
 });
 
 
@@ -303,10 +335,12 @@ function makeContext(options) {
         adminSession = null,
         adminSessionError = null,
         createAdminUserError = null,
+        csrfValid = true,
         existingAdminUser = null,
         loginThrottled = false,
     } = options ?? {};
     const calls = {
+        createAdminUser: 0,
         getAdminUserByEmailAddress: 0,
         getService: 0,
         rateLimit: 0,
@@ -335,6 +369,7 @@ function makeContext(options) {
                 return existingAdminUser;
             },
             async createNewAdminUser() {
+                calls.createAdminUser += 1;
                 if (createAdminUserError) {
                     throw createAdminUserError;
                 }
@@ -375,7 +410,7 @@ function makeContext(options) {
             calls.getService += 1;
             return {
                 sign: async () => 'new-csrf-token',
-                verify: async () => true,
+                verify: async () => csrfValid,
             };
         },
         getHttpTarget(name) {
