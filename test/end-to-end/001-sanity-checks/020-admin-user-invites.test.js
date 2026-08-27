@@ -7,7 +7,7 @@ import {
 } from 'kixx-assert';
 import { FastHTMLParser } from 'fast-html-dom-parser';
 import CookieJar from '../test-helpers/cookie-jar.js';
-import { getBaseUrl, assertCsrfCookie } from '../test-helpers/lib.js';
+import { getBaseUrl, assertHtmlCsrfToken } from '../test-helpers/lib.js';
 import { loginRootAdmin } from '../test-helpers/authenticate.js';
 import validateHtml from '../test-helpers/validate-html.js';
 
@@ -66,9 +66,7 @@ describe('GET /admin/invites as root', ({ before, it }) => {
 
         body = await response.text();
 
-        const document = new FastHTMLParser(body);
-        const [ field ] = document.getElementsByName('csrf_token');
-        formCsrfToken = field?.getAttribute('value');
+        formCsrfToken = assertHtmlCsrfToken(body);
     });
 
     it('returns a 200 HTML page', () => {
@@ -88,10 +86,6 @@ describe('GET /admin/invites as root', ({ before, it }) => {
         assertEqual('BODY', bodyNode.nodeName);
     });
 
-    it('includes the CSRF token', () => {
-        assertCsrfCookie(rootAdminCookies);
-        assertNonEmptyString(formCsrfToken, 'form csrf_token');
-    });
 });
 
 
@@ -174,9 +168,8 @@ describe('GET /users/admin/new redeem invite link', ({ before, it }) => {
         body = await response.text();
 
         const document = new FastHTMLParser(body);
-        const [ csrfField ] = document.getElementsByName('csrf_token');
         const [ inviteField ] = document.getElementsByName('invite_token');
-        formCsrfToken = csrfField?.getAttribute('value');
+        formCsrfToken = assertHtmlCsrfToken(body);
         inviteToken = inviteField?.getAttribute('value');
     });
 
@@ -197,11 +190,6 @@ describe('GET /users/admin/new redeem invite link', ({ before, it }) => {
         assertEqual('BODY', bodyNode.nodeName);
     });
 
-    it('includes the CSRF token', () => {
-        assertCsrfCookie(newSuperAdminCookies);
-        assertNonEmptyString(formCsrfToken, 'form csrf_token');
-    });
-
     it('includes the invite token', () => {
         assertNonEmptyString(inviteToken, 'form invite_token');
     });
@@ -217,7 +205,6 @@ describe('POST /users/admin/new redeem invite', ({ before, it }) => {
     before(async () => {
         // Assert dependencies here so the test fails with an informative
         // message about the assumptions we're making.
-        assertCsrfCookie(newSuperAdminCookies);
         assertNonEmptyString(formCsrfToken);
         assertNonEmptyString(inviteToken);
 

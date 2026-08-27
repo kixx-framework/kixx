@@ -50,6 +50,66 @@ export async function getSuperAdmin() {
 }
 
 /**
+ * Creates an admin invite and returns its one-time signup URL.
+ *
+ * Mutates adminCookies with the CSRF cookie refreshed by the invite form and
+ * successful invite response.
+ *
+ * @param {CookieJar} adminCookies - Authenticated cookie jar for an admin allowed to create invites.
+ * @param {string} [roleId='developer'] - Attachable admin role granted by the invite.
+ * @returns {Promise<URL>} One-time signup URL containing the plaintext invite token.
+ * @throws {Error} When the invite form cannot be loaded, its CSRF token is missing, or invite creation fails.
+ */
+export async function createAdminInvite(adminCookies, roleId = 'developer') {
+    assert(adminCookies instanceof CookieJar, 'createAdminInvite adminCookies must be a CookieJar');
+    assert(adminCookies.get('kixx_admin_session'), 'createAdminInvite adminCookies must hold an admin session');
+    assertNonEmptyString(roleId, 'createAdminInvite roleId');
+
+    const inviteUrl = new URL(`${ getBaseUrl() }/admin/invites`);
+    const inviteFormResponse = await fetch(inviteUrl, {
+        redirect: 'manual',
+        headers: { cookie: adminCookies.cookieHeader() },
+    });
+    adminCookies.applyResponse(inviteFormResponse);
+
+    if (inviteFormResponse.status !== 200) {
+        throw new Error(
+            `createAdminInvite: GET /admin/invites returned ${ inviteFormResponse.status }, expected 200`,
+        );
+    }
+
+    const inviteFormBody = await inviteFormResponse.text();
+    const csrfToken = assertHtmlCsrfToken(inviteFormBody);
+    const form = new FormData();
+    form.append('csrf_token', csrfToken);
+    form.append('role_id', roleId);
+
+    const createInviteResponse = await fetch(inviteUrl, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { cookie: adminCookies.cookieHeader() },
+        body: form,
+    });
+    adminCookies.applyResponse(createInviteResponse);
+
+    if (createInviteResponse.status !== 200) {
+        throw new Error(
+            `createAdminInvite: POST /admin/invites returned ${ createInviteResponse.status }, expected 200`,
+        );
+    }
+
+    const createInviteBody = await createInviteResponse.text();
+    const document = new FastHTMLParser(createInviteBody);
+    const inviteUrlField = document.getElementById('new-invite-url');
+    const signupUrl = inviteUrlField?.getAttribute('value');
+    if (!signupUrl) {
+        throw new Error('createAdminInvite: no invite URL found in /admin/invites response');
+    }
+
+    return new URL(signupUrl);
+}
+
+/**
  * Creates and caches a Publishing API token for end-to-end test requests.
  * @returns {Promise<string>} Publishing API bearer token.
  * @throws {Error} When the token form cannot be loaded, a required token is missing, or token creation fails.
@@ -123,51 +183,7 @@ export async function createSuperAdmin(rootUserCookies, username, password) {
     assertNonEmptyString(username, 'createSuperAdmin username');
     assertNonEmptyString(password, 'createSuperAdmin password');
 
-    const inviteUrl = new URL(`${ getBaseUrl() }/admin/invites`);
-
-    // The Root Admin's session obtains the CSRF token required to issue an invite.
-    const inviteFormResponse = await fetch(inviteUrl, {
-        redirect: 'manual',
-        headers: { cookie: rootUserCookies.cookieHeader() },
-    });
-    rootUserCookies.applyResponse(inviteFormResponse);
-
-    if (inviteFormResponse.status !== 200) {
-        throw new Error(
-            `createSuperAdmin: GET /admin/invites returned ${ inviteFormResponse.status }, expected 200`,
-        );
-    }
-
-    const inviteFormBody = await inviteFormResponse.text();
-    const inviteCsrfToken = assertHtmlCsrfToken(inviteFormBody);
-
-    const inviteForm = new FormData();
-    inviteForm.append('csrf_token', inviteCsrfToken);
-    inviteForm.append('role_id', USER_ROLE_ID);
-
-    const createInviteResponse = await fetch(inviteUrl, {
-        method: 'POST',
-        redirect: 'manual',
-        headers: { cookie: rootUserCookies.cookieHeader() },
-        body: inviteForm,
-    });
-    rootUserCookies.applyResponse(createInviteResponse);
-
-    if (createInviteResponse.status !== 200) {
-        throw new Error(
-            `createSuperAdmin: POST /admin/invites returned ${ createInviteResponse.status }, expected 200`,
-        );
-    }
-
-    const createInviteBody = await createInviteResponse.text();
-    const inviteDocument = new FastHTMLParser(createInviteBody);
-    const inviteUrlField = inviteDocument.getElementById('new-invite-url');
-    const inviteHref = inviteUrlField?.getAttribute('value');
-    if (!inviteHref) {
-        throw new Error('createSuperAdmin: no invite URL found in /admin/invites response');
-    }
-
-    const signupUrl = new URL(inviteHref);
+    const signupUrl = await createAdminInvite(rootUserCookies, USER_ROLE_ID);
     const newAdminUserUrl = new URL(`${ getBaseUrl() }/users/admin/new`);
     const superAdminCookies = new CookieJar();
     const signupFormResponse = await fetch(signupUrl, { redirect: 'manual' });

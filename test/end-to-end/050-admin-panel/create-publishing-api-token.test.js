@@ -6,7 +6,7 @@ import {
     assertNonEmptyString,
 } from 'kixx-assert';
 import { FastHTMLParser } from 'fast-html-dom-parser';
-import { getBaseUrl, assertCsrfCookie, assertHtmlCsrfToken } from '../test-helpers/lib.js';
+import { getBaseUrl, assertHtmlCsrfToken } from '../test-helpers/lib.js';
 import { getSuperAdmin } from '../test-helpers/authenticate.js';
 import validateHtml from '../test-helpers/validate-html.js';
 
@@ -55,8 +55,7 @@ describe('GET /admin/publishing-api-tokens', ({ before, it }) => {
         assertEqual('BODY', bodyNode.nodeName);
     });
 
-    it('includes the CSRF token', () => {
-        assertCsrfCookie(userCookies);
+    it('prepares the token form submission', () => {
         formCsrfToken = assertHtmlCsrfToken(body);
     });
 });

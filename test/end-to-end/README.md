@@ -1,6 +1,40 @@
 End-to-End Testing
 ==================
 
+## CSRF coverage
+
+`010-csrf/` owns explicit CSRF coverage. Its files are independently runnable:
+
+| File | Coverage |
+| --- | --- |
+| `010-form-lifecycle.test.js` | Cookie and token envelope policy, expiry window, multi-tab tokens, reuse, and validation-error refreshes. |
+| `020-authentication-boundary.test.js` | Login/signup rejection before state changes and successful authentication cookie transitions. |
+| `030-admin-mutations.test.js` | Invalid-token matrix plus protected invite and Publishing API token creates and revokes. |
+| `040-api-boundary.test.js` | Browser session cookies cannot authenticate Admin or Publishing API mutations. |
+
+The protected HTML routes are login, signup, invite create/revoke, and
+Publishing API token create/revoke. The Publishing API token create route covers
+missing, malformed, altered-signature, and SID-mismatched inputs; every other
+protected form handler has a missing-token regression check. Other workflow
+tests may extract and submit a valid token, but do not own CSRF policy or
+rejection assertions.
+
+Operators or CI can run each file, the focused suite, or the complete suite
+against an already running target:
+
+```bash
+node run-tests.js --e2e --development test/end-to-end/010-csrf/010-form-lifecycle.test.js
+node run-tests.js --e2e --development test/end-to-end/010-csrf/020-authentication-boundary.test.js
+node run-tests.js --e2e --development test/end-to-end/010-csrf/030-admin-mutations.test.js
+node run-tests.js --e2e --development test/end-to-end/010-csrf/040-api-boundary.test.js
+node run-tests.js --e2e --development test/end-to-end/010-csrf
+node run-tests.js --e2e --development
+```
+
+These fetch-based checks verify server responses and cookie attributes, not a
+browser's `SameSite=Lax` enforcement. Normal runs also do not wait 30 minutes,
+rotate the signing secret, or restart an app without that required secret.
+
 ```bash
 # Run end-to-end tests against a predefined deployment target
 node run-tests.js --e2e --development

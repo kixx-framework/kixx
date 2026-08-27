@@ -36,17 +36,18 @@ export default class CookieJar {
     }
 
     /**
-     * Returns a single `Cookie` header value for the currently stored cookies,
-     * or an empty string if the jar is empty. Expired entries are dropped.
+     * Returns a `Cookie` header for every live cookie, or a named live subset.
+     * Expired entries are dropped from the jar.
+     * @param {Iterable<string>|null} [names] - Cookie names to include. Omitting it includes every live cookie.
      * @returns {string}
      */
-    cookieHeader() {
-        const now = Date.now();
+    cookieHeader(names = null) {
         const pairs = [];
+        const cookieNames = names ?? this.#cookies.keys();
 
-        for (const [ name, entry ] of this.#cookies) {
-            if (entry.expiresAt !== null && entry.expiresAt <= now) {
-                this.#cookies.delete(name);
+        for (const name of cookieNames) {
+            const entry = this.#getLiveEntry(name);
+            if (!entry) {
                 continue;
             }
             pairs.push(`${ name }=${ entry.value }`);
@@ -61,12 +62,8 @@ export default class CookieJar {
      * @returns {CookieJarCookie|null} Cookie value and attributes.
      */
     get(name) {
-        const entry = this.#cookies.get(name);
+        const entry = this.#getLiveEntry(name);
         if (!entry) {
-            return null;
-        }
-        if (entry.expiresAt !== null && entry.expiresAt <= Date.now()) {
-            this.#cookies.delete(name);
             return null;
         }
         return {
@@ -154,5 +151,18 @@ export default class CookieJar {
             sameSite,
             partitioned,
         });
+    }
+
+    #getLiveEntry(name) {
+        const entry = this.#cookies.get(name);
+        if (!entry) {
+            return null;
+        }
+        if (entry.expiresAt !== null && entry.expiresAt <= Date.now()) {
+            this.#cookies.delete(name);
+            return null;
+        }
+
+        return entry;
     }
 }
