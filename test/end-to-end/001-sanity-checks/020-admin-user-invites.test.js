@@ -6,9 +6,10 @@ import {
     assertNonEmptyString,
 } from 'kixx-assert';
 import { FastHTMLParser } from 'fast-html-dom-parser';
-import CookieJar from '../test-helpers/cookie-jar.js';
-import { getBaseUrl, assertHtmlCsrfToken } from '../test-helpers/lib.js';
-import { loginRootAdmin } from '../test-helpers/authenticate.js';
+import CookieJar from '../test-helpers/cookies.js';
+import { assertHtmlCsrfToken } from '../test-helpers/html.js';
+import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 import validateHtml from '../test-helpers/validate-html.js';
 
 

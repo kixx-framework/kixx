@@ -6,8 +6,9 @@ import {
     assertNonEmptyString,
 } from 'kixx-assert';
 import { FastHTMLParser } from 'fast-html-dom-parser';
-import { getBaseUrl, assertHtmlCsrfToken } from '../test-helpers/lib.js';
-import { getSuperAdmin } from '../test-helpers/authenticate.js';
+import { getSuperAdmin } from '../test-helpers/admin-workflows.js';
+import { assertHtmlCsrfToken } from '../test-helpers/html.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 import validateHtml from '../test-helpers/validate-html.js';
 
 

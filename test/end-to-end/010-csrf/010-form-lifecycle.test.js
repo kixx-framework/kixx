@@ -2,13 +2,13 @@ import { FastHTMLParser } from 'fast-html-dom-parser';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertNotEqual } from 'kixx-assert';
 import { CSRF_TOKEN_TTL_SECONDS } from '../../../src/app/presentation/lib/csrf.js';
-import { loginRootAdmin } from '../test-helpers/authenticate.js';
+import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
 import {
     assertCsrfCookie,
-    assertHtmlCsrfToken,
     decodeCsrfToken,
-    getBaseUrl,
-} from '../test-helpers/lib.js';
+} from './helpers.js';
+import { assertHtmlCsrfToken } from '../test-helpers/html.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 
 
 const CLOCK_TOLERANCE_SECONDS = 5;

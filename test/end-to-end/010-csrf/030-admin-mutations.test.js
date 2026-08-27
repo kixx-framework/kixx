@@ -5,15 +5,15 @@ import {
     assertMatches,
     assertNonEmptyString,
 } from 'kixx-assert';
-import CookieJar from '../test-helpers/cookie-jar.js';
-import { loginRootAdmin } from '../test-helpers/authenticate.js';
+import CookieJar from '../test-helpers/cookies.js';
+import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
 import {
     assertCsrfCookie,
-    assertHtmlCsrfToken,
     decodeCsrfToken,
-    getBaseUrl,
     getRenderedRecordIds,
-} from '../test-helpers/lib.js';
+} from './helpers.js';
+import { assertHtmlCsrfToken } from '../test-helpers/html.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 
 
 const ADMIN_SESSION_COOKIE = 'kixx_admin_session';

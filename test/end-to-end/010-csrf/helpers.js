@@ -1,4 +1,3 @@
-import process from 'node:process';
 import { FastHTMLParser } from 'fast-html-dom-parser';
 import { assert, assertEqual, assertNonEmptyString } from 'kixx-assert';
 import {
@@ -7,22 +6,13 @@ import {
 } from '../../../src/app/presentation/lib/csrf.js';
 import { ADMIN_SESSION_COOKIE_NAME } from '../../../src/app/presentation/lib/admin-session-cookie.js';
 import { ADMIN_SESSION_TTL_SECONDS } from '../../../src/app/lib/admin-session.js';
+import { getSetCookies } from '../test-helpers/cookies.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 
-
-/**
- * Returns the configured end-to-end target URL without a trailing slash.
- * @returns {string} Absolute HTTP or HTTPS target URL.
- */
-export function getBaseUrl() {
-    assertNonEmptyString(process.env.E2E_TESTS_BASE_URL, 'E2E_TESTS_BASE_URL');
-    // Make sure the URL string is good enough for the URL parser.
-    const _url = new URL(process.env.E2E_TESTS_BASE_URL);
-    return process.env.E2E_TESTS_BASE_URL.replace(/\/$/, '');
-}
 
 /**
  * Asserts the public policy of the live CSRF session cookie.
- * @param {import('./cookie-jar.js').default} cookieJar - Jar holding the response cookies.
+ * @param {import('../test-helpers/cookies.js').default} cookieJar - Jar holding the response cookies.
  * @returns {string} Non-empty CSRF session identifier.
  */
 export function assertCsrfCookie(cookieJar) {
@@ -42,7 +32,7 @@ export function assertCsrfCookie(cookieJar) {
 
 /**
  * Asserts the public policy of a live admin authentication session cookie.
- * @param {import('./cookie-jar.js').default} cookieJar - Jar holding the response cookies.
+ * @param {import('../test-helpers/cookies.js').default} cookieJar - Jar holding the response cookies.
  * @returns {string} Non-empty admin session identifier.
  */
 export function assertAdminSessionCookie(cookieJar) {
@@ -121,71 +111,8 @@ export function getRenderedRecordIds(html, fieldName) {
     return recordIds;
 }
 
-/**
- * Extracts the non-empty CSRF token emitted by a rendered HTML form.
- * @param {string} html - Rendered HTML containing a csrf_token field.
- * @returns {string} CSRF token value.
- */
-export function assertHtmlCsrfToken(html) {
-    const document = new FastHTMLParser(html);
-    const [ field ] = document.getElementsByName('csrf_token');
-    assert(field);
-    const token = field.getAttribute('value');
-    assertNonEmptyString(token);
-    return token;
-}
-
 function isSecureBaseUrl() {
     return new URL(getBaseUrl()).protocol === 'https:';
-}
-
-function getSetCookies(response) {
-    const getSetCookie = response.headers.getSetCookie;
-    assert(typeof getSetCookie === 'function', 'Response headers getSetCookie()');
-
-    return getSetCookie.call(response.headers).map(parseSetCookie);
-}
-
-function parseSetCookie(header) {
-    const parts = header.split(';').map((part) => part.trim());
-    const [ first ] = parts;
-    const equalSign = first.indexOf('=');
-    assert(equalSign >= 0, 'Set-Cookie name-value pair');
-
-    const cookie = {
-        name: first.slice(0, equalSign),
-        value: first.slice(equalSign + 1),
-        maxAge: null,
-        domain: null,
-        path: null,
-        secure: false,
-        httpOnly: false,
-        sameSite: null,
-    };
-
-    for (let index = 1; index < parts.length; index += 1) {
-        const attribute = parts[index];
-        const lowercaseAttribute = attribute.toLowerCase();
-
-        if (lowercaseAttribute.startsWith('max-age=')) {
-            const seconds = Number.parseInt(attribute.slice('max-age='.length), 10);
-            if (Number.isFinite(seconds)) {
-                cookie.maxAge = seconds;
-            }
-        } else if (lowercaseAttribute.startsWith('domain=')) {
-            cookie.domain = attribute.slice('domain='.length);
-        } else if (lowercaseAttribute.startsWith('path=')) {
-            cookie.path = attribute.slice('path='.length);
-        } else if (lowercaseAttribute === 'secure') {
-            cookie.secure = true;
-        } else if (lowercaseAttribute === 'httponly') {
-            cookie.httpOnly = true;
-        } else if (lowercaseAttribute.startsWith('samesite=')) {
-            cookie.sameSite = attribute.slice('samesite='.length);
-        }
-    }
-
-    return cookie;
 }
 
 function assertBase64urlSegment(segment, name) {

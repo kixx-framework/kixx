@@ -7,17 +7,17 @@ import {
     assertMatches,
     assertNonEmptyString,
 } from 'kixx-assert';
-import CookieJar from '../test-helpers/cookie-jar.js';
+import CookieJar from '../test-helpers/cookies.js';
 import {
     createAdminInvite,
     loginRootAdmin,
-} from '../test-helpers/authenticate.js';
+} from '../test-helpers/admin-workflows.js';
 import {
     assertAdminSessionCookie,
     assertCsrfCookieCleared,
-    assertHtmlCsrfToken,
-    getBaseUrl,
-} from '../test-helpers/lib.js';
+} from './helpers.js';
+import { assertHtmlCsrfToken } from '../test-helpers/html.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 
 
 let loginCookies;

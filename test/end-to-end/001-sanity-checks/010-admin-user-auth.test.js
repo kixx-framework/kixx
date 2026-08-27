@@ -7,9 +7,10 @@ import {
     assertMatches,
     assertNonEmptyString,
 } from 'kixx-assert';
-import CookieJar from '../test-helpers/cookie-jar.js';
+import CookieJar from '../test-helpers/cookies.js';
+import { assertHtmlCsrfToken } from '../test-helpers/html.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 import validateHtml from '../test-helpers/validate-html.js';
-import { getBaseUrl, assertHtmlCsrfToken } from '../test-helpers/lib.js';
 
 
 // The synchronizer CSRF token embedded in the login form is only valid when

@@ -1,7 +1,8 @@
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
-import { loginRootAdmin } from '../test-helpers/authenticate.js';
-import { getBaseUrl, getRenderedRecordIds } from '../test-helpers/lib.js';
+import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
+import { getRenderedRecordIds } from './helpers.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 
 
 let adminCookies;

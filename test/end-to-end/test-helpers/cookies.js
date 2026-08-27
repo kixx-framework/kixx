@@ -24,12 +24,8 @@ export default class CookieJar {
      * @returns {CookieJar}
      */
     applyResponse(response) {
-        const setCookieHeaders = typeof response.headers.getSetCookie === 'function'
-            ? response.headers.getSetCookie()
-            : [];
-
-        for (const header of setCookieHeaders) {
-            this.#applySetCookie(header);
+        for (const cookie of getSetCookies(response)) {
+            this.#applySetCookie(cookie);
         }
 
         return this;
@@ -79,55 +75,21 @@ export default class CookieJar {
         };
     }
 
-    #applySetCookie(header) {
-        const parts = header.split(';').map((part) => part.trim());
-        const [ first ] = parts;
-        const eq = first.indexOf('=');
-        if (eq < 0) {
-            return;
-        }
-
-        const name = first.slice(0, eq);
-        const value = first.slice(eq + 1);
-
-        let maxAge = null;
-        let expires = null;
-        let expiresAt = null;
-        let domain = null;
-        let path = null;
-        let secure = false;
-        let httpOnly = false;
-        let sameSite = null;
-        let partitioned = false;
-
-        for (let i = 1; i < parts.length; i += 1) {
-            const attr = parts[i];
-            const lower = attr.toLowerCase();
-            if (lower.startsWith('max-age=')) {
-                const seconds = Number.parseInt(attr.slice('max-age='.length), 10);
-                if (Number.isFinite(seconds)) {
-                    maxAge = seconds;
-                }
-            } else if (lower.startsWith('expires=')) {
-                expires = attr.slice('expires='.length);
-                const parsed = Date.parse(attr.slice('expires='.length));
-                if (!Number.isNaN(parsed)) {
-                    expiresAt = parsed;
-                }
-            } else if (lower.startsWith('domain=')) {
-                domain = attr.slice('domain='.length);
-            } else if (lower.startsWith('path=')) {
-                path = attr.slice('path='.length);
-            } else if (lower === 'secure') {
-                secure = true;
-            } else if (lower === 'httponly') {
-                httpOnly = true;
-            } else if (lower.startsWith('samesite=')) {
-                sameSite = attr.slice('samesite='.length);
-            } else if (lower === 'partitioned') {
-                partitioned = true;
-            }
-        }
+    #applySetCookie(cookie) {
+        const {
+            name,
+            value,
+            maxAge,
+            expires,
+            expiresAt: parsedExpiresAt,
+            domain,
+            path,
+            secure,
+            httpOnly,
+            sameSite,
+            partitioned,
+        } = cookie;
+        let expiresAt = parsedExpiresAt;
 
         // Max-Age takes precedence over Expires when both attributes are present.
         if (maxAge !== null) {
@@ -165,4 +127,89 @@ export default class CookieJar {
 
         return entry;
     }
+}
+
+/**
+ * Parses every Set-Cookie header from a response.
+ * @param {Response} response - Response carrying Set-Cookie headers.
+ * @returns {Array<CookieJarCookie & {name: string, expiresAt: number|null}>} Parsed cookies.
+ */
+export function getSetCookies(response) {
+    const getSetCookie = response.headers.getSetCookie;
+    if (typeof getSetCookie !== 'function') {
+        return [];
+    }
+
+    return getSetCookie.call(response.headers)
+        .map(parseSetCookie)
+        .filter((cookie) => cookie !== null);
+}
+
+function parseSetCookie(header) {
+    const parts = header.split(';').map((part) => part.trim());
+    const [ first ] = parts;
+    const equalSign = first.indexOf('=');
+    if (equalSign < 0) {
+        return null;
+    }
+
+    const name = first.slice(0, equalSign);
+    const value = first.slice(equalSign + 1);
+
+    let maxAge = null;
+    let expires = null;
+    let expiresAt = null;
+    let domain = null;
+    let path = null;
+    let secure = false;
+    let httpOnly = false;
+    let sameSite = null;
+    let partitioned = false;
+
+    for (let index = 1; index < parts.length; index += 1) {
+        const attribute = parts[index];
+        const lowercaseAttribute = attribute.toLowerCase();
+        if (lowercaseAttribute.startsWith('max-age=')) {
+            const seconds = Number.parseInt(attribute.slice('max-age='.length), 10);
+            if (Number.isFinite(seconds)) {
+                maxAge = seconds;
+            }
+        } else if (lowercaseAttribute.startsWith('expires=')) {
+            expires = attribute.slice('expires='.length);
+            const parsed = Date.parse(expires);
+            if (!Number.isNaN(parsed)) {
+                expiresAt = parsed;
+            }
+        } else if (lowercaseAttribute.startsWith('domain=')) {
+            domain = attribute.slice('domain='.length);
+        } else if (lowercaseAttribute.startsWith('path=')) {
+            path = attribute.slice('path='.length);
+        } else if (lowercaseAttribute === 'secure') {
+            secure = true;
+        } else if (lowercaseAttribute === 'httponly') {
+            httpOnly = true;
+        } else if (lowercaseAttribute.startsWith('samesite=')) {
+            sameSite = attribute.slice('samesite='.length);
+        } else if (lowercaseAttribute === 'partitioned') {
+            partitioned = true;
+        }
+    }
+
+    if (maxAge !== null) {
+        expiresAt = Date.now() + (maxAge * 1000);
+    }
+
+    return {
+        name,
+        value,
+        maxAge,
+        expires,
+        expiresAt,
+        domain,
+        path,
+        secure,
+        httpOnly,
+        sameSite,
+        partitioned,
+    };
 }

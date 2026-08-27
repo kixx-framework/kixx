@@ -5,7 +5,7 @@ import {
     assertEqual,
     assertMatches,
 } from 'kixx-assert';
-import { getBaseUrl } from '../test-helpers/lib.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 import validateHtml from '../test-helpers/validate-html.js';
 
 

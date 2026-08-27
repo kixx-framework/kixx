@@ -1,20 +1,20 @@
 import process from 'node:process';
 import { FastHTMLParser } from 'fast-html-dom-parser';
 import { assert, assertNonEmptyString } from 'kixx-assert';
-import { getBaseUrl, assertHtmlCsrfToken } from './lib.js';
-import CookieJar from './cookie-jar.js';
+import { assertHtmlCsrfToken } from './html.js';
+import { getBaseUrl } from './target-url.js';
+import CookieJar from './cookies.js';
 
 
 // Assign random credentials for creating a fresh super admin account for testing.
-export const SUPER_ADMIN_USERNAME = `${ crypto.randomUUID() }@kixx-test.name`;
-export const SUPER_ADMIN_PASSWORD = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
+const SUPER_ADMIN_USERNAME = `${ crypto.randomUUID() }@kixx-test.name`;
+const SUPER_ADMIN_PASSWORD = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
 
 // Create a super admin carrying the Developer role.
 const USER_ROLE_ID = 'developer';
 
 let cachedRootAdmin = null;
 let cachedSuperAdmin = null;
-let cachedPublishingApiToken = null;
 
 
 export async function loginRootAdmin() {
@@ -109,75 +109,7 @@ export async function createAdminInvite(adminCookies, roleId = 'developer') {
     return new URL(signupUrl);
 }
 
-/**
- * Creates and caches a Publishing API token for end-to-end test requests.
- * @returns {Promise<string>} Publishing API bearer token.
- * @throws {Error} When the token form cannot be loaded, a required token is missing, or token creation fails.
- */
-export async function getPublishingApiToken() {
-    if (cachedPublishingApiToken) {
-        return cachedPublishingApiToken;
-    }
-
-    const userCookies = await getSuperAdmin();
-    const url = new URL(`${ getBaseUrl() }/admin/publishing-api-tokens`);
-
-    const formResponse = await fetch(url, {
-        redirect: 'manual',
-        headers: { cookie: userCookies.cookieHeader() },
-    });
-    userCookies.applyResponse(formResponse);
-
-    if (formResponse.status !== 200) {
-        throw new Error(
-            `getPublishingApiToken: GET /admin/publishing-api-tokens returned ${ formResponse.status }, expected 200`,
-        );
-    }
-
-    const formBody = await formResponse.text();
-    const csrfToken = assertHtmlCsrfToken(formBody);
-    const form = new FormData();
-    form.append('csrf_token', csrfToken);
-    form.append('description', 'test token');
-    form.append('time_to_live_seconds', '2592000');
-
-    const createTokenResponse = await fetch(url, {
-        method: 'POST',
-        redirect: 'manual',
-        headers: { cookie: userCookies.cookieHeader() },
-        body: form,
-    });
-    userCookies.applyResponse(createTokenResponse);
-
-    if (createTokenResponse.status !== 200) {
-        throw new Error(
-            `getPublishingApiToken: POST /admin/publishing-api-tokens returned ${ createTokenResponse.status }, expected 200`,
-        );
-    }
-
-    const createTokenBody = await createTokenResponse.text();
-    const document = new FastHTMLParser(createTokenBody);
-    const tokenField = document.getElementById('new-token');
-    const token = tokenField?.getAttribute('value');
-    assertNonEmptyString(token, 'getPublishingApiToken token');
-
-    cachedPublishingApiToken = token;
-    return cachedPublishingApiToken;
-}
-
-/**
- * Creates a Super Admin through the Admin User invite workflow.
- *
- * Mutates rootUserCookies with the CSRF session established while creating the
- * invite. Returns a separate jar holding the new Super Admin session.
- *
- * @param {CookieJar} rootUserCookies - Authenticated cookie jar for a Root Admin User.
- * @param {string} username - Email address for the new Super Admin User.
- * @param {string} password - Password for the new Super Admin User.
- * @returns {Promise<CookieJar>} Cookie jar holding the new Super Admin session.
- * @throws {Error} When an invite form or account form cannot be loaded, a required token is missing, or either submission fails.
- */
-export async function createSuperAdmin(rootUserCookies, username, password) {
+async function createSuperAdmin(rootUserCookies, username, password) {
     assert(rootUserCookies instanceof CookieJar, 'createSuperAdmin rootUserCookies must be a CookieJar');
     assert(rootUserCookies.get('kixx_admin_session'), 'createSuperAdmin rootUserCookies must hold an admin session');
     assertNonEmptyString(username, 'createSuperAdmin username');
@@ -232,23 +164,7 @@ export async function createSuperAdmin(rootUserCookies, username, password) {
     return superAdminCookies;
 }
 
-/**
- * Logs in as an Admin User over HTTP and returns the authenticated cookie jar.
- *
- * Performs the full two-request CSRF flow: a GET to render the login form (which
- * yields the kixx_csrf_session cookie and the csrf_token field), then a POST of
- * the credentials carrying that cookie. On success the server sets the
- * kixx_admin_session cookie, which the returned jar holds for use as the `cookie`
- * header on subsequent authenticated requests.
- *
- * @param {Object} [options] - Login options.
- * @param {string} [options.username] - Admin email address. Defaults to E2E_TESTS_ROOT_USERNAME.
- * @param {string} [options.password] - Admin password. Defaults to E2E_TESTS_ROOT_PASSWORD.
- * @param {CookieJar} [options.cookieJar] - Existing jar to populate. A fresh jar is created when omitted.
- * @returns {Promise<CookieJar>} Cookie jar holding the authenticated kixx_admin_session cookie.
- * @throws {Error} When the login form cannot be loaded, the CSRF token is missing, or the credentials are rejected.
- */
-export async function performRootAdminLogin(options) {
+async function performRootAdminLogin(options) {
     const {
         username = process.env.E2E_TESTS_ROOT_USERNAME,
         password = process.env.E2E_TESTS_ROOT_PASSWORD,
