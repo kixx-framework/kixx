@@ -310,6 +310,10 @@ function assertStringOptionsAreNotEmpty(values, suppliedOptions) {
 }
 
 function applyEndToEndEnvironmentOverrides(values, suppliedOptions) {
+    // This process-local marker describes the explicit CLI preset. Clear any
+    // inherited value so --base-url cannot accidentally select preset behavior.
+    delete process.env.E2E_TESTS_TARGET;
+
     for (const [ optionName, environmentVariable ] of END_TO_END_ENVIRONMENT_VARIABLES) {
         if (suppliedOptions.has(optionName)) {
             process.env[environmentVariable] = values[optionName];
@@ -319,6 +323,7 @@ function applyEndToEndEnvironmentOverrides(values, suppliedOptions) {
     for (const [ optionName, baseUrl ] of END_TO_END_BASE_URLS) {
         if (suppliedOptions.has(optionName)) {
             process.env.E2E_TESTS_BASE_URL = baseUrl;
+            process.env.E2E_TESTS_TARGET = optionName;
         }
     }
 }

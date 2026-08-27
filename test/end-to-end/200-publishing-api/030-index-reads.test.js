@@ -1,3 +1,4 @@
+import process from 'node:process';
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 import {
@@ -20,6 +21,7 @@ import {
 
 
 const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
+const IS_DEVELOPMENT_TARGET = process.env.E2E_TESTS_TARGET === 'development';
 const RUN_PREFIX = createRunPrefix();
 const BUILD_ID = createRunScopedBuildId(RUN_PREFIX, 'index-reads');
 const STATIC_ASSET_PATHNAME = createRunScopedPathname(RUN_PREFIX, 'assets/site.css');
@@ -118,7 +120,7 @@ describe('Publishing API published resource references', ({ before, it }) => {
         assertEqual('404', missingReferenceResponse.body.errors[0].status);
         assertEqual('NOT_FOUND_ERROR', missingReferenceResponse.body.errors[0].code);
     });
-});
+}, { disabled: IS_DEVELOPMENT_TARGET });
 
 async function uploadFixture() {
     const staticAsset = await uploadStaticAsset(publishingToken, STATIC_ASSET_PATHNAME, 'body { color: black; }');

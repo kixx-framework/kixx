@@ -1,3 +1,4 @@
+import process from 'node:process';
 import { describe } from 'kixx-test';
 import { assertEqual, assertGreaterThan } from 'kixx-assert';
 import {
@@ -20,6 +21,7 @@ import {
 
 
 const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
+const IS_DEVELOPMENT_TARGET = process.env.E2E_TESTS_TARGET === 'development';
 const RUN_PREFIX = createRunPrefix();
 const BUILD_ID = createRunScopedBuildId(RUN_PREFIX, 'closure');
 const STATIC_ASSET_PATHNAME = createRunScopedPathname(RUN_PREFIX, 'assets/site.css');
@@ -69,7 +71,7 @@ describe('Publishing API content-tree closure workflow', ({ before, it }) => {
         assertPublishedReference(staticAssetResponse, 'StaticAsset', STATIC_ASSET_PATHNAME, staticAssetReference);
         assertPublishedReference(pageTemplateResponse, 'PageTemplate', PAGE_TEMPLATE_PATHNAME, pageTemplateReference);
     });
-});
+}, { disabled: IS_DEVELOPMENT_TARGET });
 
 async function uploadFixture() {
     const staticAsset = await uploadStaticAsset(publishingToken, STATIC_ASSET_PATHNAME, 'body { color: black; }');

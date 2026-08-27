@@ -43,7 +43,10 @@ describe('Publishing API protocol errors', ({ before, it }) => {
 
     it('rejects a disallowed method with allowed methods', () => {
         assertErrorResponse(methodNotAllowedResponse, 405, 'METHOD_NOT_ALLOWED_ERROR');
-        assertEqual('GET, HEAD', methodNotAllowedResponse.allow);
+        assertEqual(
+            normalizeAllowedMethods('GET, HEAD'),
+            normalizeAllowedMethods(methodNotAllowedResponse.allow),
+        );
     });
 
     it('rejects an unsupported JSON:API media type', () => {
@@ -79,4 +82,8 @@ function assertErrorResponse(response, status, code) {
     assertEqual(status, response.status);
     assertEqual(String(status), response.body.errors[0].status);
     assertEqual(code, response.body.errors[0].code);
+}
+
+function normalizeAllowedMethods(value) {
+    return value.split(',').map(method => method.trim()).sort().join(', ');
 }

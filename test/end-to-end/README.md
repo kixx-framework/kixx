@@ -60,6 +60,12 @@ node run-tests.js --e2e --development test/end-to-end/200-publishing-api/050-clo
 node run-tests.js --e2e --development test/end-to-end/200-publishing-api
 ```
 
+The successful resource-upload tests, published-reference tests, and content-tree
+closure tests are disabled when the runner selects the `--development` target
+because the developer content store is read-only. Resource-validation tests
+still run. An explicit `--base-url` does not imply developer mode, even when it
+uses a local URL.
+
 ```bash
 # Run end-to-end tests against a predefined deployment target
 node run-tests.js --e2e --development
