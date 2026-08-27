@@ -31,13 +31,13 @@ export default {
                 },
             },
             DOCUMENT_STORE: {
-                path: './data/nodejs_app/document_store.sqlite',
+                path: '../data/nodejs_app/document_store.sqlite',
             },
             KEY_VALUE_STORE: {
-                path: './data/nodejs_app/key_value_store.sqlite',
+                path: '../data/nodejs_app/key_value_store.sqlite',
             },
             OBJECT_STORE: {
-                path: './data/nodejs_app/object_store',
+                path: '../data/nodejs_app/object_store',
                 buckets: {
                     uploads: {},
                 },

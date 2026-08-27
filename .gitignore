@@ -33,15 +33,10 @@ package-lock.json
 # Scratch pad
 tmp/
 
-# Databases
-src/data/
+# Site data
+data/
 
 # Secrets
 .env
 .env.*
-
-# End-to-End test files
-src/templates/e2e-**
-src/pages/e2e-**
-src/public/e2e-**
 
