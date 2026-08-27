@@ -52,7 +52,7 @@ export default class NewAdminUserForm extends BaseForm {
             },
             password: {
                 type: 'string',
-                minLength: 16,
+                minLength: 12,
                 maxLength: 256,
                 // writeOnly keeps the submitted password from being echoed back into
                 // the re-rendered form on a validation error (see BaseForm#getFormContext).
@@ -60,7 +60,7 @@ export default class NewAdminUserForm extends BaseForm {
                 label: 'Password',
                 inputType: 'password',
                 autocomplete: 'new-password',
-                hint: 'At least 16 characters.',
+                hint: 'At least 12 characters.',
             },
             // Passthrough bearer token authorizing this signup. Carried from the
             // signup URL into a hidden field and re-posted; redeemability is
