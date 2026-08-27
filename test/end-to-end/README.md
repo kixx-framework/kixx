@@ -35,6 +35,31 @@ These fetch-based checks verify server responses and cookie attributes, not a
 browser's `SameSite=Lax` enforcement. Normal runs also do not wait 30 minutes,
 rotate the signing secret, or restart an app without that required secret.
 
+## Publishing API coverage
+
+`200-publishing-api/` owns the Publishing API v1 end-to-end coverage. Its
+files are independently runnable:
+
+| File | Coverage |
+| --- | --- |
+| `010-authentication.test.js` | Missing, malformed, unknown, and revoked bearer-token rejection. |
+| `020-resource-uploads.test.js` | Successful uploads for all eight resource kinds and resource-shape validation failures. |
+| `030-index-reads.test.js` | Published-reference GET and HEAD reads for every index kind, plus an absent-reference rejection. |
+| `040-protocol-errors.test.js` | Method, media-type, malformed-document, and JSON:API resource-type failures. |
+| `050-closure.test.js` | Full content-tree publishing, idempotent re-publishing, and published-index reads. |
+
+Operators or CI can run each file or the focused suite against an already
+running target:
+
+```bash
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/010-authentication.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/020-resource-uploads.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/030-index-reads.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/040-protocol-errors.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/050-closure.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api
+```
+
 ```bash
 # Run end-to-end tests against a predefined deployment target
 node run-tests.js --e2e --development
