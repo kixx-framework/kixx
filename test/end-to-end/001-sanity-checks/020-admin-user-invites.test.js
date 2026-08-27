@@ -231,10 +231,79 @@ describe('POST /users/admin/new redeem invite', ({ before, it }) => {
     it('redirects to the admin page', () => {
         assert(response);
         assertEqual(303, response.status);
+        assertEqual(url.href, response.url);
         assertEqual('/admin/style-guide', response.headers.get('location'));
         assertNonEmptyString(
             newSuperAdminCookies.get('kixx_admin_session')?.value,
             'kixx_admin_session cookie',
         );
+    });
+});
+
+
+describe('GET /admin/style-guide as invited admin', ({ before, it }) => {
+
+    let url;
+    let response;
+    let body;
+
+    before(async () => {
+        assertNonEmptyString(
+            newSuperAdminCookies.get('kixx_admin_session')?.value,
+            'kixx_admin_session cookie',
+        );
+
+        url = new URL(`${ getBaseUrl() }/admin/style-guide`);
+        response = await fetch(url, {
+            redirect: 'manual',
+            headers: { cookie: newSuperAdminCookies.cookieHeader() },
+        });
+        newSuperAdminCookies.applyResponse(response);
+        body = await response.text();
+    });
+
+    it('returns the authenticated admin page', () => {
+        assert(response);
+        assertEqual(200, response.status);
+        assertEqual(url.href, response.url);
+        assertEqual('text/html; charset=utf-8', response.headers.get('content-type'));
+        assertMatches('<!doctype html>', body.slice(0, 50));
+    });
+
+    it('renders valid HTML', async () => {
+        await validateHtml(body);
+        const document = new FastHTMLParser(body);
+        const [ bodyNode ] = document.getElementsByTagName('body');
+        assertEqual('BODY', bodyNode.nodeName);
+    });
+});
+
+
+describe('GET /users/admin/new after redeeming invite', ({ before, it }) => {
+
+    let response;
+    let body;
+
+    before(async () => {
+        response = await fetch(inviteLink, { redirect: 'manual' });
+        body = await response.text();
+    });
+
+    it('does not render the account form again', () => {
+        assert(response);
+        assertEqual(200, response.status);
+        assertEqual(inviteLink.href, response.url);
+        assertMatches('Invalid invite', body);
+
+        const document = new FastHTMLParser(body);
+        const [ inviteField ] = document.getElementsByName('invite_token');
+        assertEqual(undefined, inviteField);
+    });
+
+    it('renders valid HTML', async () => {
+        await validateHtml(body);
+        const document = new FastHTMLParser(body);
+        const [ bodyNode ] = document.getElementsByTagName('body');
+        assertEqual('BODY', bodyNode.nodeName);
     });
 });
