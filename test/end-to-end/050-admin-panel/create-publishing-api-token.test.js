@@ -114,8 +114,8 @@ describe('POST /admin/publishing-api-tokens', ({ before, it }) => {
     it('includes the new token', () => {
         const document = new FastHTMLParser(body);
         const field = document.getElementById('new-token');
-        const href = field.getAttribute('value');
-        assertNonEmptyString(href);
+        const token = field.getAttribute('value');
+        assertNonEmptyString(token);
     });
 });
 
