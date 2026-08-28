@@ -1,10 +1,9 @@
 import HyperviewPageHandler from './app/presentation/request-handlers/hyperview/hyperview-page-handler.js';
 import adminErrorHandler from './app/presentation/error-handlers/admin-error-handler.js';
 import adminAuthErrorHandler from './app/presentation/error-handlers/admin-auth-error-handler.js';
-import jsonApiErrorHandler from './app/presentation/error-handlers/json-api-error-handler.js';
 import authenticateAdminUser from './app/presentation/middleware/authenticate-admin-user.js';
 import authenticatePublishingToken from './app/presentation/middleware/authenticate-publishing-token.js';
-import * as AdminUsers from './app/presentation/request-handlers/admin-panel/admin-users.js';
+import * as AdminPanel from './app/presentation/request-handlers/admin-panel/mod.js';
 import adminPanelRoutes from './routes/admin-panel.js';
 import adminApiRoutes from './routes/admin-api-v1.js';
 import publishingApiRoutes from './routes/publishing-api-v1.js';
@@ -38,7 +37,7 @@ export default [
                         name: 'render-form',
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
-                            AdminUsers.getNewAdminUserForm,
+                            AdminPanel.getNewAdminUserForm,
                             HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
                         ],
                     },
@@ -46,7 +45,7 @@ export default [
                         name: 'post-form',
                         methods: [ 'POST' ],
                         requestHandlers: [
-                            AdminUsers.postNewAdminUserForm,
+                            AdminPanel.postNewAdminUserForm,
                             HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
                         ],
                     },
@@ -63,7 +62,7 @@ export default [
                         name: 'render-form',
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
-                            AdminUsers.getAdminUserLoginForm,
+                            AdminPanel.getAdminUserLoginForm,
                             HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
                         ],
                     },
@@ -71,7 +70,7 @@ export default [
                         name: 'post-form',
                         methods: [ 'POST' ],
                         requestHandlers: [
-                            AdminUsers.postAdminUserLoginForm,
+                            AdminPanel.postAdminUserLoginForm,
                             HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
                         ],
                     },
@@ -80,9 +79,6 @@ export default [
             {
                 pattern: '/admin-api/v1',
                 name: 'admin-api',
-                errorHandlers: [
-                    jsonApiErrorHandler,
-                ],
                 routes: adminApiRoutes,
             },
             {
@@ -90,9 +86,6 @@ export default [
                 name: 'publishing-api',
                 inboundMiddleware: [
                     authenticatePublishingToken,
-                ],
-                errorHandlers: [
-                    jsonApiErrorHandler,
                 ],
                 routes: publishingApiRoutes,
             },

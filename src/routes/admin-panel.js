@@ -1,7 +1,6 @@
 import authorize from '../app/presentation/middleware/authorize.js';
 import HyperviewPageHandler from '../app/presentation/request-handlers/hyperview/hyperview-page-handler.js';
-import * as AdminInvites from '../app/presentation/request-handlers/admin-panel/admin-invites.js';
-import * as AdminPublishingApiTokens from '../app/presentation/request-handlers/admin-panel/admin-publishing-api-tokens.js';
+import * as AdminPanel from '../app/presentation/request-handlers/admin-panel/mod.js';
 
 
 export default [
@@ -34,7 +33,7 @@ export default [
                             resource: 'urn:kixx:admin:user-invites',
                         },
                     ]),
-                    AdminInvites.postRevokeAdminInvite,
+                    AdminPanel.postRevokeAdminInvite,
                 ],
             },
         ],
@@ -53,7 +52,7 @@ export default [
                             resource: 'urn:kixx:admin:user-invites',
                         },
                     ]),
-                    AdminInvites.getAdminInvites,
+                    AdminPanel.getAdminInvites,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
@@ -67,7 +66,7 @@ export default [
                             resource: 'urn:kixx:admin:user-invites',
                         },
                     ]),
-                    AdminInvites.postCreateAdminInvite,
+                    AdminPanel.postCreateAdminInvite,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
@@ -89,7 +88,7 @@ export default [
                             resource: 'urn:kixx:admin:api-tokens:publishing',
                         },
                     ]),
-                    AdminPublishingApiTokens.postRevokePublishingApiToken,
+                    AdminPanel.postRevokePublishingApiToken,
                 ],
             },
         ],
@@ -108,7 +107,7 @@ export default [
                             resource: 'urn:kixx:admin:api-tokens:publishing',
                         },
                     ]),
-                    AdminPublishingApiTokens.getPublishingApiTokens,
+                    AdminPanel.getPublishingApiTokens,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },
@@ -122,7 +121,7 @@ export default [
                             resource: 'urn:kixx:admin:api-tokens:publishing',
                         },
                     ]),
-                    AdminPublishingApiTokens.postCreatePublishingApiToken,
+                    AdminPanel.postCreatePublishingApiToken,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
                 ],
             },

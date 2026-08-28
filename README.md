@@ -33,18 +33,15 @@ Local development tools and processes.
 Run the development server with:
 
 ```bash
+# Directly
 node tools/devserver.js --port 2026
+# npm script
+npm run dev
 ```
 
-The dev server listens on the public `--port` and proxies requests to a child `src/node-server.js` process on a temporary port. It restarts the child after the app has been idle for a few seconds, so JavaScript source changes are picked up on the next request without manually restarting the command.
-
-Browser sources live under `src/static-assets/stylesheets/` and `src/static-assets/javascript/`. The developer content store scans those files on each request. `assetUrl` fingerprints template-linked entrypoints such as `/stylesheets/stylesheet.css` and `/javascript/site.js`; editing an asset produces a new hash without an asset build or devserver restart. Imports within those entrypoints use root-relative logical URLs such as `/stylesheets/lib/layout.css` and `/javascript/lib/kquery.js`, which resolve by pathname and revalidate independently.
-
-The devserver only proxies these requests. The application content store supplies cache behavior: fingerprinted entrypoints are immutable, while pathname-mode dependencies revalidate. This development workflow does not build or publish assets for staging or production; production build and publishing tooling remain outside this codebase.
+The dev server listens on the public `--port` (default=2026) and proxies requests to a child `src/node-server.js` process on a temporary port. It restarts the child after the app has been idle for a few seconds, so source code changes are picked up on the next request without manually restarting the command.
 
 The wrapper accepts the same `--environment` and `--dotenv` options as `src/node-server.js`. Change `--port` to avoid local port conflicts.
-
-The default `development` configuration enables the source-backed content store. Page metadata, templates, includes, static assets, and email templates are read from `src/` on each request.
 
 ### Linting
 

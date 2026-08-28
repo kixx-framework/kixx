@@ -348,7 +348,7 @@ When validation failure should re-render a page, `HyperviewPageHandler(...)` aft
 }
 ```
 
-Pass `pathname` whenever the route pattern contains dynamic segments. Without it the page is looked up by the request pathname, so `/bugs/BUG-123` would need its own `pages/` and `templates/pages/` directories. A stable `pathname` points every request at one published page.
+Pass `pathname` whenever the route pattern contains dynamic segments. Without it the page is looked up by the request pathname, so `/bugs/BUG-123` would need its own `pages/` directory. A stable `pathname` points every request at one published page.
 
 The response status is whatever an earlier handler set, so a re-rendered validation error keeps its 4xx.
 
@@ -763,10 +763,10 @@ Templates should render the hidden field directly inside the protected `<form>`:
 For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
 
 1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html' })`. See [Routing](#routing).
-2. Add or update `src/pages/<pathname>/page.json` for metadata and page context, including its `template` directive.
-3. Add or update the named template under `src/templates/pages/` for route-specific markup.
+2. Add or update `src/pages/<pathname>/page.json` for metadata and page context, setting its `template` directive to `page.html`.
+3. Add or update `page.html` beside `page.json` for route-specific markup.
 4. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-5. Put page-local partial sources under `src/templates/pages/` and reference them from `partials` in `page.json`.
+5. Put page-local partial sources beside `page.json` and reference them from `partials` in `page.json`.
 6. Add shared layout changes to `src/templates/base/` or `src/templates/partials/` only when the change should affect multiple pages.
 
 `baseTemplateId` is required for a full-page render (see [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler)); a bare `HyperviewPageHandler()` fails an assertion on a normal request. Because the route pattern matches the page's pathname exactly, no `pathname` option is needed — the page is looked up by the request pathname.
@@ -780,10 +780,10 @@ For a page that needs route parameters, records loaded through Transaction Scrip
 3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
 4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewPageHandler(...)`. See [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler).
 5. If the route pattern contains dynamic segments such as `/:id`, pass a stable `pathname` option to `HyperviewPageHandler` so the handler can locate the appropriate `src/pages/**` directory.
-6. Add or update `src/pages/<pathname>/page.json` for metadata and page context, including its `template` directive.
-7. Add or update the named template under `src/templates/pages/` for route-specific markup.
+6. Add or update `src/pages/<pathname>/page.json` for metadata and page context, setting its `template` directive to `page.html`.
+7. Add or update `page.html` beside `page.json` for route-specific markup.
 8. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-9. Put page-local partial sources under `src/templates/pages/` and reference them from `partials` in `page.json`.
+9. Put page-local partial sources beside `page.json` and reference them from `partials` in `page.json`.
 10. Add shared layout changes to `src/templates/base/` or `src/templates/partials/` only when the change should affect multiple pages.
 
 ### Form-Backed HTML Workflow
@@ -799,7 +799,7 @@ For a workflow that accepts user input:
 
 For an application API endpoint that accepts or returns JSON:API documents:
 
-1. Add a route subtree or leaf route in `virtual-hosts.js` and attach `jsonApiErrorHandler` from `app/presentation/error-handlers/json-api-error-handler.js` at the route level. This keeps expected HTTP errors serialized as JSON:API `errors` documents for the whole API surface while unexpected errors continue to propagate to the router fallback.
+1. Add a route subtree or leaf route in `virtual-hosts.js`. Expected errors not handled by a route or target error handler reach the router fallback, which serializes them as JSON:API `errors` documents. Unexpected errors continue to propagate to the platform server's fatal-error policy.
 2. In the request handler, call `assertJsonApiContentType(request)` before parsing a JSON:API request body. JSON:API requests must use `Content-Type: application/vnd.api+json`; optional media-type parameters are ignored by the helper.
 3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the whole returned resource into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script. `fromJsonApi(resource)` always takes the resource and reads `resource.attributes` itself — the form owns the mapping from wire shape to domain shape. If destructuring the JSON API payload is trivial, it can be done in the request handler, otherwise use an API form.
 4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
@@ -832,8 +832,7 @@ For lookup and caching details, see `kixx/static-assets/README.md`.
 
 ## Where Presentation Changes Belong
 
-- `src/pages/` contains route-specific page metadata and included content files.
-- `src/templates/pages/` contains page templates and page-local partial source files.
+- `src/pages/` contains route-specific page metadata, page templates, page-local partials, and included content files.
 - `src/templates/base/` contains shared HTML document frames.
 - `src/templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
 - `virtual-hosts.js` declares the virtual hosts and mounts the route subtrees under each one.
@@ -852,7 +851,7 @@ translated into the immutable storage layout used by `ContentSnapshot`:
 | Storage namespace | Developer source | Behavior |
 | --- | --- | --- |
 | `/pages/<pathname>/page.json` | `src/pages/<pathname>/page.json` | Direct file |
-| `/pages/<pathname>/<template basename>` | `src/templates/pages/<template>` | Relocated from the template named by the leaf `page.json` |
+| `/pages/<pathname>/<template basename>` | `src/pages/<pathname>/<template>` | Direct file named by the leaf `page.json` |
 | `/pages/<pathname>/__page-includes-bundle` | Files named by leaf `page.json` `includes` | Assembled JSON bundle |
 | `/pages/<pathname>/__page-partials-bundle` | Files named by leaf `page.json` `partials` | Assembled JSON bundle |
 | `/templates/__template-partials-bundle` | `src/templates/partials/**` | Assembled JSON bundle |
@@ -866,10 +865,12 @@ For example:
 src/
 ├── pages/
 │   ├── page.json
+│   ├── page.html
 │   ├── intro.md
 │   └── blog/
 │       └── hello-world/
-│           └── page.json
+│           ├── page.json
+│           └── page.html
 ├── static-assets/
 │   ├── images/
 │   │   └── logo.svg
@@ -884,15 +885,13 @@ src/
 │       ├── message.html
 │       └── message.txt
 └── templates/
-    ├── pages/
-    │   └── article.html
     ├── base/
     │   └── website.html
     └── partials/
         └── website-header.html
 ```
 
-Use `src/pages/` for route-specific metadata and included text content. `page.json` names page templates and page-specific partial sources under `src/templates/pages/`; template source files do not live beside page metadata. Use `src/templates/base/` and `src/templates/partials/` for shared templates. Static assets belong under `src/static-assets/`. Browser stylesheet and JavaScript sources belong under its `stylesheets/` and `javascript/` directories respectively; their browser URLs remain `/stylesheets/**` and `/javascript/**`.
+Use `src/pages/` for route-specific metadata, page templates, page-local partials, and included text content. The files named by `page.json` `template`, `partials`, and `includes` directives live beside that `page.json`. Keep page directories flat: a child directory represents another page pathname, so do not create a `partials/` directory inside a page. Use `src/templates/base/` and `src/templates/partials/` only for templates shared across pages. Static assets belong under `src/static-assets/`. Browser stylesheet and JavaScript sources belong under its `stylesheets/` and `javascript/` directories respectively; their browser URLs remain `/stylesheets/**` and `/javascript/**`.
 
 An email directory contains `email.json` and the files it names. The HTML and text representations are independent; either may be omitted. `partials` lists template ids and filenames in the same email directory. `contextData` supplies static render data:
 
@@ -933,23 +932,23 @@ Root and ancestor files are optional, but the final leaf `page.json` must exist 
 
 Top-level build directives include:
 
-- `template`: Names the page template relative to `src/templates/pages/`.
-- `partials`: Lists page-local partial ids and template filenames relative to `src/templates/pages/`.
+- `template`: Names the page template relative to the current page directory; use `page.html` for the primary page template.
+- `partials`: Lists page-local partial ids and template filenames relative to the current page directory.
 - `includes`: Maps context names to text files in the current page directory.
 
 Build directives direct source assembly and are not exposed in the assembled template context. Runtime response props named `template` or `partials` remain available because response props are merged after the published directives are removed. The `includes` directive is replaced by the resolved content under `includes`.
 
 ```json
 {
-    "template": "blog/article.html",
+    "template": "page.html",
     "partials": [
         {
             "id": "widget-list-item.html",
-            "filename": "blog/widget-list-item.html"
+            "filename": "widget-list-item.html"
         },
         {
             "id": "feed-item.xml",
-            "filename": "blog/feed-item.xml"
+            "filename": "feed-item.xml"
         }
     ],
     "includes": {

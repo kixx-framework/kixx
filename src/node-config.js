@@ -31,23 +31,23 @@ export default {
                 },
             },
             DOCUMENT_STORE: {
-                path: './data/nodejs_app/document_store.sqlite',
+                path: '../data/nodejs_app/document_store.sqlite',
             },
             KEY_VALUE_STORE: {
-                path: './data/nodejs_app/key_value_store.sqlite',
+                path: '../data/nodejs_app/key_value_store.sqlite',
             },
             OBJECT_STORE: {
-                path: './data/nodejs_app/object_store',
+                path: '../data/nodejs_app/object_store',
                 buckets: {
                     uploads: {},
                 },
             },
             CONTENT_STORE: {
                 developerMode: true,
-                pagesDirectory: './src/pages',
-                templatesDirectory: './src/templates',
-                staticAssetsDirectory: './src/static-assets',
-                emailsDirectory: './src/emails',
+                pagesDirectory: './pages',
+                templatesDirectory: './templates',
+                staticAssetsDirectory: './static-assets',
+                emailsDirectory: './emails',
             },
         },
         staging: {

@@ -6,9 +6,10 @@ import {
     assertNonEmptyString,
 } from 'kixx-assert';
 import { FastHTMLParser } from 'fast-html-dom-parser';
-import CookieJar from '../test-helpers/cookie-jar.js';
-import { getBaseUrl, assertCsrfCookie } from '../test-helpers/lib.js';
-import { loginRootAdmin } from '../test-helpers/authenticate.js';
+import CookieJar from '../test-helpers/cookies.js';
+import { assertHtmlCsrfToken } from '../test-helpers/html.js';
+import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 import validateHtml from '../test-helpers/validate-html.js';
 
 
@@ -65,6 +66,8 @@ describe('GET /admin/invites as root', ({ before, it }) => {
         rootAdminCookies.applyResponse(response);
 
         body = await response.text();
+
+        formCsrfToken = assertHtmlCsrfToken(body);
     });
 
     it('returns a 200 HTML page', () => {
@@ -84,18 +87,10 @@ describe('GET /admin/invites as root', ({ before, it }) => {
         assertEqual('BODY', bodyNode.nodeName);
     });
 
-    it('includes the CSRF token', () => {
-        assertCsrfCookie(rootAdminCookies);
-
-        const document = new FastHTMLParser(body);
-        const [ field ] = document.getElementsByName('csrf_token');
-        formCsrfToken = field.getAttribute('value');
-        assertNonEmptyString(formCsrfToken, 'form csrf_token');
-    });
 });
 
 
-describe('POST /admin/invites create super admin as root', ({ before, it }) => {
+describe('POST /admin/invites create developer admin as root', ({ before, it }) => {
 
     let url;
     let form;
@@ -126,6 +121,12 @@ describe('POST /admin/invites create super admin as root', ({ before, it }) => {
         rootAdminCookies.applyResponse(response);
 
         body = await response.text();
+
+        const document = new FastHTMLParser(body);
+        const field = document.getElementById('new-invite-url');
+        const href = field?.getAttribute('value');
+        assertNonEmptyString(href, 'new invite URL');
+        inviteLink = new URL(href);
     });
 
     it('returns a 200 HTML page', () => {
@@ -146,11 +147,6 @@ describe('POST /admin/invites create super admin as root', ({ before, it }) => {
     });
 
     it('includes the magic invite link', () => {
-        const document = new FastHTMLParser(body);
-        const field = document.getElementById('new-invite-url');
-        const href = field.getAttribute('value');
-        assertNonEmptyString(href);
-        inviteLink = new URL(href);
         assertEqual('/users/admin/new', inviteLink.pathname);
         assertNonEmptyString(inviteLink.searchParams.get('invite'));
     });
@@ -171,6 +167,11 @@ describe('GET /users/admin/new redeem invite link', ({ before, it }) => {
         newSuperAdminCookies.applyResponse(response);
 
         body = await response.text();
+
+        const document = new FastHTMLParser(body);
+        const [ inviteField ] = document.getElementsByName('invite_token');
+        formCsrfToken = assertHtmlCsrfToken(body);
+        inviteToken = inviteField?.getAttribute('value');
     });
 
     it('returns a 200 HTML page', () => {
@@ -190,25 +191,13 @@ describe('GET /users/admin/new redeem invite link', ({ before, it }) => {
         assertEqual('BODY', bodyNode.nodeName);
     });
 
-    it('includes the CSRF token', () => {
-        assertCsrfCookie(newSuperAdminCookies);
-
-        const document = new FastHTMLParser(body);
-        const [ field ] = document.getElementsByName('csrf_token');
-        formCsrfToken = field.getAttribute('value');
-        assertNonEmptyString(formCsrfToken, 'form csrf_token');
-    });
-
     it('includes the invite token', () => {
-        const document = new FastHTMLParser(body);
-        const [ field ] = document.getElementsByName('invite_token');
-        inviteToken = field.getAttribute('value');
         assertNonEmptyString(inviteToken, 'form invite_token');
     });
 });
 
 
-describe('POST /users/amdin/new redeem invite', ({ before, it }) => {
+describe('POST /users/admin/new redeem invite', ({ before, it }) => {
 
     let url;
     let form;
@@ -217,7 +206,6 @@ describe('POST /users/amdin/new redeem invite', ({ before, it }) => {
     before(async () => {
         // Assert dependencies here so the test fails with an informative
         // message about the assumptions we're making.
-        assert(newSuperAdminCookies);
         assertNonEmptyString(formCsrfToken);
         assertNonEmptyString(inviteToken);
 
@@ -244,6 +232,79 @@ describe('POST /users/amdin/new redeem invite', ({ before, it }) => {
     it('redirects to the admin page', () => {
         assert(response);
         assertEqual(303, response.status);
+        assertEqual(url.href, response.url);
         assertEqual('/admin/style-guide', response.headers.get('location'));
+        assertNonEmptyString(
+            newSuperAdminCookies.get('kixx_admin_session')?.value,
+            'kixx_admin_session cookie',
+        );
+    });
+});
+
+
+describe('GET /admin/style-guide as invited admin', ({ before, it }) => {
+
+    let url;
+    let response;
+    let body;
+
+    before(async () => {
+        assertNonEmptyString(
+            newSuperAdminCookies.get('kixx_admin_session')?.value,
+            'kixx_admin_session cookie',
+        );
+
+        url = new URL(`${ getBaseUrl() }/admin/style-guide`);
+        response = await fetch(url, {
+            redirect: 'manual',
+            headers: { cookie: newSuperAdminCookies.cookieHeader() },
+        });
+        newSuperAdminCookies.applyResponse(response);
+        body = await response.text();
+    });
+
+    it('returns the authenticated admin page', () => {
+        assert(response);
+        assertEqual(200, response.status);
+        assertEqual(url.href, response.url);
+        assertEqual('text/html; charset=utf-8', response.headers.get('content-type'));
+        assertMatches('<!doctype html>', body.slice(0, 50));
+    });
+
+    it('renders valid HTML', async () => {
+        await validateHtml(body);
+        const document = new FastHTMLParser(body);
+        const [ bodyNode ] = document.getElementsByTagName('body');
+        assertEqual('BODY', bodyNode.nodeName);
+    });
+});
+
+
+describe('GET /users/admin/new after redeeming invite', ({ before, it }) => {
+
+    let response;
+    let body;
+
+    before(async () => {
+        response = await fetch(inviteLink, { redirect: 'manual' });
+        body = await response.text();
+    });
+
+    it('does not render the account form again', () => {
+        assert(response);
+        assertEqual(200, response.status);
+        assertEqual(inviteLink.href, response.url);
+        assertMatches('Invalid invite', body);
+
+        const document = new FastHTMLParser(body);
+        const [ inviteField ] = document.getElementsByName('invite_token');
+        assertEqual(undefined, inviteField);
+    });
+
+    it('renders valid HTML', async () => {
+        await validateHtml(body);
+        const document = new FastHTMLParser(body);
+        const [ bodyNode ] = document.getElementsByTagName('body');
+        assertEqual('BODY', bodyNode.nodeName);
     });
 });

@@ -7,9 +7,10 @@ import {
     assertMatches,
     assertNonEmptyString,
 } from 'kixx-assert';
-import CookieJar from '../test-helpers/cookie-jar.js';
+import CookieJar from '../test-helpers/cookies.js';
+import { assertHtmlCsrfToken } from '../test-helpers/html.js';
+import { getBaseUrl } from '../test-helpers/target-url.js';
 import validateHtml from '../test-helpers/validate-html.js';
-import { getBaseUrl, assertCsrfCookie } from '../test-helpers/lib.js';
 
 
 // The synchronizer CSRF token embedded in the login form is only valid when
@@ -52,10 +53,11 @@ describe('GET /login/admin/new', ({ before, it }) => {
         // instead of crashing the whole test run.
         url = new URL(`${ getBaseUrl() }/login/admin/new`);
         response = await fetch(url, { redirect: 'manual' });
-        // Store the kixx_csrf_session cookie so the POST block can send it back
-        // alongside the CSRF token captured below.
+        // Store the kixx_csrf_session cookie so the POST can carry the token
+        // extracted below through the normal login workflow.
         adminLoginCookies.applyResponse(response);
         body = await response.text();
+        adminLoginHtmlCsrfToken = assertHtmlCsrfToken(body);
     });
 
     it('returns a 200 HTML page', () => {
@@ -75,15 +77,6 @@ describe('GET /login/admin/new', ({ before, it }) => {
         assertEqual('BODY', bodyNode.nodeName);
     });
 
-    it('includes the CSRF token', () => {
-        assertCsrfCookie(adminLoginCookies);
-
-        // Test for the HTML token as well
-        const document = new FastHTMLParser(body);
-        const [ field ] = document.getElementsByName('csrf_token');
-        adminLoginHtmlCsrfToken = field.getAttribute('value');
-        assertNonEmptyString(adminLoginHtmlCsrfToken, 'admin login HTML CSRF token');
-    });
 });
 
 describe('test environment', ({ it }) => {

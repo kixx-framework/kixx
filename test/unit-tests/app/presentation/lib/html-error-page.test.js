@@ -5,14 +5,11 @@ import { renderHtmlErrorPage } from '../../../../../src/app/presentation/lib/htm
 import ServerResponse from '../../../../../src/kixx/http-router/server-response.js';
 
 
-function makeRequest(isJSONRequest) {
+function makeRequest(pathname = '/admin/errors') {
     return {
         headers: new Headers(),
         id: 'request-1',
-        url: new URL('https://www.example.com/admin/errors'),
-        isJSONRequest() {
-            return isJSONRequest ?? false;
-        },
+        url: new URL(pathname, 'https://www.example.com'),
     };
 }
 
@@ -92,7 +89,7 @@ describe('renderHtmlErrorPage', ({ it }) => {
 
         const result = await renderHtmlErrorPage(
             context,
-            makeRequest(true),
+            makeRequest('/admin/errors.JSON'),
             new ServerResponse(),
             makeError(),
             errorOptions(),

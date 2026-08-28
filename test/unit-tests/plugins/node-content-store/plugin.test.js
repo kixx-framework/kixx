@@ -9,6 +9,7 @@ import { register } from '../../../../src/plugins/node-content-store/plugin.js';
 import { plugins } from '../../../../src/plugins/node.js';
 import { FORMAT } from '../../../../src/kixx/content-addressable-store/addressing.js';
 import Logger from '../../../../src/kixx/logger/logger.js';
+import nodeConfig from '../../../../src/node-config.js';
 
 
 const temporaryDirectories = [];
@@ -68,6 +69,15 @@ describe('node-content-store plugin', ({ after, it }) => {
         assert(plugins.has('nodeContentStore'));
     });
 
+    it('configures development sources relative to the Node entry point', () => {
+        const contentStoreConfig = nodeConfig.environments.development.CONTENT_STORE;
+
+        assertEqual('./pages', contentStoreConfig.pagesDirectory);
+        assertEqual('./templates', contentStoreConfig.templatesDirectory);
+        assertEqual('./static-assets', contentStoreConfig.staticAssetsDirectory);
+        assertEqual('./emails', contentStoreConfig.emailsDirectory);
+    });
+
     it('registers a configured ContentStore without touching its storage directory', async () => {
         const temporaryDirectory = await makeTemporaryDirectory();
         const rootDirectory = path.join(temporaryDirectory, 'content-store');
@@ -103,10 +113,10 @@ describe('node-content-store plugin', ({ after, it }) => {
         assertEqual('ContentStore', registered.name);
         assertEqual('DeveloperContentStore', registered.service.constructor.name);
         assertEqual(4, resolveFilepath.mock.callCount());
-        assertEqual('./src/pages', resolveFilepath.mock.getCall(0).arguments[0]);
-        assertEqual('./src/templates', resolveFilepath.mock.getCall(1).arguments[0]);
-        assertEqual('./src/static-assets', resolveFilepath.mock.getCall(2).arguments[0]);
-        assertEqual('./src/emails', resolveFilepath.mock.getCall(3).arguments[0]);
+        assertEqual('./pages', resolveFilepath.mock.getCall(0).arguments[0]);
+        assertEqual('./templates', resolveFilepath.mock.getCall(1).arguments[0]);
+        assertEqual('./static-assets', resolveFilepath.mock.getCall(2).arguments[0]);
+        assertEqual('./emails', resolveFilepath.mock.getCall(3).arguments[0]);
     });
 
     it('rejects developer mode outside the development environment', () => {

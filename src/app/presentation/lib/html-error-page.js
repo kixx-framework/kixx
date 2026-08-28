@@ -1,4 +1,5 @@
 import { assert, assertNonEmptyString, isNonEmptyString, isNumberNotNaN, isPlainObject } from '../../../kixx/assertions/mod.js';
+import isJsonPathRequest from './is-json-path-request.js';
 import respondWithHyperviewPage from './respond-with-hyperview-page.js';
 
 
@@ -50,7 +51,7 @@ export async function renderHtmlErrorPage(context, request, response, error, opt
     assertNonEmptyString(pathname, 'renderHtmlErrorPage: pathname');
     assertNonEmptyString(baseTemplateId, 'renderHtmlErrorPage: baseTemplateId');
 
-    if (request.isJSONRequest()) {
+    if (isJsonPathRequest(request)) {
         return false;
     }
 

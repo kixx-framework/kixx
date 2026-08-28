@@ -51,7 +51,7 @@ export default class AdminUserLoginForm extends BaseForm {
             },
             password: {
                 type: 'string',
-                minLength: 16,
+                minLength: 12,
                 maxLength: 256,
                 // writeOnly keeps the submitted password from being echoed back into
                 // the re-rendered form on a validation error (see BaseForm#getFormContext).

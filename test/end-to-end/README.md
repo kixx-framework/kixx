@@ -1,6 +1,71 @@
 End-to-End Testing
 ==================
 
+## CSRF coverage
+
+`010-csrf/` owns explicit CSRF coverage. Its files are independently runnable:
+
+| File | Coverage |
+| --- | --- |
+| `010-form-lifecycle.test.js` | Cookie and token envelope policy, expiry window, multi-tab tokens, reuse, and validation-error refreshes. |
+| `020-authentication-boundary.test.js` | Login/signup rejection before state changes and successful authentication cookie transitions. |
+| `030-admin-mutations.test.js` | Invalid-token matrix plus protected invite and Publishing API token creates and revokes. |
+| `040-api-boundary.test.js` | Browser session cookies cannot authenticate Admin or Publishing API mutations. |
+
+The protected HTML routes are login, signup, invite create/revoke, and
+Publishing API token create/revoke. The Publishing API token create route covers
+missing, malformed, altered-signature, and SID-mismatched inputs; every other
+protected form handler has a missing-token regression check. Other workflow
+tests may extract and submit a valid token, but do not own CSRF policy or
+rejection assertions.
+
+Operators or CI can run each file, the focused suite, or the complete suite
+against an already running target:
+
+```bash
+node run-tests.js --e2e --development test/end-to-end/010-csrf/010-form-lifecycle.test.js
+node run-tests.js --e2e --development test/end-to-end/010-csrf/020-authentication-boundary.test.js
+node run-tests.js --e2e --development test/end-to-end/010-csrf/030-admin-mutations.test.js
+node run-tests.js --e2e --development test/end-to-end/010-csrf/040-api-boundary.test.js
+node run-tests.js --e2e --development test/end-to-end/010-csrf
+node run-tests.js --e2e --development
+```
+
+These fetch-based checks verify server responses and cookie attributes, not a
+browser's `SameSite=Lax` enforcement. Normal runs also do not wait 30 minutes,
+rotate the signing secret, or restart an app without that required secret.
+
+## Publishing API coverage
+
+`200-publishing-api/` owns the Publishing API v1 end-to-end coverage. Its
+files are independently runnable:
+
+| File | Coverage |
+| --- | --- |
+| `010-authentication.test.js` | Missing, malformed, unknown, and revoked bearer-token rejection. |
+| `020-resource-uploads.test.js` | Successful uploads for all eight resource kinds and resource-shape validation failures. |
+| `030-index-reads.test.js` | Published-reference GET and HEAD reads for every index kind, plus an absent-reference rejection. |
+| `040-protocol-errors.test.js` | Method, media-type, malformed-document, and JSON:API resource-type failures. |
+| `050-closure.test.js` | Full content-tree publishing, idempotent re-publishing, and published-index reads. |
+
+Operators or CI can run each file or the focused suite against an already
+running target:
+
+```bash
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/010-authentication.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/020-resource-uploads.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/030-index-reads.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/040-protocol-errors.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api/050-closure.test.js
+node run-tests.js --e2e --development test/end-to-end/200-publishing-api
+```
+
+The successful resource-upload tests, published-reference tests, and content-tree
+closure tests are disabled when the runner selects the `--development` target
+because the developer content store is read-only. Resource-validation tests
+still run. An explicit `--base-url` does not imply developer mode, even when it
+uses a local URL.
+
 ```bash
 # Run end-to-end tests against a predefined deployment target
 node run-tests.js --e2e --development
@@ -9,9 +74,6 @@ node run-tests.js --e2e --nodejs
 
 # Override individual end-to-end configuration values
 node run-tests.js --e2e --base-url https://example.test/ --username example-user --password 'example-password'
-
-# Enable the tests which require the target deployment's current build id
-node run-tests.js --e2e --nodejs --build-id 2026-07-27T14-31-09Z
 
 # Run only the test files in the given files and directories
 node run-tests.js [pathname ...]
@@ -34,7 +96,6 @@ End-to-end runs require `E2E_TESTS_BASE_URL`, `E2E_TESTS_ROOT_USERNAME`, and `E2
 - `--base-url <url>` sets `E2E_TESTS_BASE_URL`.
 - `--username <username>` sets `E2E_TESTS_ROOT_USERNAME`.
 - `--password <password>` sets `E2E_TESTS_ROOT_PASSWORD`.
-- `--build-id <id>` sets `E2E_TESTS_BUILD_ID`.
 - `--development` sets `E2E_TESTS_BASE_URL` to `http://localhost:2026/`.
 - `--cloudflare` sets `E2E_TESTS_BASE_URL` to `https://cloudflare.kixx-testing.dev/`.
 - `--nodejs` sets `E2E_TESTS_BASE_URL` to `https://nodejs.kixx-testing.dev/`.
@@ -42,24 +103,3 @@ End-to-end runs require `E2E_TESTS_BASE_URL`, `E2E_TESTS_ROOT_USERNAME`, and `E2
 These options are valid only with `--e2e`. Each option may appear only once, and only one of `--base-url`, `--development`, `--cloudflare`, or `--nodejs` may be used in a run. CLI overrides are independent: any required value not provided on the command line continues to come from the existing environment.
 
 The final base URL must be a valid absolute HTTP or HTTPS URL with no leading or trailing whitespace. CLI values are otherwise preserved exactly.
-
-## The current build id
-
-`E2E_TESTS_BUILD_ID` is optional, unlike the three required values above. It names the Build ID the *target deployment is currently serving* — the value that deployment was started with in its own `BUILD_ID` environment variable — and it exists so tests can assert that the Publishing API refuses to write into the live build.
-
-It has to be supplied out of band because no response exposes it, and it must match the running deployment exactly; a value that does not match makes those writes succeed, and the tests which use it fail. Set it only when you know the current Build ID of the target you are pointing at.
-
-Tests which need this value disable themselves when it is absent, so an unconfigured run reports them as disabled blocks in the summary rather than skipping them silently or failing. A local dev server has no current build at all — nothing in this repository sets `BUILD_ID` — so those tests stay disabled against `--development` unless you start the server with one.
-
-## Known obsolete suite: `020-publishing-api/`
-
-This suite targets URL paths (e.g. `/publishing-api/v1/templates/**`) that
-predate the current routes in `src/routes/publishing-api-v1.js`
-(`/publishing-api/v1/resources/**` and `/publishing-api/v1/index/**`). It
-predates and is unrelated to `agents/plans/hyperview-content-service.md`;
-rewriting it against the current routes is out of scope for that work.
-Passing or failing here is not a signal about that migration or about the
-Publishing API's current behavior — see
-`src/kixx/hyperview/README.md#publication-flow` and
-`src/app/presentation/request-handlers/publishing-api/mod.js` for the
-current, tested behavior instead.

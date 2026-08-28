@@ -447,6 +447,41 @@ describe('HyperviewService', ({ describe }) => {
             assertMatches('/missing', caught.message);
         });
 
+        it('throws NotFoundError when the request pathname cannot identify content', async () => {
+            const { service, contentAddressableStore } = makeSubject(makeDefaultSpec(), {
+                serviceOptions: { allowJsonResponse: true },
+            });
+
+            const caught = await catchAsyncError(() => {
+                return service.renderPage(CONTEXT, {
+                    ...makeFullPageOptions(),
+                    props: {},
+                    url: makeRequest('https://www.example.com/.well-known/appspecific/com.chrome.devtools.json').url,
+                });
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
+            assertMatches('/.well-known/appspecific/com.chrome.devtools.json', caught.message);
+            assertEqual(0, contentAddressableStore.openSnapshotCalls.length);
+        });
+
+        it('asserts when an explicit page pathname is not canonical', async () => {
+            const { service } = makeSubject(makeDefaultSpec());
+
+            const caught = await catchAsyncError(() => {
+                return service.renderPage(CONTEXT, {
+                    ...makeFullPageOptions({ pathname: '/Invalid' }),
+                    props: {},
+                    url: makeRequest().url,
+                });
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('options.pathname', caught.message);
+        });
+
         it('throws NotFoundError when the page directory publishes no template', async () => {
             // An ancestor directory may publish metadata to supply defaults for its
             // descendants without being a page in its own right.

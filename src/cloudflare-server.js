@@ -11,7 +11,7 @@ import ServerResponse from './kixx/http-router/server-response.js';
 import { isFunction } from './kixx/assertions/mod.js';
 import * as app from './app/app.js';
 import { plugins as generalPlugins } from './plugins/general.js';
-import { plugins as cloudflarePlugins } from './plugins/cloudflare.js';
+import { plugins as cloudflarePlugins, durableObjects } from './plugins/cloudflare.js';
 import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import virtualHosts from './virtual-hosts.js';
 
@@ -77,6 +77,9 @@ router.on('error', ({ error, requestId }) => {
         }
     }
 });
+
+// Export the Cloudflare Durable Objects which are part of this Worker.
+export const { ContentAddressableIndexStore } = durableObjects;
 
 export default {
     // requestEnvironment is the per-request env binding snapshot provided by the Workers runtime.

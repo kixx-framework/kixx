@@ -1,4 +1,5 @@
 import { clearAdminSessionCookie } from '../lib/admin-session-cookie.js';
+import isJsonPathRequest from '../lib/is-json-path-request.js';
 import { renderHtmlErrorPage } from '../lib/html-error-page.js';
 
 
@@ -16,7 +17,7 @@ import { renderHtmlErrorPage } from '../lib/html-error-page.js';
  * @returns {Promise<import('../../../kixx/http-router/server-response.js').default|false>} Rendered response or login redirect, or false to continue the cascade for a JSON request.
  */
 export default async function adminErrorHandler(context, request, response, error) {
-    if (error.name === 'UnauthenticatedError' && !request.isJSONRequest()) {
+    if (error.name === 'UnauthenticatedError' && !isJsonPathRequest(request)) {
         clearAdminSessionCookie(request, response);
         const loginTarget = context.getHttpTarget('admin-login-form/render-form');
         return response.respondWithRedirect(303, loginTarget.compilePathname().pathname);

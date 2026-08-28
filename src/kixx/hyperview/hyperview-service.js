@@ -586,6 +586,11 @@ export default class HyperviewService {
         let pathname;
         if (isNonEmptyString(options.pathname)) {
             pathname = options.pathname;
+
+            assert(
+                this.#contentAddressableStore.isValidPathname(pathname),
+                'HyperviewService#renderPage: options.pathname',
+            );
         } else {
             let requestPathname = url.pathname;
             if (isJsonPathRequest) {
@@ -601,12 +606,17 @@ export default class HyperviewService {
                 }
             }
             pathname = this.#contentAddressableStore.normalizePathname(requestPathname);
-        }
 
-        assert(
-            this.#contentAddressableStore.isValidPathname(pathname),
-            'HyperviewService#renderPage: pathname',
-        );
+            // The URL is external input. Unsupported content-store characters
+            // mean no page can exist at this pathname; they are not an internal
+            // rendering-contract failure.
+            if (!this.#contentAddressableStore.isValidPathname(pathname)) {
+                throw new NotFoundError(`No page found for URL "${ url.href }"`, {
+                    url: url.href,
+                    pathname,
+                });
+            }
+        }
 
         // We need to assert these identifiers are correct and safe here, because they
         // may not have been checked prior to reaching this routine.

@@ -172,7 +172,7 @@ describe('HttpRouter', ({ describe }) => {
     });
 
     describe('handleRequest error handling', ({ it }) => {
-        it('returns a JSON 404 when no route matches', async () => {
+        it('returns a JSON:API 404 when no route matches', async () => {
             const router = makeRouter([
                 { pattern: '/users/:id', targets: [ makeTargetSpec() ] },
             ]);
@@ -180,10 +180,11 @@ describe('HttpRouter', ({ describe }) => {
             const response = await router.handleRequest(makeContext(), makeRequest({ pathname: '/missing' }), new ServerResponse());
 
             assertEqual(404, response.status);
+            assertEqual('application/vnd.api+json; charset=utf-8', response.headers.get('content-type'));
             assertEqual('404', JSON.parse(response.body).errors[0].status);
         });
 
-        it('returns a JSON 405 with an Allow header when the method is not allowed', async () => {
+        it('returns a JSON:API 405 with an Allow header when the method is not allowed', async () => {
             const router = makeRouter([
                 { pattern: '/users', targets: [ makeTargetSpec({ methods: [ 'GET' ] }) ] },
             ]);
@@ -191,6 +192,7 @@ describe('HttpRouter', ({ describe }) => {
             const response = await router.handleRequest(makeContext(), makeRequest({ method: 'POST', pathname: '/users' }), new ServerResponse());
 
             assertEqual(405, response.status);
+            assertEqual('application/vnd.api+json; charset=utf-8', response.headers.get('content-type'));
             assertMatches('GET', response.headers.get('allow'));
             assertEqual('405', JSON.parse(response.body).errors[0].status);
         });
@@ -271,12 +273,13 @@ describe('HttpRouter', ({ describe }) => {
             assertEqual(false, router.handleError({}, {}, new ServerResponse(), new Error('boom')));
         });
 
-        it('produces a JSON response for an expected HTTP error', () => {
+        it('produces a JSON:API response for an expected HTTP error', () => {
             const router = makeBasicRouter();
 
             const response = router.handleError({}, {}, new ServerResponse(), new NotFoundError('missing'));
 
             assertEqual(404, response.status);
+            assertEqual('application/vnd.api+json; charset=utf-8', response.headers.get('content-type'));
             assertEqual('404', JSON.parse(response.body).errors[0].status);
         });
 

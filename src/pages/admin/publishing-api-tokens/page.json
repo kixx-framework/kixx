@@ -1,4 +1,5 @@
 {
+    "template": "page.html",
     "subpage": {
         "title": "Publishing API Tokens"
     }

@@ -45,11 +45,15 @@ async function catchAsyncError(fn) {
 describe('DeveloperSourceScanner', ({ it }) => {
     it('maps pages, leaf directives, templates, and assets to storage pathnames', async () => {
         const root = await makeWorkspace({
-            'pages/page.json': JSON.stringify({ template: 'default.html', partials: [ { id: 'root.html', filename: 'root.html' } ] }),
+            'pages/page.json': JSON.stringify({ template: 'page.html', partials: [ { id: 'root.html', filename: 'root.html' } ] }),
+            'pages/page.html': 'Default',
+            'pages/root.html': 'Root partial',
             'pages/admin/page.json': JSON.stringify({}),
-            'pages/admin/style-guide/page.json': JSON.stringify({ template: 'style/style-guide-wrapper.html', partials: [ { id: 'style.html', filename: 'style/partial.html' } ] }),
+            'pages/admin/style-guide/page.json': JSON.stringify({ template: 'page.html', partials: [ { id: 'style.html', filename: 'style.html' } ] }),
+            'pages/admin/style-guide/page.html': 'Style guide',
+            'pages/admin/style-guide/style.html': 'Style partial',
             'pages/admin/style-guide/copy-fields/page.json': JSON.stringify({
-                template: 'copy-fields.html',
+                template: 'page.html',
                 partials: [
                     { id: 'label.html', filename: 'label.html' },
                     { id: 'copy-field.html', filename: 'copy-field.html' },
@@ -57,13 +61,9 @@ describe('DeveloperSourceScanner', ({ it }) => {
                 includes: { body: { filename: 'body.html' } },
             }),
             'pages/admin/style-guide/copy-fields/body.html': 'Copy fields',
-            'templates/pages/default.html': 'Default',
-            'templates/pages/root.html': 'Root partial',
-            'templates/pages/style/style-guide-wrapper.html': 'Style guide',
-            'templates/pages/style/partial.html': 'Style partial',
-            'templates/pages/copy-fields.html': 'Copy fields page',
-            'templates/pages/copy-field.html': 'Copy field partial',
-            'templates/pages/label.html': 'Label partial',
+            'pages/admin/style-guide/copy-fields/page.html': 'Copy fields page',
+            'pages/admin/style-guide/copy-fields/copy-field.html': 'Copy field partial',
+            'pages/admin/style-guide/copy-fields/label.html': 'Label partial',
             'templates/partials/common/site.html': 'Common partial',
             'templates/base/default.html': 'Base template',
             'static-assets/images/logo.svg': '<svg></svg>',
@@ -85,7 +85,7 @@ describe('DeveloperSourceScanner', ({ it }) => {
         try {
             const manifest = await makeScanner(root).scan();
             const keys = [ ...manifest.keys() ];
-            const template = manifest.get('/pages/admin/style-guide/copy-fields/copy-fields.html');
+            const template = manifest.get('/pages/admin/style-guide/copy-fields/page.html');
             const partials = manifest.get('/pages/admin/style-guide/copy-fields/__page-partials-bundle');
             const email = manifest.get('/emails/welcome/__email-assets');
 
@@ -109,10 +109,10 @@ describe('DeveloperSourceScanner', ({ it }) => {
 
     it('does not inherit build directives from ancestor page metadata', async () => {
         const root = await makeWorkspace({
-            'pages/page.json': JSON.stringify({ template: 'default.html', partials: [ { id: 'root.html', filename: 'root.html' } ] }),
+            'pages/page.json': JSON.stringify({ template: 'page.html', partials: [ { id: 'root.html', filename: 'root.html' } ] }),
+            'pages/page.html': 'Default',
+            'pages/root.html': 'Root partial',
             'pages/admin/page.json': JSON.stringify({}),
-            'templates/pages/default.html': 'Default',
-            'templates/pages/root.html': 'Root partial',
         });
 
         try {
@@ -191,7 +191,7 @@ describe('DeveloperSourceScanner', ({ it }) => {
     it('asserts when a template basename collides with a reserved page filename', async () => {
         const root = await makeWorkspace({
             'pages/page.json': JSON.stringify({ template: '__page-includes-bundle' }),
-            'templates/pages/__page-includes-bundle': 'collision',
+            'pages/__page-includes-bundle': 'collision',
         });
 
         try {

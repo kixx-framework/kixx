@@ -10,7 +10,7 @@ One intentional difference from core Mustache: plain object sections iterate ove
 
 ## Hyperview Context
 
-Hyperview page data comes from merged `pages/**/page.json` files, optional page-local `includes` files for additional text content, and runtime props on the response object supplied by request handlers with `response.updateProps()`. `HyperviewService#renderPage()` assembles this data into a page-context or hypertext result; the presentation facade serializes or commits that result. The assembled data object is passed to the page template and then to the base template selected by the route's `baseTemplateId` rendering option.
+Hyperview page data comes from merged `pages/**/page.json` files, optional page-local `includes` files for additional text content, and runtime props on the response object supplied by request handlers with `response.updateProps()`. A page's primary template and page-local partials live beside its leaf `page.json`; shared templates live under `templates/`. `HyperviewService#renderPage()` assembles this data into a page-context or hypertext result; the presentation facade serializes or commits that result. The assembled data object is passed to the page template and then to the base template selected by the route's `baseTemplateId` rendering option.
 
 Static page data:
 
@@ -784,7 +784,7 @@ const context = {
 {{/each}}
 ```
 
-Partial `application/templates/partials/cards/city.html`:
+Partial `src/templates/partials/cards/city.html`:
 
 ```html
 <article>
@@ -1215,15 +1215,31 @@ The `escapeHTMLChars()` utility converts `null` and `undefined` to an empty stri
 
 Partials are reusable templates registered separately from the template that includes them. Include one with `{{> name }}`.
 
-In Hyperview, shared partials live under `application/templates/partials/`. A tag like `{{> website/styles.css }}` resolves to:
+In Hyperview, shared partials live under `src/templates/partials/`. A tag like `{{> website/styles.css }}` resolves to:
 
 ```text
-application/templates/partials/website/styles.css
+src/templates/partials/website/styles.css
 ```
 
 Partial name resolution is case-insensitive, so `{{> Website/Styles.css }}` resolves the same file.
 
-Base templates live under `application/templates/base-templates/`. Page templates live under the matching `application/pages/` directory.
+Base templates live under `src/templates/base/`. A page template lives beside its `src/pages/**/page.json` file and is named by that file's `template` directive.
+
+Partials used by only one page also live as flat siblings of that page's `page.json`. Register them with the `partials` directive:
+
+```json
+{
+    "template": "page.html",
+    "partials": [
+        {
+            "id": "album-card.html",
+            "filename": "album-card.html"
+        }
+    ]
+}
+```
+
+Do not create a `partials/` directory inside a page directory; child directories represent child page pathnames. Move a partial to `src/templates/partials/` when multiple pages use it. Page-local partials take precedence over shared partials with the same id.
 
 Base template:
 
@@ -1273,7 +1289,7 @@ Page template:
 </article>
 ```
 
-Partial `application/templates/partials/cards/album.html`:
+Partial `src/templates/partials/cards/album.html`:
 
 ```html
 <li>

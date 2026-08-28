@@ -10,10 +10,10 @@ import ContentStore from './lib/content-store.js';
 import DeveloperContentStore from './lib/developer-content-store.js';
 
 const DEFAULT_SOURCE_DIRECTORIES = {
-    pagesDirectory: './src/pages',
-    templatesDirectory: './src/templates',
-    staticAssetsDirectory: './src/static-assets',
-    emailsDirectory: './src/emails',
+    pagesDirectory: './pages',
+    templatesDirectory: './templates',
+    staticAssetsDirectory: './static-assets',
+    emailsDirectory: './emails',
 };
 
 
