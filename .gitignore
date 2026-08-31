@@ -37,6 +37,9 @@ tmp/
 data/
 
 # Secrets
+# Only the secrets half of each environment is ignored. The plain
+# .env.<environment> files are committed, which is what lets a deployment
+# bind them as plain text and the secrets files as encrypted secret text.
 .env
-.env.*
+.env.*.secrets
 

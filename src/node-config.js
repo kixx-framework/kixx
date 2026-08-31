@@ -3,6 +3,9 @@ export default {
 
     environments: {
         development: {
+            LOGGER: {
+                level: 'debug',
+            },
             HYPERVIEW: {
                 useTemplateCache: false,
                 usePageCache: false,
@@ -51,6 +54,9 @@ export default {
             },
         },
         staging: {
+            LOGGER: {
+                level: 'info',
+            },
             HYPERVIEW: {
                 useTemplateCache: true,
                 usePageCache: true,
@@ -95,6 +101,9 @@ export default {
             },
         },
         production: {
+            LOGGER: {
+                level: 'info',
+            },
             HYPERVIEW: {
                 useTemplateCache: true,
                 usePageCache: true,

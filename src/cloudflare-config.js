@@ -41,6 +41,9 @@ export default {
                 //     subrequests: 0,
                 // },
             },
+            LOGGER: {
+                level: 'info',
+            },
             HYPERVIEW: {
                 useTemplateCache: true,
                 usePageCache: true,

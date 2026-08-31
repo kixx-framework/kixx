@@ -20,6 +20,7 @@ import { plugins as generalPlugins } from './plugins/general.js';
 import { plugins as nodePlugins } from './plugins/node.js';
 import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import { readConfig } from './kixx/config/read-config.js';
+import { mergeEnvironmentSources } from './kixx/config/merge-environment-sources.js';
 import virtualHosts from './virtual-hosts.js';
 
 
@@ -52,18 +53,19 @@ const dotenvFile = isNonEmptyString(cliOptions.dotenv)
     ? path.resolve(cliOptions.dotenv)
     : path.join(THIS_DIRECTORY, `.env.${ environment }`);
 
-let env;
+// Secrets live beside the plain file rather than in it, so a deployment can
+// bind the two halves differently. The path is derived instead of separately
+// configurable so --dotenv keeps selecting the pair with one flag.
+const dotenvSecretsFile = `${ dotenvFile }.secrets`;
 
-try {
-    env = parseDotEnvFile(dotenvFile);
-} catch (error) {
-    if (error.code === 'ENOENT') {
-        // If the dotenv file does not exist, use the env vars read at startup.
-        env = process.env;
-    } else {
-        throw error;
-    }
-}
+// Each file is independently optional, which is what lets the dotenv-file and
+// process-environment deployment styles be used together rather than as an
+// either/or. Overlap between the three sources is rejected by the merge.
+const env = mergeEnvironmentSources([
+    { name: dotenvFile, values: readOptionalDotEnvFile(dotenvFile) },
+    { name: dotenvSecretsFile, values: readOptionalDotEnvFile(dotenvSecretsFile) },
+    { name: 'process.env', values: process.env },
+]);
 
 const config = readConfig(sourceConfig, environment, {
     resolveFilepath,
@@ -87,16 +89,16 @@ if (port === null) {
     );
 }
 
-const name = env.APP_NAME || 'kixx-app';
-
+// BUILD_ID identifies a single deploy rather than an environment, so it stays
+// an environment variable while the application name and log level do not.
 const runtime = new AppRuntime({
     build: { id: env.BUILD_ID },
-    server: { name },
+    server: { name: config.name },
 });
 
 const logger = new Logger({
-    name,
-    level: env.LOG_LEVEL || 'debug',
+    name: config.name,
+    level: config.env.LOGGER.level,
     writer: new LoggerWriter(),
 });
 
@@ -346,11 +348,17 @@ function parsePort(value) {
     return parsedPort;
 }
 
-function parseDotEnvFile(filepath) {
+// Returns undefined when the file does not exist. A missing dotenv file is a
+// normal deployment shape, but a file which exists and cannot be read or
+// parsed is a misconfiguration and must not be silently skipped.
+function readOptionalDotEnvFile(filepath) {
     let source;
     try {
         source = fs.readFileSync(filepath, 'utf8');
     } catch (cause) {
+        if (cause.code === 'ENOENT') {
+            return undefined;
+        }
         throw new OperationalError(`Unable to read dotenv file from ${ filepath }`, { cause });
     }
 

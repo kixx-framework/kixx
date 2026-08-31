@@ -15,18 +15,21 @@ import { plugins as cloudflarePlugins, durableObjects } from './plugins/cloudfla
 import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import virtualHosts from './virtual-hosts.js';
 
+// ENVIRONMENT selects which section of the source config is loaded, so it is
+// the one setting which cannot itself come from the config.
 const environment = env.ENVIRONMENT || 'development';
 const config = readConfig(sourceConfig, environment);
-const name = env.APP_NAME || 'kixx-app';
 
+// BUILD_ID identifies a single deploy rather than an environment, so it stays
+// an environment variable while the application name and log level do not.
 const runtime = new AppRuntime({
     build: { id: env.BUILD_ID },
-    server: { name },
+    server: { name: config.name },
 });
 
 const logger = new Logger({
-    name,
-    level: env.LOG_LEVEL || 'debug',
+    name: config.name,
+    level: config.env.LOGGER.level,
     writer: new LoggerWriter(),
 });
 

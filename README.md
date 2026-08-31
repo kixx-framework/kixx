@@ -43,6 +43,54 @@ The dev server listens on the public `--port` (default=2026) and proxies request
 
 The wrapper accepts the same `--environment` and `--dotenv` options as `src/node-server.js`. Change `--port` to avoid local port conflicts.
 
+### Environment Variables and Configuration
+
+Settings are split across two kinds of file by a single question:
+
+> Does the value change **per deploy**, or only **per environment**?
+
+Per-environment values are configuration and belong in `src/node-config.js` or
+`src/cloudflare-config.js`, under the `environments` map. The application name
+and log level live here, as do every store, cache, and rate-limit setting.
+
+Per-deploy values are environment variables and live in dotenv files, split
+again by secrecy:
+
+| File | Committed | Cloudflare binding | Holds |
+| --- | --- | --- | --- |
+| `src/.env.<environment>` | yes | plain text | `ENVIRONMENT`, `TRUST_PROXY`, `BUILD_ID`, `PORT` |
+| `src/.env.<environment>.secrets` | no | encrypted secret text | signing secrets and tokens |
+
+Because the secrecy split follows the git boundary, a deployment can derive the
+binding type from the filename alone. There is no per-key annotation to keep in
+sync, and no way for a value to be classified two ways at once.
+
+`src/example.env` and `src/example.env.secrets` are the templates for each half.
+Bootstrap a fresh clone with:
+
+```bash
+cp src/example.env.secrets src/.env.development.secrets
+```
+
+#### No key may be defined twice
+
+The Node.js server reads `.env.<environment>`, `.env.<environment>.secrets`, and
+`process.env`. Each file is optional, so deploying with dotenv files and
+deploying by setting `process.env` both work, and they can be combined.
+
+A key defined by more than one of those three sources aborts startup with an
+error naming the key and the sources. There is deliberately no precedence rule:
+a key carrying two definitions means one of them is in the wrong place, and
+resolving it silently is how a secret ends up bound as plain text. Only keys the
+dotenv files declare participate, so unrelated process environment entries never
+collide.
+
+`--dotenv <path>` names the plain file and derives the secrets file by appending
+`.secrets`, so one flag selects the pair.
+
+`ENVIRONMENT` cannot move into configuration, because it selects which section
+of the config module is loaded.
+
 ### Linting
 
 Linting is configured in `./eslint.config.js`.
