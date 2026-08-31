@@ -23,7 +23,7 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
             });
 
             assertEqual(20, entry.levelCode);
-            assertEqual('INFO', entry.level);
+            assertEqual('info', entry.level);
             assertUndefined(entry.levelName);
             assertEqual('App', entry.name);
             assertEqual('request completed', entry.message);

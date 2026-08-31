@@ -4,6 +4,7 @@
  */
 
 import {
+    isString,
     isFunction,
     isObjectNotNull,
     isUndefined,
@@ -44,7 +45,7 @@ export function createJSONLogEntry(options) {
     const entry = {
         timestamp,
         levelCode,
-        level,
+        level: isString(level) ? level.toLowerCase() : level,
         name,
         message,
     };

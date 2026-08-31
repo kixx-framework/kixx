@@ -29,7 +29,7 @@ describe('Cloudflare LoggerWriter', ({ describe }) => {
 
                 const entry = parseConsoleEntry(warnMock);
                 assertEqual(30, entry.levelCode);
-                assertEqual('WARN', entry.level);
+                assertEqual('warn', entry.level);
                 assertUndefined(entry.levelName);
                 assertEqual('App', entry.name);
                 assertEqual('heads up', entry.message);
@@ -195,7 +195,7 @@ describe('Cloudflare LoggerWriter', ({ describe }) => {
 
                 const entry = parseConsoleEntry(infoMock);
                 assertEqual(20, entry.levelCode);
-                assertEqual('INFO', entry.level);
+                assertEqual('info', entry.level);
                 assertUndefined(entry.levelName);
                 assertEqual('App', entry.name);
                 assertEqual('with forced fallback', entry.message);

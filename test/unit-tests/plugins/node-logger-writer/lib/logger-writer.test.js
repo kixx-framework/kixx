@@ -39,14 +39,14 @@ describe('Node LoggerWriter', ({ describe }) => {
 
                 const debugEntry = parseStreamEntry(stdoutMock, 0);
                 assertEqual(10, debugEntry.levelCode);
-                assertEqual('DEBUG', debugEntry.level);
+                assertEqual('debug', debugEntry.level);
                 assertUndefined(debugEntry.levelName);
                 assertEqual('debug message', debugEntry.message);
                 assertUndefined(debugEntry.info);
 
                 const infoEntry = parseStreamEntry(stdoutMock, 1);
                 assertEqual(20, infoEntry.levelCode);
-                assertEqual('INFO', infoEntry.level);
+                assertEqual('info', infoEntry.level);
                 assertUndefined(infoEntry.levelName);
                 assertEqual('App', infoEntry.name);
                 assertEqual('info message', infoEntry.message);
@@ -74,13 +74,13 @@ describe('Node LoggerWriter', ({ describe }) => {
 
                 const warnEntry = parseStreamEntry(stderrMock, 0);
                 assertEqual(30, warnEntry.levelCode);
-                assertEqual('WARN', warnEntry.level);
+                assertEqual('warn', warnEntry.level);
                 assertUndefined(warnEntry.levelName);
                 assertEqual('warning', warnEntry.message);
 
                 const errorEntry = parseStreamEntry(stderrMock, 1);
                 assertEqual(40, errorEntry.levelCode);
-                assertEqual('ERROR', errorEntry.level);
+                assertEqual('error', errorEntry.level);
                 assertUndefined(errorEntry.levelName);
                 assertEqual('failure', errorEntry.message);
             } finally {
@@ -243,7 +243,7 @@ describe('Node LoggerWriter', ({ describe }) => {
 
                 const entry = parseStreamEntry(stdoutMock);
                 assertEqual(20, entry.levelCode);
-                assertEqual('INFO', entry.level);
+                assertEqual('info', entry.level);
                 assertUndefined(entry.levelName);
                 assertEqual('App', entry.name);
                 assertEqual('with forced fallback', entry.message);
