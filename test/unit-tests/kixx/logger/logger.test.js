@@ -224,7 +224,7 @@ describe('Logger', ({ describe }) => {
     });
 
     describe('Logger writer arguments', ({ it }) => {
-        it('forwards name, level integer, level name, message, info, and error to the writer', () => {
+        it('forwards name, level code, level, message, info, and error to the writer', () => {
             const tracker = new MockTracker();
             const writer = makeWriter(tracker);
             const logger = new Logger({ name: 'App', writer });

@@ -21,20 +21,20 @@ export default class LoggerWriter {
     /**
      * Serializes a log entry to JSON and writes it to the console.
      * @param {string} name - Logger name
-     * @param {number} level - Numeric severity constant from `Logger.LEVELS`
-     * @param {string} levelName - Human-readable level name (e.g., `'INFO'`)
+     * @param {number} levelCode - Numeric severity constant from `Logger.LEVELS`
+     * @param {string} level - Human-readable level name (e.g., `'INFO'`)
      * @param {string} message - Primary log message
      * @param {*} [info] - Optional supplementary data
      * @param {Error} [error] - Optional error object
      */
-    write(name, level, levelName, message, info, error) {
+    write(name, levelCode, level, message, info, error) {
         // Cloudflare prepends a timestamp when adding logs to the dashboard,
         // but it does not follow the same JSON format when we forward to
         // other log aggregators, so we add our own here.
         const now = new Date();
         const entry = createJSONLogEntry({
             timestamp: now.toISOString(),
-            levelName,
+            levelCode,
             level,
             name,
             message,
@@ -42,7 +42,7 @@ export default class LoggerWriter {
             error,
         });
 
-        const consoleLevelKey = levelName.toLowerCase();
+        const consoleLevelKey = level.toLowerCase();
         // eslint-disable-next-line no-console
         console[consoleLevelKey](stringifyJSONLogEntry(entry));
     }

@@ -24,17 +24,17 @@ export default class LoggerWriter {
     /**
      * Serializes a log entry to JSON and writes it to the Node output stream.
      * @param {string} name - Logger name
-     * @param {number} level - Numeric severity constant from `Logger.LEVELS`
-     * @param {string} levelName - Human-readable level name (e.g., `'INFO'`)
+     * @param {number} levelCode - Numeric severity constant from `Logger.LEVELS`
+     * @param {string} level - Human-readable level name (e.g., `'INFO'`)
      * @param {string} message - Primary log message
      * @param {*} [info] - Optional supplementary data
      * @param {Error} [error] - Optional error object
      */
-    write(name, level, levelName, message, info, error) {
+    write(name, levelCode, level, message, info, error) {
         const now = new Date();
         const entry = createJSONLogEntry({
             timestamp: now.toISOString(),
-            levelName,
+            levelCode,
             level,
             name,
             message,
@@ -42,7 +42,7 @@ export default class LoggerWriter {
             error,
         });
 
-        const stream = getOutputStream(levelName);
+        const stream = getOutputStream(level);
 
         // The LoggerWriterInterface is synchronous; Node may still buffer the
         // physical write after this stream handoff returns.
@@ -50,8 +50,8 @@ export default class LoggerWriter {
     }
 }
 
-function getOutputStream(levelName) {
-    if (levelName === 'WARN' || levelName === 'ERROR') {
+function getOutputStream(level) {
+    if (level === 'WARN' || level === 'ERROR') {
         return process.stderr;
     }
 

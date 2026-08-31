@@ -28,8 +28,9 @@ describe('Cloudflare LoggerWriter', ({ describe }) => {
                 assertEqual(1, warnMock.mock.callCount());
 
                 const entry = parseConsoleEntry(warnMock);
-                assertEqual('WARN', entry.levelName);
-                assertEqual(30, entry.level);
+                assertEqual(30, entry.levelCode);
+                assertEqual('WARN', entry.level);
+                assertUndefined(entry.levelName);
                 assertEqual('App', entry.name);
                 assertEqual('heads up', entry.message);
                 assertEqual('abc', entry.info.requestId);
@@ -193,8 +194,9 @@ describe('Cloudflare LoggerWriter', ({ describe }) => {
                 writer.write('App', 20, 'INFO', 'with forced fallback', { id: 7 });
 
                 const entry = parseConsoleEntry(infoMock);
-                assertEqual('INFO', entry.levelName);
-                assertEqual(20, entry.level);
+                assertEqual(20, entry.levelCode);
+                assertEqual('INFO', entry.level);
+                assertUndefined(entry.levelName);
                 assertEqual('App', entry.name);
                 assertEqual('with forced fallback', entry.message);
                 assertEqual('[UNSERIALIZABLE_LOG_ENTRY]', entry.info);

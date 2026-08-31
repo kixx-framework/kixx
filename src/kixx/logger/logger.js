@@ -228,23 +228,25 @@ export default class Logger {
 
     /**
      * Writes an accepted log entry to the configured writer or the built-in console.
-     * @param {number} level - Numeric level constant from Logger.LEVELS
+     * @param {number} levelCode - Numeric level constant from Logger.LEVELS
      * @param {string} message - Primary log message
      * @param {*} [info] - Optional additional data
      * @param {Error} [error] - Optional error object
      * @returns {Logger} this
      */
-    #printMessage(level, message, info, error) {
+    #printMessage(levelCode, message, info, error) {
+        const level = LEVELS_INTEGERS_MAP.get(levelCode);
+
         if (this.#writer) {
-            this.#writer.write(this.name, level, LEVELS_INTEGERS_MAP.get(level), message, info, error);
+            this.#writer.write(this.name, levelCode, level, message, info, error);
             return this;
         }
 
         const time = getCurrentHumanDateTimeString();
-        const levelString = LEVELS_INTEGERS_MAP.get(level).padEnd(5);
+        const levelString = level.padEnd(5);
         const messageString = `${ time } [${ levelString }] ${ this.name } ${ message }`;
 
-        const consoleLevelKey = LEVELS_INTEGERS_MAP.get(level).toLowerCase();
+        const consoleLevelKey = level.toLowerCase();
 
         /* eslint-disable no-console */
         if (isUndefined(info)) {

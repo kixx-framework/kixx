@@ -18,7 +18,7 @@
  * - A single writer instance is shared by a Logger and every descendant created
  *   through `createChild()`, so one adapter receives entries from multiple
  *   loggers; use the `name` argument to distinguish their sources
- * - `level` is always one of the emitted level constants (10, 20, 30, 40); the
+ * - `levelCode` is always one of the emitted level constants (10, 20, 30, 40); the
  *   threshold-only `NONE` value (100) is never passed to `write`
  * - `info` and `error` are passed through exactly as the caller supplied them
  *   and may be `undefined`; the adapter MUST handle both absent and present
@@ -41,9 +41,9 @@
  *
  *   Parameters:
  *   - `name`      {string}           — Logger name, e.g. `'App:RequestHandler'`
- *   - `level`     {number}           — Numeric severity constant from `Logger.LEVELS`
+ *   - `levelCode` {number}           — Numeric severity constant from `Logger.LEVELS`
  *                                      (10 = DEBUG, 20 = INFO, 30 = WARN, 40 = ERROR)
- *   - `levelName` {string}           — Human-readable level name matching `level`
+ *   - `level`     {string}           — Human-readable level name matching `levelCode`
  *                                      (e.g., `'INFO'`)
  *   - `message`   {string}           — Primary log message supplied by the caller
  *   - `info`      {*}                — Optional supplementary data; `undefined`

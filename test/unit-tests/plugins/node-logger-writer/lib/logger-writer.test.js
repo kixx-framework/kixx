@@ -38,14 +38,16 @@ describe('Node LoggerWriter', ({ describe }) => {
                 assertMatches(/\n$/, getStreamLine(stdoutMock, 1));
 
                 const debugEntry = parseStreamEntry(stdoutMock, 0);
-                assertEqual('DEBUG', debugEntry.levelName);
-                assertEqual(10, debugEntry.level);
+                assertEqual(10, debugEntry.levelCode);
+                assertEqual('DEBUG', debugEntry.level);
+                assertUndefined(debugEntry.levelName);
                 assertEqual('debug message', debugEntry.message);
                 assertUndefined(debugEntry.info);
 
                 const infoEntry = parseStreamEntry(stdoutMock, 1);
-                assertEqual('INFO', infoEntry.levelName);
-                assertEqual(20, infoEntry.level);
+                assertEqual(20, infoEntry.levelCode);
+                assertEqual('INFO', infoEntry.level);
+                assertUndefined(infoEntry.levelName);
                 assertEqual('App', infoEntry.name);
                 assertEqual('info message', infoEntry.message);
                 assertEqual('abc', infoEntry.info.requestId);
@@ -71,13 +73,15 @@ describe('Node LoggerWriter', ({ describe }) => {
                 assertMatches(/\n$/, getStreamLine(stderrMock, 1));
 
                 const warnEntry = parseStreamEntry(stderrMock, 0);
-                assertEqual('WARN', warnEntry.levelName);
-                assertEqual(30, warnEntry.level);
+                assertEqual(30, warnEntry.levelCode);
+                assertEqual('WARN', warnEntry.level);
+                assertUndefined(warnEntry.levelName);
                 assertEqual('warning', warnEntry.message);
 
                 const errorEntry = parseStreamEntry(stderrMock, 1);
-                assertEqual('ERROR', errorEntry.levelName);
-                assertEqual(40, errorEntry.level);
+                assertEqual(40, errorEntry.levelCode);
+                assertEqual('ERROR', errorEntry.level);
+                assertUndefined(errorEntry.levelName);
                 assertEqual('failure', errorEntry.message);
             } finally {
                 tracker.reset();
@@ -238,8 +242,9 @@ describe('Node LoggerWriter', ({ describe }) => {
                 writer.write('App', 20, 'INFO', 'with forced fallback', { id: 7 });
 
                 const entry = parseStreamEntry(stdoutMock);
-                assertEqual('INFO', entry.levelName);
-                assertEqual(20, entry.level);
+                assertEqual(20, entry.levelCode);
+                assertEqual('INFO', entry.level);
+                assertUndefined(entry.levelName);
                 assertEqual('App', entry.name);
                 assertEqual('with forced fallback', entry.message);
                 assertEqual('[UNSERIALIZABLE_LOG_ENTRY]', entry.info);

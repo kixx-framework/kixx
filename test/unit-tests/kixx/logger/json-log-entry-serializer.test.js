@@ -17,13 +17,14 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
         it('creates an entry with the required log fields', () => {
             const entry = createJSONLogEntry({
                 name: 'App',
-                level: 20,
-                levelName: 'INFO',
+                levelCode: 20,
+                level: 'INFO',
                 message: 'request completed',
             });
 
-            assertEqual('INFO', entry.levelName);
-            assertEqual(20, entry.level);
+            assertEqual(20, entry.levelCode);
+            assertEqual('INFO', entry.level);
+            assertUndefined(entry.levelName);
             assertEqual('App', entry.name);
             assertEqual('request completed', entry.message);
         });
@@ -34,8 +35,8 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
             const entry = createJSONLogEntry({
                 timestamp,
                 name: 'App',
-                level: 20,
-                levelName: 'INFO',
+                levelCode: 20,
+                level: 'INFO',
                 message: 'request completed',
             });
 
@@ -45,8 +46,8 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
         it('omits optional info and error fields when they are undefined', () => {
             const entry = createJSONLogEntry({
                 name: 'App',
-                level: 20,
-                levelName: 'INFO',
+                levelCode: 20,
+                level: 'INFO',
                 message: 'request completed',
             });
 
@@ -59,8 +60,8 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
 
             const entry = createJSONLogEntry({
                 name: 'App',
-                level: 20,
-                levelName: 'INFO',
+                levelCode: 20,
+                level: 'INFO',
                 message: 'request completed',
                 info,
             });
@@ -78,8 +79,8 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
 
             const entry = createJSONLogEntry({
                 name: 'App',
-                level: 40,
-                levelName: 'ERROR',
+                levelCode: 40,
+                level: 'ERROR',
                 message: 'request failed',
                 error,
             });
@@ -101,8 +102,8 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
 
             const entry = createJSONLogEntry({
                 name: 'App',
-                level: 40,
-                levelName: 'ERROR',
+                levelCode: 40,
+                level: 'ERROR',
                 message: 'request failed',
                 error,
             });
@@ -114,8 +115,8 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
     describe('stringifyJSONLogEntry', ({ it }) => {
         it('uses native JSON serialization for a JSON-safe entry', () => {
             const entry = {
-                levelName: 'INFO',
-                level: 20,
+                levelCode: 20,
+                level: 'INFO',
                 name: 'App',
                 message: 'request completed',
                 info: { requestId: 'abc' },
@@ -196,8 +197,8 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
             try {
                 json = stringifyJSONLogEntry({
                     timestamp: '2026-07-13T10:04:06.123Z',
-                    levelName: 'INFO',
-                    level: 20,
+                    levelCode: 20,
+                    level: 'INFO',
                     name: 'App',
                     message: 'request completed',
                     info: { requestId: 'abc' },
@@ -208,8 +209,9 @@ describe('JsonLogEntrySerializer', ({ describe }) => {
 
             const entry = JSON.parse(json);
             assertEqual('2026-07-13T10:04:06.123Z', entry.timestamp);
-            assertEqual('INFO', entry.levelName);
-            assertEqual(20, entry.level);
+            assertEqual(20, entry.levelCode);
+            assertEqual('INFO', entry.level);
+            assertUndefined(entry.levelName);
             assertEqual('App', entry.name);
             assertEqual('request completed', entry.message);
             assertEqual('[UNSERIALIZABLE_LOG_ENTRY]', entry.info);

@@ -23,8 +23,8 @@ const protoToString = Object.prototype.toString;
  * @param {Object} options - Log entry options
  * @param {string} options.timestamp - ISO 8601 timestamp for the log event
  * @param {string} options.name - Logger name
- * @param {number} options.level - Numeric severity constant from `Logger.LEVELS`
- * @param {string} options.levelName - Human-readable level name
+ * @param {number} options.levelCode - Numeric severity constant from `Logger.LEVELS`
+ * @param {string} options.level - Human-readable level name
  * @param {string} options.message - Primary log message
  * @param {*} [options.info] - Optional supplementary data
  * @param {Error} [options.error] - Optional error object
@@ -34,8 +34,8 @@ export function createJSONLogEntry(options) {
     const {
         timestamp,
         name,
+        levelCode,
         level,
-        levelName,
         message,
         info,
         error,
@@ -43,7 +43,7 @@ export function createJSONLogEntry(options) {
 
     const entry = {
         timestamp,
-        levelName,
+        levelCode,
         level,
         name,
         message,
@@ -79,8 +79,8 @@ function stringifyJSONLogEntrySafely(entry, nativeError) {
     } catch (safeError) {
         return JSON.stringify({
             timestamp: toSafeString(entry.timestamp),
-            levelName: toSafeString(entry.levelName),
-            level: makeJSONSafeValue(entry.level, new WeakSet()),
+            levelCode: makeJSONSafeValue(entry.levelCode, new WeakSet()),
+            level: toSafeString(entry.level),
             name: toSafeString(entry.name),
             message: toSafeString(entry.message),
             info: UNSERIALIZABLE_LOG_ENTRY,
