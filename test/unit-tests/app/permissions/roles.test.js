@@ -5,7 +5,7 @@ import { deriveRolePermissions, ROLE_ROOT_ADMIN, ROLE_EDITOR } from '../../../..
 import { evaluatePermissions } from '../../../../src/kixx/permissions/permission-validation.js';
 
 
-const BUILD_RESOURCE = 'urn:kixx:publishing:build';
+const BUILD_RESOURCE = 'urn:kixx:publishing:builds';
 
 function isAuthorized(roleId, action, resource) {
     const permissions = deriveRolePermissions([ roleId ]);
@@ -36,13 +36,13 @@ describe('app/permissions/roles', ({ describe }) => {
         it('does not extend the Editor role wildcard grant to update actions on other publishing resources', () => {
             // Editor's `urn:kixx:publishing:*` grant only lists get/create
             // actions; the Build resource's update grant must not broaden it.
-            assertEqual(false, isAuthorized(ROLE_EDITOR, 'urn:kixx:update', 'urn:kixx:publishing:resources:page'));
+            assertEqual(false, isAuthorized(ROLE_EDITOR, 'urn:kixx:update', 'urn:kixx:publishing:releases'));
             assertEqual(false, isAuthorized(ROLE_EDITOR, 'urn:kixx:delete', BUILD_RESOURCE));
         });
 
         it('still authorizes Editor for get/create on the rest of the publishing domain', () => {
-            assertEqual(true, isAuthorized(ROLE_EDITOR, 'urn:kixx:get', 'urn:kixx:publishing:resources:page'));
-            assertEqual(true, isAuthorized(ROLE_EDITOR, 'urn:kixx:create', 'urn:kixx:publishing:index'));
+            assertEqual(true, isAuthorized(ROLE_EDITOR, 'urn:kixx:get', 'urn:kixx:publishing:releases'));
+            assertEqual(true, isAuthorized(ROLE_EDITOR, 'urn:kixx:create', 'urn:kixx:publishing:objects'));
         });
     });
 });

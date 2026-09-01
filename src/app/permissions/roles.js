@@ -11,7 +11,7 @@ const EDITOR_ACTIONS = new Set([ 'urn:kixx:get', 'urn:kixx:create' ]);
 // pointer and can never create new content. Scoping the extra action to this
 // exact resource (not a wildcard) keeps Editor from gaining general update
 // authority over the rest of the publishing domain.
-const PUBLISHING_BUILD_RESOURCE = 'urn:kixx:publishing:build';
+const PUBLISHING_BUILD_RESOURCE = 'urn:kixx:publishing:builds';
 const EDITOR_BUILD_ACTIONS = new Set([ 'urn:kixx:get', 'urn:kixx:update' ]);
 
 /** @type {string} */

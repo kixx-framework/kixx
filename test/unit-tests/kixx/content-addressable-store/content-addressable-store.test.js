@@ -1,56 +1,99 @@
-import { describe, MockTracker } from 'kixx-test';
+import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
-
+import ContentAddressableStore, { CONTENT_CONTRACT_VERSION } from '../../../../src/kixx/content-addressable-store/content-addressable-store.js';
+import { CONTENT_CONTRACT_PATH } from '../../../../src/kixx/content-addressable-store/content-layout.js';
 import ContentAddressableIndex from '../../../../src/kixx/content-addressable-store/content-addressable-index.js';
-import ContentAddressableStore from '../../../../src/kixx/content-addressable-store/content-addressable-store.js';
 
-
-// Records what the framework hands the adapter, and replays it back on read.
-// Standing in for the whole persistence layer this way is what lets a single
-// test assert that what commitChanges() writes is what openSnapshot() can read.
 function makeContentStore() {
+    const blobs = new Map();
     const closures = new Map();
     const builds = new Map();
     const calls = [];
-
+    let saveCount = 0;
     return {
+        blobs,
         closures,
         builds,
         calls,
-        async saveIndex(_context, rootHash, entries) {
-            calls.push('saveIndex');
-            closures.set(rootHash, entries);
+        get saveCount() {
+            return saveCount;
         },
-        async assignBuild(_context, buildId, assignment) {
-            calls.push('assignBuild');
-            const { rootHash, expectedRootHash } = assignment;
+        async putFile(_context, _pathname, hash, payload) {
+            calls.push('putFile');
+            blobs.set(hash, payload);
+            return typeof payload === 'string' ? new TextEncoder().encode(payload).byteLength : payload.byteLength;
+        },
+        async statFiles(_context, hashes) {
+            return hashes.map((hash) => {
+                const payload = blobs.get(hash);
+                if (payload === undefined) {
+                    return null;
+                }
+                return { size: typeof payload === 'string' ? new TextEncoder().encode(payload).byteLength : payload.byteLength };
+            });
+        },
+        async getFiles(_context, _type, files) {
+            return files.map(({ hash }) => blobs.get(hash) ?? null);
+        },
+        async getFile(_context, _type, _pathname, hash) {
+            calls.push('getFile');
+            return blobs.get(hash) ?? null;
+        },
+        async saveIndex(_context, rootHash, entries) {
             if (!closures.has(rootHash)) {
-                return 'missingClosure';
+                saveCount += 1;
+                closures.set(rootHash, entries);
             }
-            if (expectedRootHash !== undefined && (builds.get(buildId) ?? null) !== expectedRootHash) {
-                return 'conflict';
-            }
-            builds.set(buildId, rootHash);
-            return 'assigned';
+        },
+        async getIndex(_context, rootHash) {
+            return closures.get(rootHash) ?? null;
         },
         async getBuild(_context, buildId) {
             calls.push('getBuild');
-            const rootHash = builds.get(buildId) ?? null;
-            if (!rootHash) {
-                return null;
-            }
-            return { rootHash, entries: closures.get(rootHash) };
+            const rootHash = builds.get(buildId)?.rootHash;
+            return rootHash ? { rootHash, entries: closures.get(rootHash) } : null;
         },
-        async getFile(_context, _type, _pathname, hash) {
-            return `bytes:${ hash }`;
+        async getBuildPointer(_context, buildId) {
+            return builds.get(buildId) ?? null;
+        },
+        async listBuilds() {
+            return [ ...builds ].map(([ buildId, pointer ]) => ({ buildId, ...pointer }));
+        },
+        async assignBuild(_context, buildId, assignment) {
+            calls.push('assignBuild');
+            if (!closures.has(assignment.rootHash)) {
+                return 'missingClosure';
+            }
+            const current = builds.get(buildId)?.rootHash ?? null;
+            if (assignment.expectedRootHash !== undefined && assignment.expectedRootHash !== current) {
+                return 'conflict';
+            }
+            builds.set(buildId, { rootHash: assignment.rootHash, assignedAt: '2026-09-01T00:00:00.000Z' });
+            return 'assigned';
         },
     };
 }
 
-function makeStore(contentStore) {
+function makeLogger() {
+    const errors = [];
+    const noop = () => {};
+    const child = {
+        debug: noop,
+        info: noop,
+        warn: noop,
+        error(message, info) {
+            errors.push({ message, info });
+        },
+    };
+    return { logger: { createChild: () => child }, errors };
+}
+
+function makeStore() {
+    const contentStore = makeContentStore();
     const store = new ContentAddressableStore();
-    store.initialize({ contentStore });
-    return store;
+    const { logger, errors } = makeLogger();
+    store.initialize({ logger, contentStore });
+    return { store, contentStore, errors };
 }
 
 async function catchAsyncError(fn) {
@@ -62,405 +105,185 @@ async function catchAsyncError(fn) {
     return null;
 }
 
+async function uploadJson(store, value) {
+    return await store.putObject({}, JSON.stringify(value));
+}
 
-describe('ContentAddressableStore', ({ describe }) => {
+async function uploadText(store, value) {
+    return await store.putObject({}, value);
+}
 
-    describe('initialize()', ({ it }) => {
-        it('requires a ContentStore', () => {
-            const store = new ContentAddressableStore();
-
-            let caught = null;
-            try {
-                store.initialize({});
-            } catch (error) {
-                caught = error;
-            }
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-        });
-    });
-
-    describe('commitChanges()', ({ it }) => {
-        it('saves the closure before pointing the build at it', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            await store.commitChanges({}, 'build-1', {
-                staticAssets: {
-                    '/a.txt': { hash: 'hash-a', size: 1 },
-                },
-            });
-
-            // Order matters: a build pointed at a closure that is not yet
-            // durable would resolve to nothing for any reader that got there
-            // first.
-            assertEqual('saveIndex,assignBuild', contentStore.calls.join(','));
-        });
-
-        it('does not persist an invalid completed index table', async () => {
-            const tracker = new MockTracker();
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            tracker.method(ContentAddressableIndex, 'buildIndex', async () => {
-                return {
-                    '/': [ 'tree', 'root-hash' ],
-                    '/file.txt': [ 'blob', 'blob-hash', 1, { invalid: undefined } ],
-                };
-            });
-
-            let caught;
-            try {
-                caught = await catchAsyncError(
-                    () => store.commitChanges({}, 'build-1', {}),
-                );
-            } finally {
-                tracker.reset();
-            }
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertEqual('', contentStore.calls.join(','));
-        });
-
-        it('reports the hash and node count of the committed closure', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            const result = await store.commitChanges({}, 'build-1', {
-                staticAssets: {
-                    '/a.txt': { hash: 'hash-a', size: 1 },
-                    '/dir/b.txt': { hash: 'hash-b', size: 2 },
-                },
-            });
-
-            // Two blobs plus the root, the "/assets" tree, and the "/assets/dir" tree.
-            assertEqual(5, result.nodeCount);
-            assertEqual(contentStore.builds.get('build-1'), result.hash);
-        });
-
-        it('derives an identical hash for identical content', async () => {
-            const store = makeStore(makeContentStore());
-            const contentTree = {
-                staticAssets: {
-                    '/a.txt': { hash: 'hash-a', size: 1 },
-                },
-            };
-
-            const first = await store.commitChanges({}, 'build-1', contentTree);
-            const second = await store.commitChanges({}, 'build-2', contentTree);
-
-            assertEqual(first.hash, second.hash);
-        });
-
-        it('derives a different hash when a referenced hash changes', async () => {
-            const store = makeStore(makeContentStore());
-
-            const first = await store.commitChanges({}, 'build-1', {
-                staticAssets: {
-                    '/a.txt': { hash: 'hash-a', size: 1 },
-                },
-            });
-            const second = await store.commitChanges({}, 'build-2', {
-                staticAssets: {
-                    '/a.txt': { hash: 'hash-changed', size: 1 },
-                },
-            });
-
-            assert(first.hash !== second.hash, 'expected the hash to change');
-        });
-
-        it('rejects a content tree with an invalid pathname key', async () => {
-            const store = makeStore(makeContentStore());
-
-            const caught = await catchAsyncError(
-                () => store.commitChanges({}, 'build-1', {
-                    staticAssets: {
-                        'no-leading-slash.txt': { hash: 'hash-a', size: 1 },
-                    },
-                }),
-            );
-
-            assert(caught, 'expected an error to be thrown');
+describe('ContentAddressableStore', ({ describe, it }) => {
+    describe('Release lifecycle', ({ it }) => {
+        it('reports every missing object before persisting anything', async () => {
+            const { store, contentStore } = makeStore();
+            const caught = await catchAsyncError(() => store.createRelease({}, { staticAssets: {
+                '/a': { objectId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa', size: 1 },
+                '/b': { objectId: 'bbbbbbbbbbbbbbbbbbbbbbbbbb', size: 2 },
+            } }));
             assertEqual('ValidationError', caught.name);
+            assertEqual(2, caught.errors.length);
+            assertEqual(0, contentStore.closures.size);
         });
 
-        it('rejects a content tree with a malformed hash or size', async () => {
-            const store = makeStore(makeContentStore());
-
-            const caught = await catchAsyncError(
-                () => store.commitChanges({}, 'build-1', {
-                    staticAssets: {
-                        '/a.txt': { hash: '', size: -1 },
-                    },
-                }),
-            );
-
-            assert(caught, 'expected an error to be thrown');
+        it('rejects a claimed size which differs from stored bytes', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const caught = await catchAsyncError(() => store.createRelease({}, {
+                staticAssets: { '/a': { objectId: object.objectId, size: 99 } },
+            }));
             assertEqual('ValidationError', caught.name);
+            assertEqual(0, contentStore.closures.size);
         });
 
-        it('publishes unconditionally when no expectedRootHash is supplied', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
-            });
-            const second = await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-b', size: 1 } },
-            });
-
-            assertEqual(second.hash, contentStore.builds.get('build-1'));
+        it('rejects invalid template syntax and unresolved partials', async () => {
+            const { store } = makeStore();
+            const invalid = await uploadText(store, '{{# open }}');
+            const unresolved = await uploadText(store, '{{> missing }}');
+            const baseTemplates = await uploadJson(store, [
+                { id: 'base.html', source: '{{> missing-base }}' },
+            ]);
+            const caught = await catchAsyncError(() => store.createRelease({}, {
+                baseTemplates,
+                pages: {
+                    '/one': { templates: { 'page.html': invalid } },
+                    '/two': { templates: { 'page.html': unresolved } },
+                },
+            }));
+            assertEqual('ValidationError', caught.name);
+            assertEqual(3, caught.errors.length);
         });
 
-        it('publishes conditionally when the observed pointer still matches', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            const first = await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
+        it('accepts templates whose partials resolve', async () => {
+            const { store } = makeStore();
+            const globals = await uploadJson(store, [ { id: 'header', source: '<header></header>' } ]);
+            const page = await uploadText(store, '{{> header }}');
+            const result = await store.createRelease({}, {
+                globalTemplatePartials: globals,
+                pages: { '/': { templates: { 'page.html': page } } },
             });
-            const second = await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-b', size: 1 } },
-            }, { expectedRootHash: first.hash });
-
-            assertEqual(second.hash, contentStore.builds.get('build-1'));
+            assertEqual(CONTENT_CONTRACT_VERSION, result.contractVersion);
         });
 
-        it('rejects a conditional publish with a stale expectedRootHash and does not move the pointer', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            const first = await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
-            });
-
-            const caught = await catchAsyncError(() => store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-b', size: 1 } },
-            }, { expectedRootHash: 'stale-hash' }));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('ConflictError', caught.name);
-            assertEqual('BuildPointerConflict', caught.code);
-            assertEqual(first.hash, contentStore.builds.get('build-1'));
-        });
-    });
-
-    describe('openSnapshot()', ({ it }) => {
-        it('reads back a snapshot over the table that was committed', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            await store.commitChanges({}, 'build-1', {
-                globalTemplatePartials: { hash: 'hash-partials', size: 4 },
-            });
-
-            // The whole write-then-read contract in one assertion: whatever
-            // commitChanges() encoded has to survive the store round trip in a
-            // shape the index can be rebuilt from.
-            const snapshot = await store.openSnapshot({
-                runtime: { build: { id: 'build-1' } },
-            });
-
-            const stat = snapshot.statGlobalTemplatePartials();
-            assert(stat, 'expected the committed partials bundle to be visible');
-            assertEqual('hash-partials', stat.hash);
-            assertEqual(4, stat.size);
+        it('validateRelease persists nothing', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const result = await store.validateRelease({}, { staticAssets: { '/a': object } });
+            assert(result.releaseId);
+            assertEqual(0, contentStore.closures.size);
+            assertEqual(1, contentStore.blobs.size);
         });
 
-        it('throws an AssertionError when the runtime build has no assigned closure', async () => {
-            const store = makeStore(makeContentStore());
-
-            const caught = await catchAsyncError(() => store.openSnapshot({
-                runtime: { build: { id: 'never-published' } },
+        it('validateRelease persists nothing when validation fails', async () => {
+            const { store, contentStore } = makeStore();
+            const before = contentStore.blobs.size;
+            const caught = await catchAsyncError(() => store.validateRelease({}, {
+                staticAssets: { '/missing': { objectId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa', size: 1 } },
             }));
 
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-        });
-    });
-
-    describe('getCurrentBuild()', ({ it }) => {
-        it('resolves the running build id and its assigned root hash', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            const committed = await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
-            });
-
-            const current = await store.getCurrentBuild({ runtime: { build: { id: 'build-1' } } });
-
-            assertEqual('build-1', current.id);
-            assertEqual(committed.hash, current.rootHash);
+            assertEqual('ValidationError', caught.name);
+            assertEqual(before, contentStore.blobs.size);
+            assertEqual(0, contentStore.closures.size);
         });
 
-        it('resolves null when the runtime has no build id', async () => {
-            const store = makeStore(makeContentStore());
-
-            assertEqual(null, await store.getCurrentBuild({ runtime: { build: {} } }));
-        });
-
-        it('resolves null when the runtime build has no registered pointer', async () => {
-            const store = makeStore(makeContentStore());
-
-            assertEqual(null, await store.getCurrentBuild({ runtime: { build: { id: 'never-published' } } }));
-        });
-
-        it('resolves null for a developer-mode adapter with no persisted pointer', async () => {
-            const store = makeStore({
-                async getBuild() {
-                    return { rootHash: null, entries: { '/': [ 'tree', 'root' ] } };
-                },
-            });
-
-            assertEqual(null, await store.getCurrentBuild({ runtime: { build: { id: 'dev' } } }));
-        });
-    });
-
-    describe('assignCurrentBuild()', ({ it }) => {
-        it('points the running build at an existing closure when the expectation matches', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-
-            const first = await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
-            });
-            const second = await store.commitChanges({}, 'other-build', {
-                staticAssets: { '/a.txt': { hash: 'hash-b', size: 1 } },
-            });
-            // Publish the second closure under a different build id so it
-            // exists without yet being assigned to "build-1".
-            contentStore.builds.delete('other-build');
-
-            const result = await store.assignCurrentBuild(
-                { runtime: { build: { id: 'build-1' } } },
-                { rootHash: second.hash, expectedRootHash: first.hash },
+        it('creates identical content idempotently and reads its manifest', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const manifest = { staticAssets: { '/a': object } };
+            const first = await store.createRelease({}, manifest);
+            const second = await store.createRelease({}, manifest);
+            assertEqual(first.releaseId, second.releaseId);
+            assertEqual(1, contentStore.saveCount);
+            assertEqual(
+                JSON.stringify(manifest),
+                JSON.stringify(await store.getReleaseManifest({}, first.releaseId)),
             );
-
-            assertEqual('build-1', result.id);
-            assertEqual(second.hash, result.rootHash);
-            assertEqual(second.hash, contentStore.builds.get('build-1'));
-        });
-
-        it('throws a NotFoundError when the runtime has no build id', async () => {
-            const store = makeStore(makeContentStore());
-
-            const caught = await catchAsyncError(() => store.assignCurrentBuild(
-                { runtime: { build: {} } },
-                { rootHash: 'root-hash', expectedRootHash: 'previous-hash' },
-            ));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('NotFoundError', caught.name);
-        });
-
-        it('throws a NotFoundError when the desired closure was never saved', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-            await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
-            });
-
-            const caught = await catchAsyncError(() => store.assignCurrentBuild(
-                { runtime: { build: { id: 'build-1' } } },
-                { rootHash: 'never-saved-hash', expectedRootHash: contentStore.builds.get('build-1') },
-            ));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('NotFoundError', caught.name);
-        });
-
-        it('throws a ConflictError with code BuildPointerConflict on a stale pointer, without mutation', async () => {
-            const contentStore = makeContentStore();
-            const store = makeStore(contentStore);
-            const first = await store.commitChanges({}, 'build-1', {
-                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
-            });
-
-            const caught = await catchAsyncError(() => store.assignCurrentBuild(
-                { runtime: { build: { id: 'build-1' } } },
-                { rootHash: first.hash, expectedRootHash: 'stale-hash' },
-            ));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('ConflictError', caught.name);
-            assertEqual('BuildPointerConflict', caught.code);
-            assertEqual(first.hash, contentStore.builds.get('build-1'));
-        });
-
-        it('requires both rootHash and expectedRootHash', async () => {
-            const store = makeStore(makeContentStore());
-
-            const missingExpected = await catchAsyncError(() => store.assignCurrentBuild(
-                { runtime: { build: { id: 'build-1' } } },
-                { rootHash: 'root-hash' },
-            ));
-            const missingRootHash = await catchAsyncError(() => store.assignCurrentBuild(
-                { runtime: { build: { id: 'build-1' } } },
-                { expectedRootHash: 'previous-hash' },
-            ));
-
-            assertEqual('AssertionError', missingExpected.name);
-            assertEqual('AssertionError', missingRootHash.name);
         });
     });
 
-    describe('getStaticAssetByHash()', ({ it }) => {
-        it('reads a blob directly by hash with its assets storage pathname', async () => {
-            const stream = new ReadableStream();
-            const calls = [];
-            const store = makeStore({
-                async getFile(context, type, pathname, hash) {
-                    calls.push({ context, type, pathname, hash });
-                    return stream;
-                },
-            });
-
-            assertEqual(stream, await store.getStaticAssetByHash({}, '/images/logo.svg', 'ny2axhh7wn5jrhffittlw6akfq'));
-            assertEqual(1, calls.length);
-            assertEqual('stream', calls[0].type);
-            assertEqual('/assets/images/logo.svg', calls[0].pathname);
-            assertEqual('ny2axhh7wn5jrhffittlw6akfq', calls[0].hash);
+    describe('assignment', ({ it }) => {
+        it('assigns to a non-running unassigned build and retries as a no-op', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
+            const pointer = await store.assignRelease({}, 'future', { releaseId: release.releaseId, precondition: null });
+            assertEqual(release.releaseId, pointer.releaseId);
+            const count = contentStore.calls.filter((call) => call === 'assignBuild').length;
+            await store.assignRelease({}, 'future', { releaseId: release.releaseId, precondition: 'aaaaaaaaaaaaaaaaaaaaaaaaaa' });
+            assertEqual(count, contentStore.calls.filter((call) => call === 'assignBuild').length);
         });
 
-        it('returns null when the addressed blob is absent', async () => {
-            const store = makeStore({
-                async getFile() {
-                    return null;
-                },
-            });
-
-            assertEqual(null, await store.getStaticAssetByHash({}, '/missing.svg', 'ny2axhh7wn5jrhffittlw6akfq'));
+        it('translates missing Releases and stale pointers', async () => {
+            const { store } = makeStore();
+            const missing = await catchAsyncError(() => store.assignRelease({}, 'build', { releaseId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa' }));
+            assertEqual('ReleaseNotFound', missing.code);
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
+            const conflict = await catchAsyncError(() => store.assignRelease({}, 'build', {
+                releaseId: release.releaseId,
+                precondition: 'bbbbbbbbbbbbbbbbbbbbbbbbbb',
+            }));
+            assertEqual('BuildPointerConflict', conflict.code);
         });
     });
 
-    describe('hashSet()', ({ it }) => {
-        it('hashes a canonicalizable collection', async () => {
-            const store = makeStore(makeContentStore());
+    describe('serving a build', ({ it }) => {
+        it('serves a snapshot for a build with a compatible Release', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
+            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, precondition: null });
 
-            assertEqual('muajbujkcmpjobtg22bjiwjrby', await store.hashSet([ 1, 2, 3 ]));
+            const context = { runtime: { build: { id: 'build-1' } } };
+            const snapshot = await store.openSnapshot(context);
+            assert(snapshot);
+
+            const getFileCalls = contentStore.calls.filter((call) => call === 'getFile').length;
+            await store.openSnapshot(context);
+            assertEqual(getFileCalls, contentStore.calls.filter((call) => call === 'getFile').length);
         });
 
-        it('derives the same digest for objects with the same keys in different order', async () => {
-            const store = makeStore(makeContentStore());
+        it('reports 503 naming the build id when no Release is assigned', async () => {
+            const { store, errors } = makeStore();
+            const context = { runtime: { build: { id: 'ghost-build' } } };
 
-            const first = await store.hashSet({ a: 1, b: 2 });
-            const second = await store.hashSet({ b: 2, a: 1 });
+            const first = await catchAsyncError(() => store.openSnapshot(context));
+            assertEqual(503, first.httpStatusCode);
+            assertEqual('BuildNotServable', first.code);
+            assert(first.message.includes('ghost-build'));
+            assertEqual(1, errors.length);
 
-            assertEqual(first, second);
+            await catchAsyncError(() => store.openSnapshot(context));
+            assertEqual(1, errors.length);
+        });
+
+        it('reports 503 naming both versions when the Release contract is unsupported', async () => {
+            const { store, contentStore, errors } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
+            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, precondition: null });
+
+            const index = new ContentAddressableIndex(contentStore.closures.get(release.releaseId));
+            const contractHash = index.getNode(CONTENT_CONTRACT_PATH).hash;
+            contentStore.blobs.set(contractHash, JSON.stringify({ version: 999 }));
+
+            const context = { runtime: { build: { id: 'build-1' } } };
+            const caught = await catchAsyncError(() => store.openSnapshot(context));
+            assertEqual(503, caught.httpStatusCode);
+            assertEqual('BuildNotServable', caught.code);
+            assert(caught.message.includes(String(CONTENT_CONTRACT_VERSION)));
+            assert(caught.message.includes('999'));
+            assertEqual(1, errors.length);
+
+            await catchAsyncError(() => store.openSnapshot(context));
+            assertEqual(1, errors.length);
         });
     });
 
-    describe('pathname helpers', ({ it }) => {
-        it('delegates normalization and validation to the content layout rules', () => {
-            const store = makeStore(makeContentStore());
-
-            assertEqual('/a/b', store.normalizePathname('/A/B/'));
-            assertEqual(true, store.isValidPathname('/a/b'));
-            assertEqual(false, store.isValidPathname('/a/../b'));
-        });
+    it('writes an object without opening a build snapshot', async () => {
+        const { store, contentStore } = makeStore();
+        const result = await store.putObject({}, new ArrayBuffer(0));
+        assertEqual(0, result.size);
+        assertEqual(false, contentStore.calls.includes('getBuild'));
     });
 });

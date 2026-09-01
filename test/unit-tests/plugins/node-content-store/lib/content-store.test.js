@@ -169,14 +169,14 @@ describe('Node ContentStore', ({ after, describe }) => {
             second.close();
         });
 
-        it('initializes schema version one with required SQLite pragmas', async () => {
+        it('initializes schema version two with required SQLite pragmas', async () => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
             await store.getFile({}, 'text', '/', 'missing');
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-1', 'index.sqlite'));
-            assertEqual(1, database.prepare('PRAGMA user_version').get().user_version);
+            assertEqual(2, database.prepare('PRAGMA user_version').get().user_version);
             assertEqual(1, database.prepare('PRAGMA foreign_keys').get().foreign_keys);
             assertEqual('wal', database.prepare('PRAGMA journal_mode').get().journal_mode);
             database.close();
@@ -224,13 +224,27 @@ describe('Node ContentStore', ({ after, describe }) => {
             store.close();
 
             const newerDatabase = new DatabaseSync(':memory:');
-            newerDatabase.exec('PRAGMA user_version = 2');
+            newerDatabase.exec('PRAGMA user_version = 3');
             const newerStore = makeStore(rootDirectory, { database: newerDatabase });
             const newer = await catchAsyncError(() => newerStore.getBuild({}, 'build'));
             assertEqual('AssertionError', newer.name);
             assertMatches('newer than supported', newer.message);
             newerStore.close();
             newerDatabase.close();
+        });
+
+        it('rejects an older schema instead of using columns it does not have', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const database = new DatabaseSync(':memory:');
+            database.exec('PRAGMA user_version = 1');
+            const store = makeStore(rootDirectory, { database });
+
+            const caught = await catchAsyncError(() => store.listBuilds({}));
+
+            assertEqual('AssertionError', caught.name);
+            assertMatches('does not migrate schema version 1 to 2', caught.message);
+            store.close();
+            database.close();
         });
 
         it('translates thrown index serialization failures to assertion errors', async () => {

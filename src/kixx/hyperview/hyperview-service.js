@@ -1,10 +1,6 @@
 import { NotFoundError } from '../errors/mod.js';
 import HyperviewPage from './hyperview-page.js';
-import * as templating from '../templating/mod.js';
-import formatDate from './helpers/format-date.js';
-import markup from './helpers/markup.js';
-import truncate from './helpers/truncate.js';
-import assetUrl from './helpers/asset-url.js';
+import { compileHyperviewTemplate } from './template-compiler.js';
 import deepMerge from '../utils/deep-merge.js';
 import {
     assert,
@@ -56,13 +52,8 @@ function layerPartials(primary, secondary) {
 }
 
 // Compiles template source with built-in and caller-provided helpers.
-function compileTemplate(templateId, source, customHelpers) {
-    const helpers = new Map([...templating.helpers, ...customHelpers]);
-
-    const tokens = templating.tokenize(null, templateId, source);
-    const tree = templating.buildSyntaxTree(null, tokens);
-
-    return templating.createRenderFunction(null, helpers, tree);
+function compileTemplate(templateId, source) {
+    return compileHyperviewTemplate(templateId, source).render;
 }
 
 /**
@@ -124,13 +115,6 @@ export default class HyperviewService {
     // Helpers available to every template this service compiles, including
     // metadata mini templates. Documented for template authors in
     // src/templates/README.md.
-    #customHelpers = new Map([
-        [ 'formatDate', formatDate ],
-        [ 'markup', markup ],
-        [ 'truncate', truncate ],
-        [ 'assetUrl', assetUrl ],
-    ]);
-
     // Immutable partial maps, indexed by their content bundle etags.
     #globalPartials = new Map();
 
@@ -242,7 +226,7 @@ export default class HyperviewService {
                 `Missing or invalid "source" from global partials in "${ file.pathname }"`,
             );
 
-            const template = compileTemplate(`${ dirname }/${ id }`, source, this.#customHelpers);
+            const template = compileTemplate(`${ dirname }/${ id }`, source);
             partials.set(id, template);
         }
 
@@ -298,7 +282,7 @@ export default class HyperviewService {
                 `Missing or invalid "source" from base templates in "${ file.pathname }"`,
             );
 
-            const template = compileTemplate(`${ dirname }/${ id }`, source, this.#customHelpers);
+            const template = compileTemplate(`${ dirname }/${ id }`, source);
             templates.set(id, template);
         }
 
@@ -352,7 +336,7 @@ export default class HyperviewService {
                 `Missing or invalid "source" from page partials in "${ file.pathname }"`,
             );
 
-            const template = compileTemplate(`${ dirname }/${ id }`, source, this.#customHelpers);
+            const template = compileTemplate(`${ dirname }/${ id }`, source);
             partials.set(id, template);
         }
 
@@ -386,7 +370,7 @@ export default class HyperviewService {
             return getCachedEntry(this.#pageTemplates, cacheKey);
         }
 
-        const template = compileTemplate(file.pathname, file.text, this.#customHelpers);
+        const template = compileTemplate(file.pathname, file.text);
 
         if (this.#useTemplateCache) {
             // Keep older compiled versions available for requests pinned to the
@@ -479,7 +463,7 @@ export default class HyperviewService {
                 source,
                 `Missing or invalid "source" from email HTML template in "${ pathname }"`,
             );
-            htmlTemplate = compileTemplate(id, source, this.#customHelpers);
+            htmlTemplate = compileTemplate(id, source);
         }
         let textTemplate;
         if (bundle.json.textTemplate) {
@@ -492,7 +476,7 @@ export default class HyperviewService {
                 source,
                 `Missing or invalid "source" from email text template in "${ pathname }"`,
             );
-            textTemplate = compileTemplate(id, source, this.#customHelpers);
+            textTemplate = compileTemplate(id, source);
         }
 
         const partials = new Map();
@@ -510,7 +494,7 @@ export default class HyperviewService {
                     `Missing or invalid "source" from email partials in "${ pathname }"`,
                 );
 
-                const template = compileTemplate(`${ pathname }/${ id }`, source, this.#customHelpers);
+                const template = compileTemplate(`${ pathname }/${ id }`, source);
                 partials.set(id, template);
             }
         }
@@ -894,7 +878,7 @@ export default class HyperviewService {
      * @returns {function(Object): string} Render function accepting the template context
      */
     createMiniTemplate(templateId, templateSource) {
-        const template = compileTemplate(templateId, templateSource, this.#customHelpers);
+        const template = compileTemplate(templateId, templateSource);
         // An empty lookup deliberately prevents metadata templates from resolving
         // page or global partials.
         return (data) => template(data, new Map());

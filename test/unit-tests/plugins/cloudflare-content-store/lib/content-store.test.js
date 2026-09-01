@@ -60,12 +60,17 @@ function makeKvStore(values) {
 }
 
 function makeContext({ durableObject, kvStore }) {
+    const object = durableObject ?? {
+        async registerFile() {
+            return { success: true };
+        },
+    };
     return {
         env: {
             CA_STORE_KV_STORE: kvStore,
             CA_STORE_DURABLE_OBJECT: {
                 getByName() {
-                    return durableObject;
+                    return object;
                 },
             },
         },
@@ -90,6 +95,8 @@ function makeConformanceStore() {
     const blobs = new Map();
     const closures = new Map();
     const builds = new Map();
+    const files = new Map();
+    let assignmentSequence = 0;
     const kvStore = {
         async get(key, { type }) {
             if (Array.isArray(key)) {
@@ -102,13 +109,38 @@ function makeConformanceStore() {
         },
     };
     const durableObject = {
+        async registerFile(hash, size) {
+            files.set(hash, { size });
+            return { success: true };
+        },
+        async statFiles(hashes) {
+            return { success: true, files: hashes.map((hash) => files.get(hash) ?? null) };
+        },
         async getBuild(buildId) {
-            const rootHash = builds.get(buildId) ?? null;
+            const rootHash = builds.get(buildId)?.rootHash ?? null;
             return {
                 success: true,
                 rootHash,
                 entries: rootHash ? cloneJson(closures.get(rootHash)) : null,
             };
+        },
+        async getIndex(rootHash) {
+            return {
+                success: true,
+                entries: closures.has(rootHash) ? cloneJson(closures.get(rootHash)) : null,
+            };
+        },
+        async getBuildPointer(buildId) {
+            const build = builds.get(buildId) ?? null;
+            return {
+                success: true,
+                pointer: build ? { rootHash: build.rootHash, assignedAt: build.assignedAt } : null,
+            };
+        },
+        async listBuilds() {
+            const listed = Array.from(builds, ([ buildId, pointer ]) => ({ buildId, ...pointer }));
+            listed.sort((a, b) => b.assignedAt.localeCompare(a.assignedAt) || a.buildId.localeCompare(b.buildId));
+            return { success: true, builds: listed };
         },
         async saveIndex(rootHash, entries) {
             if (!closures.has(rootHash)) {
@@ -121,10 +153,15 @@ function makeConformanceStore() {
             if (!closures.has(rootHash)) {
                 return { success: true, outcome: 'missingClosure' };
             }
-            if (expectedRootHash !== undefined && (builds.get(buildId) ?? null) !== expectedRootHash) {
+            const currentRootHash = builds.get(buildId)?.rootHash ?? null;
+            if (expectedRootHash !== undefined && currentRootHash !== expectedRootHash) {
                 return { success: true, outcome: 'conflict' };
             }
-            builds.set(buildId, rootHash);
+            assignmentSequence += 1;
+            builds.set(buildId, {
+                rootHash,
+                assignedAt: String(assignmentSequence).padStart(10, '0'),
+            });
             return { success: true, outcome: 'assigned' };
         },
     };
@@ -976,6 +1013,27 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('the bytes', results[1]);
         });
 
+        it('reports file metadata from the registry without reading KV payloads', async () => {
+            const kvStore = makeKvStore(new Map([ [ 'large-hash#1', new ArrayBuffer(1024) ] ]));
+            const durableObject = {
+                async statFiles(hashes) {
+                    return {
+                        success: true,
+                        files: hashes.map((hash) => hash === 'large-hash' ? { size: 1024 } : null),
+                    };
+                },
+            };
+            const store = makeStore();
+
+            const results = await store.statFiles(
+                makeContext({ durableObject, kvStore }),
+                [ 'missing-hash', 'large-hash' ],
+            );
+
+            assertEqual(JSON.stringify([ null, { size: 1024 } ]), JSON.stringify(results));
+            assertEqual(0, kvStore.calls.length);
+        });
+
         it('rejects a bulk arrayBuffer read, which KV cannot decode in bulk', async () => {
             const kvStore = makeKvStore(new Map());
             const store = makeStore();
@@ -1025,6 +1083,40 @@ describe('CloudflareContentStore', ({ describe }) => {
             const size = await store.putFile(makeContext({ kvStore }), '/wave.txt', 'hash-wave', '👋');
 
             assertEqual(4, size);
+        });
+
+        it('leaves a blob unregistered after registry failure and repairs it on repeat upload', async () => {
+            const kvStore = makeKvStore(new Map());
+            const files = new Map();
+            let registerCalls = 0;
+            const durableObject = {
+                async registerFile(hash, size) {
+                    registerCalls += 1;
+                    if (registerCalls === 1) {
+                        return { success: false, message: 'registry unavailable' };
+                    }
+                    files.set(hash, { size });
+                    return { success: true };
+                },
+                async statFiles(hashes) {
+                    return { success: true, files: hashes.map((hash) => files.get(hash) ?? null) };
+                },
+            };
+            const context = makeContext({ durableObject, kvStore });
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.putFile(context, '/a.txt', 'hash-a', 'bytes'),
+            );
+            const missing = await store.statFiles(context, [ 'hash-a' ]);
+            const size = await store.putFile(context, '/a.txt', 'hash-a', 'bytes');
+            const repaired = await store.statFiles(context, [ 'hash-a' ]);
+
+            assertEqual('OperationalError', caught.name);
+            assertEqual(null, missing[0]);
+            assertEqual(5, size);
+            assertEqual(5, repaired[0].size);
+            assertEqual(2, kvStore.calls.length);
         });
 
         it('rejects a blob that is neither a string nor an ArrayBuffer', async () => {

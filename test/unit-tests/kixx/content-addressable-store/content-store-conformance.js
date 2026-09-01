@@ -88,6 +88,29 @@ export default function contentStoreConformance(describe, makeContentStore) {
             await assertAssertionError(() => store.getFiles(context, 'text', rejected));
         });
 
+        it('reports stored sizes with missing and duplicate hashes aligned', async () => {
+            const { store, context } = makeContentStore();
+
+            await store.putFile(context, '/a.txt', 'hash-a', 'A');
+            await store.putFile(context, '/wave.txt', 'hash-wave', '👋');
+            const results = await store.statFiles(context, [
+                'hash-wave',
+                'missing-hash',
+                'hash-a',
+                'hash-wave',
+            ]);
+
+            assertEqual(JSON.stringify([ { size: 4 }, null, { size: 1 }, { size: 4 } ]), JSON.stringify(results));
+        });
+
+        it('accepts exactly 100 stat hashes and rejects a larger list', async () => {
+            const { store, context } = makeContentStore();
+            const allowed = Array.from({ length: 100 }, (_, index) => `hash-${ index }`);
+
+            assertEqual(100, (await store.statFiles(context, allowed)).length);
+            await assertAssertionError(() => store.statFiles(context, [ ...allowed, 'one-too-many' ]));
+        });
+
         it('rejects unsupported read types and malformed blob arguments', async () => {
             const { store, context } = makeContentStore();
 
@@ -97,10 +120,51 @@ export default function contentStoreConformance(describe, makeContentStore) {
             await assertAssertionError(() => store.putFile(context, '/a.txt', '', 'text'));
             await assertAssertionError(() => store.putFile(context, '/a.txt', 'hash-a', new Uint8Array(1)));
             await assertAssertionError(() => store.getFiles(context, 'text', [ { hash: '' } ]));
+            await assertAssertionError(() => store.statFiles(context, [ '' ]));
         });
     });
 
     describe('contract: index closures and builds', ({ it }) => {
+        it('reads and lists pointers without closure entries', async () => {
+            const { store, context } = makeContentStore();
+
+            assertEqual(null, await store.getBuildPointer(context, 'missing-build'));
+            await store.saveIndex(context, 'first-hash', { '/': [ 'tree', 'first-hash' ] });
+            await store.saveIndex(context, 'second-hash', { '/': [ 'tree', 'second-hash' ] });
+            await store.assignBuild(context, 'build-b', { rootHash: 'first-hash' });
+            await store.assignBuild(context, 'build-a', { rootHash: 'second-hash' });
+
+            const pointer = await store.getBuildPointer(context, 'build-a');
+            const builds = await store.listBuilds(context);
+
+            assertEqual('second-hash', pointer.rootHash);
+            assert(typeof pointer.assignedAt === 'string');
+            assertEqual(undefined, pointer.entries);
+            assertEqual(2, builds.length);
+            assertEqual('build-a,build-b', builds.map(({ buildId }) => buildId).sort().join(','));
+            assert(builds[0].assignedAt >= builds[1].assignedAt);
+            assertEqual(undefined, builds[0].entries);
+        });
+
+        it('assigns only an unassigned build when expectedRootHash is null', async () => {
+            const { store, context } = makeContentStore();
+            await store.saveIndex(context, 'first-hash', { '/': [ 'tree', 'first-hash' ] });
+            await store.saveIndex(context, 'second-hash', { '/': [ 'tree', 'second-hash' ] });
+
+            const assigned = await store.assignBuild(context, 'build-1', {
+                rootHash: 'first-hash',
+                expectedRootHash: null,
+            });
+            const conflict = await store.assignBuild(context, 'build-1', {
+                rootHash: 'second-hash',
+                expectedRootHash: null,
+            });
+
+            assertEqual('assigned', assigned);
+            assertEqual('conflict', conflict);
+            assertEqual('first-hash', (await store.getBuildPointer(context, 'build-1')).rootHash);
+        });
+
         it('saves immutable closures and preserves tree and blob tuple arity', async () => {
             const { store, context } = makeContentStore();
             const entries = {
@@ -113,8 +177,10 @@ export default function contentStoreConformance(describe, makeContentStore) {
             const outcome = await store.assignBuild(context, 'build-1', { rootHash: 'root-hash' });
 
             const build = await store.getBuild(context, 'build-1');
+            const closure = await store.getIndex(context, 'root-hash');
 
             assertEqual('assigned', outcome);
+            assertEqual(JSON.stringify(build.entries), JSON.stringify(closure));
             assertEqual('root-hash', build.rootHash);
             assertEqual(2, build.entries['/'].length);
             assertEqual(4, build.entries['/a.txt'].length);
@@ -189,6 +255,7 @@ export default function contentStoreConformance(describe, makeContentStore) {
             await assertAssertionError(() => store.saveIndex(context, '', { '/': [ 'tree', 'root-hash' ] }));
             await assertAssertionError(() => store.assignBuild(context, '', { rootHash: 'root-hash' }));
             await assertAssertionError(() => store.assignBuild(context, 'build-1', { rootHash: '' }));
+            await assertAssertionError(() => store.getBuildPointer(context, ''));
         });
     });
 }

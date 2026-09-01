@@ -64,6 +64,10 @@ export default class DeveloperContentStore {
         return { rootHash: null, entries };
     }
 
+    async getIndex() {
+        assert(false, 'DeveloperContentStore#getIndex() is unavailable');
+    }
+
     /**
      * Reads one source-backed blob by pathname.
      * @param {Object} _context - Request context accepted for interface compatibility
@@ -102,6 +106,18 @@ export default class DeveloperContentStore {
 
     async putFile() {
         throw new AssertionError('DeveloperContentStore#putFile() cannot write in developer mode');
+    }
+
+    async statFiles() {
+        throw new AssertionError('DeveloperContentStore#statFiles() cannot inspect persisted blobs in developer mode');
+    }
+
+    async getBuildPointer() {
+        throw new AssertionError('DeveloperContentStore#getBuildPointer() has no persisted build pointer in developer mode');
+    }
+
+    async listBuilds() {
+        throw new AssertionError('DeveloperContentStore#listBuilds() has no persisted build pointers in developer mode');
     }
 
     async saveIndex() {

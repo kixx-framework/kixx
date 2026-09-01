@@ -66,8 +66,16 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
         this.#sql.exec(`
             CREATE TABLE IF NOT EXISTS builds (
-                build_id  TEXT    NOT NULL PRIMARY KEY,
-                root_hash TEXT    NOT NULL
+                build_id   TEXT    NOT NULL PRIMARY KEY,
+                root_hash  TEXT    NOT NULL,
+                assigned_at TEXT   NOT NULL
+            )
+        `);
+
+        this.#sql.exec(`
+            CREATE TABLE IF NOT EXISTS objects (
+                hash TEXT    NOT NULL PRIMARY KEY,
+                size INTEGER NOT NULL
             )
         `);
     }
@@ -132,6 +140,45 @@ export default class ContentAddressableIndexStore extends DurableObject {
         return { success: true, rootHash, entries: this.#getClosureEntries(rootHash) };
     }
 
+    async getIndex(rootHash) {
+        assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#getIndex: rootHash');
+        const entries = this.#getClosureEntries(rootHash);
+        return { success: true, entries: Object.keys(entries).length ? entries : null };
+    }
+
+    /**
+     * Retrieves pointer metadata without loading closure entries.
+     * @param {string} buildId - Build identifier to resolve
+     * @returns {Promise<{success: true, pointer: ({rootHash: string, assignedAt: string}|null)}>} Pointer result
+     */
+    async getBuildPointer(buildId) {
+        assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getBuildPointer: buildId');
+        const [ row ] = this.#sql.exec(
+            'SELECT root_hash, assigned_at FROM builds WHERE build_id = ?',
+            buildId,
+        ).toArray();
+        const pointer = row ? { rootHash: row.root_hash, assignedAt: row.assigned_at } : null;
+        return { success: true, pointer };
+    }
+
+    /**
+     * Lists every build pointer newest assignment first.
+     * @returns {Promise<{success: true, builds: Array<{buildId: string, rootHash: string, assignedAt: string}>}>}
+     */
+    async listBuilds() {
+        const cursor = this.#sql.exec(`
+            SELECT build_id, root_hash, assigned_at
+            FROM builds
+            ORDER BY assigned_at DESC, build_id ASC
+        `);
+        const builds = Array.from(cursor, (row) => ({
+            buildId: row.build_id,
+            rootHash: row.root_hash,
+            assignedAt: row.assigned_at,
+        }));
+        return { success: true, builds };
+    }
+
     /**
      * Persists an immutable closure under its root hash.
      *
@@ -169,6 +216,42 @@ export default class ContentAddressableIndexStore extends DurableObject {
     }
 
     /**
+     * Records a blob after its KV write succeeds.
+     *
+     * Keeping this registry in the Durable Object makes positive existence
+     * results strongly consistent without fetching potentially large KV
+     * values. The additional write accompanies an object transfer which
+     * already dominates the operation's cost.
+     * @param {string} hash - Content hash identifying the blob
+     * @param {number} size - Stored payload size in bytes
+     * @returns {Promise<{success: true}>}
+     */
+    async registerFile(hash, size) {
+        assertNonEmptyString(hash, 'ContentAddressableIndexStore#registerFile: hash');
+        assert(Number.isInteger(size) && size >= 0, 'ContentAddressableIndexStore#registerFile: size');
+        this.#sql.exec('INSERT OR REPLACE INTO objects (hash, size) VALUES (?, ?)', hash, size);
+        return { success: true };
+    }
+
+    /**
+     * Reports registered blob sizes in the same order as the requested hashes.
+     * @param {string[]} hashes - Content hashes to inspect
+     * @returns {Promise<{success: true, files: Array<({size: number}|null)>}>}
+     */
+    async statFiles(hashes) {
+        assert(Array.isArray(hashes), 'ContentAddressableIndexStore#statFiles: hashes');
+        assert(hashes.length <= 100, 'ContentAddressableIndexStore#statFiles accepts at most 100 hashes');
+
+        const statement = 'SELECT size FROM objects WHERE hash = ?';
+        const files = hashes.map((hash, index) => {
+            assertNonEmptyString(hash, `ContentAddressableIndexStore#statFiles: hashes[${ index }]`);
+            const [ row ] = this.#sql.exec(statement, hash).toArray();
+            return row ? { size: row.size } : null;
+        });
+        return { success: true, files };
+    }
+
+    /**
      * Atomically points a build at a non-empty, previously committed closure,
      * optionally only when the build's current pointer still equals
      * `expectedRootHash`.
@@ -178,7 +261,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
      * `await` between them, so the read-compare-write sequence cannot be
      * interleaved by a concurrent call.
      * @param {string} buildId - Build identifier to assign
-     * @param {{rootHash: string, expectedRootHash?: string}} assignment - Desired closure and optional pointer precondition
+     * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
      * @returns {Promise<{success: true, outcome: import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome}>}
      */
     async assignBuild(buildId, assignment) {
@@ -197,17 +280,22 @@ export default class ContentAddressableIndexStore extends DurableObject {
         }
 
         if (expectedRootHash !== undefined) {
-            assertNonEmptyString(expectedRootHash, 'ContentAddressableIndexStore#assignBuild: expectedRootHash');
+            if (expectedRootHash !== null) {
+                assertNonEmptyString(expectedRootHash, 'ContentAddressableIndexStore#assignBuild: expectedRootHash');
+            }
             if (this.#getBuildRootHash(buildId) !== expectedRootHash) {
                 return { success: true, outcome: BUILD_ASSIGNMENT_OUTCOME.CONFLICT };
             }
         }
 
+        const assignedAt = new Date().toISOString();
         this.#sql.exec(`
-            INSERT INTO builds (build_id, root_hash)
-            VALUES (?, ?)
-            ON CONFLICT(build_id) DO UPDATE SET root_hash = EXCLUDED.root_hash
-        `, buildId, rootHash);
+            INSERT INTO builds (build_id, root_hash, assigned_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(build_id) DO UPDATE SET
+                root_hash = EXCLUDED.root_hash,
+                assigned_at = EXCLUDED.assigned_at
+        `, buildId, rootHash, assignedAt);
 
         return { success: true, outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED };
     }

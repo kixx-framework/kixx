@@ -6,8 +6,7 @@ import {
     KEY,
     stringToUint8Array,
     bufferToString,
-    hashArrayBufferBlob,
-    hashStringBlob,
+    hashBlob,
     hashTree,
     hashSet,
     hashString,
@@ -47,11 +46,11 @@ describe('addressing', ({ describe }) => {
 
     describe('FORMAT and KEY', ({ it }) => {
         it('exposes the current wire format version', () => {
-            assertEqual(2, FORMAT);
+            assertEqual(3, FORMAT);
         });
 
         it('prefixes blob storage keys with the format version', () => {
-            assertEqual('b:2:', KEY.blob);
+            assertEqual('b:3:', KEY.blob);
         });
     });
 
@@ -149,59 +148,36 @@ describe('addressing', ({ describe }) => {
 
     describe('content hashing', ({ describe }) => {
 
-        describe('hashArrayBufferBlob()', ({ it }) => {
+        describe('hashBlob()', ({ it }) => {
             it('matches a known digest for the empty blob', async () => {
-                assertEqual('ny2axhh7wn5jrhffittlw6akfq', await hashArrayBufferBlob(new ArrayBuffer(0)));
+                assertEqual('ny2axhh7wn5jrhffittlw6akfq', await hashBlob(new ArrayBuffer(0)));
             });
 
             it('matches a known digest for a non-empty blob', async () => {
-                assertEqual('rivfzg3wrat54wuvklbyubcmmy', await hashArrayBufferBlob(toArrayBuffer('hello')));
+                assertEqual('rivfzg3wrat54wuvklbyubcmmy', await hashBlob('hello'));
             });
 
-            it('is deterministic for identical bytes', async () => {
-                const bytes = toArrayBuffer('same content');
-                assertEqual(await hashArrayBufferBlob(bytes), await hashArrayBufferBlob(bytes));
+            it('gives a string and its UTF-8 bytes the same address', async () => {
+                assertEqual(await hashBlob('abc'), await hashBlob(toArrayBuffer('abc')));
             });
 
             it('produces different digests for different bytes', async () => {
-                const a = await hashArrayBufferBlob(toArrayBuffer('one'));
-                const b = await hashArrayBufferBlob(toArrayBuffer('two'));
+                const a = await hashBlob('one');
+                const b = await hashBlob('two');
                 assertNotEqual(a, b);
             });
 
             it('returns lowercase unpadded base32 text', async () => {
-                const digest = await hashArrayBufferBlob(toArrayBuffer('anything'));
+                const digest = await hashBlob(toArrayBuffer('anything'));
                 assertMatches(DIGEST_PATTERN, digest);
             });
 
-            it('rejects a value that is not an ArrayBuffer', async () => {
-                const caught = await catchAsyncError(() => hashArrayBufferBlob('hello'));
+            it('rejects a value that is neither a string nor an ArrayBuffer', async () => {
+                const caught = await catchAsyncError(() => hashBlob(new Uint8Array()));
 
                 assert(caught, 'expected an error to be thrown');
                 assertEqual('TypeError', caught.name);
-                assertMatches('not an ArrayBuffer', caught.message);
-            });
-        });
-
-        describe('hashStringBlob()', ({ it }) => {
-            it('matches a known digest for the empty blob', async () => {
-                assertEqual('jp2relzuivkmko66f25yzuvx4m', await hashStringBlob(''));
-            });
-
-            it('matches a known digest for a non-empty blob', async () => {
-                assertEqual('ztxlpkmf5tb5vpfuzd3gntldp4', await hashStringBlob('hello'));
-            });
-
-            it('returns lowercase unpadded base32 text', async () => {
-                assertMatches(DIGEST_PATTERN, await hashStringBlob('anything'));
-            });
-
-            it('rejects a value that is not a string', async () => {
-                const caught = await catchAsyncError(() => hashStringBlob(toArrayBuffer('hello')));
-
-                assert(caught, 'expected an error to be thrown');
-                assertEqual('TypeError', caught.name);
-                assertMatches('must be a string', caught.message);
+                assertMatches('string or ArrayBuffer', caught.message);
             });
         });
 
@@ -254,14 +230,13 @@ describe('addressing', ({ describe }) => {
                 const canonical = '[1,2,3]';
 
                 const digests = new Set([
-                    await hashArrayBufferBlob(toArrayBuffer(canonical)),
-                    await hashStringBlob(canonical),
+                    await hashBlob(canonical),
                     await hashTree([ 1, 2, 3 ]),
                     await hashSet([ 1, 2, 3 ]),
                     await hashString(canonical),
                 ]);
 
-                assertEqual(5, digests.size);
+                assertEqual(4, digests.size);
             });
         });
     });

@@ -167,7 +167,7 @@ run in parallel with T1/T2.
 
 ### Task T1: Objects are addressed by their bytes alone
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/kixx/content-addressable-store/addressing.js` module comment
 
@@ -209,11 +209,11 @@ header, and a manifest reference is a single string instead of an
 
 **Acceptance criteria**
 
-- [ ] One exported blob hash function accepts a string or an `ArrayBuffer`.
-- [ ] `hashBlob('abc')` equals `hashBlob(new TextEncoder().encode('abc').buffer)`.
-- [ ] `FORMAT` is 3 and its history comment records why.
-- [ ] No caller selects a hash function by declared representation.
-- [ ] Unit tests assert the string/bytes equivalence and pin at least one digest
+- [x] One exported blob hash function accepts a string or an `ArrayBuffer`.
+- [x] `hashBlob('abc')` equals `hashBlob(new TextEncoder().encode('abc').buffer)`.
+- [x] `FORMAT` is 3 and its history comment records why.
+- [x] No caller selects a hash function by declared representation.
+- [x] Unit tests assert the string/bytes equivalence and pin at least one digest
       as a regression guard against silent format drift.
 
 **Validation**
@@ -223,19 +223,19 @@ header, and a manifest reference is a single string instead of an
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Unified string and ArrayBuffer blob hashing under `hashBlob()`, bumped the wire format to 3, updated the sole production caller, and added equivalence and pinned-digest coverage.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: Kept the former array-buffer blob domain byte (`0x00`), leaving byte digests stable while format-3 isolates indexes, keys, caches, and Durable Object state. Tree, set, and string domain bytes remain unchanged.
+- Actual files changed: `src/kixx/content-addressable-store/addressing.js`; `src/kixx/content-addressable-store/content-snapshot.js`; `test/unit-tests/kixx/content-addressable-store/addressing.test.js`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/content-addressable-store` (172 passed); `node run-linter.js src/kixx/content-addressable-store` (passed); `node run-tests.js` (1,275 passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task T2: The content store can report which objects it holds
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `src/kixx/content-addressable-store/content-store-interface.js`
 
@@ -289,13 +289,13 @@ publish-time validation hole.
 
 **Acceptance criteria**
 
-- [ ] `statFiles()` returns a positionally aligned array with `null` for absent objects.
-- [ ] A list longer than 100 asserts rather than splitting.
-- [ ] The Cloudflare adapter answers without reading payload bytes.
-- [ ] A registry write failing after a successful KV write leaves the object
+- [x] `statFiles()` returns a positionally aligned array with `null` for absent objects.
+- [x] A list longer than 100 asserts rather than splitting.
+- [x] The Cloudflare adapter answers without reading payload bytes.
+- [x] A registry write failing after a successful KV write leaves the object
       reported missing, and a repeat upload repairs it.
-- [ ] Both adapters report the same sizes `putFile()` returned.
-- [ ] Port documentation covers the cap, the alignment rule, and why the
+- [x] Both adapters report the same sizes `putFile()` returned.
+- [x] Port documentation covers the cap, the alignment rule, and why the
       registry must be strongly consistent.
 
 **Validation**
@@ -305,19 +305,19 @@ publish-time validation hole.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added the `statFiles()` port method; implemented filesystem metadata reads for Node, a strongly consistent Durable Object registry for Cloudflare, and the developer-mode assertion; added shared conformance and Cloudflare failure-order tests.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: Cloudflare writes KV before the registry so failures produce only safe false-missing results. Repeating `putFile()` writes KV idempotently and repairs the registry. Registry reads never fetch KV payloads.
+- Actual files changed: `src/kixx/content-addressable-store/content-store-interface.js`; `src/plugins/node-content-store/lib/content-store.js`; `src/plugins/node-content-store/lib/developer-content-store.js`; `src/plugins/cloudflare-content-store/lib/content-store.js`; `src/plugins/cloudflare-content-store/lib/content-addressable-index-store.js`; `test/unit-tests/kixx/content-addressable-store/content-store-conformance.js`; `test/unit-tests/plugins/cloudflare-content-store/lib/content-store.test.js`; `test/unit-tests/plugins/node-content-store/developer-content-store.test.js`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-tests.js test/unit-tests/plugins test/unit-tests/kixx/content-addressable-store` (585 passed); `node run-linter.js src/kixx/content-addressable-store src/plugins` (passed); `git diff --check` (passed); `node run-tests.js` (1,281 passed).
 - Blockers: None.
 
 ---
 
 ### Task T3: Build pointers are readable, listable, and assignable for any build
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/kixx/content-addressable-store/content-store-interface.js`
 
@@ -368,13 +368,13 @@ manifest republish.
 
 **Acceptance criteria**
 
-- [ ] `getBuildPointer()` returns a pointer without loading index entries.
-- [ ] `listBuilds()` reports every registered build, newest assignment first.
-- [ ] `expectedRootHash: null` assigns only when the build is unassigned and
+- [x] `getBuildPointer()` returns a pointer without loading index entries.
+- [x] `listBuilds()` reports every registered build, newest assignment first.
+- [x] `expectedRootHash: null` assigns only when the build is unassigned and
       reports `CONFLICT` otherwise.
-- [ ] A stale `expectedRootHash` string reports `CONFLICT` and mutates nothing.
-- [ ] Assigning a root hash with no saved closure reports `MISSING_CLOSURE`.
-- [ ] Both adapters behave identically across all three modes.
+- [x] A stale `expectedRootHash` string reports `CONFLICT` and mutates nothing.
+- [x] Assigning a root hash with no saved closure reports `MISSING_CLOSURE`.
+- [x] Both adapters behave identically across all three modes.
 
 **Validation**
 
@@ -383,19 +383,19 @@ manifest republish.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added pointer-only reads, complete newest-first build listing, assignment timestamps, and the unassigned-only precondition to Node and Cloudflare; extended shared adapter conformance across all assignment modes; added developer-mode assertions.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: Pointer results use ISO 8601 `assignedAt` strings; list ordering is `assignedAt` descending with `buildId` ascending as a deterministic tie-breaker. Node schema version 2 is created fresh with `assigned_at`; older schemas fail clearly because format 3 requires no migration. Node's null precondition is one atomic `INSERT ... ON CONFLICT DO NOTHING`; Cloudflare compares and writes synchronously within one Durable Object method. Conflict and missing-closure outcomes do not change pointer metadata or caches.
+- Actual files changed: `src/kixx/content-addressable-store/content-store-interface.js`; `src/plugins/node-content-store/lib/content-store.js`; `src/plugins/node-content-store/lib/developer-content-store.js`; `src/plugins/cloudflare-content-store/lib/content-store.js`; `src/plugins/cloudflare-content-store/lib/content-addressable-index-store.js`; `test/unit-tests/kixx/content-addressable-store/content-store-conformance.js`; `test/unit-tests/plugins/node-content-store/lib/content-store.test.js`; `test/unit-tests/plugins/node-content-store/developer-content-store.test.js`; `test/unit-tests/plugins/cloudflare-content-store/lib/content-store.test.js`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-tests.js test/unit-tests/plugins test/unit-tests/kixx/content-addressable-store` (590 passed); `node run-linter.js src/kixx/content-addressable-store src/plugins` (passed); `git diff --check` (passed); `node run-tests.js` (1,286 passed).
 - Blockers: None.
 
 ---
 
 ### Task T4: A release manifest has one schema, validated in one place
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `src/docs/server-error-handling.md`; `src/kixx/content-addressable-store/content-layout.js`
 
@@ -464,15 +464,15 @@ separate pathname checks inside `flattenContentTree()`.
 
 **Acceptance criteria**
 
-- [ ] A valid manifest converts to the flat `IndexSourceFile` list `buildIndex()` consumes.
-- [ ] A non-canonical pathname is rejected with a `source` and is never normalized.
-- [ ] Every malformed facet, bundle entry, and reference is reported in one
+- [x] A valid manifest converts to the flat `IndexSourceFile` list `buildIndex()` consumes.
+- [x] A non-canonical pathname is rejected with a `source` and is never normalized.
+- [x] Every malformed facet, bundle entry, and reference is reported in one
       `ValidationError` rather than failing on the first.
-- [ ] `pages.<path>.templates` accepts a filename-to-object map and rejects
+- [x] `pages.<path>.templates` accepts a filename-to-object map and rejects
       reserved filenames.
-- [ ] Unknown fields in any structured bundle are rejected.
-- [ ] Zero-byte references validate.
-- [ ] No input path reaches an assertion. Malformed containers, wrong types, and
+- [x] Unknown fields in any structured bundle are rejected.
+- [x] Zero-byte references validate.
+- [x] No input path reaches an assertion. Malformed containers, wrong types, and
       hostile keys all produce `ValidationError`.
 
 **Validation**
@@ -483,19 +483,19 @@ separate pathname checks inside `flattenContentTree()`.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added a pure Release manifest module that accumulates schema, pathname, reference, unknown-field, reserved-filename, JSON-fidelity, and collision failures; converts valid manifests into index source files; validates every structured content kind; and replaced the old index and upload-handler validation owners.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: Manifest error sources use escaped JSON Pointer paths. Static-asset `mediaType` becomes index metadata only when present. Email `contextData` remains an allowed JSON object because runtime email rendering consumes it, but it does not satisfy the requirement that an email publish at least one template, partial, or include. `commitChanges()` temporarily consumes the new manifest schema until T5 removes it.
+- Actual files changed: `src/kixx/content-addressable-store/release-manifest.js`; `src/kixx/content-addressable-store/content-addressable-index.js`; `src/kixx/content-addressable-store/content-addressable-store.js`; `src/app/presentation/request-handlers/publishing-api/mod.js`; `test/unit-tests/kixx/content-addressable-store/release-manifest.test.js`; `test/unit-tests/kixx/content-addressable-store/content-addressable-index.test.js`; `test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js`; `test/unit-tests/app/presentation/request-handlers/publishing-api/mod.test.js`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/content-addressable-store` (169 passed); `node run-tests.js test/unit-tests/app/presentation/request-handlers/publishing-api test/unit-tests/kixx/content-addressable-store` (199 passed); `node run-linter.js src/kixx/content-addressable-store src/app/presentation/request-handlers/publishing-api test/unit-tests/kixx/content-addressable-store test/unit-tests/app/presentation/request-handlers/publishing-api` (passed); `node run-tests.js` (1,283 passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task T5: Releases are created, fully verified, and assigned as separate operations
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T2, T3, T4
 **Documentation:** `src/app/transaction-scripts/README.md` (framework-service boundary)
 
@@ -562,18 +562,18 @@ assertion. Creation touches no build pointer.
 
 **Acceptance criteria**
 
-- [ ] A Release naming an object the store does not hold cannot be created, and
+- [x] A Release naming an object the store does not hold cannot be created, and
       the error lists every missing object up to the cap.
-- [ ] A Release whose claimed size disagrees with the stored size cannot be created.
-- [ ] A Release containing a template that fails to compile, or referring to an
+- [x] A Release whose claimed size disagrees with the stored size cannot be created.
+- [x] A Release containing a template that fails to compile, or referring to an
       unresolvable base template or partial, cannot be created.
-- [ ] `validateRelease()` persists nothing on success or failure.
-- [ ] Creating an identical Release twice yields one `releaseId` and one closure.
-- [ ] `assignRelease()` works for a build id that is not running and for one
+- [x] `validateRelease()` persists nothing on success or failure.
+- [x] Creating an identical Release twice yields one `releaseId` and one closure.
+- [x] `assignRelease()` works for a build id that is not running and for one
       that has never been assigned.
-- [ ] Assigning the already-assigned Release succeeds without mutating the pointer.
-- [ ] Writing an object never opens a snapshot.
-- [ ] `commitChanges()` and `assignCurrentBuild()` no longer exist.
+- [x] Assigning the already-assigned Release succeeds without mutating the pointer.
+- [x] Writing an object never opens a snapshot.
+- [x] `commitChanges()` and `assignCurrentBuild()` no longer exist.
 
 **Validation**
 
@@ -584,19 +584,19 @@ assertion. Creation touches no build pointer.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added snapshot-free object writes and the complete Release validate/create/read/assign lifecycle; verified object existence and sizes in capped batches; parsed every structured bundle; compiled runtime templates and resolved partial references before persistence; stored the manifest and contract version inside each closure; added direct immutable-closure reads to the port and adapters; removed the legacy commit and running-build-only assignment methods.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: Release manifests and `{version: 1}` contract records are canonicalized reserved blobs at `/__kixx/release-manifest.json` and `/__kixx/content-contract.json`, so they contribute to the root hash without side storage. `validateRelease()` computes but never writes those blobs. Runtime and publish-time compilation now share `compileHyperviewTemplate()`, including built-in Hyperview helpers. Missing-object reporting is capped at 1,000 while store probes and reads remain batched at the port's 100-key cap. `getIndex()` reads a closure by Release id without creating a temporary build pointer.
+- Actual files changed: `src/kixx/content-addressable-store/content-addressable-store.js`; `src/kixx/content-addressable-store/content-layout.js`; `src/kixx/content-addressable-store/content-snapshot.js`; `src/kixx/content-addressable-store/content-store-interface.js`; `src/kixx/hyperview/template-compiler.js`; `src/kixx/hyperview/hyperview-service.js`; `src/plugins/node-content-store/lib/content-store.js`; `src/plugins/node-content-store/lib/developer-content-store.js`; `src/plugins/cloudflare-content-store/lib/content-store.js`; `src/plugins/cloudflare-content-store/lib/content-addressable-index-store.js`; `test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js`; `test/unit-tests/kixx/content-addressable-store/content-store-conformance.js`; `test/unit-tests/plugins/cloudflare-content-store/lib/content-store.test.js`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js` (10 passed); `node run-tests.js test/unit-tests/kixx` (713 passed); `node run-tests.js test/unit-tests/plugins test/unit-tests/kixx/content-addressable-store` (570 passed); `node run-linter.js src/kixx src/plugins test/unit-tests/kixx/content-addressable-store test/unit-tests/plugins` (passed); `node run-tests.js` (1,266 passed); `node run-linter.js` (passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task T6: Release provenance and activation history are discoverable
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T5
 **Documentation:** `src/app/collections/README.md`; `src/app/transaction-scripts/README.md`
 
@@ -653,13 +653,13 @@ retain. This is what makes the second stated objective of the API achievable.
 
 **Acceptance criteria**
 
-- [ ] Creating a Release records provenance and rejects unknown provenance fields.
-- [ ] Re-creating an identical Release leaves the original record unchanged.
-- [ ] Every successful assignment appends an Activation naming the prior and new
+- [x] Creating a Release records provenance and rejects unknown provenance fields.
+- [x] Re-creating an identical Release leaves the original record unchanged.
+- [x] Every successful assignment appends an Activation naming the prior and new
       Release ids.
-- [ ] Listings are newest first and paginate with a stable cursor.
-- [ ] A failed metadata write leaves the pointer authoritative and is logged.
-- [ ] A rollback is performable using only data these endpoints return.
+- [x] Listings are newest first and paginate with a stable cursor.
+- [x] A failed metadata write leaves the pointer authoritative and is logged.
+- [x] A rollback is performable using only data these endpoints return.
 
 **Validation**
 
@@ -668,19 +668,19 @@ retain. This is what makes the second stated objective of the API achievable.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added immutable Release metadata and append-only Activation metadata Collections and Records; registered both Collections and the build-history secondary index; added create, assign, and paginated listing Transaction Scripts; covered provenance validation, first-write-wins behavior, activation history, audit-write failure handling, and listing order/filter contracts.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: Release provenance is validated before the content closure is persisted, preventing inert content from malformed provenance. Release ids are Collection ids, so duplicate creation loads and returns the original record without overwriting its provenance. Activations use a `buildId:activatedAt` compound index value so build-filtered results remain newest-first with stable keyset cursors. A successful pointer assignment is returned even when Activation persistence fails; the full attempted audit record and cause are logged because the pointer is authoritative and retrying the request could misrepresent the completed write. Successful no-op assignments still append an Activation, preserving repeated publish intent.
+- Actual files changed: `src/app/app.js`; `src/app/collections/release-record.js`; `src/app/collections/release-collection.js`; `src/app/collections/activation-record.js`; `src/app/collections/activation-collection.js`; `src/app/transaction-scripts/publishing/create-release.js`; `src/app/transaction-scripts/publishing/assign-release.js`; `src/app/transaction-scripts/publishing/list-releases.js`; `src/app/transaction-scripts/publishing/list-activations.js`; `test/unit-tests/app/collections/release-record.test.js`; `test/unit-tests/app/collections/activation-record.test.js`; `test/unit-tests/app/collections/publishing-history-collections.test.js`; `test/unit-tests/app/transaction-scripts/publishing/create-release.test.js`; `test/unit-tests/app/transaction-scripts/publishing/assign-release.test.js`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-tests.js test/unit-tests/app` (145 passed); `node run-tests.js` (1,276 passed); `node run-linter.js` (passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task T7: The HTTP surface expresses objects, releases, and build pointers
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T5, T6
 **Documentation:** `src/app/presentation/README.md`; `src/docs/server-error-handling.md`
 
@@ -786,15 +786,15 @@ Error codes:
 
 **Acceptance criteria**
 
-- [ ] Two object endpoints replace all sixteen per-content-kind endpoints.
-- [ ] A pointer write without a precondition returns `428`; with a stale one, `412`.
-- [ ] `If-None-Match: *` assigns an unassigned build and conflicts on an assigned one.
-- [ ] An object whose bytes do not match its address returns `422` and stores nothing.
-- [ ] Uploading works when no build has ever been assigned.
-- [ ] A manifest with inline content publishes a small site in one request.
-- [ ] Discovery reports the running build id, contract version, and real limits.
-- [ ] `GET /builds/:buildId` reads a build that is not running.
-- [ ] Every malformed client input returns a 4xx error document; none reaches an assertion.
+- [x] Two object endpoints replace all sixteen per-content-kind endpoints.
+- [x] A pointer write without a precondition returns `428`; with a stale one, `412`.
+- [x] `If-None-Match: *` assigns an unassigned build and conflicts on an assigned one.
+- [x] An object whose bytes do not match its address returns `422` and stores nothing.
+- [x] Uploading works when no build has ever been assigned.
+- [x] A manifest with inline content publishes a small site in one request.
+- [x] Discovery reports the running build id, contract version, and real limits.
+- [x] `GET /builds/:buildId` reads a build that is not running.
+- [x] Every malformed client input returns a 4xx error document; none reaches an assertion.
 
 **Validation**
 
@@ -803,19 +803,19 @@ Error codes:
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Replaced the legacy per-content-kind route table with discovery, object, Release, build-pointer, manifest, and activation-history resources; split handlers by resource; added raw hash-verified uploads, bulk status, inline text publication, Release history and validation, authoritative build reads, mandatory HTTP preconditions and ETags, real limit discovery, responsibility-scoped permissions, and protocol error classification.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: Routes sharing a pathname group their method targets because the router stops at the first pathname match before method selection; this preserves correct `405 Allow` responses. Inline objects are content-addressed and the transformed manifest is schema-validated before any upload. Inline content is accepted for Release creation but not `/releases/validation`, preserving T5's invariant that validation persists nothing; validation callers reference already-stored objects. Existing object uploads return `200` without a redundant store write, while new objects return `201`. Build ETags are quoted Release ids read from the authoritative pointer, and malformed quoted values are rejected before reaching service assertions. Object creation can consume unreclaimable storage because the port has no delete; the 25 MiB object cap and 100-id status cap are the current bounds.
+- Actual files changed: `src/routes/publishing-api-v1.js`; `src/app/permissions/roles.js`; `src/app/presentation/request-handlers/publishing-api/mod.js`; `src/app/presentation/request-handlers/publishing-api/constants.js`; `src/app/presentation/request-handlers/publishing-api/discovery.js`; `src/app/presentation/request-handlers/publishing-api/objects.js`; `src/app/presentation/request-handlers/publishing-api/releases.js`; `src/app/presentation/request-handlers/publishing-api/builds.js`; `src/app/transaction-scripts/publishing/get-release.js`; `src/kixx/content-addressable-store/content-addressable-store.js`; `test/unit-tests/app/presentation/request-handlers/publishing-api/mod.test.js` (removed); `test/unit-tests/app/presentation/request-handlers/publishing-api/objects.test.js`; `test/unit-tests/app/presentation/request-handlers/publishing-api/releases.test.js`; `test/unit-tests/app/presentation/request-handlers/publishing-api/builds.test.js`; `test/unit-tests/app/presentation/request-handlers/publishing-api/discovery.test.js`; `test/unit-tests/app/permissions/roles.test.js`; `test/unit-tests/routes/publishing-api-v1.test.js`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-tests.js test/unit-tests/app/presentation test/unit-tests/routes test/unit-tests/app/permissions/roles.test.js` (111 passed); `node run-tests.js` (1,260 passed); `node run-linter.js` (passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task T8: A build states plainly whether it can serve its content
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T5
 **Documentation:** `src/plugins/README.md`; `src/docs/server-error-handling.md`
 
@@ -863,11 +863,11 @@ actually work.
 
 **Acceptance criteria**
 
-- [ ] A build with no assigned Release serves `503` naming the build id, not a 500.
-- [ ] A build assigned a Release with an unsupported contract version serves `503`
+- [x] A build with no assigned Release serves `503` naming the build id, not a 500.
+- [x] A build assigned a Release with an unsupported contract version serves `503`
       naming both versions.
-- [ ] Both conditions log at fatal level once, not per request.
-- [ ] A build with a compatible Release serves normally with no added per-request cost.
+- [x] Both conditions log at fatal level once, not per request.
+- [x] A build with a compatible Release serves normally with no added per-request cost.
 
 **Validation**
 
@@ -876,19 +876,19 @@ actually work.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Replaced `openSnapshot()`'s bare assertion with two expected `503 BuildNotServable` outcomes — no pointer, and an incompatible content contract version — both surfaced as `OperationalError` so the router's existing generic handler serializes them without a custom error handler. Added a per-Release contract-check cache (keyed by root hash, since compatibility is a property of immutable content and must not go stale across a rollback that repoints the running build) and a per-build-id "already logged" set for the no-pointer case, which has no root hash to key by. Gave `ContentAddressableStore` a logger, supplied by its plugin's `initialize()` phase.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: The project logger has no FATAL level (`DEBUG`/`INFO`/`WARN`/`ERROR`/`NONE` only), so both conditions log via `logger.error()`, the highest severity available. Caching the contract-check result by Release id means the check runs once per distinct Release process-wide, not once per build id, so two build ids carrying the same Release (a code-only deploy) share one check, and a rollback to a previously-checked Release incurs no re-read. `getCurrentBuild()` was left untouched: it already treats an unassigned build as an expected `null`, which is a different caller contract than `openSnapshot()`'s hard failure.
+- Actual files changed: `src/kixx/content-addressable-store/content-addressable-store.js`; `src/plugins/content-addressable-store/plugin.js`; `test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js` (13 passed); `node run-tests.js test/unit-tests/kixx test/unit-tests/kixx/static-assets` (123 passed, hyperview + static-assets); `node run-tests.js` (1,263 passed); `node run-linter.js src/kixx/content-addressable-store src/plugins/content-addressable-store test/unit-tests/kixx/content-addressable-store` (passed); `node run-linter.js` (passed); `git diff --check` (passed).
 - Blockers: None.
 
 ---
 
 ### Task T9: Documentation matches the API
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T7, T8
 **Documentation:** `docs/publishing-api.md`; `src/app/transaction-scripts/README.md`
 
@@ -938,12 +938,12 @@ docs stop describing modules that no longer exist.
 
 **Acceptance criteria**
 
-- [ ] The atomic release model and the role of `BUILD_ID` are stated before any endpoint.
-- [ ] All four workflows are documented with concrete requests and responses.
-- [ ] Bootstrap from an empty store is documented.
-- [ ] Every endpoint, error code, permission, and limit in T7 appears.
-- [ ] No documentation references `HyperviewContentService`, `commitChanges`, `/index/closure`, or `/resources/*`.
-- [ ] The Cloudflare consistency tradeoff is stated, not omitted.
+- [x] The atomic release model and the role of `BUILD_ID` are stated before any endpoint.
+- [x] All four workflows are documented with concrete requests and responses.
+- [x] Bootstrap from an empty store is documented.
+- [x] Every endpoint, error code, permission, and limit in T7 appears.
+- [x] No documentation references `HyperviewContentService`, `commitChanges`, `/index/closure`, or `/resources/*`.
+- [x] The Cloudflare consistency tradeoff is stated, not omitted.
 
 **Validation**
 
@@ -952,12 +952,12 @@ docs stop describing modules that no longer exist.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Rewrote `docs/publishing-api.md` from scratch against the actual T7 route table, handlers, error classes, and permission grants (verified by reading `discovery.js`, `objects.js`, `releases.js`, `builds.js`, `constants.js`, `roles.js`, and `virtual-hosts.js` rather than trusting the plan's endpoint sketch). Leads with the atomic release model and `BUILD_ID`'s role, documents all four workflows plus bootstrap, states the Cloudflare consistency tradeoff, and lists every endpoint, error code, permission, and limit. Corrected the stale `HyperviewContentService` example in `src/app/transaction-scripts/README.md` to cite `ContentAddressableStore` via the actual object-endpoint handlers, and contrasted it with the Release/Build handlers that correctly use Transaction Scripts. Checked `src/app/presentation/README.md` for stale publishing description; its one publishing mention is about form file layout and needed no change.
+- Current state: Complete; every acceptance criterion is satisfied.
+- Remaining: Nothing.
+- Decisions and discoveries: Discovery (`GET /`) is *not* unauthenticated — `authenticatePublishingToken` runs as virtual-host `inboundMiddleware`, which concatenates ahead of every route's target handlers including the parameterless discovery target — so the doc states it requires a valid bearer token but no specific permission grant, not "no authentication." The stale `/resources/*`, `/index/*`, and `/build` endpoint references that remain are confined to `test/end-to-end/200-publishing-api/*`, which is test code, not documentation, and is explicitly T10's job to rewrite.
+- Actual files changed: `docs/publishing-api.md`; `src/app/transaction-scripts/README.md`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-linter.js` (passed); `node run-tests.js` (1,263 passed, unaffected by documentation-only changes); `git diff --check` (passed); manual cross-check of every T7 route, error code, permission grant, and discovery limit against the rewritten document.
 - Blockers: None.
 
 ---
