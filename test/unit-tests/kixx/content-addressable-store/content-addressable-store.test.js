@@ -243,6 +243,24 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             assertEqual(getFileCalls, contentStore.calls.filter((call) => call === 'getFile').length);
         });
 
+        it('serves a snapshot without a contract check in developer mode', async () => {
+            const { store, contentStore } = makeStore();
+
+            // A developer-mode adapter resolves a build with scanned entries
+            // but no persisted rootHash, and never writes a content-contract
+            // entry — there is no immutable Release to check it against.
+            const entries = {
+                '/': [ 'tree', 'aaaaaaaaaaaaaaaaaaaaaaaaaa' ],
+                '/a': [ 'blob', 'bbbbbbbbbbbbbbbbbbbbbbbbbb', 3, null ],
+            };
+            contentStore.getBuild = async () => ({ rootHash: null, entries });
+
+            const context = { runtime: { build: { id: 'dev' } } };
+            const snapshot = await store.openSnapshot(context);
+            assert(snapshot);
+            assertEqual(0, contentStore.calls.filter((call) => call === 'getFile').length);
+        });
+
         it('reports 503 naming the build id when no Release is assigned', async () => {
             const { store, errors } = makeStore();
             const context = { runtime: { build: { id: 'ghost-build' } } };

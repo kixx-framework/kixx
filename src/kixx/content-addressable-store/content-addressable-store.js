@@ -182,7 +182,13 @@ export default class ContentAddressableStore {
         }
 
         const index = new ContentAddressableIndex(build.entries);
-        await this.#verifyContentContract(context, buildId, build.rootHash, index);
+
+        // A null rootHash means developer mode: a live scan with no immutable
+        // Release, so there is no content contract to verify against.
+        if (build.rootHash) {
+            await this.#verifyContentContract(context, buildId, build.rootHash, index);
+        }
+
         return new ContentSnapshot(this.#store, index);
     }
 
