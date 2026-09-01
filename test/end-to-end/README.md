@@ -48,6 +48,39 @@ files are independently runnable:
 | `040-protocol-errors.test.js` | Method, media-type, malformed-document, and JSON:API resource-type failures. |
 | `050-closure.test.js` | Full content-tree publishing, idempotent re-publishing, and published-index reads. |
 
+### Active-build mutation and restoration
+
+`030-index-reads.test.js` and `050-closure.test.js` publish through the
+target's actual running build (`GET /publishing-api/v1/build`), not an
+isolated random build id: only the running build's index is reachable through
+`/index/*`, so publishing anywhere else would leave those reads unable to see
+the fixture. Each file:
+
+1. Reads the active Build before making any request that mutates it, and
+   retains its `id` and `rootHash`.
+2. Publishes its own closure with that observed `rootHash` as
+   `expectedRootHash` on `/index/closure`, so the publish itself fails with
+   `409 BuildPointerConflict` rather than silently overwriting a pointer moved
+   by a concurrent deploy or another test run.
+3. Registers its restoration in an `after` hook before any mutating request is
+   made, so the hook still runs if setup fails partway through (per the
+   `kixx-test` guarantee that `after` runs even when `before` fails).
+4. Restores the original pointer via a conditional `PUT
+   /publishing-api/v1/build`, using its own published root hash as
+   `expectedRootHash`. Restoration is skipped, not attempted, when the
+   original Build or a confirmed publish is unknown — guessing ownership of
+   the pointer in that state would be more destructive than leaving a clearly
+   failed run for an operator to inspect.
+
+A restore conflict (something else moved the pointer between publish and
+restore) fails the `after` hook loudly and does not overwrite the newer
+pointer — this is a compare-and-swap safety net, not a distributed lock.
+Operators should still avoid running these two files concurrently against the
+same target, or overlapping them with a real deploy, when a deterministic
+result matters. Every published closure and uploaded blob remains in storage
+after a run either way (see "What a run leaves behind" below); only the build
+pointer is conditionally restored.
+
 Operators or CI can run each file or the focused suite against an already
 running target:
 
@@ -65,6 +98,17 @@ closure tests are disabled when the runner selects the `--development` target
 because the developer content store is read-only. Resource-validation tests
 still run. An explicit `--base-url` does not imply developer mode, even when it
 uses a local URL.
+
+### What a run leaves behind
+
+A successful run against a deployed target does not delete anything it wrote:
+uploaded blobs and every published closure stay in storage (the port has no
+delete operation by design; see `content-store-interface.js`), and minted
+Publishing API tokens keep their normal expiry rather than being revoked by
+the test. Only the active build pointer is touched, and it is restored
+conditionally as described above. Routine content cleanup between runs is
+unnecessary — UUID-namespaced run prefixes keep each run's fixture pathnames
+from colliding with real content or with each other.
 
 ```bash
 # Run end-to-end tests against a predefined deployment target

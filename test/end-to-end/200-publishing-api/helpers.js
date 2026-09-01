@@ -7,16 +7,6 @@ export function createRunPrefix() {
 }
 
 /**
- * Creates a build ID isolated to one end-to-end test run.
- * @param {string} prefix - Run prefix from createRunPrefix().
- * @param {string} name - Test-specific build name.
- * @returns {string} Namespaced build ID.
- */
-export function createRunScopedBuildId(prefix, name) {
-    return `${ prefix }-${ name }`;
-}
-
-/**
  * Creates a content pathname isolated to one end-to-end test run.
  * @param {string} prefix - Run prefix from createRunPrefix().
  * @param {string} pathname - Test-specific canonical pathname.

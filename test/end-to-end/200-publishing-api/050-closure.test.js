@@ -3,6 +3,8 @@ import { describe } from 'kixx-test';
 import { assertEqual, assertGreaterThan } from 'kixx-assert';
 import {
     createPublishingApiToken,
+    getActiveBuild,
+    putActiveBuild,
     uploadBaseTemplates,
     uploadEmailAssets,
     uploadGlobalTemplatePartials,
@@ -15,7 +17,6 @@ import {
 import { getBaseUrl } from '../test-helpers/target-url.js';
 import {
     createRunPrefix,
-    createRunScopedBuildId,
     createRunScopedPathname,
 } from './helpers.js';
 
@@ -23,13 +24,19 @@ import {
 const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
 const IS_DEVELOPMENT_TARGET = process.env.E2E_TESTS_TARGET === 'development';
 const RUN_PREFIX = createRunPrefix();
-const BUILD_ID = createRunScopedBuildId(RUN_PREFIX, 'closure');
 const STATIC_ASSET_PATHNAME = createRunScopedPathname(RUN_PREFIX, 'assets/site.css');
 const PAGE_PATHNAME = createRunScopedPathname(RUN_PREFIX, 'pages/example');
 const PAGE_TEMPLATE_PATHNAME = createRunScopedPathname(RUN_PREFIX, 'pages/example/page.html');
 const EMAIL_PATHNAME = createRunScopedPathname(RUN_PREFIX, 'emails/welcome');
 
 let publishingToken;
+// Captured before any mutation so the `after` hook can restore the exact
+// pointer this run observed, even if setup fails partway through.
+let originalBuild;
+// Set only once the first PUT /index/closure actually confirms a new
+// closure. Guards the `after` hook against restoring a pointer that was
+// never moved.
+let publishedRootHash;
 let firstClosureResponse;
 let repeatedClosureResponse;
 let staticAssetReference;
@@ -38,7 +45,22 @@ let staticAssetResponse;
 let pageTemplateResponse;
 
 
-describe('Publishing API content-tree closure workflow', ({ before, it }) => {
+describe('Publishing API content-tree closure workflow', ({ before, after, it }) => {
+
+    // Registered ahead of any request `before()` makes, so it still runs when
+    // `before()` throws partway through setup (kixx-test always runs `after`
+    // hooks for a describe even when its `before` hook fails).
+    after(async () => {
+        if (!publishingToken || !originalBuild || !publishedRootHash) {
+            return;
+        }
+
+        await putActiveBuild(publishingToken, {
+            buildId: originalBuild.id,
+            rootHash: originalBuild.rootHash,
+            expectedRootHash: publishedRootHash,
+        });
+    });
 
     before(async () => {
         const token = await createPublishingApiToken({
@@ -46,12 +68,19 @@ describe('Publishing API content-tree closure workflow', ({ before, it }) => {
         });
         publishingToken = token.token;
 
+        originalBuild = await getActiveBuild(publishingToken);
+
         const references = await uploadFixture();
         const contentTree = createContentTree(references);
 
         staticAssetReference = references.staticAsset;
         pageTemplateReference = references.pageTemplate;
-        firstClosureResponse = await publishContentTree(contentTree);
+
+        // The precondition only guards the first publish: this run owns the
+        // pointer move from here on, so the repeated publish below is
+        // unconditional, the same as an ordinary idempotent republish.
+        firstClosureResponse = await publishContentTree({ ...contentTree, expectedRootHash: originalBuild.rootHash });
+        publishedRootHash = firstClosureResponse.body?.data?.attributes?.hash;
         repeatedClosureResponse = await publishContentTree(contentTree);
         staticAssetResponse = await getPublishedReference(`index/static-asset/${ STATIC_ASSET_PATHNAME }`);
         pageTemplateResponse = await getPublishedReference(`index/page-templates/${ PAGE_TEMPLATE_PATHNAME }`);
@@ -108,7 +137,7 @@ async function uploadFixture() {
 
 function createContentTree(references) {
     return {
-        buildId: BUILD_ID,
+        buildId: originalBuild.id,
         staticAssets: { [STATIC_ASSET_PATHNAME]: references.staticAsset },
         globalTemplatePartials: references.globalTemplatePartials,
         baseTemplates: references.baseTemplates,
@@ -154,7 +183,7 @@ async function getPublishedReference(path) {
 function assertClosureResponse(response) {
     assertEqual(201, response.status);
     assertEqual('ContentTree', response.body.data.type);
-    assertEqual(BUILD_ID, response.body.data.attributes.buildId);
+    assertEqual(originalBuild.id, response.body.data.attributes.buildId);
     assertEqual(response.body.data.id, response.body.data.attributes.hash);
     assertGreaterThan(0, response.body.data.attributes.nodeCount);
 }

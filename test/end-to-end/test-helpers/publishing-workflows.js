@@ -203,6 +203,72 @@ export async function uploadEmailAssets(publishingToken, pathname, attributes) {
     return await uploadJsonApiResource(publishingToken, `resources/emails/${ pathname }`, 'EmailAssets', attributes);
 }
 
+/**
+ * Reads the running deploy's currently active Build through the Publishing API.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @returns {Promise<{id: string, rootHash: string}>} Active build id and its assigned closure root hash.
+ * @throws {Error} When the API does not report an active Build.
+ */
+export async function getActiveBuild(publishingToken) {
+    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/build`, {
+        headers: { authorization: `Bearer ${ publishingToken }` },
+    });
+
+    if (response.status !== 200) {
+        throw new Error(
+            `getActiveBuild: GET /publishing-api/v1/build returned ${ response.status }, expected 200`,
+        );
+    }
+
+    const { data } = await response.json();
+    return { id: data.id, rootHash: data.attributes.rootHash };
+}
+
+/**
+ * Conditionally points the running deploy's build at an already-published
+ * closure. Never publishes new content: `rootHash` must already name a saved
+ * closure, and the assignment only takes effect while the build's current
+ * pointer still equals `expectedRootHash`.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {Object} assignment - Desired assignment.
+ * @param {string} assignment.buildId - The running deploy's own build id, matched against `data.id`.
+ * @param {string} assignment.rootHash - Root hash of a previously published closure.
+ * @param {string} assignment.expectedRootHash - Root hash the caller last observed as the current pointer.
+ * @returns {Promise<{id: string, rootHash: string}>} The resulting active build id and root hash.
+ * @throws {Error} When the API does not confirm the assignment, including on a
+ *   stale `expectedRootHash` (409) — callers that call this from an `after`
+ *   restoration hook want that failure to surface loudly rather than being
+ *   silently retried over a pointer someone else has since moved.
+ */
+export async function putActiveBuild(publishingToken, assignment) {
+    const { buildId, rootHash, expectedRootHash } = assignment;
+
+    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/build`, {
+        method: 'PUT',
+        headers: {
+            authorization: `Bearer ${ publishingToken }`,
+            'content-type': JSON_API_CONTENT_TYPE,
+        },
+        body: JSON.stringify({
+            data: {
+                type: 'Build',
+                id: buildId,
+                attributes: { rootHash, expectedRootHash },
+            },
+        }),
+    });
+
+    if (response.status !== 200) {
+        const body = await response.text();
+        throw new Error(
+            `putActiveBuild: PUT /publishing-api/v1/build returned ${ response.status }, expected 200: ${ body }`,
+        );
+    }
+
+    const { data } = await response.json();
+    return { id: data.id, rootHash: data.attributes.rootHash };
+}
+
 async function uploadJsonApiResource(publishingToken, path, type, attributes) {
     return await uploadResource(
         publishingToken,
