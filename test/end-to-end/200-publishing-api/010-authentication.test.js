@@ -11,7 +11,9 @@ import { createRunPrefix } from './helpers.js';
 const RUN_PREFIX = createRunPrefix();
 
 // The token-mint endpoint only accepts publishing-capable roles, so a valid
-// token lacking a Publishing API permission cannot be created through public APIs.
+// token lacking a Publishing API permission cannot be created through public
+// APIs. Discovery requires a valid bearer token but no additional grant, so
+// it is the endpoint every credential state below is checked against.
 
 let missingCredentialsResponse;
 let malformedCredentialsResponse;
@@ -22,15 +24,15 @@ let revokedCredentialsResponse;
 describe('Publishing API authentication boundary', ({ before, it }) => {
 
     before(async () => {
-        missingCredentialsResponse = await getBaseTemplates();
-        malformedCredentialsResponse = await getBaseTemplates({ authorization: 'not-a-bearer-credential' });
-        unknownCredentialsResponse = await getBaseTemplates({ authorization: `Bearer kxpat_${ crypto.randomUUID() }` });
+        missingCredentialsResponse = await getDiscovery();
+        malformedCredentialsResponse = await getDiscovery({ authorization: 'not-a-bearer-credential' });
+        unknownCredentialsResponse = await getDiscovery({ authorization: `Bearer kxpat_${ crypto.randomUUID() }` });
 
         const publishingToken = await createPublishingApiToken({
             description: `${ RUN_PREFIX } authentication coverage`,
         });
         await revokePublishingApiToken(publishingToken.id);
-        revokedCredentialsResponse = await getBaseTemplates({
+        revokedCredentialsResponse = await getDiscovery({
             authorization: `Bearer ${ publishingToken.token }`,
         });
     });
@@ -52,8 +54,8 @@ describe('Publishing API authentication boundary', ({ before, it }) => {
     });
 });
 
-async function getBaseTemplates(headers) {
-    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/index/base-templates`, { headers });
+async function getDiscovery(headers) {
+    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/`, { headers });
 
     return {
         status: response.status,

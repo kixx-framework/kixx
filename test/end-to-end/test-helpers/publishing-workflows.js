@@ -1,5 +1,7 @@
 import process from 'node:process';
+import { URLSearchParams } from 'node:url';
 import { assertNonEmptyString } from 'kixx-assert';
+import { hashBlob } from '../../../src/kixx/content-addressable-store/addressing.js';
 import { loginRootAdmin } from './admin-workflows.js';
 import { assertHtmlCsrfToken } from './html.js';
 import { getBaseUrl } from './target-url.js';
@@ -110,192 +112,218 @@ export async function revokePublishingApiToken(tokenId) {
 }
 
 /**
- * Uploads an immutable static asset.
+ * Reads the Publishing API discovery resource.
  * @param {string} publishingToken - Publishing API bearer token.
- * @param {string} pathname - Asset pathname.
- * @param {BodyInit} content - Non-empty asset bytes.
- * @returns {Promise<{hash: string, size: number}>} Content-addressed asset reference.
- * @throws {Error} When the API does not create the asset.
+ * @returns {Promise<{status: number, body: Object}>} Raw discovery response.
  */
-export async function uploadStaticAsset(publishingToken, pathname, content) {
-    return await uploadResource(publishingToken, `resources/static-asset/${ pathname }`, content);
+export async function getDiscovery(publishingToken) {
+    return await jsonRequest(publishingToken, 'GET', '');
 }
 
 /**
- * Uploads the global partial-template bundle.
+ * Reports which of the given object ids are already stored.
  * @param {string} publishingToken - Publishing API bearer token.
- * @param {Object[]} bundle - Partial templates with `id` and `source` fields.
- * @returns {Promise<{hash: string, size: number}>} Content-addressed bundle reference.
- * @throws {Error} When the API does not create the bundle.
+ * @param {string[]} objectIds - Content addresses to check.
+ * @returns {Promise<{status: number, body: Object}>} Raw ObjectStatus response.
  */
-export async function uploadGlobalTemplatePartials(publishingToken, bundle) {
-    return await uploadJsonApiResource(publishingToken, 'resources/global-template-partials', 'GlobalTemplatePartials', { bundle });
+export async function getObjectStatus(publishingToken, objectIds) {
+    return await jsonRequest(publishingToken, 'POST', 'objects/status', jsonApiDocument('ObjectStatus', { objectIds }));
 }
 
 /**
- * Uploads the base-template bundle.
+ * Uploads raw bytes to a specific object id, without verifying the address.
  * @param {string} publishingToken - Publishing API bearer token.
- * @param {Object[]} bundle - Base templates with `id` and `source` fields.
- * @returns {Promise<{hash: string, size: number}>} Content-addressed bundle reference.
- * @throws {Error} When the API does not create the bundle.
+ * @param {string} objectId - Route object id, which may deliberately mismatch `body`.
+ * @param {BodyInit} body - Raw payload bytes.
+ * @returns {Promise<{status: number, body: Object}>} Raw Object response.
  */
-export async function uploadBaseTemplates(publishingToken, bundle) {
-    return await uploadJsonApiResource(publishingToken, 'resources/base-templates', 'BaseTemplates', { bundle });
-}
-
-/**
- * Uploads a page metadata document.
- * @param {string} publishingToken - Publishing API bearer token.
- * @param {string} pathname - Canonical page pathname.
- * @param {Object} attributes - Page metadata attributes.
- * @returns {Promise<{hash: string, size: number}>} Content-addressed metadata reference.
- * @throws {Error} When the API does not create the metadata document.
- */
-export async function uploadPageMetadata(publishingToken, pathname, attributes) {
-    return await uploadJsonApiResource(publishingToken, `resources/page-metadata/${ pathname }`, 'PageMetadata', attributes);
-}
-
-/**
- * Uploads page include source files.
- * @param {string} publishingToken - Publishing API bearer token.
- * @param {string} pathname - Canonical page pathname.
- * @param {Object<string, string>} bundle - Include pathname-to-source mapping.
- * @returns {Promise<{hash: string, size: number}>} Content-addressed includes reference.
- * @throws {Error} When the API does not create the include bundle.
- */
-export async function uploadPageIncludes(publishingToken, pathname, bundle) {
-    return await uploadJsonApiResource(publishingToken, `resources/page-includes/${ pathname }`, 'PageIncludes', { bundle });
-}
-
-/**
- * Uploads page partial templates.
- * @param {string} publishingToken - Publishing API bearer token.
- * @param {string} pathname - Canonical page pathname.
- * @param {Object[]} bundle - Partial templates with `id` and `source` fields.
- * @returns {Promise<{hash: string, size: number}>} Content-addressed partials reference.
- * @throws {Error} When the API does not create the partial bundle.
- */
-export async function uploadPagePartials(publishingToken, pathname, bundle) {
-    return await uploadJsonApiResource(publishingToken, `resources/page-partials/${ pathname }`, 'PagePartials', { bundle });
-}
-
-/**
- * Uploads a plain-text page template.
- * @param {string} publishingToken - Publishing API bearer token.
- * @param {string} pathname - Canonical page pathname.
- * @param {string} source - Template source.
- * @returns {Promise<{hash: string, size: number}>} Content-addressed template reference.
- * @throws {Error} When the API does not create the template.
- */
-export async function uploadPageTemplate(publishingToken, pathname, source) {
-    return await uploadResource(publishingToken, `resources/page-templates/${ pathname }`, source, 'text/plain');
-}
-
-/**
- * Uploads email templates, partials, and includes.
- * @param {string} publishingToken - Publishing API bearer token.
- * @param {string} pathname - Email pathname.
- * @param {Object} attributes - Email asset attributes.
- * @returns {Promise<{hash: string, size: number}>} Content-addressed email asset reference.
- * @throws {Error} When the API does not create the email assets.
- */
-export async function uploadEmailAssets(publishingToken, pathname, attributes) {
-    return await uploadJsonApiResource(publishingToken, `resources/emails/${ pathname }`, 'EmailAssets', attributes);
-}
-
-/**
- * Reads the running deploy's currently active Build through the Publishing API.
- * @param {string} publishingToken - Publishing API bearer token.
- * @returns {Promise<{id: string, rootHash: string}>} Active build id and its assigned closure root hash.
- * @throws {Error} When the API does not report an active Build.
- */
-export async function getActiveBuild(publishingToken) {
-    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/build`, {
-        headers: { authorization: `Bearer ${ publishingToken }` },
-    });
-
-    if (response.status !== 200) {
-        throw new Error(
-            `getActiveBuild: GET /publishing-api/v1/build returned ${ response.status }, expected 200`,
-        );
-    }
-
-    const { data } = await response.json();
-    return { id: data.id, rootHash: data.attributes.rootHash };
-}
-
-/**
- * Conditionally points the running deploy's build at an already-published
- * closure. Never publishes new content: `rootHash` must already name a saved
- * closure, and the assignment only takes effect while the build's current
- * pointer still equals `expectedRootHash`.
- * @param {string} publishingToken - Publishing API bearer token.
- * @param {Object} assignment - Desired assignment.
- * @param {string} assignment.buildId - The running deploy's own build id, matched against `data.id`.
- * @param {string} assignment.rootHash - Root hash of a previously published closure.
- * @param {string} assignment.expectedRootHash - Root hash the caller last observed as the current pointer.
- * @returns {Promise<{id: string, rootHash: string}>} The resulting active build id and root hash.
- * @throws {Error} When the API does not confirm the assignment, including on a
- *   stale `expectedRootHash` (409) — callers that call this from an `after`
- *   restoration hook want that failure to surface loudly rather than being
- *   silently retried over a pointer someone else has since moved.
- */
-export async function putActiveBuild(publishingToken, assignment) {
-    const { buildId, rootHash, expectedRootHash } = assignment;
-
-    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/build`, {
+export async function putObject(publishingToken, objectId, body) {
+    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/objects/${ objectId }`, {
         method: 'PUT',
-        headers: {
-            authorization: `Bearer ${ publishingToken }`,
-            'content-type': JSON_API_CONTENT_TYPE,
-        },
-        body: JSON.stringify({
-            data: {
-                type: 'Build',
-                id: buildId,
-                attributes: { rootHash, expectedRootHash },
-            },
-        }),
+        headers: { authorization: `Bearer ${ publishingToken }` },
+        body,
     });
-
-    if (response.status !== 200) {
-        const body = await response.text();
-        throw new Error(
-            `putActiveBuild: PUT /publishing-api/v1/build returned ${ response.status }, expected 200: ${ body }`,
-        );
-    }
-
-    const { data } = await response.json();
-    return { id: data.id, rootHash: data.attributes.rootHash };
+    return { status: response.status, headers: response.headers, body: await readJsonBody(response) };
 }
 
-async function uploadJsonApiResource(publishingToken, path, type, attributes) {
-    return await uploadResource(
+/**
+ * Computes an object's content address and uploads it, failing loudly on any
+ * status other than 200 (already present) or 201 (newly stored).
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {string} content - Object content.
+ * @returns {Promise<{objectId: string, size: number, status: number}>} Stored object reference.
+ * @throws {Error} When the upload does not succeed.
+ */
+export async function uploadObject(publishingToken, content) {
+    const objectId = await hashBlob(content);
+    const response = await putObject(publishingToken, objectId, content);
+    if (response.status !== 200 && response.status !== 201) {
+        throw new Error(
+            `uploadObject: PUT /objects/${ objectId } returned ${ response.status }, expected 200 or 201: ${ JSON.stringify(response.body) }`,
+        );
+    }
+    return { objectId, size: response.body.data.attributes.size, status: response.status };
+}
+
+/**
+ * Creates and fully verifies a Release.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {Object} manifest - Release manifest.
+ * @param {Object} [provenance] - Optional provenance metadata.
+ * @returns {Promise<{status: number, body: Object}>} Raw Release response.
+ */
+export async function createRelease(publishingToken, manifest, provenance) {
+    const attributes = provenance ? { manifest, provenance } : { manifest };
+    return await jsonRequest(publishingToken, 'POST', 'releases', jsonApiDocument('Release', attributes));
+}
+
+/**
+ * Creates a Release, failing loudly unless the store fully verifies it.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {Object} manifest - Release manifest.
+ * @param {Object} [provenance] - Optional provenance metadata.
+ * @returns {Promise<Object>} The created Release resource's `data`.
+ * @throws {Error} When creation does not return 201.
+ */
+export async function createReleaseOrThrow(publishingToken, manifest, provenance) {
+    const response = await createRelease(publishingToken, manifest, provenance);
+    if (response.status !== 201) {
+        throw new Error(
+            `createReleaseOrThrow: POST /releases returned ${ response.status }, expected 201: ${ JSON.stringify(response.body) }`,
+        );
+    }
+    return response.body.data;
+}
+
+/**
+ * Verifies a Release without persisting it.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {Object} manifest - Release manifest referencing already-stored objects.
+ * @param {Object} [provenance] - Optional provenance metadata.
+ * @returns {Promise<{status: number, body: Object}>} Raw ReleaseValidation response.
+ */
+export async function validateRelease(publishingToken, manifest, provenance) {
+    const attributes = provenance ? { manifest, provenance } : { manifest };
+    return await jsonRequest(publishingToken, 'POST', 'releases/validation', jsonApiDocument('Release', attributes));
+}
+
+/**
+ * Lists Release history.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {Object} [params] - Optional `cursor` and `limit` query parameters.
+ * @returns {Promise<{status: number, body: Object}>} Raw Release collection response.
+ */
+export async function listReleases(publishingToken, params) {
+    return await jsonRequest(publishingToken, 'GET', `releases${ queryString(params) }`);
+}
+
+/**
+ * Gets one Release's metadata.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {string} releaseId - Release id to read.
+ * @returns {Promise<{status: number, body: Object}>} Raw Release response.
+ */
+export async function getRelease(publishingToken, releaseId) {
+    return await jsonRequest(publishingToken, 'GET', `releases/${ releaseId }`);
+}
+
+/**
+ * Gets the complete manifest stored inside one Release's closure.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {string} releaseId - Release id to read.
+ * @returns {Promise<{status: number, body: Object}>} Raw ReleaseManifest response.
+ */
+export async function getReleaseManifest(publishingToken, releaseId) {
+    return await jsonRequest(publishingToken, 'GET', `releases/${ releaseId }/manifest`);
+}
+
+/**
+ * Lists every registered build pointer.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @returns {Promise<{status: number, body: Object}>} Raw Build collection response.
+ */
+export async function listBuilds(publishingToken) {
+    return await jsonRequest(publishingToken, 'GET', 'builds');
+}
+
+/**
+ * Gets one build's authoritative pointer, running or not.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {string} buildId - Build id to read.
+ * @returns {Promise<{status: number, headers: Headers, body: Object}>} Raw Build response, including its `ETag` header.
+ */
+export async function getBuild(publishingToken, buildId) {
+    return await jsonRequest(publishingToken, 'GET', `builds/${ buildId }`);
+}
+
+/**
+ * Assigns a Release to a build id using a mandatory pointer precondition.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {string} buildId - Build id to assign, matched against `data.id`.
+ * @param {Object} assignment - Desired assignment.
+ * @param {string} assignment.releaseId - Release id to assign.
+ * @param {string} [assignment.reason] - Audit reason (`publish`, `rollback`, `carry-forward`, `restore`).
+ * @param {string} [assignment.ifMatch] - Unquoted Release id the current pointer must equal.
+ * @param {string} [assignment.ifNoneMatch] - Pass `'*'` to require the build be currently unassigned.
+ * @returns {Promise<{status: number, headers: Headers, body: Object}>} Raw Build response.
+ */
+export async function putBuild(publishingToken, buildId, assignment) {
+    const { releaseId, reason, ifMatch, ifNoneMatch } = assignment;
+    const headers = {};
+    if (ifMatch !== undefined) {
+        headers['if-match'] = `"${ ifMatch }"`;
+    }
+    if (ifNoneMatch !== undefined) {
+        headers['if-none-match'] = ifNoneMatch;
+    }
+    const attributes = reason ? { releaseId, reason } : { releaseId };
+    return await jsonRequest(
         publishingToken,
-        path,
-        JSON.stringify({ data: { type, attributes } }),
-        JSON_API_CONTENT_TYPE,
+        'PUT',
+        `builds/${ buildId }`,
+        jsonApiDocument('Build', attributes, buildId),
+        headers,
     );
 }
 
-async function uploadResource(publishingToken, path, body, contentType) {
-    const headers = { authorization: `Bearer ${ publishingToken }` };
-    if (contentType) {
-        headers['content-type'] = contentType;
+/**
+ * Lists one build's activation history.
+ * @param {string} publishingToken - Publishing API bearer token.
+ * @param {string} buildId - Build id whose history to read.
+ * @param {Object} [params] - Optional `cursor` and `limit` query parameters.
+ * @returns {Promise<{status: number, body: Object}>} Raw Activation collection response.
+ */
+export async function listBuildActivations(publishingToken, buildId, params) {
+    return await jsonRequest(publishingToken, 'GET', `builds/${ buildId }/activations${ queryString(params) }`);
+}
+
+function jsonApiDocument(type, attributes, id) {
+    const data = id === undefined ? { type, attributes } : { type, id, attributes };
+    return JSON.stringify({ data });
+}
+
+function queryString(params) {
+    if (!params) {
+        return '';
     }
+    const search = new URLSearchParams(params).toString();
+    return search ? `?${ search }` : '';
+}
 
-    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/${ path }`, {
-        method: 'PUT',
-        headers,
-        body,
-    });
-
-    if (response.status !== 201) {
-        throw new Error(
-            `uploadResource: PUT /publishing-api/v1/${ path } returned ${ response.status }, expected 201`,
-        );
+async function jsonRequest(publishingToken, method, path, body, extraHeaders) {
+    const headers = { authorization: `Bearer ${ publishingToken }`, ...extraHeaders };
+    if (body !== undefined) {
+        headers['content-type'] = JSON_API_CONTENT_TYPE;
     }
+    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/${ path }`, { method, headers, body });
+    return {
+        status: response.status,
+        headers: response.headers,
+        body: await readJsonBody(response),
+    };
+}
 
-    const { data } = await response.json();
-    return { hash: data.attributes.hash, size: data.attributes.size };
+async function readJsonBody(response) {
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
 }

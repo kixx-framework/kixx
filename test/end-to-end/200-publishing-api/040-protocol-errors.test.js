@@ -8,6 +8,11 @@ import { createRunPrefix } from './helpers.js';
 const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
 const RUN_PREFIX = createRunPrefix();
 
+// These checks fail before any request reaches Release or object business
+// logic (media-type and document parsing run ahead of everything else), so
+// they carry no storage side effects and always run, including against a
+// read-only developer content store.
+
 let publishingToken;
 let methodNotAllowedResponse;
 let unsupportedMediaTypeResponse;
@@ -23,28 +28,28 @@ describe('Publishing API protocol errors', ({ before, it }) => {
         });
         publishingToken = token.token;
 
-        methodNotAllowedResponse = await request('index/page-metadata', { method: 'POST' });
-        unsupportedMediaTypeResponse = await request('resources/page-metadata', {
-            method: 'PUT',
+        methodNotAllowedResponse = await request('', { method: 'POST' });
+        unsupportedMediaTypeResponse = await request('releases/validation', {
+            method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ data: { type: 'PageMetadata', attributes: {} } }),
+            body: JSON.stringify({ data: { type: 'Release', attributes: {} } }),
         });
-        malformedDocumentResponse = await request('resources/page-metadata', {
-            method: 'PUT',
+        malformedDocumentResponse = await request('releases', {
+            method: 'POST',
             headers: { 'content-type': JSON_API_CONTENT_TYPE },
             body: '{"data":',
         });
-        typeMismatchResponse = await request('resources/page-metadata', {
-            method: 'PUT',
+        typeMismatchResponse = await request('releases', {
+            method: 'POST',
             headers: { 'content-type': JSON_API_CONTENT_TYPE },
-            body: JSON.stringify({ data: { type: 'PageIncludes', attributes: {} } }),
+            body: JSON.stringify({ data: { type: 'NotARelease', attributes: {} } }),
         });
     });
 
     it('rejects a disallowed method with allowed methods', () => {
         assertErrorResponse(methodNotAllowedResponse, 405, 'METHOD_NOT_ALLOWED_ERROR');
         assertEqual(
-            normalizeAllowedMethods('GET, HEAD'),
+            normalizeAllowedMethods('GET'),
             normalizeAllowedMethods(methodNotAllowedResponse.allow),
         );
     });

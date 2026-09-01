@@ -964,7 +964,7 @@ docs stop describing modules that no longer exist.
 
 ### Task T10: End-to-end tests cover the workflows, not the endpoints
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T7, T8
 **Documentation:** `test/end-to-end/README.md`
 
@@ -1010,27 +1010,28 @@ that matter, rather than porting the old endpoint-per-file tests to new URLs.
 
 **Acceptance criteria**
 
-- [ ] Every workflow above has a test.
-- [ ] A test proves a Release naming an unwritten object cannot be created.
-- [ ] A test proves a non-running build can be staged and read back.
-- [ ] A test proves rollback needs no client-retained root hash.
-- [ ] No test references `/resources/*`, `/index/*`, or `/build`.
-- [ ] Helpers restore pointers they move and fail loudly on conflict.
+- [x] Every workflow above has a test.
+- [x] A test proves a Release naming an unwritten object cannot be created.
+- [x] A test proves a non-running build can be staged and read back.
+- [x] A test proves rollback needs no client-retained root hash.
+- [x] No test references `/resources/*`, `/index/*`, or `/build`.
+- [x] Helpers restore pointers they move and fail loudly on conflict.
 
 **Validation**
 
-- `node run-tests.js --e2e test/end-to-end/200-publishing-api` — per `test/end-to-end/README.md`
-- `node run-linter.js test`
+- `node run-tests.js --e2e test/end-to-end/200-publishing-api` — per `test/end-to-end/README.md`; not run in this session per project instructions (no dev server or e2e runs during work verification) — needs an operator or CI run against a live target before this task is trusted.
+- `node run-linter.js` — passed, repo-wide.
+- `node run-tests.js` — passed (1,263 unit tests), confirming no unintended source changes; this task touched only `test/end-to-end/**` and `docs` were untouched.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Rewrote the Publishing API v1 end-to-end suite around the four documented workflows instead of the old endpoint-per-file layout. `010-authentication.test.js` now checks bearer-token states against discovery. `020-objects.test.js` covers upload, re-upload dedup, `POST /objects/status` dedup/omission, and an address/bytes mismatch that stores nothing. `030-releases.test.js` covers full verification success, missing-object/wrong-size/unresolvable-partial failures, `POST /releases/validation` persisting nothing and rejecting inline content, content-idempotent creation, and Release list/read/manifest reads. `040-protocol-errors.test.js` is retargeted at the new routes (method-not-allowed on discovery, media-type and malformed-document and resource-type-mismatch on `/releases*`). `050-build-pointers.test.js` drives the full build-pointer story — missing precondition, pre-stage-and-read-back on a never-assigned build, `If-None-Match: *` conflict on an already-assigned build, a stale `If-Match`, code-only carry-forward to a second build id, forward-publish-then-rollback discovered from `GET /builds/:id/activations`, a no-op reassignment, a coherent read immediately after each assignment, and `GET /builds` — entirely against run-generated build ids, so it never touches real infrastructure. `060-running-build.test.js` isolates the one workflow that must touch the target's actual running build (`If-Match` publish, read-back, activation history), mirroring the old `050-closure.test.js` capture-then-restore pattern in an `after` hook that fails loudly on a restore conflict. Rewrote `test/end-to-end/test-helpers/publishing-workflows.js` from scratch for the new endpoint surface (discovery, objects, releases, builds, activations), reusing `hashBlob()` from `src/kixx/content-addressable-store/addressing.js` so fixtures compute the same content addresses the server does. Updated `createRunScopedPathname()` in `test/end-to-end/200-publishing-api/helpers.js` to emit a leading slash, because the new Release manifest pathname rule requires exact equality with `normalizePathname()`'s output (reject, don't normalize) — the old contentTree API had no such requirement, so this was silently wrong until checked against `release-manifest.js`. Rewrote the "Publishing API coverage" section of `test/end-to-end/README.md` to describe the new file layout, the narrowed active-build restoration scope (only `060-running-build.test.js` touches it now), and which files/describes are disabled on `--development`.
+- Current state: Complete; every acceptance criterion is satisfied and the suite is internally consistent with `docs/publishing-api.md` (T9) and the T7 route table.
+- Remaining: Nothing for this task. Actually executing `--e2e` against a live target (development, Cloudflare, or Node.js) has not been done in this session — see Validation — and should happen before relying on this suite in CI.
+- Decisions and discoveries: (1) Release manifest pathnames must equal `normalizePathname()`'s output, which always prepends `/`; the old `createRunScopedPathname()` never added one because the old contentTree API used pathnames as raw URL segments, not manifest keys — fixed at the shared helper so every call site got it automatically. (2) A manifest reference schema is a closed set (`{objectId, size[, mediaType]}`); passing an `uploadObject()` result (which also carries `status`) straight into a manifest fails with an unknown-field error, so test fixtures explicitly narrow references before use. (3) "Coherent reads while an assignment happens" is implemented as an immediate `GET` after each successful `PUT` matching its result, rather than a true concurrent-request race, to keep the suite deterministic; a genuine concurrency test would be flaky under real network timing and isn't what the invariant (no torn reads of the authoritative pointer) requires to demonstrate. (4) `030-releases.test.js` splits into two `describe` blocks so the missing-object case (which needs no upload) still runs against a read-only developer content store, while every other case (which needs at least one uploaded fixture object) is disabled there, matching the nuance already documented for object uploads.
+- Actual files changed: `test/end-to-end/200-publishing-api/010-authentication.test.js`; `test/end-to-end/200-publishing-api/020-objects.test.js` (new); `test/end-to-end/200-publishing-api/030-releases.test.js` (new); `test/end-to-end/200-publishing-api/040-protocol-errors.test.js`; `test/end-to-end/200-publishing-api/050-build-pointers.test.js` (new); `test/end-to-end/200-publishing-api/060-running-build.test.js` (new); `test/end-to-end/200-publishing-api/020-resource-uploads.test.js` (removed); `test/end-to-end/200-publishing-api/030-index-reads.test.js` (removed); `test/end-to-end/200-publishing-api/050-closure.test.js` (removed); `test/end-to-end/200-publishing-api/helpers.js`; `test/end-to-end/test-helpers/publishing-workflows.js`; `test/end-to-end/README.md`; `agents/plans/publishing-api-v1-refactor.md`.
+- Validation run: `node run-linter.js` (passed, repo-wide); `node run-tests.js` (1,263 passed, unit suite only — unaffected by e2e-only changes); `node --check` on every changed/new e2e file (passed). `--e2e` was intentionally not run in this session.
+- Blockers: None. The suite has not been exercised against a live target; a human or CI run against `--development`, `--cloudflare`, or `--nodejs` is the natural next check before treating this task as fully proven in practice, though every acceptance criterion in this document is met by inspection and the code matches the T7/T9 contract it was written against.
 
 ---
 
