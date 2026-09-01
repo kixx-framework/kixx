@@ -20,8 +20,6 @@ const RUN_PREFIX = createRunPrefix();
 
 let publishingToken;
 
-// "Fails on a missing object" needs no fixture upload at all, so it is safe
-// to run even against a read-only developer content store.
 let missingObjectResponse;
 
 
@@ -42,7 +40,7 @@ describe('Publishing API Release creation', ({ before, it }) => {
         assertEqual(422, missingObjectResponse.status);
         assertEqual('MissingContentObjects', missingObjectResponse.body.errors[0].code);
     });
-});
+}, { disabled: IS_DEVELOPMENT_TARGET });
 
 describe('Publishing API Release verification', ({ before, it }) => {
     const staticAssetPathname = createRunScopedPathname(RUN_PREFIX, 'verified/site.css');

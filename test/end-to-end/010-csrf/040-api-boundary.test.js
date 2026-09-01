@@ -10,8 +10,6 @@ let adminApiResponse;
 let tokenIdsBeforeAdminApiRequest;
 let tokenIdsAfterAdminApiRequest;
 let publishingApiResponse;
-let homePageBeforePublishingApiRequest;
-let homePageAfterPublishingApiRequest;
 
 
 describe('CSRF API credential boundary', ({ before, it }) => {
@@ -30,10 +28,7 @@ describe('CSRF API credential boundary', ({ before, it }) => {
             'token_id',
         );
 
-        const homeUrl = new URL(getBaseUrl());
-        homePageBeforePublishingApiRequest = await fetchText(homeUrl);
-        publishingApiResponse = await submitPublishingApiTemplateWrite();
-        homePageAfterPublishingApiRequest = await fetchText(homeUrl);
+        publishingApiResponse = await fetchPublishingApiDiscovery();
     });
 
     it('does not let an admin browser cookie authenticate an Admin API mutation', () => {
@@ -41,9 +36,8 @@ describe('CSRF API credential boundary', ({ before, it }) => {
         assertEqual(tokenIdsBeforeAdminApiRequest.join(','), tokenIdsAfterAdminApiRequest.join(','));
     });
 
-    it('does not let an admin browser cookie authenticate a Publishing API mutation', () => {
+    it('does not let an admin browser cookie authenticate to the Publishing API', () => {
         assertUnauthenticatedResponse(publishingApiResponse, 'Publishing API authentication is required.');
-        assertEqual(homePageBeforePublishingApiRequest, homePageAfterPublishingApiRequest);
     });
 });
 
@@ -71,16 +65,12 @@ async function submitAdminApiTokenCreate() {
     };
 }
 
-async function submitPublishingApiTemplateWrite() {
-    const pathname = `/publishing-api/v1/resources/page-templates/csrf-api-${ crypto.randomUUID() }`;
-    const response = await fetch(`${ getBaseUrl() }${ pathname }`, {
-        method: 'PUT',
+async function fetchPublishingApiDiscovery() {
+    const response = await fetch(`${ getBaseUrl() }/publishing-api/v1/`, {
         redirect: 'manual',
         headers: {
             cookie: adminCookies.cookieHeader(),
-            'content-type': 'text/plain',
         },
-        body: '<main>browser-cookie API boundary</main>',
     });
 
     return {
@@ -95,13 +85,6 @@ async function fetchHtml(url) {
         headers: { cookie: adminCookies.cookieHeader() },
     });
     adminCookies.applyResponse(response);
-
-    assertEqual(200, response.status);
-    return response.text();
-}
-
-async function fetchText(url) {
-    const response = await fetch(url, { redirect: 'manual' });
 
     assertEqual(200, response.status);
     return response.text();

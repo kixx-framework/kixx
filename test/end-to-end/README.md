@@ -108,12 +108,11 @@ it. See each directory for what it covers.
 Because the developer content store is read-only, every `200-publishing-api/`
 test that would upload an object or create a Release is disabled under
 `--development`: `020-objects.test.js`, `050-build-pointers.test.js`, and
-`060-running-build.test.js` in full, plus the Release-verification `describe`
-block in `030-releases.test.js`. The exceptions, which run unconditionally
-because they need no write: `030-releases.test.js`'s "reports every missing
-object" case (references an address the store was never asked to store), and
-`010-authentication.test.js` / `040-protocol-errors.test.js` (both fail
-before reaching any storage call).
+`060-running-build.test.js` in full, plus both Release `describe` blocks in
+`030-releases.test.js`. Release verification requires persisted-object metadata
+even when the expected result is a missing-object error. The exceptions which
+run unconditionally are `010-authentication.test.js` and
+`040-protocol-errors.test.js`; both fail before reaching any storage call.
 
 ### Publishing API: `060-running-build.test.js` mutates a real build
 
