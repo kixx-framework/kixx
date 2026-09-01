@@ -6,7 +6,9 @@ import ContentAddressableIndex, {
 import ContentSnapshot from './content-snapshot.js';
 import { hashSet, hashString, isValidHash } from './addressing.js';
 import { getStaticAssetPath, normalizePathname, isValidPathname } from './content-layout.js';
-import { assert } from '../assertions/mod.js';
+import { BUILD_ASSIGNMENT_OUTCOME } from './content-store-interface.js';
+import { assert, assertNonEmptyString } from '../assertions/mod.js';
+import { ConflictError, NotFoundError } from '../errors/mod.js';
 
 /**
  * @typedef {import('./content-addressable-index.js').ContentTree} ContentTree
@@ -131,9 +133,81 @@ export default class ContentAddressableStore {
      */
     async openSnapshot(context) {
         const buildId = context.runtime.build.id ?? null;
-        const entries = await this.#store.getIndex(context, buildId);
-        const index = new ContentAddressableIndex(entries);
+        const build = await this.#store.getBuild(context, buildId);
+        // A missing active closure here means the running deploy cannot serve
+        // any content at all, which is an unrecoverable configuration fault,
+        // not something a renderer could sensibly branch on.
+        assert(build, `No registered content index for BUILD_ID ${ buildId }`);
+        const index = new ContentAddressableIndex(build.entries);
         return new ContentSnapshot(this.#store, index);
+    }
+
+    /**
+     * Resolves the closure currently assigned to the running deploy's build,
+     * for callers that must report or restore it rather than read through it.
+     *
+     * Unlike {@link ContentAddressableStore#openSnapshot}, absence at every
+     * level is reported as `null` rather than thrown: this method backs public
+     * request handling (the Publishing API's Build resource) and end-to-end
+     * restoration, where "no active build" is an expected outcome to report,
+     * not a startup-class fault.
+     * @param {Object} context - Request or execution context, passed through to the store
+     * @returns {Promise<{id: string, rootHash: string}|null>} The running build's id and assigned root hash, or null when the runtime has no build id, no registered pointer, or (developer mode) no persisted pointer
+     * @throws {OperationalError} When the backing store fails
+     */
+    async getCurrentBuild(context) {
+        const buildId = context.runtime.build.id ?? null;
+        if (!buildId) {
+            return null;
+        }
+
+        const build = await this.#store.getBuild(context, buildId);
+        if (!build || !build.rootHash) {
+            return null;
+        }
+
+        return { id: buildId, rootHash: build.rootHash };
+    }
+
+    /**
+     * Points the running deploy's build at a previously published closure, only
+     * when its currently assigned root hash still equals `expectedRootHash`.
+     *
+     * This never publishes new content and never touches a build other than
+     * the running deploy's own: the closure named by `rootHash` must already
+     * exist, and there is no way to name a different build id.
+     * @param {Object} context - Request or execution context, passed through to the store
+     * @param {Object} assignment - Desired closure and required pointer precondition
+     * @param {string} assignment.rootHash - Root hash of a previously saved closure
+     * @param {string} assignment.expectedRootHash - Root hash the caller observed as the current pointer
+     * @returns {Promise<{id: string, rootHash: string}>} The running build's id and its newly assigned root hash
+     * @throws {NotFoundError} When the runtime has no build id, or `rootHash` names no saved closure
+     * @throws {ConflictError} When the build's current pointer no longer equals `expectedRootHash` (code `BuildPointerConflict`)
+     * @throws {OperationalError} When the backing store fails
+     */
+    async assignCurrentBuild(context, assignment) {
+        const { rootHash, expectedRootHash } = assignment ?? {};
+        assertNonEmptyString(rootHash, 'ContentAddressableStore#assignCurrentBuild: rootHash');
+        assertNonEmptyString(expectedRootHash, 'ContentAddressableStore#assignCurrentBuild: expectedRootHash');
+
+        const buildId = context.runtime.build.id ?? null;
+        if (!buildId) {
+            throw new NotFoundError('No active runtime build is configured.');
+        }
+
+        const outcome = await this.#store.assignBuild(context, buildId, { rootHash, expectedRootHash });
+
+        if (outcome === BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE) {
+            throw new NotFoundError(`No closure has been published for root hash "${ rootHash }".`);
+        }
+        if (outcome === BUILD_ASSIGNMENT_OUTCOME.CONFLICT) {
+            throw new ConflictError(
+                'The active build pointer no longer matches expectedRootHash.',
+                { code: 'BuildPointerConflict' },
+            );
+        }
+
+        return { id: buildId, rootHash };
     }
 
     /**
@@ -177,14 +251,24 @@ export default class ContentAddressableStore {
      * @param {Object} context - Request or execution context, passed through to the store
      * @param {string} buildId - Build id to point at the new closure
      * @param {ContentTree} contentTree - Structured commit payload naming every file in the published site
+     * @param {Object} [options] - Optional publication precondition
+     * @param {string} [options.expectedRootHash] - When present, the build pointer is only reassigned if its current value still equals this. Omitting it preserves unconditional publication.
      * @returns {Promise<{hash: string, nodeCount: number}>} The published closure's root hash and its total node count, counting directories
      * @throws {ValidationError} When a content tree entry is malformed or collides with another
+     * @throws {ConflictError} When `expectedRootHash` is present and no longer matches the build's current pointer (code `BuildPointerConflict`)
      * @throws {OperationalError} When the backing store fails
      */
-    async commitChanges(context, buildId, contentTree) {
+    async commitChanges(context, buildId, contentTree, options) {
+        const { expectedRootHash } = options ?? {};
+        if (expectedRootHash !== undefined) {
+            assertNonEmptyString(expectedRootHash, 'ContentAddressableStore#commitChanges: expectedRootHash');
+        }
+
         // flattenContentTree() derives the flat manifest buildIndex() validates
         // and builds the encoded table persisted in the store. The table is
         // persisted as-is rather than wrapped in a ContentAddressableIndex.
+        // expectedRootHash is assignment metadata, not content, so it never
+        // enters this derivation and cannot affect the deterministic hash.
         const files = flattenContentTree(contentTree);
         const entries = await ContentAddressableIndex.buildIndex(files);
         assertValidIndexTable(entries);
@@ -195,7 +279,23 @@ export default class ContentAddressableStore {
         // failure between them leaves an unreferenced closure, which is inert
         // because a retry re-derives the identical hash.
         await this.#store.saveIndex(context, hash, entries);
-        await this.#store.assignBuild(context, buildId, hash);
+        const outcome = await this.#store.assignBuild(context, buildId, { rootHash: hash, expectedRootHash });
+
+        // The closure was just saved above, so a same-call missing-closure
+        // outcome would mean the store failed to persist what it just
+        // acknowledged, an internal invariant violation rather than an
+        // outcome this layer's callers can act on.
+        assert(
+            outcome !== BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE,
+            'ContentAddressableStore#commitChanges(): assignBuild() reported a missing closure immediately after saveIndex()',
+        );
+
+        if (outcome === BUILD_ASSIGNMENT_OUTCOME.CONFLICT) {
+            throw new ConflictError(
+                'The build pointer no longer matches expectedRootHash.',
+                { code: 'BuildPointerConflict' },
+            );
+        }
 
         return { hash, nodeCount: Object.keys(entries).length };
     }

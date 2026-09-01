@@ -21,13 +21,25 @@ function makeContentStore() {
             calls.push('saveIndex');
             closures.set(rootHash, entries);
         },
-        async assignBuild(_context, buildId, rootHash) {
+        async assignBuild(_context, buildId, assignment) {
             calls.push('assignBuild');
+            const { rootHash, expectedRootHash } = assignment;
+            if (!closures.has(rootHash)) {
+                return 'missingClosure';
+            }
+            if (expectedRootHash !== undefined && (builds.get(buildId) ?? null) !== expectedRootHash) {
+                return 'conflict';
+            }
             builds.set(buildId, rootHash);
+            return 'assigned';
         },
-        async getIndex(_context, buildId) {
-            calls.push('getIndex');
-            return closures.get(builds.get(buildId));
+        async getBuild(_context, buildId) {
+            calls.push('getBuild');
+            const rootHash = builds.get(buildId) ?? null;
+            if (!rootHash) {
+                return null;
+            }
+            return { rootHash, entries: closures.get(rootHash) };
         },
         async getFile(_context, _type, _pathname, hash) {
             return `bytes:${ hash }`;
@@ -188,6 +200,52 @@ describe('ContentAddressableStore', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('ValidationError', caught.name);
         });
+
+        it('publishes unconditionally when no expectedRootHash is supplied', async () => {
+            const contentStore = makeContentStore();
+            const store = makeStore(contentStore);
+
+            await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
+            });
+            const second = await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-b', size: 1 } },
+            });
+
+            assertEqual(second.hash, contentStore.builds.get('build-1'));
+        });
+
+        it('publishes conditionally when the observed pointer still matches', async () => {
+            const contentStore = makeContentStore();
+            const store = makeStore(contentStore);
+
+            const first = await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
+            });
+            const second = await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-b', size: 1 } },
+            }, { expectedRootHash: first.hash });
+
+            assertEqual(second.hash, contentStore.builds.get('build-1'));
+        });
+
+        it('rejects a conditional publish with a stale expectedRootHash and does not move the pointer', async () => {
+            const contentStore = makeContentStore();
+            const store = makeStore(contentStore);
+
+            const first = await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
+            });
+
+            const caught = await catchAsyncError(() => store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-b', size: 1 } },
+            }, { expectedRootHash: 'stale-hash' }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ConflictError', caught.name);
+            assertEqual('BuildPointerConflict', caught.code);
+            assertEqual(first.hash, contentStore.builds.get('build-1'));
+        });
     });
 
     describe('openSnapshot()', ({ it }) => {
@@ -210,6 +268,143 @@ describe('ContentAddressableStore', ({ describe }) => {
             assert(stat, 'expected the committed partials bundle to be visible');
             assertEqual('hash-partials', stat.hash);
             assertEqual(4, stat.size);
+        });
+
+        it('throws an AssertionError when the runtime build has no assigned closure', async () => {
+            const store = makeStore(makeContentStore());
+
+            const caught = await catchAsyncError(() => store.openSnapshot({
+                runtime: { build: { id: 'never-published' } },
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+    });
+
+    describe('getCurrentBuild()', ({ it }) => {
+        it('resolves the running build id and its assigned root hash', async () => {
+            const contentStore = makeContentStore();
+            const store = makeStore(contentStore);
+
+            const committed = await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
+            });
+
+            const current = await store.getCurrentBuild({ runtime: { build: { id: 'build-1' } } });
+
+            assertEqual('build-1', current.id);
+            assertEqual(committed.hash, current.rootHash);
+        });
+
+        it('resolves null when the runtime has no build id', async () => {
+            const store = makeStore(makeContentStore());
+
+            assertEqual(null, await store.getCurrentBuild({ runtime: { build: {} } }));
+        });
+
+        it('resolves null when the runtime build has no registered pointer', async () => {
+            const store = makeStore(makeContentStore());
+
+            assertEqual(null, await store.getCurrentBuild({ runtime: { build: { id: 'never-published' } } }));
+        });
+
+        it('resolves null for a developer-mode adapter with no persisted pointer', async () => {
+            const store = makeStore({
+                async getBuild() {
+                    return { rootHash: null, entries: { '/': [ 'tree', 'root' ] } };
+                },
+            });
+
+            assertEqual(null, await store.getCurrentBuild({ runtime: { build: { id: 'dev' } } }));
+        });
+    });
+
+    describe('assignCurrentBuild()', ({ it }) => {
+        it('points the running build at an existing closure when the expectation matches', async () => {
+            const contentStore = makeContentStore();
+            const store = makeStore(contentStore);
+
+            const first = await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
+            });
+            const second = await store.commitChanges({}, 'other-build', {
+                staticAssets: { '/a.txt': { hash: 'hash-b', size: 1 } },
+            });
+            // Publish the second closure under a different build id so it
+            // exists without yet being assigned to "build-1".
+            contentStore.builds.delete('other-build');
+
+            const result = await store.assignCurrentBuild(
+                { runtime: { build: { id: 'build-1' } } },
+                { rootHash: second.hash, expectedRootHash: first.hash },
+            );
+
+            assertEqual('build-1', result.id);
+            assertEqual(second.hash, result.rootHash);
+            assertEqual(second.hash, contentStore.builds.get('build-1'));
+        });
+
+        it('throws a NotFoundError when the runtime has no build id', async () => {
+            const store = makeStore(makeContentStore());
+
+            const caught = await catchAsyncError(() => store.assignCurrentBuild(
+                { runtime: { build: {} } },
+                { rootHash: 'root-hash', expectedRootHash: 'previous-hash' },
+            ));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
+        });
+
+        it('throws a NotFoundError when the desired closure was never saved', async () => {
+            const contentStore = makeContentStore();
+            const store = makeStore(contentStore);
+            await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
+            });
+
+            const caught = await catchAsyncError(() => store.assignCurrentBuild(
+                { runtime: { build: { id: 'build-1' } } },
+                { rootHash: 'never-saved-hash', expectedRootHash: contentStore.builds.get('build-1') },
+            ));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('NotFoundError', caught.name);
+        });
+
+        it('throws a ConflictError with code BuildPointerConflict on a stale pointer, without mutation', async () => {
+            const contentStore = makeContentStore();
+            const store = makeStore(contentStore);
+            const first = await store.commitChanges({}, 'build-1', {
+                staticAssets: { '/a.txt': { hash: 'hash-a', size: 1 } },
+            });
+
+            const caught = await catchAsyncError(() => store.assignCurrentBuild(
+                { runtime: { build: { id: 'build-1' } } },
+                { rootHash: first.hash, expectedRootHash: 'stale-hash' },
+            ));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('ConflictError', caught.name);
+            assertEqual('BuildPointerConflict', caught.code);
+            assertEqual(first.hash, contentStore.builds.get('build-1'));
+        });
+
+        it('requires both rootHash and expectedRootHash', async () => {
+            const store = makeStore(makeContentStore());
+
+            const missingExpected = await catchAsyncError(() => store.assignCurrentBuild(
+                { runtime: { build: { id: 'build-1' } } },
+                { rootHash: 'root-hash' },
+            ));
+            const missingRootHash = await catchAsyncError(() => store.assignCurrentBuild(
+                { runtime: { build: { id: 'build-1' } } },
+                { expectedRootHash: 'previous-hash' },
+            ));
+
+            assertEqual('AssertionError', missingExpected.name);
+            assertEqual('AssertionError', missingRootHash.name);
         });
     });
 
