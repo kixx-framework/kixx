@@ -187,11 +187,13 @@ Error codes used by this API:
 | `409` | `JsonApiResourceTypeMismatch` | Request resource type is wrong |
 | `409` | `ObjectSizeMismatch` | A stored object's size disagrees with the manifest |
 | `412` | `BuildPointerConflict` | The pointer precondition no longer holds |
+| `413` | `PAYLOAD_TOO_LARGE_ERROR` | An object upload exceeds `maxObjectBytes` |
 | `415` | `UNSUPPORTED_MEDIA_TYPE_ERROR` | The request media type is not accepted |
 | `422` | `ObjectIdMismatch` | Uploaded bytes do not match the object id in the URL |
 | `422` | `ObjectIdInvalid` | An object id is not a valid content address |
 | `422` | `MissingContentObjects` | The manifest names objects the store does not hold |
 | `422` | `InvalidReleaseManifest` | The manifest structure or content is invalid |
+| `422` | `InvalidBuildAssignment` | `data.id`, `attributes.releaseId`, or `attributes.reason` fails validation |
 | `428` | `PreconditionRequired` | A build pointer write omitted `If-Match`/`If-None-Match` |
 
 Unexpected storage failures are not part of the public contract and are
@@ -287,10 +289,11 @@ curl --request PUT \
     http://localhost:2026/publishing-api/v1/objects/<object-id>
 ```
 
-A mismatch returns `422 ObjectIdMismatch` and stores nothing. On success the
-response distinguishes a newly stored object (`201 Created`) from one that
-was already present (`200 OK`), so a client can report how many bytes it
-actually transferred:
+A body over `maxObjectBytes` (25 MiB) returns `413 PAYLOAD_TOO_LARGE_ERROR`
+before the bytes are hashed. A mismatch returns `422 ObjectIdMismatch` and
+stores nothing. On success the response distinguishes a newly stored object
+(`201 Created`) from one that was already present (`200 OK`), so a client
+can report how many bytes it actually transferred:
 
 ```json
 {
@@ -573,8 +576,10 @@ Content-Type: application/vnd.api+json
 }
 ```
 
-`data.id` must equal the route `:buildId`. `attributes.releaseId` must name
-an existing Release — a Release id that was never created returns
+`data.id` must equal the route `:buildId`, and `attributes.releaseId` must be
+a syntactically valid content address; either failing, or an unrecognized
+`attributes.reason`, returns `422 InvalidBuildAssignment`. A well-formed
+`releaseId` that names a Release that was never created returns
 `404 ReleaseNotFound`. `attributes.reason` is optional audit metadata
 (`publish`, default; `rollback`; `carry-forward`; `restore`) and changes no
 behavior.
@@ -587,6 +592,7 @@ behavior.
 | `If-None-Match: *` | Assign only if the build has no current pointer (pre-staging a build id for the first time, or bootstrapping) |
 | neither | `428 PreconditionRequired` |
 | present but stale | `412 BuildPointerConflict` |
+| both headers, or a malformed value (`If-Match` not one quoted valid hash, `If-None-Match` not exactly `*`) | `400 BAD_REQUEST_ERROR` |
 
 Assigning the Release a build already points at is a **success no-op**, not
 a conflict — this is what makes retry-after-lost-response and an
