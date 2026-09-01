@@ -127,10 +127,44 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await first.saveIndex({}, 'first', firstEntries);
             await first.saveIndex({}, 'second', secondEntries);
-            await first.assignBuild({}, 'current', 'first');
-            await second.assignBuild({}, 'current', 'second');
+            await first.assignBuild({}, 'current', { rootHash: 'first' });
+            await second.assignBuild({}, 'current', { rootHash: 'second' });
 
-            assertEqual(JSON.stringify(secondEntries), JSON.stringify(await first.getIndex({}, 'current')));
+            const build = await first.getBuild({}, 'current');
+            assertEqual('second', build.rootHash);
+            assertEqual(JSON.stringify(secondEntries), JSON.stringify(build.entries));
+            first.close();
+            second.close();
+        });
+
+        it('conditionally assigns across instances using a stale-pointer conflict as the CAS proof', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const first = makeStore(rootDirectory);
+            const second = makeStore(rootDirectory);
+
+            await first.saveIndex({}, 'first', { '/': [ 'tree', 'first' ] });
+            await first.saveIndex({}, 'second', { '/': [ 'tree', 'second' ] });
+            await first.assignBuild({}, 'current', { rootHash: 'first' });
+
+            // A second instance moves the pointer between when a caller could
+            // have observed "first" and when it tries to restore it, the same
+            // way a concurrent deploy or test run would.
+            await second.assignBuild({}, 'current', { rootHash: 'second' });
+
+            const conflicted = await first.assignBuild({}, 'current', {
+                rootHash: 'first',
+                expectedRootHash: 'first',
+            });
+            assertEqual('conflict', conflicted);
+            assertEqual('second', (await first.getBuild({}, 'current')).rootHash);
+
+            const assigned = await first.assignBuild({}, 'current', {
+                rootHash: 'first',
+                expectedRootHash: 'second',
+            });
+            assertEqual('assigned', assigned);
+            assertEqual('first', (await second.getBuild({}, 'current')).rootHash);
+
             first.close();
             second.close();
         });
@@ -179,12 +213,12 @@ describe('Node ContentStore', ({ after, describe }) => {
             const store = makeStore(rootDirectory);
 
             await store.saveIndex({}, 'root', { '/': [ 'tree', 'root' ] });
-            await store.assignBuild({}, 'build', 'root');
+            await store.assignBuild({}, 'build', { rootHash: 'root' });
             const database = new DatabaseSync(path.join(rootDirectory, 'format-1', 'index.sqlite'));
             database.prepare('UPDATE closures SET entries_json = ? WHERE root_hash = ?').run('{', 'root');
             database.close();
 
-            const corrupt = await catchAsyncError(() => store.getIndex({}, 'build'));
+            const corrupt = await catchAsyncError(() => store.getBuild({}, 'build'));
             assertEqual('AssertionError', corrupt.name);
             assert(corrupt.cause);
             store.close();
@@ -192,7 +226,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const newerDatabase = new DatabaseSync(':memory:');
             newerDatabase.exec('PRAGMA user_version = 2');
             const newerStore = makeStore(rootDirectory, { database: newerDatabase });
-            const newer = await catchAsyncError(() => newerStore.getIndex({}, 'build'));
+            const newer = await catchAsyncError(() => newerStore.getBuild({}, 'build'));
             assertEqual('AssertionError', newer.name);
             assertMatches('newer than supported', newer.message);
             newerStore.close();

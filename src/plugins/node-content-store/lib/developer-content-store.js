@@ -53,15 +53,15 @@ export default class DeveloperContentStore {
      * Rescans developer sources and returns their current encoded index.
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string|null} _buildId - Ignored because disk is the only developer closure
-     * @returns {Promise<Object>} Encoded index table
+     * @returns {Promise<{rootHash: null, entries: Object}>} Scanned index table; rootHash is always null because there is no persisted build pointer
      */
-    async getIndex(_context, _buildId) {
+    async getBuild(_context, _buildId) {
         this.#assertOpen();
         const manifest = await this.#scanner.scan();
         const entries = await buildDeveloperIndex(manifest);
         this.#manifest = manifest;
-        this.#logger.debug('getIndex() scanned developer sources', { fileCount: manifest.size });
-        return entries;
+        this.#logger.debug('getBuild() scanned developer sources', { fileCount: manifest.size });
+        return { rootHash: null, entries };
     }
 
     /**

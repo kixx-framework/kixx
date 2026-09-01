@@ -9,6 +9,7 @@ import {
     isString,
     isPlainObject,
 } from '../../../kixx/assertions/mod.js';
+import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
 
 
 /**
@@ -183,7 +184,7 @@ export default class ContentStore {
         return `${ hash }#${ this.#wireFormat }`;
     }
 
-    async #fetchIndex(context, buildId) {
+    async #fetchBuild(context, buildId) {
         const cache = this.#edgeCache;
         const cacheKey = this.#buildIndexCacheRequest(buildId);
 
@@ -199,24 +200,25 @@ export default class ContentStore {
 
         const result = await this.#callDurableObject(
             context,
-            'getIndex',
-            (durableObject) => durableObject.getIndex(buildId),
+            'getBuild',
+            (durableObject) => durableObject.getBuild(buildId),
         );
         if (!result.success) {
-            throw new OperationalError(`ContentStore#fetchIndex() was unsuccessful: ${ result.message }`);
+            throw new OperationalError(`ContentStore#fetchBuild() was unsuccessful: ${ result.message }`);
         }
 
-        const { entries } = result;
+        const { rootHash, entries } = result;
         if (!entries) {
-            // If the index does not exist, then the system is not recoverable.
-            throw new AssertionError(`No registered content index for BUILD_ID ${ buildId }`);
+            return null;
         }
+
+        const build = { rootHash, entries };
 
         // A zero TTL means the entry would be stale the moment it is written, so
         // skip the write instead of paying for a response the colo can never
         // serve. This is the configured state in development.
         if (this.#indexCacheTtlSeconds > 0) {
-            await cache.put(cacheKey, new Response(JSON.stringify(entries), {
+            await cache.put(cacheKey, new Response(JSON.stringify(build), {
                 headers: {
                     'content-type': 'application/json',
                     'cache-control': `max-age=${ this.#indexCacheTtlSeconds }`,
@@ -224,22 +226,21 @@ export default class ContentStore {
             }));
         }
 
-        return entries;
+        return build;
     }
 
     /**
-     * Retrieves the index assigned to a build, sharing in-flight and resolved
+     * Retrieves the closure assigned to a build, sharing in-flight and resolved
      * reads within the configured index cache TTL.
      * @param {RequestContext} context - Request context exposing the configured Cloudflare bindings
-     * @param {string} buildId - Build identifier whose index should be loaded
-     * @returns {Promise<Object>} Encoded index table keyed by pathname
-     * @throws {AssertionError} When no index is registered for the build
+     * @param {string} buildId - Build identifier to resolve
+     * @returns {Promise<{rootHash: string, entries: Object}|null>} The assigned root hash and its encoded index table, or null when the build is not registered
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      */
-    async getIndex(context, buildId) {
-        assertNonEmptyString(buildId, 'ContentStore#getIndex: buildId');
+    async getBuild(context, buildId) {
+        assertNonEmptyString(buildId, 'ContentStore#getBuild: buildId');
 
-        // Cache pending and resolved index promises in runtime memory, scoped
+        // Cache pending and resolved build promises in runtime memory, scoped
         // to the build which produced them. Freshness is checked lazily on
         // read (against cachedAt) rather than through a scheduled eviction.
         const cached = this.#pendingIndexes.get(buildId);
@@ -249,7 +250,7 @@ export default class ContentStore {
 
         this.#logger.info('index instance cache miss', { buildId });
 
-        const promise = this.#fetchIndex(context, buildId);
+        const promise = this.#fetchBuild(context, buildId);
         const entry = { promise, cachedAt: Date.now() };
 
         this.#pendingIndexes.set(buildId, entry);
@@ -373,24 +374,30 @@ export default class ContentStore {
     }
 
     /**
-     * Points a build at a previously persisted index closure.
+     * Points a build at a previously persisted index closure, optionally only
+     * when the build's currently assigned root hash still equals
+     * `expectedRootHash`.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to assign
-     * @param {string} rootHash - Root hash of the closure the build should serve
-     * @returns {Promise<void>}
+     * @param {{rootHash: string, expectedRootHash?: string}} assignment - Desired closure and optional pointer precondition
+     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome>}
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      */
-    async assignBuild(context, buildId, rootHash) {
+    async assignBuild(context, buildId, assignment) {
         assertNonEmptyString(buildId, 'put index requires buildId to be a non-empty string');
+        assert(isPlainObject(assignment), 'ContentStore#assignBuild: assignment must be a plain object');
+
+        const { rootHash, expectedRootHash } = assignment;
         assertNonEmptyString(rootHash, 'put index requires rootHash to be a non-empty string');
+        if (expectedRootHash !== undefined) {
+            assertNonEmptyString(expectedRootHash, 'ContentStore#assignBuild: expectedRootHash must be a non-empty string');
+        }
+
         const result = await this.#callDurableObject(
             context,
             'assignBuild',
-            (durableObject) => durableObject.assignBuild(buildId, rootHash),
+            (durableObject) => durableObject.assignBuild(buildId, { rootHash, expectedRootHash }),
         );
-        if (result.missingClosure) {
-            throw new AssertionError(`ContentStore#assignBuild(): no closure exists for root hash "${ rootHash }"`);
-        }
         if (!result.success) {
             throw new OperationalError(`ContentStore#assignBuild() was unsuccessful: ${ result.message }`);
         }
@@ -401,7 +408,13 @@ export default class ContentStore {
         // independent Cache API entries which expire on their configured TTL.
         // Invalidating before assignment would be worse: a failed assignment
         // leaves the old closure correct and would only force a redundant read.
-        await this.#invalidateIndexCaches(buildId);
+        // A conflict or missing-closure outcome left the pointer untouched, so
+        // the cached closure is still correct and must not be evicted.
+        if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED) {
+            await this.#invalidateIndexCaches(buildId);
+        }
+
+        return result.outcome;
     }
 
     // Rolling a build back to a prior closure reuses its build id, so waiting

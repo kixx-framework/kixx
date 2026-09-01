@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { assert, assertNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
+import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
 import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
 
 
@@ -115,20 +116,20 @@ export default class ContentAddressableIndexStore extends DurableObject {
     }
 
     /**
-     * Looks up the closure entries served by a build.
+     * Looks up the closure currently assigned to a build.
      * @param {string} buildId - Build identifier to resolve
-     * @returns {Promise<{success: true, entries: (Object<string, IndexEntryTuple>|null)}>} Encoded index table, or null when the build is not registered
+     * @returns {Promise<{success: true, rootHash: (string|null), entries: (Object<string, IndexEntryTuple>|null)}>} The assigned root hash and its closure entries, both null when the build is not registered
      */
-    async getIndex(buildId) {
-        assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getIndex: buildId');
+    async getBuild(buildId) {
+        assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getBuild: buildId');
 
         const rootHash = this.#getBuildRootHash(buildId);
 
         if (!rootHash) {
-            return { success: true, entries: null };
+            return { success: true, rootHash: null, entries: null };
         }
 
-        return { success: true, entries: this.#getClosureEntries(rootHash) };
+        return { success: true, rootHash, entries: this.#getClosureEntries(rootHash) };
     }
 
     /**
@@ -168,13 +169,23 @@ export default class ContentAddressableIndexStore extends DurableObject {
     }
 
     /**
-     * Atomically points a build at a non-empty, previously committed closure.
+     * Atomically points a build at a non-empty, previously committed closure,
+     * optionally only when the build's current pointer still equals
+     * `expectedRootHash`.
+     *
+     * A Durable Object instance runs at most one method at a time, and every
+     * check and write below is synchronous SQLite storage access with no
+     * `await` between them, so the read-compare-write sequence cannot be
+     * interleaved by a concurrent call.
      * @param {string} buildId - Build identifier to assign
-     * @param {string} rootHash - Root hash of the closure the build should serve
-     * @returns {Promise<{success: true}|{success: false, missingClosure: true}>} Successful assignment result, or a missing closure result
+     * @param {{rootHash: string, expectedRootHash?: string}} assignment - Desired closure and optional pointer precondition
+     * @returns {Promise<{success: true, outcome: import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome}>}
      */
-    async assignBuild(buildId, rootHash) {
+    async assignBuild(buildId, assignment) {
         assertNonEmptyString(buildId, 'ContentAddressableIndexStore#assignBuild: buildId');
+        assert(isPlainObject(assignment), 'ContentAddressableIndexStore#assignBuild: assignment must be a plain object');
+
+        const { rootHash, expectedRootHash } = assignment;
         assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#assignBuild: rootHash');
 
         const closureRows = this.#sql.exec(
@@ -182,7 +193,14 @@ export default class ContentAddressableIndexStore extends DurableObject {
             rootHash,
         ).toArray();
         if (closureRows.length === 0) {
-            return { success: false, missingClosure: true };
+            return { success: true, outcome: BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE };
+        }
+
+        if (expectedRootHash !== undefined) {
+            assertNonEmptyString(expectedRootHash, 'ContentAddressableIndexStore#assignBuild: expectedRootHash');
+            if (this.#getBuildRootHash(buildId) !== expectedRootHash) {
+                return { success: true, outcome: BUILD_ASSIGNMENT_OUTCOME.CONFLICT };
+            }
         }
 
         this.#sql.exec(`
@@ -191,6 +209,6 @@ export default class ContentAddressableIndexStore extends DurableObject {
             ON CONFLICT(build_id) DO UPDATE SET root_hash = EXCLUDED.root_hash
         `, buildId, rootHash);
 
-        return { success: true };
+        return { success: true, outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED };
     }
 }

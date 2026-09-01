@@ -110,38 +110,85 @@ export default function contentStoreConformance(describe, makeContentStore) {
 
             await store.saveIndex(context, 'root-hash', entries);
             await store.saveIndex(context, 'root-hash', { '/': [ 'tree', 'replacement' ] });
-            await store.assignBuild(context, 'build-1', 'root-hash');
+            const outcome = await store.assignBuild(context, 'build-1', { rootHash: 'root-hash' });
 
-            const loaded = await store.getIndex(context, 'build-1');
+            const build = await store.getBuild(context, 'build-1');
 
-            assertEqual(2, loaded['/'].length);
-            assertEqual(4, loaded['/a.txt'].length);
-            assertEqual(JSON.stringify(entries), JSON.stringify(loaded));
+            assertEqual('assigned', outcome);
+            assertEqual('root-hash', build.rootHash);
+            assertEqual(2, build.entries['/'].length);
+            assertEqual(4, build.entries['/a.txt'].length);
+            assertEqual(JSON.stringify(entries), JSON.stringify(build.entries));
         });
 
-        it('rejects missing builds and closures, and permits reassignment', async () => {
+        it('resolves null for a missing build and reports a missing closure without mutation', async () => {
+            const { store, context } = makeContentStore();
+
+            assertEqual(null, await store.getBuild(context, 'missing-build'));
+            assertEqual('missingClosure', await store.assignBuild(context, 'build-1', { rootHash: 'missing-hash' }));
+            assertEqual(null, await store.getBuild(context, 'build-1'));
+        });
+
+        it('permits unconditional reassignment to a different closure', async () => {
             const { store, context } = makeContentStore();
             const first = { '/': [ 'tree', 'first-hash' ] };
             const second = { '/': [ 'tree', 'second-hash' ] };
 
-            await assertAssertionError(() => store.getIndex(context, 'missing-build'));
-            await assertAssertionError(() => store.assignBuild(context, 'build-1', 'missing-hash'));
+            await store.saveIndex(context, 'first-hash', first);
+            await store.saveIndex(context, 'second-hash', second);
+            await store.assignBuild(context, 'build-1', { rootHash: 'first-hash' });
+            await store.assignBuild(context, 'build-1', { rootHash: 'second-hash' });
+
+            const build = await store.getBuild(context, 'build-1');
+            assertEqual('second-hash', build.rootHash);
+            assertEqual(JSON.stringify(second), JSON.stringify(build.entries));
+        });
+
+        it('assigns conditionally when the expected pointer matches, and leaves it untouched on conflict', async () => {
+            const { store, context } = makeContentStore();
+            const first = { '/': [ 'tree', 'first-hash' ] };
+            const second = { '/': [ 'tree', 'second-hash' ] };
 
             await store.saveIndex(context, 'first-hash', first);
             await store.saveIndex(context, 'second-hash', second);
-            await store.assignBuild(context, 'build-1', 'first-hash');
-            await store.assignBuild(context, 'build-1', 'second-hash');
+            await store.assignBuild(context, 'build-1', { rootHash: 'first-hash' });
 
-            assertEqual(JSON.stringify(second), JSON.stringify(await store.getIndex(context, 'build-1')));
+            const stale = await store.assignBuild(context, 'build-1', {
+                rootHash: 'second-hash',
+                expectedRootHash: 'wrong-hash',
+            });
+            assertEqual('conflict', stale);
+            assertEqual('first-hash', (await store.getBuild(context, 'build-1')).rootHash);
+
+            const matched = await store.assignBuild(context, 'build-1', {
+                rootHash: 'second-hash',
+                expectedRootHash: 'first-hash',
+            });
+            assertEqual('assigned', matched);
+            assertEqual('second-hash', (await store.getBuild(context, 'build-1')).rootHash);
+        });
+
+        it('reports a missing closure rather than conflict when the desired root does not exist', async () => {
+            const { store, context } = makeContentStore();
+            await store.saveIndex(context, 'first-hash', { '/': [ 'tree', 'first-hash' ] });
+            await store.assignBuild(context, 'build-1', { rootHash: 'first-hash' });
+
+            const outcome = await store.assignBuild(context, 'build-1', {
+                rootHash: 'never-saved-hash',
+                expectedRootHash: 'first-hash',
+            });
+
+            assertEqual('missingClosure', outcome);
+            assertEqual('first-hash', (await store.getBuild(context, 'build-1')).rootHash);
         });
 
         it('rejects malformed index and build identifiers', async () => {
             const { store, context } = makeContentStore();
 
-            await assertAssertionError(() => store.getIndex(context, ''));
+            await assertAssertionError(() => store.getBuild(context, ''));
             await assertAssertionError(() => store.saveIndex(context, '', { '/': [ 'tree', 'root-hash' ] }));
-            await assertAssertionError(() => store.assignBuild(context, '', 'root-hash'));
-            await assertAssertionError(() => store.assignBuild(context, 'build-1', ''));
+            await assertAssertionError(() => store.assignBuild(context, '', { rootHash: 'root-hash' }));
+            await assertAssertionError(() => store.assignBuild(context, 'build-1', { rootHash: '' }));
         });
     });
 }

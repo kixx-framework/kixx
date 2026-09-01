@@ -121,23 +121,49 @@
  *
  * - `saveIndex()` MUST be idempotent. Re-saving a closure under the same root
  *   hash is a no-op, since the content is by definition identical.
- * - `assignBuild()` MUST reject a root hash for which no closure has been saved.
- *   Pointing a build at a closure that does not exist yields a build that cannot
- *   be read, and failing at assignment is the last moment that is detectable.
- * - The port makes no atomicity guarantee **across** the two calls. A failure
- *   between them leaves a saved closure that no build points at, which is inert
- *   and safe: closures are content-addressed, so the retry saves the same one.
+ * - `assignBuild()` MUST report `MISSING_CLOSURE` rather than assign a root
+ *   hash for which no closure has been saved. Pointing a build at a closure
+ *   that does not exist yields a build that cannot be read, and refusing at
+ *   assignment is the last moment that is detectable.
+ * - The port makes no atomicity guarantee **across** `saveIndex()` and
+ *   `assignBuild()`. A failure between them leaves a saved closure that no
+ *   build points at, which is inert and safe: closures are content-addressed,
+ *   so the retry saves the same one.
  *
- * ## Reading an index that does not exist is an error
- * `getIndex()` MUST throw when a build has no assigned closure. It MUST NOT
- * resolve `null` or an empty table.
+ * ## Conditional assignment is a compare-and-swap on one pointer
+ * `assignBuild()` accepts an assignment object carrying `rootHash` and an
+ * optional `expectedRootHash`. When `expectedRootHash` is present, the adapter
+ * MUST compare it against the build's currently stored pointer and perform the
+ * comparison and the update as one atomic operation — an application-layer
+ * read followed by a separate write cannot provide this guarantee, because
+ * another deploy or caller could reassign the pointer in between. A mismatch
+ * MUST leave the pointer and every cache untouched and MUST be reported as
+ * `CONFLICT`, not thrown as an error, because a stale caller-observed pointer
+ * is an expected outcome of concurrent publication rather than a programmer
+ * mistake. Omitting `expectedRootHash` performs the existing unconditional
+ * assignment.
  *
- * This is the one place the port deliberately refuses to model absence as a
- * value. An unresolvable build id means the running deploy cannot serve any
- * content at all — every page, asset, and template read goes through the index —
- * so it is an unrecoverable startup-class fault, not a cache miss the caller
- * could sensibly branch on. Returning an empty table would convert a total
- * outage into a site that renders every route as a 404.
+ * `assignBuild()` resolves one of `BUILD_ASSIGNMENT_OUTCOME.ASSIGNED`,
+ * `.CONFLICT`, or `.MISSING_CLOSURE` rather than throwing for any of these
+ * three outcomes, because all three can now result from public request input
+ * (an API client's stale `expectedRootHash`, or a desired closure it never
+ * published) rather than only from programmer error.
+ *
+ * ## Resolving a build never throws for absence
+ * `getBuild()` resolves `{ rootHash, entries }` when the build is registered,
+ * and `null` when it is not — it MUST NOT throw for an unregistered build.
+ * `rootHash` is the exact stored pointer value, not a hash the caller
+ * recomputes.
+ *
+ * This is a deliberate change from treating build absence as an unrecoverable
+ * fault at the port boundary. The port is now used both by the framework's own
+ * startup-critical read of the running deploy's active build, and by public
+ * publishing-API request handling that must distinguish "no such build" from a
+ * platform failure without an assertion. Callers that require the running
+ * deploy to always have an assigned closure — such as page rendering — enforce
+ * that invariant themselves, one layer up, where a missing closure is
+ * unambiguously a server configuration error rather than absence of a build a
+ * client merely asked about.
  *
  * ## Caching and the consistency floor
  * An adapter MAY cache index reads, and the Cloudflare adapter caches at two
@@ -216,13 +242,41 @@
  */
 
 /**
+ * The closure currently assigned to a build, as resolved by `getBuild()`.
+ *
+ * @typedef {Object} ContentBuildLookup
+ * @property {(string|null)} rootHash - The exact stored pointer value. A
+ *   developer-mode adapter with no persisted pointer resolves `null` here
+ *   while still returning scanned `entries`; deployed adapters resolve a
+ *   non-empty root hash for every build this returns non-null for.
+ * @property {ContentIndexTable} entries - Encoded index table for that closure.
+ */
+
+/**
+ * The desired assignment passed to `assignBuild()`.
+ *
+ * @typedef {Object} ContentBuildAssignment
+ * @property {string} rootHash - Root hash of the closure the build should point at.
+ * @property {string} [expectedRootHash] - When present, the assignment only
+ *   takes effect if this equals the build's currently stored pointer,
+ *   compared and updated as one atomic operation.
+ */
+
+/**
+ * The result of `assignBuild()`. See `BUILD_ASSIGNMENT_OUTCOME` for the
+ * three possible values.
+ *
+ * @typedef {('assigned'|'conflict'|'missingClosure')} ContentBuildAssignmentOutcome
+ */
+
+/**
  * Content-addressed blob and index store.
  *
  * @typedef {Object} ContentStoreInterface
  *
- * @property {function(Object, string): Promise<ContentIndexTable>} getIndex
- *   Retrieves the index table assigned to a build id. Throws rather than
- *   resolving `null` when the build has no assigned closure.
+ * @property {function(Object, string): Promise<(ContentBuildLookup|null)>} getBuild
+ *   Resolves the closure currently assigned to a build id, or `null` when the
+ *   build is not registered. Never throws for build absence.
  *
  * @property {function(Object, ContentReadType, string, string): Promise<(string|ArrayBuffer|ReadableStream|null)>} getFile
  *   Retrieves one blob by content hash, in the requested representation.
@@ -248,9 +302,22 @@
  *   — only `assignBuild()` does that. Adapters reject values their backing
  *   representation cannot store faithfully.
  *
- * @property {function(Object, string, string): Promise<void>} assignBuild
- *   Points a build id at a previously saved closure and makes a best effort to
- *   invalidate locally cached indexes for that build. Concurrent reads and
- *   other instances may serve the previous closure until their cache entries
- *   expire. Rejects a root hash with no saved closure. Resolves with no value.
+ * @property {function(Object, string, ContentBuildAssignment): Promise<ContentBuildAssignmentOutcome>} assignBuild
+ *   Points a build id at a previously saved closure, optionally only when the
+ *   build's current pointer still equals `expectedRootHash`. On an `ASSIGNED`
+ *   outcome, makes a best effort to invalidate locally cached indexes for that
+ *   build; concurrent reads and other instances may still serve the previous
+ *   closure until their cache entries expire. A `CONFLICT` or `MISSING_CLOSURE`
+ *   outcome leaves the pointer and every cache untouched.
  */
+
+/**
+ * The three possible resolutions of `assignBuild()`.
+ *
+ * @type {{ASSIGNED: 'assigned', CONFLICT: 'conflict', MISSING_CLOSURE: 'missingClosure'}}
+ */
+export const BUILD_ASSIGNMENT_OUTCOME = Object.freeze({
+    ASSIGNED: 'assigned',
+    CONFLICT: 'conflict',
+    MISSING_CLOSURE: 'missingClosure',
+});

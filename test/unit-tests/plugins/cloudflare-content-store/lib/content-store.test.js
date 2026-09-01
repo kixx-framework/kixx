@@ -102,9 +102,13 @@ function makeConformanceStore() {
         },
     };
     const durableObject = {
-        async getIndex(buildId) {
-            const rootHash = builds.get(buildId);
-            return { success: true, entries: rootHash ? cloneJson(closures.get(rootHash)) : null };
+        async getBuild(buildId) {
+            const rootHash = builds.get(buildId) ?? null;
+            return {
+                success: true,
+                rootHash,
+                entries: rootHash ? cloneJson(closures.get(rootHash)) : null,
+            };
         },
         async saveIndex(rootHash, entries) {
             if (!closures.has(rootHash)) {
@@ -112,12 +116,16 @@ function makeConformanceStore() {
             }
             return { success: true };
         },
-        async assignBuild(buildId, rootHash) {
+        async assignBuild(buildId, assignment) {
+            const { rootHash, expectedRootHash } = assignment;
             if (!closures.has(rootHash)) {
-                return { success: false, missingClosure: true };
+                return { success: true, outcome: 'missingClosure' };
+            }
+            if (expectedRootHash !== undefined && (builds.get(buildId) ?? null) !== expectedRootHash) {
+                return { success: true, outcome: 'conflict' };
             }
             builds.set(buildId, rootHash);
-            return { success: true };
+            return { success: true, outcome: 'assigned' };
         },
     };
 
@@ -171,29 +179,30 @@ describe('CloudflareContentStore', ({ describe }) => {
 
     contentStoreConformance(describe, makeConformanceStore);
 
-    describe('getIndex()', ({ it }) => {
+    describe('getBuild()', ({ it }) => {
         it('rejects an empty build id before accessing the cache or Durable Object', async () => {
             const store = makeStore();
 
-            const caught = await catchAsyncError(() => store.getIndex({ env: {} }, ''));
+            const caught = await catchAsyncError(() => store.getBuild({ env: {} }, ''));
 
             assertEqual('AssertionError', caught.name);
         });
 
         it('returns an entry table the framework index accepts', async () => {
             const durableObject = {
-                async getIndex() {
-                    return { success: true, entries: makeEntries() };
+                async getBuild() {
+                    return { success: true, rootHash: 'root-hash', entries: makeEntries() };
                 },
             };
             const store = makeStore();
 
-            const entries = await store.getIndex(makeContext({ durableObject }), 'build-1');
+            const build = await store.getBuild(makeContext({ durableObject }), 'build-1');
 
             // The contract that matters is not the shape in isolation, but that
             // ContentAddressableIndex can be constructed from it. Entry objects,
             // or tree tuples padded to four elements, fail here.
-            const index = new ContentAddressableIndex(entries);
+            const index = new ContentAddressableIndex(build.entries);
+            assertEqual('root-hash', build.rootHash);
             assertEqual('blob', index.getNode('/a.txt').kind);
             assertEqual('hash-a', index.getNode('/a.txt').hash);
         });
@@ -201,16 +210,16 @@ describe('CloudflareContentStore', ({ describe }) => {
         it('serves a repeat read from the isolate cache without calling the Durable Object', async () => {
             let calls = 0;
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
-                    return { success: true, entries: makeEntries() };
+                    return { success: true, rootHash: 'root-hash', entries: makeEntries() };
                 },
             };
             const store = makeStore();
             const context = makeContext({ durableObject });
 
-            await store.getIndex(context, 'build-1');
-            await store.getIndex(context, 'build-1');
+            await store.getBuild(context, 'build-1');
+            await store.getBuild(context, 'build-1');
 
             assertEqual(1, calls);
         });
@@ -218,66 +227,70 @@ describe('CloudflareContentStore', ({ describe }) => {
         it('writes the configured TTL onto the colo cache entry', async () => {
             const edgeCache = makeEdgeCache();
             const durableObject = {
-                async getIndex() {
-                    return { success: true, entries: makeEntries() };
+                async getBuild() {
+                    return { success: true, rootHash: 'root-hash', entries: makeEntries() };
                 },
             };
             const store = makeStore({ edgeCache, indexCacheTtlSeconds: 42 });
 
-            await store.getIndex(makeContext({ durableObject }), 'build-1');
+            await store.getBuild(makeContext({ durableObject }), 'build-1');
 
             assertEqual(1, edgeCache.store.size);
             const [ response ] = Array.from(edgeCache.store.values());
             assertEqual('max-age=42', response.headers.get('cache-control'));
         });
 
-        it('serves an index from the colo cache without calling the Durable Object', async () => {
+        it('serves a build from the colo cache without calling the Durable Object', async () => {
             const edgeCache = makeEdgeCache();
             const cacheKey = new Request('https://content-addressable-store.internal/index/1/build-1');
-            await edgeCache.put(cacheKey, new Response(JSON.stringify(makeEntries('cached-hash'))));
+            await edgeCache.put(cacheKey, new Response(JSON.stringify({
+                rootHash: 'cached-hash',
+                entries: makeEntries('cached-hash'),
+            })));
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     throw new Error('Durable Object should not be called');
                 },
             };
             const store = makeStore({ edgeCache });
 
-            const entries = await store.getIndex(makeContext({ durableObject }), 'build-1');
+            const build = await store.getBuild(makeContext({ durableObject }), 'build-1');
 
-            assertEqual('cached-hash', entries['/a.txt'][1]);
+            assertEqual('cached-hash', build.rootHash);
+            assertEqual('cached-hash', build.entries['/a.txt'][1]);
         });
 
-        it('fetches a fresh index after the isolate cache TTL expires', async () => {
+        it('fetches a fresh build after the isolate cache TTL expires', async () => {
             const tracker = new MockTracker();
             let now = 1000;
             tracker.method(Date, 'now', () => now);
             let calls = 0;
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
-                    return { success: true, entries: makeEntries(`hash-${ calls }`) };
+                    return { success: true, rootHash: `hash-${ calls }`, entries: makeEntries(`hash-${ calls }`) };
                 },
             };
             const edgeCache = makeEdgeCache();
             const store = makeStore({ edgeCache, indexCacheTtlSeconds: 10 });
             const context = makeContext({ durableObject });
 
-            const first = await store.getIndex(context, 'build-1');
+            const first = await store.getBuild(context, 'build-1');
             edgeCache.store.clear();
             now += 10001;
-            const second = await store.getIndex(context, 'build-1');
+            const second = await store.getBuild(context, 'build-1');
             tracker.reset();
 
-            assertEqual('hash-1', first['/a.txt'][1]);
-            assertEqual('hash-2', second['/a.txt'][1]);
+            assertEqual('hash-1', first.entries['/a.txt'][1]);
+            assertEqual('hash-2', second.entries['/a.txt'][1]);
             assertEqual(2, calls);
         });
 
-        it('shares an in-flight index read between concurrent callers', async () => {
+        it('shares an in-flight build read between concurrent callers', async () => {
             const deferred = makeDeferredPromise();
             let calls = 0;
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
                     return await deferred.promise;
                 },
@@ -285,9 +298,9 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
             const context = makeContext({ durableObject });
 
-            const first = store.getIndex(context, 'build-1');
-            const second = store.getIndex(context, 'build-1');
-            deferred.resolve({ success: true, entries: makeEntries() });
+            const first = store.getBuild(context, 'build-1');
+            const second = store.getBuild(context, 'build-1');
+            deferred.resolve({ success: true, rootHash: 'root-hash', entries: makeEntries() });
 
             assertEqual(await first, await second);
             assertEqual(1, calls);
@@ -300,76 +313,72 @@ describe('CloudflareContentStore', ({ describe }) => {
             const firstRead = makeDeferredPromise();
             let calls = 0;
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
                     if (calls === 1) {
                         return await firstRead.promise;
                     }
-                    return { success: true, entries: makeEntries('new-hash') };
+                    return { success: true, rootHash: 'new-hash', entries: makeEntries('new-hash') };
                 },
             };
             const store = makeStore({ indexCacheTtlSeconds: 10 });
             const context = makeContext({ durableObject });
 
-            const stalePromise = store.getIndex(context, 'build-1');
+            const stalePromise = store.getBuild(context, 'build-1');
             now += 10001;
-            await store.getIndex(context, 'build-1');
+            await store.getBuild(context, 'build-1');
             firstRead.reject(new TypeError('stale failure'));
             await catchAsyncError(() => stalePromise);
-            const entries = await store.getIndex(context, 'build-1');
+            const build = await store.getBuild(context, 'build-1');
             tracker.reset();
 
-            assertEqual('new-hash', entries['/a.txt'][1]);
+            assertEqual('new-hash', build.entries['/a.txt'][1]);
             assertEqual(2, calls);
         });
 
         it('does not write a colo cache entry when the TTL is zero', async () => {
             const edgeCache = makeEdgeCache();
             const durableObject = {
-                async getIndex() {
-                    return { success: true, entries: makeEntries() };
+                async getBuild() {
+                    return { success: true, rootHash: 'root-hash', entries: makeEntries() };
                 },
             };
             const store = makeStore({ edgeCache, indexCacheTtlSeconds: 0 });
 
-            await store.getIndex(makeContext({ durableObject }), 'build-1');
+            await store.getBuild(makeContext({ durableObject }), 'build-1');
 
             assertEqual(0, edgeCache.store.size);
         });
 
-        it('throws an AssertionError when the build has no registered index', async () => {
+        it('resolves null when the build has no registered closure', async () => {
             const durableObject = {
-                async getIndex() {
-                    return { success: true, entries: null };
+                async getBuild() {
+                    return { success: true, rootHash: null, entries: null };
                 },
             };
             const store = makeStore();
 
-            const caught = await catchAsyncError(
-                () => store.getIndex(makeContext({ durableObject }), 'build-1'),
-            );
+            const build = await store.getBuild(makeContext({ durableObject }), 'build-1');
 
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('build-1', caught.message);
+            assertEqual(null, build);
         });
 
         it('throws an OperationalError when the Durable Object reports failure', async () => {
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     return { success: false, message: 'storage offline' };
                 },
             };
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.getIndex(makeContext({ durableObject }), 'build-1'),
+                () => store.getBuild(makeContext({ durableObject }), 'build-1'),
             );
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('OperationalError', caught.name);
             assertEqual(
-                'ContentStore#fetchIndex() was unsuccessful: storage offline',
+                'ContentStore#fetchBuild() was unsuccessful: storage offline',
                 caught.message,
             );
         });
@@ -378,7 +387,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.getIndex({ env: {} }, 'build-1'),
+                () => store.getBuild({ env: {} }, 'build-1'),
             );
 
             assert(caught, 'expected an error to be thrown');
@@ -393,40 +402,74 @@ describe('CloudflareContentStore', ({ describe }) => {
         it('retries the next read after a failed fetch instead of caching the rejection', async () => {
             let calls = 0;
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
                     if (calls === 1) {
                         return { success: false, message: 'transient' };
                     }
-                    return { success: true, entries: makeEntries() };
+                    return { success: true, rootHash: 'root-hash', entries: makeEntries() };
                 },
             };
             const store = makeStore();
             const context = makeContext({ durableObject });
 
-            await catchAsyncError(() => store.getIndex(context, 'build-1'));
-            const entries = await store.getIndex(context, 'build-1');
+            await catchAsyncError(() => store.getBuild(context, 'build-1'));
+            const build = await store.getBuild(context, 'build-1');
 
             assertEqual(2, calls);
-            assertEqual('hash-a', entries['/a.txt'][1]);
+            assertEqual('hash-a', build.entries['/a.txt'][1]);
         });
     });
 
     describe('assignBuild()', ({ it }) => {
-        it('translates a missing closure result into an AssertionError', async () => {
+        it('returns missingClosure without invalidating caches', async () => {
+            const edgeCache = makeEdgeCache();
             const durableObject = {
                 async assignBuild() {
-                    return { success: false, missingClosure: true };
+                    return { success: true, outcome: 'missingClosure' };
+                },
+            };
+            const store = makeStore({ edgeCache });
+
+            const outcome = await store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'missing-hash' });
+
+            assertEqual('missingClosure', outcome);
+        });
+
+        it('returns conflict without invalidating caches', async () => {
+            const durableObject = {
+                async assignBuild() {
+                    return { success: true, outcome: 'conflict' };
                 },
             };
             const store = makeStore();
 
-            const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), 'build-1', 'missing-hash'),
-            );
+            const outcome = await store.assignBuild(makeContext({ durableObject }), 'build-1', {
+                rootHash: 'root-hash',
+                expectedRootHash: 'stale-hash',
+            });
 
-            assertEqual('AssertionError', caught.name);
-            assertMatches('missing-hash', caught.message);
+            assertEqual('conflict', outcome);
+        });
+
+        it('passes rootHash and expectedRootHash through to the Durable Object', async () => {
+            let received = null;
+            const durableObject = {
+                async assignBuild(buildId, assignment) {
+                    received = { buildId, assignment };
+                    return { success: true, outcome: 'assigned' };
+                },
+            };
+            const store = makeStore();
+
+            await store.assignBuild(makeContext({ durableObject }), 'build-1', {
+                rootHash: 'root-hash',
+                expectedRootHash: 'previous-hash',
+            });
+
+            assertEqual('build-1', received.buildId);
+            assertEqual('root-hash', received.assignment.rootHash);
+            assertEqual('previous-hash', received.assignment.expectedRootHash);
         });
 
         it('uses the stable Durable Object name scoped by wire format', async () => {
@@ -438,7 +481,7 @@ describe('CloudflareContentStore', ({ describe }) => {
                             receivedName = name;
                             return {
                                 async assignBuild() {
-                                    return { success: true };
+                                    return { success: true, outcome: 'assigned' };
                                 },
                             };
                         },
@@ -447,41 +490,68 @@ describe('CloudflareContentStore', ({ describe }) => {
             };
             const store = makeStore({ wireFormat: 'format-2' });
 
-            await store.assignBuild(context, 'build-1', 'root-hash');
+            await store.assignBuild(context, 'build-1', { rootHash: 'root-hash' });
 
             assertEqual('ContentAddressableStore#format-2', receivedName);
         });
 
         it('invalidates both index caches so a rollback is visible immediately', async () => {
             let pointer = 'hash-new';
-            let getIndexCalls = 0;
+            let getBuildCalls = 0;
             const durableObject = {
-                async getIndex() {
-                    getIndexCalls += 1;
-                    return { success: true, entries: makeEntries(pointer) };
+                async getBuild() {
+                    getBuildCalls += 1;
+                    return { success: true, rootHash: pointer, entries: makeEntries(pointer) };
                 },
-                async assignBuild(_buildId, rootHash) {
-                    pointer = rootHash;
-                    return { success: true };
+                async assignBuild(_buildId, assignment) {
+                    pointer = assignment.rootHash;
+                    return { success: true, outcome: 'assigned' };
                 },
             };
             const edgeCache = makeEdgeCache();
             const store = makeStore({ edgeCache, indexCacheTtlSeconds: 600 });
             const context = makeContext({ durableObject });
 
-            const before = await store.getIndex(context, 'build-1');
-            assertEqual('hash-new', before['/a.txt'][1]);
+            const before = await store.getBuild(context, 'build-1');
+            assertEqual('hash-new', before.entries['/a.txt'][1]);
             assertEqual(1, edgeCache.store.size);
 
-            await store.assignBuild(context, 'build-1', 'hash-old');
+            await store.assignBuild(context, 'build-1', { rootHash: 'hash-old' });
 
             // Both tiers must be gone; a surviving entry would keep serving the
             // superseded closure for the whole 600 second TTL.
             assertEqual(0, edgeCache.store.size);
 
-            const after = await store.getIndex(context, 'build-1');
-            assertEqual('hash-old', after['/a.txt'][1]);
-            assertEqual(2, getIndexCalls);
+            const after = await store.getBuild(context, 'build-1');
+            assertEqual('hash-old', after.entries['/a.txt'][1]);
+            assertEqual(2, getBuildCalls);
+        });
+
+        it('does not invalidate caches on a conflict or missing-closure outcome', async () => {
+            let getBuildCalls = 0;
+            const durableObject = {
+                async getBuild() {
+                    getBuildCalls += 1;
+                    return { success: true, rootHash: 'hash-new', entries: makeEntries('hash-new') };
+                },
+                async assignBuild() {
+                    return { success: true, outcome: 'conflict' };
+                },
+            };
+            const edgeCache = makeEdgeCache();
+            const store = makeStore({ edgeCache, indexCacheTtlSeconds: 600 });
+            const context = makeContext({ durableObject });
+
+            await store.getBuild(context, 'build-1');
+            assertEqual(1, edgeCache.store.size);
+
+            await store.assignBuild(context, 'build-1', { rootHash: 'hash-old', expectedRootHash: 'stale' });
+
+            assertEqual(1, edgeCache.store.size);
+
+            const after = await store.getBuild(context, 'build-1');
+            assertEqual('hash-new', after.entries['/a.txt'][1]);
+            assertEqual(1, getBuildCalls);
         });
 
         it('throws an OperationalError when the Durable Object reports failure', async () => {
@@ -493,7 +563,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), 'build-1', 'root-hash'),
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'root-hash' }),
             );
 
             assert(caught, 'expected an error to be thrown');
@@ -506,13 +576,13 @@ describe('CloudflareContentStore', ({ describe }) => {
             const durableObject = {
                 async assignBuild() {
                     calls += 1;
-                    return { success: true };
+                    return { success: true, outcome: 'assigned' };
                 },
             };
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), '', 'root-hash'),
+                () => store.assignBuild(makeContext({ durableObject }), '', { rootHash: 'root-hash' }),
             );
 
             assertEqual('AssertionError', caught.name);
@@ -524,13 +594,31 @@ describe('CloudflareContentStore', ({ describe }) => {
             const durableObject = {
                 async assignBuild() {
                     calls += 1;
-                    return { success: true };
+                    return { success: true, outcome: 'assigned' };
                 },
             };
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), 'build-1', ''),
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: '' }),
+            );
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, calls);
+        });
+
+        it('rejects an empty expectedRootHash before calling the Durable Object', async () => {
+            let calls = 0;
+            const durableObject = {
+                async assignBuild() {
+                    calls += 1;
+                    return { success: true, outcome: 'assigned' };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'root-hash', expectedRootHash: '' }),
             );
 
             assertEqual('AssertionError', caught.name);
@@ -633,28 +721,28 @@ describe('CloudflareContentStore', ({ describe }) => {
         it('retries a retryable failure and returns the eventual success', async () => {
             let calls = 0;
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
                     if (calls === 1) {
                         const error = new Error('connection lost');
                         error.retryable = true;
                         throw error;
                     }
-                    return { success: true, entries: makeEntries() };
+                    return { success: true, rootHash: 'root-hash', entries: makeEntries() };
                 },
             };
             const store = makeStore();
 
-            const entries = await store.getIndex(makeContext({ durableObject }), 'build-1');
+            const build = await store.getBuild(makeContext({ durableObject }), 'build-1');
 
             assertEqual(2, calls);
-            assertEqual('hash-a', entries['/a.txt'][1]);
+            assertEqual('hash-a', build.entries['/a.txt'][1]);
         });
 
         it('does not retry an overloaded failure', async () => {
             let calls = 0;
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
                     const error = new Error('too many requests');
                     error.overloaded = true;
@@ -664,7 +752,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.getIndex(makeContext({ durableObject }), 'build-1'),
+                () => store.getBuild(makeContext({ durableObject }), 'build-1'),
             );
 
             assertEqual(1, calls);
@@ -675,7 +763,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             let calls = 0;
             const waits = [];
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
                     const error = new Error('connection lost');
                     error.retryable = true;
@@ -691,7 +779,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             });
 
             const caught = await catchAsyncError(
-                () => store.getIndex(makeContext({ durableObject }), 'build-1'),
+                () => store.getBuild(makeContext({ durableObject }), 'build-1'),
             );
 
             assertEqual(3, calls);
@@ -703,7 +791,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         it('does not retry a remote failure which is not marked retryable', async () => {
             let calls = 0;
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     calls += 1;
                     const error = new Error('remote failure');
                     error.remote = true;
@@ -713,7 +801,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.getIndex(makeContext({ durableObject }), 'build-1'),
+                () => store.getBuild(makeContext({ durableObject }), 'build-1'),
             );
 
             assertEqual(1, calls);
@@ -723,7 +811,7 @@ describe('CloudflareContentStore', ({ describe }) => {
 
         it('rethrows a local error untouched rather than treating it as a storage failure', async () => {
             const durableObject = {
-                async getIndex() {
+                async getBuild() {
                     // No remote/retryable/overloaded marker: this never crossed
                     // the RPC boundary, so it is a programmer error here.
                     throw new TypeError('local bug');
@@ -732,7 +820,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.getIndex(makeContext({ durableObject }), 'build-1'),
+                () => store.getBuild(makeContext({ durableObject }), 'build-1'),
             );
 
             assertEqual('TypeError', caught.name);

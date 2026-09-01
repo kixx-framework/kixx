@@ -37,7 +37,9 @@ async function catchAsyncError(fn) {
 describe('DeveloperContentStore', ({ it }) => {
     it('serves repository pages through a real ContentSnapshot', async () => {
         const store = makeStore(path.resolve('src'));
-        const index = new ContentAddressableIndex(await store.getIndex({}, null));
+        const { rootHash, entries } = await store.getBuild({}, null);
+        assertEqual(null, rootHash);
+        const index = new ContentAddressableIndex(entries);
         const snapshot = new ContentSnapshot(store, index);
 
         const home = await snapshot.batchGetPageAssets({}, '/');
@@ -57,10 +59,10 @@ describe('DeveloperContentStore', ({ it }) => {
             const filepath = path.join(root, 'pages/page.json');
             await fsp.writeFile(filepath, JSON.stringify({ title: 'First' }));
             const store = makeStore(root);
-            const first = await store.getIndex({}, null);
+            const first = await store.getBuild({}, null);
 
             await fsp.writeFile(filepath, JSON.stringify({ title: 'Second version' }));
-            const second = await store.getIndex({}, null);
+            const second = await store.getBuild({}, null);
 
             assertEqual(false, JSON.stringify(first) === JSON.stringify(second));
         } finally {
@@ -74,7 +76,9 @@ describe('DeveloperContentStore', ({ it }) => {
             await fsp.mkdir(path.join(root, 'static-assets'), { recursive: true });
             await fsp.writeFile(path.join(root, 'static-assets/known.txt'), 'known');
             const store = makeStore(root);
-            const index = new ContentAddressableIndex(await store.getIndex({}, null));
+            const { rootHash, entries } = await store.getBuild({}, null);
+            assertEqual(null, rootHash);
+            const index = new ContentAddressableIndex(entries);
             const known = index.getNode('/assets/known.txt');
             const results = await store.getFiles({}, 'text', [
                 known,
@@ -115,7 +119,7 @@ describe('DeveloperContentStore', ({ it }) => {
             },
         };
         const store = makeStore('/unreadable', fileSystem);
-        const caught = await catchAsyncError(() => store.getIndex({}, null));
+        const caught = await catchAsyncError(() => store.getBuild({}, null));
 
         assertEqual('OperationalError', caught.name);
         assertEqual(cause, caught.cause);
