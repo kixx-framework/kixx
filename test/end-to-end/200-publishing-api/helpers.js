@@ -7,11 +7,13 @@ export function createRunPrefix() {
 }
 
 /**
- * Creates a content pathname isolated to one end-to-end test run.
+ * Creates a canonical Release manifest pathname isolated to one end-to-end
+ * test run. Release manifest pathnames are rejected, not normalized, so the
+ * leading slash matters: it must equal `normalizePathname()`'s output exactly.
  * @param {string} prefix - Run prefix from createRunPrefix().
- * @param {string} pathname - Test-specific canonical pathname.
- * @returns {string} Namespaced content pathname.
+ * @param {string} pathname - Test-specific pathname, without a leading slash.
+ * @returns {string} Namespaced, canonical manifest pathname.
  */
 export function createRunScopedPathname(prefix, pathname) {
-    return `${ prefix }/${ pathname }`;
+    return `/${ prefix }/${ pathname }`;
 }

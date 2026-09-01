@@ -267,6 +267,52 @@ export default class ContentStore {
         return await promise;
     }
 
+    async getIndex(context, rootHash) {
+        assertNonEmptyString(rootHash, 'CloudflareContentStore#getIndex: rootHash');
+        const result = await this.#callDurableObject(
+            context,
+            'getIndex',
+            (durableObject) => durableObject.getIndex(rootHash),
+        );
+        return result.entries;
+    }
+
+    /**
+     * Retrieves build pointer metadata without loading closure entries.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {string} buildId - Build identifier to resolve
+     * @returns {Promise<({rootHash: string, assignedAt: string}|null)>} Pointer metadata, or null when unassigned
+     */
+    async getBuildPointer(context, buildId) {
+        assertNonEmptyString(buildId, 'ContentStore#getBuildPointer: buildId');
+        const result = await this.#callDurableObject(
+            context,
+            'getBuildPointer',
+            (durableObject) => durableObject.getBuildPointer(buildId),
+        );
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#getBuildPointer() was unsuccessful: ${ result.message }`);
+        }
+        return result.pointer;
+    }
+
+    /**
+     * Lists every build pointer newest assignment first.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string}>>} Registered build pointers
+     */
+    async listBuilds(context) {
+        const result = await this.#callDurableObject(
+            context,
+            'listBuilds',
+            (durableObject) => durableObject.listBuilds(),
+        );
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#listBuilds() was unsuccessful: ${ result.message }`);
+        }
+        return result.builds;
+    }
+
     /**
      * Retrieves a content-addressed blob by type.
      *
@@ -312,7 +358,49 @@ export default class ContentStore {
         const kv = this.#resolveKvStore(context);
         const key = this.#buildFileKey(hash);
         await kv.put(key, blob);
-        return isString(blob) ? textEncoder.encode(blob).byteLength : blob.byteLength;
+        const size = isString(blob) ? textEncoder.encode(blob).byteLength : blob.byteLength;
+
+        // KV is written first so a failed registry write can only produce a
+        // safe false-missing result. Repeating the idempotent upload repairs
+        // the registry. Reversing the order could validate an unreadable blob.
+        const result = await this.#callDurableObject(
+            context,
+            'registerFile',
+            (durableObject) => durableObject.registerFile(hash, size),
+        );
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#registerFile() was unsuccessful: ${ result.message }`);
+        }
+
+        return size;
+    }
+
+    /**
+     * Reports stored blob sizes from the strongly consistent object registry.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {string[]} hashes - Content hashes to inspect
+     * @returns {Promise<Array<({size: number}|null)>>} Positional metadata results
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     */
+    async statFiles(context, hashes) {
+        assertArray(hashes, 'ContentStore#statFiles: hashes');
+        for (const [ index, hash ] of hashes.entries()) {
+            assertNonEmptyString(hash, `ContentStore#statFiles: hashes[${ index }]`);
+        }
+        assert(
+            hashes.length <= KV_BULK_MAX_KEYS,
+            `ContentStore#statFiles() accepts at most ${ KV_BULK_MAX_KEYS } hashes per call; received ${ hashes.length }`,
+        );
+
+        const result = await this.#callDurableObject(
+            context,
+            'statFiles',
+            (durableObject) => durableObject.statFiles(hashes),
+        );
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#statFiles() was unsuccessful: ${ result.message }`);
+        }
+        return result.files;
     }
 
     /**
@@ -379,7 +467,7 @@ export default class ContentStore {
      * `expectedRootHash`.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to assign
-     * @param {{rootHash: string, expectedRootHash?: string}} assignment - Desired closure and optional pointer precondition
+     * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
      * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome>}
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      */
@@ -389,7 +477,7 @@ export default class ContentStore {
 
         const { rootHash, expectedRootHash } = assignment;
         assertNonEmptyString(rootHash, 'put index requires rootHash to be a non-empty string');
-        if (expectedRootHash !== undefined) {
+        if (expectedRootHash !== undefined && expectedRootHash !== null) {
             assertNonEmptyString(expectedRootHash, 'ContentStore#assignBuild: expectedRootHash must be a non-empty string');
         }
 

@@ -42,10 +42,13 @@ import {
  *   digests all moved; array-buffer blob digests did not. Nothing had been
  *   deployed at the time, so this bump records the change rather than
  *   migrating anything.
+ * - `3` — string and array-buffer blobs were merged into one byte-addressed
+ *   domain. A string and its UTF-8 encoding now have one content address.
+ *   Nothing had been deployed at the time, so no migration was required.
  * @type {number}
  * @readonly
  */
-export const FORMAT = 2;
+export const FORMAT = 3;
 
 /**
  * Storage-key prefixes for each persisted content-addressing structure.
@@ -68,8 +71,7 @@ const DIGEST_PATTERN = /^[a-z2-7]{26}$/;
 // a blob containing the canonical bytes of a tree, set or value would have the
 // same digest as that object. Domains separate types; they do not increase the
 // hash algorithm's resistance to random collisions within a type.
-const DOMAIN_ARRAY_BUFFER_BLOB = 0x00;
-const DOMAIN_STRING_BLOB = 0x01;
+const DOMAIN_BLOB = 0x00;
 const DOMAIN_TREE = 0x02;
 const DOMAIN_SET = 0x03;
 const DOMAIN_STRING = 0x04;
@@ -224,27 +226,18 @@ export async function hashSet(obj) {
 }
 
 /**
- * Hashes raw bytes from an ArrayBuffer blob.
- * @param {ArrayBuffer} bytes - Blob content
+ * Hashes a blob by its bytes, encoding strings as UTF-8.
+ * @param {string|ArrayBuffer} value - Blob content
  * @returns {Promise<string>} Content digest in the current wire format
  */
-export async function hashArrayBufferBlob(bytes) {
-    if (bytes instanceof ArrayBuffer) {
-        return await digestDomain(DOMAIN_ARRAY_BUFFER_BLOB, new Uint8Array(bytes));
-    }
-    throw new TypeError('hashArrayBufferBlob: bytes is not an ArrayBuffer');
-}
-
-/**
- * Hashes a string blob under the string blob domain.
- * @param {string} value - Blob content
- * @returns {Promise<string>} Content digest in the current wire format
- */
-export async function hashStringBlob(value) {
+export async function hashBlob(value) {
     if (isString(value)) {
-        return await digestDomain(DOMAIN_STRING_BLOB, stringToUint8Array(value));
+        return await digestDomain(DOMAIN_BLOB, stringToUint8Array(value));
     }
-    throw new TypeError('hashStringBlob: value must be a string');
+    if (value instanceof ArrayBuffer) {
+        return await digestDomain(DOMAIN_BLOB, new Uint8Array(value));
+    }
+    throw new TypeError('hashBlob: value must be a string or ArrayBuffer');
 }
 
 /**

@@ -68,6 +68,12 @@ export const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
  */
 export const EMAIL_ASSETS_BUNDLE = '__email-assets';
 
+/** @type {string} @readonly */
+export const RELEASE_MANIFEST_PATH = '/__kixx/release-manifest.json';
+
+/** @type {string} @readonly */
+export const CONTENT_CONTRACT_PATH = '/__kixx/content-contract.json';
+
 /**
  * Filenames a page directory reserves for its own bundles. A page template
  * filename must not collide with one of these, because the template shares the

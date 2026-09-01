@@ -98,6 +98,14 @@
  * many blobs one read is worth is the caller's decision, and quietly turning one
  * call into five would hide that decision at exactly the point it is being made.
  *
+ * `statFiles()` has the same 100-key cap and positional alignment, returning
+ * `{ size }` for a stored blob and `null` for an absent one. Implementations
+ * MUST answer without loading payload bytes. Where the blob backing store
+ * cannot report metadata cheaply, the adapter may maintain a registry, but a
+ * positive result MUST come from strongly consistent state. A false missing
+ * result only causes an idempotent re-upload; a false present result could let
+ * a release name bytes which cannot be read.
+ *
  * ## Index entries are stored, not interpreted
  * `saveIndex()` receives an encoded index table already validated by the
  * framework, and `getIndex()` returns one. An adapter remains responsible for
@@ -132,7 +140,9 @@
  *
  * ## Conditional assignment is a compare-and-swap on one pointer
  * `assignBuild()` accepts an assignment object carrying `rootHash` and an
- * optional `expectedRootHash`. When `expectedRootHash` is present, the adapter
+ * optional `expectedRootHash`. A string requires the current pointer to equal
+ * that value; `null` requires the build to be unassigned; omission performs an
+ * unconditional assignment. For either explicit precondition, the adapter
  * MUST compare it against the build's currently stored pointer and perform the
  * comparison and the update as one atomic operation — an application-layer
  * read followed by a separate write cannot provide this guarantee, because
@@ -142,6 +152,12 @@
  * is an expected outcome of concurrent publication rather than a programmer
  * mistake. Omitting `expectedRootHash` performs the existing unconditional
  * assignment.
+ *
+ * ## Pointer reads do not load closures
+ * `getBuildPointer()` and `listBuilds()` read only mutable pointer metadata.
+ * They MUST NOT load or deserialize closure entries. Pointer reads therefore
+ * remain proportional to the number of builds, not the size of their sites.
+ * `listBuilds()` returns every pointer newest assignment first.
  *
  * `assignBuild()` resolves one of `BUILD_ASSIGNMENT_OUTCOME.ASSIGNED`,
  * `.CONFLICT`, or `.MISSING_CLOSURE` rather than throwing for any of these
@@ -234,6 +250,13 @@
  */
 
 /**
+ * Stored metadata for a content-addressed blob.
+ *
+ * @typedef {Object} ContentFileStat
+ * @property {number} size - Stored payload size in bytes.
+ */
+
+/**
  * An encoded index table keyed by pathname, as produced by
  * `ContentAddressableIndex.buildIndex()` and accepted by its constructor. The
  * store persists and returns this shape without interpreting it.
@@ -253,13 +276,30 @@
  */
 
 /**
+ * Mutable pointer metadata for one build.
+ *
+ * @typedef {Object} ContentBuildPointer
+ * @property {string} rootHash - Root hash currently assigned to the build.
+ * @property {string} assignedAt - ISO 8601 timestamp of the latest assignment.
+ */
+
+/**
+ * A listed build and its pointer metadata.
+ *
+ * @typedef {Object} ListedContentBuildPointer
+ * @property {string} buildId - Operator-chosen build identifier.
+ * @property {string} rootHash - Root hash currently assigned to the build.
+ * @property {string} assignedAt - ISO 8601 timestamp of the latest assignment.
+ */
+
+/**
  * The desired assignment passed to `assignBuild()`.
  *
  * @typedef {Object} ContentBuildAssignment
  * @property {string} rootHash - Root hash of the closure the build should point at.
- * @property {string} [expectedRootHash] - When present, the assignment only
- *   takes effect if this equals the build's currently stored pointer,
- *   compared and updated as one atomic operation.
+ * @property {(string|null)} [expectedRootHash] - A string requires the stored
+ *   pointer to equal that hash; `null` requires no stored pointer. The
+ *   comparison and update are one atomic operation. Omission is unconditional.
  */
 
 /**
@@ -278,6 +318,17 @@
  *   Resolves the closure currently assigned to a build id, or `null` when the
  *   build is not registered. Never throws for build absence.
  *
+ * @property {function(Object, string): Promise<(ContentIndexTable|null)>} getIndex
+ *   Resolves an immutable closure directly by root hash, or null when absent.
+ *
+ * @property {function(Object, string): Promise<(ContentBuildPointer|null)>} getBuildPointer
+ *   Resolves pointer metadata without loading closure entries, or `null` when
+ *   the build is not registered.
+ *
+ * @property {function(Object): Promise<Array<ListedContentBuildPointer>>} listBuilds
+ *   Resolves every registered build newest assignment first without loading
+ *   closure entries.
+ *
  * @property {function(Object, ContentReadType, string, string): Promise<(string|ArrayBuffer|ReadableStream|null)>} getFile
  *   Retrieves one blob by content hash, in the requested representation.
  *   Resolves `null` when no blob is stored under that hash. The `pathname`
@@ -289,6 +340,11 @@
  *   Retrieves up to 100 blobs, resolving an array aligned positionally with
  *   `files` and holding `null` for each blob that does not exist. Rejects a
  *   longer list rather than splitting the read.
+ *
+ * @property {function(Object, Array<string>): Promise<Array<(ContentFileStat|null)>>} statFiles
+ *   Reports metadata for up to 100 content hashes without reading payload
+ *   bytes. Results align positionally with the input and contain `null` for
+ *   absent blobs. Rejects a longer list rather than splitting the read.
  *
  * @property {function(Object, string, string, (string|ArrayBuffer)): Promise<number>} putFile
  *   Stores a blob under its caller-supplied content hash. Idempotent, and never

@@ -22,8 +22,7 @@ import {
 import {
     canonicalize,
     hashSet,
-    hashStringBlob,
-    hashArrayBufferBlob,
+    hashBlob,
 } from './addressing.js';
 import {
     assert,
@@ -50,7 +49,7 @@ import {
  * - `put*` writes a blob to the store and returns its content address. It does
  *   **not** touch this snapshot's index, so a value written here is not readable
  *   through this snapshot, or any other, until a subsequent
- *   `ContentAddressableStore#commitChanges()` publishes a closure naming it.
+ *   `ContentAddressableStore#createRelease()` publishes a closure naming it.
  *
  * That asymmetry is the whole publishing model: uploading content and making it
  * live are separate steps, which is what lets a build be staged completely
@@ -119,19 +118,15 @@ export default class ContentSnapshot {
         return [ stat, bytes ];
     }
 
-    // The type selects the hash function and nothing else — the store derives
-    // the representation from the blob itself. An unrecognized type must throw
-    // rather than fall through: hashing nothing would content-address the blob
-    // by `undefined` and the mistake would only surface a layer down.
+    // The type validates the caller's intended representation; the address is
+    // derived from the blob's bytes regardless of that representation.
     async #putFile(context, type, pathname, bytes) {
         assert(
             type === 'text' || type === 'arrayBuffer',
             `Invalid type "${ type }" passed into ContentSnapshot#putFile()`,
         );
 
-        const hash = type === 'text'
-            ? await hashStringBlob(bytes)
-            : await hashArrayBufferBlob(bytes);
+        const hash = await hashBlob(bytes);
 
         const size = await this.#store.putFile(context, pathname, hash, bytes);
 

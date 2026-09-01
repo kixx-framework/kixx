@@ -13,7 +13,8 @@ export function register(context) {
 }
 
 export function initialize(context) {
+    const { logger } = context;
     const contentStore = context.getService('ContentStore');
     const store = context.getService('ContentAddressableStore');
-    store.initialize({ contentStore });
+    store.initialize({ logger, contentStore });
 }

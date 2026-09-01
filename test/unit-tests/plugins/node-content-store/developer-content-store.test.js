@@ -101,6 +101,9 @@ describe('DeveloperContentStore', ({ it }) => {
         const errors = await Promise.all([
             catchAsyncError(() => store.getFile({}, 'json', '/page.json', 'ignored')),
             catchAsyncError(() => store.putFile()),
+            catchAsyncError(() => store.statFiles()),
+            catchAsyncError(() => store.getBuildPointer()),
+            catchAsyncError(() => store.listBuilds()),
             catchAsyncError(() => store.saveIndex()),
             catchAsyncError(() => store.assignBuild()),
         ]);
