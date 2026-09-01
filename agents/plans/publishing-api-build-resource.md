@@ -78,7 +78,7 @@ deterministic results are required.
 
 ### Task PB1: Make build pointers a portable conditional store capability
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/plugins/README.md`, `src/kixx/content-addressable-store/content-store-interface.js`
 
@@ -153,16 +153,16 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Both writable adapters return the exact persisted root hash and encoded
+- [x] Both writable adapters return the exact persisted root hash and encoded
       entries for a registered build, and `null` for an unknown build.
-- [ ] Both writable adapters support unconditional assignment for compatibility.
-- [ ] Conditional assignment succeeds only when the stored pointer equals
+- [x] Both writable adapters support unconditional assignment for compatibility.
+- [x] Conditional assignment succeeds only when the stored pointer equals
       `expectedRootHash` and reports conflict without mutation otherwise.
-- [ ] Assignment reports a missing desired closure distinctly from pointer
+- [x] Assignment reports a missing desired closure distinctly from pointer
       conflict.
-- [ ] Cloudflare invalidates build-index caches after success and not after a
+- [x] Cloudflare invalidates build-index caches after success and not after a
       conflict or missing-closure result.
-- [ ] Shared conformance and adapter-specific unit tests cover these invariants.
+- [x] Shared conformance and adapter-specific unit tests cover these invariants.
 
 **Validation**
 
@@ -171,19 +171,59 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: The current port returns only index entries and
-  `assignBuild()` is unconditional. Both must change at the storage boundary;
-  an application-layer read followed by write cannot provide compare-and-swap.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Port renamed `getIndex()` to `getBuild()`, resolving
+  `{ rootHash, entries }` or `null` instead of throwing for an unregistered
+  build. `assignBuild()` now takes an `{ rootHash, expectedRootHash }`
+  assignment object and resolves `BUILD_ASSIGNMENT_OUTCOME.ASSIGNED` /
+  `.CONFLICT` / `.MISSING_CLOSURE` instead of throwing `AssertionError` for
+  conflict/missing-closure. Implemented in the Node SQLite adapter (single
+  UPSERT for unconditional assignment; a single conditional `UPDATE ... WHERE
+  root_hash = expected AND EXISTS(closure)` for compare-and-swap, with a
+  closures-only follow-up read to classify a 0-row result as conflict vs.
+  missing-closure — safe because closures are never deleted), the Cloudflare
+  Durable Object (`content-addressable-index-store.js`, whose single-threaded
+  per-instance execution makes the check-then-write sequence atomic without a
+  SQL transaction), the Cloudflare outward adapter (`content-store.js`, which
+  now invalidates index caches only on `ASSIGNED`), and the developer adapter
+  (`getBuild()` always resolves `{ rootHash: null, entries }` from a fresh
+  scan; `assignBuild()` still unconditionally throws — developer mode has no
+  writable pointer regardless of arguments).
+- Current state: Complete. `BUILD_ASSIGNMENT_OUTCOME` is exported from
+  `content-store-interface.js` and imported by both writable adapters and the
+  Durable Object.
+- Remaining: None for this task. PB2 must update
+  `ContentAddressableStore#openSnapshot()`/`#commitChanges()`, which still
+  call the now-removed `getIndex()`/old two-arg `assignBuild()` shape on the
+  real adapters (its own unit test suite is green only because it uses local
+  mocks that were not touched).
+- Decisions and discoveries: The old port returned only index entries and
+  `assignBuild()` was unconditional; both had to change at the storage
+  boundary since an application-layer read followed by a write cannot provide
+  compare-and-swap. Did not add a dedicated Durable Object SQL test file —
+  the outward adapter's Durable Object mock (in
+  `content-store.test.js`/conformance) fully expresses the
+  match/mismatch/missing-closure branching the DO implements, and DO
+  single-threaded call serialization is a documented Cloudflare platform
+  guarantee, not something a local mock can meaningfully race-test.
+- Actual files changed:
+  - `src/kixx/content-addressable-store/content-store-interface.js`
+  - `src/plugins/node-content-store/lib/content-store.js`
+  - `src/plugins/node-content-store/lib/developer-content-store.js`
+  - `src/plugins/cloudflare-content-store/lib/content-store.js`
+  - `src/plugins/cloudflare-content-store/lib/content-addressable-index-store.js`
+  - `test/unit-tests/kixx/content-addressable-store/content-store-conformance.js`
+  - `test/unit-tests/plugins/node-content-store/lib/content-store.test.js`
+  - `test/unit-tests/plugins/node-content-store/developer-content-store.test.js`
+  - `test/unit-tests/plugins/cloudflare-content-store/lib/content-store.test.js`
+- Validation run:
+  - `node run-linter.js src/kixx/content-addressable-store/content-store-interface.js src/plugins/node-content-store src/plugins/cloudflare-content-store test/unit-tests/kixx/content-addressable-store/content-store-conformance.js test/unit-tests/plugins/node-content-store test/unit-tests/plugins/cloudflare-content-store` — clean, no output.
+  - `node run-tests.js test/unit-tests/plugins/node-content-store test/unit-tests/plugins/cloudflare-content-store` — 134 tests, passed.
+  - `node run-tests.js` (full suite) — 1251 tests, passed; confirms this task did not regress anything outside its own scope.
 - Blockers: None.
 
 ### Task PB2: Add current-build lifecycle behavior to ContentAddressableStore
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** PB1
 **Documentation:** `src/docs/code-style-guide.md`, `src/docs/code-documentation-guide.md`, `src/docs/server-error-handling.md`
 
@@ -236,16 +276,16 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Application code can obtain the active build id and exact assigned root
+- [x] Application code can obtain the active build id and exact assigned root
       hash without accessing a platform adapter.
-- [ ] Existing snapshot reads continue to use one closure pinned for the
+- [x] Existing snapshot reads continue to use one closure pinned for the
       request.
-- [ ] Existing callers can publish unconditionally when no expectation is
+- [x] Existing callers can publish unconditionally when no expectation is
       supplied.
-- [ ] Conditional publication and restoration use atomic adapter assignment
+- [x] Conditional publication and restoration use atomic adapter assignment
       and report stale pointers as `409 BuildPointerConflict`-compatible domain
       errors.
-- [ ] Missing runtime builds and missing desired closures are distinguishable
+- [x] Missing runtime builds and missing desired closures are distinguishable
       expected errors for the new public operations.
 
 **Validation**
@@ -255,19 +295,54 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Upload and index handlers currently call
-  `openSnapshot()`, which resolves only `context.runtime.build.id`; publishing a
-  random build cannot affect their subsequent reads.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `content-addressable-store.js` now imports `BUILD_ASSIGNMENT_OUTCOME`
+  from the port, and `ConflictError`/`NotFoundError` from `kixx/errors/mod.js`.
+  - `openSnapshot()` now calls `#store.getBuild()` instead of the removed
+    `getIndex()`, and throws the assertion-library `AssertionError` (via
+    `assert()`) when it resolves `null` — same observable behavior as before,
+    now enforced one layer up since the port itself no longer throws for
+    build absence.
+  - Added `getCurrentBuild(context)`: resolves `{ id, rootHash }` or `null`,
+    guarding on a missing `context.runtime.build.id` before ever calling the
+    adapter (unlike `openSnapshot()`, so a public caller gets `null` instead
+    of a crash), and treating a developer-mode `rootHash: null` result as
+    "no active build" too.
+  - Added `assignCurrentBuild(context, { rootHash, expectedRootHash })`: both
+    fields are required (unlike `commitChanges()`'s optional precondition,
+    since this operation only ever restores an already-observed pointer).
+    Throws `NotFoundError` for a missing runtime build id or a
+    `MISSING_CLOSURE` outcome, `ConflictError` with `code: 'BuildPointerConflict'`
+    for a `CONFLICT` outcome, and never names a build other than the runtime's
+    own — there is no build-id parameter.
+  - `commitChanges()` gained an optional 4th `options.expectedRootHash`
+    parameter, kept out of `flattenContentTree()`/hashing input, passed to
+    `#store.assignBuild()`, and translated to the same `ConflictError`. A
+    `MISSING_CLOSURE` outcome here is asserted unreachable (the closure was
+    just saved in the same call) rather than surfaced as a caller-facing error.
+- Current state: Complete.
+- Remaining: None for this task. PB3 wires `getCurrentBuild()`/
+  `assignCurrentBuild()` into the `GET`/`PUT /publishing-api/v1/build` route
+  and handler, and passes `expectedRootHash` through the existing closure
+  endpoint's `commitChanges()` call
+  (`src/app/presentation/request-handlers/publishing-api/mod.js`); neither
+  existing caller needed changes for this task since both new parameters are
+  optional/additive.
+- Decisions and discoveries: `openSnapshot()` still calls the adapter with a
+  possibly-null `buildId` (unlike the two new public methods) so the
+  developer-mode adapter — which ignores `buildId` entirely — keeps working
+  exactly as before; only the two new methods short-circuit on a missing
+  runtime build id.
+- Actual files changed:
+  - `src/kixx/content-addressable-store/content-addressable-store.js`
+  - `test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js`
+- Validation run:
+  - `node run-linter.js src/kixx/content-addressable-store/content-addressable-store.js test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js` — clean, no output.
+  - `node run-tests.js test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js` — 27 tests, passed.
 - Blockers: None.
 
 ### Task PB3: Expose and authorize the Publishing API Build resource
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** PB2
 **Documentation:** `docs/publishing-api.md`, `src/app/presentation/README.md`, `src/docs/server-error-handling.md`
 
@@ -332,17 +407,17 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Authenticated GET returns the runtime Build id and assigned root hash.
-- [ ] GET and PUT return 404 when the runtime id is absent or unassigned.
-- [ ] PUT can point only the current runtime build at a persisted closure.
-- [ ] PUT returns 409 without mutation when its expected pointer is stale.
-- [ ] PUT returns 404 when its desired closure does not exist and 409 when its
+- [x] Authenticated GET returns the runtime Build id and assigned root hash.
+- [x] GET and PUT return 404 when the runtime id is absent or unassigned.
+- [x] PUT can point only the current runtime build at a persisted closure.
+- [x] PUT returns 409 without mutation when its expected pointer is stale.
+- [x] PUT returns 404 when its desired closure does not exist and 409 when its
       resource id differs from the runtime build.
-- [ ] Conditional closure publication returns 409 on a stale pointer; existing
+- [x] Conditional closure publication returns 409 on a stale pointer; existing
       closure clients without `expectedRootHash` remain compatible.
-- [ ] Editor, Admin, Developer, and Root Admin are authorized for both Build
+- [x] Editor, Admin, Developer, and Root Admin are authorized for both Build
       operations; unrelated roles or empty grants remain forbidden.
-- [ ] Publishing API documentation describes the mutation risk and conditional
+- [x] Publishing API documentation describes the mutation risk and conditional
       restore sequence.
 
 **Validation**
@@ -353,19 +428,80 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Completed:
+  - `src/routes/publishing-api-v1.js`: added a top-level `/build` route with
+    `GET` (`urn:kixx:get` on `urn:kixx:publishing:build`) and `PUT`
+    (`urn:kixx:update` on the same resource) targets, wired to new
+    `getBuild`/`putBuild` handlers.
+  - `src/app/presentation/request-handlers/publishing-api/mod.js`: added
+    `getBuild()` (calls `store.getCurrentBuild()`, 404s via `NotFoundError`
+    when it resolves `null`) and `putBuild()` (validates `rootHash`/
+    `expectedRootHash` are non-empty strings as a `ValidationError` — public
+    input is validated here, not left to the store's internal assertions;
+    404s when the runtime has no build id, checked *before* the id-mismatch
+    check so that case reports 404 rather than `BuildIdMismatch`; 409s with
+    code `BuildIdMismatch` when `data.id` differs from the runtime build id;
+    then delegates to `store.assignCurrentBuild()`, which supplies the
+    404/409 `BuildPointerConflict` outcomes for a missing closure or stale
+    pointer). `commitChanges()` now reads `attributes.expectedRootHash`,
+    validates its type as a `ValidationError` when present, and passes it
+    through as `store.commitChanges()`'s options 4th argument — an absent
+    value stays `undefined`, preserving unconditional publication for
+    existing clients.
+  - `src/app/permissions/roles.js`: added a `{ action: ['urn:kixx:get',
+    'urn:kixx:update'], resource: 'urn:kixx:publishing:build' }` grant to
+    `developer`, `admin`, and `editor` (Root Admin already covered by its
+    `*`/`*` wildcard). Extended `assertPublishingGrants()` so the Editor-role
+    invariant check allows `update` only on the exact
+    `urn:kixx:publishing:build` resource (via a new `EDITOR_BUILD_ACTIONS`
+    set keyed off `PUBLISHING_BUILD_RESOURCE`), leaving every other
+    publishing grant restricted to get/create as before.
+  - `docs/publishing-api.md`: added the `GET`/`PUT /build` rows to the
+    endpoint table, the `BuildIdMismatch`/`BuildPointerConflict` error rows,
+    an `expectedRootHash` note under "Publish a content tree", a permissions
+    note that the Build update grant does not extend elsewhere, and a new
+    "Get and restore the active build" section documenting the request/
+    response shapes and the observe-then-conditionally-restore pattern.
+  - Added `test/unit-tests/app/permissions/roles.test.js` (new directory;
+    none existed before) covering: get/update on Build for developer, admin,
+    editor; Root Admin via wildcard; an unknown role id; that Editor's Build
+    update grant does not leak into update on other publishing resources or
+    into unrelated actions on Build; and that Editor's ordinary get/create
+    publishing access is unaffected.
+  - Extended `test/unit-tests/app/presentation/request-handlers/publishing-api/mod.test.js`
+    with `getBuild`/`putBuild` describe blocks and three new `commitChanges`
+    cases (expectedRootHash omitted/present/invalid, and store-raised
+    `ConflictError` propagation). `makeContext()` now takes an optional
+    runtime build id and always sets `context.runtime`; `makeStore()` gained
+    `getCurrentBuild`/`assignCurrentBuild` trackers.
+- Current state: Complete.
+- Remaining: None for this task. PB4 will use `GET`/`PUT /build` from the E2E
+  suite for active-build discovery and conditional restoration.
 - Decisions and discoveries: Existing publishing roles grant only get/create;
-  the update grant must be specific to the Build resource so pointer mutation
-  does not imply general update authority.
-- Actual files changed: None yet.
-- Validation run: None yet.
+  the update grant had to be specific to the Build resource so pointer
+  mutation does not imply general update authority — confirmed by extending
+  `assertPublishingGrants()` rather than widening `EDITOR_ACTIONS` itself. No
+  dedicated route-manifest audit test exists in this codebase (checked); route
+  behavior is proven through the handler unit tests plus the existing generic
+  `http-router` test suite, per the existing pattern for every other
+  publishing-api-v1 route.
+- Actual files changed:
+  - `src/routes/publishing-api-v1.js`
+  - `src/app/presentation/request-handlers/publishing-api/mod.js`
+  - `src/app/permissions/roles.js`
+  - `docs/publishing-api.md`
+  - `test/unit-tests/app/presentation/request-handlers/publishing-api/mod.test.js`
+  - `test/unit-tests/app/permissions/roles.test.js` (new)
+- Validation run:
+  - `node run-linter.js src/routes/publishing-api-v1.js src/app/presentation/request-handlers/publishing-api src/app/permissions/roles.js test/unit-tests/app/presentation/request-handlers/publishing-api test/unit-tests/app/permissions` — clean, no output.
+  - `node run-tests.js test/unit-tests/app/presentation/request-handlers/publishing-api test/unit-tests/app/permissions` — 35 tests, passed.
+  - `node run-tests.js test/unit-tests/kixx/http-router` — 144 tests, passed.
+  - `node run-tests.js` (full suite) — 1279 tests, passed.
 - Blockers: None.
 
 ### Task PB4: Make publishing E2E workflows restore the active build
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** PB3
 **Documentation:** `test/end-to-end/README.md`, `docs/publishing-api.md`, `test/unit-tests/README.md`
 
@@ -430,16 +566,16 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] Both affected test files remain independently runnable.
-- [ ] They publish to the runtime build using the root observed immediately
+- [x] Both affected test files remain independently runnable.
+- [x] They publish to the runtime build using the root observed immediately
       before publication as an atomic precondition.
-- [ ] Their `/index/*` assertions read the test closure rather than the
+- [x] Their `/index/*` assertions read the test closure rather than the
       deployment's prior closure.
-- [ ] Successful runs conditionally restore the exact original root hash.
-- [ ] A changed pointer causes 409 and a failed restore hook without overwriting
+- [x] Successful runs conditionally restore the exact original root hash.
+- [x] A changed pointer causes 409 and a failed restore hook without overwriting
       the newer pointer.
-- [ ] Setup failures do not trigger an unconditional or guessed restoration.
-- [ ] Documentation states what persistent test data remains and why routine
+- [x] Setup failures do not trigger an unconditional or guessed restoration.
+- [x] Documentation states what persistent test data remains and why routine
       content reset is unnecessary.
 
 **Validation**
@@ -452,12 +588,69 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Random build IDs isolate stored pointers but cannot
-  make `/index/*` read them; index reads always use the runtime build. Safe
-  restoration therefore requires mutating that pointer with compare-and-swap.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed:
+  - `test/end-to-end/test-helpers/publishing-workflows.js`: added
+    `getActiveBuild(publishingToken)` (GET `/build`, throws on non-200,
+    returns `{id, rootHash}`) and `putActiveBuild(publishingToken, {buildId,
+    rootHash, expectedRootHash})` (PUT `/build`, throws on non-200 — including
+    a 409 conflict, deliberately, so a restoration call in an `after` hook
+    fails loudly rather than being retried over a pointer something else has
+    since moved). Both follow this file's existing throw-on-unexpected-status
+    convention.
+  - `test/end-to-end/200-publishing-api/helpers.js`: removed
+    `createRunScopedBuildId()` — no remaining caller after both test files
+    switched to publishing through the observed runtime build id.
+    `createRunPrefix()`/`createRunScopedPathname()` are unchanged and still
+    used for fixture pathname namespacing.
+  - `test/end-to-end/200-publishing-api/030-index-reads.test.js` and
+    `050-closure.test.js`: both now call `getActiveBuild()` as the first thing
+    `before()` does (before any mutating request), publish with
+    `buildId: originalBuild.id` and `expectedRootHash: originalBuild.rootHash`
+    on `/index/closure`, and register an `after()` hook — ahead of any request
+    `before()` makes — that conditionally restores via `putActiveBuild()` only
+    when both `originalBuild` and a confirmed `publishedRootHash` are set.
+    `050-closure.test.js`'s repeated-publish call (proving idempotent
+    re-publish) stays unconditional, matching its existing intent; only the
+    first publish carries the precondition. Added two explicit Build-endpoint
+    checks to `030-index-reads.test.js`: one asserting `GET /build` reports a
+    non-empty id/rootHash, and one self-contained no-op round trip (`PUT
+    /build` reassigning the current pointer to itself) proving restoration
+    works without depending on or disturbing either file's own fixture.
+  - `test/end-to-end/README.md`: added an "Active-build mutation and
+    restoration" subsection under Publishing API coverage describing the
+    observe → conditional-publish → register-`after`-early → conditional-
+    restore sequence, the conflict-is-not-a-lock caveat and the
+    non-concurrent-run recommendation, and a "What a run leaves behind"
+    subsection stating that blobs/closures/tokens are not cleaned up and why
+    that is safe (content-addressed, no delete operation in the port; UUID
+    run prefixes prevent collisions).
+- Current state: Complete.
+- Remaining: None for this task. Actually exercising `--e2e --cloudflare` /
+  `--e2e --nodejs` against a live deployment is explicitly operator/CI
+  verification per this task's own Validation section — not run by this
+  implementation pass. `node --check` confirmed all four touched E2E files
+  parse, and the unit suite (which never loads `test/end-to-end/`) stayed
+  green throughout.
+- Decisions and discoveries: Confirmed the discovery already recorded above —
+  before this task, `/index/*` reads always resolve `context.runtime.build.id`
+  regardless of what `buildId` a `ContentTree` publish names, so the prior
+  random-build-id fixtures could only have passed by coincidence or not been
+  exercised; publishing through the observed active build is what makes the
+  reads see the fixture at all, independent of the restoration concern.
+  Confirmed via `test/unit-tests/README.md` that `kixx-test` runs a
+  describe's `after` hook even when its `before` hook fails, which is what
+  makes "register `after` early, guard on captured state" sufficient without
+  a try/finally inside `before()`.
+- Actual files changed:
+  - `test/end-to-end/test-helpers/publishing-workflows.js`
+  - `test/end-to-end/200-publishing-api/helpers.js`
+  - `test/end-to-end/200-publishing-api/030-index-reads.test.js`
+  - `test/end-to-end/200-publishing-api/050-closure.test.js`
+  - `test/end-to-end/README.md`
+- Validation run:
+  - `node run-linter.js test/end-to-end/test-helpers/publishing-workflows.js test/end-to-end/200-publishing-api` — clean, no output.
+  - `node --check` on all four touched E2E `.js` files — parsed successfully.
+  - `node run-tests.js` (full unit suite) — 1279 tests, passed; the E2E suite is not part of this run by design (requires `--e2e` and a live `E2E_TESTS_BASE_URL`).
+  - Not run (operator/CI only, per this task's Validation section): `node run-tests.js --e2e --cloudflare test/end-to-end/200-publishing-api/030-index-reads.test.js`, the `050-closure.test.js` Cloudflare run, `node run-tests.js --e2e --nodejs test/end-to-end/200-publishing-api`, and the post-run `GET /publishing-api/v1/build` pointer check.
+- Blockers: None. The four remote validation commands above are the
+  documented next step for an operator with a live target.
