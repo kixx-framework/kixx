@@ -12,29 +12,44 @@ import {
     putPageTemplate,
     putEmailAssets,
     commitChanges,
+    getBuild,
+    putBuild,
 } from '../../../../../../src/app/presentation/request-handlers/publishing-api/mod.js';
 
 import ServerResponse from '../../../../../../src/kixx/http-router/server-response.js';
 import { JSON_API_CONTENT_TYPE } from '../../../../../../src/app/presentation/lib/json-api.js';
 
 
-function makeContext(store) {
+function makeContext(store, runtimeBuildId) {
     return {
         getService(name) {
             assertEqual('ContentAddressableStore', name);
             return store;
         },
+        runtime: { build: { id: runtimeBuildId } },
     };
 }
 
 function makeStore(content, options) {
     const tracker = new MockTracker();
-    const { commitChangesResult } = options ?? {};
+    const {
+        commitChangesResult,
+        getCurrentBuildResult,
+        assignCurrentBuildResult,
+        assignCurrentBuildError,
+    } = options ?? {};
 
     const store = {
         normalizePathname: tracker.fn((pathname) => pathname),
         openSnapshot: tracker.fn(() => Promise.resolve(content)),
         commitChanges: tracker.fn(() => Promise.resolve(commitChangesResult)),
+        getCurrentBuild: tracker.fn(() => Promise.resolve(getCurrentBuildResult)),
+        assignCurrentBuild: tracker.fn(() => {
+            if (assignCurrentBuildError) {
+                return Promise.reject(assignCurrentBuildError);
+            }
+            return Promise.resolve(assignCurrentBuildResult);
+        }),
     };
 
     return { store, tracker };
@@ -478,6 +493,156 @@ describe('publishing-api/mod', ({ describe }) => {
             const call = store.commitChanges.mock.getCall(0);
             assertEqual('build-42', call.arguments[1]);
             assertEqual('about-hash', call.arguments[2].pages.about);
+            assertEqual(undefined, call.arguments[3].expectedRootHash);
+        });
+
+        it('passes a present expectedRootHash through as a publication precondition', async () => {
+            const { store } = makeStore(null, { commitChangesResult: { hash: 'closure-hash', nodeCount: 1 } });
+
+            const request = makeRequest({
+                jsonBody: jsonApiDocument('ContentTree', {
+                    buildId: 'build-42',
+                    expectedRootHash: 'previous-hash',
+                }),
+            });
+
+            await commitChanges(makeContext(store), request, makeResponse());
+
+            const call = store.commitChanges.mock.getCall(0);
+            assertEqual('previous-hash', call.arguments[3].expectedRootHash);
+        });
+
+        it('rejects a non-string expectedRootHash before calling the store', async () => {
+            const { store } = makeStore(null, { commitChangesResult: { hash: 'x', nodeCount: 0 } });
+
+            const request = makeRequest({
+                jsonBody: jsonApiDocument('ContentTree', { buildId: 'build-42', expectedRootHash: 42 }),
+            });
+
+            const error = await catchAsyncError(() => commitChanges(makeContext(store), request, makeResponse()));
+
+            assertError(error, 'ValidationError', 'VALIDATION_ERROR');
+            assertEqual(0, store.commitChanges.mock.callCount());
+        });
+
+        it('propagates a stale-pointer ConflictError raised by the store unchanged', async () => {
+            const conflictError = Object.assign(new Error('stale pointer'), {
+                name: 'ConflictError',
+                code: 'BuildPointerConflict',
+            });
+            const { store } = makeStore(null, {});
+            store.commitChanges = new MockTracker().fn(() => {
+                throw conflictError;
+            });
+
+            const request = makeRequest({
+                jsonBody: jsonApiDocument('ContentTree', { buildId: 'build-42', expectedRootHash: 'stale' }),
+            });
+
+            const error = await catchAsyncError(() => commitChanges(makeContext(store), request, makeResponse()));
+
+            assertError(error, 'ConflictError', 'BuildPointerConflict');
+        });
+    });
+
+    describe('getBuild', ({ it }) => {
+        it('responds with the running build id and its assigned root hash', async () => {
+            const { store } = makeStore(null, {
+                getCurrentBuildResult: { id: 'build-42', rootHash: 'closure-hash' },
+            });
+
+            const response = await getBuild(makeContext(store, 'build-42'), makeRequest(), makeResponse());
+
+            assertEqual(200, response.status);
+            const data = parseBody(response);
+            assertEqual('Build', data.type);
+            assertEqual('build-42', data.id);
+            assertEqual('closure-hash', data.attributes.rootHash);
+        });
+
+        it('throws NotFoundError when the store reports no active build', async () => {
+            const { store } = makeStore(null, { getCurrentBuildResult: null });
+
+            const error = await catchAsyncError(() => getBuild(makeContext(store), makeRequest(), makeResponse()));
+
+            assertError(error, 'NotFoundError', 'NOT_FOUND_ERROR');
+        });
+    });
+
+    describe('putBuild', ({ it }) => {
+        it('assigns the closure and responds with the resulting Build resource', async () => {
+            const { store } = makeStore(null, {
+                assignCurrentBuildResult: { id: 'build-42', rootHash: 'new-hash' },
+            });
+
+            const request = makeRequest({
+                jsonBody: jsonApiDocument('Build', { rootHash: 'new-hash', expectedRootHash: 'old-hash' }, 'build-42'),
+            });
+
+            const response = await putBuild(makeContext(store, 'build-42'), request, makeResponse());
+
+            assertEqual(200, response.status);
+            const data = parseBody(response);
+            assertEqual('Build', data.type);
+            assertEqual('build-42', data.id);
+            assertEqual('new-hash', data.attributes.rootHash);
+
+            const call = store.assignCurrentBuild.mock.getCall(0);
+            assertEqual('new-hash', call.arguments[1].rootHash);
+            assertEqual('old-hash', call.arguments[1].expectedRootHash);
+        });
+
+        it('rejects a missing rootHash or expectedRootHash before calling the store', async () => {
+            const { store } = makeStore(null, {});
+
+            const request = makeRequest({
+                jsonBody: jsonApiDocument('Build', {}, 'build-42'),
+            });
+
+            const error = await catchAsyncError(() => putBuild(makeContext(store, 'build-42'), request, makeResponse()));
+
+            assertError(error, 'ValidationError', 'VALIDATION_ERROR');
+            assertEqual(2, error.errors.length);
+            assertEqual(0, store.assignCurrentBuild.mock.callCount());
+        });
+
+        it('throws NotFoundError before comparing ids when the runtime has no build id', async () => {
+            const { store } = makeStore(null, {});
+
+            const request = makeRequest({
+                jsonBody: jsonApiDocument('Build', { rootHash: 'new-hash', expectedRootHash: 'old-hash' }, 'some-build'),
+            });
+
+            const error = await catchAsyncError(() => putBuild(makeContext(store, undefined), request, makeResponse()));
+
+            assertError(error, 'NotFoundError', 'NOT_FOUND_ERROR');
+            assertEqual(0, store.assignCurrentBuild.mock.callCount());
+        });
+
+        it('throws a ConflictError with code BuildIdMismatch for a different build id, without calling the store', async () => {
+            const { store } = makeStore(null, {});
+
+            const request = makeRequest({
+                jsonBody: jsonApiDocument('Build', { rootHash: 'new-hash', expectedRootHash: 'old-hash' }, 'other-build'),
+            });
+
+            const error = await catchAsyncError(() => putBuild(makeContext(store, 'build-42'), request, makeResponse()));
+
+            assertError(error, 'ConflictError', 'BuildIdMismatch');
+            assertEqual(0, store.assignCurrentBuild.mock.callCount());
+        });
+
+        it('propagates NotFoundError and ConflictError raised by the store', async () => {
+            const notFound = Object.assign(new Error('missing closure'), { name: 'NotFoundError', code: 'NOT_FOUND_ERROR' });
+            const { store } = makeStore(null, { assignCurrentBuildError: notFound });
+
+            const request = makeRequest({
+                jsonBody: jsonApiDocument('Build', { rootHash: 'never-saved', expectedRootHash: 'old-hash' }, 'build-42'),
+            });
+
+            const error = await catchAsyncError(() => putBuild(makeContext(store, 'build-42'), request, makeResponse()));
+
+            assertError(error, 'NotFoundError', 'NOT_FOUND_ERROR');
         });
     });
 });

@@ -34,6 +34,8 @@ server origin.
 | `PUT` | `/resources/page-templates/*path` | `urn:kixx:create` on `urn:kixx:publishing:resources:page` | Upload a page template |
 | `PUT` | `/resources/emails/*path` | `urn:kixx:create` on `urn:kixx:publishing:resources:email` | Upload email assets |
 | `PUT` | `/index/closure` | `urn:kixx:create` on `urn:kixx:publishing:index` | Publish a content tree for a build |
+| `GET` | `/build` | `urn:kixx:get` on `urn:kixx:publishing:build` | Get the running deploy's build id and assigned closure |
+| `PUT` | `/build` | `urn:kixx:update` on `urn:kixx:publishing:build` | Point the running deploy's build at an already-published closure |
 
 `*path` is a slash-separated content pathname. Page metadata, partials, and
 includes allow an omitted path: `/page-metadata/`, `/page-partials/`, and
@@ -58,9 +60,11 @@ Missing, malformed, or unknown bearer credentials return `401` with code
 
 Permissions are derived from the token's stored roles for every request. The
 `editor` role can use every endpoint in this API; `root-admin`, `developer`,
-and `admin` have the same publishing permissions. Unknown stored role IDs grant
-no permissions. An authenticated token without the required grant receives
-`403 FORBIDDEN_ERROR`.
+and `admin` have the same publishing permissions. `PUT /build` additionally
+requires `urn:kixx:update` on `urn:kixx:publishing:build`, a grant scoped to
+that one resource — it does not extend to update actions on any other
+publishing resource. Unknown stored role IDs grant no permissions. An
+authenticated token without the required grant receives `403 FORBIDDEN_ERROR`.
 
 Authentication and authorization occur before an endpoint reads or validates a
 request body.
@@ -157,6 +161,8 @@ Common failures are:
 | `404` | `NOT_FOUND_ERROR` | The requested published resource does not exist |
 | `405` | `METHOD_NOT_ALLOWED_ERROR` | The method is not allowed on the recognized path |
 | `409` | `JsonApiResourceTypeMismatch` | Request resource type is wrong |
+| `409` | `BuildIdMismatch` | `PUT /build` `data.id` does not match the running build |
+| `409` | `BuildPointerConflict` | The build's pointer no longer matches the request's `expectedRootHash` |
 | `415` | `UNSUPPORTED_MEDIA_TYPE_ERROR` | The request media type is not accepted |
 | `422` | `VALIDATION_ERROR` | A resource or content-tree value is invalid |
 
@@ -315,6 +321,13 @@ complete build view. Every referenced blob must have been uploaded first. An
 omitted facet is absent from the new closure; this endpoint does not merge it
 with the previously published tree.
 
+`attributes.expectedRootHash` is optional. When present, the build pointer is
+only reassigned if its current value still equals it; a stale value returns
+`409 BuildPointerConflict` and the pointer is left untouched. Omitting it
+preserves the existing unconditional publication behavior. Either way, the
+closure itself is always saved first and is idempotent by content hash, so a
+conflicted or retried publish never re-uploads or duplicates content.
+
 ```json
 {
     "data": {
@@ -372,6 +385,73 @@ The closure root hash is deterministic for the same content tree. Publishing
 the same tree again is content-idempotent, but still reassigns the named build
 to that closure. The index is saved before the build pointer moves; a failed
 assignment can leave an unreachable closure that a retry safely recreates.
+
+## Get and restore the active build
+
+```http
+GET /publishing-api/v1/build
+```
+
+Reports the running deploy's own build id and its currently assigned closure
+root hash. There is no way to name or inspect a different build through this
+endpoint.
+
+```json
+{
+    "data": {
+        "type": "Build",
+        "id": "production",
+        "attributes": {
+            "rootHash": "<assigned-closure-root-hash>"
+        }
+    }
+}
+```
+
+A deploy with no active build (no runtime build id configured, or no closure
+ever assigned to it) returns `404 NOT_FOUND_ERROR`.
+
+```http
+PUT /publishing-api/v1/build
+Content-Type: application/vnd.api+json
+```
+
+Conditionally points the running build at an already-published closure. This
+never publishes new content — `rootHash` must already name a saved closure —
+and can only ever move the running build's own pointer.
+
+```json
+{
+    "data": {
+        "type": "Build",
+        "id": "production",
+        "attributes": {
+            "rootHash": "<desired-existing-root-hash>",
+            "expectedRootHash": "<currently-assigned-root-hash>"
+        }
+    }
+}
+```
+
+`data.id`, `attributes.rootHash`, and `attributes.expectedRootHash` are all
+required. `data.id` must equal the running build's id — a different value
+returns `409 BuildIdMismatch` rather than moving a different build.
+`expectedRootHash` is a required precondition here, unlike the optional one on
+`/index/closure`: this endpoint only ever restores a pointer the caller has
+already observed through a prior `GET`. If the pointer no longer equals
+`expectedRootHash`, the assignment does not happen and the endpoint returns
+`409 BuildPointerConflict`. If `rootHash` names no saved closure, it returns
+`404 NOT_FOUND_ERROR`. On success it returns `200 OK` with the resulting Build
+resource.
+
+This is the safe way to roll back to a closure this API previously reported,
+including from automated tests that must restore a build's original pointer
+after a temporary publish: read the pointer with `GET`, retain it, publish or
+locate the desired closure, then `PUT` with that retained value as
+`expectedRootHash`. A conflict means something else moved the pointer in the
+meantime; retrying blindly would silently overwrite that concurrent change, so
+callers should treat it as a failure to investigate rather than retry
+automatically.
 
 ## Typical publishing workflow
 

@@ -17,9 +17,43 @@ import {
     putPageTemplate,
     putEmailAssets,
     commitChanges,
+    getBuild,
+    putBuild,
 } from '../app/presentation/request-handlers/publishing-api/mod.js';
 
 export default [
+    {
+        pattern: '/build',
+        name: 'build',
+        targets: [
+            {
+                name: 'get-build',
+                methods: [ 'GET' ],
+                requestHandlers: [
+                    authorize([
+                        {
+                            action: 'urn:kixx:get',
+                            resource: 'urn:kixx:publishing:build',
+                        },
+                    ]),
+                    getBuild,
+                ],
+            },
+            {
+                name: 'put-build',
+                methods: [ 'PUT' ],
+                requestHandlers: [
+                    authorize([
+                        {
+                            action: 'urn:kixx:update',
+                            resource: 'urn:kixx:publishing:build',
+                        },
+                    ]),
+                    putBuild,
+                ],
+            },
+        ],
+    },
     {
         pattern: '/index',
         name: 'index',

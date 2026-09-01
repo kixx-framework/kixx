@@ -1,5 +1,6 @@
 import {
     BadRequestError,
+    ConflictError,
     NotFoundError,
     UnsupportedMediaTypeError,
     ValidationError,
@@ -343,12 +344,19 @@ export async function commitChanges(context, request, response) {
 
     const {
         buildId,
+        expectedRootHash,
         staticAssets,
         globalTemplatePartials,
         baseTemplates,
         pages,
         emails,
     } = attributes;
+
+    if (!isUndefined(expectedRootHash) && !isNonEmptyString(expectedRootHash)) {
+        const err = new ValidationError('PUT ContentTree payload validation error');
+        err.push('expectedRootHash must be a non-empty string when present', 'attributes.expectedRootHash');
+        throw err;
+    }
 
     const store = context.getService('ContentAddressableStore');
 
@@ -358,7 +366,7 @@ export async function commitChanges(context, request, response) {
         baseTemplates,
         pages,
         emails,
-    });
+    }, { expectedRootHash });
 
     const resource = jsonApiResource({
         type: 'ContentTree',
@@ -371,4 +379,89 @@ export async function commitChanges(context, request, response) {
     });
 
     return response.respondWithJSON(201, resource, { contentType: JSON_API_CONTENT_TYPE });
+}
+
+
+/**
+ * Reports the running deploy's build id and its currently assigned closure.
+ * @param {Object} context - Request context exposing the ContentAddressableStore service and runtime build id
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} _request - Unused; the resource is derived entirely from context.runtime.build.id
+ * @param {import('../../../../kixx/http-router/server-response-interface.js').ServerResponseInterface} response - Response to write the Build resource onto
+ * @returns {Promise<Object>} The response, carrying a 200 Build resource
+ * @throws {NotFoundError} When the runtime has no build id or the build has no assigned closure
+ */
+export async function getBuild(context, _request, response) {
+    const store = context.getService('ContentAddressableStore');
+    const build = await store.getCurrentBuild(context);
+
+    if (!build) {
+        throw new NotFoundError('No active build is configured.');
+    }
+
+    const resource = jsonApiResource({
+        type: 'Build',
+        id: build.id,
+        attributes: { rootHash: build.rootHash },
+    });
+
+    return response.respondWithJSON(200, resource, { contentType: JSON_API_CONTENT_TYPE });
+}
+
+
+/**
+ * Conditionally points the running deploy's build at an already-published
+ * closure. This never publishes new content and can only ever move the
+ * running build's own pointer — `data.id` is checked against it, not used to
+ * select which build to mutate.
+ * @param {Object} context - Request context exposing the ContentAddressableStore service and runtime build id
+ * @param {import('../../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Incoming request carrying a Build resource document
+ * @param {import('../../../../kixx/http-router/server-response-interface.js').ServerResponseInterface} response - Response to write the resulting Build resource onto
+ * @returns {Promise<Object>} The response, carrying a 200 Build resource
+ * @throws {ValidationError} When `attributes.rootHash` or `attributes.expectedRootHash` is not a non-empty string
+ * @throws {NotFoundError} When the runtime has no build id, or `rootHash` names no saved closure
+ * @throws {ConflictError} When `data.id` does not match the running build (code `BuildIdMismatch`), or the build's current pointer no longer matches `expectedRootHash` (code `BuildPointerConflict`)
+ */
+export async function putBuild(context, request, response) {
+    assertJsonApiContentType(request);
+
+    const { id, attributes } = await parseJsonApiResource(request, 'Build');
+    const { rootHash, expectedRootHash } = attributes;
+
+    const err = new ValidationError('PUT Build payload validation error');
+    if (!isNonEmptyString(rootHash)) {
+        err.push('rootHash must be a non-empty string', 'attributes.rootHash');
+    }
+    if (!isNonEmptyString(expectedRootHash)) {
+        err.push('expectedRootHash must be a non-empty string', 'attributes.expectedRootHash');
+    }
+    if (err.length > 0) {
+        throw err;
+    }
+
+    const runtimeBuildId = context.runtime.build.id ?? null;
+
+    if (!runtimeBuildId) {
+        throw new NotFoundError('No active build is configured.');
+    }
+
+    // The endpoint only ever operates on the running deploy's own build;
+    // a mismatched id is rejected here rather than silently ignored, so a
+    // caller cannot mistake this for pointing an arbitrary build.
+    if (id !== runtimeBuildId) {
+        throw new ConflictError(
+            `Build id "${ id }" does not match the running build "${ runtimeBuildId }".`,
+            { code: 'BuildIdMismatch' },
+        );
+    }
+
+    const store = context.getService('ContentAddressableStore');
+    const build = await store.assignCurrentBuild(context, { rootHash, expectedRootHash });
+
+    const resource = jsonApiResource({
+        type: 'Build',
+        id: build.id,
+        attributes: { rootHash: build.rootHash },
+    });
+
+    return response.respondWithJSON(200, resource, { contentType: JSON_API_CONTENT_TYPE });
 }

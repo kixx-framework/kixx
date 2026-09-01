@@ -6,6 +6,14 @@ const EDITOR_CATEGORY = 'editor';
 const PUBLISHING_URN_PREFIX = 'urn:kixx:publishing:';
 const EDITOR_ACTIONS = new Set([ 'urn:kixx:get', 'urn:kixx:create' ]);
 
+// The Build resource is the one place a publishing-capable role may update
+// rather than only get/create: it moves an existing, already-published
+// pointer and can never create new content. Scoping the extra action to this
+// exact resource (not a wildcard) keeps Editor from gaining general update
+// authority over the rest of the publishing domain.
+const PUBLISHING_BUILD_RESOURCE = 'urn:kixx:publishing:build';
+const EDITOR_BUILD_ACTIONS = new Set([ 'urn:kixx:get', 'urn:kixx:update' ]);
+
 /** @type {string} */
 export const ROLE_ROOT_ADMIN = 'root-admin';
 
@@ -34,6 +42,10 @@ const ROLE_DEFINITIONS = deepFreeze([
                 action: [ 'urn:kixx:get', 'urn:kixx:create' ],
                 resource: 'urn:kixx:publishing:*',
             },
+            {
+                action: [ 'urn:kixx:get', 'urn:kixx:update' ],
+                resource: PUBLISHING_BUILD_RESOURCE,
+            },
             { action: '*', resource: 'urn:kixx:admin:api-tokens:*' },
             { action: '*', resource: 'urn:kixx:admin:migrations' },
         ],
@@ -49,6 +61,10 @@ const ROLE_DEFINITIONS = deepFreeze([
                 action: [ 'urn:kixx:get', 'urn:kixx:create' ],
                 resource: 'urn:kixx:publishing:*',
             },
+            {
+                action: [ 'urn:kixx:get', 'urn:kixx:update' ],
+                resource: PUBLISHING_BUILD_RESOURCE,
+            },
         ],
     },
     {
@@ -59,6 +75,10 @@ const ROLE_DEFINITIONS = deepFreeze([
             {
                 action: [ 'urn:kixx:get', 'urn:kixx:create' ],
                 resource: 'urn:kixx:publishing:*',
+            },
+            {
+                action: [ 'urn:kixx:get', 'urn:kixx:update' ],
+                resource: PUBLISHING_BUILD_RESOURCE,
             },
         ],
     },
@@ -150,7 +170,11 @@ function assertRoleDefinitions(roles) {
 function assertPublishingGrants(role) {
     for (const grant of role.permissions) {
         const actions = Array.isArray(grant.action) ? grant.action : [ grant.action ];
-        const actionsArePublishing = actions.every((action) => EDITOR_ACTIONS.has(action));
+        // Only the exact Build resource may carry the update action; every
+        // other publishing grant stays within get/create so Editor never
+        // gains general update authority through a wildcard resource.
+        const allowedActions = grant.resource === PUBLISHING_BUILD_RESOURCE ? EDITOR_BUILD_ACTIONS : EDITOR_ACTIONS;
+        const actionsArePublishing = actions.every((action) => allowedActions.has(action));
 
         assert(
             actionsArePublishing && isString(grant.resource) && grant.resource.startsWith(PUBLISHING_URN_PREFIX),
