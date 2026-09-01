@@ -1,10 +1,10 @@
 {
     "workerName": "kixx-test-app",
-    "buildId": "2026-08-31T13-33-37Z",
-    "versionId": "67e905a7-c9af-4950-881d-648cebbbb4eb",
-    "createdAt": "2026-08-31T13:33:37.717Z",
-    "deployed": true,
-    "modulesHash": "72e502167115bd552f1edad3c8dce37a71b41a45b16430084b7819fbb362a9a0",
+    "buildId": "2026-09-01T18-47-18Z-f0489de4-0143-48fb-b758-01c1439c0ec7",
+    "versionId": "7307b4d5-f527-4d3d-914c-27105e3b99c7",
+    "createdAt": "2026-09-01T18:47:18.199Z",
+    "deployed": false,
+    "modulesHash": "9a1dddeaceda479a1ac437131142935e52848c3ef849d391bdeca894711897a2",
     "bindingsHash": "4a72c2d4648d5e43ee2796d901abb33f80942d6359e0fc30ac857d37fa534f76",
     "configHash": "b9ac8ea870c8e5099c3b1c9e069dbf28024ac994d753639cbff139812df4db38"
 }
