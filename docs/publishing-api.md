@@ -17,13 +17,24 @@ server origin.
 Read this section before using any endpoint below. Misunderstanding it leads
 to misusing every endpoint that follows.
 
-A release of server-side code and a release of website content ship as one
-atomic unit. The mechanism is the `BUILD_ID` environment variable: it
-identifies one build of the server source (Node.js process or Cloudflare
-Worker), and a **build pointer** records which content **Release** that build
-serves. There is no separate "activate" step — a Worker deploy and a process
-restart are already atomic, so reverting `BUILD_ID` reverts the code and the
-content it was authored against as a single coordinate.
+**A release of server-side code and a release of website content ship as one
+atomic unit.** This is the guarantee the entire API is built to uphold, and
+every endpoint below exists in service of it. A build's code and the content
+it renders are never allowed to drift apart: you cannot end up running code
+authored for one site version against content authored for another.
+
+The mechanism is the `BUILD_ID` environment variable. `BUILD_ID` identifies
+one build of the server source (Node.js process or Cloudflare Worker), and a
+**build pointer** records which content **Release** that build serves.
+Deploying code and switching content are therefore **the same act**: setting
+`BUILD_ID` to a value already pointed at the Release you intend to serve.
+**There is no separate "activate" step and no atomic switch to engineer** —
+a Worker deploy and a process restart are already atomic, so setting (or
+reverting) `BUILD_ID` reverts the code and the content it was authored
+against as a single, indivisible coordinate. The
+[Code-plus-content release (pre-staging)](#2-code-plus-content-release-pre-staging)
+workflow below is how a publishing client puts this to use for an atomic
+deploy.
 
 Three objects make this work:
 
@@ -51,8 +62,11 @@ in which build id and which Release:
 - **Rollback**: assign an earlier Release back to a build id.
 
 A named channel (`production`) that survives code deploys was considered and
-rejected: it would let one build's code serve content authored for a
-different build, which is exactly the mismatch this model prevents.
+rejected. That is precisely the property the atomic release model refuses to
+allow: it would let one build's code serve content authored for a different
+build — the exact `(code, content)` mismatch this design exists to prevent.
+The build-keyed pointer, not a channel, is what makes `(code, content)` one
+revertible coordinate.
 
 ### Cloudflare consistency note
 
