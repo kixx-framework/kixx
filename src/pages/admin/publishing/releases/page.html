@@ -1,0 +1,62 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <p><a href="{{ links.overview }}">&larr; Publishing</a></p>
+            <h1>Release {{ release.id }}</h1>
+        </header>
+
+        <div class="card flow">
+            <p class="type-label">{{ release.id }}{{#if release.isCurrent}} (current){{/if}}</p>
+            <p class="type-body-sm">Created {{ formatDate release.createdAt format="DATETIME_MED" }} by {{ release.createdBy }}</p>
+            <p class="type-body-sm">{{ release.objectCount }} objects, {{ release.totalBytes }} bytes</p>
+
+            <div class="flow">
+                <p class="type-label">Provenance</p>
+                {{#if release.hasProvenance}}
+                {{#with release.provenance}}
+                {{#if sourceRevision}}<p class="type-body-sm">Source revision: {{ sourceRevision }}</p>{{/if}}
+                {{#if message}}<p class="type-body-sm">Message: {{ message }}</p>{{/if}}
+                {{#if client}}<p class="type-body-sm">Client: {{ client }}</p>{{/if}}
+                {{#if intendedForBuildId}}<p class="type-body-sm">Intended for build: {{ intendedForBuildId }}</p>{{/if}}
+                {{/with}}
+                {{else}}
+                <p class="type-body-sm">No provenance recorded.</p>
+                {{/if}}
+            </div>
+
+            {{#if form}}
+            <form class="cluster" method="{{ form.method }}" action="{{ form.url }}">
+                {{#if form.csrf}}
+                <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                {{/if}}
+                <input type="hidden" name="release_id" value="{{ release.id }}">
+                <input type="hidden" name="build_id" value="{{ runningBuild.id }}">
+                <input type="hidden" name="expected_release_id" value="{{ runningBuild.releaseId }}">
+                {{#ifEqual direction "rollback"}}
+                <button class="button button--primary" type="submit">Roll back to this Release</button>
+                {{else}}
+                <button class="button button--primary" type="submit">Roll forward to this Release</button>
+                {{/ifEqual}}
+            </form>
+            {{/if}}
+        </div>
+
+        <section class="flow">
+            <h2>Referencing builds</h2>
+            {{#if referencingBuilds}}
+            <ul class="grid-auto list-unstyled">
+            {{#each referencingBuilds as |build| }}
+                <li>
+                    <article class="card flow">
+                        <p class="type-label"><a href="{{ build.href }}">{{ build.id }}</a>{{#if build.isRunning}} (running){{/if}}</p>
+                        <p class="type-body-sm">Assigned {{ formatDate build.assignedAt format="DATETIME_MED" }}</p>
+                    </article>
+                </li>
+            {{/each}}
+            </ul>
+            {{else}}
+            <p class="type-body-sm">No build currently points at this Release.</p>
+            {{/if}}
+        </section>
+    </article>
+</main>

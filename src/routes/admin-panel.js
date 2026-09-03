@@ -147,6 +147,108 @@ export default [
         ],
     },
     {
+        pattern: '/publishing/builds/:buildId',
+        name: 'publishing-build',
+        targets: [
+            {
+                name: 'render-build',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [
+                    authorize([
+                        {
+                            action: 'urn:kixx:get',
+                            resource: 'urn:kixx:publishing:builds',
+                        },
+                    ]),
+                    AdminPanel.getPublishingBuild,
+                    HyperviewPageHandler({
+                        baseTemplateId: 'admin.html',
+                        pathname: '/admin/publishing/builds',
+                    }),
+                ],
+            },
+        ],
+    },
+    {
+        pattern: '/publishing/releases/:releaseId',
+        name: 'publishing-release',
+        targets: [
+            {
+                name: 'render-release',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [
+                    authorize([
+                        {
+                            action: 'urn:kixx:get',
+                            resource: 'urn:kixx:publishing:releases',
+                        },
+                        {
+                            action: 'urn:kixx:get',
+                            resource: 'urn:kixx:publishing:builds',
+                        },
+                    ]),
+                    AdminPanel.getPublishingRelease,
+                    // Every render mints a fresh, session-bound CSRF token for the
+                    // assign-to-running-build control, so the rendered page cache
+                    // must never store or serve it.
+                    HyperviewPageHandler({
+                        baseTemplateId: 'admin.html',
+                        pathname: '/admin/publishing/releases',
+                        usePageCache: false,
+                    }),
+                ],
+            },
+        ],
+    },
+    {
+        // Its own route because it renders no page of its own (only redirects)
+        // and is reachable from two pages (overview and Release detail).
+        pattern: '/publishing/assign',
+        name: 'publishing-assign',
+        targets: [
+            {
+                name: 'assign',
+                methods: [ 'POST' ],
+                requestHandlers: [
+                    authorize([
+                        {
+                            action: 'urn:kixx:update',
+                            resource: 'urn:kixx:publishing:builds',
+                        },
+                    ]),
+                    AdminPanel.postAssignRelease,
+                ],
+            },
+        ],
+    },
+    {
+        pattern: '/publishing',
+        name: 'publishing',
+        targets: [
+            {
+                name: 'render-overview',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [
+                    authorize([
+                        {
+                            action: 'urn:kixx:get',
+                            resource: 'urn:kixx:publishing:releases',
+                        },
+                        {
+                            action: 'urn:kixx:get',
+                            resource: 'urn:kixx:publishing:builds',
+                        },
+                    ]),
+                    AdminPanel.getPublishingOverview,
+                    // Every render mints a fresh, session-bound CSRF token for the
+                    // assign-to-running-build control, so the rendered page cache
+                    // must never store or serve it.
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
+                ],
+            },
+        ],
+    },
+    {
         pattern: '*',
         name: 'static-pages',
         targets: [

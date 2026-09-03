@@ -1,0 +1,164 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <h1>Publishing</h1>
+            <p>Review the running build, every build pointer, and the Release history. Assign a Release to the running build to publish or roll back.</p>
+        </header>
+
+        {{#ifEqual notice "release_assigned"}}
+        <div class="callout callout--info" role="status">
+            <span class="callout__icon" aria-hidden="true">[i]</span>
+            <div class="callout__body">
+                <p class="type-body-sm">The running build now points at the selected Release.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+        {{#ifEqual notice "pointer_conflict"}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body">
+                <p class="type-label">The running Release changed</p>
+                <p class="type-body-sm">Nothing was changed. Reload this page and try again.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+        {{#ifEqual notice "build_mismatch"}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body">
+                <p class="type-label">The running build changed</p>
+                <p class="type-body-sm">Nothing was changed. Reload this page and try again.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+        {{#ifEqual notice "build_unassigned"}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body">
+                <p class="type-label">The running build has no Release assigned</p>
+                <p class="type-body-sm">Use the Publishing API to assign a first Release before assigning from here.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+        {{#ifEqual notice "release_not_found"}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body">
+                <p class="type-label">That Release could not be found</p>
+                <p class="type-body-sm">Nothing was changed.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+        {{#ifEqual notice "form_expired"}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body">
+                <p class="type-label">That form had expired</p>
+                <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+
+        <section class="flow">
+            <h2>Running build</h2>
+            {{#if runningBuild}}
+                {{#if runningBuild.releaseId}}
+                <div class="card flow">
+                    <p class="type-label">{{ runningBuild.id }}</p>
+                    <p class="type-body-sm">
+                        Running Release {{ runningBuild.releaseId }}
+                        since {{ formatDate runningBuild.assignedAt format="DATETIME_MED" }}
+                    </p>
+                </div>
+                {{else}}
+                <div class="callout callout--error" role="alert">
+                    <span class="callout__icon" aria-hidden="true">[x]</span>
+                    <div class="callout__body">
+                        <p class="type-body-sm">Build <strong>{{ runningBuild.id }}</strong> has no Release assigned. Assign one through the Publishing API.</p>
+                    </div>
+                </div>
+                {{/if}}
+            {{else}}
+            <p class="type-body-sm">This deploy has no configured running build id.</p>
+            {{/if}}
+        </section>
+
+        <section class="flow">
+            <h2>Build pointers</h2>
+            {{#if builds}}
+            <ul class="grid-auto list-unstyled">
+            {{#each builds as |build| }}
+                <li>
+                    <article class="card flow">
+                        <p class="type-label"><a href="{{ build.href }}">{{ build.id }}</a>{{#if build.isRunning}} (running){{/if}}</p>
+                        {{#if build.releaseId}}
+                        <p class="type-body-sm">Release {{ build.releaseId }}</p>
+                        <p class="type-body-sm">Assigned {{ formatDate build.assignedAt format="DATETIME_MED" }}</p>
+                        {{else}}
+                        <p class="type-body-sm">No Release assigned.</p>
+                        {{/if}}
+                    </article>
+                </li>
+            {{/each}}
+            </ul>
+            {{else}}
+            <p class="type-body-sm">No builds are registered yet.</p>
+            {{/if}}
+        </section>
+
+        <section class="flow">
+            <h2>Release history</h2>
+            {{#if releases}}
+            <ul class="flow">
+            {{#each releases as |release| }}
+                <li class="card flow">
+                    <p class="type-label"><a href="{{ release.href }}">{{ release.id }}</a>{{#if release.isCurrent}} (current){{/if}}</p>
+                    <p class="type-body-sm">
+                        Created {{ formatDate release.createdAt format="DATETIME_MED" }} by {{ release.createdBy }}
+                    </p>
+                    <p class="type-body-sm">{{ release.objectCount }} objects, {{ release.totalBytes }} bytes</p>
+                    {{#if release.isCurrent}}
+                    <p class="type-label">Current</p>
+                    {{else}}
+                        {{#if form}}
+                        <form class="cluster" method="{{ form.method }}" action="{{ form.url }}">
+                            {{#if form.csrf}}
+                            <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                            {{/if}}
+                            <input type="hidden" name="release_id" value="{{ release.id }}">
+                            <input type="hidden" name="build_id" value="{{ runningBuild.id }}">
+                            <input type="hidden" name="expected_release_id" value="{{ runningBuild.releaseId }}">
+                            {{#ifEqual release.direction "rollback"}}
+                            <button class="button button--secondary" type="submit">Roll back to this Release</button>
+                            {{else}}
+                            <button class="button button--secondary" type="submit">Roll forward to this Release</button>
+                            {{/ifEqual}}
+                        </form>
+                        {{/if}}
+                    {{/if}}
+                </li>
+            {{/each}}
+            </ul>
+            {{else}}
+            <p class="type-body-sm">No Releases yet.</p>
+            {{/if}}
+
+            {{!--
+                Pagination sits outside the list conditional on purpose. A later page
+                whose rows were all removed concurrently renders the empty state, and
+                nesting this inside would strip the "Previous page" link along with the
+                rows — stranding the operator on an empty page with no way back.
+            --}}
+            {{#if showPagination}}
+            <p class="cluster">
+                {{#if links.previousPage}}
+                <a class="button button--secondary" href="{{ links.previousPage }}">Previous page</a>
+                {{/if}}
+                {{#if links.nextPage}}
+                <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
+                {{/if}}
+            </p>
+            {{/if}}
+        </section>
+    </article>
+</main>
