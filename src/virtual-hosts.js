@@ -38,7 +38,9 @@ export default [
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
                             AdminPanel.getNewAdminUserForm,
-                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
+                            // Every render mints a fresh, session-bound CSRF token, so
+                            // the rendered page cache must never store or serve it.
+                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html', usePageCache: false }),
                         ],
                     },
                     {
@@ -46,7 +48,7 @@ export default [
                         methods: [ 'POST' ],
                         requestHandlers: [
                             AdminPanel.postNewAdminUserForm,
-                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
+                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html', usePageCache: false }),
                         ],
                     },
                 ],
@@ -63,7 +65,9 @@ export default [
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
                             AdminPanel.getAdminUserLoginForm,
-                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
+                            // Every render mints a fresh, session-bound CSRF token, so
+                            // the rendered page cache must never store or serve it.
+                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html', usePageCache: false }),
                         ],
                     },
                     {
@@ -71,7 +75,7 @@ export default [
                         methods: [ 'POST' ],
                         requestHandlers: [
                             AdminPanel.postAdminUserLoginForm,
-                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html' }),
+                            HyperviewPageHandler({ baseTemplateId: 'admin-login.html', usePageCache: false }),
                         ],
                     },
                 ],

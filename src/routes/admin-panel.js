@@ -66,7 +66,10 @@ export default [
                         },
                     ]),
                     AdminPanel.getAdminInvites,
-                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
+                    // Every render mints a fresh, session-bound CSRF token for the
+                    // create-invite form, so the rendered page cache must never
+                    // store or serve it.
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
                 ],
             },
             {
@@ -80,7 +83,7 @@ export default [
                         },
                     ]),
                     AdminPanel.postCreateAdminInvite,
-                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
                 ],
             },
         ],
@@ -121,7 +124,10 @@ export default [
                         },
                     ]),
                     AdminPanel.getPublishingApiTokens,
-                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
+                    // Every render mints a fresh, session-bound CSRF token for the
+                    // create-token form, so the rendered page cache must never
+                    // store or serve it.
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
                 ],
             },
             {
@@ -135,7 +141,7 @@ export default [
                         },
                     ]),
                     AdminPanel.postCreatePublishingApiToken,
-                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
                 ],
             },
         ],

@@ -30,6 +30,15 @@ export default async function respondWithHyperviewPage(context, request, respons
         ...configuredResponseOptions,
         contentType: configuredResponseOptions?.contentType ?? 'text/html',
     };
+
+    // An error response is rendered from request-specific state (validation
+    // errors, an echoed field value, a one-time notice) that must never be
+    // written to the shared rendered-page cache or served to another request.
+    // This overrides any route or handler cache configuration; it does not
+    // affect compiled-template caching, which stays on regardless.
+    if (response.status >= 400) {
+        renderOptions.usePageCache = false;
+    }
     const hyperviewService = context.getService('HyperviewService');
     const result = await hyperviewService.renderPage(context, {
         ...renderOptions,
