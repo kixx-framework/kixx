@@ -1,0 +1,9 @@
+{
+    "app": {
+        "environments": {
+            "production": {
+                "origin": "https://www.example.com"
+            }
+        }
+    }
+}

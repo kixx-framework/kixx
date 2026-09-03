@@ -42,4 +42,6 @@ data/
 # bind them as plain text and the secrets files as encrypted secret text.
 .env
 .env.*.secrets
+src/.kixx/config.json
+src/.kixx/secrets.json
 
