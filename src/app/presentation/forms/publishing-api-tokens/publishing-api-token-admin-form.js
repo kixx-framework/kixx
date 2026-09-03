@@ -151,8 +151,11 @@ function normalizeTimeToLiveSeconds(value) {
 
     // Number.parseInt() accepts partial numbers like "604800abc"; keep forged
     // non-integer submissions invalid so validate() can report the field error.
+    // The raw string is kept (not Number.NaN) because it round-trips through
+    // getFormContext()'s echoed field value into response props, which must
+    // stay JSON-canonicalizable for the page cache key.
     if (!INTEGER_STRING_PATTERN.test(trimmed)) {
-        return Number.NaN;
+        return trimmed;
     }
 
     return Number.parseInt(trimmed, 10);
