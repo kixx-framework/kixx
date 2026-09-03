@@ -120,7 +120,7 @@ describe('POST /login/admin/new create user session', ({ before, it }) => {
         assert(response);
         assertEqual(303, response.status);
         assertEqual(url.href, response.url);
-        assertEqual('/admin/style-guide', response.headers.get('location'));
+        assertEqual('/admin/', response.headers.get('location'));
         // The successful login response sets the kixx_admin_session cookie,
         // captured into the jar above, which authenticates later requests.
         assertNonEmptyString(

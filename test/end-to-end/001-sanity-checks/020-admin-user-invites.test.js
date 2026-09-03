@@ -233,7 +233,7 @@ describe('POST /users/admin/new redeem invite', ({ before, it }) => {
         assert(response);
         assertEqual(303, response.status);
         assertEqual(url.href, response.url);
-        assertEqual('/admin/style-guide', response.headers.get('location'));
+        assertEqual('/admin/', response.headers.get('location'));
         assertNonEmptyString(
             newSuperAdminCookies.get('kixx_admin_session')?.value,
             'kixx_admin_session cookie',

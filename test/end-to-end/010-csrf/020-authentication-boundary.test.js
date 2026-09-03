@@ -49,7 +49,7 @@ describe('CSRF authentication boundary', ({ before, it }) => {
 
     it('allows the original valid login submission after rejection', () => {
         assertEqual(303, loginSuccessResponse.status);
-        assertEqual('/admin/style-guide', loginSuccessResponse.location);
+        assertEqual('/admin/', loginSuccessResponse.location);
         assertAuthenticatedJar(loginCookies, loginSuccessResponse.response);
     });
 
@@ -60,7 +60,7 @@ describe('CSRF authentication boundary', ({ before, it }) => {
 
     it('allows the original valid signup submission after rejection', () => {
         assertEqual(303, signupSuccessResponse.status);
-        assertEqual('/admin/style-guide', signupSuccessResponse.location);
+        assertEqual('/admin/', signupSuccessResponse.location);
         assertAuthenticatedJar(signupCookies, signupSuccessResponse.response);
     });
 });
