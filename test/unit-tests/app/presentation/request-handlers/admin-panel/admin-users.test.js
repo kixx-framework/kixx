@@ -39,7 +39,7 @@ describe('Admin users request handlers', ({ it }) => {
 
         assertEqual(1, skipCallCount);
         assertEqual(302, response.redirect.status);
-        assertEqual('/admin/style-guide', response.redirect.location);
+        assertEqual('/admin', response.redirect.location);
         assertEqual(0, context.calls.getService);
         assertEqual(0, response.calls.cookie);
         assertEqual(0, response.calls.adminSessionCookie);
@@ -96,7 +96,7 @@ describe('Admin users request handlers', ({ it }) => {
 
         assertEqual(1, skipCallCount);
         assertEqual(303, response.redirect.status);
-        assertEqual('/admin/style-guide', response.redirect.location);
+        assertEqual('/admin', response.redirect.location);
         assertEqual(0, request.calls.formData);
         assertEqual(0, context.calls.getService);
         assertEqual(0, context.calls.rateLimit);
@@ -414,8 +414,8 @@ function makeContext(options) {
             };
         },
         getHttpTarget(name) {
-            const pathname = name === 'admin-panel/style-guide/render-style-guide-page'
-                ? '/admin/style-guide'
+            const pathname = name === 'admin-panel/admin-directory/render-admin-directory'
+                ? '/admin'
                 : '/form';
             return { compilePathname: () => ({ pathname }) };
         },

@@ -132,6 +132,68 @@ page gives each existing admin domain a clear, usable entry point.
   live rendering check.
 - Blockers: None.
 
+### Task ADMLP-3: Redirect admin authentication flows to the directory
+
+**Status:** Complete
+**Depends on:** ADMLP-1
+**Documentation:** `src/app/presentation/README.md` (Reverse Routing);
+`src/docs/code-style-guide.md`; `test/unit-tests/README.md`
+
+**Objective**
+
+Send successful and already-authenticated admin signup and login flows to the
+new `/admin` directory rather than the Style Guide.
+
+**Scope**
+
+- In: Admin-user handler redirect target selection and its unit-test contract.
+- Out: Authentication, session, CSRF, throttle, or form behavior.
+
+**Design and invariants**
+
+- Resolve the named `admin-panel/admin-directory/render-admin-directory` target
+  through `context.getHttpTarget()`; do not hard-code `/admin` in handlers.
+- All routes that enter the admin panel use the shared helper.
+- Preserve existing redirect statuses and all authentication behavior.
+
+**Expected touch points**
+
+- `src/app/presentation/request-handlers/admin-panel/admin-users.js` — compile
+  the root directory target for admin-entry redirects.
+- `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`
+  — assert the root redirect destination.
+
+**Acceptance criteria**
+
+- [x] Authenticated login GET and POST redirects resolve to `/admin`.
+- [x] Successful new-user signup redirects resolve to `/admin`.
+- [x] Existing status codes and session behavior remain unchanged.
+
+**Validation**
+
+- `node run-linter.js src/app/presentation/request-handlers/admin-panel/admin-users.js test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`
+  — validates changed JavaScript style.
+- `node run-tests.js test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`
+  — validates focused redirect behavior.
+- `node run-tests.js` — validates the full unit suite.
+
+**Progress and handoff**
+
+- Completed: Routed login and signup success redirects through the root target.
+- Current state: Complete.
+- Remaining: Nothing in this task.
+- Decisions and discoveries: The root route's fully-qualified target name is
+  `admin-panel/admin-directory/render-admin-directory`.
+- Actual files changed: `src/app/presentation/request-handlers/admin-panel/admin-users.js`
+  and `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`.
+- Validation run: `node run-linter.js
+  src/app/presentation/request-handlers/admin-panel/admin-users.js
+  test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`,
+  `node run-tests.js
+  test/unit-tests/app/presentation/request-handlers/admin-panel/admin-users.test.js`
+  (17 tests), `node run-tests.js` (1,267 tests), and `git diff --check` passed.
+- Blockers: None.
+
 ### Task ADMLP-2: Lock the admin-root route contract with a unit test
 
 **Status:** Complete

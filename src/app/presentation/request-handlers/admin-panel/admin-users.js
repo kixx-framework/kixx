@@ -42,7 +42,7 @@ function getAdminLoginFormLink(context) {
 }
 
 function getAdminPanelLink(context) {
-    const target = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
+    const target = context.getHttpTarget('admin-panel/admin-directory/render-admin-directory');
     return target.compilePathname().pathname;
 }
 
@@ -292,9 +292,8 @@ export async function postNewAdminUserForm(context, request, response, skip) {
     await clearSignupThrottle(context, request);
     clearCsrfToken(request, response);
 
-    const adminTarget = context.getHttpTarget('admin-panel/style-guide/render-style-guide-page');
     skip();
-    return response.respondWithRedirect(303, adminTarget.compilePathname().pathname);
+    return response.respondWithRedirect(303, getAdminPanelLink(context));
 }
 
 /**
