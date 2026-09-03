@@ -17,9 +17,9 @@ describe('node-config local environment', ({ it }) => {
 
     it('lists every top-level section the other environments have', () => {
         const local = sourceConfig.environments.local;
-        const staging = sourceConfig.environments.staging;
+        const production = sourceConfig.environments.production;
 
-        for (const section of Object.keys(staging)) {
+        for (const section of Object.keys(production)) {
             assert(
                 Object.hasOwn(local, section),
                 `expected local environment to define ${ section }`,
