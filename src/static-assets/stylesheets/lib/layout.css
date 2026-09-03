@@ -40,6 +40,18 @@
 }
 
 /* -----------------------------------------------------------------------------
+    Unstyled list
+
+    Use .list-unstyled when list semantics describe repeated interface content
+    but browser markers and indentation do not. It deliberately leaves ordinary
+    prose lists alone.
+----------------------------------------------------------------------------- */
+.list-unstyled {
+    padding: 0;
+    list-style: none;
+}
+
+/* -----------------------------------------------------------------------------
     Cluster — wrapping inline groups
 
     Use .cluster for toolbars, button rows, tag/chip lists, header controls, and

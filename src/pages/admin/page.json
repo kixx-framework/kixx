@@ -1,6 +1,9 @@
 {
-    "template": "",
+    "template": "page.html",
     "page": {
         "title": { "template": "{{ subpage.title }} | Admin" }
+    },
+    "subpage": {
+        "title": "Admin Panel"
     }
 }

@@ -5,6 +5,19 @@ import * as AdminPanel from '../app/presentation/request-handlers/admin-panel/mo
 
 export default [
     {
+        pattern: '{/}',
+        name: 'admin-directory',
+        targets: [
+            {
+                name: 'render-admin-directory',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html' }),
+                ],
+            },
+        ],
+    },
+    {
         pattern: '/style-guide{.:suffix}',
         name: 'style-guide',
         targets: [
