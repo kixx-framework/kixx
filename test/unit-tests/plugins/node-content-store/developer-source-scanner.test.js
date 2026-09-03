@@ -204,6 +204,60 @@ describe('DeveloperSourceScanner', ({ it }) => {
         }
     });
 
+    it('attaches a manifest facet to every recipe kind', async () => {
+        const root = await makeWorkspace({
+            'pages/page.json': JSON.stringify({ template: 'page.html', partials: [ { id: 'root.html', filename: 'root.html' } ] }),
+            'pages/page.html': 'Default',
+            'pages/root.html': 'Root partial',
+            'templates/partials/common/site.html': 'Common partial',
+            'templates/base/default.html': 'Base template',
+            'static-assets/images/logo.svg': '<svg></svg>',
+            'emails/welcome/email.json': JSON.stringify({
+                htmlTemplate: { id: 'welcome.html', filename: 'message.html' },
+            }),
+            'emails/welcome/message.html': 'Welcome',
+        });
+
+        try {
+            const manifest = await makeScanner(root).scan();
+
+            assertEqual(
+                JSON.stringify({ name: 'page', pathname: '/', field: 'metadata' }),
+                JSON.stringify(manifest.get('/pages/page.json').facet),
+            );
+            assertEqual(
+                JSON.stringify({ name: 'page', pathname: '/', field: 'templates', filename: 'page.html' }),
+                JSON.stringify(manifest.get('/pages/page.html').facet),
+            );
+            assertEqual(
+                JSON.stringify({ name: 'page', pathname: '/', field: 'partials' }),
+                JSON.stringify(manifest.get('/pages/__page-partials-bundle').facet),
+            );
+            assertEqual(
+                JSON.stringify({ name: 'page', pathname: '/', field: 'includes' }),
+                JSON.stringify(manifest.get('/pages/__page-includes-bundle').facet),
+            );
+            assertEqual(
+                JSON.stringify({ name: 'globalTemplatePartials' }),
+                JSON.stringify(manifest.get('/templates/__template-partials-bundle').facet),
+            );
+            assertEqual(
+                JSON.stringify({ name: 'baseTemplates' }),
+                JSON.stringify(manifest.get('/templates/__base-templates-bundle').facet),
+            );
+            assertEqual(
+                JSON.stringify({ name: 'staticAssets', pathname: '/images/logo.svg' }),
+                JSON.stringify(manifest.get('/assets/images/logo.svg').facet),
+            );
+            assertEqual(
+                JSON.stringify({ name: 'emails', pathname: '/welcome' }),
+                JSON.stringify(manifest.get('/emails/welcome/__email-assets').facet),
+            );
+        } finally {
+            await fsp.rm(root, { recursive: true, force: true });
+        }
+    });
+
     it('does not re-read unchanged manifest JSON on repeat scans', async () => {
         const root = await makeWorkspace({ 'pages/page.json': JSON.stringify({}) });
         let readCount = 0;

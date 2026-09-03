@@ -33,7 +33,11 @@ import { plugins as nodePlugins } from './plugins/node.js';
 import { plugins as cloudflarePlugins } from './plugins/cloudflare.js';
 ```
 
-After that import, both entry points run identical registration logic, hand the same `ApplicationContext` to the same `HttpRouter`, and serve the same `app/`.
+After that import, both entry points call the same `bootApplication()` function (`kixx/context/boot-application.js`), hand the same `ApplicationContext` to the same `HttpRouter`, and serve the same `app/`.
+
+`bootApplication({ env, config, LoggerWriter, plugins, app })` is the platform-neutral half of composition: it constructs the `AppRuntime` and `Logger`, builds the `ApplicationContext`, runs every plugin's `register()` before any `initialize()`, calls `app.register()`/`app.initialize()`, and finalizes the logger. It imports nothing from `app/`, `plugins/`, or any native platform module — the entry point still chooses which plugin map to pass in, so it remains the seam. Router construction, request/response translation, and shutdown stay in each entry point because that behavior legitimately differs per platform.
+
+On Node.js, reading the dotenv pair and merging it with `process.env` is handled by `node-environment.js`, which also builds the `resolveFilepath` function passed to `readConfig()`. This module is importable outside an HTTP server, so a tool that boots the application in-process without listening on a port (rather than shelling out to `node-server.js`) can reuse the identical environment-reading and bootstrap logic.
 
 Each adapter package is self-contained: `plugin.js` is the lifecycle module the entry point calls, and `lib/` holds the implementation. Nothing outside a package imports its `lib/` directly except its own `plugin.js` and, occasionally, the entry point for direct-construction adapters which are described below.
 
@@ -165,7 +169,7 @@ The matrix above is the checklist. A new target — Deno, Deno Deploy, AWS Lambd
 1. An adapter package per port, plus its logger-writer and server-request adapters. The server-request adapter extends `kixx/http-router/base-server-request.js` and supplies only `id`, `ip`, `url`, `headers`, and a body delegate — start from the base class and the interface, not from a copy of a sibling adapter.
 2. A `plugins/<platform>.js` registry mapping each package.
 3. A `<platform>-config.js` source config.
-4. A `<platform>-server.js` entry point that reads config, builds the `Logger` with the platform writer, builds the `ApplicationContext`, merges `generalPlugins` with the platform registry, runs the two registration phases, calls `app.register()`/`app.initialize()`, finalizes the logger, constructs the `HttpRouter`, and translates between native requests/responses and `ServerRequest`/`ServerResponse`.
+4. A `<platform>-server.js` entry point that reads config, merges `generalPlugins` with the platform registry, calls `bootApplication({ env, config, LoggerWriter, plugins, app })` to get back `{ appContext, logger }`, constructs the `HttpRouter`, and translates between native requests/responses and `ServerRequest`/`ServerResponse`.
 
 Nothing in `src/app/`, `src/kixx/`, `src/templates/`, or `src/pages/` should need to change. If a new platform forces a change in `app/`, that is the signal that a port is missing or that a contract promised more than the portable floor.
 

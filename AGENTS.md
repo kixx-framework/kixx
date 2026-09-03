@@ -137,6 +137,8 @@ Add `.json` to the end of any URL to get the template context object as JSON, in
 `http://localhost:2026/index.json` -> context object for `http://localhost:2026/`
 `http://localhost:2026/users/admin/new.json` -> context object for `http://localhost:2026/users/admin/new`
 
+The devserver's content store is read-only: `DeveloperContentStore` serves `pages/`, `templates/`, `static-assets/`, and `emails/` from the working tree, and its write methods throw. If a task needs to write through the Publishing API, sign up an admin, or otherwise exercise a real write path, use `node tools/local-target.js` instead (see README.md, "Local Target Instances") rather than trying to make the devserver do it.
+
 ## Dependencies
 
 This project uses vendored dependencies. They live in the `src/kixx/vendor/` tree and are imported using relative paths directly in project files — not as package names. Do not use `npm install` or bare package name imports for vendored deps.

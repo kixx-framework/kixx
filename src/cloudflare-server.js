@@ -1,14 +1,11 @@
 import { env } from 'cloudflare:workers';
 import sourceConfig from './cloudflare-config.js';
 import { readConfig } from './kixx/config/read-config.js';
-import Logger from './kixx/logger/logger.js';
-import ApplicationContext from './kixx/context/application-context.js';
-import AppRuntime from './kixx/context/app-runtime.js';
 import HttpRouter from './kixx/http-router/http-router.js';
 import LoggerWriter from './plugins/cloudflare-logger-writer/lib/logger-writer.js';
 import ServerRequest from './plugins/cloudflare-server-request/lib/server-request.js';
 import ServerResponse from './kixx/http-router/server-response.js';
-import { isFunction } from './kixx/assertions/mod.js';
+import { bootApplication } from './kixx/context/boot-application.js';
 import * as app from './app/app.js';
 import { plugins as generalPlugins } from './plugins/general.js';
 import { plugins as cloudflarePlugins, durableObjects } from './plugins/cloudflare.js';
@@ -20,53 +17,16 @@ import virtualHosts from './virtual-hosts.js';
 const environment = env.ENVIRONMENT || 'development';
 const config = readConfig(sourceConfig, environment);
 
-// BUILD_ID identifies a single deploy rather than an environment, so it stays
-// an environment variable while the application name and log level do not.
-const runtime = new AppRuntime({
-    build: { id: env.BUILD_ID },
-    server: { name: config.name },
-});
-
-const logger = new Logger({
-    name: config.name,
-    level: config.env.LOGGER.level,
-    writer: new LoggerWriter(),
-});
-
-const appContext = new ApplicationContext({
-    env,
-    config,
-    runtime,
-    logger,
-});
-
 // Merge plugin maps, allowing platform plugins to override general plugins.
 const plugins = mergePluginMaps(generalPlugins, cloudflarePlugins);
 
-// Register all plugins before calling initialize() on each.
-for (const plugin of plugins.values()) {
-    if (isFunction(plugin?.register)) {
-        plugin.register(appContext);
-    }
-}
-
-for (const plugin of plugins.values()) {
-    if (isFunction(plugin?.initialize)) {
-        plugin.initialize(appContext);
-    }
-}
-
-if (isFunction(app.register)) {
-    app.register(appContext);
-}
-
-if (isFunction(app.initialize)) {
-    app.initialize(appContext);
-}
-
-// Finalize the logger to prevent creating infinite child loggers.
-// This must be done *after* the plugins have been registered and initialized.
-logger.finalize();
+const { appContext, logger } = bootApplication({
+    env,
+    config,
+    LoggerWriter,
+    plugins,
+    app,
+});
 
 const router = new HttpRouter(virtualHosts);
 

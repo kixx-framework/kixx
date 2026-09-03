@@ -13,7 +13,8 @@
     "scripts": {
         "test": "node run-linter && node run-tests.js",
         "lint": "node run-linter",
-        "dev": "node ./tools/devserver.js"
+        "dev": "node ./tools/devserver.js",
+        "local-target": "node ./tools/local-target.js"
     },
     "repository": {
         "type": "git",

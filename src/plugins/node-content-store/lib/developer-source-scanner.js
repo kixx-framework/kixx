@@ -110,7 +110,12 @@ export default class DeveloperSourceScanner {
             pages.set(pathname, { file, json });
             entries.push([
                 getPageMetadataPath(pathname),
-                { kind: 'file', sources: [ makeFileIdentity(file.filepath, file.stats) ], manifests: [] },
+                {
+                    kind: 'file',
+                    sources: [ makeFileIdentity(file.filepath, file.stats) ],
+                    manifests: [],
+                    facet: { name: 'page', pathname, field: 'metadata' },
+                },
             ]);
         }
 
@@ -128,7 +133,12 @@ export default class DeveloperSourceScanner {
                 const templatePathname = pathname === '/' ? `/${ filename }` : `${ pathname }/${ filename }`;
                 entries.push([
                     getPageTemplatePath(templatePathname),
-                    { kind: 'file', sources: [ makeFileIdentity(templateFile.filepath, templateFile.stats) ], manifests: [ manifest ] },
+                    {
+                        kind: 'file',
+                        sources: [ makeFileIdentity(templateFile.filepath, templateFile.stats) ],
+                        manifests: [ manifest ],
+                        facet: { name: 'page', pathname, field: 'templates', filename },
+                    },
                 ]);
             }
 
@@ -143,7 +153,12 @@ export default class DeveloperSourceScanner {
             }
             entries.push([
                 getPagePartialsPath(pathname),
-                { kind: 'partials', sources: partialSources, manifests: [ manifest ] },
+                {
+                    kind: 'partials',
+                    sources: partialSources,
+                    manifests: [ manifest ],
+                    facet: { name: 'page', pathname, field: 'partials' },
+                },
             ]);
 
             const includeSources = [];
@@ -153,7 +168,12 @@ export default class DeveloperSourceScanner {
             }
             entries.push([
                 getPageIncludesPath(pathname),
-                { kind: 'includes', sources: includeSources, manifests: [ makeFileIdentity(page.file.filepath, page.file.stats) ] },
+                {
+                    kind: 'includes',
+                    sources: includeSources,
+                    manifests: [ makeFileIdentity(page.file.filepath, page.file.stats) ],
+                    facet: { name: 'page', pathname, field: 'includes' },
+                },
             ]);
         }
     }
@@ -169,7 +189,12 @@ export default class DeveloperSourceScanner {
             this.#assertValidRelativePath(file.relativePath, file.filepath);
             return { id: file.relativePath, ...makeFileIdentity(file.filepath, file.stats) };
         });
-        entries.push([ storagePathname, { kind: 'partials', sources, manifests: [] } ]);
+
+        // 'partials' names the global-partials bundle directory; 'base' names
+        // the base-templates bundle directory. Each maps to its own manifest facet.
+        const facet = { name: directoryName === 'partials' ? 'globalTemplatePartials' : 'baseTemplates' };
+
+        entries.push([ storagePathname, { kind: 'partials', sources, manifests: [], facet } ]);
     }
 
     async #scanStaticAssets(entries) {
@@ -177,7 +202,15 @@ export default class DeveloperSourceScanner {
             this.#assertValidRelativePath(file.relativePath, file.filepath);
             entries.push([
                 getStaticAssetPath(file.relativePath),
-                { kind: 'file', sources: [ makeFileIdentity(file.filepath, file.stats) ], manifests: [] },
+                {
+                    kind: 'file',
+                    sources: [ makeFileIdentity(file.filepath, file.stats) ],
+                    manifests: [],
+                    // The manifest's staticAssets dictionary keys are canonical
+                    // pathnames (leading slash), unlike the raw relativePath used
+                    // to build the storage pathname above.
+                    facet: { name: 'staticAssets', pathname: `/${ file.relativePath }` },
+                },
             ]);
         }
     }
@@ -211,6 +244,7 @@ export default class DeveloperSourceScanner {
                     sources,
                     manifests: [ makeFileIdentity(file.filepath, file.stats) ],
                     contextData: json.contextData ?? {},
+                    facet: { name: 'emails', pathname },
                 },
             ]);
         }

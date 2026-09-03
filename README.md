@@ -43,53 +43,65 @@ The dev server listens on the public `--port` (default=2026) and proxies request
 
 The wrapper accepts the same `--environment` and `--dotenv` options as `src/node-server.js`. Change `--port` to avoid local port conflicts.
 
+### Local Target Instances
+
+The dev server's content store is read-only: `DeveloperContentStore` serves `pages/`, `templates/`, `static-assets/`, and `emails/` straight from the working tree, and its write methods throw. To exercise the Publishing API, an admin signup, or anything else that writes, create a **local target instance**: a throwaway directory holding a complete, writable `local` environment deployment, seeded from the working tree and served by `src/node-server.js` directly.
+
+```bash
+node tools/local-target.js create alpha
+node tools/local-target.js seed alpha
+node tools/local-target.js serve alpha
+node tools/local-target.js destroy alpha
+```
+
+| Verb | Effect |
+| --- | --- |
+| `create <name>` | Creates `data/local-targets/<name>/` and writes its `.env`/`.env.secrets` pair — a fresh port, Build ID, and random secrets. |
+| `seed <name>` | Boots the app in-process, publishes the working tree as a Release assigned to the instance's Build ID, creates the root admin, mints a Publishing API token, and writes `credentials.json`. |
+| `serve <name>` | Runs `node src/node-server.js --environment local --dotenv <instance>/.env` in the foreground. |
+| `destroy <name>` | Deletes the instance directory (refuses while its server is still listening). |
+
+`credentials.json` holds the root admin's email and password, a Publishing API token, the Build ID, and the base URL — everything needed to log in to the admin panel or call the Publishing API. It is plain text inside `data/local-targets/<name>/`, which `.gitignore` excludes; treat it like any other local secret.
+
+Instances are disposable: destroy and re-create one rather than trying to carry it forward, and `seed` refuses to run a second time against the same instance (delete `credentials.json`, or `destroy` and `create` again).
+
 ### Environment Variables and Configuration
 
 Settings are split across two kinds of file by a single question:
 
 > Does the value change **per deploy**, or only **per environment**?
 
-Per-environment values are configuration and belong in `src/node-config.js` or
-`src/cloudflare-config.js`, under the `environments` map. The application name
-and log level live here, as do every store, cache, and rate-limit setting.
+Per-environment values are configuration and belong in `src/node-config.js` or `src/cloudflare-config.js`, under the `environments` map. The application name and log level live here, as do every store, cache, and rate-limit setting.
 
-Per-deploy values are environment variables and live in dotenv files, split
-again by secrecy:
+Per-deploy values are environment variables and live in dotenv files, split again by secrecy:
 
 | File | Committed | Cloudflare binding | Holds |
 | --- | --- | --- | --- |
 | `src/.env.<environment>` | yes | plain text | `ENVIRONMENT`, `TRUST_PROXY`, `BUILD_ID`, `PORT` |
 | `src/.env.<environment>.secrets` | no | encrypted secret text | signing secrets and tokens |
 
-Because the secrecy split follows the git boundary, a deployment can derive the
-binding type from the filename alone. There is no per-key annotation to keep in
-sync, and no way for a value to be classified two ways at once.
+Because the secrecy split follows the git boundary, a deployment can derive the binding type from the filename alone. There is no per-key annotation to keep in sync, and no way for a value to be classified two ways at once.
 
-`src/example.env` and `src/example.env.secrets` are the templates for each half.
-Bootstrap a fresh clone with:
+`src/example.env` and `src/example.env.secrets` are the templates for each half. Bootstrap a fresh clone with:
 
 ```bash
 cp src/example.env.secrets src/.env.development.secrets
 ```
 
-#### No key may be defined twice
-
-The Node.js server reads `.env.<environment>`, `.env.<environment>.secrets`, and
-`process.env`. Each file is optional, so deploying with dotenv files and
-deploying by setting `process.env` both work, and they can be combined.
+The Node.js server reads `.env.<environment>`, `.env.<environment>.secrets`, and `process.env`. Each file is optional, so deploying with dotenv files and deploying by setting `process.env` both work, and they can be combined.
 
 A key defined by more than one of those three sources aborts startup with an
 error naming the key and the sources. There is deliberately no precedence rule:
 a key carrying two definitions means one of them is in the wrong place, and
-resolving it silently is how a secret ends up bound as plain text. Only keys the
-dotenv files declare participate, so unrelated process environment entries never
-collide.
+resolving it silently is how a secret ends up bound as plain text.
 
-`--dotenv <path>` names the plain file and derives the secrets file by appending
-`.secrets`, so one flag selects the pair.
+Only keys the dotenv files declare participate, so unrelated process environment entries never collide.
 
-`ENVIRONMENT` cannot move into configuration, because it selects which section
-of the config module is loaded.
+`--dotenv <path>` names the plain file and derives the secrets file by appending `.secrets`, so one flag selects the pair.
+
+`ENVIRONMENT` cannot move into configuration, because it selects which section of the config module is loaded.
+
+`DATA_DIRECTORY` is an optional, Node.js-only per-deploy value. When set, it overrides the directory that config-relative store paths (`DOCUMENT_STORE`, `KEY_VALUE_STORE`, `OBJECT_STORE`, `CONTENT_STORE`) resolve against, in place of `src/`. It exists for local target instances (see "Local Target Instances" below), where every instance's stores must live inside that instance's own directory rather than the shared development data. Leave it unset for every other deployment.
 
 ### Linting
 

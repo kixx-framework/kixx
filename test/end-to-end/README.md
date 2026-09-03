@@ -57,6 +57,26 @@ The final base URL must be an absolute `http:` or `https:` URL with no
 leading or trailing whitespace, whether it came from a flag or from
 `E2E_TESTS_BASE_URL` directly.
 
+### Against a local target instance
+
+A [local target instance](../../README.md#local-target-instances)
+(`node tools/local-target.js`) is a writable local deployment, unlike
+`--development`, so it exercises the Publishing API write tests instead of
+skipping them. Copy the values out of the instance's `credentials.json` by
+hand into `--base-url`, `--username`, and `--password` — this is not
+automated:
+
+```bash
+node tools/local-target.js create alpha
+node tools/local-target.js seed alpha
+node tools/local-target.js serve alpha &
+
+node run-tests.js --e2e \
+  --base-url http://localhost:<port>/ \
+  --username root@alpha.local \
+  --password '<password from credentials.json>'
+```
+
 ## Running a subset
 
 ```bash

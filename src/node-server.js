@@ -1,15 +1,11 @@
 import process from 'node:process';
-import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 import util from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
-import { assertNonEmptyString, isFunction, isNonEmptyString } from './kixx/assertions/mod.js';
+import { isFunction, isNonEmptyString } from './kixx/assertions/mod.js';
 import { OperationalError } from './kixx/errors/mod.js';
-import Logger from './kixx/logger/logger.js';
-import ApplicationContext from './kixx/context/application-context.js';
-import AppRuntime from './kixx/context/app-runtime.js';
 import HttpRouter from './kixx/http-router/http-router.js';
 import LoggerWriter from './plugins/node-logger-writer/lib/logger-writer.js';
 import ServerRequest from './plugins/node-server-request/lib/server-request.js';
@@ -20,7 +16,8 @@ import { plugins as generalPlugins } from './plugins/general.js';
 import { plugins as nodePlugins } from './plugins/node.js';
 import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import { readConfig } from './kixx/config/read-config.js';
-import { mergeEnvironmentSources } from './kixx/config/merge-environment-sources.js';
+import { bootApplication } from './kixx/context/boot-application.js';
+import { resolveDotenvFilepath, readEnvironment, createResolveFilepath } from './node-environment.js';
 import virtualHosts from './virtual-hosts.js';
 
 
@@ -49,23 +46,18 @@ if (!environment) {
     environment = 'development';
 }
 
-const dotenvFile = isNonEmptyString(cliOptions.dotenv)
-    ? path.resolve(cliOptions.dotenv)
-    : path.join(THIS_DIRECTORY, `.env.${ environment }`);
+const dotenvFile = resolveDotenvFilepath({
+    baseDirectory: THIS_DIRECTORY,
+    environment,
+    dotenv: cliOptions.dotenv,
+});
 
-// Secrets live beside the plain file rather than in it, so a deployment can
-// bind the two halves differently. The path is derived instead of separately
-// configurable so --dotenv keeps selecting the pair with one flag.
-const dotenvSecretsFile = `${ dotenvFile }.secrets`;
+const env = readEnvironment({ dotenvFile });
 
-// Each file is independently optional, which is what lets the dotenv-file and
-// process-environment deployment styles be used together rather than as an
-// either/or. Overlap between the three sources is rejected by the merge.
-const env = mergeEnvironmentSources([
-    { name: dotenvFile, values: readOptionalDotEnvFile(dotenvFile) },
-    { name: dotenvSecretsFile, values: readOptionalDotEnvFile(dotenvSecretsFile) },
-    { name: 'process.env', values: process.env },
-]);
+const resolveFilepath = createResolveFilepath({
+    baseDirectory: THIS_DIRECTORY,
+    dataDirectory: env.DATA_DIRECTORY,
+});
 
 const config = readConfig(sourceConfig, environment, {
     resolveFilepath,
@@ -89,58 +81,21 @@ if (port === null) {
     );
 }
 
-// BUILD_ID identifies a single deploy rather than an environment, so it stays
-// an environment variable while the application name and log level do not.
-const runtime = new AppRuntime({
-    build: { id: env.BUILD_ID },
-    server: { name: config.name },
-});
+// Merge plugin maps, allowing platform plugins to override general plugins.
+const plugins = mergePluginMaps(generalPlugins, nodePlugins);
 
-const logger = new Logger({
-    name: config.name,
-    level: config.env.LOGGER.level,
-    writer: new LoggerWriter(),
-});
-
-const appContext = new ApplicationContext({
+const { appContext, logger } = bootApplication({
     env,
     config,
-    runtime,
-    logger,
+    LoggerWriter,
+    plugins,
+    app,
 });
 
 // Whether to trust the X-Forwarded-For header when resolving a request's client
 // IP. Enable only when running behind a trusted reverse proxy that sets it;
 // otherwise a directly-connected client could spoof its own IP address.
 const trustProxy = appContext.getEnvBoolean('TRUST_PROXY');
-
-// Merge plugin maps, allowing platform plugins to override general plugins.
-const plugins = mergePluginMaps(generalPlugins, nodePlugins);
-
-// Register all plugins before calling initialize() on each.
-for (const plugin of plugins.values()) {
-    if (isFunction(plugin?.register)) {
-        plugin.register(appContext);
-    }
-}
-
-for (const plugin of plugins.values()) {
-    if (isFunction(plugin?.initialize)) {
-        plugin.initialize(appContext);
-    }
-}
-
-if (isFunction(app.register)) {
-    app.register(appContext);
-}
-
-if (isFunction(app.initialize)) {
-    app.initialize(appContext);
-}
-
-// Finalize the logger to prevent creating infinite child loggers.
-// This must be done *after* the plugins have been registered and initialized.
-logger.finalize();
 
 const router = new HttpRouter(virtualHosts);
 
@@ -346,33 +301,4 @@ function parsePort(value) {
     }
 
     return parsedPort;
-}
-
-// Returns undefined when the file does not exist. A missing dotenv file is a
-// normal deployment shape, but a file which exists and cannot be read or
-// parsed is a misconfiguration and must not be silently skipped.
-function readOptionalDotEnvFile(filepath) {
-    let source;
-    try {
-        source = fs.readFileSync(filepath, 'utf8');
-    } catch (cause) {
-        if (cause.code === 'ENOENT') {
-            return undefined;
-        }
-        throw new OperationalError(`Unable to read dotenv file from ${ filepath }`, { cause });
-    }
-
-    try {
-        return util.parseEnv(source);
-    } catch (cause) {
-        throw new OperationalError(`Unable to parse dotenv file from ${ filepath }`, { cause });
-    }
-}
-
-function resolveFilepath(relativeFilepath) {
-    assertNonEmptyString(relativeFilepath, 'resolveFilepath requires a relative filepath');
-
-    // Config file paths are POSIX-style so deployment config stays portable.
-    // Rejoin the pieces with node:path to return an OS-native absolute path.
-    return path.join(THIS_DIRECTORY, ...relativeFilepath.split('/'));
 }
