@@ -30,6 +30,10 @@ body {
     line-height: var(--leading-body);
     color: var(--color-ink);
     background: var(--color-bg);
+    /* The only styling native selection controls (checkbox, radio, range,
+       progress) receive: tint them with the link accent instead of leaving
+       the browser's own accent color. */
+    accent-color: var(--color-ink-link);
 }
 
 :root[data-theme="dark"] body {
@@ -47,7 +51,7 @@ svg {
     max-width: 100%;
 }
 
-/* Form controls should inherit the one-font system unless a component opts out. */
+/* Form controls should inherit the body font unless a component opts out. */
 input,
 button,
 textarea,
@@ -69,7 +73,9 @@ h6 {
 
 /* Lists and block elements carry no default block margin; vertical rhythm comes
    from parent-owned gaps and component rules. Keep this at ELEMENT specificity
-   so component classes can still opt into their own margins when needed. */
+   so component classes can still opt into their own margins when needed.
+   Zeroing block margins here is required for .flow's owl selector to be the
+   ONLY source of vertical spacing between siblings — see layout.css. */
 ul,
 ol,
 dl,
@@ -82,8 +88,7 @@ p {
     text-wrap: pretty;
 }
 
-/* Headings share the one monospace family; hierarchy is size + weight only.
-   No balance/tracking tricks — a heading is simply bigger and heavier. */
+/* Headings share the body font; hierarchy comes from size and weight. */
 h1,
 h2,
 h3,
