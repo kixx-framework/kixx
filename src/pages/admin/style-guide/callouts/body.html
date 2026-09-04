@@ -17,7 +17,7 @@
     <div class="demo-stage">
         <div class="callout callout--warning">
             <span class="callout__icon" aria-hidden="true">[!]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="callout__title">Unsaved changes</p>
                 <p class="type-body-sm">Leaving now will discard edits to this record. Save first if you want to keep them.</p>
             </div>
@@ -44,28 +44,28 @@
 <div class="flow">
     <div class="callout">
         <span class="callout__icon" aria-hidden="true">*</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Rule of thumb</p>
             <p class="type-body-sm">The default tone. One note per idea &mdash; if everything is highlighted, nothing is.</p>
         </div>
     </div>
     <div class="callout callout--info">
         <span class="callout__icon" aria-hidden="true">[i]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Heads up</p>
             <p class="type-body-sm">Scheduled maintenance runs Sunday 02:00&ndash;03:00 UTC. No action needed.</p>
         </div>
     </div>
     <div class="callout callout--warning">
         <span class="callout__icon" aria-hidden="true">[!]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Warning</p>
             <p class="type-body-sm">This API key has read-write access. Rotate it if it&rsquo;s ever been shared.</p>
         </div>
     </div>
     <div class="callout callout--error">
         <span class="callout__icon" aria-hidden="true">[x]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Couldn&rsquo;t save</p>
             <p class="type-body-sm">The server rejected the request (HTTP 422). Check the highlighted fields and try again.</p>
         </div>
@@ -76,7 +76,7 @@
 <p class="doc-lede">Wrap the message in <code>.callout__body</code> so the optional mark and the copy lay out side by side. The mark is decorative &mdash; the tone word in the body carries the meaning.</p>
 <pre class="code-block"><code>&lt;div class="callout callout--warning"&gt;
 &lt;span class="callout__icon" aria-hidden="true"&gt;[!]&lt;/span&gt;
-&lt;div class="callout__body"&gt;
+&lt;div class="callout__body flow"&gt;
 &lt;p class="callout__title"&gt;Warning&lt;/p&gt;
 &lt;p&gt;Proceed-with-caution message goes here.&lt;/p&gt;
 &lt;/div&gt;
@@ -84,7 +84,7 @@
 
 &lt;!-- Neutral note: no modifier, no mark needed --&gt;
 &lt;div class="callout"&gt;
-&lt;div class="callout__body"&gt;&lt;p&gt;A plain rule of thumb.&lt;/p&gt;&lt;/div&gt;
+&lt;div class="callout__body flow"&gt;&lt;p&gt;A plain rule of thumb.&lt;/p&gt;&lt;/div&gt;
 &lt;/div&gt;
 
 &lt;!-- An error raised after an action — announce it to assistive tech --&gt;

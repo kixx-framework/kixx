@@ -8,7 +8,7 @@
         {{#ifEqual notice "release_assigned"}}
         <div class="callout callout--info" role="status">
             <span class="callout__icon" aria-hidden="true">[i]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="type-body-sm">The running build now points at the selected Release.</p>
             </div>
         </div>
@@ -16,7 +16,7 @@
         {{#ifEqual notice "pointer_conflict"}}
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="callout__title">The running Release changed</p>
                 <p class="type-body-sm">Nothing was changed. Reload this page and try again.</p>
             </div>
@@ -25,7 +25,7 @@
         {{#ifEqual notice "build_mismatch"}}
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="callout__title">The running build changed</p>
                 <p class="type-body-sm">Nothing was changed. Reload this page and try again.</p>
             </div>
@@ -34,7 +34,7 @@
         {{#ifEqual notice "build_unassigned"}}
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="callout__title">The running build has no Release assigned</p>
                 <p class="type-body-sm">Use the Publishing API to assign a first Release before assigning from here.</p>
             </div>
@@ -43,7 +43,7 @@
         {{#ifEqual notice "release_not_found"}}
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="callout__title">That Release could not be found</p>
                 <p class="type-body-sm">Nothing was changed.</p>
             </div>
@@ -52,7 +52,7 @@
         {{#ifEqual notice "form_expired"}}
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="callout__title">That form had expired</p>
                 <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
             </div>
@@ -73,7 +73,7 @@
                 {{else}}
                 <div class="callout callout--error" role="alert">
                     <span class="callout__icon" aria-hidden="true">[x]</span>
-                    <div class="callout__body">
+                    <div class="callout__body flow">
                         <p class="type-body-sm">Build <strong>{{ runningBuild.id }}</strong> has no Release assigned. Assign one through the Publishing API.</p>
                     </div>
                 </div>

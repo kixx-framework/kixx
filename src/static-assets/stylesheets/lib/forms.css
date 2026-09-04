@@ -11,21 +11,27 @@
 }
 
 /* -----------------------------------------------------------------------------
-    Text Fields (single-line inputs)
+    Text Fields (single-line inputs) and Selects
 
-    .field wraps a label, the <input>, optional persistent hint text, and
+    .field wraps a label, the control, optional persistent hint text, and
     optional validation error text in a column stack. Gap-based spacing — no
     .flow nesting needed.
+
+    .field__input styles text-like inputs (text, email, password, url,
+    search, number, tel, and the date family) and <textarea>. .field__select
+    shares the same box but is never given `appearance: none`, so a <select>
+    keeps its native dropdown affordance while still lining up with the
+    fields around it.
 
     Expected structure:
         .field
           .field__label
-          .field__input
+          .field__input or .field__select
           .field__hint
           .field__error
 
     Modifier:
-      .field--error    — error-colored input border
+      .field--error    — error-colored control border
 ----------------------------------------------------------------------------- */
 
 .field {
@@ -35,30 +41,33 @@
 }
 
 .field__label {
-    font-family: var(--font-mono);
-    font-size: var(--text-label);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
+    font-size: var(--text-body);
+    font-weight: var(--weight-medium);
+    color: var(--color-ink);
     cursor: default;
 }
 
-.field__input {
+.field__input,
+.field__select {
     display: block;
     width: 100%;
     min-height: 2.75rem;
     padding-block: var(--space-2xs);
     padding-inline: var(--space-sm);
     border: var(--field-border-width) solid var(--color-field-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--control-radius);
     font: inherit;
     font-size: var(--text-body);
     color: var(--color-ink);
     background: var(--color-field-bg);
+    transition: border-color 150ms ease;
+}
+
+/* Text-like inputs and textarea only — never on .field__select, which needs
+   its native appearance to keep the platform's dropdown affordance. */
+.field__input {
     -webkit-appearance: none;
     appearance: none;
-    transition: border-color 150ms ease;
 }
 
 .field__input::placeholder {
@@ -67,36 +76,30 @@
     opacity: 1;
 }
 
-.field__input:hover:not(:disabled):not([readonly]) {
+.field__input:hover:not(:disabled):not([readonly]),
+.field__select:hover:not(:disabled) {
     border-color: var(--color-field-border-active);
 }
 
-.field__input:focus {
+.field__input:focus,
+.field__select:focus {
     outline: 2px solid var(--color-focus-outline);
     outline-offset: 2px;
     border-color: var(--color-field-border-active);
 }
 
-/* Number inputs: hide default spinners for a cleaner inline field. */
-.field__input[type="number"]::-webkit-inner-spin-button,
-.field__input[type="number"]::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    appearance: none;
-}
-
-.field__input[type="number"] {
-    -moz-appearance: textfield;
-}
-
-.field__input:disabled {
+.field__input:disabled,
+.field__select:disabled {
     border-color: var(--color-ink-muted);
     color: var(--color-ink-muted);
     cursor: not-allowed;
     opacity: 0.5;
 }
 
+/* Recessed fill rather than a dashed border — a readonly field still reads
+   as a filled-in field, not an unstyled placeholder box. */
 .field__input[readonly] {
-    border-style: dashed;
+    background: var(--color-surface-sunken);
 }
 
 .field__hint {
@@ -112,10 +115,9 @@
 }
 
 /* Error state — applied to the .field wrapper to mark the invalid control. */
-.field--error .field__input {
+.field--error .field__input,
+.field--error .field__select {
     border-color: var(--color-field-border-error);
-    /* Error takes precedence over readonly's dashed affordance. */
-    border-style: solid;
 }
 
 /* -----------------------------------------------------------------------------
@@ -137,12 +139,38 @@ textarea.field__input {
 }
 
 /* -----------------------------------------------------------------------------
+    Native Controls
+
+    <select> (via .field__select above), checkboxes, radios, file inputs, and
+    range inputs are left native — the browser and OS keep full control over
+    their affordances (dropdown behavior, checkbox/radio hit targets, the OS
+    file picker). They receive only `font: inherit` (reset.css) and
+    `accent-color` (design-tokens.css); nothing here draws a custom box
+    around them.
+
+    .field--choice lays out a single checkbox or radio beside its label
+    without styling the control itself — for a row of these, repeat the
+    structure and let .flow or .cluster space the rows.
+
+    Expected structure:
+        .field--choice
+          input[type="checkbox"] or input[type="radio"]
+          label
+----------------------------------------------------------------------------- */
+
+.field--choice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+}
+
+/* -----------------------------------------------------------------------------
     Copy Field
 
     A labeled, read-only value paired with a copy-to-clipboard button — the
     display primitive for any value someone might want to copy verbatim (a
     one-time secret, a URL, an id). The value reuses .field__input outright so
-    its border, padding, font, and readonly dashed-border state stay in sync
+    its border, padding, font, and readonly sunken-fill state stay in sync
     with ordinary form fields; only the row layout, button, and status text
     are specific to this component. Progressive: without JavaScript the value
     is a plain read-only input, selectable and copyable by hand. With
@@ -166,12 +194,9 @@ textarea.field__input {
 }
 
 .copy-field__label {
-    font-family: var(--font-mono);
-    font-size: var(--text-label);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-    color: var(--color-ink-muted);
+    font-size: var(--text-body);
+    font-weight: var(--weight-medium);
+    color: var(--color-ink);
     cursor: default;
 }
 
@@ -184,29 +209,33 @@ textarea.field__input {
 .copy-field__value {
     /* min-width: 0 lets the input shrink below its content length inside the
        flex row; the input itself scrolls long values natively on overflow, so
-       no extra overflow handling is needed here. */
+       no extra overflow handling is needed here. A copied value is usually
+       code-like (a token, an id, a URL), so it keeps the monospace family —
+       the one place mono appears in a control. */
     flex: 1 1 auto;
     min-width: 0;
+    font-family: var(--font-mono);
 }
 
+/* Mirrors .button's box model (radius, transition, hover inversion) at a
+   fixed square size so the row's two edges align with .field__input. */
 .copy-field__button {
     flex: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 2.75rem;
-    /* Match .field__input so the row's two edges align. */
     min-height: 2.75rem;
     border: var(--field-border-width) solid var(--color-field-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--control-radius);
     color: var(--color-ink);
     background: var(--color-bg);
-    transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
 .copy-field__button:hover {
     background: var(--color-ink);
-    color: var(--color-bg);
+    color: var(--color-ink-on-accent);
     border-color: var(--color-ink);
 }
 

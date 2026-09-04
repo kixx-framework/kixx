@@ -18,7 +18,7 @@
 
     <div class="callout">
         <span class="callout__icon" aria-hidden="true">*</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">The rule</p>
             <p>A component rule consumes a semantic <code>--color-*</code> token only. It never names a raw <code>--palette-*</code> token or writes an <code>hsl()</code> / hex literal. If you reach for the palette in a component, the role you actually want is a missing semantic token &mdash; add it.</p>
         </div>
@@ -169,7 +169,7 @@
 
 <div class="callout">
     <span class="callout__icon" aria-hidden="true">*</span>
-    <div class="callout__body">
+    <div class="callout__body flow">
         <p class="callout__title">Status colors</p>
         <p>A functional family, kept off the link accent so &ldquo;something is wrong&rdquo; never shares a color with &ldquo;this is a link.&rdquo; All three read as a foreground mark (text, border, icon) and are theme-aware so they hold contrast on light and dark: <code>--color-status-danger</code> (a deep red on paper, brighter on the void &mdash; as <code>.field--error</code> uses it), <code>--color-status-warning</code> (a deep amber on light, brand yellow on dark), and <code>--color-status-success</code> for confirmations. Because these are tuned for <em>marks</em> (3:1), not body text (4.5:1), keep the message itself in <code>--color-ink</code>.</p>
     </div>

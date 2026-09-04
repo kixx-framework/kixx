@@ -125,7 +125,7 @@
     /* A normal reading measure and a comfortable form-field measure. */
     --measure-prose: 65ch;
     --measure-form: 40ch;
-    --form-field-gap: 2.5rem;
+    --form-field-gap: var(--space-md);
 
     /* Vertical spacing scale — fixed rem steps, consumed by the .flow primitive
        (and anywhere a gap is needed). */

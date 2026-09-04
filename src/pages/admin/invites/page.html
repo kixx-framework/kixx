@@ -14,7 +14,7 @@
         {{#ifEqual form.errorCode "form_expired"}}
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="callout__title">That form had expired</p>
                 <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
             </div>
@@ -29,7 +29,7 @@
         {{#if newInviteUrl}}
         <div class="callout callout--info" role="status">
             <span class="callout__icon" aria-hidden="true">[i]</span>
-            <div class="callout__body">
+            <div class="callout__body flow">
                 <p class="type-body-sm">New invite link created. Copy it now — it is shown only once and cannot be retrieved later.</p>
                 <div class="copy-field">
                     <label class="copy-field__label" for="new-invite-url">Invite link</label>
@@ -53,7 +53,7 @@
             <div class="field{{#if form.fields.role_id.error}} field--error{{/if}}">
                 <label class="field__label" for="role-id">{{ form.fields.role_id.label }}</label>
                 <select
-                    class="field__input"
+                    class="field__select"
                     id="role-id"
                     name="role_id"
                     required

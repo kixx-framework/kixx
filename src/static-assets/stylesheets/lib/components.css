@@ -1,46 +1,9 @@
 /* -----------------------------------------------------------------------------
-    Wordmark
-
-    A code-comment "//kixx". The slashes carry the one bit of accent color; the
-    name stays ink. Mono, bold, square: it looks like something typed.
-
-    Expected structure:
-        .kixx-wordmark
-          .kixx-wordmark__slash-1
-          .kixx-wordmark__slash-2
-          .kixx-wordmark__kixx
------------------------------------------------------------------------------ */
-.kixx-wordmark {
-    font-family: var(--font-wordmark);
-    display: inline-flex;
-    align-items: baseline;
-    font-size: 2em;
-    font-weight: var(--weight-bold);
-    line-height: 1;
-    letter-spacing: 0;
-    text-decoration: none;
-}
-
-a.kixx-wordmark {
-    color: var(--color-ink);
-}
-
-.kixx-wordmark__slash-1,
-.kixx-wordmark__slash-2 {
-    color: var(--color-ink-link);
-    letter-spacing: -0.25em;
-}
-
-.kixx-wordmark__kixx {
-    margin-left: 0.5em;
-}
-
-/* -----------------------------------------------------------------------------
     Site header
 
     The default site top bar. It composes .cluster for alignment, keeps the
-    wordmark responsive, and leaves controls in a
-    compact group at the trailing edge.
+    title link responsive, and leaves controls in a compact group at the
+    trailing edge.
 ----------------------------------------------------------------------------- */
 
 .site-header {
@@ -54,8 +17,18 @@ a.kixx-wordmark {
     --cluster-justify: space-between;
 }
 
-.site-header__wordmark {
-    font-size: clamp(1.75rem, 4vw, 2.25rem);
+/* A plain text link standing in for a brand mark — swap in a logo or custom
+   lettering in a downstream site. */
+.site-header__title {
+    font-size: var(--text-h3);
+    font-weight: var(--weight-semibold);
+    color: var(--color-ink);
+    text-decoration: none;
+}
+
+.site-header__title:hover,
+.site-header__title:focus-visible {
+    text-decoration: underline;
 }
 
 /* Also a .cluster; tighter gap for the controls. */
@@ -64,80 +37,42 @@ a.kixx-wordmark {
 }
 
 /* -----------------------------------------------------------------------------
-    Theme toggle
-
-    A bracketed, boxed spec-sheet control. It names the theme it switches TO and
-    inverts on hover like every other control.
------------------------------------------------------------------------------ */
-.theme-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 2.25rem;
-    padding-inline: 0.75rem;
-    border: var(--button-border-width) solid var(--color-ink);
-    border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-label);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-label);
-    color: var(--color-ink);
-    background: transparent;
-}
-
-.theme-toggle:hover {
-    background: var(--color-ink);
-    color: var(--color-bg);
-}
-
-.theme-toggle:focus-visible {
-    outline: 2px solid var(--color-focus-outline);
-    outline-offset: 2px;
-}
-
-/* -----------------------------------------------------------------------------
     Buttons
 
-    A terminal / spec-sheet control: a mono, uppercase label inside a square,
-    1px box. States are communicated by INVERSION (fill flips to ink) or a
-    border/color shift — never a shadow, never motion.
+    A plain outline control. States are communicated by INVERSION (fill flips
+    to ink) or a border/color shift — never a shadow, never motion.
 
     Modifiers:
       .button            outline box — the neutral default
       .button--primary   solid ink fill — the one emphasized action
       .button--danger    red outline — a destructive action (color as signal)
+
+    Composition: the theme toggle is a .button — see Theme toggle below.
 ----------------------------------------------------------------------------- */
 
 .button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: var(--space-2xs);
     min-height: 2.5rem;
-    padding-inline: 1rem;
+    min-width: 2.5rem;
+    padding-inline: var(--space-sm);
     border: var(--button-border-width) solid var(--color-ink);
-    border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-body-sm);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-label);
+    border-radius: var(--control-radius);
+    font-size: var(--text-body);
+    font-weight: var(--weight-medium);
+    line-height: 1;
     color: var(--color-ink);
     background: var(--color-bg);
     text-decoration: none;
-}
-
-/* Bracket the label so it reads as a terminal target: [ save ]. */
-.button::before {
-    content: "[\00a0";
-}
-
-.button::after {
-    content: "\00a0]";
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
 .button:not(:disabled):hover {
     /* Every button inverts to a solid ink fill — one shared hover treatment. */
     background: var(--color-ink);
-    color: var(--color-bg);
+    color: var(--color-ink-on-accent);
     border-color: var(--color-ink);
 }
 
@@ -180,11 +115,26 @@ a.kixx-wordmark {
 }
 
 /* -----------------------------------------------------------------------------
+    Theme toggle
+
+    Markup: class="button theme-toggle". It is a .button at a smaller size —
+    every state (hover inversion, focus ring, disabled) comes from .button.
+----------------------------------------------------------------------------- */
+.theme-toggle {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+    padding-inline: var(--space-xs);
+}
+
+/* -----------------------------------------------------------------------------
     Cards
 
-    The bordered-surface primitive: flat, square, hairline-ruled — the
+    The bordered-surface primitive: a small-radius, hairline-ruled box — the
     structural building block for dashboards, settings groups, and list modules.
     Depth comes from the 1px rule, never a shadow.
+
+    A card owns its box only, not its contents' layout — compose it with
+    .flow to space its children: <div class="card flow">.
 
     Modifiers:
       .card                    padded, hairline-bordered surface (the default)
@@ -197,7 +147,8 @@ a.kixx-wordmark {
 .card {
     --card-accent: var(--color-ink);
     padding: var(--card-padding, clamp(1.1rem, 3vw, 1.5rem));
-    border: var(--hairline-width) solid var(--color-rule-strong);
+    /* A hairline rule, not the full-ink border of a spec-sheet box. */
+    border: var(--hairline-width) solid var(--color-rule);
     border-radius: var(--radius-md);
     /* Clip full-bleed inner strips (a flush card's sample/meta bands, a swatch
        chip) to the card edge. */
@@ -233,19 +184,29 @@ a.kixx-wordmark {
     Callouts
 
     A boxed notice: a hairline box with a heavier left marker in the tone color,
-    on a sunken surface. The default is a neutral note; three tone modifiers
-    recolor the marker + the ASCII icon from the semantic tokens. Static, like
-    Cards — no interactive states.
+    on a sunken surface. The default is a neutral note; four tone modifiers
+    recolor the marker and (if present) the icon from the semantic tokens.
+    Static, like Cards — no interactive states.
 
     Modifiers:
       .callout            neutral emphasis note (the default)
       .callout--info      link blue — calm, non-urgent information
       .callout--warning   amber    — proceed with caution
       .callout--error     red      — something failed or is blocked
+      .callout--success   green    — something completed
 
     Tone rides the left marker and the icon only — both graphical marks that
     clear WCAG's 3:1 non-text threshold. The message stays --color-ink so the
-    warning tone never lands as thin text where it would lose contrast.
+    tone never lands as thin text where it would lose contrast.
+
+    Elements:
+      .callout__icon    optional; omit the element entirely if the callout
+                         has no icon. Mark it aria-hidden in markup — the
+                         tone is not conveyed by the icon alone.
+      .callout__body     required; the message column. Compose it with .flow
+                         when it has more than one child:
+                         <div class="callout__body flow">.
+      .callout__title    optional; a bold lead line inside .callout__body.
 ----------------------------------------------------------------------------- */
 
 .callout {
@@ -256,23 +217,25 @@ a.kixx-wordmark {
     padding: var(--space-sm);
     border: var(--hairline-width) solid var(--color-rule);
     border-left: 3px solid var(--callout-accent);
+    border-radius: var(--radius-md);
     background: var(--color-surface-sunken);
 }
 
 .callout__icon {
     flex: none;
-    font-family: var(--font-mono);
     font-weight: var(--weight-bold);
     line-height: var(--leading-body);
     color: var(--callout-accent);
 }
 
 .callout__body {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2xs);
-    /* Let long words wrap instead of stretching the flex item. */
+    /* Let long words wrap instead of stretching the flex item. Layout of
+       multiple children belongs to .flow, not to this element. */
     min-width: 0;
+}
+
+.callout__title {
+    font-weight: var(--weight-semibold);
 }
 
 .callout--info {
@@ -285,4 +248,8 @@ a.kixx-wordmark {
 
 .callout--error {
     --callout-accent: var(--color-status-danger);
+}
+
+.callout--success {
+    --callout-accent: var(--color-status-success);
 }

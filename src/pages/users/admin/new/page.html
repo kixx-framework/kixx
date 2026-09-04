@@ -6,7 +6,7 @@
 
     <div class="callout callout--warning" role="alert">
         <span class="callout__icon" aria-hidden="true">[!]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Admin session active</p>
             <p class="type-body-sm">You are already logged in as an admin user. Delete your cookies for this site and try again.</p>
         </div>
@@ -21,7 +21,7 @@
     {{#if throttled}}
     <div class="callout callout--error" role="alert">
         <span class="callout__icon" aria-hidden="true">[x]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Too many attempts</p>
             <p class="type-body-sm">{{ throttleMessage }}</p>
         </div>
@@ -36,7 +36,7 @@
     {{#if formError}}
     <div class="callout callout--error" role="alert">
         <span class="callout__icon" aria-hidden="true">[x]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Account already exists</p>
             <p class="type-body-sm">{{ formError }}</p>
         </div>
@@ -111,7 +111,7 @@
 
     <div class="callout callout--error" role="alert">
         <span class="callout__icon" aria-hidden="true">[x]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             {{!-- No callout__title here: the header above already reads "Too many
                   attempts", so a matching title would just repeat it. --}}
             <p class="type-body-sm">{{ throttleMessage }}</p>
@@ -130,7 +130,7 @@
 
     <div class="callout callout--error" role="alert">
         <span class="callout__icon" aria-hidden="true">[x]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Email address already taken</p>
             <p class="type-body-sm">Someone else registered that email address at the same moment, and your single-use invite was spent in the attempt. No account was created. Please ask an administrator for a new invitation.</p>
         </div>
@@ -147,7 +147,7 @@
 
     <div class="callout callout--error" role="alert">
         <span class="callout__icon" aria-hidden="true">[x]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Invalid invite</p>
             <p class="type-body-sm">This invite link is invalid, expired, or has already been used. Ask an administrator for a new invitation.</p>
         </div>

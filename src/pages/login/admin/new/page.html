@@ -13,7 +13,7 @@
     {{#ifEqual form.errorCode "session_create_failed"}}
     <div class="callout callout--info" role="status">
         <span class="callout__icon" aria-hidden="true">[i]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Account created</p>
             <p class="type-body-sm">Your account was created, but we couldn&rsquo;t sign you in automatically. Please log in below.</p>
         </div>
@@ -27,7 +27,7 @@
     {{#if throttled}}
     <div class="callout callout--error" role="alert">
         <span class="callout__icon" aria-hidden="true">[x]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Too many attempts</p>
             <p class="type-body-sm">{{ throttleMessage }}</p>
         </div>
@@ -42,7 +42,7 @@
     {{#if formError}}
     <div class="callout callout--error" role="alert">
         <span class="callout__icon" aria-hidden="true">[x]</span>
-        <div class="callout__body">
+        <div class="callout__body flow">
             <p class="callout__title">Login failed</p>
             <p class="type-body-sm">{{ formError }}</p>
         </div>

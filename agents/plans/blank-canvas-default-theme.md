@@ -353,7 +353,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task 5: Neutral buttons and theme toggle
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 2
 **Documentation:** `docs/frontend-development-guide.md` (Components and Forms); Buttons section comment in `components.css`
 
@@ -396,19 +396,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Rewrote `.button` per spec (flex box, `var(--space-sm)` padding, `var(--control-radius)`, `var(--text-body)` at `--weight-medium`, no mono/uppercase/tracking, `min-height`/`min-width: 2.5rem` for WCAG 2.5.8 target size, transition on background/color/border-color). Removed `.button::before`/`::after` bracket pseudo-elements. Kept hover inversion (`background: var(--color-ink); color: var(--color-ink-on-accent)`), focus ring, primary (inverted resting, flips to outline on hover), danger (red outline → red fill), and disabled states unchanged in behavior. Rewrote the Buttons section comment (dropped "terminal / spec-sheet" language). Took the plan's recommendation and made `.theme-toggle` compose `.button`: deleted its old standalone box/mono/uppercase/bracket rules and replaced with a 3-line override (`min-height`/`min-width: 2.25rem`, `padding-inline: var(--space-xs)`) plus a comment documenting the `class="button theme-toggle"` markup contract. Updated markup in `templates/partials/default-site-header.html`, `templates/partials/admin-site-header.html`, and `pages/body.html` (a homepage demo instance of the same toggle) from `class="theme-toggle"` to `class="button theme-toggle"`.
+- Current state: Complete.
+- Remaining: Nothing for this task's scope. `.copy-field__button` (Task 6) should still be brought to match this `.button` box model per the plan's note under Task 6. The buttons style-guide page (`pages/admin/style-guide/buttons/body.html`) has no theme-toggle demo yet — Task 9 owns adding one along with rewriting page copy.
+- Decisions and discoveries: No other `.theme-toggle` usages existed beyond the two header partials and the one homepage demo (confirmed via `grep -rn "theme-toggle" src/pages src/templates src/static-assets`). `site.js`'s `data-js-behavior="theme-toggle"` selector and `.theme-toggle__label` child selector are unaffected by the class addition (JS matches on data attribute and descendant class, not on `.theme-toggle` alone), so no JS changes were needed.
+- Actual files changed: `src/static-assets/stylesheets/lib/components.css` (Buttons and Theme toggle sections), `src/templates/partials/default-site-header.html`, `src/templates/partials/admin-site-header.html`, `src/pages/body.html`.
+- Validation run: `grep -n "text-transform\|letter-spacing\|font-family: var(--font-mono)\|::before\|::after" src/static-assets/stylesheets/lib/components.css` — remaining hits are only in the (out-of-scope) Wordmark and Callouts sections, none in Buttons/Theme toggle. No `.js` files changed, so no lint run applies. No devserver run (forbidden by AGENTS.md for work verification) — a human should visually check `/admin/style-guide/buttons`, `/`, and `/admin` in both color schemes, tabbing through controls to confirm the focus ring and hover inversion.
 - Blockers: None.
 
 ---
 
 ### Task 6: Accessible, simplified form controls
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 2, Task 5
 **Documentation:** `docs/frontend-development-guide.md` (Components and Forms); Forms sections in `forms.css`
 
@@ -450,19 +450,19 @@ Text-like inputs and textareas are styled with a plain border, small radius, com
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Rewrote `forms.css`. `.field__label`/`.copy-field__label` are now normal-case, `--text-body` size, `--weight-medium`, `--color-ink` (primary, not muted — labels are no longer mono/uppercase/tracked). Merged the text-input and select box model into one comma-selector (`.field__input, .field__select`: width, min-height, padding, border, `--control-radius`, font, background, transition) and kept `-webkit-appearance/appearance: none` scoped to `.field__input` only, so the new `.field__select` never gets `appearance: none` and keeps its native dropdown affordance; extended hover/focus/disabled states to cover both. Removed the number-spinner-hiding rules entirely (native spinners show now). Changed readonly from a dashed border to a sunken background fill (`--color-surface-sunken`), per the plan's recommendation — dropped the now-unneeded "error overrides readonly's dashed" comment/override since error only needs to change border-color now. Added a new "Native Controls" section documenting that select/checkbox/radio/file/range are left native (styled only by reset.css's `font: inherit` and design-tokens.css's `accent-color`), and added `.field--choice` (flex row, centered, `gap: var(--space-2xs)`) as the documented way to lay a single checkbox/radio beside its label without styling the control. `.copy-field__button` now mirrors `.button`'s box model: `border-radius: var(--control-radius)` (was `--radius-md`), hover color changed from `var(--color-bg)` to `var(--color-ink-on-accent)` (matches the shared inversion convention), and transition timing changed from 200ms to 150ms to match `.button`. `.copy-field__value` picked up `font-family: var(--font-mono)` directly (previously inherited mono implicitly from the old page-wide mono stack that no longer applies now that body text is sans-serif) — this is the one documented place mono appears in a control, per the plan. In `design-tokens.css`, changed `--form-field-gap` from the hardcoded `2.5rem` to `var(--space-md)` (`1.5rem`), per the plan's recommendation now that labels are normal case and need less breathing room. Updated the two real `<select>` elements (`pages/admin/publishing-api-tokens/page.html`, `pages/admin/invites/page.html`) from `class="field__input"` to `class="field__select"`.
+- Current state: Complete.
+- Remaining: Nothing for this task's scope. The forms/text-fields/multi-line-text-areas/copy-fields style guide pages (Task 9) should demonstrate `.field--choice` with a checkbox and radio row, and a `.field__select` example, none of which exist yet since there was no prior demo of native controls on those pages.
+- Decisions and discoveries: Grepped the whole `src/pages` and `src/templates` trees and found only two real `<select>` elements and zero checkbox/radio/file inputs anywhere in current templates or pages — so the "Native Controls" section's checkbox/radio/file guidance has no existing consumer yet; it exists for downstream use and for Task 9's style-guide demos.
+- Actual files changed: `src/static-assets/stylesheets/lib/forms.css`, `src/static-assets/stylesheets/lib/design-tokens.css`, `src/pages/admin/publishing-api-tokens/page.html`, `src/pages/admin/invites/page.html`.
+- Validation run: `grep -n "text-transform\|tracking-label\|text-label\|::-webkit-inner-spin\|-moz-appearance" src/static-assets/stylesheets/lib/forms.css` — empty (only the intentional `.copy-field__value` mono rule remains, which is a `font-family` line, not one of the greped patterns). `grep -rln "<select" src/pages src/templates` confirms both selects updated. No `.js` files changed, so no lint run applies. No devserver run (forbidden by AGENTS.md for work verification) — a human should visually/keyboard check `/admin/style-guide/text-fields`, `/admin/style-guide/multi-line-text-areas`, `/admin/style-guide/forms`, `/admin/style-guide/copy-fields`, `/admin/invites`, `/admin/publishing-api-tokens`, `/login/admin/new`, `/users/admin/new`.
 - Blockers: None.
 
 ---
 
 ### Task 7: Standard card and callout components
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 2, Task 4
 **Documentation:** `docs/frontend-development-guide.md` (Components and Forms, BEM); Cards and Callouts section comments in `components.css`
 
@@ -505,19 +505,20 @@ Text-like inputs and textareas are styled with a plain border, small radius, com
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `.card` border dropped from `--color-rule-strong` (full ink) to `--color-rule` (hairline grey), per the plan's explicit decision — recorded here as the decision. Added a comment noting `<div class="card flow">` is the canonical composition and that a card owns its box only, not its children's layout. Kept all four modifiers (`--flush`, `--accent-primary`, `--accent-secondary`, `--sunken`) unchanged. `.callout` gained `border-radius: var(--radius-md)` (previously square) to match the card radius. Added `.callout--success` using the previously-unconsumed `--color-status-success` token. Removed `display:flex/flex-direction:column/gap` from `.callout__body` — it's now just `min-width: 0` — and added the new `.callout__title` element (`font-weight: var(--weight-semibold)`), which replaces the `.type-label` usage Task 4 already migrated onto this class name. Removed `font-family: var(--font-mono)` from `.callout__icon` (Task 4 already removed the ASCII-icon framing from prose; this removes the last mono styling on the icon itself now that the icon is documented as optional, not a fixed ASCII glyph). Rewrote both section comments (dropped "ASCII icon" language, documented `.callout__body flow` composition and the optional icon/title elements).
+  - Added `flow` to every `class="callout__body"` occurrence across the codebase (38 total, found via `grep -rl 'class="callout__body"' src/pages src/templates` — more than the plan's estimated 14 *files* since several files have multiple callouts). Applied uniformly rather than auditing each for child count: a single-child `.flow` body is unaffected (the `* + *` selector matches nothing), so blanket application is behavior-preserving and simpler to verify than a per-instance audit.
+- Current state: Complete.
+- Remaining: Nothing for this task's scope. `pages/admin/style-guide/callouts/body.html` still describes three tone modifiers, "ASCII mark" language, and a `.callout__body` doc list that says "an optional label plus copy" (stale, pre-`.callout__title` framing) — entirely expected, this page's full content rewrite is Task 9's scope. Note: the blanket `flow`-class edit also touched two `&lt;...&gt;` escaped markup samples inside that page's `<pre class="code-block">` (lines 79 and 87), so those code samples now show `callout__body flow` including on a single-child example — harmless (it's just documentation text, matches the real recommended markup) but Task 9 should sanity-check that page's code samples when it rewrites the content, since it still shows only 3 tones there.
+- Decisions and discoveries: No `templates/**` file uses `.callout__body` — all 14 files from the plan's list (and 38 individual occurrences) are under `pages/**`, confirmed via the grep above returning only `src/pages/*` paths.
+- Actual files changed: `src/static-assets/stylesheets/lib/components.css` (Cards and Callouts sections), and the 14 files listed in the plan under `pages/**` that contain `.callout__body` (`body.html`, `admin/publishing/page.html`, `admin/publishing-api-tokens/page.html`, `admin/errors/page.html`, `admin/invites/page.html`, `admin/style-guide/body.html`, `admin/style-guide/layout/body.html`, `admin/style-guide/aesthetic/body.html`, `admin/style-guide/colors/body.html`, `admin/style-guide/typography/body.html`, `admin/style-guide/callouts/body.html`, `users/admin/new/page.html`, `login/admin/new/page.html`, `login/admin/errors/page.html`).
+- Validation run: `grep -rn "callout__body" src/pages src/templates` — every occurrence carries `flow` except the plain prose references to the class name in body copy (e.g. `<code>.callout__body</code>` inside a sentence), which are not markup and correctly untouched. `grep -n "ASCII" src/static-assets/stylesheets/lib/components.css` — empty. No `.js` files changed, so no lint run applies. No devserver run (forbidden by AGENTS.md for work verification) — a human should visually check `/admin/style-guide/cards`, `/admin/style-guide/callouts`, `/admin/style-guide` (index uses a warning callout), and `/admin/errors`.
 - Blockers: None.
 
 ---
 
 ### Task 8: Remove the wordmark; plain-text site headers
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Task 2, Task 5
 **Documentation:** None
 
@@ -557,12 +558,12 @@ The `//kixx` wordmark component is gone. Both site headers show a plain text lin
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Deleted the entire Wordmark section from `components.css` (`.kixx-wordmark`, `a.kixx-wordmark`, `.kixx-wordmark__slash-1`, `.kixx-wordmark__slash-2`, `.kixx-wordmark__kixx`). Replaced `.site-header__wordmark` with `.site-header__title` (`--text-h3`, `--weight-semibold`, `--color-ink`, no decoration at rest, underline on hover/focus-visible) and did the same for `.admin-header__wordmark` → `.admin-header__title` in `admin-shell.css`. Updated both section comments to say "title link" instead of "wordmark" — reworded rather than just removed, since the acceptance criteria requires `grep -rn "wordmark" src/` to return nothing at all, including comments. Updated `templates/partials/default-site-header.html`: replaced the 4-line `.kixx-wordmark` anchor (with its two slash spans and a "kixx" span) with a single `<a class="site-header__title" href="/">Kixx</a>`. No `siteName`/`site_name` key exists anywhere in the template context (checked `templates/base/default.html`, `pages/page.json`, and grepped the whole `pages/`/`templates/` tree) — used the literal text "Kixx" as the plan allows, and dropped `aria-label="Kixx — home"` since the visible link text is now self-descriptive. Updated `templates/partials/admin-site-header.html` the same way: `<a class="admin-header__title" href="/admin">Site Admin</a>` — note the `href` changed from `/` to `/admin` per the plan's explicit instruction (the site-header link keeps `href="/"`; the admin header link goes to `/admin`).
+- Current state: Complete.
+- Remaining: Nothing for this task's scope. A downstream site that wants a real logo/wordmark edits these two partials directly and adds its own component — noted in both new CSS comments.
+- Decisions and discoveries: No page or template outside the two header partials referenced `.kixx-wordmark` or its elements (confirmed via `grep -rn "kixx-wordmark\|site-header__wordmark\|admin-header__wordmark" src/` returning empty after the edit).
+- Actual files changed: `src/static-assets/stylesheets/lib/components.css`, `src/static-assets/stylesheets/lib/admin-shell.css`, `src/templates/partials/default-site-header.html`, `src/templates/partials/admin-site-header.html`.
+- Validation run: `grep -rn "wordmark" src/` — empty (exit 1). No `.js` files changed, so no lint run applies. No devserver run (forbidden by AGENTS.md for work verification) — a human should visually check `/`, `/admin`, and `/login/admin/new` in both color schemes, confirming the text link and theme toggle stay aligned at narrow and wide widths.
 - Blockers: None.
 
 ---

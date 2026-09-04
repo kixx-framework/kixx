@@ -39,8 +39,8 @@ body:has(> .admin-layout) {
     Admin header
 
     The top bar used by admin shells and standalone admin auth pages. It
-    composes .cluster for alignment, keeps the wordmark responsive, and leaves
-    controls in a compact group at the trailing edge.
+    composes .cluster for alignment, keeps the title link responsive, and
+    leaves controls in a compact group at the trailing edge.
 ----------------------------------------------------------------------------- */
 
 .admin-header {
@@ -54,8 +54,18 @@ body:has(> .admin-layout) {
     --cluster-justify: space-between;
 }
 
-.admin-header__wordmark {
-    font-size: clamp(1.75rem, 4vw, 2.25rem);
+/* A plain text link standing in for a brand mark — swap in a logo or custom
+   lettering in a downstream site. */
+.admin-header__title {
+    font-size: var(--text-h3);
+    font-weight: var(--weight-semibold);
+    color: var(--color-ink);
+    text-decoration: none;
+}
+
+.admin-header__title:hover,
+.admin-header__title:focus-visible {
+    text-decoration: underline;
 }
 
 /* Also a .cluster; tighter gap for the controls. */
