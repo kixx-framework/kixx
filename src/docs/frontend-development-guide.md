@@ -9,7 +9,7 @@ This web application provides two different entry points for users:
 1. The public website - Publicly available on the Web
 2. Admin panel - Administrative and content management "backend" behind an authentication and access gate.
 
-The public website is the default presentation surface. Static public pages should use the default base template, `templates/base/default.html`, and the public stylesheet entrypoint, `/stylesheets/stylesheet.css`, through `templates/partials/common-site-styles.html`. The current homepage is the canonical example of this default path: root page metadata in `pages/page.json`, route-level markup in `pages/page.html`, public page content in `pages/body.html`, and page-local CSS in `pages/page.css`.
+The public website is the default presentation surface. Static public pages should use the default base template, `templates/base/default.html`, which links the public stylesheet entrypoint, `/stylesheets/stylesheet.css`, directly. The current homepage is the canonical example of this default path: root page metadata in `pages/page.json`, route-level markup in `pages/page.html`, public page content in `pages/body.html`, and page-local CSS in `pages/page.css`.
 
 Admin pages are an extension of the public foundation, not the baseline every page inherits. Admin panel routes opt into their shell with `HyperviewPageHandler({ baseTemplateId: 'admin.html' })`, while standalone admin authentication routes use `baseTemplateId: 'admin-login.html'`. Those admin base templates load the admin stylesheet entrypoint, `/stylesheets/admin.css`, which layers admin shell and style-guide rules over the shared public foundations.
 
@@ -122,9 +122,13 @@ Component classes follow Block-Element-Modifier (BEM):
 }
 ```
 
-An element name is only ever attached to its own block (`.callout__body`, not `.body`). A modifier always sits alongside its block's base class in markup (`class="callout callout--warning"`), never alone. The base class carries the shared rules, and the modifier only overrides what varies.
+BEM in this project is an ownership rule, not just a naming convention:
 
-Utility classes are flat, single-purpose names without BEM structure: `.flow`, `.cluster`, `.center`, `.type-label`. They are not components with internal parts; they are reusable declaration blocks.
+- **A block owns its internal layout and its elements.** A block never sets its own outside margin — that space belongs to whatever sibling relationship the block sits in (see Flow, below).
+- **An element is only ever styled from within its own block's rules.** `.callout__body` is styled in the `.callout` section of `components.css`. No other block's rules may reach into `.callout__body`.
+- **A modifier always accompanies its base class in markup** (`class="callout callout--warning"`), never alone. The base class carries the shared rules; the modifier only overrides what varies.
+- **Page-local stylesheets may add a new block, a new modifier of an existing block, or a page-scoped rule.** They may not restyle a shared block's elements — that is the shared block's owner reaching an inconsistent hand back into a stylesheet it does not control.
+- **Utilities are flat, single-purpose classes**: `.flow`, `.cluster`, `.center`, `.type-caption`. They are not blocks — they have no elements and no modifiers — they are reusable declaration blocks applied directly to whatever markup needs them.
 
 ### Tuning Instances with Custom Properties
 
@@ -163,6 +167,8 @@ The same tiered thinking applies to spacing (`--space-*`), measures (`--measure-
 
 Choose heading levels for document structure first. If the semantic level is correct but the visual size is wrong, apply the matching `.type-*` utility rather than changing the heading level.
 
+The default font stack is a generic system sans-serif (`--font-body`, `--font-display`), with no downloaded font files. Monospace (`--font-mono`) is reserved for `code`, `pre`, `kbd`, and copy-field values — it is not the project's default voice. A downstream site that wants a web font adds it in its own base template and overrides `--font-body` / `--font-display`; it does not edit the shared token file.
+
 There are two generalized categories of typography used in this project:
 
 1. The public website - usually for marketing purposes
@@ -182,15 +188,49 @@ When you do reach for fluid type, keep it zoom-safe so it does not regress WCAG 
 
 `layout.css` defines a small family of composable, single-purpose layout primitives in the Every Layout tradition. Each is one class tuned by scoped custom properties. Compose these before writing a new `display: flex` or `display: grid` rule. Most page structure should be a nesting of these primitives.
 
-Because `.flow` uses `gap`, nested `.flow` elements are safe: the outer flow controls the nested element's outside spacing, and the inner flow controls spacing between its own children. If one child needs exceptional outside spacing, make that exception explicit with a component rule or page-local style.
+`.cluster`, `.grid-auto`, `.switcher`, and `.with-sidebar` are `gap`-based and exist for two-dimensional or inline arrangement. `.flow` is different on purpose: it owns vertical document rhythm, not a flex column, and is implemented as the "lobotomized owl":
+
+```css
+.flow > * + * {
+    margin-block-start: var(--flow-space, var(--space-sm));
+}
+```
+
+- **Spacing is a relationship between siblings, and the parent `.flow` owns it.** Components never set their own vertical margins — that would fight the flow container for the same space.
+- **The container tunes the default rhythm** by declaring `--flow-space` on itself; every child inherits it.
+- **A child overrides for itself alone** by declaring `--flow-space` on that one child — this changes the space *above that child only*, not the rhythm of its siblings.
+- **Nesting is safe** because a nested `.flow` only applies margins to its own direct children; it never reaches into a descendant's descendants.
+
+Do not use `.flow` to build a flex column, and do not set `display: flex` on `.flow`.
 
 When a primitive needs shell-specific defaults, scope those defaults to the shell class. For example, `.site-layout` sets `--sidebar-content-min` for the app shell built on `.with-sidebar`; the primitive itself stays generally reusable.
+
+## Composition
+
+Page structure is layout primitives → blocks → elements, in that order of responsibility:
+
+- A layout primitive (`.flow`, `.cluster`, `.with-sidebar`, …) and a block class (`.card`, `.callout`, …) may coexist on the same element — `<div class="card flow">` is the normal, expected composition.
+- A layout class never carries block styling, and a block never lays out its siblings — that is the layout primitive's job.
+- A block's *internal* layout may use primitives on its own child elements (for example `<div class="callout__body flow">`), but the block itself does not reimplement `gap` or margin spacing that a primitive already provides.
+
+## When to Add What
+
+| Situation | Where it goes |
+| --- | --- |
+| A value changes on one instance, structure stays the same | A scoped CSS custom property override, set on that instance |
+| A variant of an existing block | A modifier class (`.block--modifier`) in the block's file |
+| A reusable declaration block with no parts | A utility class in `layout.css` or `typography.css` |
+| A new reusable component with parts | A new block in `components.css` or `forms.css` |
+| Styling that belongs to exactly one page | The page's `page_stylesheet` include |
+| A new color or size is needed | Check existing tokens first (`design-tokens.css`); add a token only if nothing fits |
 
 ## Components and Forms
 
 Reusable components live in `components.css` and `forms.css`. Copy their documented anatomy instead of inventing parallel markup.
 
-Component state should be visible, semantic, and restrained. Buttons invert or shift border color; destructive actions use the danger signal; focus uses `--color-focus-outline`; cards and callouts remain flat, square, and hairline-ruled. Do not add shadows, decorative gradients, rounded card treatments, or ornamental color fills unless the style guide has first established that pattern.
+Component state should be visible, semantic, and restrained. Buttons invert or shift border color; destructive actions use the danger signal; focus uses `--color-focus-outline`.
+
+The shipped defaults are neutral on purpose: a small border radius, hairline borders, no shadows, a single link accent color. These are defaults, not rules — a downstream site is expected to change them. Change them through tokens first (`--radius-sm`, `--radius-md`, `--control-radius`, the `--color-*` tier), and through a new modifier class second, before reaching for a one-off override.
 
 ## Page-Local Styles via `page_stylesheet`
 
