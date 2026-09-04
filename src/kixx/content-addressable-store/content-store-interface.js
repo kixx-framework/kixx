@@ -182,12 +182,12 @@
  * client merely asked about.
  *
  * ## Caching and the consistency floor
- * An adapter MAY cache index reads, and the Cloudflare adapter caches at two
- * tiers. When `assignBuild()` reassigns a build, an adapter SHOULD make a best
- * effort to invalidate its local cached copy after the assignment is durable.
- * A concurrent read may repopulate a cache with the previous closure after
- * invalidation, however, and a distributed cache may not support global
- * eviction.
+ * An adapter MAY cache index reads. The Cloudflare adapter uses a bounded
+ * isolate-local cache. When `assignBuild()` reassigns a build, an adapter
+ * SHOULD make a best effort to invalidate its local cached copy after the
+ * assignment is durable. A concurrent read may repopulate a cache with the
+ * previous closure after invalidation, however, and other adapter instances
+ * may retain their copies until they expire.
  *
  * The contract therefore makes no immediate-visibility guarantee. Concurrent
  * reads and other adapter instances or colos may serve the previous closure

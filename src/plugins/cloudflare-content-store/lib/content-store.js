@@ -42,16 +42,17 @@ const textEncoder = new TextEncoder();
 // migration, alongside a wire format version change.
 const DURABLE_OBJECT_NAME = 'ContentAddressableStore';
 
-// Not a real destination, only a stable Cache API key; index cache entries
-// never leave the colo that wrote them.
-const INDEX_CACHE_URL_PREFIX = 'https://content-addressable-store.internal/index';
-
 // The adapter keeps the historical 60-second blob-cache minimum even though
 // Cloudflare KV now accepts values as low as 30 seconds. Raising a configured
-// value is safe here in a way it would not be for the index cache: blob keys
-// carry the content hash, so a changed blob is a different key and a longer TTL
-// can never serve stale bytes.
+// value is safe here in a way it would not be for the build cache: blob keys
+// carry the content hash, so a changed blob is a different key and a longer
+// TTL can never serve stale bytes.
 const KV_MIN_CACHE_TTL_SECONDS = 60;
+
+// Keep this aligned with CLOSURE_CACHE_MAX_SIZE in
+// content-addressable-index-store.js. Both layers retain the same bounded
+// working set, while the isolate cache remains disposable.
+const BUILD_CACHE_MAX_SIZE = 10;
 
 // Retry policy for Durable Object calls, per Cloudflare's documented
 // guidance: https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
@@ -72,8 +73,7 @@ const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
  * Durable Object.
  *
  * Blob and index keys include the configured wire format, isolating data
- * written by format. Index reads use both isolate-local promise
- * caching and Cloudflare's colo-local Cache API.
+ * written by format. Build reads use a bounded isolate-local promise cache.
  * @implements {import('../../../kixx/content-addressable-store/content-store-interface.js').ContentStoreInterface}
  */
 export default class ContentStore {
@@ -84,21 +84,19 @@ export default class ContentStore {
     #wireFormat;
     #blobReadCacheTtlSeconds;
     #indexCacheTtlSeconds;
-    #edgeCache;
     #scheduler;
 
-    #pendingIndexes = new Map();
+    #buildCache = new Map();
 
     /**
      * @param {Object} options - Store configuration
      * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create the adapter's child logger
      * @param {string} options.kvBindingName - Name of the KV binding on each request context's environment
      * @param {string} options.durableObjectBindingName - Name of the Durable Object namespace binding on each request context's environment
-     * @param {string} options.wireFormat - Format identifier appended to persisted blob and index keys
+     * @param {string|number} options.wireFormat - Format identifier appended to persisted blob and index keys
      * @param {number} [options.blobReadCacheTtlSeconds=0] - Cloudflare KV cache TTL used for blob reads; raised to this adapter's 60-second minimum when lower
-     * @param {number} [options.indexCacheTtlSeconds=0] - TTL used by isolate-local and colo-local index caches
-     * @param {Cache} [options.edgeCache] - Cache API implementation; defaults to the Workers runtime cache; helpful for testing
-    * @param {Scheduler} [options.scheduler] - Scheduler used for retry backoff; defaults to the Workers runtime scheduler; helpful for testing
+     * @param {number} [options.indexCacheTtlSeconds=0] - TTL used by the isolate-local build cache
+     * @param {Scheduler} [options.scheduler] - Scheduler used for retry backoff; defaults to the Workers runtime scheduler; helpful for testing
     */
     constructor(options) {
         const { logger } = options ?? {};
@@ -112,14 +110,9 @@ export default class ContentStore {
             KV_MIN_CACHE_TTL_SECONDS,
         );
         this.#indexCacheTtlSeconds = options.indexCacheTtlSeconds ?? 0;
-        // The Cache API's default cache is a true platform global rather than
-        // a request-scoped context.env binding, so it is injectable here
-        // (options.edgeCache), allowing tests to supply a fake without a
-        // Workers runtime.
-        this.#edgeCache = options.edgeCache ?? caches.default;
         // The Scheduler API is likewise a platform global, injectable here for
-        // the same reason: it lets Durable Object retry-backoff tests run
-        // without a Workers runtime and without waiting out real backoff delays.
+        // tests so Durable Object retry-backoff tests run without a Workers
+        // runtime and without waiting out real backoff delays.
         this.#scheduler = options.scheduler ?? scheduler;
     }
 
@@ -176,28 +169,11 @@ export default class ContentStore {
         }
     }
 
-    #buildIndexCacheRequest(buildId) {
-        return new Request(`${ INDEX_CACHE_URL_PREFIX }/${ this.#wireFormat }/${ buildId }`);
-    }
-
     #buildFileKey(hash) {
         return `${ hash }#${ this.#wireFormat }`;
     }
 
     async #fetchBuild(context, buildId) {
-        const cache = this.#edgeCache;
-        const cacheKey = this.#buildIndexCacheRequest(buildId);
-
-        // The edge Cache API is shared by every isolate hitting this colo, so
-        // a cache hit here avoids a Durable Object call regardless of which
-        // isolate served the last request for this build.
-        const cachedResponse = await cache.match(cacheKey);
-        if (cachedResponse) {
-            return await cachedResponse.json();
-        }
-
-        this.#logger.info('index colo cache miss', { cacheKey });
-
         const result = await this.#callDurableObject(
             context,
             'getBuild',
@@ -208,25 +184,7 @@ export default class ContentStore {
         }
 
         const { rootHash, entries } = result;
-        if (!entries) {
-            return null;
-        }
-
-        const build = { rootHash, entries };
-
-        // A zero TTL means the entry would be stale the moment it is written, so
-        // skip the write instead of paying for a response the colo can never
-        // serve. This is the configured state in development.
-        if (this.#indexCacheTtlSeconds > 0) {
-            await cache.put(cacheKey, new Response(JSON.stringify(build), {
-                headers: {
-                    'content-type': 'application/json',
-                    'cache-control': `max-age=${ this.#indexCacheTtlSeconds }`,
-                },
-            }));
-        }
-
-        return build;
+        return entries ? { rootHash, entries } : null;
     }
 
     /**
@@ -243,24 +201,36 @@ export default class ContentStore {
         // Cache pending and resolved build promises in runtime memory, scoped
         // to the build which produced them. Freshness is checked lazily on
         // read (against cachedAt) rather than through a scheduled eviction.
-        const cached = this.#pendingIndexes.get(buildId);
+        const cached = this.#buildCache.get(buildId);
         if (cached && Date.now() - cached.cachedAt < this.#indexCacheTtlSeconds * 1000) {
+            // Map preserves insertion order. Re-inserting a fresh hit moves it
+            // to the most-recent end of the LRU.
+            this.#buildCache.delete(buildId);
+            this.#buildCache.set(buildId, cached);
             return cached.promise;
         }
 
-        this.#logger.info('index instance cache miss', { buildId });
+        this.#logger.info('index isolate cache miss', { buildId });
 
         const promise = this.#fetchBuild(context, buildId);
         const entry = { promise, cachedAt: Date.now() };
 
-        this.#pendingIndexes.set(buildId, entry);
+        // Delete first because Map#set() does not change insertion order for an
+        // existing key. An expired build becomes the newest cache entry.
+        this.#buildCache.delete(buildId);
+        this.#buildCache.set(buildId, entry);
+
+        if (this.#buildCache.size > BUILD_CACHE_MAX_SIZE) {
+            const leastRecentlyUsedBuildId = this.#buildCache.keys().next().value;
+            this.#buildCache.delete(leastRecentlyUsedBuildId);
+        }
 
         // Drop a failed fetch immediately so the next call retries instead of
         // waiting out the TTL on a rejected promise, but only if this entry
         // is still current. A slow, failed fetch must not evict a newer one.
         promise.catch(() => {
-            if (this.#pendingIndexes.get(buildId) === entry) {
-                this.#pendingIndexes.delete(buildId);
+            if (this.#buildCache.get(buildId) === entry) {
+                this.#buildCache.delete(buildId);
             }
         });
 
@@ -490,28 +460,17 @@ export default class ContentStore {
             throw new OperationalError(`ContentStore#assignBuild() was unsuccessful: ${ result.message }`);
         }
 
-        // Both local index caches are keyed by build id, so make a best effort
-        // to evict the previous closure after the assignment is durable. A
-        // concurrent read can still repopulate the cache, and other colos have
-        // independent Cache API entries which expire on their configured TTL.
-        // Invalidating before assignment would be worse: a failed assignment
-        // leaves the old closure correct and would only force a redundant read.
-        // A conflict or missing-closure outcome left the pointer untouched, so
-        // the cached closure is still correct and must not be evicted.
+        // Evict the isolate's previous closure after the assignment is durable.
+        // A concurrent read can still repopulate the cache, and other isolates
+        // retain their entries until the configured TTL. Invalidating before
+        // assignment would be worse: a failed assignment leaves the old closure
+        // correct and would only force a redundant read. A conflict or missing-
+        // closure outcome left the pointer untouched, so its cache stays valid.
         if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED) {
-            await this.#invalidateIndexCaches(buildId);
+            this.#buildCache.delete(buildId);
         }
 
         return result.outcome;
-    }
-
-    // Rolling a build back to a prior closure reuses its build id, so waiting
-    // out a TTL would keep serving the superseded closure. Note that the Cache
-    // API is colo-local: this evicts only in the colo serving this request, and
-    // other colos still rely on the entry's max-age expiring.
-    async #invalidateIndexCaches(buildId) {
-        this.#pendingIndexes.delete(buildId);
-        await this.#edgeCache.delete(this.#buildIndexCacheRequest(buildId));
     }
 }
 

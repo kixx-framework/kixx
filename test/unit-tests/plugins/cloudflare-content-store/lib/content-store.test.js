@@ -21,27 +21,6 @@ function makeEntries(blobHash) {
     };
 }
 
-// Stores real Response objects so headers written by the store are observable,
-// and so a stale entry can actually be served back on a later read.
-function makeEdgeCache() {
-    const store = new Map();
-    return {
-        store,
-        async match(request) {
-            const response = store.get(request.url);
-            // A Response body can only be read once, so hand back a clone the
-            // way the real Cache API hands back a fresh response each time.
-            return response ? response.clone() : null;
-        },
-        async put(request, response) {
-            store.set(request.url, response);
-        },
-        async delete(request) {
-            return store.delete(request.url);
-        },
-    };
-}
-
 function makeKvStore(values) {
     const calls = [];
     return {
@@ -85,7 +64,6 @@ function makeStore(options) {
         wireFormat: 1,
         blobReadCacheTtlSeconds: 60,
         indexCacheTtlSeconds: 10,
-        edgeCache: makeEdgeCache(),
         scheduler: { async wait() {} },
         ...options,
     });
@@ -261,42 +239,6 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual(1, calls);
         });
 
-        it('writes the configured TTL onto the colo cache entry', async () => {
-            const edgeCache = makeEdgeCache();
-            const durableObject = {
-                async getBuild() {
-                    return { success: true, rootHash: 'root-hash', entries: makeEntries() };
-                },
-            };
-            const store = makeStore({ edgeCache, indexCacheTtlSeconds: 42 });
-
-            await store.getBuild(makeContext({ durableObject }), 'build-1');
-
-            assertEqual(1, edgeCache.store.size);
-            const [ response ] = Array.from(edgeCache.store.values());
-            assertEqual('max-age=42', response.headers.get('cache-control'));
-        });
-
-        it('serves a build from the colo cache without calling the Durable Object', async () => {
-            const edgeCache = makeEdgeCache();
-            const cacheKey = new Request('https://content-addressable-store.internal/index/1/build-1');
-            await edgeCache.put(cacheKey, new Response(JSON.stringify({
-                rootHash: 'cached-hash',
-                entries: makeEntries('cached-hash'),
-            })));
-            const durableObject = {
-                async getBuild() {
-                    throw new Error('Durable Object should not be called');
-                },
-            };
-            const store = makeStore({ edgeCache });
-
-            const build = await store.getBuild(makeContext({ durableObject }), 'build-1');
-
-            assertEqual('cached-hash', build.rootHash);
-            assertEqual('cached-hash', build.entries['/a.txt'][1]);
-        });
-
         it('fetches a fresh build after the isolate cache TTL expires', async () => {
             const tracker = new MockTracker();
             let now = 1000;
@@ -308,12 +250,10 @@ describe('CloudflareContentStore', ({ describe }) => {
                     return { success: true, rootHash: `hash-${ calls }`, entries: makeEntries(`hash-${ calls }`) };
                 },
             };
-            const edgeCache = makeEdgeCache();
-            const store = makeStore({ edgeCache, indexCacheTtlSeconds: 10 });
+            const store = makeStore({ indexCacheTtlSeconds: 10 });
             const context = makeContext({ durableObject });
 
             const first = await store.getBuild(context, 'build-1');
-            edgeCache.store.clear();
             now += 10001;
             const second = await store.getBuild(context, 'build-1');
             tracker.reset();
@@ -373,18 +313,29 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual(2, calls);
         });
 
-        it('does not write a colo cache entry when the TTL is zero', async () => {
-            const edgeCache = makeEdgeCache();
+        it('evicts the least recently used build after reaching the cache limit', async () => {
+            const calls = new Map();
             const durableObject = {
-                async getBuild() {
-                    return { success: true, rootHash: 'root-hash', entries: makeEntries() };
+                async getBuild(buildId) {
+                    calls.set(buildId, (calls.get(buildId) ?? 0) + 1);
+                    return { success: true, rootHash: buildId, entries: makeEntries(buildId) };
                 },
             };
-            const store = makeStore({ edgeCache, indexCacheTtlSeconds: 0 });
+            const store = makeStore();
+            const context = makeContext({ durableObject });
 
-            await store.getBuild(makeContext({ durableObject }), 'build-1');
+            for (let index = 0; index < 10; index += 1) {
+                await store.getBuild(context, `build-${ index }`);
+            }
 
-            assertEqual(0, edgeCache.store.size);
+            // Touch build-0 so build-1 becomes the least recently used entry.
+            await store.getBuild(context, 'build-0');
+            await store.getBuild(context, 'build-10');
+            await store.getBuild(context, 'build-0');
+            await store.getBuild(context, 'build-1');
+
+            assertEqual(1, calls.get('build-0'));
+            assertEqual(2, calls.get('build-1'));
         });
 
         it('resolves null when the build has no registered closure', async () => {
@@ -460,17 +411,26 @@ describe('CloudflareContentStore', ({ describe }) => {
 
     describe('assignBuild()', ({ it }) => {
         it('returns missingClosure without invalidating caches', async () => {
-            const edgeCache = makeEdgeCache();
+            let getBuildCalls = 0;
             const durableObject = {
+                async getBuild() {
+                    getBuildCalls += 1;
+                    return { success: true, rootHash: 'hash-new', entries: makeEntries('hash-new') };
+                },
                 async assignBuild() {
                     return { success: true, outcome: 'missingClosure' };
                 },
             };
-            const store = makeStore({ edgeCache });
+            const store = makeStore();
+            const context = makeContext({ durableObject });
 
-            const outcome = await store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'missing-hash' });
+            await store.getBuild(context, 'build-1');
+            const outcome = await store.assignBuild(context, 'build-1', { rootHash: 'missing-hash' });
+            const build = await store.getBuild(context, 'build-1');
 
             assertEqual('missingClosure', outcome);
+            assertEqual('hash-new', build.rootHash);
+            assertEqual(1, getBuildCalls);
         });
 
         it('returns conflict without invalidating caches', async () => {
@@ -532,7 +492,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual('ContentAddressableStore#format-2', receivedName);
         });
 
-        it('invalidates both index caches so a rollback is visible immediately', async () => {
+        it('invalidates the isolate cache so a rollback is visible immediately', async () => {
             let pointer = 'hash-new';
             let getBuildCalls = 0;
             const durableObject = {
@@ -545,26 +505,20 @@ describe('CloudflareContentStore', ({ describe }) => {
                     return { success: true, outcome: 'assigned' };
                 },
             };
-            const edgeCache = makeEdgeCache();
-            const store = makeStore({ edgeCache, indexCacheTtlSeconds: 600 });
+            const store = makeStore({ indexCacheTtlSeconds: 600 });
             const context = makeContext({ durableObject });
 
             const before = await store.getBuild(context, 'build-1');
             assertEqual('hash-new', before.entries['/a.txt'][1]);
-            assertEqual(1, edgeCache.store.size);
 
             await store.assignBuild(context, 'build-1', { rootHash: 'hash-old' });
-
-            // Both tiers must be gone; a surviving entry would keep serving the
-            // superseded closure for the whole 600 second TTL.
-            assertEqual(0, edgeCache.store.size);
 
             const after = await store.getBuild(context, 'build-1');
             assertEqual('hash-old', after.entries['/a.txt'][1]);
             assertEqual(2, getBuildCalls);
         });
 
-        it('does not invalidate caches on a conflict or missing-closure outcome', async () => {
+        it('does not invalidate the isolate cache on a conflict', async () => {
             let getBuildCalls = 0;
             const durableObject = {
                 async getBuild() {
@@ -575,16 +529,12 @@ describe('CloudflareContentStore', ({ describe }) => {
                     return { success: true, outcome: 'conflict' };
                 },
             };
-            const edgeCache = makeEdgeCache();
-            const store = makeStore({ edgeCache, indexCacheTtlSeconds: 600 });
+            const store = makeStore({ indexCacheTtlSeconds: 600 });
             const context = makeContext({ durableObject });
 
             await store.getBuild(context, 'build-1');
-            assertEqual(1, edgeCache.store.size);
 
             await store.assignBuild(context, 'build-1', { rootHash: 'hash-old', expectedRootHash: 'stale' });
-
-            assertEqual(1, edgeCache.store.size);
 
             const after = await store.getBuild(context, 'build-1');
             assertEqual('hash-new', after.entries['/a.txt'][1]);

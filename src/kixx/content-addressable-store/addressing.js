@@ -31,9 +31,9 @@ import {
  *
  * Bump this whenever a change makes previously computed digests
  * irreproducible or previously written keys unreadable. It namespaces blob
- * keys (see {@link KEY}), the Cloudflare index cache URL and Durable Object
- * instance name, and the root hash itself, so a bump re-isolates all of them
- * together and old data is never read back under the new rules.
+ * keys (see {@link KEY}), the Cloudflare Durable Object instance name, and the
+ * root hash itself, so a bump re-isolates all of them together and old data is
+ * never read back under the new rules.
  *
  * History:
  * - `1` — initial format.
