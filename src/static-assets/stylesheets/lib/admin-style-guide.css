@@ -118,6 +118,13 @@
     min-height: 4.5rem;
 }
 
+/* Demonstrates the per-child --flow-space exception: only the space ABOVE
+   this one child changes, not the container's rhythm for its siblings. */
+.demo-box--flow-space-override {
+    --flow-space: var(--space-xl);
+    border-style: dashed;
+}
+
 /* Do / Don't guidance cards. Built on .card with an accented left rule; the
    do/dont modifiers recolor that rule with a status signal and mark the label
    with an ASCII glyph, so the guidance reads even in greyscale. */
@@ -126,8 +133,10 @@
     --grid-space: var(--space-sm);
 }
 
-.guideline > * + * {
-    margin-top: var(--space-2xs);
+/* Spacing between the label and its list is a .flow relationship, set in the
+   markup as class="... guideline flow" — not a rule owned by this block. */
+.guideline {
+    --flow-space: var(--space-2xs);
 }
 
 .guideline ul {
@@ -226,14 +235,12 @@
     font-size: var(--text-caption);
 }
 
-/* Numbered parts list, paired with an anatomy stage. */
+/* Numbered parts list, paired with an anatomy stage. Spacing between items is
+   a .flow relationship, set in the markup as class="parts-list flow". */
 .parts-list {
+    --flow-space: var(--space-2xs);
     padding-left: 2.5ch;
     font-size: var(--text-body-sm);
-}
-
-.parts-list li + li {
-    margin-top: var(--space-2xs);
 }
 
 .parts-list li::marker {

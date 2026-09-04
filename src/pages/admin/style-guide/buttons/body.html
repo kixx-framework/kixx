@@ -1,32 +1,31 @@
 <header class="admin-content-section__header">
     <h2>Buttons</h2>
-    <p>The action control &mdash; a mono, uppercase label inside a square, bracketed box.</p>
+    <p>The action control &mdash; an outline box that inverts to a solid fill.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">Buttons trigger actions. The label is set in the mono <a href="/admin/style-guide/typography">label register</a> &mdash; uppercase and tracked &mdash; wrapped in brackets inside a square, 1px box, so an action reads like a terminal target you can type at: <code>[ save ]</code>.</p>
+    <p class="type-body-lg">Buttons trigger actions. The label sits in normal body type inside a small-radius, 1px box; states are communicated by inverting the fill or shifting the border color, never a shadow or motion.</p>
 
     <p><strong>When to use:</strong> a <code>&lt;button&gt;</code> performs an action (save, delete, open a dialog); a <em>link</em> navigates somewhere. If pressing it changes the URL, it&rsquo;s a link &mdash; you can style it <code>.button</code>, but keep the <code>&lt;a&gt;</code> element. Keep a single primary action per view.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Anatomy</h3>
-<p class="doc-lede">Every button is the same square box; emphasis comes from the fill, never from size or a brand hue.</p>
+<p class="doc-lede">Every button is the same box; emphasis comes from the fill, never from size or a brand hue.</p>
 <div class="anatomy flow">
     <div class="demo-stage">
         <button class="button button--primary" type="button">Save changes</button>
     </div>
-    <ol class="parts-list">
-        <li><strong>Label</strong> &mdash; a verb in the mono label register: uppercase, tracked.</li>
-        <li><strong>Brackets</strong> &mdash; <code>[</code> and <code>]</code> framing the label, added in CSS so it reads as a spec-sheet control.</li>
-        <li><strong>Box</strong> &mdash; a 1px solid edge (<code>--button-border-width</code>) on square corners &mdash; no radius.</li>
+    <ol class="parts-list flow">
+        <li><strong>Label</strong> &mdash; a verb, in normal body-weight-medium text; no uppercase, no tracking.</li>
+        <li><strong>Box</strong> &mdash; a 1px solid edge (<code>--button-border-width</code>) with a small radius (<code>--control-radius</code>).</li>
         <li><strong>Fill</strong> &mdash; the page surface for the default button; solid ink for the one primary action.</li>
-        <li><strong>Target</strong> &mdash; a <code>2.5rem</code> minimum height for a comfortable, consistent target.</li>
+        <li><strong>Target</strong> &mdash; a <code>2.5rem</code> minimum height and width for a comfortable, consistent target.</li>
         <li><strong>Focus ring</strong> &mdash; a 2px <code>--color-focus-outline</code> outline, offset 2px (keyboard only).</li>
     </ol>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Variants</h3>
-<p class="doc-lede">Three variants only. Emphasis comes from fill; the one use of color is the destructive signal.</p>
+<p class="doc-lede">Three variants only. Emphasis comes from fill; the one use of color is the destructive signal. The theme toggle in the header composes <code>.button</code> at a smaller size &mdash; it isn&rsquo;t a separate component.</p>
 <div class="example-grid grid-auto">
     <div class="card card--flush example">
         <div class="example__preview"><button class="button" type="button">Cancel</button></div>
@@ -40,10 +39,18 @@
         <div class="example__preview"><button class="button button--danger" type="button">Delete</button></div>
         <div class="example__label"><code>.button--danger</code><span class="example__note">Destructive &mdash; color as signal</span></div>
     </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <button class="button theme-toggle" type="button" aria-label="Switch color theme">
+                <span>dark</span>
+            </button>
+        </div>
+        <div class="example__label"><code>.button.theme-toggle</code><span class="example__note">Same box, a smaller size</span></div>
+    </div>
 </div>
 
 <h3 class="type-h3 doc-section-heading">States</h3>
-<p class="doc-lede">Hover, focus (press <kbd>Tab</kbd>), and click the live buttons to see each state. States are inversions and border shifts &mdash; no shadow, no motion.</p>
+<p class="doc-lede">Hover, focus (press <kbd>Tab</kbd>), and click the live buttons to see each state. States are inversions and border shifts, with a brief color transition &mdash; never a shadow or a scale change.</p>
 <div class="states flow">
     <div class="demo-stage">
         <button class="button button--primary" type="button">Primary</button>
@@ -54,7 +61,7 @@
     </div>
     <dl class="state-list">
         <div><dt>Default</dt><dd>Resting. The default button sits on the page surface with an ink box; primary carries the solid ink fill.</dd></div>
-        <div><dt>Hover</dt><dd>Inversion. The default button fills with ink; the primary flips to an outline; danger fills red &mdash; a simple flip, no transition.</dd></div>
+        <div><dt>Hover</dt><dd>Inversion. The default button fills with ink; the primary flips to an outline; danger fills red &mdash; a short 150ms color transition, never a shadow or scale.</dd></div>
         <div><dt>Focus</dt><dd>A 2px <code>--color-focus-outline</code> ring, offset 2px. Shows for keyboard focus (<code>:focus-visible</code>), not mouse clicks.</dd></div>
         <div><dt>Disabled</dt><dd>Box and label go to <code>--color-ink-muted</code> on the page surface, so a disabled button reads as inactive. Hover is suppressed.</dd></div>
     </dl>
@@ -82,7 +89,7 @@
     <ul>
         <li>Use <code>&lt;button&gt;</code> for actions and <code>&lt;a&gt;</code> for navigation &mdash; keyboards and screen readers treat them differently; don&rsquo;t swap them.</li>
         <li>Always set <code>type</code> on a <code>&lt;button&gt;</code> (<code>button</code> or <code>submit</code>) so it can&rsquo;t submit a form by accident.</li>
-        <li>The visible label is the accessible name; keep it a clear verb. The brackets are added in CSS, so they never reach the accessibility tree.</li>
+        <li>The visible label is the accessible name; keep it a clear verb.</li>
         <li>Never remove the focus ring &mdash; <code>:focus-visible</code> shows it for keyboard users only.</li>
         <li>Buttons hold a <code>2.5rem</code> minimum height for a comfortable target; keep interactive controls at least this size.</li>
         <li>When a control is disabled but users still need to know it exists, prefer <code>aria-disabled="true"</code> (it stays focusable and announced) over the <code>disabled</code> attribute.</li>
@@ -91,7 +98,7 @@
 
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
-    <div class="card card--accent-secondary guideline guideline--do">
+    <div class="card card--accent-secondary guideline guideline--do flow">
         <p class="guideline__label">Do</p>
         <ul>
             <li>Keep one primary button per view; make everything else the default outline.</li>
@@ -100,13 +107,13 @@
             <li>Reserve <code>.button--danger</code> for actions that destroy something.</li>
         </ul>
     </div>
-    <div class="card card--accent-primary guideline guideline--dont">
+    <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don&rsquo;t</p>
         <ul>
             <li>Stack several primary buttons competing for the same attention.</li>
             <li>Use a button to navigate &mdash; that&rsquo;s a link&rsquo;s job.</li>
             <li>Remove the focus ring or drop below the <code>2.5rem</code> target.</li>
-            <li>Add a shadow, a radius, or a hover transition &mdash; states are inversions, not motion.</li>
+            <li>Add a shadow or a scale/position change on hover &mdash; states are inversions and color shifts, not motion.</li>
         </ul>
     </div>
 </div>

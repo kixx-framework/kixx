@@ -4,7 +4,7 @@
 </header>
 
 <div class="callout callout--warning">
-    <span class="callout__icon" aria-hidden="true">[!]</span>
+    <span class="callout__icon" aria-hidden="true">!</span>
     <div class="callout__body flow">
         <p class="callout__title">Style Guide Place-Holder</p>
         <p class="type-body-sm">This style guide is a place-holder as part of your default Kixx installation. The intention is for you to replace it once you have established the aesthetic for your site.</p>
@@ -14,9 +14,9 @@
 <div class="doc-prose">
     <p class="type-body-lg">Use this style guide before changing any frontend markup or CSS. It is the live source of truth for the site&rsquo;s aesthetic, design tokens, layout primitives, type roles, components, form controls, and documentation patterns.</p>
 
-    <p>The system is intentionally narrow: <strong>Hypertext Minimalism</strong>. Build from semantic HTML, system monospace type, thin structural rules, square controls, explicit links, functional whitespace, and color used only as a signal. When a page feels over-designed, reduce the surface area before adding another style.</p>
+    <p>Kixx ships a <strong>blank canvas</strong>: a neutral, accessible default meant to be built on, not a house style. Read <a href="/admin/style-guide/aesthetic">Aesthetic</a> for what is a structural rule you keep and what is a default you are expected to change.</p>
 
-    <p>For implementation details, pair this guide with <code>docs/frontend-development-guide.md</code>. That document explains the no-inline-styles rule, the stylesheet organization, BEM naming, token layering, layout primitive contract, and page-local stylesheet pattern.</p>
+    <p>For implementation details, pair this guide with <code>docs/frontend-development-guide.md</code>. That document explains the no-inline-styles rule, the stylesheet organization, BEM naming, token layering, the flow spacing contract, and the page-local stylesheet pattern &mdash; including its &ldquo;when to add what&rdquo; decision table.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Development workflow</h3>
@@ -40,20 +40,20 @@
 <div class="doc-prose">
     <p>Start with the <a href="/admin/style-guide/aesthetic">Aesthetic</a> when you need the design direction behind the system. Then move to the specific foundation or component page for the thing you are building, and copy the documented markup patterns instead of inventing a parallel class vocabulary.</p>
 
-    <p>For implementation work, treat each page as a decision checklist:</p>
+    <p>For implementation work, treat each page as a decision checklist, following the guide&rsquo;s &ldquo;when to add what&rdquo; table:</p>
     <ul>
-        <li>Use the documented semantic tokens before adding new colors, spacing, typography, borders, or states.</li>
-        <li>Reach for layout primitives before writing custom flex or grid rules.</li>
-        <li>Match component anatomy, variants, states, and usage examples before adding modifiers.</li>
+        <li>A value changes on one instance &mdash; a scoped custom property, not a new class.</li>
+        <li>A variant of an existing block &mdash; a modifier class in the block&rsquo;s file.</li>
+        <li>A new reusable component with parts &mdash; a block in <code>components.css</code> or <code>forms.css</code>.</li>
+        <li>Styling that belongs to exactly one page &mdash; that page&rsquo;s <code>page_stylesheet</code> include.</li>
     </ul>
 
-    <p>If a pattern is missing, prefer extending the shared design system with a reusable token, primitive, or component rather than solving one page with a one-off
- style. This guide should remain the source of truth for how the UI is built.</p>
+    <p>If a pattern is missing, prefer extending the shared design system with a reusable token, primitive, or component rather than solving one page with a one-off style. This guide should remain the source of truth for how the UI is built.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Decision rules</h3>
 <div class="guidelines grid-auto">
-    <div class="card card--accent-secondary guideline guideline--do">
+    <div class="card card--accent-secondary guideline guideline--do flow">
         <p class="guideline__label">Do</p>
         <ul>
             <li>Use semantic HTML first; add classes only when the design system needs them.</li>
@@ -63,13 +63,13 @@
             <li>Use page-local <code>page_stylesheet</code> includes only for styling that truly belongs to one page.</li>
         </ul>
     </div>
-    <div class="card card--accent-primary guideline guideline--dont">
+    <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Avoid</p>
         <ul>
             <li>Inline <code>style</code> attributes in templates.</li>
             <li>Raw color literals or direct <code>--palette-*</code> references inside component rules.</li>
             <li>New wrappers, modifiers, or utilities when a primitive or component already fits.</li>
-            <li>Decorative gradients, shadows, rounded corners, icons, images, or motion.</li>
+            <li>Reaching past a token or modifier straight to a one-off override for radius, shadow, or color.</li>
             <li>Adding dependencies, web fonts, or icon libraries for visual polish.</li>
         </ul>
     </div>

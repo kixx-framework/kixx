@@ -570,7 +570,7 @@ The `//kixx` wordmark component is gone. Both site headers show a plain text lin
 
 ### Task 9: Rewrite the style guide pages for the blank-canvas system
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** Tasks 1–8
 **Documentation:** `docs/frontend-development-guide.md` (all sections); `src/app/presentation/README.md` (page includes and `page_stylesheet`)
 
@@ -624,10 +624,26 @@ Every page under `pages/admin/style-guide/` documents the finished neutral syste
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed:
+  - `admin-style-guide.css`: converted the two hand-rolled owls the plan named to `.flow` — `.guideline > * + *` and `.parts-list li + li` are gone; `.guideline` and `.parts-list` now set `--flow-space` on themselves (`--space-2xs`) and every markup instance across all 12 touched pages got `flow` added to its class list (`guideline guideline--do/--dont flow`, `parts-list flow`) via a bulk find/replace, then spot-checked. Added `.demo-box--flow-space-override` (sets a large `--flow-space` on itself) to support the new Layout page demo.
+  - **Aesthetic page**: full rewrite to the plan's five sections (Intent, What is fixed, What is a default, Accessibility floor, Do/Avoid), replacing the old "Hypertext Minimalism" manifesto.
+  - **Index page** (`style-guide/body.html`): removed the "Hypertext Minimalism" paragraph, replaced with blank-canvas framing and a link to the Aesthetic page; the "How to use it" checklist now cites the guide's "when to add what" rows; the Avoid list's "decorative gradients, shadows, rounded corners…" bullet is replaced with "reaching past a token or modifier straight to a one-off override" since radius/shadow/color are now permissive defaults, not prohibitions.
+  - **Typography page**: rewrote prose to drop "one monospace family"/"grid material"/72ch framing; specimen table values updated to the real current scale (h1 2rem/600/1.15 … caption 0.8125rem/400/1.4); added a new "Code, keyboard, and quotes" section demonstrating `code`, `kbd`, and `blockquote` live (none were demonstrated before).
+  - **Colors page**: content was already generic (no mono/spec-sheet language) — only the `flow` class bulk-add touched it.
+  - **Layout page**: added a second Flow demo directly under the first, showing a per-child `--flow-space` override (one child gets a visibly larger gap above itself via `.demo-box--flow-space-override`, its siblings keep the container's tight rhythm) — this was previously undemonstrated (Task 3 left this checkbox unchecked for exactly this reason). Also fixed the "Don't" guideline bullet that told readers not to use child-scoped `--flow-space` overrides at all, which directly contradicted the new demo — reworded to say it's the exception path for one child, not a substitute for retuning the container.
+  - **Buttons page**: dropped "mono, uppercase... bracketed box"/"[ save ]" framing; anatomy parts-list now describes the box/radius/target instead of brackets; added a 4th variant tile demonstrating `.button.theme-toggle`; fixed the States/Accessibility/Guidelines copy that said hover was "a simple flip, no transition" and forbade "a shadow, a radius, or a hover transition" — both were stale now that Task 5 gave buttons a radius and a 150ms color transition by design.
+  - **Cards page**: fixed the border token reference (`--color-rule-strong` → `--color-rule`, matching Task 7's hairline-border decision), removed "spec-sheet box"/"square corners"/"the system is square everywhere (`--radius-md` is `0`)" language now that cards have a small radius, and reworded the two guideline bullets that depended on the old square/full-ink framing.
+  - **Callouts page**: full rewrite — five tones (added `--success`), `.callout__icon` and `.callout__title` documented as optional elements per the new anatomy, `.callout__body flow` composition, all "ASCII"/bracket-glyph language (`[!]`, `[i]`, `[x]`) replaced with plain-word framing and bare glyphs (`!`) in the demos that still show one.
+  - **Text Fields, Multi-Line Text Areas, Copy Fields pages**: replaced "mono, uppercase, muted" label descriptions with "normal body text at medium weight"; replaced "border becomes dashed" / "dashed readonly border" readonly descriptions with the new sunken-fill description (Task 6 changed this behavior).
+  - **Forms page**: added a new "Native Controls" section (between "Hints and Errors" and "Standalone Form Pages") with four demo tiles — `.field__select` (a real multi-option select), a `.field--choice` checkbox, a `.field--choice` radio group (two options sharing one `name`), and a bare `input[type=file]` — plus prose explaining none of them get a custom box. This is the one place in the style guide that demonstrates `select`/checkbox/radio/file per the plan's acceptance criteria; the per-component field pages (Text Fields, Copy Fields) link out to it rather than duplicating the demo.
+  - Also normalized the index page's placeholder warning callout icon from `[!]` to `!` for consistency with the new callouts-page convention.
+- Current state: Complete.
+- Remaining: Nothing identified. `pages/admin/style-guide/callouts/body.html` still shows `class="callout__body"` (no `flow`) inside one escaped `<pre><code>` sample — that's intentional: it's the documented single-child case that doesn't need `.flow`, matching the page's own "adding `.flow` when it has more than one child" guidance.
+- Decisions and discoveries:
+  - Read every `admin-style-guide.css` helper class against the whole `pages/admin/style-guide` tree after all edits (`doc-prose`, `specimen-list`, `guidelines`, `swatch-list`, `demo-stage`, `parts-list`, `example-grid`, `state-list`, `code-block`, etc.) — every one still has at least one consumer, so nothing needed deleting from that file.
+  - Interpreted the plan's single bullet "Text fields, Multi-line text areas, Forms, Copy fields pages: … native controls section with a select, checkbox row, radio row, and file input demo" as one combined requirement across those four pages, not four duplicated sections — the full native-controls demo lives on the Forms page (the composition page), with the per-component pages updated for label/readonly wording only and cross-linking to Forms. The acceptance criterion ("the forms pages show native select, checkbox, radio, and file controls") is satisfied by that one page.
+  - Did not touch any page's `page.json` — no new includes were needed, and every existing `page.css` file was reviewed and found to hold only genuinely page-local rules already (no shared-primitive duplication to remove).
+  - Left the do/dont guideline marker glyphs (`.guideline__label::before` content `[+]`/`[x]` in `admin-style-guide.css`) unchanged — they're CSS-authored admin-only chrome, not prose in `pages/`, so they don't trip the "ASCII" acceptance grep, and the plan didn't call for removing them.
+- Actual files changed: `src/static-assets/stylesheets/lib/admin-style-guide.css`, and 12 `body.html` files under `pages/admin/style-guide/` (`aesthetic`, index `body.html`, `buttons`, `callouts`, `cards`, `colors`, `copy-fields`, `forms`, `layout`, `multi-line-text-areas`, `text-fields`, `typography`).
+- Validation run: `grep -rn "Hypertext Minimalism\|monospace-first\|spec-sheet\|type-label\|wordmark\|ASCII" src/pages/admin/style-guide` — empty. Confirmed every `.guideline`/`.parts-list` markup instance and every `.callout__body` with more than one child carries `flow`. Confirmed div-tag balance (open vs. close count) in every rewritten `body.html`. No `.js` files changed, so no lint run applies. No devserver run (forbidden by AGENTS.md for work verification) — a human should load every `/admin/style-guide/*` page in light and dark, narrow and wide, and append `.json` to each URL once to confirm includes still resolve.
 - Blockers: None.

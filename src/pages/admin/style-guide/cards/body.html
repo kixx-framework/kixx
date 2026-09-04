@@ -4,9 +4,9 @@
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">A card is a flat, hairline-bordered panel &mdash; the structural building block for dashboards, settings groups, and list modules. Square corners, a 1px rule, a flat fill: a spec-sheet box, not a decorative surface. Depth comes from the rule, never a shadow.</p>
+    <p class="type-body-lg">A card is a flat, hairline-bordered panel with a small corner radius &mdash; the structural building block for dashboards, settings groups, and list modules. Depth comes from the 1px rule, never a shadow.</p>
 
-    <p>Because it&rsquo;s built entirely from semantic tokens &mdash; <code>--color-rule-strong</code> for the border, <code>--color-bg</code> for the fill, and <code>--color-ink</code> / <code>--color-ink-muted</code> for the accent marker &mdash; a card is correct in both light and dark with no extra work. It&rsquo;s a small, concrete demonstration of the <a href="/admin/style-guide/colors">color contract</a>.</p>
+    <p>Because it&rsquo;s built entirely from semantic tokens &mdash; <code>--color-rule</code> for the border, <code>--color-bg</code> for the fill, and <code>--color-ink</code> / <code>--color-ink-muted</code> for the accent marker &mdash; a card is correct in both light and dark with no extra work. It&rsquo;s a small, concrete demonstration of the <a href="/admin/style-guide/colors">color contract</a>.</p>
 
     <p><strong>When to use:</strong> group related content into a distinct surface. When you only need to space things out, reach for <a href="/admin/style-guide/layout"><code>.flow</code> or a layout primitive</a> instead &mdash; a card is a surface, not a spacer.</p>
 </div>
@@ -20,9 +20,9 @@
             <p class="type-body-sm">A surface with a hairline box, built-in padding, and an optional accent marker down the left edge.</p>
         </div>
     </div>
-    <ol class="parts-list">
+    <ol class="parts-list flow">
         <li><strong>Surface</strong> &mdash; the flat fill (<code>--color-bg</code>); the card sits straight on the page, no shadow.</li>
-        <li><strong>Hairline box</strong> &mdash; a 1px rule on all four square sides (<code>--color-rule-strong</code>).</li>
+        <li><strong>Hairline box</strong> &mdash; a 1px rule on all four sides (<code>--color-rule</code>), with a small radius (<code>--radius-md</code>).</li>
         <li><strong>Padding</strong> &mdash; built-in breathing room (<code>--card-padding</code>); removed by <code>.card--flush</code>.</li>
         <li><strong>Accent marker</strong> &mdash; optional; a 3px left rule in ink or muted, flagging the panel like a changelog entry, via <code>.card--accent-primary</code> / <code>.card--accent-secondary</code>.</li>
     </ol>
@@ -79,14 +79,14 @@
     <ul>
         <li>A card is a presentational surface &mdash; it adds no semantics. Put the real structure inside it (a heading, list, or landmark) so assistive tech still gets an outline.</li>
         <li>Keep DOM order logical; the box groups content visually but doesn&rsquo;t change reading order.</li>
-        <li>Don&rsquo;t rely on the hairline alone to signal grouping &mdash; it uses <code>--color-rule-strong</code> (full ink) for exactly this reason. Keep it.</li>
+        <li>Don&rsquo;t rely on a faint rule alone to signal grouping if contrast is a concern &mdash; pair it with a heading or a real semantic landmark inside.</li>
         <li>If a whole card is one target, wrap its content in a single <code>&lt;a&gt;</code> / <code>&lt;button&gt;</code> rather than nesting interactive elements, and keep a visible focus style.</li>
     </ul>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
-    <div class="card card--accent-secondary guideline guideline--do">
+    <div class="card card--accent-secondary guideline guideline--do flow">
         <p class="guideline__label">Do</p>
         <ul>
             <li>Reach for the default <code>.card</code> first; add a modifier only when the surface needs it.</li>
@@ -95,11 +95,11 @@
             <li>Use <code>.card--sunken</code> for an inner panel instead of nesting full cards.</li>
         </ul>
     </div>
-    <div class="card card--accent-primary guideline guideline--dont">
+    <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don&rsquo;t</p>
         <ul>
-            <li>Add drop shadows or faux elevation &mdash; the system stays flat; depth comes from the hairline box, not shadow.</li>
-            <li>Round the corners &mdash; the system is square everywhere (<code>--radius-md</code> is <code>0</code>). Keep it consistent.</li>
+            <li>Add drop shadows or faux elevation &mdash; the default stays flat; depth comes from the hairline box, not shadow.</li>
+            <li>Reach past the radius token for a one-off corner value &mdash; change <code>--radius-md</code> if you want a different radius everywhere.</li>
             <li>Nest bordered cards more than one level deep; the rules start to fight.</li>
             <li>Use a card just to create space &mdash; that&rsquo;s the job of <code>.flow</code> and the layout primitives.</li>
             <li>Tint the surface or paint a full colored border; the accent is a left marker in ink or muted, nothing more.</li>

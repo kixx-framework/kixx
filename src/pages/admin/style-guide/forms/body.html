@@ -29,7 +29,7 @@
         </form>
         <p class="demo-stage__hint">A live layout &mdash; tab through the fields to the button. The submit is inert here.</p>
     </div>
-    <ol class="parts-list">
+    <ol class="parts-list flow">
         <li><strong>Form flow</strong> &mdash; <code>&lt;form class="flow field-stack"&gt;</code>. The form is the flow container; each field, callout, and submit cluster is a direct child spaced by the flow gap.</li>
         <li><strong>Field</strong> &mdash; a standard <code>.field</code> with label, control, optional hint, and optional error text.</li>
         <li><strong>Field gap</strong> &mdash; the rhythm between rows, set by <code>.field-stack</code> to <code>--form-field-gap</code> so fields never crowd each other.</li>
@@ -109,6 +109,60 @@
     <p>Add <code>.field--error</code> to the wrapper to turn the control border red, set <code>aria-invalid="true"</code> on the control, and reference every rendered message id in <code>aria-describedby</code>. When a field has no standing guidance, render <code>.field__error</code> alone.</p>
 </div>
 
+<h3 class="type-h3 doc-section-heading">Native Controls</h3>
+<p class="doc-lede">A <code>select</code>, a checkbox, a radio, and a file input are left native &mdash; unstyled on purpose, so the browser and OS keep full control over their affordances.</p>
+<div class="example-grid grid-auto">
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field">
+                <label class="field__label" for="native-select">Role</label>
+                <select class="field__select" id="native-select">
+                    <option>Viewer</option>
+                    <option selected>Editor</option>
+                    <option>Admin</option>
+                </select>
+            </div>
+        </div>
+        <div class="example__label"><code>.field__select</code><span class="example__note">Native dropdown, field-aligned box</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field--choice">
+                <input type="checkbox" id="native-checkbox" checked>
+                <label for="native-checkbox">Email me when this finishes</label>
+            </div>
+        </div>
+        <div class="example__label"><code>.field--choice</code><span class="example__note">Checkbox &mdash; control untouched</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="flow">
+                <div class="field--choice">
+                    <input type="radio" name="native-radio" id="native-radio-1" checked>
+                    <label for="native-radio-1">Public</label>
+                </div>
+                <div class="field--choice">
+                    <input type="radio" name="native-radio" id="native-radio-2">
+                    <label for="native-radio-2">Private</label>
+                </div>
+            </div>
+        </div>
+        <div class="example__label"><code>.field--choice</code><span class="example__note">Radio group, one shared <code>name</code></span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <div class="field">
+                <label class="field__label" for="native-file">Attachment</label>
+                <input type="file" id="native-file">
+            </div>
+        </div>
+        <div class="example__label"><code>input[type=file]</code><span class="example__note">Native file picker</span></div>
+    </div>
+</div>
+<div class="doc-prose">
+    <p>None of these get a custom box. <code>.field__select</code> shares a text field&rsquo;s width, border, and radius but is never given <code>appearance: none</code>, so the browser&rsquo;s own dropdown affordance stays intact. Checkboxes, radios, and file inputs receive only <code>font: inherit</code> (from the reset) and <code>accent-color</code> (from the design tokens) &mdash; the OS draws the rest. <code>.field--choice</code> only lays a control beside its label; it does not touch the control itself.</p>
+</div>
+
 <h3 class="type-h3 doc-section-heading">Standalone Form Pages</h3>
 <p class="doc-lede">A form that is the page &mdash; login, signup, settings &mdash; sits in a centered column capped to the form measure so its lines never stretch too wide to scan.</p>
 <div class="doc-prose">
@@ -157,7 +211,7 @@ aria-describedby="email-hint email-error" aria-invalid="true"&gt;
 
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
-    <div class="card card--accent-secondary guideline guideline--do">
+    <div class="card card--accent-secondary guideline guideline--do flow">
         <p class="guideline__label">Do</p>
         <ul>
             <li>Put <code>.field-stack</code> on the <code>&lt;form&gt;</code> so every form shares one rhythm.</li>
@@ -166,7 +220,7 @@ aria-describedby="email-hint email-error" aria-invalid="true"&gt;
             <li>Keep standing guidance in <code>.field__hint</code> and validation feedback in <code>.field__error</code>.</li>
         </ul>
     </div>
-    <div class="card card--accent-primary guideline guideline--dont">
+    <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don&rsquo;t</p>
         <ul>
             <li>Leave a form on the bare <code>.flow</code> default when it is collecting multiple fields.</li>

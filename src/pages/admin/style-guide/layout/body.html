@@ -36,6 +36,15 @@
         <div class="demo-box">Third</div>
     </div>
 
+    <h4 class="type-h4">Flow &mdash; a per-child <code>--flow-space</code> override</h4>
+    <p class="type-body-sm">The container sets the default rhythm for every child. One child can override <code>--flow-space</code> on itself to change the space <em>above that child only</em> &mdash; the rest of the siblings keep the container&rsquo;s rhythm.</p>
+    <div class="layout-demo flow">
+        <div class="demo-box">Default gap above</div>
+        <div class="demo-box">Default gap above</div>
+        <div class="demo-box demo-box--flow-space-override">Extra gap above &mdash; only this child sets <code>--flow-space</code></div>
+        <div class="demo-box">Back to the default gap</div>
+    </div>
+
     <h4 class="type-h4">Cluster &mdash; wrapping row</h4>
     <p class="type-body-sm">A horizontal group that wraps with a shared gap. Toolbars, button rows, tag and chip lists, the header controls.</p>
     <div class="layout-demo cluster">
@@ -80,7 +89,7 @@
 
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
-    <div class="card card--accent-secondary guideline guideline--do">
+    <div class="card card--accent-secondary guideline guideline--do flow">
         <p class="guideline__label">Do</p>
         <ul>
             <li>Compose layout by nesting primitives &mdash; a <code>.cluster</code> inside a <code>.flow</code> inside a <code>.with-sidebar</code>.</li>
@@ -89,11 +98,11 @@
             <li>Keep tuning values on the design tokens (<code>--space-*</code>, <code>--measure-prose</code>).</li>
         </ul>
     </div>
-    <div class="card card--accent-primary guideline guideline--dont">
+    <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don't</p>
         <ul>
             <li>Reach for a bespoke <code>display: flex</code> / <code>grid</code> rule before checking the six primitives.</li>
-            <li>Use child-scoped <code>--flow-space</code> overrides to create one-off outside margins; put exceptional spacing in an explicit component rule.</li>
+            <li>Reach for a child-scoped <code>--flow-space</code> override as a first move; it's the exception path for one child, not a substitute for a container-level rhythm change.</li>
             <li>Add media-query breakpoints where <code>.grid-auto</code> or <code>.switcher</code> already adapt.</li>
             <li>Hard-code pixel gaps; the spacing ladder is the contract.</li>
         </ul>

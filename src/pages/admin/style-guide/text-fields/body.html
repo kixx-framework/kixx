@@ -4,9 +4,9 @@
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">Text fields collect short, structured input. They are intentionally plain — a clear border, a recessed fill, and nothing that distracts from the data being entered. The label sits above in the <a href="/admin/style-guide/typography">label register</a> (mono, uppercase), optional hint text carries standing guidance, and optional error text carries validation feedback.</p>
+    <p class="type-body-lg">Text fields collect short, structured input. They are intentionally plain — a clear border, a recessed fill, and nothing that distracts from the data being entered. The label sits above in normal body text at medium weight, optional hint text carries standing guidance, and optional error text carries validation feedback.</p>
 
-    <p><strong>When to use:</strong> a text field is for a single line of user input — names, email addresses, numbers, URLs, and similar. When the user needs to write more than a line or two, reach for a multi-line text area instead. When choosing from a fixed set of options, reach for a select or radio group.</p>
+    <p><strong>When to use:</strong> a text field is for a single line of user input — names, email addresses, numbers, URLs, and similar. When the user needs to write more than a line or two, reach for a <a href="/admin/style-guide/multi-line-text-areas">multi-line text area</a> instead. When choosing from a fixed set of options, reach for a <a href="/admin/style-guide/forms">select or radio group</a> — both are left native.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Anatomy</h3>
@@ -19,9 +19,9 @@
             <p class="field__hint">This is how your name appears to other users.</p>
         </div>
     </div>
-    <ol class="parts-list">
-        <li><strong>Label</strong> &mdash; mono, uppercase, muted; sits directly above the input and is always connected with a matching <code>for</code>/<code>id</code> pair.</li>
-        <li><strong>Input</strong> &mdash; the interactive control; a 1px muted box on the page surface, square corners, and a 2.75rem minimum height for a comfortable target.</li>
+    <ol class="parts-list flow">
+        <li><strong>Label</strong> &mdash; normal body text at medium weight, primary ink color; sits directly above the input and is always connected with a matching <code>for</code>/<code>id</code> pair.</li>
+        <li><strong>Input</strong> &mdash; the interactive control; a 1px muted box on the page surface, a small radius, and a 2.75rem minimum height for a comfortable target.</li>
         <li><strong>Hint</strong> &mdash; optional caption below; describes the expected format or explains a persistent constraint.</li>
         <li><strong>Error</strong> &mdash; optional validation feedback in <code>.field__error</code>; rendered only when the field needs correction.</li>
     </ol>
@@ -97,7 +97,7 @@
         <div><dt>Hover</dt><dd>Border intensifies to full <code>--color-ink</code> — the field sharpens without moving or jumping.</dd></div>
         <div><dt>Focus</dt><dd>Border stays active and a 2px <code>--color-focus-outline</code> ring appears, offset 2px from the border edge.</dd></div>
         <div><dt>Disabled</dt><dd>Muted border and muted text at half opacity; cursor becomes <code>not-allowed</code>. Hover and focus are suppressed.</dd></div>
-        <div><dt>Read-only</dt><dd>Border becomes dashed — a visual signal the value is visible but not editable. The field remains focusable and its text is selectable.</dd></div>
+        <div><dt>Read-only</dt><dd>Fill becomes the recessed <code>--color-surface-sunken</code> ground — a visual signal the value is visible but not editable. The field remains focusable and its text is selectable.</dd></div>
         <div><dt>Error</dt><dd>Border turns <code>--color-field-border-error</code> (the danger red, from <a href="/admin/style-guide/colors">the status color</a>). Persistent hints stay muted; <code>.field__error</code> carries the validation message.</dd></div>
     </dl>
 </div>
@@ -150,7 +150,7 @@ value="sk_live_••••••••" disabled&gt;
 
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
-    <div class="card card--accent-secondary guideline guideline--do">
+    <div class="card card--accent-secondary guideline guideline--do flow">
         <p class="guideline__label">Do</p>
         <ul>
             <li>Stack fields vertically in a form so the eye moves straight down the page and never hunts across a row for a matching label.</li>
@@ -160,7 +160,7 @@ value="sk_live_••••••••" disabled&gt;
             <li>Size fields to their expected content, not the full column width.</li>
         </ul>
     </div>
-    <div class="card card--accent-primary guideline guideline--dont">
+    <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don't</p>
         <ul>
             <li>Use placeholder text as a label &mdash; it disappears the moment the user starts typing.</li>

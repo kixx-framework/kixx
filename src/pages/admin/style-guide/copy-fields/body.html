@@ -26,9 +26,9 @@
             <p class="copy-field__status" role="status" aria-live="polite"></p>
         </div>
     </div>
-    <ol class="parts-list">
-        <li><strong>Label</strong> &mdash; mono, uppercase, muted; tied to the value input with a matching <code>for</code>/<code>id</code> pair, exactly like a field label.</li>
-        <li><strong>Value</strong> &mdash; a <code>readonly</code> <code>.field__input</code> so it carries the field&rsquo;s border, fill, font, and dashed read-only border; it scrolls long values natively and selects on click.</li>
+    <ol class="parts-list flow">
+        <li><strong>Label</strong> &mdash; normal body text at medium weight; tied to the value input with a matching <code>for</code>/<code>id</code> pair, exactly like a field label.</li>
+        <li><strong>Value</strong> &mdash; a <code>readonly</code> <code>.field__input</code> so it carries the field&rsquo;s border, sunken read-only fill, and monospace font (the one place mono appears outside <code>code</code>); it scrolls long values natively and selects on click.</li>
         <li><strong>Button</strong> &mdash; a square control matched to the input height; it copies the value and swaps its text icon to a success mark when the clipboard write succeeds.</li>
         <li><strong>Status</strong> &mdash; an <code>aria-live</code> line that stays empty until a copy, then announces <code>Copied.</code> or the manual-copy fallback. Its height is reserved so the row never shifts.</li>
     </ol>
@@ -101,7 +101,7 @@
         <p class="demo-stage__hint">This is a real control &mdash; press the button to copy, or click into the value.</p>
     </div>
     <dl class="state-list">
-        <div><dt>Idle</dt><dd>Value in an input with a dashed <code>readonly</code> border; the button sits quiet beside it. The status line is empty.</dd></div>
+        <div><dt>Idle</dt><dd>Value in a <code>readonly</code> input with a sunken fill; the button sits quiet beside it. The status line is empty.</dd></div>
         <div><dt>Value hover / focus</dt><dd>Clicking the value selects the whole string; focusing it shows the standard field focus ring.</dd></div>
         <div><dt>Button hover</dt><dd>The button inverts to a solid <code>--color-ink</code> fill &mdash; a clear, contained affordance without moving anything.</dd></div>
         <div><dt>Button focus</dt><dd>A 2px <code>--color-focus-outline</code> ring on <code>:focus-visible</code> for keyboard users.</dd></div>
@@ -139,7 +139,7 @@ aria-label="Copy invite link"&gt;
 
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
-    <div class="card card--accent-secondary guideline guideline--do">
+    <div class="card card--accent-secondary guideline guideline--do flow">
         <p class="guideline__label">Do</p>
         <ul>
             <li>Use it for any value the user needs to paste elsewhere &mdash; tokens, links, IDs, recovery codes.</li>
@@ -148,7 +148,7 @@ aria-label="Copy invite link"&gt;
             <li>Trust the progressive fallback: the plain <code>readonly</code> input is still selectable when scripting is off.</li>
         </ul>
     </div>
-    <div class="card card--accent-primary guideline guideline--dont">
+    <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don&rsquo;t</p>
         <ul>
             <li>Use <code>disabled</code> on the value &mdash; it can no longer be selected or copied by hand.</li>
