@@ -21,22 +21,24 @@
 /* -----------------------------------------------------------------------------
     Flow — vertical rhythm primitive
 
-    The Stack / "flow" idea (Andy Bell / Every Layout / Piccalilli). Add .flow to
-    any container and its DIRECT children get consistent vertical spacing from
-    the container's row gap. Spacing is a relationship BETWEEN siblings, so it
-    lives on the parent flow, not on per-element classes.
+    The "lobotomized owl" (Heydon Pickering / Andy Bell / Every Layout). Add
+    .flow to any container; every child after the first gets a top margin.
+    Spacing is a relationship BETWEEN siblings, so it is owned by the parent
+    .flow — components never set their own vertical margins.
 
-    Tune a container's rhythm by setting --flow-space on that container. Nested
-    flow elements are safe: the outer flow owns the nested element's outside gap,
-    and the inner flow owns the rhythm between its own children. If one child
-    needs exceptional outside spacing, make that exception explicit with a
-    component rule or utility margin instead of overloading --flow-space.
+    Tune a container's rhythm by setting --flow-space ON THE CONTAINER; every
+    child inherits it. Override for a single child by setting --flow-space on
+    that child instead — this changes the space above that child only, not the
+    rhythm of its siblings. Do not set --flow-space on .flow itself: the default
+    lives in the var() fallback below, so a child's own --flow-space always wins
+    over the container's inherited value.
+
+    Nesting is safe: a nested .flow only ever applies margins to its own direct
+    children, never to a descendant's descendants. This is a margin-based
+    primitive, not a flex column — do not add display: flex here.
 ----------------------------------------------------------------------------- */
-.flow {
-    --flow-space: var(--space-sm);
-    display: flex;
-    flex-direction: column;
-    gap: var(--flow-space);
+.flow > * + * {
+    margin-block-start: var(--flow-space, var(--space-sm));
 }
 
 /* -----------------------------------------------------------------------------
