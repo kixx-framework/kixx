@@ -110,16 +110,6 @@
 .supporting > div + div {
     border-top: var(--hairline-width) solid var(--color-rule);
 }
-/* Section headings read like markdown/man-page headers: a muted "#" marker sets
-   them off without borrowing the link accent. */
-.supporting h3 {
-    display: flex;
-    gap: var(--space-2xs);
-}
-.supporting h3::before {
-    content: "#";
-    color: var(--color-ink-muted);
-}
 /* The byline paragraph is metadata, so it drops to caption weight and color. */
 .supporting [role="contentinfo"] {
     margin-top: var(--space-sm);

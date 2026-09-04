@@ -37,7 +37,7 @@
 .field {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3xs);
+    gap: var(--space-2xs);
 }
 
 .field__label {
@@ -217,15 +217,17 @@ textarea.field__input {
     font-family: var(--font-mono);
 }
 
-/* Mirrors .button's box model (radius, transition, hover inversion) at a
-   fixed square size so the row's two edges align with .field__input. */
+/* Mirrors .button's box model (radius, transition, hover inversion), sized to
+   its text label rather than a fixed square — the "icon" is currently a
+   plain-text word, not a glyph. */
 .copy-field__button {
     flex: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.75rem;
+    min-width: 2.75rem;
     min-height: 2.75rem;
+    padding-inline: var(--space-sm);
     border: var(--field-border-width) solid var(--color-field-border);
     border-radius: var(--control-radius);
     color: var(--color-ink);

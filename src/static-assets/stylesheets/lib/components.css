@@ -37,6 +37,18 @@
 }
 
 /* -----------------------------------------------------------------------------
+    Site footer
+
+    Bottom edge of the page frame, so the rule matches the header's.
+----------------------------------------------------------------------------- */
+
+.site-footer {
+    padding-block: var(--space-lg);
+    padding-inline: var(--space-page-gutter);
+    border-top: var(--rule-width) solid var(--color-rule-strong);
+}
+
+/* -----------------------------------------------------------------------------
     Buttons
 
     A plain outline control. States are communicated by INVERSION (fill flips

@@ -27,13 +27,15 @@
     margin-top: var(--space-2xs);
 }
 
-/* A standalone section heading + its lede, sitting in the section flow. */
+/* A standalone section heading + its lede, sitting in the section flow. These
+   margins replace the flow's default gap outright (equal-specificity rules
+   override, they don't add to it), so each is written as the gap it wants. */
 .doc-section-heading {
-    margin-block-start: calc(var(--space-xl) - var(--space-lg));
+    margin-block-start: var(--space-xl);
 }
 
 .doc-lede {
-    margin-block-start: calc(var(--space-2xs) - var(--space-lg));
+    margin-block-start: var(--space-2xs);
     max-width: var(--measure-prose);
     color: var(--color-ink-muted);
 }
