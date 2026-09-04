@@ -17,7 +17,7 @@
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
             <div class="callout__body">
-                <p class="type-label">The running Release changed</p>
+                <p class="callout__title">The running Release changed</p>
                 <p class="type-body-sm">Nothing was changed. Reload this page and try again.</p>
             </div>
         </div>
@@ -26,7 +26,7 @@
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
             <div class="callout__body">
-                <p class="type-label">The running build changed</p>
+                <p class="callout__title">The running build changed</p>
                 <p class="type-body-sm">Nothing was changed. Reload this page and try again.</p>
             </div>
         </div>
@@ -35,7 +35,7 @@
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
             <div class="callout__body">
-                <p class="type-label">The running build has no Release assigned</p>
+                <p class="callout__title">The running build has no Release assigned</p>
                 <p class="type-body-sm">Use the Publishing API to assign a first Release before assigning from here.</p>
             </div>
         </div>
@@ -44,7 +44,7 @@
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
             <div class="callout__body">
-                <p class="type-label">That Release could not be found</p>
+                <p class="callout__title">That Release could not be found</p>
                 <p class="type-body-sm">Nothing was changed.</p>
             </div>
         </div>
@@ -53,7 +53,7 @@
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
             <div class="callout__body">
-                <p class="type-label">That form had expired</p>
+                <p class="callout__title">That form had expired</p>
                 <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
             </div>
         </div>
@@ -64,7 +64,7 @@
             {{#if runningBuild}}
                 {{#if runningBuild.releaseId}}
                 <div class="card flow">
-                    <p class="type-label">{{ runningBuild.id }}</p>
+                    <p><strong>{{ runningBuild.id }}</strong></p>
                     <p class="type-body-sm">
                         Running Release {{ runningBuild.releaseId }}
                         since {{ formatDate runningBuild.assignedAt format="DATETIME_MED" }}
@@ -90,7 +90,7 @@
             {{#each builds as |build| }}
                 <li>
                     <article class="card flow">
-                        <p class="type-label"><a href="{{ build.href }}">{{ build.id }}</a>{{#if build.isRunning}} (running){{/if}}</p>
+                        <p><strong><a href="{{ build.href }}">{{ build.id }}</a></strong>{{#if build.isRunning}} (running){{/if}}</p>
                         {{#if build.releaseId}}
                         <p class="type-body-sm">Release {{ build.releaseId }}</p>
                         <p class="type-body-sm">Assigned {{ formatDate build.assignedAt format="DATETIME_MED" }}</p>
@@ -112,13 +112,13 @@
             <ul class="flow">
             {{#each releases as |release| }}
                 <li class="card flow">
-                    <p class="type-label"><a href="{{ release.href }}">{{ release.id }}</a>{{#if release.isCurrent}} (current){{/if}}</p>
+                    <p><strong><a href="{{ release.href }}">{{ release.id }}</a></strong>{{#if release.isCurrent}} (current){{/if}}</p>
                     <p class="type-body-sm">
                         Created {{ formatDate release.createdAt format="DATETIME_MED" }} by {{ release.createdBy }}
                     </p>
                     <p class="type-body-sm">{{ release.objectCount }} objects, {{ release.totalBytes }} bytes</p>
                     {{#if release.isCurrent}}
-                    <p class="type-label">Current</p>
+                    <p class="type-caption">Current</p>
                     {{else}}
                         {{#if form}}
                         <form class="cluster" method="{{ form.method }}" action="{{ form.url }}">

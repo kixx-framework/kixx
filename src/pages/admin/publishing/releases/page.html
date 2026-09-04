@@ -6,12 +6,12 @@
         </header>
 
         <div class="card flow">
-            <p class="type-label">{{ release.id }}{{#if release.isCurrent}} (current){{/if}}</p>
+            <p><strong>{{ release.id }}</strong>{{#if release.isCurrent}} (current){{/if}}</p>
             <p class="type-body-sm">Created {{ formatDate release.createdAt format="DATETIME_MED" }} by {{ release.createdBy }}</p>
             <p class="type-body-sm">{{ release.objectCount }} objects, {{ release.totalBytes }} bytes</p>
 
             <div class="flow">
-                <p class="type-label">Provenance</p>
+                <p class="type-caption">Provenance</p>
                 {{#if release.hasProvenance}}
                 {{#with release.provenance}}
                 {{#if sourceRevision}}<p class="type-body-sm">Source revision: {{ sourceRevision }}</p>{{/if}}
@@ -48,7 +48,7 @@
             {{#each referencingBuilds as |build| }}
                 <li>
                     <article class="card flow">
-                        <p class="type-label"><a href="{{ build.href }}">{{ build.id }}</a>{{#if build.isRunning}} (running){{/if}}</p>
+                        <p><strong><a href="{{ build.href }}">{{ build.id }}</a></strong>{{#if build.isRunning}} (running){{/if}}</p>
                         <p class="type-body-sm">Assigned {{ formatDate build.assignedAt format="DATETIME_MED" }}</p>
                     </article>
                 </li>

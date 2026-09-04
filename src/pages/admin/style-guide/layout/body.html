@@ -18,7 +18,7 @@
 
     <div class="callout">
         <div class="callout__body">
-            <p class="type-label">Rule of thumb</p>
+            <p class="callout__title">Rule of thumb</p>
             <p>This page is built from them: the header bar is a <code>.cluster</code>, and the whole app shell is a <code>.with-sidebar</code>. Reach for a primitive before a bespoke rule. Nested <code>.flow</code> elements are safe: the outer flow controls the nested element's outside gap, and the inner flow controls its own children.</p>
         </div>
     </div>
@@ -81,7 +81,7 @@
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
     <div class="card card--accent-secondary guideline guideline--do">
-        <p class="type-label guideline__label">Do</p>
+        <p class="guideline__label">Do</p>
         <ul>
             <li>Compose layout by nesting primitives &mdash; a <code>.cluster</code> inside a <code>.flow</code> inside a <code>.with-sidebar</code>.</li>
             <li>Adjust one axis by setting its custom property, not by writing a new rule.</li>
@@ -90,7 +90,7 @@
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
-        <p class="type-label guideline__label">Don't</p>
+        <p class="guideline__label">Don't</p>
         <ul>
             <li>Reach for a bespoke <code>display: flex</code> / <code>grid</code> rule before checking the six primitives.</li>
             <li>Use child-scoped <code>--flow-space</code> overrides to create one-off outside margins; put exceptional spacing in an explicit component rule.</li>

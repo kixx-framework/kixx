@@ -7,7 +7,7 @@
         <div class="callout{{#ifEqual error.classification "error"}} callout--error{{else}} callout--warning{{/ifEqual}}">
             <span class="callout__icon" aria-hidden="true">{{#ifEqual error.classification "error"}}[x]{{else}}[!]{{/ifEqual}}</span>
             <div class="callout__body">
-                <p class="type-label">{{ error.statusCode }}</p>
+                <p class="callout__title">{{ error.statusCode }}</p>
                 <p class="type-body-sm">{{ error.message }}</p>
             </div>
         </div>

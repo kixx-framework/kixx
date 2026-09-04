@@ -19,7 +19,7 @@
     <div class="callout">
         <span class="callout__icon" aria-hidden="true">*</span>
         <div class="callout__body">
-            <p class="type-label">The rule</p>
+            <p class="callout__title">The rule</p>
             <p>A component rule consumes a semantic <code>--color-*</code> token only. It never names a raw <code>--palette-*</code> token or writes an <code>hsl()</code> / hex literal. If you reach for the palette in a component, the role you actually want is a missing semantic token &mdash; add it.</p>
         </div>
     </div>
@@ -170,7 +170,7 @@
 <div class="callout">
     <span class="callout__icon" aria-hidden="true">*</span>
     <div class="callout__body">
-        <p class="type-label">Status colors</p>
+        <p class="callout__title">Status colors</p>
         <p>A functional family, kept off the link accent so &ldquo;something is wrong&rdquo; never shares a color with &ldquo;this is a link.&rdquo; All three read as a foreground mark (text, border, icon) and are theme-aware so they hold contrast on light and dark: <code>--color-status-danger</code> (a deep red on paper, brighter on the void &mdash; as <code>.field--error</code> uses it), <code>--color-status-warning</code> (a deep amber on light, brand yellow on dark), and <code>--color-status-success</code> for confirmations. Because these are tuned for <em>marks</em> (3:1), not body text (4.5:1), keep the message itself in <code>--color-ink</code>.</p>
     </div>
 </div>
@@ -178,7 +178,7 @@
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
     <div class="card card--accent-secondary guideline guideline--do">
-        <p class="type-label guideline__label">Do</p>
+        <p class="guideline__label">Do</p>
         <ul>
             <li>Style components with semantic <code>--color-*</code> tokens &mdash; <code>--color-ink</code>, <code>--color-rule</code>, <code>--color-bg</code>.</li>
             <li>When a role is missing, add a semantic token instead of hardcoding.</li>
@@ -187,7 +187,7 @@
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
-        <p class="type-label guideline__label">Don&rsquo;t</p>
+        <p class="guideline__label">Don&rsquo;t</p>
         <ul>
             <li>Name a raw <code>--palette-*</code> token or write an <code>hsl()</code> / hex literal in a component rule.</li>
             <li>Reach past the semantic layer &mdash; not even &ldquo;just this once.&rdquo;</li>

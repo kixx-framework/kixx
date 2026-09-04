@@ -6,7 +6,7 @@
         </header>
 
         <div class="card flow">
-            <p class="type-label">{{ build.id }}{{#if build.isRunning}} (running){{/if}}</p>
+            <p><strong>{{ build.id }}</strong>{{#if build.isRunning}} (running){{/if}}</p>
             {{#if build.releaseId}}
             <p class="type-body-sm">Release <a href="{{ build.releaseHref }}">{{ build.releaseId }}</a></p>
             <p class="type-body-sm">Assigned {{ formatDate build.assignedAt format="DATETIME_MED" }}</p>
@@ -21,7 +21,7 @@
             <ul class="flow">
             {{#each activations as |activation| }}
                 <li class="card flow">
-                    <p class="type-label">{{ activation.reason }}</p>
+                    <p><strong>{{ activation.reason }}</strong></p>
                     <p class="type-body-sm">
                         {{#if activation.fromReleaseHref}}
                         From <a href="{{ activation.fromReleaseHref }}">{{ activation.fromReleaseId }}</a>

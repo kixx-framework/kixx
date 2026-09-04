@@ -15,7 +15,6 @@
     <ul>
         <li><strong>Structural headings</strong> &mdash; <code>h1</code>&ndash;<code>h4</code>, bold and larger.</li>
         <li><strong>Reading &amp; UI text</strong> &mdash; from <code>.type-body-lg</code> down to <code>.type-caption</code>.</li>
-        <li><strong>Label / overline</strong> &mdash; uppercase and tracked; the signature for small functional text. Buttons, field labels, and the nav title all use it.</li>
         <li><strong>Code</strong> &mdash; the same face with a faint ground, for inline tokens like <code>--text-h1</code>.</li>
     </ul>
 
@@ -32,8 +31,8 @@
     <div class="callout">
         <span class="callout__icon" aria-hidden="true">*</span>
         <div class="callout__body">
-            <p class="type-label">Rule of thumb</p>
-            <p>Line-height is role-dependent, never one global value. Big headings run tight (1.2), reading copy opens to 1.65 for breathability, and dense UI text sits near 1.45 to save vertical space.</p>
+            <p class="callout__title">Rule of thumb</p>
+            <p>Line-height is role-dependent, never one global value. Big headings run tight (1.15), reading copy opens up for breathability, and dense UI text sits tighter to save vertical space.</p>
         </div>
     </div>
 </div>
@@ -131,17 +130,6 @@
     </article>
 
     <article class="card card--flush specimen">
-        <div class="specimen__sample"><p class="type-label">Account status</p></div>
-        <dl class="specimen__meta grid-auto">
-            <div><dt>Class</dt><dd>.type-label</dd></div>
-            <div><dt>Size</dt><dd>0.75rem &middot; 12px</dd></div>
-            <div><dt>Weight</dt><dd>700 &middot; caps</dd></div>
-            <div><dt>Tracking</dt><dd>+0.12em</dd></div>
-            <div class="specimen__use"><dt>Use for</dt><dd>Overlines, field labels, and status chips. The theme&rsquo;s small-text signature.</dd></div>
-        </dl>
-    </article>
-
-    <article class="card card--flush specimen">
         <div class="specimen__sample"><p class="type-body">Reference a token inline, like <code>--leading-relaxed</code>, with the code role.</p></div>
         <dl class="specimen__meta grid-auto">
             <div><dt>Class</dt><dd>code &middot; .type-code</dd></div>
@@ -156,7 +144,7 @@
 <h3 class="type-h3 doc-section-heading">Guidelines</h3>
 <div class="guidelines grid-auto">
     <div class="card card--accent-secondary guideline guideline--do">
-        <p class="type-label guideline__label">Do</p>
+        <p class="guideline__label">Do</p>
         <ul>
             <li>Reach for semantic elements first &mdash; <code>h1</code>&ndash;<code>h4</code> and <code>p</code> render correctly with no classes.</li>
             <li>Signal importance with size and weight, not color, italics, or underlines.</li>
@@ -166,7 +154,7 @@
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont">
-        <p class="type-label guideline__label">Don&rsquo;t</p>
+        <p class="guideline__label">Don&rsquo;t</p>
         <ul>
             <li>Introduce a second typeface or download a web font &mdash; the system is one system-provided mono family.</li>
             <li>Pick a heading level for its size &mdash; choose the level for structure, then restyle with a <code>.type-*</code> class.</li>

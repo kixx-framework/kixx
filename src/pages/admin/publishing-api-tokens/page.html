@@ -14,7 +14,7 @@
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
             <div class="callout__body">
-                <p class="type-label">That form had expired</p>
+                <p class="callout__title">That form had expired</p>
                 <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
             </div>
         </div>
@@ -92,7 +92,7 @@
         <ul class="flow">
         {{#each tokens as |token| }}
             <li class="card flow">
-                <p class="type-label">{{ token.status }}</p>
+                <p class="type-caption">{{ token.status }}</p>
                 {{#if token.description}}
                 <p class="type-body-sm">{{ token.description }}</p>
                 {{else}}

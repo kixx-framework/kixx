@@ -15,7 +15,7 @@
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
             <div class="callout__body">
-                <p class="type-label">That form had expired</p>
+                <p class="callout__title">That form had expired</p>
                 <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
             </div>
         </div>
@@ -85,12 +85,12 @@
         <ul class="flow">
         {{#each invites as |invite| }}
             <li class="card flow">
-                <p class="type-label">{{ invite.status }}</p>
+                <p class="type-caption">{{ invite.status }}</p>
                 {{!-- Bootstrap markers carry no roles, so the line is omitted rather than
                       rendered empty. --}}
                 {{#if invite.roles}}
                 <p class="type-body-sm">
-                    Grants: <span class="type-label">{{ invite.roles }}</span>
+                    Grants: <strong>{{ invite.roles }}</strong>
                 </p>
                 {{/if}}
                 <p class="type-body-sm">

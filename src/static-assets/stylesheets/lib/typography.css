@@ -1,10 +1,11 @@
 /* -----------------------------------------------------------------------------
     Typography roles
 
-    One monospace family carries the whole system. Semantic elements (h1-h4, p,
-    code) already render at the right role, so plain HTML is correct with no
-    classes. The matching .type-* utility applies the SAME role to ANY element —
-    reach for one only when the visual size must differ from the semantic level.
+    A generic system sans-serif carries the whole system. Semantic elements
+    (h1-h4, p, code) already render at the right role, so plain HTML is correct
+    with no classes. The matching .type-* utility applies the SAME role to ANY
+    element — reach for one only when the visual size must differ from the
+    semantic level.
 
     Golden rule: choose a heading level for document STRUCTURE, then, if the size
     is wrong, restyle it with a .type-* class. Never pick a level for its size.
@@ -13,32 +14,32 @@
     decoration. A heading is bigger and heavier; it is never a different hue.
 ----------------------------------------------------------------------------- */
 
-/* Structural headings — bigger + heavier steps of the one mono face. */
+/* Structural headings. */
 h1,
 .type-h1 {
     font-size: var(--text-h1);
-    font-weight: var(--weight-bold);
+    font-weight: var(--weight-semibold);
     line-height: var(--leading-tight);
 }
 
 h2,
 .type-h2 {
     font-size: var(--text-h2);
-    font-weight: var(--weight-bold);
+    font-weight: var(--weight-semibold);
     line-height: var(--leading-tight);
 }
 
 h3,
 .type-h3 {
     font-size: var(--text-h3);
-    font-weight: var(--weight-bold);
+    font-weight: var(--weight-semibold);
     line-height: var(--leading-snug);
 }
 
 h4,
 .type-h4 {
     font-size: var(--text-h4);
-    font-weight: var(--weight-bold);
+    font-weight: var(--weight-semibold);
     line-height: var(--leading-snug);
 }
 
@@ -69,18 +70,8 @@ h4,
     color: var(--color-ink-muted);
 }
 
-/* Label / overline — uppercase + tracked. The signature for small functional
-   text; buttons, field labels, and the nav title all follow this convention. */
-.type-label {
-    font-size: var(--text-label);
-    font-weight: var(--weight-bold);
-    line-height: var(--leading-normal);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-}
-
-/* Inline code — the whole page is already mono, so code needs only a faint
-   ground and square padding to read as a distinct token, not a new typeface. */
+/* Inline code — monospace is reserved for code-like content, so it reads as a
+   distinct token against the sans-serif body text around it. */
 code,
 .type-code {
     font-family: var(--font-mono);
@@ -100,11 +91,12 @@ kbd {
     background: var(--color-surface-sunken);
 }
 
-/* Blockquote — set off by a character-width left rule and the accent, the way a
-   quoted passage is marked in a plain-text document. */
+/* Blockquote — set off by a left rule, the way a quoted passage is marked in a
+   plain-text document. Uses the rule color, not the link accent: color is a
+   signal reserved for links and status, not decoration. */
 blockquote {
     margin: 0;
     padding-left: var(--space-sm);
-    border-left: 2px solid var(--color-ink-link);
+    border-left: 2px solid var(--color-rule-strong);
     color: var(--color-ink-muted);
 }

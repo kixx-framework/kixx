@@ -66,9 +66,8 @@
 }
 
 .specimen__meta dt {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-label);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
     color: var(--color-ink-muted);
 }
 
@@ -139,6 +138,11 @@
 
 .guideline li + li {
     margin-top: var(--space-2xs);
+}
+
+.guideline__label {
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
 }
 
 .guideline__label::before {
@@ -279,8 +283,7 @@
 .state-list dt {
     flex: 0 0 6rem;
     font-size: var(--text-caption);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-label);
+    font-weight: var(--weight-medium);
     color: var(--color-ink-muted);
 }
 

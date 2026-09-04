@@ -99,9 +99,8 @@ body:has(> .admin-layout) {
 .admin-nav__title {
     margin-bottom: 0.5rem;
     padding-inline: clamp(1rem, 2.5vw, 1.75rem);
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-label);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
     color: var(--color-ink-muted);
 }
 

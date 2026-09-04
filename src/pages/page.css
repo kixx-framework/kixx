@@ -128,33 +128,23 @@
 }
 
 /* -----------------------------------------------------------------------------
-    Footer — the validator / license row rendered as bracketed terminal chips,
-    matching the [ button ] treatment in the shared component sheet.
+    Footer — the validator / license row, a plain row of small caption links.
 ----------------------------------------------------------------------------- */
 .supporting footer {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-2xs);
+    gap: var(--space-sm);
     margin-top: var(--space-lg);
     padding-top: var(--space-lg);
     border-top: var(--rule-width) solid var(--color-rule-strong);
 }
 .supporting footer a {
-    font-size: var(--text-label);
-    font-weight: var(--weight-bold);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
     text-decoration: none;
     color: var(--color-ink);
 }
-/* Non-breaking spaces inside the brackets keep the label off the corner. */
-.supporting footer a::before { content: "[\00a0"; }
-.supporting footer a::after  { content: "\00a0]"; }
 .supporting footer a:hover {
-    color: var(--color-ink-link);
-}
-.supporting footer a:hover::before,
-.supporting footer a:hover::after {
     color: var(--color-ink-link);
 }
 
@@ -175,13 +165,10 @@
     position: sticky;
     top: var(--space-lg);
 }
-/* Panel headings share the uppercase tracked "label" register used across the
-   system for small functional text. */
+/* Panel headings — small, muted section titles for the index panels. */
 .sidebar h3 {
-    font-size: var(--text-label);
-    font-weight: var(--weight-bold);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
     color: var(--color-ink-muted);
     padding-bottom: var(--space-2xs);
     margin-bottom: var(--space-xs);
