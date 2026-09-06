@@ -263,7 +263,7 @@ export default class ContentStore {
             await this.#syncDirectory(shardDirectory, hash);
         } catch (cause) {
             await this.#removeTemporaryFile(temporaryPath, hash);
-            if (cause instanceof OperationalError) {
+            if (cause.name === 'OperationalError') {
                 throw cause;
             }
             throw new OperationalError(`NodeContentStore failed to publish blob "${ hash }"`, { cause });
@@ -528,7 +528,7 @@ export default class ContentStore {
         try {
             this.#prepareDatabase(this.#database);
         } catch (cause) {
-            if (cause instanceof AssertionError) {
+            if (cause.name === 'AssertionError') {
                 throw cause;
             }
             throw new OperationalError('NodeContentStore failed to initialize database schema', { cause });
