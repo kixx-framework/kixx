@@ -52,7 +52,10 @@ const dotenvFile = resolveDotenvFilepath({
     dotenv: cliOptions.dotenv,
 });
 
-const env = readEnvironment({ dotenvFile });
+const env = readEnvironment({
+    dotenvFile,
+    secretsManifestFile: path.join(THIS_DIRECTORY, 'example.env.secrets'),
+});
 
 const resolveFilepath = createResolveFilepath({
     baseDirectory: THIS_DIRECTORY,
