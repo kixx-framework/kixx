@@ -68,7 +68,7 @@ export default {
             // as a success: no exception event.
             // Rejecting a waitUntil() promise gives us both — the platform records the
             // exception with its stack, and the client still gets our response.
-            cloudflare.waitUntil(Promise.reject(error));
+            cloudflare.waitUntil(waitToThrow(1000, error));
 
             // Last resort: the routing pipeline could not turn this error into a response.
             // mapErrorToJsonError() redacts the message of any error which is not a
@@ -84,3 +84,8 @@ export default {
         }
     },
 };
+
+async function waitToThrow(milliseconds, error) {
+    await scheduler.wait(milliseconds);
+    throw error;
+}
