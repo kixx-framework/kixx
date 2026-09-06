@@ -73,9 +73,11 @@ export default {
             // Last resort: the routing pipeline could not turn this error into a response.
             // mapErrorToJsonError() redacts the message of any error which is not a
             // public-safe HttpError, so nothing internal leaks.
-            const jsonError = HttpRouter.mapErrorToJsonError(error);
+            const payload = {
+                errors: [ HttpRouter.mapErrorToJsonError(error) ],
+            };
 
-            return new Response(JSON.stringify(jsonError, null, 4), {
+            return new Response(JSON.stringify(payload, null, 4), {
                 status: 500,
                 headers: {
                     'content-type': 'application/vnd.api+json',
