@@ -12,6 +12,7 @@ import { plugins as cloudflarePlugins, durableObjects } from './plugins/cloudfla
 import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import virtualHosts from './virtual-hosts.js';
 
+
 // ENVIRONMENT selects which section of the source config is loaded, so it is
 // the one setting which cannot itself come from the config.
 const environment = env.ENVIRONMENT || 'development';
@@ -47,7 +48,7 @@ export const { ContentAddressableIndexStore } = durableObjects;
 export default {
     // requestEnvironment is the per-request env binding snapshot provided by the Workers runtime.
     // It may differ from the module-level `env` used at startup (e.g. in tail worker configurations).
-    async fetch(nativeRequest, requestEnvironment, _cloudflare) {
+    async fetch(nativeRequest, requestEnvironment, cloudflare) {
         try {
             const request = new ServerRequest(nativeRequest);
             const requestContext = appContext.createRequestContext(requestEnvironment, request);
@@ -60,7 +61,26 @@ export default {
             });
         } catch (error) {
             logger.error('worker fetch error', null, error);
-            throw error;
+
+            // Report the failure to the Workers runtime without throwing out of fetch(). A
+            // throw here would discard the response below and serve Cloudflare's own error
+            // page instead, but simply returning a 500 would leave the invocation recorded
+            // as a success: no exception event.
+            // Rejecting a waitUntil() promise gives us both — the platform records the
+            // exception with its stack, and the client still gets our response.
+            cloudflare.waitUntil(Promise.reject(error));
+
+            // Last resort: the routing pipeline could not turn this error into a response.
+            // mapErrorToJsonError() redacts the message of any error which is not a
+            // public-safe HttpError, so nothing internal leaks.
+            const jsonError = HttpRouter.mapErrorToJsonError(error);
+
+            return new Response(JSON.stringify(jsonError, null, 4), {
+                status: 500,
+                headers: {
+                    'content-type': 'application/vnd.api+json',
+                },
+            });
         }
     },
 };

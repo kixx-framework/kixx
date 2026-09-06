@@ -59,6 +59,14 @@ Do not catch-and-swallow. Do not convert a programmer error into an operational 
 
 This does **not** mean the one in-flight request that hit the bug must receive a bare or unstyled response. The fatal-error/shutdown decision is driven by an `error` event the router emits for every failure, independently of whatever response is eventually produced for that request.
 
+### How Each Entry Point Applies the Rule
+
+The rule is about reaching the platform's fatal-error policy, not about the `throw` statement itself, so the two entry points implement it differently.
+
+`node-server.js` shuts the process down. A Node.js process owns long-lived mutable state — open store connections, in-memory caches — which a bug may have corrupted, and a supervisor restarts it clean.
+
+`cloudflare-server.js` does not rethrow out of `fetch()`. A throw there does not restart the isolate the way `process.exit()` restarts a process; it only replaces the response with Cloudflare's generic error page and risks truncating the log tail. The entry point returns a JSON:API 500 and reports the error to the runtime with `waitUntil(Promise.reject(error))`, which still produces the platform `exception` event and still counts against the Worker's error rate.
+
 ## Assumptions To Assertions
 
 The way we protect against unexpected errors is to write down our assumptions as **assertions** at the boundaries of our code. An assertion that fails is a loud, immediate crash with a precise message — exactly what you want for a bug.
