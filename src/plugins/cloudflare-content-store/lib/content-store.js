@@ -237,6 +237,13 @@ export default class ContentStore {
         return await promise;
     }
 
+    /**
+     * Retrieves an immutable index closure directly by root hash.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {string} rootHash - Content hash identifying the closure
+     * @returns {Promise<Object|null>} The encoded index table, or null when no closure is stored under `rootHash`
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     */
     async getIndex(context, rootHash) {
         assertNonEmptyString(rootHash, 'CloudflareContentStore#getIndex: rootHash');
         const result = await this.#callDurableObject(
@@ -244,6 +251,9 @@ export default class ContentStore {
             'getIndex',
             (durableObject) => durableObject.getIndex(rootHash),
         );
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#getIndex() was unsuccessful: ${ result.message }`);
+        }
         return result.entries;
     }
 

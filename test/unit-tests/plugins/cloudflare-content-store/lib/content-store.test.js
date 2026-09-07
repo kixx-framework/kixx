@@ -409,6 +409,25 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
     });
 
+    describe('getIndex()', ({ it }) => {
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = {
+                async getIndex() {
+                    return { success: false, message: 'closure table unavailable' };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.getIndex(makeContext({ durableObject }), 'root-hash'),
+            );
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
+            assertMatches('closure table unavailable', caught.message);
+        });
+    });
+
     describe('assignBuild()', ({ it }) => {
         it('returns missingClosure without invalidating caches', async () => {
             let getBuildCalls = 0;
