@@ -1,6 +1,6 @@
 # Frontend Development Guide
 
-This guide covers the frontend development conventions for this project: the live style guide, public and admin layout boundaries, source stylesheet organization, class naming, design tokens, CSS formatting, CSS comments, and the page-local stylesheet pattern. For template syntax, see `templates/README.md`. For presentation-layer and HTTP middleware and request handlers, see `app/presentation/README.md`.
+This guide covers the frontend development conventions for this project: the live style guide, public and admin layout boundaries, source stylesheet organization, class naming, design tokens, the color-scheme contract, CSS formatting, CSS comments, the page-local stylesheet pattern, and browser JavaScript. For template syntax, see `templates/README.md`. For presentation-layer and HTTP middleware and request handlers, see `app/presentation/README.md`.
 
 ## Public Pages Are the Default
 
@@ -17,8 +17,11 @@ Admin pages are an extension of the public foundation, not the baseline every pa
 
 Before writing or reviewing any frontend markup or CSS, check the live style guide. It is the design reference and a set of working examples built from the project's own primitives and components:
 
-- Start with `pages/admin/style-guide/aesthetic/body.html` — the tone and design philosophy behind every other section.
-- Read the source files under `pages/admin/style-guide/` when you need concrete markup examples.
+- Start with `pages/admin/style-guide/aesthetic/body.html` — the tone and design philosophy behind every other section, and the line it draws between a structural rule you keep and a default you are expected to change.
+- Read the source files under `pages/admin/style-guide/` when you need concrete markup examples. The sections are `aesthetic`, `typography`, `colors`, `layout`, `buttons`, `cards`, `callouts`, `forms`, `text-fields`, `multi-line-text-areas`, and `copy-fields`.
+- Served at `/admin/style-guide/<section>` behind the admin auth gate.
+
+The shipped style guide is a place-holder for a default Kixx installation. It is expected to be replaced once a site establishes its own aesthetic; the structural rules in this document outlive it.
 
 Treat the style guide as the source of truth for aesthetic decisions: color use, type roles, spacing rhythm, component anatomy, and state treatment. Its shell and navigation examples are admin examples; copy those only for admin pages. Public pages should borrow the shared tokens, typography roles, layout primitives, and reusable components without inheriting admin-panel chrome by default.
 
@@ -43,12 +46,22 @@ CSS source lives under `src/static-assets/stylesheets/`. There are two styleshee
 
 ```text
 src/static-assets/stylesheets/
-├── admin.css
-├── stylesheet.css
-└── lib/             # Source library for admin.css and stylesheet.css
+├── stylesheet.css          # Public bundle: imports the six shared lib files, in order
+├── admin.css               # Admin bundle: imports stylesheet.css, then the two admin files
+└── lib/
+    ├── design-tokens.css   # The three token tiers, color-scheme roles, type scale, spacing
+    ├── reset.css           # Low-specificity browser normalization
+    ├── typography.css      # Element type roles (h1-h4, code, kbd, blockquote) + .type-* utilities
+    ├── layout.css          # Every Layout primitives + .list-unstyled
+    ├── components.css      # .site-header, .site-footer, .button, .theme-toggle, .card, .callout
+    ├── forms.css           # .field-stack, .field, .copy-field
+    ├── admin-shell.css     # Admin-only: .admin-layout, .admin-header, .admin-nav, .admin-main
+    └── admin-style-guide.css  # Admin-only: demo and prose chrome for the style-guide pages
 ```
 
-Templates link to public logical URLs such as `/stylesheets/stylesheet.css`; source imports use root-relative logical URLs such as `/stylesheets/lib/layout.css`. Keep the bundle ordered from low-level foundations to higher-level components.
+`admin.css` does not replace the public bundle, it extends it: its first import is `/stylesheets/stylesheet.css`, and the two admin files layer on top. A rule that belongs on both surfaces goes in `lib/`; only shell chrome and style-guide demo chrome go in the two `admin-*` files.
+
+Templates link to public logical URLs such as `/stylesheets/stylesheet.css` through the `assetUrl` helper, which fingerprints the entrypoint. Source `@import` statements use root-relative logical URLs such as `/stylesheets/lib/layout.css`; those revalidate independently, so never write a relative or fingerprinted path inside a stylesheet. Keep each bundle ordered from low-level foundations to higher-level components.
 
 Before adding a new file to `lib/`, prefer extending one of the existing files. The project favors a handful of well-documented stylesheets over many small files, so related rules stay close to the examples and comments that explain them.
 
@@ -128,7 +141,7 @@ BEM in this project is an ownership rule, not just a naming convention:
 - **An element is only ever styled from within its own block's rules.** `.callout__body` is styled in the `.callout` section of `components.css`. No other block's rules may reach into `.callout__body`.
 - **A modifier always accompanies its base class in markup** (`class="callout callout--warning"`), never alone. The base class carries the shared rules; the modifier only overrides what varies.
 - **Page-local stylesheets may add a new block, a new modifier of an existing block, or a page-scoped rule.** They may not restyle a shared block's elements — that is the shared block's owner reaching an inconsistent hand back into a stylesheet it does not control.
-- **Utilities are flat, single-purpose classes**: `.flow`, `.cluster`, `.center`, `.type-caption`. They are not blocks — they have no elements and no modifiers — they are reusable declaration blocks applied directly to whatever markup needs them.
+- **Utilities and layout primitives are flat, single-purpose classes**: `.flow`, `.cluster`, `.center`, `.list-unstyled`, `.type-caption`. They are not blocks — they own no elements — they are reusable declaration blocks applied directly to whatever markup needs them. A primitive may carry a `--` modifier that only presets one of its custom properties (`.center--form` sets `--center-max`), but it never gains parts.
 
 ### Tuning Instances with Custom Properties
 
@@ -161,7 +174,21 @@ component token  ->  semantic token  ->  reference palette token
 
 A component rule must not name a raw `--palette-*` token or a literal color. Use semantic tokens for foregrounds, backgrounds, rules, status marks, focus outlines, and selection colors.
 
-The same tiered thinking applies to spacing (`--space-*`), measures (`--measure-*`), type scale (`--text-*`, `--leading-*`, `--tracking-*`, `--weight-*`), radii, and border widths. Read the comments in `design-tokens.css` and the relevant style-guide pages before adding a new token.
+The same tiered thinking applies to spacing (`--space-*`, plus the standalone `--space-page-gutter` and `--space-section-gap`), measures (`--measure-prose`, `--measure-form`), the type scale (`--text-*`, `--leading-*`, `--weight-*`), radii (`--radius-sm`, `--radius-md`, `--control-radius`), and border widths (`--rule-width`, `--hairline-width`, `--button-border-width`, `--accent-border-width`). There is no letter-spacing token: tracking is not a hierarchy tool here. Read the comments in `design-tokens.css` and the relevant style-guide pages before adding a new token.
+
+## Color Scheme and Theming
+
+The site supports light and dark without duplicated stylesheets. Three pieces make that work, and a component rule should not have to touch any of them:
+
+1. `design-tokens.css` sets `color-scheme: light dark` on `:root` and resolves every themed semantic token with `light-dark(<light value>, <dark value>)`.
+2. `common-site-meta.html` runs a small inline script before first paint that reads the saved preference from `localStorage` and stamps `data-color-scheme="light"` or `"dark"` on `<html>`. `design-tokens.css` maps that attribute back onto `color-scheme`, so an explicit choice overrides the OS. This script is the one deliberate exception to keeping behavior out of templates: it must run before paint or the page flashes the wrong theme.
+3. `site.js` wires the `.theme-toggle` control, writes the choice to `localStorage`, and follows the OS preference while no explicit choice is stored.
+
+Consequences when you write CSS:
+
+- **Never write a `prefers-color-scheme` media query in a component rule.** Put both values in a `light-dark()` semantic token in `design-tokens.css` and read the token.
+- **Never write a literal color or a `--palette-*` reference in a component rule** — it will be correct in exactly one scheme.
+- **Never assume a theme.** Anything shipped must be legible on both grounds; check both before calling a change done.
 
 ## Typography
 
@@ -188,6 +215,19 @@ When you do reach for fluid type, keep it zoom-safe so it does not regress WCAG 
 
 `layout.css` defines a small family of composable, single-purpose layout primitives in the Every Layout tradition. Each is one class tuned by scoped custom properties. Compose these before writing a new `display: flex` or `display: grid` rule. Most page structure should be a nesting of these primitives.
 
+The family, all defined in `layout.css`:
+
+| Class | Use for | Custom properties |
+| --- | --- | --- |
+| `.flow` | Vertical document rhythm between siblings | `--flow-space` |
+| `.cluster` | Wrapping horizontal groups: toolbars, button rows, chips | `--cluster-space`, `--cluster-align`, `--cluster-justify` |
+| `.grid-auto` | Auto-fit responsive tracks: galleries, swatches, card rows | `--grid-min`, `--grid-space` |
+| `.switcher` | Row that flips to one-per-row below a threshold, no media query | `--switcher-threshold`, `--switcher-space` |
+| `.with-sidebar` | Fixed-ish rail beside fluid content; wraps when tight | `--sidebar-width`, `--sidebar-content-min`, `--sidebar-space` |
+| `.center` | Measure-capped, horizontally centered column | `--center-max` |
+
+`.center` ships two preset modifiers: `.center--form` (`--measure-form`) for standalone form pages and `.center--site` (68rem) for the default public shell. `layout.css` also holds `.list-unstyled`, a plain utility for lists whose semantics matter but whose markers do not.
+
 `.cluster`, `.grid-auto`, `.switcher`, and `.with-sidebar` are `gap`-based and exist for two-dimensional or inline arrangement. `.flow` is different on purpose: it owns vertical document rhythm, not a flex column, and is implemented as the "lobotomized owl":
 
 ```css
@@ -197,13 +237,13 @@ When you do reach for fluid type, keep it zoom-safe so it does not regress WCAG 
 ```
 
 - **Spacing is a relationship between siblings, and the parent `.flow` owns it.** Components never set their own vertical margins — that would fight the flow container for the same space.
-- **The container tunes the default rhythm** by declaring `--flow-space` on itself; every child inherits it.
+- **The container tunes the default rhythm** by declaring `--flow-space` on itself; every child inherits it. Do not set `--flow-space` on the `.flow` rule in shared CSS — the default lives in the `var()` fallback so that a child's own value always wins over an inherited one.
 - **A child overrides for itself alone** by declaring `--flow-space` on that one child — this changes the space *above that child only*, not the rhythm of its siblings.
 - **Nesting is safe** because a nested `.flow` only applies margins to its own direct children; it never reaches into a descendant's descendants.
 
 Do not use `.flow` to build a flex column, and do not set `display: flex` on `.flow`.
 
-When a primitive needs shell-specific defaults, scope those defaults to the shell class. For example, `.site-layout` sets `--sidebar-content-min` for the app shell built on `.with-sidebar`; the primitive itself stays generally reusable.
+When a primitive needs shell-specific defaults, scope those defaults to the shell class. For example, `.admin-layout` in `admin-shell.css` sets `--sidebar-content-min` (100%, dropping to 60% past its one `52rem` breakpoint) for the admin shell built on `.with-sidebar`; the primitive itself stays breakpoint-free and generally reusable.
 
 ## Composition
 
@@ -223,18 +263,59 @@ Page structure is layout primitives → blocks → elements, in that order of re
 | A new reusable component with parts | A new block in `components.css` or `forms.css` |
 | Styling that belongs to exactly one page | The page's `page_stylesheet` include |
 | A new color or size is needed | Check existing tokens first (`design-tokens.css`); add a token only if nothing fits |
+| A color must differ between light and dark | A `light-dark()` semantic token in `design-tokens.css`, never a media query in the component |
+| Interactive behavior on a component | A `data-js-behavior` hook plus an IIFE in `static-assets/javascript/site.js` |
+| Chrome that only the admin shell needs | `admin-shell.css`, never the shared `lib/` files |
 
 ## Components and Forms
 
-Reusable components live in `components.css` and `forms.css`. Copy their documented anatomy instead of inventing parallel markup.
+Reusable components live in `components.css` and `forms.css`. Copy their documented anatomy instead of inventing parallel markup — every one of them declares its expected structure, modifiers, and exposed tokens in the section comment above it.
+
+| Block | File | Modifiers |
+| --- | --- | --- |
+| `.site-header` / `.site-footer` | `components.css` | — |
+| `.button` | `components.css` | `--primary`, `--danger` |
+| `.theme-toggle` | `components.css` | Composed as `class="button theme-toggle"` |
+| `.card` | `components.css` | `--flush`, `--sunken`, `--accent-primary`, `--accent-secondary` |
+| `.callout` | `components.css` | `--info`, `--success`, `--warning`, `--error` |
+| `.field-stack` / `.field` | `forms.css` | `.field--choice`, `.field--error` |
+| `.copy-field` | `forms.css` | — |
+
+Admin shell blocks (`.admin-layout`, `.admin-header`, `.admin-nav`, `.admin-main`, `.admin-content-section`) live in `admin-shell.css` and are for admin pages only. The `.doc-*`, `.specimen*`, `.demo-*`, and `.guideline*` blocks in `admin-style-guide.css` are chrome for the style-guide pages themselves — do not reuse them in application markup.
 
 Component state should be visible, semantic, and restrained. Buttons invert or shift border color; destructive actions use the danger signal; focus uses `--color-focus-outline`.
 
 The shipped defaults are neutral on purpose: a small border radius, hairline borders, no shadows, a single link accent color. These are defaults, not rules — a downstream site is expected to change them. Change them through tokens first (`--radius-sm`, `--radius-md`, `--control-radius`, the `--color-*` tier), and through a new modifier class second, before reaching for a one-off override.
 
+## Browser JavaScript
+
+Browser JavaScript lives in `src/static-assets/javascript/` and is deliberately small:
+
+```text
+src/static-assets/javascript/
+├── site.js            # The single entrypoint, loaded by every base template
+└── lib/kquery.js      # A ~90-line jQuery-shaped DOM wrapper, the only "library"
+```
+
+All three base templates end `<body>` with the same tag:
+
+```html
+<script type="module" src="{{ assetUrl assets "/javascript/site.js" }}"></script>
+```
+
+Conventions:
+
+- **Behavior is attached by a `data-js-behavior` attribute, never by a style class.** `site.js` finds its work with `kQuery('[data-js-behavior="theme-toggle"]')` and `kQuery('[data-js-behavior="copy-field"]')`. A class is for styling; an attribute hook is for behavior, so restyling a component cannot break its script and vice versa.
+- **Progressive enhancement is the contract.** Every component must be usable with JavaScript disabled or failed. `.copy-field` is the reference case: without the script the value is still a selectable read-only input; the script adds click-to-select and a clipboard write, and falls back to a "press Cmd+C" status message when the Clipboard API is missing or denied.
+- **Missing markup is a warning, not a throw.** A behavior whose required attributes or target elements are absent logs to the console and skips that one element, so one broken control cannot disable every other control on the page.
+- **No dependencies.** There is no build step, no bundler, and no npm package for the browser. `kquery.js` is vendored source in this repo — extend it if you need a DOM method it lacks, rather than reaching for a library.
+- **ES modules, root-relative imports.** `site.js` imports `'/javascript/lib/kquery.js'`. Import paths inside JavaScript are logical URLs like the ones inside stylesheets, and are never fingerprinted; only the template-linked entrypoint goes through `assetUrl`.
+
+New behavior belongs in `site.js` as another self-contained IIFE keyed off its own `data-js-behavior` value. Reach for a page-local script only when the behavior is genuinely specific to one page.
+
 ## Page-Local Styles via `page_stylesheet`
 
-Most base templates conditionally render a `page_stylesheet` include into a `<style>` element in the document `<head>`:
+All three base templates (`default.html`, `admin.html`, `admin-login.html`) conditionally render a `page_stylesheet` include into a `<style>` element in the document `<head>`:
 
 ```html
 {{#if includes.page_stylesheet }}
@@ -252,6 +333,6 @@ To supply page-local CSS, add a `page_stylesheet` entry to the page's `includes`
 }
 ```
 
-`pages/admin/style-guide/colors/` is a working example of this pattern: `colors/page.json` includes both `body.html` and `page.css`, keeping one-page layout rules out of the shared stylesheets.
+`pages/admin/style-guide/colors/` is a working example of this pattern: `colors/page.json` includes both `body.html` and `page.css`, keeping one-page layout rules out of the shared stylesheets. The public homepage at `pages/` uses the same pattern. Most of the style-guide subdirectories carry a `page.css` — read one before writing your own.
 
 This is the supported pattern for localized styles. Reach for `page_stylesheet` only when the styling is specific to one page and is not worth generalizing into `src/static-assets/stylesheets/lib/`.

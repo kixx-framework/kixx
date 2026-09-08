@@ -174,9 +174,8 @@ textarea.field__input {
     with ordinary form fields; only the row layout, button, and status text
     are specific to this component. Progressive: without JavaScript the value
     is a plain read-only input, selectable and copyable by hand. With
-    JavaScript, the delegated script in the admin base template
-    (data-js-behavior="copy-field") adds click-to-select and one-click
-    clipboard writes plus status feedback.
+    JavaScript, the site.js behavior bound to data-js-behavior="copy-field"
+    adds click-to-select and one-click clipboard writes plus status feedback.
 
     Expected structure:
         .copy-field
