@@ -1,37 +1,50 @@
-import kQuery from '/javascript/lib/kquery.js';
-
 // Set up the theme toggle.
 (function () {
-    const root = kQuery(document.documentElement);
-    const toggles = kQuery('[data-js-behavior="theme-toggle"]');
+    const root = document.documentElement;
+    const toggles = document.querySelectorAll('[data-js-behavior="theme-toggle"]');
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
     function getCurrentColorScheme() {
-        return root.getData('colorScheme') || (systemColorScheme.matches ? 'dark' : 'light');
+        return root.dataset.colorScheme || (systemColorScheme.matches ? 'dark' : 'light');
     }
 
     function syncSchemeControl() {
         const scheme = getCurrentColorScheme();
 
         toggles.forEach((toggle) => {
-            toggle
-                .setAttribute('aria-pressed', String(scheme === 'dark'))
-                .query('.theme-toggle__label')
+            toggle.setAttribute('aria-pressed', String(scheme === 'dark'));
+
+            const label = toggle.querySelector('.theme-toggle__label');
+
+            if (label) {
                 // The control names the theme it switches TO, so it reads as an
                 // action label rather than a state indicator.
-                .setTextContent(scheme === 'dark' ? 'light' : 'dark');
+                label.textContent = scheme === 'dark' ? 'light' : 'dark';
+            }
         });
     }
 
-    toggles.on('click', () => {
-        const nextScheme = getCurrentColorScheme() === 'dark' ? 'light' : 'dark';
-        root.setData('colorScheme', nextScheme);
-        localStorage.setItem(window.COLOR_SCHEME_STORAGE_KEY, nextScheme);
-        syncSchemeControl();
+    toggles.forEach((toggle) => {
+        toggle.addEventListener('click', () => {
+            const nextScheme = getCurrentColorScheme() === 'dark' ? 'light' : 'dark';
+
+            root.dataset.colorScheme = nextScheme;
+
+            // Storage can be unavailable or full. The theme still applies for
+            // this page view; only the memory of it across page loads is lost,
+            // so a failed write must not stop the control from updating.
+            try {
+                localStorage.setItem(window.COLOR_SCHEME_STORAGE_KEY, nextScheme);
+            } catch (_err) {
+                // Intentionally ignored.
+            }
+
+            syncSchemeControl();
+        });
     });
 
     systemColorScheme.addEventListener('change', () => {
-        if (!root.getData('colorScheme')) {
+        if (!root.dataset.colorScheme) {
             syncSchemeControl();
         }
     });
@@ -41,45 +54,50 @@ import kQuery from '/javascript/lib/kquery.js';
 
 // Set up the clipboard copy field buttons
 (function () {
-    kQuery('[data-js-behavior="copy-field"]').forEach((button) => {
-        const fieldId = button.getData('copyTarget');
+    document.querySelectorAll('[data-js-behavior="copy-field"]').forEach((button) => {
+        const fieldId = button.dataset.copyTarget;
+
         // A copy button with no resolvable target field is a markup bug in
         // whichever page rendered it; skip it instead of throwing so one
         // broken control cannot stop every other copy-field on the page.
         if (!fieldId) {
             // eslint-disable-next-line no-console
-            console.warn('expected button to have data-copy-target', button.nodeList[0]);
+            console.warn('expected button to have data-copy-target', button);
             return;
         }
 
-        const field = kQuery(`#${ fieldId }`);
+        const field = document.getElementById(fieldId);
+
         if (!field) {
             // eslint-disable-next-line no-console
             console.warn('expected a copy field with id', fieldId);
             return;
         }
 
-        const icon = button.query('.copy-field__icon');
-        const status = field.closest('.copy-field').query('.copy-field__status');
-        const defaultIconName = icon.getTextContent() || null;
+        const container = button.closest('.copy-field');
+        const icon = button.querySelector('.copy-field__icon');
+        const status = container ? container.querySelector('.copy-field__status') : null;
+        const defaultIconName = icon ? icon.textContent : null;
 
         let resetTimeoutId = null;
 
         function setStatus(message) {
-            status.setTextContent(message);
-        }
-
-        function resetIcon() {
-            if (defaultIconName) {
-                icon.setTextContent(defaultIconName);
+            if (status) {
+                status.textContent = message;
             }
         }
 
-        field.on('click', () => {
+        function resetIcon() {
+            if (icon && defaultIconName) {
+                icon.textContent = defaultIconName;
+            }
+        }
+
+        field.addEventListener('click', () => {
             field.select();
         });
 
-        button.on('click', async () => {
+        button.addEventListener('click', async () => {
             field.select();
             clearTimeout(resetTimeoutId);
 

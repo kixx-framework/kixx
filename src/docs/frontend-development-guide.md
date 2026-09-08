@@ -293,8 +293,7 @@ Browser JavaScript lives in `src/static-assets/javascript/` and is deliberately 
 
 ```text
 src/static-assets/javascript/
-├── site.js            # The single entrypoint, loaded by every base template
-└── lib/kquery.js      # A ~90-line jQuery-shaped DOM wrapper, the only "library"
+└── site.js            # The single entrypoint, loaded by every base template
 ```
 
 All three base templates end `<body>` with the same tag:
@@ -305,11 +304,13 @@ All three base templates end `<body>` with the same tag:
 
 Conventions:
 
-- **Behavior is attached by a `data-js-behavior` attribute, never by a style class.** `site.js` finds its work with `kQuery('[data-js-behavior="theme-toggle"]')` and `kQuery('[data-js-behavior="copy-field"]')`. A class is for styling; an attribute hook is for behavior, so restyling a component cannot break its script and vice versa.
+- **Behavior is attached by a `data-js-behavior` attribute, never by a style class.** `site.js` finds its work with `document.querySelectorAll('[data-js-behavior="theme-toggle"]')` and `document.querySelectorAll('[data-js-behavior="copy-field"]')`. A class is for styling; an attribute hook is for behavior, so restyling a component cannot break its script and vice versa.
 - **Progressive enhancement is the contract.** Every component must be usable with JavaScript disabled or failed. `.copy-field` is the reference case: without the script the value is still a selectable read-only input; the script adds click-to-select and a clipboard write, and falls back to a "press Cmd+C" status message when the Clipboard API is missing or denied.
 - **Missing markup is a warning, not a throw.** A behavior whose required attributes or target elements are absent logs to the console and skips that one element, so one broken control cannot disable every other control on the page.
-- **No dependencies.** There is no build step, no bundler, and no npm package for the browser. `kquery.js` is vendored source in this repo — extend it if you need a DOM method it lacks, rather than reaching for a library.
-- **ES modules, root-relative imports.** `site.js` imports `'/javascript/lib/kquery.js'`. Import paths inside JavaScript are logical URLs like the ones inside stylesheets, and are never fingerprinted; only the template-linked entrypoint goes through `assetUrl`.
+- **Vanilla DOM APIs only. No dependencies, no DOM wrapper, no build step, no bundler, no npm package for the browser.** Use `querySelector`/`querySelectorAll`, `addEventListener`, `dataset`, `classList`, and `textContent` directly. A jQuery-shaped wrapper (`kquery.js`) was removed: it added a layer to learn, and because a wrapper instance is always truthy it silently swallowed missing-element bugs that plain nodes surface immediately.
+- **Guard for absent nodes explicitly.** `querySelector` returns `null` and `getElementById` returns `null`; check before use, and skip that one element rather than throwing.
+- **ES modules, root-relative imports.** If `site.js` ever grows a second module, import it by a root-relative logical URL such as `'/javascript/lib/thing.js'`, never a relative path — a relative import would inherit the entrypoint's fingerprint hash, and hash-addressed reads would return the entrypoint blob for the dependency request. Only the template-linked entrypoint goes through `assetUrl`.
+- **Browser sources are linted at `ecmaVersion: 2017`** (see the browser block in `eslint.config.js`), so `async`/`await` is available but optional chaining and `??` are not.
 
 New behavior belongs in `site.js` as another self-contained IIFE keyed off its own `data-js-behavior` value. Reach for a page-local script only when the behavior is genuinely specific to one page.
 

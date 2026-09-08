@@ -31,8 +31,8 @@ Browser sources live in `src/static-assets/stylesheets/` and
 
 `assetUrl` gives template-linked entrypoints their own fingerprinted URL and
 immutable cache policy. An entrypoint must import dependencies through a
-root-relative logical pathname, such as `/stylesheets/lib/layout.css` or
-`/javascript/lib/kquery.js`, rather than a relative URL. A relative import
+root-relative logical pathname, such as `/stylesheets/lib/layout.css`, rather
+than a relative URL. A relative import
 would inherit the entrypoint hash, but hash-addressed storage reads key on that
 hash alone and would return the entrypoint blob for a dependency request.
 
