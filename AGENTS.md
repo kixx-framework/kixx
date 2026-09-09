@@ -7,7 +7,7 @@ Use this documentation index to identify which linked documents are relevant to 
 
 src/docs/code-style-guide.md
 
-**When to use this document:** Apply this guide whenever you are writing or modifying any server-side JavaScript source file in this project. This includes:
+**When to use this document:** Apply this guide whenever you are writing or modifying any non-browser JavaScript source files. This includes:
 
 - New functions, classes, modules, inline code comments, or any other JavaScript code you write from scratch.
 - Edits to existing source files, including adding, updating, and improving inline code comments.
@@ -16,13 +16,11 @@ src/docs/code-style-guide.md
 - Improving code structure while making a scoped feature or bug fix.
 - Reviewing abstractions for responsibility ownership, encapsulation, layering, naming, or accidental complexity.
 
-**What this document provides:** The canonical JavaScript style conventions for this project — maintaining good quality code as you work on a task, how to choose responsible owners for behavior, language standard, formatting rules, linting constraints, inline code comments, and project-specific patterns like destructuring, type detection, and private class members. Following this guide keeps code consistent throughout the codebase.
-
 ### Code Documentation Guide
 
 src/docs/code-documentation-guide.md
 
-**When to use this document:** Apply this guide whenever you are writing, reviewing, or improving JSDoc block comments in any JavaScript source file in this project. This includes:
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or improving JSDoc block comments in non-browser JavaScript source files. This includes:
 
 - Adding documentation to new functions, classes, methods, or modules you write.
 - Reviewing or updating existing documentation for accuracy and completeness.
@@ -100,7 +98,7 @@ src/docs/frontend-development-guide.md
 - Deciding where a new CSS rule belongs — an existing primitive, a new shared utility, or a page-local stylesheet.
 - Naming classes, adding design tokens, or tuning a component's custom properties.
 
-**What this document provides:** The frontend conventions for this project — how to use the live style guide as the design reference, the no-inline-styles resolution order, how `src/static-assets/stylesheets/` is organized into shared vs. admin-only files, BEM class naming, the three-tier design token system, the Every Layout–style layout primitives, and the page-local `page_stylesheet` include pattern.
+**What this document provides:** The frontend conventions for this project — how to use the live style guide as the design reference, the no-inline-styles resolution order, how `src/static-assets/stylesheets/` is organized into shared vs. admin-only files, BEM class naming, CSS formatting and comment conventions, light/dark theming, composition rules, and the page-local `page_stylesheet` include pattern. Design tokens and layout primitives are documented in the stylesheets that define them (`design-tokens.css`, `layout.css`), and typography in the live style guide; the guide points at those rather than restating them.
 
 ### Plugins and Cross-Platform Architecture
 
@@ -222,15 +220,10 @@ Write implementation plans into the agents/plans/ directory.
 
 ## Work Verification
 
-DO:
-
 - Always run the linter when you change JavaScript files for the Node.js or Cloudflare runtimes. See [Linting](#linting) below.
 - Always run the unit tests when you change JavaScript source files for the Node.js or Cloudflare runtimes. See [Testing](#testing) below.
 
-DO NOT:
-
-- Do not run the dev server, call remote servers, or write specialized code for the purpose of work verification or smoke testing.
-- Do not run or write end-to-end tests unless explicitly asked to do so.
+If you need to run a server, start a Local Target Instance (see README.md for more information).
 
 ### Linting
 
@@ -238,7 +231,7 @@ Run the linter according to the instructions in the `README.md` for every JavaSc
 
 ### Testing
 
-Follow the unit testing guide at test/unit/README.md and follow the instructions in `README.md` for running unit tests. When you discover broken unit tests; think carefully about the correctness if the implementation. If the unit tests need to be updated to match the intended behavior of the implementation then update the unit tests. Otherwise fix the implementation to address the issue that broken tests have highlighted.
+Follow the unit testing guide at `test/README.md`. Run the full suite with `node run-tests.js`. When you discover broken unit tests; think carefully about the correctness if the implementation. If the unit tests need to be updated to match the intended behavior of the implementation then update the unit tests. Otherwise fix the implementation to address the issue that broken tests have highlighted.
 
 ## Helpful Tips
 When writing something intended for human consumption, (comment, commit message, reply to prompt) use as few words as possible. Be down to the point. Less is more.
