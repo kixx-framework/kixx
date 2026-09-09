@@ -16,6 +16,8 @@ src/docs/code-style-guide.md
 - Improving code structure while making a scoped feature or bug fix.
 - Reviewing abstractions for responsibility ownership, encapsulation, layering, naming, or accidental complexity.
 
+**What this document provides:** The project's JavaScript style conventions and structural design principles — naming, formatting, module organization, and how to decide where behavior belongs.
+
 ### Code Documentation Guide
 
 src/docs/code-documentation-guide.md
@@ -27,13 +29,15 @@ src/docs/code-documentation-guide.md
 - Deciding whether a given symbol *needs* documentation at all.
 - Choosing the right JSDoc tags for a given situation.
 
+**What this document provides:** The project's JSDoc conventions — when documentation is warranted, tag usage, and formatting standards.
+
 ### Server Error Handling
 
 src/docs/server-error-handling.md
 
 **When to use this document:** Apply this guide whenever you are writing, reviewing, or refactoring server-side JavaScript error handling. This includes throwing application errors, handling errors, validating request input, asserting internal invariants, writing route error handlers, and deciding whether an error should propagate as expected or unexpected.
 
-**What this document provides:** The project error-handling rules for server-side code — expected operational errors vs. unexpected programmer errors, which `src/kixx/errors/` class to throw, when and how to use assertions, how to use `ValidationError`, and how the HTTP router handles and serializes errors.
+**What this document provides:** The project's error-handling model — the distinction between expected and unexpected errors, application error conventions, input validation, invariant assertions, and route error handler responsibilities.
 
 ### Unit Testing Guide
 
@@ -45,7 +49,7 @@ test/unit-tests/README.md
 - Adding or modifying test cases, hooks, or assertions in an existing test file.
 - Writing mocks with `MockTracker` or testing thrown errors and rejected promises.
 
-**What this document provides:** The complete test API for this project — the `kixx-test` runner, `kixx-assert` assertions, mock helpers, file and naming conventions, hook semantics, timeout configuration, and patterns for error/rejection testing.
+**What this document provides:** The project's unit testing conventions — file structure, test organization, mocking with `MockTracker`, and asserting thrown errors and rejected promises.
 
 ### Collections
 
