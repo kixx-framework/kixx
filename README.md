@@ -67,41 +67,10 @@ Instances are disposable: destroy and re-create one rather than trying to carry 
 
 ### Environment Variables and Configuration
 
-Settings are split across two kinds of file by a single question:
-
-> Does the value change **per deploy**, or only **per environment**?
-
-Per-environment values are configuration and belong in `src/node-config.js` or `src/cloudflare-config.js`, under the `environments` map. The application name and log level live here, as do every store, cache, and rate-limit setting.
-
-Per-deploy values are environment variables and live in dotenv files, split again by secrecy:
-
-| File | Committed | Cloudflare binding | Holds |
-| --- | --- | --- | --- |
-| `src/.env.<environment>` | yes | plain text | `ENVIRONMENT`, `TRUST_PROXY`, `BUILD_ID`, `PORT` |
-| `src/.env.<environment>.secrets` | no | encrypted secret text | signing secrets and tokens |
-
-Because the secrecy split follows the git boundary, a deployment can derive the binding type from the filename alone. There is no per-key annotation to keep in sync, and no way for a value to be classified two ways at once.
-
-`src/example.env` and `src/example.env.secrets` are the templates for each half. Bootstrap a fresh clone with:
-
-```bash
-cp src/example.env.secrets src/.env.development.secrets
-```
-
-The Node.js server reads `.env.<environment>`, `.env.<environment>.secrets`, and `process.env`. Each file is optional, so deploying with dotenv files and deploying by setting `process.env` both work, and they can be combined.
-
-A key defined by more than one of those three sources aborts startup with an
-error naming the key and the sources. There is deliberately no precedence rule:
-a key carrying two definitions means one of them is in the wrong place, and
-resolving it silently is how a secret ends up bound as plain text.
-
-Only keys the dotenv files declare participate, so unrelated process environment entries never collide.
-
-`--dotenv <path>` names the plain file and derives the secrets file by appending `.secrets`, so one flag selects the pair.
-
-`ENVIRONMENT` cannot move into configuration, because it selects which section of the config module is loaded.
-
-`DATA_DIRECTORY` is an optional, Node.js-only per-deploy value. When set, it overrides the directory that config-relative store paths (`DOCUMENT_STORE`, `KEY_VALUE_STORE`, `OBJECT_STORE`, `CONTENT_STORE`) resolve against, in place of `src/`. It exists for local target instances (see "Local Target Instances" below), where every instance's stores must live inside that instance's own directory rather than the shared development data. Leave it unset for every other deployment.
+See [`docs/configuration.md`](docs/configuration.md) for the full picture:
+what belongs in a config module (`src/node-config.js`,
+`src/cloudflare-config.js`) versus a dotenv/secrets file, how the sources are
+merged and validated at startup, and `DATA_DIRECTORY`.
 
 ### Linting
 
