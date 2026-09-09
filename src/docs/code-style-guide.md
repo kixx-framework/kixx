@@ -1,6 +1,6 @@
 # Maintaining Code Quality
 
-Be disciplined in your code writing tasks to ensure that you are writing code for future maintainability. Following this code quality guide will help you avoid adding accidental complexity to the codebase.
+Following this code quality guide will help you avoid adding accidental complexity to the codebase.
 
 ## Owners of responsibility
 
@@ -10,9 +10,10 @@ When you encounter procedural code, shift your focus from *how* an operation is 
 - A module is enough when the responsibility needs private helpers but no per-instance state.
 - A plain helper function is enough when the behavior is stateless, has no hidden invariants, and can be named precisely.
 - Data that carries important invariants should usually be manipulated through the module or object that owns those invariants.
-- Think of relationships between data and concepts as objects with their own responsibilities and capabilities.
 
-*Lean into Object Oriented Programming (OOP).* - strongly consider the owners of responsibility for your logic, but there is no need to follow the "one class per noun" methodology.
+*Lean into Object Oriented Programming (OOP).*
+
+Consider the owners of responsibility for your logic, but there is no need to follow the "one class per noun" methodology.
 
 ## Use Encapsulation
 

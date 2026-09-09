@@ -80,7 +80,7 @@ Expected errors use a JSON:API error document:
             "status": "422",
             "code": "VALIDATION_ERROR",
             "title": "ValidationError",
-            "detail": "Password must be at least 16 characters",
+            "detail": "Password must be at least 12 characters",
             "source": "password"
         }
     ]
@@ -380,7 +380,7 @@ The required resource type is `AdminUser`.
 | Attribute | Requirements |
 | --- | --- |
 | `emailAddress` | Required string in a basic email-address shape; trimmed and lowercased before storage |
-| `password` | Required string, 16 to 256 characters; preserved exactly as submitted |
+| `password` | Required string, 12 to 256 characters; preserved exactly as submitted |
 
 The invite is resolved before account-field validation. An absent or malformed
 Bearer header returns `401`. An unknown, expired, revoked, already-used, or
