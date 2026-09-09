@@ -39,6 +39,14 @@ src/docs/server-error-handling.md
 
 **What this document provides:** The project's error-handling model — the distinction between expected and unexpected errors, application error conventions, input validation, invariant assertions, and route error handler responsibilities.
 
+### Configuration
+
+docs/configuration.md
+
+**When to use this document:** Apply this guide whenever you are adding, changing, or reviewing a runtime setting — deciding whether a value belongs in `src/node-config.js`/`src/cloudflare-config.js` versus a dotenv or secrets file, editing `example.env` or `example.env.secrets`, working with `src/kixx/config/` or `src/node-environment.js`, or touching `DATA_DIRECTORY`, `ENVIRONMENT`, or environment/config loading in an entry point.
+
+**What this document provides:** The full configuration model — the per-deploy vs. per-environment split, the shape and loading of config modules (`readConfig`), how dotenv files and `process.env` merge and are validated (`mergeEnvironmentSources`, the secrets manifest), Cloudflare-specific differences, and the checklist for adding a new setting.
+
 ### Unit Testing Guide
 
 test/unit-tests/README.md
@@ -117,6 +125,31 @@ src/plugins/README.md
 - Adding support for a new deploy target, or deciding whether a new capability needs a port at all.
 
 **What this document provides:** The cross-platform design reference — the three roles (ports, adapters, and entry-points), the plugin module contract and its two-phase `register()`/`initialize()` lifecycle, plugin-registry merge semantics, where platform differences live, the rules interface contracts are written by, and checklists for adding a new port or a new platform.
+
+## Respect Existing Architecture
+
+Project-specific architecture guidance takes precedence over your general knowledge about code organization and architecture.
+
+- Frontend Development:
+    + src/docs/frontend-development-guide.md
+    + src/app/presentation/README.md
+    + src/static-assets/stylesheets/
+    + src/static-assets/javascript/
+    + src/pages/
+    + src/templates
+- Presentation Layer - src/app/presentation/README.md
+- Domain Layer (Transaction Scripts) - src/app/transaction-scripts/README.md
+- Data Source Layer (Collections and Records) - src/app/collections/README.md
+- Platform Portability (Plugins, Adapters, and Ports) - src/plugins/README.md
+
+The JavaScript code in `app/` must run on multiple platforms:
+
+- Node.js
+- Deno
+- Cloudflare Workers
+- AWS Lambda
+
+Therefore, it is critically important that the code in `app/` is cross platform, using modern Web Platform APIs. Never use Node, Deno, Cloudflare Worker, or AWS Lambda specific APIs for the JavaScript code in `app/`. Platform targeted logic can be implemented using the *adapters and ports* pattern described in `src/plugins/README.md`.
 
 ## Development Server
 
