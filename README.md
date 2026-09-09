@@ -67,10 +67,7 @@ Instances are disposable: destroy and re-create one rather than trying to carry 
 
 ### Environment Variables and Configuration
 
-See [`docs/configuration.md`](docs/configuration.md) for the full picture:
-what belongs in a config module (`src/node-config.js`,
-`src/cloudflare-config.js`) versus a dotenv/secrets file, how the sources are
-merged and validated at startup, and `DATA_DIRECTORY`.
+See [`docs/configuration.md`](docs/configuration.md) for the full picture.
 
 ### Linting
 
