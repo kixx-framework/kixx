@@ -25,7 +25,20 @@
         <li><strong>Zoom &amp; accessibility.</strong> Fixed <code>rem</code> scales cleanly with browser zoom; <code>vw</code>-based fluid type partially ignores it, working against WCAG 1.4.4 (Resize Text).</li>
         <li><strong>Simplicity.</strong> If a heading is ever too large on mobile, add one discrete breakpoint step &mdash; never continuous scaling.</li>
     </ul>
-    <p>For public marketing pages, body copy, navigation, form text, and ordinary section headings should still use the shared roles. Limit fluid sizing to page-specific display text, define it in that page&rsquo;s <code>page_stylesheet</code>, and keep <code>rem</code> bounds around any <code>clamp()</code> so zoom behavior remains predictable. The home page masthead is the model: <code>.intro h1</code> uses a bounded <code>clamp()</code> because it is display composition, not an admin heading role.</p>
+    <p>For public marketing pages, body copy, navigation, form text, and ordinary section headings should still use the shared roles. Limit fluid sizing to page-specific display text &mdash; a hero title, an oversized background motif, a lede &mdash; and define it in that page&rsquo;s <code>page_stylesheet</code>, never in the shared token or stylesheet files.</p>
+
+    <h4 class="type-h4">Keep fluid type zoom-safe</h4>
+    <p>A <code>clamp()</code> whose preferred value is bare <code>vw</code> ignores browser zoom, which regresses WCAG 1.4.4. Give the minimum and maximum <code>rem</code> values, and make the preferred value carry a <code>rem</code> term so zoom still scales the text while <code>vw</code> only adds viewport response on top:</p>
+</div>
+
+<pre class="code-block"><code>/* Zoom-safe: rem floor, rem ceiling, rem term in the middle. */
+font-size: clamp(2.75rem, calc(2.125rem + 1.8vw), 3.75rem);
+
+/* Not zoom-safe: a bare vw preferred value. */
+font-size: clamp(2rem, 6vw, 3rem);</code></pre>
+
+<div class="doc-prose">
+    <p>The Zen Garden home page masthead predates this rule and uses the bare-<code>vw</code> form. It is a fixed demo document, not a pattern &mdash; do not copy its sizing.</p>
 
     <div class="callout">
         <span class="callout__icon" aria-hidden="true">*</span>
@@ -168,6 +181,7 @@
             <li>Pick a heading level for its size &mdash; choose the level for structure, then restyle with a <code>.type-*</code> class.</li>
             <li>Invent new reusable or admin font sizes; shared roles live in <code>--text-*</code> tokens.</li>
             <li>Use fluid <code>clamp()</code> type in admin panels, shared components, or reusable <code>.type-*</code> roles.</li>
+            <li>Give a <code>clamp()</code> a bare <code>vw</code> preferred value &mdash; it ignores browser zoom.</li>
         </ul>
     </div>
 </div>

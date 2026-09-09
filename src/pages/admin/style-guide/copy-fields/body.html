@@ -6,7 +6,7 @@
 <div class="doc-prose">
     <p class="type-body-lg">A copy field is the display primitive for any value someone needs to take away verbatim &mdash; a one-time secret, a shareable link, an identifier. It reuses the <a href="/admin/style-guide/text-fields">text field</a>&rsquo;s input treatment so the value looks like a real form control, then adds a copy button beside it and a small status line below to confirm the copy.</p>
 
-    <p>It is deliberately progressive. Without JavaScript the value is a plain <code>readonly</code> input &mdash; selectable and copyable by hand. With JavaScript, the <code>data-js-behavior="copy-field"</code> behavior in <code>site.js</code> adds click-to-select on the value, a one-click clipboard write on the button, and status feedback that clears itself after a moment.</p>
+    <p>It is deliberately progressive. Without JavaScript the value is a plain <code>readonly</code> input &mdash; selectable and copyable by hand. With JavaScript, the delegated <code>data-js-behavior="copy-field"</code> script adds click-to-select on the value, a one-click clipboard write on the button, and status feedback that clears itself after a moment.</p>
 
     <p><strong>When to use:</strong> a copy field is for a value the user will paste somewhere else &mdash; an API token, an invite URL, an account ID, a recovery code. Reach for it whenever getting the value out cleanly matters more than editing it. For a value the user types, use a <a href="/admin/style-guide/text-fields">text field</a>. For a value that is only displayed, plain text is enough.</p>
 </div>
