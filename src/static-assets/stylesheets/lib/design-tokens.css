@@ -4,6 +4,36 @@
     Neutral defaults for a starter site: a system sans-serif stack, a small
     radius, hairline rules. Change the palette and type tokens first when
     adopting a house style; components read tokens, not literals.
+
+    This file is the whole token vocabulary. Check here for an existing token
+    before adding a new one, and read the section comment for the family you are
+    adding to — each one states its own rules.
+
+    Token families, in the order they appear below:
+
+      --palette-*        Tier 1 reference palette; the only literal colors
+      --color-*          Tier 2 semantic color roles; what components consume
+      --field-*          Field (input) component values
+      --button-*         Button component values
+      --rule-width, --hairline-width, --accent-border-width
+                         Border widths
+      --radius-*, --control-radius
+                         Corner radii; buttons and fields share --control-radius
+      --space-page-gutter, --space-section-gap, --sidebar-width,
+      --form-field-gap   Layout spacing — the only fluid values in the set
+      --measure-*        Reading and form column caps
+      --space-3xs … --space-2xl
+                         Vertical spacing scale; consumed by .flow and every gap
+      --font-*           Font stacks; --font-body / --font-display are the
+                         override points for a downstream site
+      --text-*           Type scale; fixed rem steps
+      --leading-*        Line heights; role-dependent, not size-dependent
+      --weight-*         Font weights
+
+    There is deliberately no letter-spacing family. reset.css sets
+    `letter-spacing: 0` on headings and buttons because hierarchy in this system
+    comes from size and weight alone; adding a tracking token would invite the
+    decoration those rules exist to prevent.
 ----------------------------------------------------------------------------- */
 
 :root {

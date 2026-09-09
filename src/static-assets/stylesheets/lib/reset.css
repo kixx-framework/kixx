@@ -36,8 +36,15 @@ body {
     accent-color: var(--color-ink-link);
 }
 
-:root[data-theme="dark"] body {
-    /* Dark surfaces benefit from lighter antialiasing on WebKit. */
+/* Dark surfaces benefit from lighter antialiasing on WebKit. */
+@media (prefers-color-scheme: dark) {
+    /* The user has not chosen a color scheme, but the system preference is dark */
+    :root:not([data-color-scheme="light"]) body {
+        -webkit-font-smoothing: antialiased;
+    }
+}
+:root[data-color-scheme="dark"] body {
+    /* The user chosen the dark color scheme */
     -webkit-font-smoothing: antialiased;
 }
 

@@ -7,15 +7,24 @@
     element (or an ancestor) to adjust a single axis without writing bespoke CSS.
 
     The family:
-      .flow         vertical stack with parent-owned gap between siblings
-      .cluster      horizontal group that wraps; gap-driven
-      .grid-auto    auto-fit responsive grid, tracks never below --grid-min
-      .switcher     row that flips to a column below a width threshold
-      .with-sidebar fixed-ish sidebar beside fluid content; wraps when tight
-      .center       caps a column to a measure and centers it
+      .flow           vertical stack with parent-owned gap between siblings
+      .cluster        horizontal group that wraps; gap-driven
+      .grid-auto      auto-fit responsive grid, tracks never below --grid-min
+      .switcher       row that flips to a column below a width threshold
+      .with-sidebar   fixed-ish sidebar beside fluid content; wraps when tight
+      .center         caps a column to a measure and centers it
+                      (.center--form, .center--site are measure presets)
+      .list-unstyled  strips markers from a list used as interface content
 
     Composition over bespoke layout: reach for these before writing a new
     display:flex / display:grid rule. Most page structure is a nesting of the six.
+
+    These primitives are breakpoint-free on purpose. When a shell needs
+    different defaults, or needs a primitive to change at a breakpoint, scope
+    that to the shell's own class rather than editing the primitive here.
+    .admin-layout in admin-shell.css is the worked example: it sets
+    --sidebar-content-min for itself and flips it at 52rem, leaving
+    .with-sidebar generally reusable.
 ----------------------------------------------------------------------------- */
 
 /* -----------------------------------------------------------------------------
