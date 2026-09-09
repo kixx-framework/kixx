@@ -4,6 +4,7 @@ This guide covers frontend development conventions for this project: where front
 
 Related documents:
 
+- `static-assets/README.md` — Static asset serving, fingerprinting, and the content-addressable store.
 - `templates/README.md` — Kixx template syntax (interpolation, sections, helpers, partials).
 - `app/presentation/README.md` — routing, request handlers, forms, page includes, and the Hyperview file layout.
 
@@ -29,6 +30,8 @@ The three directories differ in how the publishing tool (outside the scope of th
 | `public/` | `/**` (site root) | No | No |
 | `pages/**/page.css` | None — inlined into the HTML | N/A | **No** |
 
+See `static-assets/README.md` for more information about how fingerprinting and the content-addressable store work.
+
 Templates link entrypoints through `assetUrl`, which rewrites the logical pathname to a content-addressed URL when a Release is published and falls back to the bare pathname in development:
 
 ```html
@@ -37,6 +40,8 @@ Templates link entrypoints through `assetUrl`, which rewrites the logical pathna
 ```
 
 There is no CSS or browser-JavaScript bundling in development. There is a bundler outside the scope of this project so you do not need to worry about the cost of splitting a stylesheet or module.
+
+See `static-assets/README.md` for more information about how assets are served in development and how `assetUrl` works with the content-addressable store.
 
 ## Public Pages Are the Default
 
