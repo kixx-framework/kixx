@@ -178,19 +178,33 @@ describe('ReleaseManifest', ({ describe, it }) => {
             assertEqual(2, caught.errors.length);
         });
 
-        it('rejects non-string includes and non-JSON page metadata in bulk', () => {
-            const includesError = catchError(() => validateStructuredContent('pageIncludes', {
+        it('rejects non-string includes', () => {
+            const caught = catchError(() => validateStructuredContent('pageIncludes', {
                 first: 1,
                 second: null,
             }));
-            const metadataError = catchError(() => validateStructuredContent('pageMetadata', {
-                missing: undefined,
-                infinite: Infinity,
-                date: new Date(),
-            }));
 
-            assertEqual(2, includesError.errors.length);
-            assertEqual(3, metadataError.errors.length);
+            assertEqual(2, caught.errors.length);
+        });
+
+        it('requires object-shaped metadata and email context data', () => {
+            for (const value of [ null, [], 'text', 1 ]) {
+                const metadataError = catchError(() => validateStructuredContent('pageMetadata', value));
+                const emailError = catchError(() => validateStructuredContent('email', {
+                    includes: {},
+                    contextData: value,
+                }));
+
+                assertEqual(1, metadataError.errors.length);
+                assertEqual(1, emailError.errors.length);
+            }
+        });
+
+        it('leaves nested metadata and email context values to JSON parsing', () => {
+            const content = JSON.parse('{"nested":{"values":[null,true,1e400]}}');
+
+            validateStructuredContent('pageMetadata', content);
+            validateStructuredContent('email', { includes: {}, contextData: content });
         });
     });
 });

@@ -383,18 +383,21 @@ Creation runs, and fails before persisting anything if any step fails:
 
 1. manifest schema validation;
 2. object existence and size verification against every referenced object id;
-3. structured payload parsing (template bundles, page metadata, email
-   bundles, includes);
-4. template compilation with the same compiler used at runtime;
-5. resolution of every base template and partial each page and email refers
-   to.
+3. JSON parsing and schema validation for structured payloads (template
+   bundles, page metadata, email bundles, includes).
+
+Template source is not compiled and partial references are not resolved during
+release validation or creation. Hyperview compiles templates when rendering;
+syntax errors surface there, and missing partials render as empty output.
+Successful release validation does not guarantee successful rendering.
 
 A manifest naming an object the store does not hold fails with
 `422 MissingContentObjects`, listing every missing reference — not just the
 first — up to a documented cap. A claimed size that disagrees with the
-stored size fails with `409 ObjectSizeMismatch`. A template that does not
-compile, or that references an unresolvable partial, fails with
-`422 InvalidReleaseManifest`.
+stored size fails with `409 ObjectSizeMismatch`. Malformed JSON or a structured
+payload that violates its schema fails with
+`422 InvalidReleaseManifest`. Metadata and email context data must be JSON
+objects; their nested values are not recursively validated.
 
 The response is `201 Created`:
 

@@ -91,7 +91,7 @@ export function validateReleaseManifest(manifest) {
 /**
  * Validates one parsed structured content object referenced by a manifest.
  * @param {string} kind - One of `globalTemplatePartials`, `baseTemplates`, `pageMetadata`, `pagePartials`, `pageIncludes`, or `email`
- * @param {*} content - Parsed JSON payload
+ * @param {*} content - Payload already parsed from JSON; only its content-kind schema is checked
  * @param {string} [source='/content'] - JSON Pointer prefix used in failures
  * @returns {void}
  * @throws {ValidationError} When the payload violates its content-kind schema
@@ -106,7 +106,7 @@ export function validateStructuredContent(kind, content, source = '/content') {
     } else if (kind === 'baseTemplates') {
         validateTemplateBundle(error, content, source, 'base template');
     } else if (kind === 'pageMetadata') {
-        validateJsonObject(error, content, source, new Set());
+        validateJsonObject(error, content, source);
     } else if (kind === 'pageIncludes') {
         validateIncludes(error, content, source);
     } else if (kind === 'email') {
@@ -329,7 +329,7 @@ function validateEmail(error, email, source) {
         validateIncludes(error, email.includes, source + '/includes');
     }
     if (!isUndefined(email.contextData)) {
-        validateJsonObject(error, email.contextData, source + '/contextData', new Set());
+        validateJsonObject(error, email.contextData, source + '/contextData');
     }
 }
 
@@ -347,41 +347,10 @@ function validateTemplateObject(error, template, source, label) {
     }
 }
 
-function validateJsonObject(error, value, source, ancestors) {
+function validateJsonObject(error, value, source) {
     if (!isPlainObject(value)) {
-        error.push('Page metadata must be a plain JSON object', source);
-        return;
+        error.push('Content must be a plain JSON object', source);
     }
-    validateJsonValue(error, value, source, ancestors);
-}
-
-function validateJsonValue(error, value, source, ancestors) {
-    if (value === null || isString(value) || typeof value === 'boolean') {
-        return;
-    }
-    if (typeof value === 'number') {
-        if (!Number.isFinite(value)) {
-            error.push('JSON numbers must be finite', source);
-        }
-        return;
-    }
-    if (!Array.isArray(value) && !isPlainObject(value)) {
-        error.push('Value must be JSON-compatible', source);
-        return;
-    }
-    if (ancestors.has(value)) {
-        error.push('JSON content must not contain cycles', source);
-        return;
-    }
-    ancestors.add(value);
-    for (const [ key, child ] of Object.entries(value)) {
-        if (isUndefined(child) || typeof child === 'function' || typeof child === 'symbol' || typeof child === 'bigint') {
-            error.push('Value must be JSON-compatible', `${ source }/${ escapePointer(key) }`);
-        } else {
-            validateJsonValue(error, child, `${ source }/${ escapePointer(key) }`, ancestors);
-        }
-    }
-    ancestors.delete(value);
 }
 
 function rejectUnknownFields(error, value, allowedFields, source) {

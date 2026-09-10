@@ -18,9 +18,8 @@ import {
     normalizePathname,
     isValidPathname,
 } from './content-layout.js';
-import { compileHyperviewTemplate } from '../hyperview/template-compiler.js';
 import { BUILD_ASSIGNMENT_OUTCOME } from './content-store-interface.js';
-import { assert, assertNonEmptyString, isPlainObject } from '../assertions/mod.js';
+import { assert, assertNonEmptyString } from '../assertions/mod.js';
 import { ConflictError, NotFoundError, OperationalError, ValidationError } from '../errors/mod.js';
 
 const BULK_FILE_LIMIT = 100;
@@ -380,7 +379,7 @@ export default class ContentAddressableStore {
      * @param {Object} context - Request or execution context
      * @param {Object} manifest - Complete Release manifest
      * @returns {Promise<Object>} Derived Release identity and aggregate statistics
-     * @throws {ValidationError} When the Release cannot be served completely
+     * @throws {ValidationError} When the manifest, referenced objects, or structured payloads are invalid
      */
     async validateRelease(context, manifest) {
         const prepared = await this.#prepareRelease(context, manifest);
@@ -393,7 +392,7 @@ export default class ContentAddressableStore {
      * @param {Object} manifest - Complete Release manifest
      * @param {Object} [_options] - Reserved creation options
      * @returns {Promise<Object>} Release identity and aggregate statistics
-     * @throws {ValidationError} When the Release cannot be served completely
+     * @throws {ValidationError} When the manifest, referenced objects, or structured payloads are invalid
      */
     async createRelease(context, manifest, _options) {
         const prepared = await this.#prepareRelease(context, manifest);
@@ -428,9 +427,7 @@ export default class ContentAddressableStore {
         const files = validateReleaseManifest(manifest);
         const error = new ValidationError('The Release content is invalid');
         await this.#verifyObjectStats(context, files, error);
-        const contentByPath = await this.#readStructuredContent(context, files, error);
-        this.#verifyStructuredContent(files, contentByPath, error);
-        this.#verifyTemplates(files, contentByPath, error);
+        await this.#verifyStructuredContent(context, files, error);
         if (error.length) {
             throw error;
         }
@@ -473,82 +470,37 @@ export default class ContentAddressableStore {
         });
     }
 
-    async #readStructuredContent(context, files, error) {
-        const readable = files.filter(({ pathname }) => {
-            return getStructuredKind(pathname) || isPageTemplatePath(pathname);
-        });
-        const content = new Map();
+    async #verifyStructuredContent(context, files, error) {
+        const readable = files.filter(({ pathname }) => getStructuredKind(pathname));
         for (let offset = 0; offset < readable.length; offset += BULK_FILE_LIMIT) {
             const batch = readable.slice(offset, offset + BULK_FILE_LIMIT);
             const results = await this.#store.getFiles(context, 'text', batch);
             results.forEach((text, index) => {
-                const file = batch[index];
+                const { pathname } = batch[index];
                 if (text === null) {
                     return;
                 }
-                if (getStructuredKind(file.pathname)) {
-                    try {
-                        content.set(file.pathname, JSON.parse(text));
-                    } catch {
-                        error.push('Structured object must contain valid JSON', file.pathname);
+
+                let content;
+                try {
+                    content = JSON.parse(text);
+                } catch (cause) {
+                    if (cause.name !== 'SyntaxError') {
+                        throw cause;
                     }
-                } else {
-                    content.set(file.pathname, text);
+                    error.push('Structured object must contain valid JSON', pathname);
+                    return;
+                }
+
+                try {
+                    validateStructuredContent(getStructuredKind(pathname), content, pathname);
+                } catch (cause) {
+                    if (cause.name !== 'ValidationError') {
+                        throw cause;
+                    }
+                    cause.errors.forEach((entry) => error.push(entry.message, entry.source));
                 }
             });
-        }
-        return content;
-    }
-
-    #verifyStructuredContent(files, contentByPath, error) {
-        for (const file of files) {
-            const kind = getStructuredKind(file.pathname);
-            if (!kind || !contentByPath.has(file.pathname)) {
-                continue;
-            }
-            try {
-                validateStructuredContent(kind, contentByPath.get(file.pathname), file.pathname);
-            } catch (cause) {
-                cause.errors.forEach((entry) => error.push(entry.message, entry.source));
-            }
-        }
-    }
-
-    #verifyTemplates(files, contentByPath, error) {
-        const globals = collectTemplateIds(contentByPath.get('/templates/__template-partials-bundle'));
-        const compiledByPath = new Map();
-        for (const file of files) {
-            const value = contentByPath.get(file.pathname);
-            const kind = getStructuredKind(file.pathname);
-            if (kind === 'globalTemplatePartials') {
-                compileBundle(value, file.pathname, globals, error);
-            } else if (kind === 'baseTemplates') {
-                compileBundle(value, file.pathname, globals, error);
-            } else if (kind === 'pagePartials') {
-                const locals = collectTemplateIds(value);
-                compileBundle(value, file.pathname, new Set([ ...globals, ...locals ]), error);
-            } else if (kind === 'email') {
-                compileEmail(value, file.pathname, globals, error);
-            } else if (isPageTemplatePath(file.pathname)) {
-                compiledByPath.set(file.pathname, this.#compileTemplate(file.pathname, value, error));
-            }
-        }
-        for (const [ pathname, compiled ] of compiledByPath) {
-            const directory = pathname.slice(0, pathname.lastIndexOf('/'));
-            const locals = collectTemplateIds(contentByPath.get(`${ directory }/__page-partials-bundle`));
-            verifyPartialIds(compiled, new Set([ ...globals, ...locals ]), pathname, error);
-        }
-    }
-
-    #compileTemplate(pathname, source, error) {
-        if (typeof source !== 'string') {
-            return null;
-        }
-        try {
-            return compileHyperviewTemplate(pathname, source);
-        } catch (cause) {
-            error.push(`Template does not compile: ${ cause.message }`, pathname);
-            return null;
         }
     }
 }
@@ -583,54 +535,4 @@ function getStructuredKind(pathname) {
         return 'email';
     }
     return null;
-}
-
-function isPageTemplatePath(pathname) {
-    return pathname.startsWith('/pages/') && !getStructuredKind(pathname);
-}
-
-function collectTemplateIds(bundle) {
-    return new Set(Array.isArray(bundle) ? bundle.map(({ id }) => id) : []);
-}
-
-function compileBundle(bundle, pathname, available, error) {
-    if (!Array.isArray(bundle)) {
-        return;
-    }
-    for (const template of bundle) {
-        compileAndVerify(template.id, template.source, pathname, available, error);
-    }
-}
-
-function compileEmail(email, pathname, globals, error) {
-    if (!isPlainObject(email)) {
-        return;
-    }
-    const locals = collectTemplateIds(email.partials);
-    const available = new Set([ ...globals, ...locals ]);
-    for (const template of [ email.htmlTemplate, email.textTemplate, ...(email.partials ?? []) ]) {
-        if (template) {
-            compileAndVerify(template.id, template.source, pathname, available, error);
-        }
-    }
-}
-
-function compileAndVerify(id, source, pathname, available, error) {
-    try {
-        const compiled = compileHyperviewTemplate(id, source);
-        verifyPartialIds(compiled, available, pathname, error);
-    } catch (cause) {
-        error.push(`Template does not compile: ${ cause.message }`, pathname);
-    }
-}
-
-function verifyPartialIds(compiled, available, pathname, error) {
-    if (!compiled) {
-        return;
-    }
-    for (const partialId of compiled.partialIds) {
-        if (!available.has(partialId)) {
-            error.push(`Template references missing partial "${ partialId }"`, pathname);
-        }
-    }
 }

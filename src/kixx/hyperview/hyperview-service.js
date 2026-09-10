@@ -53,7 +53,7 @@ function layerPartials(primary, secondary) {
 
 // Compiles template source with built-in and caller-provided helpers.
 function compileTemplate(templateId, source) {
-    return compileHyperviewTemplate(templateId, source).render;
+    return compileHyperviewTemplate(templateId, source);
 }
 
 /**

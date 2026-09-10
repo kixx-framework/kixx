@@ -47,7 +47,7 @@ describe('Publishing API Release verification', ({ before, it }) => {
 
     let successResponse;
     let wrongSizeResponse;
-    let badTemplateResponse;
+    let unresolvedTemplateResponse;
     let validationResponse;
     let validationReadBackResponse;
     let inlineInValidationResponse;
@@ -76,7 +76,7 @@ describe('Publishing API Release verification', ({ before, it }) => {
             publishingToken,
             JSON.stringify([ { id: 'base.html', source: '{{> missing-base }}' } ]),
         );
-        badTemplateResponse = await createRelease(publishingToken, {
+        unresolvedTemplateResponse = await createRelease(publishingToken, {
             baseTemplates: { objectId: unresolvedBaseTemplates.objectId, size: unresolvedBaseTemplates.size },
         });
 
@@ -120,9 +120,9 @@ describe('Publishing API Release verification', ({ before, it }) => {
         assertEqual('ObjectSizeMismatch', wrongSizeResponse.body.errors[0].code);
     });
 
-    it('rejects a template that references an unresolvable partial', () => {
-        assertEqual(422, badTemplateResponse.status);
-        assertEqual('InvalidReleaseManifest', badTemplateResponse.body.errors[0].code);
+    it('creates a Release without resolving template partials', () => {
+        assertEqual(201, unresolvedTemplateResponse.status);
+        assert(unresolvedTemplateResponse.body.data.id);
     });
 
     it('validates without persisting a Release record', () => {

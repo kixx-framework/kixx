@@ -1,4 +1,4 @@
-import { describe } from 'kixx-test';
+import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 import ContentAddressableStore, { CONTENT_CONTRACT_VERSION } from '../../../../src/kixx/content-addressable-store/content-addressable-store.js';
 import { CONTENT_CONTRACT_PATH } from '../../../../src/kixx/content-addressable-store/content-layout.js';
@@ -136,33 +136,71 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             assertEqual(0, contentStore.closures.size);
         });
 
-        it('rejects invalid template syntax and unresolved partials', async () => {
-            const { store } = makeStore();
+        it('validates and creates templates without compiling or resolving partials', async () => {
+            const { store, contentStore } = makeStore();
             const invalid = await uploadText(store, '{{# open }}');
             const unresolved = await uploadText(store, '{{> missing }}');
-            const baseTemplates = await uploadJson(store, [
-                { id: 'base.html', source: '{{> missing-base }}' },
+            const bundle = await uploadJson(store, [
+                { id: 'broken', source: '{{# open }}' },
+                { id: 'unresolved', source: '{{> missing }}' },
             ]);
-            const caught = await catchAsyncError(() => store.createRelease({}, {
-                baseTemplates,
+            const email = await uploadJson(store, {
+                htmlTemplate: { id: 'html', source: '{{# open }}' },
+                textTemplate: { id: 'text', source: '{{> missing }}' },
+                partials: [ { id: 'signature', source: '{{# open }}' } ],
+            });
+            const manifest = {
+                globalTemplatePartials: bundle,
+                baseTemplates: bundle,
                 pages: {
-                    '/one': { templates: { 'page.html': invalid } },
+                    '/one': { partials: bundle, templates: { 'page.html': invalid } },
                     '/two': { templates: { 'page.html': unresolved } },
                 },
-            }));
-            assertEqual('ValidationError', caught.name);
-            assertEqual(3, caught.errors.length);
+                emails: { '/welcome': email },
+            };
+
+            const validated = await store.validateRelease({}, manifest);
+            assertEqual(0, contentStore.closures.size);
+            const created = await store.createRelease({}, manifest);
+            assertEqual(validated.releaseId, created.releaseId);
+            assertEqual(1, contentStore.closures.size);
         });
 
-        it('accepts templates whose partials resolve', async () => {
-            const { store } = makeStore();
-            const globals = await uploadJson(store, [ { id: 'header', source: '<header></header>' } ]);
-            const page = await uploadText(store, '{{> header }}');
-            const result = await store.createRelease({}, {
-                globalTemplatePartials: globals,
-                pages: { '/': { templates: { 'page.html': page } } },
-            });
-            assertEqual(CONTENT_CONTRACT_VERSION, result.contractVersion);
+        it('does not read standalone template bodies during release preparation', async () => {
+            const { store, contentStore } = makeStore();
+            const template = await uploadText(store, '{{# open }}');
+            const tracker = new MockTracker();
+            const getFiles = tracker.method(contentStore, 'getFiles');
+            const manifest = { pages: { '/': { templates: { 'page.html': template } } } };
+
+            await store.validateRelease({}, manifest);
+            await store.createRelease({}, manifest);
+
+            assertEqual(0, getFiles.mock.callCount());
+            tracker.reset();
+        });
+
+        it('aggregates JSON and schema errors across batches before persisting', async () => {
+            const { store, contentStore } = makeStore();
+            const malformed = await uploadText(store, '{');
+            const wrongShape = await uploadJson(store, []);
+            const invalidBundle = await uploadJson(store, [ null ]);
+            const pages = {};
+            for (let index = 0; index < 101; index += 1) {
+                pages[`/page-${ index }`] = { metadata: index === 100 ? wrongShape : malformed };
+            }
+            const manifest = { pages, globalTemplatePartials: invalidBundle };
+            const blobCount = contentStore.blobs.size;
+
+            for (const method of [ 'validateRelease', 'createRelease' ]) {
+                const caught = await catchAsyncError(() => store[method]({}, manifest));
+                assert(caught, 'expected validation to fail');
+                assertEqual('ValidationError', caught.name);
+                assertEqual(102, caught.errors.length);
+                assert(caught.errors.some(({ source }) => source === '/pages/page-100/page.json'));
+                assertEqual(0, contentStore.closures.size);
+                assertEqual(blobCount, contentStore.blobs.size);
+            }
         });
 
         it('validateRelease persists nothing', async () => {
