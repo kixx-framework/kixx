@@ -839,7 +839,7 @@ Hyperview registers these helpers in addition to the core Kixx helpers:
 | `truncate` | Inline | `helpers/truncate.js` | Shorten a string to a maximum character count |
 | `assetUrl` | Inline | `helpers/asset-url.js` | Render a fingerprinted static-asset URL from the reserved `assets` map |
 
-These helpers are available in Hyperview page templates, base templates, partials, page metadata mini templates, and templated `includes`. Metadata mini templates and templated `includes` compile without partials, so avoid `{{> partial }}` inside those fields.
+These helpers are available in Hyperview page templates, base templates, partials, page metadata mini templates, email templates, and email subject mini templates. Page and email templates can pass published `includes` content to a helper like any other template value. Metadata and subject mini templates compile without partials, so avoid `{{> partial }}` inside those fields.
 
 ### assetUrl Helper
 
@@ -849,11 +849,7 @@ Use `assetUrl` with the explicit `assets` map and a logical asset pathname:
 <link rel="stylesheet" href="{{ assetUrl assets "/stylesheets/stylesheet.css" }}">
 ```
 
-For a published asset it renders `/assets/<hash>/<pathname>`. An unpublished
-pathname renders unchanged so development can use source-file URLs before build
-tooling publishes assets to the content-addressable store. `assets` is a
-reserved page-context key supplied by Hyperview after published page data and
-runtime response props, so neither can shadow it. Helper output is escaped.
+For a published asset it renders `/assets/<hash>/<pathname>`. An unpublished pathname renders unchanged so development can use source-file URLs before build tooling publishes assets to the content-addressable store. `assets` is a reserved page-context key supplied by Hyperview after published page data and runtime response props, so neither can shadow it. Helper output is escaped.
 
 ### formatDate Helper
 
@@ -1334,6 +1330,30 @@ Additional partial rules:
 
 ## Custom Helpers
 
+Application helpers live under `src/app/presentation/template-helpers/`. Import them explicitly in `src/app/app.js` and register them on the application’s `HyperviewService` during startup:
+
+```javascript
+import formatMoney from './presentation/template-helpers/format-money.js';
+
+
+export function register(context) {
+    const hyperview = context.getService('HyperviewService');
+
+    hyperview.registerTemplateHelper('formatMoney', formatMoney);
+}
+```
+
+Registered helpers are available anywhere Hyperview compiles templates: pages, base templates, partials, page metadata, email bodies, and email subjects. A helper registered under an existing name replaces that helper, including a core or Hyperview helper. Registration is application wiring and should finish before the application begins rendering templates.
+
+Helpers that need application configuration can capture it in a factory called from `app.js`. Pass request-specific values through template data and helper arguments; helpers do not receive an application or request context implicitly.
+
+```javascript
+const formatMoney = createFormatMoney(context.config.env.DEFAULT_CURRENCY);
+hyperview.registerTemplateHelper('formatMoney', formatMoney);
+```
+
+`registerTemplateHelper()` returns the `HyperviewService`, so registrations may be chained. It requires a non-empty helper name and a function.
+
 Core helper signature:
 
 ```javascript
@@ -1487,9 +1507,7 @@ API notes:
 
 ## Errors
 
-Malformed templates throw `LineSyntaxError` during tokenization, syntax-tree building,
-or helper execution. The error includes the template filename, line number, and start
-position when available.
+Malformed templates throw `LineSyntaxError` during tokenization, syntax-tree building, or helper execution. The error includes the template filename, line number, and start position when available.
 
 Common causes:
 

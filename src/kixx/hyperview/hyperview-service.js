@@ -1,6 +1,10 @@
 import { NotFoundError } from '../errors/mod.js';
 import HyperviewPage from './hyperview-page.js';
-import { compileHyperviewTemplate } from './template-compiler.js';
+import * as templating from '../templating/mod.js';
+import formatDate from './helpers/format-date.js';
+import markup from './helpers/markup.js';
+import truncate from './helpers/truncate.js';
+import assetUrl from './helpers/asset-url.js';
 import deepMerge from '../utils/deep-merge.js';
 import {
     assert,
@@ -49,11 +53,6 @@ function setCachedEntry(cache, key, entry, maxEntries) {
 function layerPartials(primary, secondary) {
     // Page partials take precedence over global partials for this render only.
     return new Map([ ...secondary, ...primary ]);
-}
-
-// Compiles template source with built-in and caller-provided helpers.
-function compileTemplate(templateId, source) {
-    return compileHyperviewTemplate(templateId, source);
 }
 
 /**
@@ -112,9 +111,16 @@ function compileTemplate(templateId, source) {
  */
 export default class HyperviewService {
 
-    // Helpers available to every template this service compiles, including
-    // metadata mini templates. Documented for template authors in
-    // src/templates/README.md.
+    // Each application owns an independent registry so helper replacements do
+    // not leak into another application booted in the same JavaScript runtime.
+    #templateHelpers = new Map([
+        ...templating.helpers,
+        [ 'formatDate', formatDate ],
+        [ 'markup', markup ],
+        [ 'truncate', truncate ],
+        [ 'assetUrl', assetUrl ],
+    ]);
+
     // Immutable partial maps, indexed by their content bundle etags.
     #globalPartials = new Map();
 
@@ -190,6 +196,30 @@ export default class HyperviewService {
         this.#kvStore = kvStore;
     }
 
+    /**
+     * Registers an application helper for every template this service compiles.
+     * A registration under an existing name replaces the previous helper.
+     * Register helpers during application startup, before rendering templates.
+     * @param {string} name - Helper name used in templates
+     * @param {Function} helper - Synchronous template helper function
+     * @returns {HyperviewService} This service instance for method chaining
+     * @throws {AssertionError} When name is not a non-empty string
+     * @throws {AssertionError} When helper is not a function
+     */
+    registerTemplateHelper(name, helper) {
+        assertNonEmptyString(name, 'Template helper name must be a non-empty string');
+        assertFunction(helper, `Template helper "${ name }" must be a function`);
+
+        this.#templateHelpers.set(name, helper);
+        return this;
+    }
+
+    #compileTemplate(templateId, source) {
+        const tokens = templating.tokenize(null, templateId, source);
+        const tree = templating.buildSyntaxTree(null, tokens);
+        return templating.createRenderFunction(null, this.#templateHelpers, tree);
+    }
+
     // Compiles the site-wide partial bundle, which every render layers beneath
     // the page's own partials. Resolves an empty Map when no bundle is published.
     async #loadGlobalTemplatePartials(context, content) {
@@ -226,7 +256,7 @@ export default class HyperviewService {
                 `Missing or invalid "source" from global partials in "${ file.pathname }"`,
             );
 
-            const template = compileTemplate(`${ dirname }/${ id }`, source);
+            const template = this.#compileTemplate(`${ dirname }/${ id }`, source);
             partials.set(id, template);
         }
 
@@ -282,7 +312,7 @@ export default class HyperviewService {
                 `Missing or invalid "source" from base templates in "${ file.pathname }"`,
             );
 
-            const template = compileTemplate(`${ dirname }/${ id }`, source);
+            const template = this.#compileTemplate(`${ dirname }/${ id }`, source);
             templates.set(id, template);
         }
 
@@ -336,7 +366,7 @@ export default class HyperviewService {
                 `Missing or invalid "source" from page partials in "${ file.pathname }"`,
             );
 
-            const template = compileTemplate(`${ dirname }/${ id }`, source);
+            const template = this.#compileTemplate(`${ dirname }/${ id }`, source);
             partials.set(id, template);
         }
 
@@ -370,7 +400,7 @@ export default class HyperviewService {
             return getCachedEntry(this.#pageTemplates, cacheKey);
         }
 
-        const template = compileTemplate(file.pathname, file.text);
+        const template = this.#compileTemplate(file.pathname, file.text);
 
         if (this.#useTemplateCache) {
             // Keep older compiled versions available for requests pinned to the
@@ -463,7 +493,7 @@ export default class HyperviewService {
                 source,
                 `Missing or invalid "source" from email HTML template in "${ pathname }"`,
             );
-            htmlTemplate = compileTemplate(id, source);
+            htmlTemplate = this.#compileTemplate(id, source);
         }
         let textTemplate;
         if (bundle.json.textTemplate) {
@@ -476,7 +506,7 @@ export default class HyperviewService {
                 source,
                 `Missing or invalid "source" from email text template in "${ pathname }"`,
             );
-            textTemplate = compileTemplate(id, source);
+            textTemplate = this.#compileTemplate(id, source);
         }
 
         const partials = new Map();
@@ -494,7 +524,7 @@ export default class HyperviewService {
                     `Missing or invalid "source" from email partials in "${ pathname }"`,
                 );
 
-                const template = compileTemplate(`${ pathname }/${ id }`, source);
+                const template = this.#compileTemplate(`${ pathname }/${ id }`, source);
                 partials.set(id, template);
             }
         }
@@ -878,7 +908,7 @@ export default class HyperviewService {
      * @returns {function(Object): string} Render function accepting the template context
      */
     createMiniTemplate(templateId, templateSource) {
-        const template = compileTemplate(templateId, templateSource);
+        const template = this.#compileTemplate(templateId, templateSource);
         // An empty lookup deliberately prevents metadata templates from resolving
         // page or global partials.
         return (data) => template(data, new Map());

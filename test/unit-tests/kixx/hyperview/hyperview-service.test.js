@@ -1393,6 +1393,123 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
+    describe('registerTemplateHelper()', ({ it }) => {
+
+        it('registers a helper for every page template layer', async () => {
+            const spec = makeDefaultSpec();
+            spec.pages['/'].pageData = [{ page: { title: { template: '{{ shout name }}' } }, name: 'home' }];
+            spec.pages['/'].template = '<main>{{ shout page.title }}{{> byline }}{{> footer }}</main>';
+            spec.pages['/'].partials = [
+                { id: 'byline', source: '<p>{{ shout name }}</p>' },
+            ];
+            spec.globalPartials = [
+                { id: 'footer', source: '<footer>{{ shout name }}</footer>' },
+            ];
+            spec.baseTemplates = [
+                { id: 'main', source: '<html data-name="{{ shout name }}">{{{ body }}}</html>' },
+            ];
+
+            const { service } = makeSubject(spec);
+            service.registerTemplateHelper('shout', (_context, _options, value) => {
+                return String(value).toUpperCase();
+            });
+            const response = new ServerResponse();
+
+            await renderPageToResponse(service,
+                CONTEXT,
+                makeRequest(),
+                response,
+                makeFullPageOptions(),
+            );
+
+            assertEqual(
+                '<html data-name="HOME"><main>HOME<p>HOME</p><footer>HOME</footer></main></html>',
+                response.body,
+            );
+        });
+
+        it('registers a helper for email bodies, partials, and subjects', async () => {
+            const spec = {
+                globalPartials: [
+                    { id: 'signoff', source: '{{ shout name }}' },
+                ],
+                emails: {
+                    '/welcome': {
+                        bundle: {
+                            contextData: {
+                                subject: { template: '{{ shout name }}' },
+                            },
+                            htmlTemplate: { id: 'welcome.html', source: '<p>{{ shout name }} {{> signoff }}</p>' },
+                            textTemplate: { id: 'welcome.txt', source: '{{ shout name }}' },
+                        },
+                    },
+                },
+            };
+            const { service } = makeSubject(spec);
+            service.registerTemplateHelper('shout', (_context, _options, value) => {
+                return String(value).toUpperCase();
+            });
+
+            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
+
+            assertEqual('RAKIM', email.subject);
+            assertEqual('<p>RAKIM RAKIM</p>', email.html);
+            assertEqual('RAKIM', email.text);
+        });
+
+        it('replaces an existing helper and returns the service', () => {
+            const { service } = makeSubject(makeDefaultSpec());
+            const returned = service.registerTemplateHelper('truncate', () => 'replacement');
+
+            const template = service.createMiniTemplate('test.title', '{{ truncate name 4 }}');
+
+            assertEqual(service, returned);
+            assertEqual('replacement', template({ name: 'Rakim' }));
+        });
+
+        it('keeps helper replacements isolated between service instances', () => {
+            const { service: first } = makeSubject(makeDefaultSpec());
+            const { service: second } = makeSubject(makeDefaultSpec());
+            first.registerTemplateHelper('truncate', () => 'replacement');
+
+            const firstTemplate = first.createMiniTemplate('first.title', '{{ truncate name 4 }}');
+            const secondTemplate = second.createMiniTemplate('second.title', '{{ truncate name 4 }}');
+
+            assertEqual('replacement', firstTemplate({ name: 'Rakim' }));
+            assertEqual('Raki&hellip;', secondTemplate({ name: 'Rakim' }));
+        });
+
+        it('requires a non-empty helper name', () => {
+            const { service } = makeSubject(makeDefaultSpec());
+            let caught = null;
+
+            try {
+                service.registerTemplateHelper('', () => '');
+            } catch (error) {
+                caught = error;
+            }
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('name', caught.message);
+        });
+
+        it('requires a helper function', () => {
+            const { service } = makeSubject(makeDefaultSpec());
+            let caught = null;
+
+            try {
+                service.registerTemplateHelper('invalid', {});
+            } catch (error) {
+                caught = error;
+            }
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('function', caught.message);
+        });
+    });
+
     describe('initialize()', ({ it }) => {
 
         it('requires a kvStore', () => {
