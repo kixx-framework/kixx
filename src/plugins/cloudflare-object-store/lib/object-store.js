@@ -5,6 +5,7 @@ import {
     isNonEmptyString,
     isObjectNotNull,
     isPlainObject,
+    isFunction,
     assert,
     assertNonEmptyString,
 } from '../../../kixx/assertions/mod.js';
@@ -89,6 +90,7 @@ export default class ObjectStore {
 
         const contentType = options?.contentType;
         const customMetadata = options?.customMetadata;
+        const contentLength = options?.contentLength;
         const putOptions = {};
 
         if (!isUndefined(contentType)) {
@@ -104,12 +106,32 @@ export default class ObjectStore {
             putOptions.customMetadata = customMetadata;
         }
 
+        if (!isUndefined(contentLength)) {
+            assert(
+                Number.isSafeInteger(contentLength) && contentLength >= 0,
+                'ObjectStore "contentLength" must be a nonnegative safe integer when provided',
+            );
+        }
+
         this.#logger.debug('put() writing object', { bucket, key });
 
         let object;
         try {
-            object = await bucketBinding.put(key, body, putOptions);
+            if (body instanceof ReadableStream && !isUndefined(contentLength)) {
+                object = await putExactLengthStream(bucketBinding, key, body, contentLength, putOptions);
+            } else {
+                if (!isUndefined(contentLength) && getBodyLength(body) !== contentLength) {
+                    throw new OperationalError(
+                        `ObjectStore body does not match declared content length ${ contentLength }`,
+                        { code: 'ObjectContentLengthMismatch' },
+                    );
+                }
+                object = await bucketBinding.put(key, body, putOptions);
+            }
         } catch (cause) {
+            if (cause.code === 'ObjectContentLengthMismatch') {
+                throw cause;
+            }
             throw new OperationalError(
                 `ObjectStore failed to store object "${ bucket }/${ key }"`,
                 { cause },
@@ -336,6 +358,42 @@ export default class ObjectStore {
         }
     }
 
+}
+
+async function putExactLengthStream(bucketBinding, key, body, contentLength, putOptions) {
+    assert(
+        isFunction(globalThis.FixedLengthStream),
+        'ObjectStore exact-length streams require the Cloudflare FixedLengthStream runtime API',
+    );
+
+    const fixedLengthStream = new globalThis.FixedLengthStream(contentLength);
+    const producer = body.pipeTo(fixedLengthStream.writable);
+    const storage = bucketBinding.put(key, fixedLengthStream.readable, putOptions);
+    const [ producerResult, storageResult ] = await Promise.allSettled([ producer, storage ]);
+
+    if (producerResult.status === 'rejected') {
+        throw new OperationalError('ObjectStore body does not match its declared content length', {
+            cause: producerResult.reason,
+            code: 'ObjectContentLengthMismatch',
+        });
+    }
+    if (storageResult.status === 'rejected') {
+        throw storageResult.reason;
+    }
+    return storageResult.value;
+}
+
+function getBodyLength(body) {
+    if (body instanceof Blob) {
+        return body.size;
+    }
+    if (isString(body)) {
+        return textEncoder.encode(body).byteLength;
+    }
+    if (body instanceof ArrayBuffer) {
+        return body.byteLength;
+    }
+    return body.byteLength;
 }
 
 function metaFromR2(object) {

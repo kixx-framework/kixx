@@ -205,7 +205,7 @@ Read the full applicable guide before modifying its area:
 
 ### Task F1: Support bounded streaming storage on both platforms
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** Implementation Approach: Upload transport and Configuration;
 `src/plugins/README.md`; `docs/configuration.md`;
@@ -268,18 +268,35 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Neither object-store adapter currently has a
-  dedicated test directory; add tests, not a new testing dependency.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None for repository work; live R2 binding is an F7 prerequisite.
+- Completed: Added optional exact-length writes to the ObjectStore contract and
+  both adapters; Node stages and counts before publication, while Cloudflare
+  bridges Web streams through `FixedLengthStream` and awaits producer/storage
+  settlement. Added the private `files` bucket, `FILES` settings, boot
+  invariants, and shared adapter contract coverage.
+- Current state: Repository implementation and mocked adapter validation are
+  complete.
+- Remaining: F7 must provision/bind `OBJECT_STORE_FILES` and verify the actual
+  Worker/R2 stream path, including zero-byte, normal, limit, disconnect, and
+  mismatch behavior. A mocked R2 test is not runtime proof.
+- Decisions and discoveries: Length mismatch uses the stable expected error code
+  `ObjectContentLengthMismatch`. Existing callers remain on the unsized path.
+  The Cloudflare config names the required private bucket but does not provision
+  it. The existing `uploads` bucket remains configured on Node.
+- Actual files changed: `src/kixx/object-store/object-store-interface.js`,
+  `src/plugins/node-object-store/lib/object-store.js`,
+  `src/plugins/cloudflare-object-store/lib/object-store.js`,
+  `src/node-config.js`, `src/cloudflare-config.js`, `src/app/app.js`,
+  `test/unit-tests/kixx/object-store/object-store-conformance.js`,
+  `test/unit-tests/plugins/node-object-store/lib/object-store.test.js`, and
+  `test/unit-tests/plugins/cloudflare-object-store/lib/object-store.test.js`.
+- Validation run: `node run-linter.js` passed; focused object-store suites passed
+  (5 tests); `node run-tests.js` passed (1,378 tests); `git diff --check` passed.
+- Blockers: None for repository work. Live R2 provisioning and runtime access
+  remain an F7 prerequisite.
 
 ### Task F2: Implement stable file identity and mutable file lifecycle
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** F1
 **Documentation:** Approved behavior; Storage and replacement, Last write wins,
 Deletion and cleanup; Collections, Transaction Scripts, Forms, and error guides.
@@ -352,13 +369,32 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Internal compare-and-swap retries implement the
-  approved last-write-wins policy; they do not introduce user-facing conflicts.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added validated File records, deterministic newest-first paging,
+  the private content gateway, upload/metadata/action Forms, and Transaction
+  Scripts for create, replace, metadata, publish, unpublish, get, list, and
+  conditional delete. Fresh generation keys protect replacements; field-specific
+  retries preserve unrelated concurrent writes; post-commit cleanup cannot undo
+  or misreport the winning pointer.
+- Current state: The storage/domain lifecycle is complete and registered. HTTP
+  routes and presentation remain owned by later tasks.
+- Remaining: Nothing in F2. F3 must construct the Forms from authenticated HTTP
+  input and map the documented expected errors to responses. Operational orphan
+  cleanup can list `<file UUID>/<generation UUID>` keys and remove references not
+  named by the current File record.
+- Decisions and discoveries: MIME type is derived from the shared extension map,
+  ignoring browser claims. Blank metadata normalizes to null. Replacement retry
+  tracks the content displaced by the successful commit, so overlapping
+  replacements cannot delete the winning content. Cleanup failure is logged
+  after a committed mutation and does not turn the successful logical change
+  into a failed result.
+- Actual files changed: `src/app/app.js`,
+  `src/app/collections/file-collection.js`, `file-record.js`, and
+  `file-content-collection.js`; `src/app/presentation/forms/files/`;
+  `src/app/transaction-scripts/files/`; and matching tests under
+  `test/unit-tests/app/collections/`, `app/presentation/forms/files/`, and
+  `app/transaction-scripts/files/`.
+- Validation run: `node run-linter.js` passed; focused F1/F2 suites passed (20
+  tests); `node run-tests.js` passed (1,378 tests); `git diff --check` passed.
 - Blockers: None.
 
 ### Task F3: Expose authenticated admin file operations

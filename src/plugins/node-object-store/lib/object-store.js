@@ -183,6 +183,7 @@ export default class ObjectStore {
 
         const contentType = this.#resolveContentType(options);
         const customMetadata = this.#resolveCustomMetadata(options);
+        const expectedContentLength = this.#resolveContentLength(options);
         this.#logger.debug('put() writing object', { bucket, key });
 
         const db = this.#getDatabase();
@@ -190,7 +191,10 @@ export default class ObjectStore {
 
         // Stage the body to a temp file (hashing and counting as it streams), then
         // atomically move it into place before the manifest row references it.
-        const { tempPath, etag, contentLength } = await this.#writeBodyToTemp(readable);
+        const { tempPath, etag, contentLength } = await this.#writeBodyToTemp(
+            readable,
+            expectedContentLength,
+        );
 
         const uploaded = Date.now();
         try {
@@ -661,10 +665,22 @@ export default class ObjectStore {
         return customMetadata;
     }
 
+    #resolveContentLength(options) {
+        const contentLength = options?.contentLength;
+        if (isUndefined(contentLength)) {
+            return undefined;
+        }
+        assert(
+            Number.isSafeInteger(contentLength) && contentLength >= 0,
+            'ObjectStore "contentLength" must be a nonnegative safe integer when provided',
+        );
+        return contentLength;
+    }
+
     // Streams the body to a uniquely named temp file in the object root, hashing
     // and counting bytes as it goes, then fsyncs the file. Returns the temp path
     // for the caller to rename into place or clean up.
-    async #writeBodyToTemp(readable) {
+    async #writeBodyToTemp(readable, expectedContentLength) {
         const tempPath = path.join(this.#tempDirectory, generateShortId());
 
         const hash = createHash('sha256');
@@ -677,11 +693,24 @@ export default class ObjectStore {
                     for await (const chunk of source) {
                         hash.update(chunk);
                         contentLength += chunk.length;
+                        if (!isUndefined(expectedContentLength) && contentLength > expectedContentLength) {
+                            throw new OperationalError(
+                                `ObjectStore body exceeds declared content length ${ expectedContentLength }`,
+                                { code: 'ObjectContentLengthMismatch' },
+                            );
+                        }
                         yield chunk;
                     }
                 },
                 fs.createWriteStream(tempPath),
             );
+
+            if (!isUndefined(expectedContentLength) && contentLength !== expectedContentLength) {
+                throw new OperationalError(
+                    `ObjectStore body ended before declared content length ${ expectedContentLength }`,
+                    { code: 'ObjectContentLengthMismatch' },
+                );
+            }
 
             // fsync the staged bytes before the rename so a crash cannot leave a
             // renamed-but-empty file visible to readers.
@@ -693,6 +722,9 @@ export default class ObjectStore {
             }
         } catch (cause) {
             await this.#unlinkQuietly(tempPath);
+            if (cause.code === 'ObjectContentLengthMismatch') {
+                throw cause;
+            }
             throw new OperationalError('ObjectStore failed to stage the object body', { cause });
         }
 

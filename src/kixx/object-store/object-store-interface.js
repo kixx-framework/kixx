@@ -163,6 +163,8 @@
  * @typedef {Object} ObjectPutOptions
  * @property {string} [contentType] - Content type to store with the object.
  * @property {Object<string,string>} [customMetadata] - User-defined string metadata to store with the object.
+ * @property {number} [contentLength] - Required exact body length in bytes. A
+ * short or excessive body fails the write without publishing partial content.
  */
 
 /**

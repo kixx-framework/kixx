@@ -8,6 +8,9 @@ import PublishingApiTokenCollection from './collections/publishing-api-token-col
 import RateLimitCollection from './collections/rate-limit-collection.js';
 import ReleaseCollection from './collections/release-collection.js';
 import UserSessionCollection from './collections/user-session-collection.js';
+import FileCollection from './collections/file-collection.js';
+import FileContentCollection from './collections/file-content-collection.js';
+import { assert, assertNonEmptyString, isPlainObject } from '../kixx/assertions/mod.js';
 
 
 // Each document store collection owns its own secondary index definitions
@@ -23,8 +26,21 @@ const CSRF_TOKEN_SIGNING_SECRET = 'CSRF_TOKEN_SIGNING_SECRET';
 
 
 export function register(context) {
+    const filesConfig = context.config?.env?.FILES;
+    assert(isPlainObject(filesConfig), 'app requires context.config.env.FILES');
+    assert(
+        Number.isSafeInteger(filesConfig.maxUploadBytes) && filesConfig.maxUploadBytes >= 0,
+        'app requires context.config.env.FILES.maxUploadBytes to be a nonnegative safe integer',
+    );
+    assertNonEmptyString(filesConfig.bucket, 'app requires context.config.env.FILES.bucket');
+    assert(
+        context.config?.env?.OBJECT_STORE?.buckets?.[filesConfig.bucket],
+        'app requires context.config.env.FILES.bucket to name a configured object-store bucket',
+    );
+
     const documentStore = new DocumentStore();
     const keyValueStore = context.getService('KeyValueStore');
+    const objectStore = context.getService('ObjectStore');
 
     context.registerService('DocumentStore', documentStore);
 
@@ -36,6 +52,12 @@ export function register(context) {
     context.registerCollection('RateLimit', new RateLimitCollection({ db: keyValueStore }));
     context.registerCollection('Release', new ReleaseCollection({ db: documentStore }));
     context.registerCollection('UserSession', new UserSessionCollection({ db: keyValueStore }));
+    context.registerCollection('File', new FileCollection({ db: documentStore }));
+    context.registerCollection('FileContent', new FileContentCollection({
+        store: objectStore,
+        bucket: filesConfig.bucket,
+        maxUploadBytes: filesConfig.maxUploadBytes,
+    }));
 }
 
 export function initialize(context) {
