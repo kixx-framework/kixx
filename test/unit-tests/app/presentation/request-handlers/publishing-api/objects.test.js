@@ -5,18 +5,14 @@ import { hashBlob } from '../../../../../../src/kixx/content-addressable-store/a
 import ServerResponse from '../../../../../../src/kixx/http-router/server-response.js';
 import { getObjectStatus, putObject } from '../../../../../../src/app/presentation/request-handlers/publishing-api/objects.js';
 import { JSON_API_CONTENT_TYPE } from '../../../../../../src/app/presentation/lib/json-api.js';
+import { MAX_OBJECT_BYTES } from '../../../../../../src/app/presentation/request-handlers/publishing-api/constants.js';
 
 
 function makeRawRequest(objectId, bytes) {
     return {
         pathnameParams: { objectId },
-        headers: new Headers(),
-        body: new ReadableStream({
-            start(controller) {
-                controller.enqueue(bytes);
-                controller.close();
-            },
-        }),
+        headers: new Headers({ 'content-length': String(bytes.byteLength) }),
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
     };
 }
 
@@ -30,6 +26,43 @@ async function catchError(fn) {
 }
 
 describe('Publishing API objects', ({ it }) => {
+
+    it('rejects missing Content-Length before reading the body', async () => {
+        const bytes = new TextEncoder().encode('hello');
+        const objectId = await hashBlob(bytes.buffer);
+        const request = makeRawRequest(objectId, bytes);
+        request.headers.delete('content-length');
+        let readCount = 0;
+        request.arrayBuffer = async () => {
+            readCount += 1;
+            return bytes.buffer;
+        };
+
+        const error = await catchError(() => putObject({}, request, new ServerResponse()));
+
+        assert(error);
+        assertEqual(411, error.httpStatusCode);
+        assertEqual('LengthRequired', error.code);
+        assertEqual(0, readCount);
+    });
+
+    it('rejects an oversized Content-Length before reading the body', async () => {
+        const bytes = new TextEncoder().encode('hello');
+        const objectId = await hashBlob(bytes.buffer);
+        const request = makeRawRequest(objectId, bytes);
+        request.headers.set('content-length', String(MAX_OBJECT_BYTES + 1));
+        let readCount = 0;
+        request.arrayBuffer = async () => {
+            readCount += 1;
+            return bytes.buffer;
+        };
+
+        const error = await catchError(() => putObject({}, request, new ServerResponse()));
+
+        assert(error);
+        assertEqual(413, error.httpStatusCode);
+        assertEqual(0, readCount);
+    });
 
     it('rejects mismatched bytes without storing them', async () => {
         const objectId = await hashBlob(new TextEncoder().encode('expected').buffer);

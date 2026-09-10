@@ -1,6 +1,5 @@
-import { BadRequestError, ValidationError } from '../../../../kixx/errors/mod.js';
+import { BadRequestError, OperationalError, PayloadTooLargeError, ValidationError } from '../../../../kixx/errors/mod.js';
 import { hashBlob, isValidHash } from '../../../../kixx/content-addressable-store/addressing.js';
-import { bufferRequestBodyWithLimit } from '../../lib/read-request-body.js';
 import {
     JSON_API_CONTENT_TYPE,
     assertJsonApiContentType,
@@ -44,6 +43,8 @@ export async function getObjectStatus(context, request, response) {
  * @param {Object} response - Response to populate.
  * @returns {Promise<Object>} JSON:API Object response.
  * @throws {ValidationError} When the route id does not match the payload bytes.
+ * @throws {OperationalError} With status 411 when Content-Length is missing.
+ * @throws {PayloadTooLargeError} When Content-Length exceeds the object size limit.
  */
 export async function putObject(context, request, response) {
     const objectId = request.pathnameParams.objectId;
@@ -51,8 +52,22 @@ export async function putObject(context, request, response) {
         throw validationError('Object id must be a valid content address', 'ObjectIdInvalid', 'objectId');
     }
 
-    const body = await bufferRequestBodyWithLimit(request, MAX_OBJECT_BYTES);
-    const payload = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
+    if (!request.headers.has('content-length')) {
+        throw new OperationalError('Object uploads require Content-Length.', {
+            expected: true,
+            httpStatusCode: 411,
+            code: 'LengthRequired',
+            name: 'LengthRequiredError',
+        });
+    }
+
+    // Trust the declared length; body reading and storage enforce platform limits.
+    const declaredLength = Number.parseInt(request.headers.get('content-length'), 10);
+    if (declaredLength > MAX_OBJECT_BYTES) {
+        throw new PayloadTooLargeError(`Request body exceeds the maximum of ${ MAX_OBJECT_BYTES } bytes.`);
+    }
+
+    const payload = await request.arrayBuffer();
     const actualObjectId = await hashBlob(payload);
 
     if (actualObjectId !== objectId) {

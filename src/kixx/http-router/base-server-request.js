@@ -326,10 +326,7 @@ export default class BaseServerRequest {
      * Reads the request body as raw bytes.
      *
      * The whole body is buffered in memory with no size limit, matching the
-     * other read methods. A handler accepting untrusted uploads should use
-     * `bufferRequestBodyWithLimit()` from
-     * `app/presentation/lib/read-request-body.js` instead, which streams the
-     * body under a hard byte cap and aborts once the cap is crossed.
+     * other read methods.
      *
      * A read failure rejects with `BadRequestError` rather than the `TypeError`
      * the Web platform specifies for `Request#arrayBuffer()`. The deviation is

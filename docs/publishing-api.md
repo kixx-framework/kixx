@@ -124,8 +124,8 @@ a request body.
 
 Creating an object consumes storage nothing can currently reclaim — the
 content store has no delete operation — so object upload permission is worth
-granting deliberately. The 25 MiB per-object cap and the 100-id status cap
-are the only current bound.
+granting deliberately. Object uploads check the declared `Content-Length`
+against 25 MiB; status requests are capped at 100 ids.
 
 ## Protocol conventions
 
@@ -200,8 +200,9 @@ Error codes used by this API:
 | `405` | `METHOD_NOT_ALLOWED_ERROR` | The method is not allowed on the recognized path |
 | `409` | `JsonApiResourceTypeMismatch` | Request resource type is wrong |
 | `409` | `ObjectSizeMismatch` | A stored object's size disagrees with the manifest |
+| `411` | `LengthRequired` | An object upload omitted `Content-Length` |
 | `412` | `BuildPointerConflict` | The pointer precondition no longer holds |
-| `413` | `PAYLOAD_TOO_LARGE_ERROR` | An object upload exceeds `maxObjectBytes` |
+| `413` | `PAYLOAD_TOO_LARGE_ERROR` | An object upload's declared `Content-Length` exceeds `maxObjectBytes` |
 | `415` | `UNSUPPORTED_MEDIA_TYPE_ERROR` | The request media type is not accepted |
 | `422` | `ObjectIdMismatch` | Uploaded bytes do not match the object id in the URL |
 | `422` | `ObjectIdInvalid` | An object id is not a valid content address |
@@ -303,8 +304,11 @@ curl --request PUT \
     http://localhost:2026/publishing-api/v1/objects/<object-id>
 ```
 
-A body over `maxObjectBytes` (25 MiB) returns `413 PAYLOAD_TOO_LARGE_ERROR`
-before the bytes are hashed. A mismatch returns `422 ObjectIdMismatch` and
+A declared `Content-Length` over `maxObjectBytes` (25 MiB) returns
+`413 PAYLOAD_TOO_LARGE_ERROR` before the body is read. The server trusts this
+header and does not count incoming bytes against the limit. A missing header
+returns `411 LengthRequired` before the body is read.
+A content-address mismatch returns `422 ObjectIdMismatch` and
 stores nothing. On success the response distinguishes a newly stored object
 (`201 Created`) from one that was already present (`200 OK`), so a client
 can report how many bytes it actually transferred:
