@@ -6,6 +6,7 @@ import { isSecureRequest } from './admin-session-cookie.js';
 
 export const CSRF_COOKIE_NAME = 'kixx_csrf_session';
 export const CSRF_FIELD_NAME = 'csrf_token';
+export const CSRF_HEADER_NAME = 'x-kixx-csrf-token';
 export const CSRF_TOKEN_TTL_SECONDS = 60 * 30;
 
 // The `code` validateCsrfFormData() reports an expired or mismatched token with.
@@ -114,8 +115,24 @@ async function mintCsrfToken(context, request) {
  */
 export async function validateCsrfFormData(context, request) {
     const formData = await request.formData();
+    await validateCsrfToken(context, request, formData.get(CSRF_FIELD_NAME));
+
+    return formData;
+}
+
+/**
+ * Validates the CSRF header used by one-shot raw upload bodies without reading the body.
+ * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
+ * @returns {Promise<void>}
+ * @throws {ForbiddenError} When the CSRF cookie or header token is invalid.
+ */
+export async function validateCsrfHeader(context, request) {
+    await validateCsrfToken(context, request, request.headers.get(CSRF_HEADER_NAME));
+}
+
+async function validateCsrfToken(context, request, token) {
     const sid = request.getCookie(CSRF_COOKIE_NAME);
-    const token = formData.get(CSRF_FIELD_NAME);
     const signer = context.getService('CsrfTokenSigner');
 
     const isValidToken = isNonEmptyString(sid)
@@ -128,7 +145,6 @@ export async function validateCsrfFormData(context, request) {
         });
     }
 
-    return formData;
 }
 
 /**

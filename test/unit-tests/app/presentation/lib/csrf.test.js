@@ -8,12 +8,14 @@ import {
 import {
     CSRF_COOKIE_NAME,
     CSRF_FIELD_NAME,
+    CSRF_HEADER_NAME,
     CSRF_TOKEN_TTL_SECONDS,
     INVALID_CSRF_TOKEN_CODE,
     clearCsrfToken,
     getCsrfFormContext,
     renderWithFreshCsrf,
     validateCsrfFormData,
+    validateCsrfHeader,
 } from '../../../../../src/app/presentation/lib/csrf.js';
 
 
@@ -120,6 +122,29 @@ describe('csrf', ({ describe }) => {
         });
     });
 
+    describe('validateCsrfHeader', ({ it }) => {
+        it('verifies a cookie-bound header without reading the request body', async () => {
+            const signer = makeSigner({ isValid: true });
+            const request = makeRequest({
+                csrfSid: 'browser-session',
+                headers: { [CSRF_HEADER_NAME]: 'header-token' },
+            });
+
+            await validateCsrfHeader(makeContext(signer), request);
+
+            assertEqual(0, request.calls.formData);
+            assertEqual('header-token', signer.calls.verify[0].token);
+        });
+
+        it('rejects an invalid header without reading the request body', async () => {
+            const request = makeRequest({ csrfSid: 'browser-session' });
+            const caught = await catchAsyncError(() => validateCsrfHeader(makeContext(makeSigner()), request));
+
+            assertInvalidCsrfError(caught);
+            assertEqual(0, request.calls.formData);
+        });
+    });
+
     describe('renderWithFreshCsrf', ({ it }) => {
         it('preserves an Error status and merges a fresh form into page props', async () => {
             const error = { httpStatusCode: 422 };
@@ -210,11 +235,13 @@ function makeRequest(options) {
     const {
         csrfSid = null,
         formData = new FormData(),
+        headers = {},
         url = 'https://example.com/form',
     } = options ?? {};
 
     return {
         calls: { formData: 0 },
+        headers: new Headers(headers),
         url: new URL(url),
         getCookie(name) {
             assertEqual(CSRF_COOKIE_NAME, name);

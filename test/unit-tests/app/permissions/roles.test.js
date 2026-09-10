@@ -6,6 +6,7 @@ import { evaluatePermissions } from '../../../../src/kixx/permissions/permission
 
 
 const BUILD_RESOURCE = 'urn:kixx:publishing:builds';
+const FILE_RESOURCE = 'urn:kixx:publishing:files';
 
 function isAuthorized(roleId, action, resource) {
     const permissions = deriveRolePermissions([ roleId ]);
@@ -43,6 +44,20 @@ describe('app/permissions/roles', ({ describe }) => {
         it('still authorizes Editor for get/create on the rest of the publishing domain', () => {
             assertEqual(true, isAuthorized(ROLE_EDITOR, 'urn:kixx:get', 'urn:kixx:publishing:releases'));
             assertEqual(true, isAuthorized(ROLE_EDITOR, 'urn:kixx:create', 'urn:kixx:publishing:objects'));
+        });
+    });
+
+    describe('File resource grants', ({ it }) => {
+        it('authorizes every admin role for exact file management actions', () => {
+            for (const roleId of [ ROLE_ROOT_ADMIN, 'developer', 'admin', ROLE_EDITOR ]) {
+                for (const action of [ 'get', 'list', 'create', 'update', 'delete' ]) {
+                    assertEqual(true, isAuthorized(roleId, `urn:kixx:${ action }`, FILE_RESOURCE));
+                }
+            }
+        });
+
+        it('does not broaden Editor file grants to other resources', () => {
+            assertEqual(false, isAuthorized(ROLE_EDITOR, 'urn:kixx:delete', 'urn:kixx:publishing:releases'));
         });
     });
 });

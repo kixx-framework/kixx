@@ -7,6 +7,7 @@ import * as AdminPanel from './app/presentation/request-handlers/admin-panel/mod
 import adminPanelRoutes from './routes/admin-panel.js';
 import adminApiRoutes from './routes/admin-api-v1.js';
 import publishingApiRoutes from './routes/publishing-api-v1.js';
+import fileRoutes from './routes/files.js';
 import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
 
 
@@ -15,6 +16,7 @@ export default [
         name: 'kixx-app',
         hostname: 'localhost',
         routes: [
+            ...fileRoutes,
             {
                 pattern: '/admin',
                 name: 'admin-panel',

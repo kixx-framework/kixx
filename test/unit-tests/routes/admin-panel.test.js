@@ -46,4 +46,22 @@ describe('Admin panel routes', ({ it }) => {
         assertEqual(1, calls.length);
         assertEqual('admin.html', calls[0].baseTemplateId);
     });
+
+    it('orders upload and action endpoints before the dynamic detail route', () => {
+        const patterns = routes.map((route) => route.pattern);
+        const detailIndex = patterns.indexOf('/files/:fileId');
+
+        assert(patterns.indexOf('/files/upload') < detailIndex);
+        assert(patterns.indexOf('/files/:fileId/download') < detailIndex);
+        assert(patterns.indexOf('/files/:fileId/replace') < detailIndex);
+        assert(patterns.includes('/files/:fileId/delete'));
+    });
+
+    it('authorizes raw upload before its handler can consume the body', () => {
+        const upload = routes.find((route) => route.pattern === '/files/upload').targets[0];
+
+        assertEqual('urn:kixx:create', upload.requestHandlers[0].decisions[0].action);
+        assertEqual('urn:kixx:publishing:files', upload.requestHandlers[0].decisions[0].resource);
+        assertEqual('postFileUpload', upload.requestHandlers[1].name);
+    });
 });

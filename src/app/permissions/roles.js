@@ -13,6 +13,14 @@ const EDITOR_ACTIONS = new Set([ 'urn:kixx:get', 'urn:kixx:create' ]);
 // authority over the rest of the publishing domain.
 const PUBLISHING_BUILD_RESOURCE = 'urn:kixx:publishing:builds';
 const EDITOR_BUILD_ACTIONS = new Set([ 'urn:kixx:get', 'urn:kixx:update' ]);
+const FILE_RESOURCE = 'urn:kixx:publishing:files';
+const FILE_ACTIONS = new Set([
+    'urn:kixx:get',
+    'urn:kixx:list',
+    'urn:kixx:create',
+    'urn:kixx:update',
+    'urn:kixx:delete',
+]);
 
 /** @type {string} */
 export const ROLE_ROOT_ADMIN = 'root-admin';
@@ -46,6 +54,7 @@ const ROLE_DEFINITIONS = deepFreeze([
                 action: [ 'urn:kixx:get', 'urn:kixx:update' ],
                 resource: PUBLISHING_BUILD_RESOURCE,
             },
+            { action: Array.from(FILE_ACTIONS), resource: FILE_RESOURCE },
             { action: '*', resource: 'urn:kixx:admin:api-tokens:*' },
             { action: '*', resource: 'urn:kixx:admin:migrations' },
         ],
@@ -65,6 +74,7 @@ const ROLE_DEFINITIONS = deepFreeze([
                 action: [ 'urn:kixx:get', 'urn:kixx:update' ],
                 resource: PUBLISHING_BUILD_RESOURCE,
             },
+            { action: Array.from(FILE_ACTIONS), resource: FILE_RESOURCE },
         ],
     },
     {
@@ -80,6 +90,7 @@ const ROLE_DEFINITIONS = deepFreeze([
                 action: [ 'urn:kixx:get', 'urn:kixx:update' ],
                 resource: PUBLISHING_BUILD_RESOURCE,
             },
+            { action: Array.from(FILE_ACTIONS), resource: FILE_RESOURCE },
         ],
     },
 ]);
@@ -173,7 +184,12 @@ function assertPublishingGrants(role) {
         // Only the exact Build resource may carry the update action; every
         // other publishing grant stays within get/create so Editor never
         // gains general update authority through a wildcard resource.
-        const allowedActions = grant.resource === PUBLISHING_BUILD_RESOURCE ? EDITOR_BUILD_ACTIONS : EDITOR_ACTIONS;
+        let allowedActions = EDITOR_ACTIONS;
+        if (grant.resource === PUBLISHING_BUILD_RESOURCE) {
+            allowedActions = EDITOR_BUILD_ACTIONS;
+        } else if (grant.resource === FILE_RESOURCE) {
+            allowedActions = FILE_ACTIONS;
+        }
         const actionsArePublishing = actions.every((action) => allowedActions.has(action));
 
         assert(

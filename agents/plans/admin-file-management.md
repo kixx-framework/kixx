@@ -399,7 +399,7 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 ### Task F3: Expose authenticated admin file operations
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** F2
 **Documentation:** Upload transport; `src/app/presentation/README.md`;
 `src/app/permissions/roles.js`; server error and testing guides.
@@ -474,18 +474,43 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: `/admin` already authenticates sessions; upload
-  error handling must accommodate failures from that ancestor middleware.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added exact file-management grants for Developer, Admin, and
+  Editor; added ordered listing, creation, detail, download, upload,
+  replacement, metadata, publication, and deletion routes; factored shared
+  header/form CSRF verification; and added handlers that construct F2 Forms,
+  call Transaction Scripts, redirect normal form actions, and return local JSON
+  contracts for raw uploads and partial row actions. Upload errors are returned
+  as machine-readable JSON, including errors raised by ancestor authentication.
+- Current state: The authenticated endpoint surface and transport contracts are
+  complete. F5 supplies the page and row templates consumed by the GET routes;
+  F6 consumes the JSON upload/partial contracts from browser JavaScript.
+- Remaining: Nothing in F3. F5 must add the referenced `/admin/files`,
+  `/admin/files/new`, and `/admin/files/detail` Hyperview sources. F6 must send
+  `x-kixx-csrf-token`, URI-encoded `x-file-name`, and decimal `x-file-size` on
+  each raw request, and use `kixx-partial` for non-navigating row actions.
+- Decisions and discoveries: The raw upload headers are intentionally local to
+  the admin browser surface. Authorization remains before handlers, and header
+  CSRF verification is the first operation inside raw handlers, so rejected
+  requests never read or store body bytes. File partial responses use JSON until
+  F5 provides server-renderable row sources; they include file state and
+  reverse-routed detail, download, and public links.
+- Actual files changed: `src/app/permissions/roles.js`,
+  `src/app/presentation/lib/csrf.js`,
+  `src/app/presentation/error-handlers/file-upload-error-handler.js`,
+  `src/app/presentation/request-handlers/admin-panel/admin-files.js`,
+  `src/app/presentation/request-handlers/admin-panel/mod.js`,
+  `src/routes/admin-panel.js`; tests in
+  `test/unit-tests/app/permissions/roles.test.js`,
+  `test/unit-tests/app/presentation/lib/csrf.test.js`, and
+  `test/unit-tests/routes/admin-panel.test.js`.
+- Validation run: `node run-linter.js` passed; focused permissions,
+  presentation, and route suites passed (165 tests); `node run-tests.js` passed
+  (1,394 tests); `git diff --check` passed.
 - Blockers: None.
 
 ### Task F4: Serve stable public URLs and private admin downloads
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** F2, F3
 **Documentation:** Serving; `src/app/presentation/README.md`;
 `src/kixx/object-store/object-store-interface.js`; server error and testing guides.
@@ -556,13 +581,34 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: The existing static-asset handler's immutable hash
-  shortcut cannot serve this feature; publication checks must happen first.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Reserved `/files/:fileId` before every catch-all and added public
+  GET/HEAD serving plus authenticated admin GET/HEAD downloads. Responses use
+  generation validators, weak/list/star If-None-Match matching, explicit inline
+  MIME policy, safe ASCII and RFC 5987 filenames, nosniff, exact lengths, and
+  the required public/private cache policies. Public absence and unpublication
+  return non-cacheable 404s; Range is ignored; HEAD and 304 are bodyless.
+- Current state: Stable public URLs and private admin downloads are complete on
+  the shared Web-stream presentation boundary.
+- Remaining: Nothing in F4. F7 must exercise the same cases against live Node
+  and Worker/R2 targets, including replacement races and runtime cancellation.
+- Decisions and discoveries: The committed generation is the representation
+  ETag, so replacement invalidates clients even when object bytes hash equally.
+  The handler does not open storage for a 304. If an opened record points to a
+  missing object, it re-resolves the record through bounded retries before
+  treating the inconsistency as an operational failure. Public markup and
+  unknown types are attachments; only the explicit raster, PDF, audio, video,
+  and plain-text allowlist is inline.
+- Actual files changed: `src/virtual-hosts.js`, `src/routes/files.js`,
+  `src/app/presentation/lib/file-response.js`,
+  `src/app/presentation/request-handlers/files/file-content.js`,
+  `src/app/presentation/request-handlers/files/mod.js`, and tests in
+  `test/unit-tests/app/presentation/lib/file-response.test.js`,
+  `test/unit-tests/app/presentation/request-handlers/files/file-content.test.js`,
+  and `test/unit-tests/routes/files.test.js`. The admin download route and grant
+  integration also touch the F3 files listed above.
+- Validation run: `node run-linter.js` passed; focused permissions,
+  presentation, and route suites passed (165 tests); `node run-tests.js` passed
+  (1,394 tests); `git diff --check` passed.
 - Blockers: None.
 
 ### Task F5: Build the file listing and detail workflows
