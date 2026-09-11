@@ -179,6 +179,18 @@ deployment tooling reports as live on the target Worker.
 `cloudflare-config.js` address D1 databases, KV namespaces, R2 buckets, and
 Durable Objects by binding name rather than filesystem path.
 
+Naming a D1 database, KV namespace, or R2 bucket in `cloudflare-config.js`
+does not provision it. The resource must exist and be bound to the Worker
+under the configured binding name before a deploy that reads it.
+
+## File library settings
+
+`FILES.maxUploadBytes` (default 50 MiB) and `FILES.bucket` (default
+`'files'`) configure the admin file library in every environment of both
+config modules; `src/app/app.js` validates them at boot. See
+[admin-files.md](admin-files.md) for the bucket isolation rules, hosting
+limits, and the private R2 binding the Worker needs.
+
 ## Adding a new setting
 
 1. Decide per-deploy vs. per-environment using the question at the top of

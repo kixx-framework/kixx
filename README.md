@@ -69,6 +69,11 @@ Instances are disposable: destroy and re-create one rather than trying to carry 
 
 See [`docs/configuration.md`](docs/configuration.md) for the full picture.
 
+### Admin File Library
+
+See [`docs/admin-files.md`](docs/admin-files.md) for the file library's
+behavior, configuration, storage recovery, and Cloudflare validation runbook.
+
 ### Linting
 
 Linting is configured in `./eslint.config.js`.
