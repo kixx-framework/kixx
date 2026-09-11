@@ -22,7 +22,7 @@ are not mislabeled. The existing end-to-end coverage remains unchanged.
 
 ### Task CFLSE-1: Normalize Cloudflare fixed-length byte-count failures
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `README.md`; `src/docs/code-style-guide.md`;
 `src/docs/code-documentation-guide.md`; `src/docs/server-error-handling.md`;
@@ -92,21 +92,21 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] A short streamed body produces an error with code
+- [x] A short streamed body produces an error with code
   `ObjectContentLengthMismatch` when the native failure surfaces from the
   producer promise.
-- [ ] A short streamed body produces the same stable error when the native
+- [x] A short streamed body produces the same stable error when the native
   failure surfaces from the R2 consumer promise.
-- [ ] An excessive streamed body is normalized identically, including the
+- [x] An excessive streamed body is normalized identically, including the
   consumer-side behavior observed in the Cloudflare deployment.
-- [ ] Every normalized error preserves the native `TypeError` as `cause`.
-- [ ] A non-length-related R2 rejection remains a generic
+- [x] Every normalized error preserves the native `TypeError` as `cause`.
+- [x] A non-length-related R2 rejection remains a generic
   `OperationalError`; it is not assigned `ObjectContentLengthMismatch`.
-- [ ] Failed exact-length writes do not publish an object in the test R2 store.
-- [ ] Existing successful, zero-byte, sized-body, Node adapter, transaction,
+- [x] Failed exact-length writes do not publish an object in the test R2 store.
+- [x] Existing successful, zero-byte, sized-body, Node adapter, transaction,
   and presentation behavior remains unchanged.
-- [ ] No end-to-end test files are added or modified.
-- [ ] The interface documentation describes the stable mismatch outcome.
+- [x] No end-to-end test files are added or modified.
+- [x] The interface documentation describes the stable mismatch outcome.
 
 **Validation**
 
@@ -118,14 +118,25 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Workers can surface the same
-  `FixedLengthStream` byte-count failure through either side of the concurrent
-  pipe/R2 operation. The current Cloudflare unit double is a plain
-  `TransformStream`, so it cannot reproduce that behavior. The supplied worker
-  logs establish the native underflow and overflow `TypeError` signatures.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: The Cloudflare adapter recognizes exact underflow and overflow
+  `TypeError` messages from either settled operation, gives a recognized
+  mismatch precedence, preserves its cause, and leaves unrelated failures on
+  the generic storage-error path. The portable interface and Cloudflare
+  `put()` contract document the mismatch outcome. Cloudflare-specific tests
+  cover both messages on both rejection channels, no publication, and
+  unrelated producer and R2 failures.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: The classifier checks `error.name` and exact
+  message equality so arbitrary `TypeError`s cannot become client-input
+  failures. When neither result is a recognized mismatch, producer rejection
+  retains precedence over consumer rejection.
+- Actual files changed:
+  `src/plugins/cloudflare-object-store/lib/object-store.js`;
+  `src/kixx/object-store/object-store-interface.js`;
+  `test/unit-tests/plugins/cloudflare-object-store/lib/object-store.test.js`;
+  `agents/plans/cloudflare-fixed-length-stream-errors.md`.
+- Validation run: Focused lint passed. Cloudflare adapter tests passed (8).
+  Node adapter and downstream transaction-script tests passed (5). Full unit
+  suite passed (1,412). `git diff --check` passed.
 - Blockers: None.

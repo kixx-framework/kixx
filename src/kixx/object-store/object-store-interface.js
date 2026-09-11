@@ -79,6 +79,9 @@
  * - Invalid arguments (bad key, bad bucket name, unknown/unconfigured bucket,
  *   wrong body type) throw `AssertionError`.
  * - Missing binding or missing configuration throws `AssertionError`.
+ * - When `ObjectPutOptions.contentLength` is provided and the body is shorter or
+ *   longer, `put()` throws an `OperationalError` with code
+ *   `ObjectContentLengthMismatch` and does not publish partial content.
  * - Transient backend failures (an R2 call failure, a filesystem I/O error) are
  *   wrapped and rethrown as `OperationalError` with the original error preserved
  *   as `cause`.

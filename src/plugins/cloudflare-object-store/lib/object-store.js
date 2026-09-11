@@ -26,6 +26,10 @@ const MAX_KEY_BYTES = 1024;
 
 const INCLUDABLE_FIELDS = [ 'contentType', 'customMetadata' ];
 const MAX_LIST_LIMIT = 1000;
+const FIXED_LENGTH_STREAM_UNDERFLOW_MESSAGE =
+    'FixedLengthStream did not see all expected bytes before close().';
+const FIXED_LENGTH_STREAM_OVERFLOW_MESSAGE =
+    'Attempt to write too many bytes through a FixedLengthStream.';
 
 const textEncoder = new TextEncoder();
 
@@ -73,6 +77,7 @@ export default class ObjectStore {
      * @param {import('../../../kixx/object-store/object-store-interface.js').ObjectPutOptions} [options] - Write options
      * @returns {Promise<ObjectMeta>} Metadata for the stored object
      * @throws {AssertionError} When the bucket, key, body, or options are invalid
+     * @throws {OperationalError} With code `ObjectContentLengthMismatch` when the body length does not match `options.contentLength`; otherwise when R2 fails
      */
     async put(context, bucket, key, body, options) {
         const bucketBinding = this.#resolveBinding(context, bucket);
@@ -371,16 +376,28 @@ async function putExactLengthStream(bucketBinding, key, body, contentLength, put
     const storage = bucketBinding.put(key, fixedLengthStream.readable, putOptions);
     const [ producerResult, storageResult ] = await Promise.allSettled([ producer, storage ]);
 
-    if (producerResult.status === 'rejected') {
+    const mismatchResult = [ producerResult, storageResult ].find((result) => {
+        return result.status === 'rejected' && isFixedLengthStreamMismatch(result.reason);
+    });
+    if (mismatchResult) {
         throw new OperationalError('ObjectStore body does not match its declared content length', {
-            cause: producerResult.reason,
+            cause: mismatchResult.reason,
             code: 'ObjectContentLengthMismatch',
         });
+    }
+    if (producerResult.status === 'rejected') {
+        throw producerResult.reason;
     }
     if (storageResult.status === 'rejected') {
         throw storageResult.reason;
     }
     return storageResult.value;
+}
+
+function isFixedLengthStreamMismatch(error) {
+    return error?.name === 'TypeError'
+        && (error.message === FIXED_LENGTH_STREAM_UNDERFLOW_MESSAGE
+            || error.message === FIXED_LENGTH_STREAM_OVERFLOW_MESSAGE);
 }
 
 function getBodyLength(body) {
