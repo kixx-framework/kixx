@@ -66,6 +66,13 @@ select {
     font: inherit;
 }
 
+/* The one deliberate exception to low specificity: the browser's own [hidden]
+   rule loses to any component `display` (.field, .button), so scripts that
+   toggle `hidden` would leave the element on screen without this. */
+[hidden] {
+    display: none !important;
+}
+
 /* Text-bearing block elements should wrap long tokens instead of overflowing. */
 p,
 h1,
