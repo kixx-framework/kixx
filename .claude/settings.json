@@ -1,6 +1,12 @@
 {
-  "autoMemoryEnabled": false,
   "includeGitInstructions": false,
   "respectGitignore": false,
-  "showThinkingSummaries": true
+  "autoMemoryEnabled": false,
+  "showThinkingSummaries": true,
+  "attribution": {
+      "commit": "",
+      "pr": "",
+      "sessionUrl": false
+  }
 }
+
