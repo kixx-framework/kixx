@@ -27,7 +27,10 @@ export default class UploadFileForm extends BaseForm {
         // provides the same deterministic type on every runtime.
         this.contentType = isNonEmptyString(this.filename) ? getContentType(this.filename) : contentType;
         this.contentLength = contentLength;
-        this.body = body;
+        // Node.js and Workers both expose an empty request body as null, so a
+        // declared zero-byte upload becomes an empty body rather than a missing
+        // one. Any other length still requires a stream for storage to verify.
+        this.body = body ?? (contentLength === 0 ? new Uint8Array(0) : null);
         this.maxUploadBytes = maxUploadBytes;
     }
 

@@ -1,12 +1,11 @@
-import { cleanupContent } from './lib.js';
+import { cleanupContent, storeContent } from './lib.js';
 
 /** Stores bytes before making a new unpublished file visible. */
 export async function createFile(context, form) {
     form.validate();
     const files = context.getCollection('File');
-    const contents = context.getCollection('FileContent');
     const id = crypto.randomUUID();
-    const content = await contents.create(context, id, form.body, form);
+    const content = await storeContent(context, id, form);
 
     try {
         const record = await files.createFile(context, {

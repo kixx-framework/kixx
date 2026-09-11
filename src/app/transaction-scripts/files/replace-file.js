@@ -1,12 +1,11 @@
-import { cleanupContent, requireFile, translateMissingFile } from './lib.js';
+import { cleanupContent, requireFile, storeContent, translateMissingFile } from './lib.js';
 
 /** Commits a fresh content reference while preserving every unrelated field. */
 export async function replaceFile(context, fileId, form) {
     form.validate();
     const files = context.getCollection('File');
-    const contents = context.getCollection('FileContent');
     const existing = await requireFile(context, fileId);
-    const content = await contents.create(context, fileId, form.body, form);
+    const content = await storeContent(context, fileId, form);
     let displacedKey = existing.get('content').key;
 
     try {

@@ -76,4 +76,55 @@ describe('replaceFile', ({ it }) => {
         assertEqual('file/replacement', result.content.key);
         assertEqual('file/concurrent', deleted[0]);
     });
+
+    it('reports a declared-size mismatch as a bad request without touching the record', async () => {
+        const initial = makeRecord('file/original', true);
+        const deleted = [];
+        let updateCount = 0;
+        const collections = {
+            File: {
+                async getFile() {
+                    return initial;
+                },
+                async updateWithRetry() {
+                    updateCount += 1;
+                },
+            },
+            FileContent: {
+                async create() {
+                    const error = new Error('ObjectStore body ended before declared content length 10');
+                    error.code = 'ObjectContentLengthMismatch';
+                    throw error;
+                },
+                async delete(_context, key) {
+                    deleted.push(key);
+                },
+            },
+        };
+        const context = {
+            getCollection(name) {
+                return collections[name];
+            },
+        };
+        const form = {
+            filename: 'new.txt',
+            contentType: 'text/plain',
+            contentLength: 10,
+            body: new Blob([ 'short' ]).stream(),
+            validate() {},
+        };
+
+        let error;
+        try {
+            await replaceFile(context, initial.id, form);
+        } catch (cause) {
+            error = cause;
+        }
+
+        assertEqual('FileContentLengthMismatch', error?.code);
+        assertEqual(400, error.httpStatusCode);
+        assertEqual('ObjectContentLengthMismatch', error.cause.code);
+        assertEqual(0, updateCount);
+        assertEqual(0, deleted.length);
+    });
 });
