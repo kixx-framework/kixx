@@ -65,7 +65,7 @@ function respondFile(response, request, file, body, status, forceAttachment) {
         etag: getFileEtag(file),
         'x-content-type-options': 'nosniff',
     };
-    const stream = request.isHeadRequest || status === 304 ? null : body;
+    const stream = request.isHeadRequest() || status === 304 ? null : body;
     if (stream === null && body?.cancel) {
         void body.cancel();
     }

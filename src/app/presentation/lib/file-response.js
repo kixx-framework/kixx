@@ -25,7 +25,10 @@ export function matchesIfNoneMatch(value, etag) {
 
 /** Builds a safe Content-Disposition value for the stored filename. */
 export function getContentDisposition(file, forceAttachment = false) {
-    const type = forceAttachment || !INLINE_TYPES.some((pattern) => pattern.test(file.content.contentType))
+    // Match the media type essence: the shared extension map emits parameters
+    // such as `text/plain; charset=utf-8`, which must still count as plain text.
+    const essence = file.content.contentType.split(';')[0].trim().toLowerCase();
+    const type = forceAttachment || !INLINE_TYPES.some((pattern) => pattern.test(essence))
         ? 'attachment'
         : 'inline';
     const filename = file.content.filename;

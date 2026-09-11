@@ -42,6 +42,19 @@ describe('file content handlers', ({ it }) => {
         assertEqual('inline; filename="photo.png"; filename*=UTF-8\'\'photo.png',
             response.headers.get('content-disposition'));
         assertEqual(null, response.headers.get('accept-ranges'));
+        assertEqual(true, response.body instanceof ReadableStream);
+        assertEqual(false, context.wasCanceled());
+    });
+
+    it('streams the body of a GET admin download', async () => {
+        const context = makeContext(makeFile({ isPublished: false }));
+        const response = new ServerResponse();
+
+        await getAdminFileDownload(context, makeRequest(), response);
+
+        assertEqual(200, response.status);
+        assertEqual(true, response.body instanceof ReadableStream);
+        assertEqual(false, context.wasCanceled());
     });
 
     it('allows a private attachment download while unpublished', async () => {
@@ -112,9 +125,11 @@ function makeRequest(options) {
     const headers = new Headers();
     if (ifNoneMatch) headers.set('if-none-match', ifNoneMatch);
     if (range) headers.set('range', range);
+    // A method, as on BaseServerRequest: a boolean property here once hid a
+    // handler that dropped every GET body.
     return {
         headers,
-        isHeadRequest,
+        isHeadRequest: () => isHeadRequest,
         pathnameParams: { fileId: '123e4567-e89b-42d3-a456-426614174000' },
     };
 }

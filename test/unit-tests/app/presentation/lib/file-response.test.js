@@ -25,6 +25,15 @@ describe('file-response', ({ it }) => {
             getContentDisposition(makeFile('text/html', 'page.html')));
     });
 
+    it('matches the media type essence, ignoring parameters', () => {
+        assertEqual('inline; filename="notes.txt"; filename*=UTF-8\'\'notes.txt',
+            getContentDisposition(makeFile('text/plain; charset=utf-8', 'notes.txt')));
+        assertEqual('attachment; filename="icon.svg"; filename*=UTF-8\'\'icon.svg',
+            getContentDisposition(makeFile('image/svg+xml; charset=utf-8', 'icon.svg')));
+        assertEqual('attachment; filename="page.html"; filename*=UTF-8\'\'page.html',
+            getContentDisposition(makeFile('text/html; charset=utf-8', 'page.html')));
+    });
+
     it('encodes Unicode and neutralizes quoted fallback characters', () => {
         assertEqual(
             'attachment; filename="r_sum__.xml"; filename*=UTF-8\'\'r%C3%A9sum%C3%A9%22.xml',
