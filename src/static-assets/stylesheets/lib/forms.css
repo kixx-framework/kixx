@@ -251,8 +251,9 @@ textarea.field__input {
 }
 
 .copy-field__status {
-    /* Reserve space so status text appearing or clearing does not shift layout. */
-    min-height: 1em;
+    /* Reserve one line box (font-size × line-height, not 1em) so status text
+       appearing or clearing does not shift layout. */
+    min-height: 1lh;
     font-size: var(--text-caption);
     line-height: var(--leading-normal);
     color: var(--color-ink-muted);
