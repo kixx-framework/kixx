@@ -1,0 +1,158 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <p><a href="{{ links.filesList }}">&larr; Files</a></p>
+            <h1>{{ file.displayTitle }}</h1>
+        </header>
+
+        {{#if metadataInvalid}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body flow">
+                <p class="callout__title">The metadata could not be saved</p>
+                <p class="type-body-sm">Check the title and description lengths and try again.</p>
+            </div>
+        </div>
+        {{/if}}
+
+        <div class="card flow">
+            <p class="type-caption">{{#if file.isPublished}}Published{{else}}Unpublished{{/if}}</p>
+            <p class="type-body-sm">{{ file.filename }} &middot; {{ file.contentType }} &middot; {{ file.sizeLabel }}</p>
+            <p class="type-body-sm">Originally uploaded {{ formatDate file.originalUploadedAt format="DATETIME_MED" }}</p>
+
+            <div class="copy-field">
+                <label class="copy-field__label" for="file-public-url">Permanent URL</label>
+                <div class="copy-field__row">
+                    <input class="field__input copy-field__value" id="file-public-url" type="text" value="{{ file.publicUrl }}" readonly>
+                    <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="file-public-url" aria-label="Copy permanent URL">
+                        <span class="copy-field__icon" aria-hidden="true">copy</span>
+                    </button>
+                </div>
+                <p class="copy-field__status" role="status" aria-live="polite"></p>
+                {{#unless file.isPublished}}
+                <p class="field__hint">This URL returns 404 until the file is published.</p>
+                {{/unless}}
+            </div>
+
+            <div class="cluster">
+                <a class="button button--secondary" href="{{ file.links.download }}">Download</a>
+
+                {{#if file.isPublished}}
+                <form method="POST" action="{{ file.links.unpublish }}">
+                    {{#if form.csrf}}
+                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                    {{/if}}
+                    <button class="button" type="submit">Unpublish</button>
+                </form>
+                {{else}}
+                <form method="POST" action="{{ file.links.publish }}">
+                    {{#if form.csrf}}
+                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                    {{/if}}
+                    <button class="button button--primary" type="submit">Publish</button>
+                </form>
+                {{/if}}
+            </div>
+        </div>
+
+        <div class="card flow">
+            <h2>Metadata</h2>
+            <form
+                class="flow field-stack"
+                method="{{ form.method }}"
+                action="{{ form.url }}"
+            >
+                {{#if form.csrf}}
+                <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                {{/if}}
+
+                <div class="field{{#if form.fields.title.error}} field--error{{/if}}">
+                    <label class="field__label" for="file-title">{{ form.fields.title.label }}</label>
+                    <input
+                        class="field__input"
+                        id="file-title"
+                        name="title"
+                        type="text"
+                        maxlength="200"
+                        placeholder="{{ file.filename }}"
+                        value="{{ form.fields.title.value }}"
+                        {{#if form.fields.title.error}}aria-describedby="file-title-error" aria-invalid="true"{{/if}}
+                    >
+                    {{#if form.fields.title.hint}}
+                    <p class="field__hint">{{ form.fields.title.hint }}</p>
+                    {{/if}}
+                    {{#if form.fields.title.error}}
+                    <p class="field__error" id="file-title-error" role="alert">{{ form.fields.title.error }}</p>
+                    {{/if}}
+                </div>
+
+                <div class="field{{#if form.fields.description.error}} field--error{{/if}}">
+                    <label class="field__label" for="file-description">{{ form.fields.description.label }}</label>
+                    <textarea
+                        class="field__input"
+                        id="file-description"
+                        name="description"
+                        rows="4"
+                        maxlength="2000"
+                        {{#if form.fields.description.error}}aria-describedby="file-description-error" aria-invalid="true"{{/if}}
+                    >{{ form.fields.description.value }}</textarea>
+                    {{#if form.fields.description.error}}
+                    <p class="field__error" id="file-description-error" role="alert">{{ form.fields.description.error }}</p>
+                    {{/if}}
+                </div>
+
+                <div class="cluster">
+                    <button class="button button--primary" type="submit">Save metadata</button>
+                </div>
+            </form>
+        </div>
+
+        <div
+            class="card flow"
+            data-js-behavior="file-replace"
+            data-file-id="{{ file.id }}"
+            data-replace-url="{{ file.links.replace }}"
+            data-csrf-token="{{ form.csrf.token }}"
+            data-is-published="{{ file.isPublished }}"
+        >
+            <h2>Replace file</h2>
+            <p class="type-body-sm">Uploading a new file replaces the current bytes at the same permanent URL. The
+               UUID, title, description, and publication state stay unchanged.</p>
+
+            <noscript>
+                <p class="type-body-sm">Replacing a file requires JavaScript.</p>
+            </noscript>
+
+            <div class="field">
+                <label class="field__label" for="file-replace-input">Choose a replacement file</label>
+                <input class="field__input" type="file" id="file-replace-input" data-replace-input>
+            </div>
+
+            <div class="field" data-replace-progress hidden>
+                <progress class="field__input" data-replace-progress-bar value="0" max="100"></progress>
+            </div>
+
+            <p class="type-body-sm" data-replace-status role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="card flow">
+            <h2>Delete</h2>
+            {{#if file.isPublished}}
+            <p class="type-body-sm">Unpublish this file before it can be deleted.</p>
+            {{else}}
+            <form class="flow field-stack" method="POST" action="{{ file.links.delete }}">
+                {{#if form.csrf}}
+                <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                {{/if}}
+                <label class="cluster">
+                    <input type="checkbox" name="confirm_delete" value="yes" required>
+                    <span class="type-body-sm">I understand this permanently deletes the file and cannot be undone.</span>
+                </label>
+                <div class="cluster">
+                    <button class="button button--danger" type="submit">Delete file</button>
+                </div>
+            </form>
+            {{/if}}
+        </div>
+    </article>
+</main>

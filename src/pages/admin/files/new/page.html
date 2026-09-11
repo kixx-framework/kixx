@@ -1,0 +1,62 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <p><a href="{{ links.filesList }}">&larr; Files</a></p>
+            <h1>Upload files</h1>
+            <p>Select one or more files to upload. Each file uploads independently and stays unpublished until you
+               publish it below.</p>
+        </header>
+
+        <div
+            class="flow"
+            data-js-behavior="file-upload-queue"
+            data-upload-url="{{ upload.url }}"
+            data-csrf-field="{{ upload.csrf.fieldName }}"
+            data-csrf-token="{{ upload.csrf.token }}"
+            data-max-upload-bytes="{{ maxUploadBytes }}"
+        >
+            <div class="field">
+                <label class="field__label" for="file-upload-input">Choose files</label>
+                <input class="field__input" type="file" id="file-upload-input" multiple data-upload-input>
+            </div>
+
+            <noscript>
+                <p class="type-body-sm">Uploading files requires JavaScript. Enable JavaScript to use this page.</p>
+            </noscript>
+
+            <ul class="flow list-unstyled" data-upload-list></ul>
+        </div>
+
+        <template data-upload-row-template>
+            <li class="card flow" data-file-row>
+                <p class="type-caption" data-row-status>Queued</p>
+                <p class="type-body-sm" data-row-filename></p>
+
+                <div class="field" data-row-progress>
+                    <progress class="field__input" data-row-progress-bar value="0" max="100"></progress>
+                </div>
+
+                <p class="type-body-sm" data-row-error role="alert" hidden></p>
+
+                <div class="field">
+                    <label class="field__label">Title</label>
+                    <input class="field__input" type="text" maxlength="200" data-row-title>
+                </div>
+
+                <div class="field">
+                    <label class="field__label">Description</label>
+                    <textarea class="field__input" rows="3" maxlength="2000" data-row-description></textarea>
+                </div>
+
+                <div class="cluster">
+                    <button class="button" type="button" data-row-cancel>Cancel</button>
+                    <button class="button" type="button" data-row-retry hidden>Retry</button>
+                    <button class="button" type="button" data-row-save disabled>Save metadata</button>
+                    <button class="button button--primary" type="button" data-row-publish disabled>Publish</button>
+                </div>
+
+                <p class="type-body-sm" data-row-save-status role="status" aria-live="polite"></p>
+            </li>
+        </template>
+    </article>
+</main>

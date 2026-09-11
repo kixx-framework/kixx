@@ -1,0 +1,66 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <h1>Files</h1>
+            <p>Upload, publish, and manage the shared file library. Published files are served at a stable
+               permanent URL.</p>
+        </header>
+
+        <p class="cluster">
+            <a class="button button--primary" href="{{ links.newFiles }}">Upload files</a>
+        </p>
+
+        {{#if files}}
+        <ul class="grid-auto list-unstyled">
+        {{#each files as |file| }}
+            <li>
+                <article class="card flow">
+                    <p class="type-caption">{{#if file.isPublished}}Published{{else}}Unpublished{{/if}}</p>
+                    <h2><a href="{{ file.links.detail }}">{{ file.displayTitle }}</a></h2>
+                    <p class="type-body-sm">{{ file.filename }} &middot; {{ file.sizeLabel }}</p>
+
+                    <div class="cluster">
+                        <a class="button button--secondary" href="{{ file.links.detail }}">Manage</a>
+
+                        {{#if file.isPublished}}
+                        <form method="POST" action="{{ file.links.unpublish }}">
+                            {{#if csrf}}
+                            <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                            {{/if}}
+                            <button class="button" type="submit">Unpublish</button>
+                        </form>
+                        {{else}}
+                        <form method="POST" action="{{ file.links.publish }}">
+                            {{#if csrf}}
+                            <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                            {{/if}}
+                            <button class="button" type="submit">Publish</button>
+                        </form>
+                        {{/if}}
+                    </div>
+                </article>
+            </li>
+        {{/each}}
+        </ul>
+        {{else}}
+        <p class="type-body-sm">No files yet. Upload one to get started.</p>
+        {{/if}}
+
+        {{!--
+            Pagination sits outside the list conditional on purpose. A later page
+            whose rows were all removed concurrently renders the empty state, and
+            nesting this inside would strip the "Previous page" link along with the
+            rows — stranding the operator on an empty page with no way back.
+        --}}
+        {{#if showPagination}}
+        <p class="cluster">
+            {{#if links.previousPage}}
+            <a class="button button--secondary" href="{{ links.previousPage }}">Previous page</a>
+            {{/if}}
+            {{#if links.nextPage}}
+            <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
+            {{/if}}
+        </p>
+        {{/if}}
+    </article>
+</main>

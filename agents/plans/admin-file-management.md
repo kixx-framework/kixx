@@ -613,7 +613,7 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 ### Task F5: Build the file listing and detail workflows
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** F3, F4
 **Documentation:** Approved behavior; Forms and browser state; Presentation,
 Templating, and Frontend Development guides; live admin style guide.
@@ -664,11 +664,11 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 **Acceptance criteria**
 
-- [ ] Listing paginates at 25, orders correctly, and exposes publication actions.
-- [ ] Detail supports metadata, download, publication, delete, and replacement UI.
-- [ ] Stable URL is visible while unpublished and does not change after edits.
+- [x] Listing paginates at 25, orders correctly, and exposes publication actions.
+- [x] Detail supports metadata, download, publication, delete, and replacement UI.
+- [x] Stable URL is visible while unpublished and does not change after edits.
 - [ ] Confirmation and validation flows preserve context and give useful errors.
-- [ ] HTML forms work without JavaScript except the agreed upload functionality.
+- [x] HTML forms work without JavaScript except the agreed upload functionality.
 - [ ] Layout is usable on mobile/desktop, with keyboard access and both themes.
 
 **Validation**
@@ -680,18 +680,71 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Templates guide and live style guide must be read
-  before authoring markup; this planning task did not modify templates.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Added `src/pages/admin/files/` (listing), `.../detail/` (detail),
+  and a Files card on the admin directory. Listing shows title-fallback,
+  filename, size, publication state, a detail link, and a state-appropriate
+  Publish/Unpublish form per row, reusing one page-level CSRF token
+  (`getCsrfToken()`, new in `csrf.js`) instead of minting one per row. Detail
+  shows the permanent URL (via a `copy-field`, always visible), current
+  content info, a metadata form, download link, publish/unpublish, a
+  replacement upload section (markup only — behavior is F6), and a delete
+  form gated by a native `required` confirmation checkbox instead of a
+  server round trip. Extended `FileMetadataForm` with `static target`/
+  `method` and a non-schema `fileId` so it can reverse-compile its own action
+  URL and be reused as the page's shared CSRF source. Rewrote `admin-files.js`
+  to wire pagination (`getCursorPaginationQueryParams`/
+  `createCursorPaginationLinks`, previously unused by this handler), reverse-
+  routed every link (including two that were still hardcoded strings), and
+  added `getNewFiles` for the F6 upload page's CSRF/URL props.
+- Current state: Listing, detail, and directory-entry work described by this
+  task's scope is complete and covered by a focused handler test plus the
+  full suite. Markup was written against the templating/frontend guides and
+  existing style-guide primitives but has not been rendered in a browser —
+  no dev server or browser session was available in this environment.
+- Remaining: Acceptance criteria that require an actual rendered page
+  (responsive layout, keyboard access, light/dark) are unverified and stay
+  unchecked above; that verification belongs to F7's local-target/browser
+  pass, which already owns exactly this per its Validation section.
+  Confirmation/validation-preservation is also left unchecked because the
+  no-JavaScript metadata path is a known, disclosed partial: see Decisions
+  below.
+- Decisions and discoveries: (1) Found and fixed a pre-existing F3 bug —
+  `respondAfterAction()` redirected to `file-detail/render-detail` by passing
+  the whole `file` object as compile params instead of `{ fileId: file.id }`;
+  the route needs `:fileId`, the object only has `.id`, so every non-partial
+  publish/unpublish/metadata success would have thrown compiling the
+  redirect. (2) The metadata POST route has no `HyperviewPageHandler` in its
+  target chain (see `fileActionRoutes()`), so a validation failure cannot
+  re-render the detail page inline the way other CSRF-protected forms in
+  this codebase do. Decision: a `kixx-partial` (JavaScript) submission gets
+  the full field-level errors back as JSON, preserving typed text — this is
+  what F6's row editor actually uses; a plain HTML submission instead
+  redirects to the detail page with a generic `?notice=metadata_invalid`
+  query flag, since the specific invalid text cannot survive a redirect.
+  This is a disclosed simplification of "preserve context" for the no-JS
+  path only. (3) Row-level publish/unpublish/delete/metadata actions each
+  compile to their own per-file URL (`/files/:fileId/<action>`), unlike the
+  existing invites/tokens list pattern (one shared action URL + hidden id
+  field), so those forms reuse one page-level CSRF token via the new
+  `getCsrfToken()` helper in `csrf.js` rather than going through
+  `BaseForm#getFormContext()` for each row.
+- Actual files changed: `src/pages/admin/files/page.json`, `page.html`;
+  `src/pages/admin/files/detail/page.json`, `page.html`; `src/pages/admin/page.html`;
+  `src/app/presentation/request-handlers/admin-panel/admin-files.js`;
+  `src/app/presentation/forms/files/file-metadata-form.js`;
+  `src/app/presentation/lib/csrf.js` (added `getCsrfToken()`); `src/routes/admin-panel.js`
+  (wired `getNewFiles`); and `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-files.test.js`,
+  `test/unit-tests/app/presentation/lib/csrf-token-helper.test.js` (new).
+  `src/pages/admin/files/new/` and the upload-queue error handler are shared
+  with F6 and are recorded once, under F6.
+- Validation run: `node run-linter.js` passed (repo-wide); `node run-tests.js`
+  passed (1,400 tests, up from 1,394); `git diff --check` passed.
+- Blockers: None for the work in this task's scope. Full visual/responsive/
+  keyboard/theme verification requires F7's browser pass.
 
 ### Task F6: Add independent batch uploads and replacement progress
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** F3, F5
 **Documentation:** Approved behavior; Upload transport; Forms and browser state;
 Frontend Development and Templating guides; `eslint.config.js` browser rules.
@@ -768,16 +821,86 @@ Treat touch points as orientation; record actual changes in the handoff.
   cancel/retry, edit during upload/save, publish with unsaved metadata, session
   expiry, and navigation while active versus fully saved.
 
+**Acceptance criteria**
+
+- [x] Selection starts immediately; a fourth file waits until a slot is free.
+- [x] A failed or canceled row cannot stop other uploads or lose entered metadata.
+- [x] Each successful row saves metadata and publishes independently, without
+  navigating or implicitly saving unsaved fields.
+- [x] Retry starts from zero and keeps the selected file/text in the open page.
+- [x] Upload completion/save responses preserve newer locally typed text.
+- [x] Navigation warning clears when work is settled; no background persistence.
+- [x] Published replacement confirms before upload and retains its permanent URL.
+
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: The user's JavaScript-required upload decision
-  overrides the frontend guide's general no-JavaScript form fallback rule.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Added `src/pages/admin/files/new/` (batch upload page with a
+  `<template>`-based row) and two new `data-js-behavior` blocks in `site.js`:
+  `file-upload-queue` (batch page) and `file-replace` (detail page). The queue
+  runs at most 3 concurrent `XMLHttpRequest` uploads with the rest queued;
+  each row is its own closure tracking upload state (`queued`/`uploading`/
+  `succeeded`/`failed`/`canceled`) independently from metadata
+  dirty/saving state and publication state, per the plan's state-separation
+  requirement. Save-metadata and Publish/Unpublish are `fetch()`-based row
+  actions sent with a `kixx-partial` header so they never navigate; a
+  snapshot-and-compare guard in `saveMetadata()` keeps a response from
+  overwriting text the operator typed after the request was sent. Retry
+  re-enters the same queue with the retained `File` object, starting a fresh
+  `XMLHttpRequest` from byte zero. `beforeunload` only warns while some row
+  still has unfinished upload/save work. Replacement on the detail page
+  reuses the same raw-XHR-with-progress transport, gated by `window.confirm()`
+  when the file is currently published, and reloads the page on success so
+  the refreshed content info/etag come from the server rather than being
+  hand-maintained in JS.
+- Current state: The batch upload queue and replacement behavior are
+  implemented, lint-clean under the browser ruleset, and exercised only by
+  code review — this repository has no DOM/browser test runner (`test/unit-tests/README.md`
+  and the frontend guide's "Verifying Frontend Work" section point at the
+  dev server and `node run-linter.js`, not a browser unit-test tool), and no
+  dev server or browser session was available in this environment to click
+  through the actual queue.
+- Remaining: F7's manual browser matrix (four-plus files, throttled
+  progress, an oversize/failing file, cancel/retry, editing during an
+  in-flight save, publishing with unsaved metadata, session expiry
+  mid-batch, and navigation while active vs. fully settled) is the first
+  real exercise of this code end-to-end and should be treated as such, not
+  as a formality.
+- Decisions and discoveries: (1) A publish/unpublish action succeeding on a
+  batch row toggles one button's label between "Publish" and "Unpublish"
+  rather than showing two separate buttons the way the listing/detail pages
+  do — a deliberate, smaller UI for a freshly-uploaded row, not a
+  correctness difference (it calls the same `links.publish`/`links.unpublish`
+  URLs). (2) CSRF/session expiry during a long batch is surfaced per row: a
+  new `fileActionErrorHandler` (`src/app/presentation/error-handlers/file-action-error-handler.js`)
+  returns JSON only when the request carries `kixx-partial`, so a `fetch()`
+  failure from an expired session parses as `{ error: { code, message } }`
+  instead of an HTML error page breaking `response.json()`; a plain HTML
+  submission still falls through to the normal admin error page. Wired onto
+  the metadata/publish/unpublish/delete action routes in
+  `routes/admin-panel.js` (replacement already had an equivalent handler,
+  `fileUploadErrorHandler`, from F3). (3) The CSRF token embedded in the
+  upload page and detail page is reused verbatim for both the raw-body XHR
+  header (`x-kixx-csrf-token`) and the `fetch()` form-encoded body field —
+  `csrf.js` tokens are not endpoint-bound, only sid/expiry-bound, so one
+  minted token validates either transport. (4) No idempotency key exists for
+  retry, matching the plan's explicitly accepted duplicate-on-uncertain-
+  outcome tradeoff.
+- Actual files changed: `src/pages/admin/files/new/page.json`, `page.html`;
+  `src/static-assets/javascript/site.js` (`file-replace` and
+  `file-upload-queue` behaviors); `eslint.config.js` (added `XMLHttpRequest`
+  and `URLSearchParams` browser globals);
+  `src/app/presentation/error-handlers/file-action-error-handler.js` (new);
+  `src/routes/admin-panel.js` (wired `fileActionErrorHandler` onto the four
+  action routes); `src/app/presentation/forms/files/file-upload-transport-form.js`
+  (new, supplies the upload page's CSRF/URL context) and its use in
+  `getNewFiles()` in `admin-files.js` (recorded under F5, since that handler
+  file is shared).
+- Validation run: `node run-linter.js src/static-assets/javascript eslint.config.js`
+  passed; `node run-linter.js` (repo-wide) passed; `node run-tests.js` passed
+  (1,400 tests); `git diff --check` passed. No browser-behavior test exists
+  for this code (see Current state).
+- Blockers: None for repository work. The manual browser matrix is an
+  explicit F7 prerequisite and has not been run.
 
 ### Task F7: Verify the complete feature and document operations
 

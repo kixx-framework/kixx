@@ -3,6 +3,7 @@ import HyperviewPageHandler from '../app/presentation/request-handlers/hyperview
 import * as AdminPanel from '../app/presentation/request-handlers/admin-panel/mod.js';
 import { getAdminFileDownload } from '../app/presentation/request-handlers/files/mod.js';
 import fileUploadErrorHandler from '../app/presentation/error-handlers/file-upload-error-handler.js';
+import fileActionErrorHandler from '../app/presentation/error-handlers/file-action-error-handler.js';
 
 const FILE_RESOURCE = 'urn:kixx:publishing:files';
 const fileDecision = (action) => [ { action: `urn:kixx:${ action }`, resource: FILE_RESOURCE } ];
@@ -18,6 +19,7 @@ export default [
                 methods: [ 'GET', 'HEAD' ],
                 requestHandlers: [
                     authorize(fileDecision('create')),
+                    AdminPanel.getNewFiles,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
                 ],
             },
@@ -342,11 +344,11 @@ export default [
 
 function fileActionRoutes() {
     const actions = [
-        [ 'metadata', 'update', AdminPanel.postFileMetadata ],
+        [ 'metadata', 'update', AdminPanel.postFileMetadata, fileActionErrorHandler ],
         [ 'replace', 'update', AdminPanel.postFileReplacement, fileUploadErrorHandler ],
-        [ 'publish', 'update', AdminPanel.postFilePublish ],
-        [ 'unpublish', 'update', AdminPanel.postFileUnpublish ],
-        [ 'delete', 'delete', AdminPanel.postFileDelete ],
+        [ 'publish', 'update', AdminPanel.postFilePublish, fileActionErrorHandler ],
+        [ 'unpublish', 'update', AdminPanel.postFileUnpublish, fileActionErrorHandler ],
+        [ 'delete', 'delete', AdminPanel.postFileDelete, fileActionErrorHandler ],
     ];
     return actions.map(([ name, permission, handler, errorHandler ]) => ({
         pattern: `/files/:fileId/${ name }`,

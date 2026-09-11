@@ -413,6 +413,8 @@ export default [
                 console: 'readonly',
                 structuredClone: 'readonly',
                 crypto: 'readonly',
+                XMLHttpRequest: 'readonly',
+                URLSearchParams: 'readonly',
             },
         },
         rules: browserRules,
