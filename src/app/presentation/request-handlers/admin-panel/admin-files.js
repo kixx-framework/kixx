@@ -27,6 +27,9 @@ import { updateFileMetadata } from '../../../transaction-scripts/files/update-fi
 const METADATA_INVALID_NOTICE = 'metadata_invalid';
 const ALLOWED_FILE_NOTICES = new Set([ METADATA_INVALID_NOTICE ]);
 
+// Checkbox name in the detail page's delete form (pages/admin/files/detail).
+const DELETE_CONFIRMATION_FIELD = 'confirm_delete';
+
 /** Loads the paginated admin file listing for Hyperview rendering. */
 export async function getAdminFiles(context, request, response) {
     const pagination = getCursorPaginationQueryParams(request.queryParams);
@@ -135,10 +138,20 @@ export async function postFileUnpublish(context, request, response) {
     return respondAfterAction(context, request, response, file);
 }
 
-/** Permanently deletes an unpublished file. */
+/** Permanently deletes an unpublished file once the operator confirms it. */
 export async function postFileDelete(context, request, response) {
-    await validateCsrfFormData(context, request);
-    const file = await deleteFile(context, validatedAction(request));
+    const formData = await validateCsrfFormData(context, request);
+    const action = validatedAction(request);
+
+    // The detail form's required checkbox is only a browser check; recheck it
+    // so a crafted or scripted submission cannot skip the confirmation.
+    if (formData.get(DELETE_CONFIRMATION_FIELD) !== 'yes') {
+        throw new BadRequestError('Confirm the permanent deletion before deleting the file', {
+            code: 'FileDeleteNotConfirmed',
+        });
+    }
+
+    const file = await deleteFile(context, action);
     if (request.headers.get('kixx-partial')) {
         return response.respondWithJSON(200, { file, deleted: true });
     }

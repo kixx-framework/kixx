@@ -3,6 +3,7 @@ import { assertEqual, assertMatches } from 'kixx-assert';
 
 import {
     getAdminFiles,
+    postFileDelete,
     postFileMetadata,
     postFilePublish,
 } from '../../../../../../src/app/presentation/request-handlers/admin-panel/admin-files.js';
@@ -44,6 +45,25 @@ describe('Admin file publish action', ({ it }) => {
 
         assertEqual(303, response.redirect.status);
         assertEqual('/admin/files/11111111-1111-4111-8111-111111111111', response.redirect.location);
+    });
+});
+
+describe('Admin file delete action', ({ it }) => {
+    it('rejects a submission without the confirmation before touching storage', async () => {
+        const store = { '11111111-1111-4111-8111-111111111111': makeFileRecord({ id: '11111111-1111-4111-8111-111111111111' }) };
+        const context = makeContext(store);
+        const request = makeRequest({ pathnameParams: { fileId: '11111111-1111-4111-8111-111111111111' } });
+        let error;
+
+        try {
+            await postFileDelete(context, request, makeResponse());
+        } catch (cause) {
+            error = cause;
+        }
+
+        assertEqual('FileDeleteNotConfirmed', error?.code);
+        assertEqual(400, error.httpStatusCode);
+        assertEqual(0, context.lookups.count);
     });
 });
 
@@ -146,11 +166,13 @@ const TARGET_PATTERNS = {
 };
 
 function makeContext(store) {
+    const lookups = { count: 0 };
     const fileCollection = {
         async listPage() {
             return { items: Object.values(store), cursor: null };
         },
         async getFile(_context, id) {
+            lookups.count += 1;
             return store[id] || null;
         },
         async patch(_context, record, patch) {
@@ -161,6 +183,7 @@ function makeContext(store) {
     const collections = { File: fileCollection };
 
     return {
+        lookups,
         config: { env: { FILES: { maxUploadBytes: 52428800 } } },
         getCollection(name) {
             return collections[name];
