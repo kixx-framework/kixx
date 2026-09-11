@@ -396,6 +396,14 @@ Treat touch points as orientation; record actual changes in the handoff.
 - Validation run: `node run-linter.js` passed; focused F1/F2 suites passed (20
   tests); `node run-tests.js` passed (1,378 tests); `git diff --check` passed.
 - Blockers: None.
+- Fixed during F7: zero-byte uploads failed with `422` because Node.js and
+  Workers expose an empty request body as `null`; `UploadFileForm` now turns a
+  declared-zero upload with no body into empty bytes. A declared-size
+  mismatch returned `500 ObjectContentLengthMismatch`; `storeContent()` in
+  `transaction-scripts/files/lib.js` now translates it to
+  `400 FileContentLengthMismatch` with the cause. Files:
+  `upload-file-form.js`, `files/lib.js`, `create-file.js`, `replace-file.js`,
+  and tests in `file-forms.test.js` and `replace-file.test.js`.
 
 ### Task F3: Expose authenticated admin file operations
 
@@ -610,6 +618,15 @@ Treat touch points as orientation; record actual changes in the handoff.
   presentation, and route suites passed (165 tests); `node run-tests.js` passed
   (1,394 tests); `git diff --check` passed.
 - Blockers: None.
+- Fixed during F7: every public and admin `GET` sent headers, including
+  `content-length`, but no body, then stalled until the connection closed.
+  `respondFile()` read `request.isHeadRequest` as a property, but it is a
+  method, so the always-truthy function dropped and canceled every body. The
+  unit mock had the same mistake and now models a method. Plain text was also
+  served as an attachment, because the map emits `text/plain; charset=utf-8`
+  and the inline allowlist matched exact strings; disposition now matches the
+  media type essence. Files: `file-content.js`, `file-response.js`, and tests in
+  `file-content.test.js` and `file-response.test.js`.
 
 ### Task F5: Build the file listing and detail workflows
 
@@ -667,9 +684,9 @@ Treat touch points as orientation; record actual changes in the handoff.
 - [x] Listing paginates at 25, orders correctly, and exposes publication actions.
 - [x] Detail supports metadata, download, publication, delete, and replacement UI.
 - [x] Stable URL is visible while unpublished and does not change after edits.
-- [ ] Confirmation and validation flows preserve context and give useful errors.
+- [x] Confirmation and validation flows preserve context and give useful errors.
 - [x] HTML forms work without JavaScript except the agreed upload functionality.
-- [ ] Layout is usable on mobile/desktop, with keyboard access and both themes.
+- [x] Layout is usable on mobile/desktop, with keyboard access and both themes.
 
 **Validation**
 
@@ -741,6 +758,17 @@ Treat touch points as orientation; record actual changes in the handoff.
   passed (1,400 tests, up from 1,394); `git diff --check` passed.
 - Blockers: None for the work in this task's scope. Full visual/responsive/
   keyboard/theme verification requires F7's browser pass.
+- Verified during F7: F7's browser pass on a Node target covered the empty
+  state, 26-file pagination, the validation notice, both confirmations, the
+  no-JavaScript forms, 390 px and desktop layouts in light and dark, and
+  keyboard order and focus, so the two rendered-page criteria above are now
+  checked. The no-JavaScript metadata path still reports a generic notice
+  rather than echoing invalid text (decision (2) above).
+- Fixed during F7: the delete confirmation was only the checkbox's native
+  `required`, so a crafted or scripted POST skipped it, contrary to "recheck
+  required confirmations". `postFileDelete()` now requires
+  `confirm_delete=yes` and otherwise throws `400 FileDeleteNotConfirmed`
+  before any storage call. Files: `admin-files.js` and `admin-files.test.js`.
 
 ### Task F6: Add independent batch uploads and replacement progress
 
@@ -901,10 +929,24 @@ Treat touch points as orientation; record actual changes in the handoff.
   for this code (see Current state).
 - Blockers: None for repository work. The manual browser matrix is an
   explicit F7 prerequisite and has not been run.
+- Verified and fixed during F7: the browser matrix ran on a Node target (see
+  F7). Defects fixed: (1) canceling a queued row and retrying it before its
+  original queue entry drained uploaded the file twice; `startNext()` now
+  starts only rows still `queued`, so stale entries are skipped. (2) The
+  `hidden` attribute never hid `.field` or `.button` elements, whose
+  component `display` beat the browser default, so every Retry and Cancel
+  button and finished progress bar stayed visible; `reset.css` now has a
+  `[hidden]` rule. (3) Upload-row Title and Description inputs had no
+  accessible names; each row now gets unique ids, its labels point at its
+  fields, and its progress bar and buttons are described by its filename.
+  The detail page's replacement progress bar is labeled. (4) A failed row
+  Publish/Unpublish re-enabled the button silently; it now shows the error in
+  the row's status line. Files: `site.js`, `reset.css`,
+  `pages/admin/files/new/page.html`, `pages/admin/files/detail/page.html`.
 
 ### Task F7: Verify the complete feature and document operations
 
-**Status:** Not started
+**Status:** Awaiting operator
 **Depends on:** F1, F2, F3, F4, F5, F6
 **Documentation:** Entire approved behavior; `README.md`; Configuration,
 Unit Testing, and End-to-End Testing guides.
@@ -914,18 +956,37 @@ Unit Testing, and End-to-End Testing guides.
 Demonstrate the agreed workflows on Node.js and Cloudflare and document the
 configuration, limits, provisioning, and recovery needed to operate them.
 
+F7 has two phases with different owners:
+
+- **Phase A — agent.** All repository work and all Node.js validation: the
+  end-to-end suite, Local Target Instance runs, the browser matrix,
+  documentation, and a Cloudflare runbook for Phase B.
+- **Phase B — operator.** Provision the private R2 bucket and binding, deploy
+  to Cloudflare, then run the Cloudflare end-to-end and validation steps from
+  the Phase A runbook. Agents never deploy, provision, or run tests against a
+  Cloudflare target.
+
 **Scope**
 
-- In: HTTP end-to-end suite, browser acceptance checks, real-platform validation,
-  configuration/operator documentation, and final handoff evidence.
-- Out: Deploying from this planning task, changing the running build during file
-  tests, unrelated publishing tests, or claiming mock tests prove R2 behavior.
+- In (Phase A, agent): HTTP end-to-end suite, Node Local Target Instance runs,
+  browser acceptance checks on Node, configuration/operator documentation, the
+  Phase B runbook, and handoff evidence.
+- In (Phase B, operator): R2 bucket provisioning and binding, Cloudflare
+  deployment, the end-to-end suite against Cloudflare, real Worker/R2 streaming
+  and limit checks, a Cloudflare browser smoke test, and recording results.
+- Out: Agent-performed deployment, provisioning, or Cloudflare test runs; new
+  deployment or provisioning tooling; changing the running build during file
+  tests; unrelated publishing tests; claiming mock tests prove R2 behavior.
 
 **Design and invariants**
 
 - Add a dedicated `test/end-to-end/100-admin-files/` suite, usable against either
   platform with session authentication and real CSRF tokens. Use unique fixtures
   and clean up its own unpublished files; never touch unrelated file records.
+- The suite selects its target only through the existing e2e flags and
+  environment variables. It must not read the local data directory, instance
+  files, or anything else unavailable when the operator runs it against
+  Cloudflare.
 - Cover create/metadata/publish/replace/unpublish/republish/download/delete, four
   roles, rejected auth/CSRF, 26-file pagination, zero bytes, disposition, ETags,
   HEAD, ignored Range, and failed replacement preserving old content.
@@ -933,14 +994,28 @@ configuration, limits, provisioning, and recovery needed to operate them.
   separately validate the default 50 MiB boundary and three simultaneous uploads
   on real platform runtimes. Respect the e2e runner's 10-second test ceiling;
   do not pretend a large-file manual check belongs in a short-timeout test.
-- Browser validation covers queue state, per-row independence, dirty metadata,
-  confirmations, cancellation, mobile/desktop, keyboard access, and light/dark.
+- Phase A browser validation runs on a Node Local Target Instance and covers
+  queue state, per-row independence, dirty metadata, confirmations,
+  cancellation, mobile/desktop, keyboard access, and light/dark, plus F5's
+  rendered-page checks.
 - Use a writable Local Target Instance, not the read-only devserver, for Node
   write workflows. Read instance credentials locally; do not commit or print them.
-- Before Cloudflare validation, confirm the approved test target has this code
-  and a provisioned private files R2 bucket/binding. Record bucket/binding names
-  and the actual deployment path; missing provisioning is an explicit validation
-  blocker, not a reason to drop Cloudflare support or invent deployment commands.
+- The Phase B runbook, written by the agent in `docs/admin-files.md`, lets an
+  operator without conversation history complete Phase B. It states:
+  - Preconditions: the deployed Worker contains this implementation, and the
+    private bucket `kixx-test-app-production-files` is provisioned and bound as
+    `OBJECT_STORE_FILES` (names from `src/cloudflare-config.js`), with no public
+    bucket URL.
+  - The exact e2e command and the environment variables it needs.
+  - Each manual check, how to produce its fixtures (zero bytes, default-limit,
+    limit + 1 byte, a truncated/disconnected upload), and the expected outcome.
+  - Where to record results in this task's handoff.
+  Describe what the deployment must contain; leave the deployment method to the
+  operator. Do not invent deployment or provisioning commands.
+- When Phase A is complete, the agent sets **Status** to `Awaiting operator` and
+  leaves every Phase B criterion unchecked. Only operator-supplied results mark
+  Phase B criteria done and the task `Complete`. An agent may transcribe results
+  the operator provides, but must not infer them.
 - Document `FILES.maxUploadBytes`, files bucket isolation, no ranges/history/API,
   per-request revalidation, cancellation's commit race, and physical orphan
   recovery following interrupted cleanup. Normal operations remove replaced and
@@ -953,24 +1028,45 @@ configuration, limits, provisioning, and recovery needed to operate them.
 - `test/end-to-end/100-admin-files/` — portable HTTP lifecycle checks.
 - `test/end-to-end/README.md` — suite setup and cleanup behavior.
 - `docs/configuration.md`, `README.md`, proposed `docs/admin-files.md` — setup,
-  feature behavior, private R2 provisioning, and recovery notes.
+  feature behavior, private R2 provisioning, recovery notes, and the Phase B
+  runbook.
 - `agents/plans/admin-file-management.md` — task acceptance and handoff evidence.
 
 Treat touch points as orientation; record actual changes in the handoff.
 
 **Acceptance criteria**
 
-- [ ] Full unit suite and required lint pass, with no unexplained regressions.
-- [ ] Dedicated HTTP suite passes against writable Node and Cloudflare targets.
-- [ ] Real Cloudflare streaming evidence includes zero bytes and size enforcement;
-  three concurrent default-limit uploads do not require whole-body buffering.
-- [ ] Browser matrix passes, including editing metadata without leaving uploads.
-- [ ] File tests do not modify site release/build pointers or leave normal fixtures.
-- [ ] Configuration/provisioning and cleanup limitations are documented accurately.
-- [ ] All task handoffs identify actual changes and validation; incomplete runtime
+Phase A — agent:
+
+- [x] Full unit suite and required lint pass, with no unexplained regressions.
+- [x] Dedicated HTTP suite passes against a writable Node Local Target Instance.
+- [x] Default 50 MiB boundary and three concurrent default-limit uploads pass on
+  the Node target.
+- [x] Browser matrix passes on the Node target, including editing metadata
+  without leaving uploads, and F5's unchecked rendered-page criteria.
+- [x] File tests do not modify site release/build pointers or leave normal fixtures.
+- [x] Configuration/provisioning and cleanup limitations are documented accurately.
+- [x] The Phase B runbook is complete enough for an operator to follow without
+  conversation history.
+- [x] All task handoffs identify actual changes and validation; incomplete runtime
   checks remain visibly incomplete rather than being marked done.
 
+Phase B — operator:
+
+- [ ] Private files bucket is provisioned and bound as `OBJECT_STORE_FILES`; the
+  deployed Worker contains this implementation. Bucket, binding, deployed
+  commit, and deployment method are recorded.
+- [ ] Dedicated HTTP suite passes against the Cloudflare deployment.
+- [ ] Real Worker/R2 streaming evidence covers zero bytes, the default limit,
+  limit + 1 rejection, and length mismatch/disconnect without a stored partial
+  object; three concurrent default-limit uploads succeed without whole-body
+  buffering.
+- [ ] Cloudflare browser smoke test passes: a four-file batch upload, a
+  published replacement, and public serving at `/files/<uuid>`.
+
 **Validation**
+
+Phase A — agent:
 
 - `node run-linter.js` — final JavaScript lint.
 - `node run-tests.js` — full unit suite.
@@ -982,21 +1078,103 @@ Treat touch points as orientation; record actual changes in the handoff.
 - `node run-tests.js --e2e test/end-to-end/100-admin-files` — run with
   `E2E_TESTS_BASE_URL`, `E2E_TESTS_ROOT_USERNAME`, and `E2E_TESTS_ROOT_PASSWORD`
   populated locally from the instance credentials.
-- `node run-tests.js --e2e --cloudflare test/end-to-end/100-admin-files` — run after
-  the configured Cloudflare test target has this implementation and binding,
-  with its credentials supplied through the documented environment variables.
 - After stopping the local server, `node tools/local-target.js destroy admin-files`
   removes the disposable instance.
 - Record manual browser and large-file checks separately with target and outcome.
 
+Phase B — operator, after deploying:
+
+- `node run-tests.js --e2e --cloudflare test/end-to-end/100-admin-files` — run
+  against the deployment with `E2E_TESTS_ROOT_USERNAME` and
+  `E2E_TESTS_ROOT_PASSWORD` set for that target.
+- The runbook's manual streaming, large-file, concurrency, and browser smoke
+  checks, recorded with target, deployed commit, and outcome.
+
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Cloudflare files-bucket provisioning is not present
-  in current config, and deployment tooling is outside this repository.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: Live Cloudflare validation requires an updated test target and its
-  private files bucket/binding; no provisioning or deployment was attempted.
+- Completed: Phase A. Added the portable `test/end-to-end/100-admin-files/`
+  suite (76 tests: access control, lifecycle, content policy, roles,
+  pagination) and a standalone `large-upload-checks.js` for real-size uploads.
+  Ran both, plus a browser matrix, on a Node Local Target Instance. Wrote
+  `docs/admin-files.md` (behavior, configuration, recovery, Phase B runbook).
+  Fixed the defects the runs exposed (below, and under the owning tasks).
+- Current state: Awaiting the operator's Phase B. The disposable
+  `admin-files` instance was destroyed after validation.
+- Remaining: Phase B, following `docs/admin-files.md` → "Cloudflare
+  validation runbook". Record its results here as a `Phase B results` entry.
+- Decisions and discoveries:
+  - Defects found by live runs and fixed (details under F2, F4, F5, F6):
+    public/admin GET sent headers but no body (F4); plain text served as an
+    attachment (F4); zero-byte uploads rejected (F2); declared-size mismatch
+    returned 500 (F2); cancel-then-retry of a queued row uploaded the file
+    twice (F6); `hidden` never hid `.field`/`.button` elements, so Retry,
+    Cancel, and finished progress bars stayed visible (F6); upload-row fields
+    had no accessible names (F6); a failed row publish showed no message
+    (F6); delete confirmation was not rechecked by the server (F5).
+  - Unit tests missed the F4 body defect because the mock modeled
+    `request.isHeadRequest()` as a boolean property. The mock is now a method.
+  - Known limitation, not fixed: after session or CSRF expiry mid-batch, each
+    row shows the error, but signing in again rotates the CSRF cookie, so the
+    open upload page must be reloaded, abandoning unfinished rows (the page
+    warns). Completed uploads persist. Documented in `docs/admin-files.md`; a
+    token-refresh mechanism would be new scope.
+  - Server-side upload validation errors surface the generic "The file
+    upload is invalid" on the row (e.g., a control character in the
+    filename); field detail is not in the upload error JSON. Left as is.
+  - The suite reads the target's upload limit from the upload page, so it
+    needs no local config or instance files and runs unchanged against
+    Cloudflare. Real-size checks are a separate script because of the 10 s
+    e2e ceiling.
+  - Browser queue checks used an in-page shim that defers each
+    `XMLHttpRequest.send` by 6–8 s, because localhost uploads finish in
+    milliseconds. The queue code ran unmodified; the shim only simulated
+    latency and made `abort()` before the deferred send behave like aborting
+    an in-flight request.
+  - Node streaming evidence is supporting only: server RSS rose from 99 MiB
+    to a 155 MiB peak across 150 MiB of concurrent uploads. The body path
+    streams through `pipeline()`, but a fast local disk would not expose
+    buffering. Phase B's concurrent uploads under the 128 MB Worker limit are
+    the real proof.
+  - `src/cloudflare-config.js` names the private bucket and binding but does
+    not provision them. Deployment tooling is outside this repository.
+    Deployment and all Cloudflare validation are operator-owned.
+- Actual files changed: `test/end-to-end/100-admin-files/` (`helpers.js`,
+  `010-access-control.test.js`, `020-lifecycle.test.js`,
+  `030-content-policy.test.js`, `040-roles.test.js`,
+  `050-pagination.test.js`, `large-upload-checks.js`);
+  `test/end-to-end/test-helpers/admin-workflows.js` (exported
+  `createInvitedAdmin()`); `test/end-to-end/README.md`;
+  `docs/admin-files.md` (new); `docs/configuration.md`; `README.md`; this
+  plan. Fixes to other tasks' files are listed under F2, F4, F5, and F6.
+- Validation run (Node Local Target Instance `admin-files`, Node v24.13.1):
+  - `node run-linter.js` — exit 0.
+  - `node run-tests.js` — 1,406 tests passed.
+  - `git diff --check` — clean.
+  - `node run-tests.js --e2e test/end-to-end/100-admin-files` — 76 passed.
+    File documents, `files` manifest rows, and body files were 0 before and
+    after; content-store index and Activation/Release rows were byte-identical
+    before and after (hash comparison).
+  - `node run-tests.js --e2e` (all suites) — 159 passed.
+  - `node test/end-to-end/100-admin-files/large-upload-checks.js` — 7/7
+    passed: 0 bytes; exactly 52,428,800 bytes stored and served with a
+    matching SHA-256; 3 concurrent limit-size uploads; limit + 1 declared →
+    `413 FileUploadTooLarge`; limit + 1 declared as the limit →
+    `400 FileContentLengthMismatch`; disconnect after 26,214,400 bytes → no
+    record, no staged temp file, server healthy (logged as an expected
+    `ECONNRESET` OperationalError). No objects remained afterward.
+  - Browser matrix, Chrome, Node target: six-file selection started three
+    uploads with the rest queued (peak three on the wire); queued and active
+    cancel; retry from zero keeping typed text; oversize (browser preflight)
+    and control-character filename (server 422) failed per row without
+    affecting others; title typed during upload survived completion; publish
+    with unsaved metadata left the title unsaved; a save response did not
+    mark newer text saved; the navigation warning showed only while work was
+    pending and cleared once settled; session expiry surfaced per row; the
+    published replacement confirmed before sending (decline sent nothing) and
+    kept the URL; the delete checkbox blocked submission until checked;
+    no-JavaScript publish, metadata, and delete forms worked; empty state,
+    validation notice, and 26-file pagination rendered; 390 px layouts had no
+    horizontal overflow in light or dark; keyboard tab order was logical with
+    a visible focus ring, and Enter submitted Publish.
+- Blockers: None for Phase A. Phase B requires the operator to provision the
+  bucket/binding and deploy this implementation.
