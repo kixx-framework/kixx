@@ -40,13 +40,37 @@ export async function getSuperAdmin() {
 
     const rootAdmin = await loginRootAdmin();
 
-    cachedSuperAdmin = await createSuperAdmin(
-        rootAdmin,
-        SUPER_ADMIN_USERNAME,
-        SUPER_ADMIN_PASSWORD,
-    );
+    cachedSuperAdmin = await createInvitedAdmin(rootAdmin, {
+        roleId: USER_ROLE_ID,
+        username: SUPER_ADMIN_USERNAME,
+        password: SUPER_ADMIN_PASSWORD,
+    });
 
     return cachedSuperAdmin;
+}
+
+/**
+ * Invites and signs up a fresh admin holding one role.
+ *
+ * Every call creates a new account; the target keeps it after the run, the
+ * same as the cached super admin.
+ *
+ * @param {CookieJar} rootUserCookies - Authenticated cookie jar for an admin allowed to invite the role.
+ * @param {Object} [options]
+ * @param {string} [options.roleId='developer'] - Attachable admin role granted by the invite.
+ * @param {string} [options.username] - Email address; defaults to a random test address.
+ * @param {string} [options.password] - Password; defaults to a random value.
+ * @returns {Promise<CookieJar>} Cookie jar holding the new admin's session.
+ * @throws {Error} When the invite or signup workflow does not complete.
+ */
+export async function createInvitedAdmin(rootUserCookies, options) {
+    const {
+        roleId = USER_ROLE_ID,
+        username = `${ crypto.randomUUID() }@kixx-test.name`,
+        password = crypto.randomUUID().replaceAll('-', '').slice(0, 16),
+    } = options ?? {};
+
+    return await createSuperAdmin(rootUserCookies, username, password, roleId);
 }
 
 /**
@@ -109,13 +133,14 @@ export async function createAdminInvite(adminCookies, roleId = 'developer') {
     return new URL(signupUrl);
 }
 
-async function createSuperAdmin(rootUserCookies, username, password) {
+async function createSuperAdmin(rootUserCookies, username, password, roleId) {
     assert(rootUserCookies instanceof CookieJar, 'createSuperAdmin rootUserCookies must be a CookieJar');
     assert(rootUserCookies.get('kixx_admin_session'), 'createSuperAdmin rootUserCookies must hold an admin session');
     assertNonEmptyString(username, 'createSuperAdmin username');
     assertNonEmptyString(password, 'createSuperAdmin password');
+    assertNonEmptyString(roleId, 'createSuperAdmin roleId');
 
-    const signupUrl = await createAdminInvite(rootUserCookies, USER_ROLE_ID);
+    const signupUrl = await createAdminInvite(rootUserCookies, roleId);
     const newAdminUserUrl = new URL(`${ getBaseUrl() }/users/admin/new`);
     const superAdminCookies = new CookieJar();
     const signupFormResponse = await fetch(signupUrl, { redirect: 'manual' });

@@ -121,7 +121,31 @@ it. See each directory for what it covers.
 | `001-sanity-checks/` | Baseline smoke checks. No target-specific caveats. |
 | `010-csrf/` | Fetch-based checks of server responses and cookie attributes — not a browser's `SameSite=Lax` enforcement. Normal runs do not wait 30 minutes, rotate the signing secret, or restart the app without that secret. |
 | `050-admin-panel/` | Admin-panel HTML workflows. No target-specific caveats. |
+| `100-admin-files/` | Admin file library over HTTP. Writes to the target's document and object stores and deletes what it creates; see below. |
 | `200-publishing-api/` | See below — this directory changes behavior with `--development` and has one file that mutates a real deployment. |
+
+### Admin files: fixtures and large uploads
+
+`100-admin-files/` creates its fixtures with `e2e-`-prefixed filenames and
+deletes every file it creates in `after` hooks, including after a failed
+test. It never reads or changes unrelated files, releases, or build pointers.
+Each run leaves behind the Developer, Admin, and Editor accounts it invites
+and one revoked Publishing API token. It reads the target's upload limit from
+the upload page, so routine boundary checks send small bodies with declared
+sizes rather than real 50 MiB files.
+
+Real-size uploads do not fit the 10 second test timeout, so they live in a
+standalone script that uses the same environment variables:
+
+```bash
+node test/end-to-end/100-admin-files/large-upload-checks.js
+```
+
+It uploads a zero-byte file, a file at exactly the configured limit (read
+back and hash-checked), three limit-size files at once, two limit + 1
+uploads, and a connection that drops after half its declared bytes. It
+deletes what it created. [`docs/admin-files.md`](../../docs/admin-files.md)
+lists the expected results.
 
 ### Publishing API: `--development` disables writes
 
