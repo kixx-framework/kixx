@@ -51,7 +51,7 @@ export async function getBuild(context, request, response) {
         data: buildResource({ buildId, ...pointer }),
     }, {
         contentType: JSON_API_CONTENT_TYPE,
-        headers: { etag: quoteEtag(pointer.rootHash) },
+        headers: buildPointerHeaders(pointer.rootHash),
     });
 }
 
@@ -110,7 +110,7 @@ export async function putBuild(context, request, response) {
         }),
     }, {
         contentType: JSON_API_CONTENT_TYPE,
-        headers: { etag: quoteEtag(pointer.releaseId) },
+        headers: buildPointerHeaders(pointer.releaseId),
     });
 }
 
@@ -188,4 +188,13 @@ function activationResource(activation) {
 
 function quoteEtag(value) {
     return `"${ value }"`;
+}
+
+function buildPointerHeaders(rootHash) {
+    return {
+        // Cloudflare otherwise compresses JSON and weakens the ETag, which cannot
+        // serve as the strong If-Match precondition required by pointer writes.
+        'cache-control': 'no-transform',
+        etag: quoteEtag(rootHash),
+    };
 }

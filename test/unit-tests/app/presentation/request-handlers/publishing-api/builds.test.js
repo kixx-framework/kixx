@@ -82,8 +82,15 @@ describe('Publishing API builds', ({ it }) => {
 
     it('maps If-None-Match star to an unassigned precondition', async () => {
         const context = makeContext();
-        await putBuild(context, await makeRequest({ 'if-none-match': '*' }), new ServerResponse());
+        const response = await putBuild(
+            context,
+            await makeRequest({ 'if-none-match': '*' }),
+            new ServerResponse(),
+        );
+
         assertEqual(null, context.preconditions[0]);
+        assertEqual('"release-new"', response.headers.get('etag'));
+        assertEqual('no-transform', response.headers.get('cache-control'));
     });
 
     it('reports If-None-Match conflict on an assigned build', async () => {
@@ -110,5 +117,6 @@ describe('Publishing API builds', ({ it }) => {
         const response = await getBuild(makeContext(), await makeRequest(), new ServerResponse());
         assertEqual(200, response.status);
         assertEqual('"release-old"', response.headers.get('etag'));
+        assertEqual('no-transform', response.headers.get('cache-control'));
     });
 });
