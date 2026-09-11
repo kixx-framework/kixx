@@ -1,9 +1,88 @@
 import authorize from '../app/presentation/middleware/authorize.js';
 import HyperviewPageHandler from '../app/presentation/request-handlers/hyperview/hyperview-page-handler.js';
 import * as AdminPanel from '../app/presentation/request-handlers/admin-panel/mod.js';
+import { getAdminFileDownload } from '../app/presentation/request-handlers/files/mod.js';
+import fileUploadErrorHandler from '../app/presentation/error-handlers/file-upload-error-handler.js';
+import fileActionErrorHandler from '../app/presentation/error-handlers/file-action-error-handler.js';
+
+const FILE_RESOURCE = 'urn:kixx:publishing:files';
+const fileDecision = (action) => [ { action: `urn:kixx:${ action }`, resource: FILE_RESOURCE } ];
 
 
 export default [
+    {
+        pattern: '/files/new',
+        name: 'new-files',
+        targets: [
+            {
+                name: 'render-new',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [
+                    authorize(fileDecision('create')),
+                    AdminPanel.getNewFiles,
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
+                ],
+            },
+        ],
+    },
+    {
+        pattern: '/files/upload',
+        name: 'file-upload',
+        targets: [
+            {
+                name: 'upload',
+                methods: [ 'POST' ],
+                errorHandlers: [ fileUploadErrorHandler ],
+                requestHandlers: [ authorize(fileDecision('create')), AdminPanel.postFileUpload ],
+            },
+        ],
+    },
+    ...fileActionRoutes(),
+    {
+        pattern: '/files/:fileId/download',
+        name: 'file-download',
+        targets: [
+            {
+                name: 'download',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [ authorize(fileDecision('get')), getAdminFileDownload ],
+            },
+        ],
+    },
+    {
+        pattern: '/files/:fileId',
+        name: 'file-detail',
+        targets: [
+            {
+                name: 'render-detail',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [
+                    authorize(fileDecision('get')),
+                    AdminPanel.getAdminFile,
+                    HyperviewPageHandler({
+                        baseTemplateId: 'admin.html',
+                        pathname: '/admin/files/detail',
+                        usePageCache: false,
+                    }),
+                ],
+            },
+        ],
+    },
+    {
+        pattern: '/files',
+        name: 'files',
+        targets: [
+            {
+                name: 'render-list',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [
+                    authorize(fileDecision('list')),
+                    AdminPanel.getAdminFiles,
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
+                ],
+            },
+        ],
+    },
     {
         pattern: '{/}',
         name: 'admin-directory',
@@ -262,3 +341,23 @@ export default [
         ],
     },
 ];
+
+function fileActionRoutes() {
+    const actions = [
+        [ 'metadata', 'update', AdminPanel.postFileMetadata, fileActionErrorHandler ],
+        [ 'replace', 'update', AdminPanel.postFileReplacement, fileUploadErrorHandler ],
+        [ 'publish', 'update', AdminPanel.postFilePublish, fileActionErrorHandler ],
+        [ 'unpublish', 'update', AdminPanel.postFileUnpublish, fileActionErrorHandler ],
+        [ 'delete', 'delete', AdminPanel.postFileDelete, fileActionErrorHandler ],
+    ];
+    return actions.map(([ name, permission, handler, errorHandler ]) => ({
+        pattern: `/files/:fileId/${ name }`,
+        name: `file-${ name }`,
+        targets: [ {
+            name,
+            methods: [ 'POST' ],
+            errorHandlers: errorHandler ? [ errorHandler ] : undefined,
+            requestHandlers: [ authorize(fileDecision(permission)), handler ],
+        } ],
+    }));
+}

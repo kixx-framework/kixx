@@ -43,7 +43,12 @@ export default {
                 path: '../data/nodejs_app/object_store',
                 buckets: {
                     uploads: {},
+                    files: {},
                 },
+            },
+            FILES: {
+                maxUploadBytes: 52428800,
+                bucket: 'files',
             },
             CONTENT_STORE: {
                 developerMode: true,
@@ -99,7 +104,12 @@ export default {
                 path: './object_store',
                 buckets: {
                     uploads: {},
+                    files: {},
                 },
+            },
+            FILES: {
+                maxUploadBytes: 52428800,
+                bucket: 'files',
             },
             CONTENT_STORE: {
                 rootDirectory: './content_store',
@@ -146,7 +156,12 @@ export default {
                 path: '../data/nodejs_app/object_store',
                 buckets: {
                     uploads: {},
+                    files: {},
                 },
+            },
+            FILES: {
+                maxUploadBytes: 52428800,
+                bucket: 'files',
             },
             CONTENT_STORE: {
                 rootDirectory: '../data/nodejs_app/content_store',

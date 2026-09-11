@@ -37,17 +37,15 @@ export default {
 };
 ```
 
-`name` is the application name. Everything else lives under `environments`,
-keyed by environment name. Each environment section holds every store,
-cache, logger, and rate-limit setting that section's deploys share — for
-example `LOGGER.level`, `HYPERVIEW.useTemplateCache`,
-`SECRET_ENCRYPTION.PBKDF2_ITERATIONS`, `RATE_LIMIT.ADMIN_LOGIN`, and the
-`DOCUMENT_STORE` / `KEY_VALUE_STORE` / `OBJECT_STORE` / `CONTENT_STORE`
-gateway settings. The two platform modules are independent: an environment
+Top-level settings like `name` are rare. Everything else lives under
+`environments`, keyed by environment name. Each environment section holds every
+store, cache, logger, and rate-limit setting that environments deploys will
+share — for example `LOGGER.level`, `HYPERVIEW.useTemplateCache`, and
+`DOCUMENT_STORE`.
+
+The two platform specific configuration files are independent: an environment
 name in one has no obligation to exist in, or match the shape of, the same
-name in the other. `cloudflare-config.js` additionally carries `WORKER` and
-`WORKER_VERSION` sections that have no Node.js equivalent, because they
-configure the Worker deployment itself rather than the application.
+name in the other.
 
 ### Loading a config: `readConfig`
 
@@ -66,21 +64,24 @@ It throws if `config.environments` is not a plain object, or if
 `environment` does not match a key in it. The returned object is deep-frozen
 and reshapes the source: the selected section becomes `config.env`, the
 environment name becomes `config.environment`, and everything else at the
-top level of the source module (`name`, and `resolveFilepath` when supplied)
-passes through unchanged. Application code reads settings from `config.env`,
-never by re-selecting from `config.environments` itself.
+top level of the config file (like `name`) passes through unchanged.
+Application code reads settings from `config.env`, never by
+re-selecting from `config.environments` itself.
 
-`resolveFilepath`, when supplied, is attached to the frozen config and is how
-config-relative store paths (`DOCUMENT_STORE.path`, `CONTENT_STORE.rootDirectory`,
-etc.) turn into real filesystem paths — see `DATA_DIRECTORY` below.
+In runtimes with access to the filesystem, the top level `resolveFilepath`,
+is attached to the frozen config and is how config-relative store paths
+(`DOCUMENT_STORE.path`, `CONTENT_STORE.rootDirectory`, etc.) turn into
+real filesystem paths — see `DATA_DIRECTORY` below.
 
 ### Which environment is selected
 
 `ENVIRONMENT` selects the config section to load and cannot itself move into
 configuration, because it is what decides which section of the config module
-is even read. The Node.js server (`src/node-server.js`) resolves it as
-`--environment`, else `NODE_ENV`, defaulting to `development` if neither is
-set. The Cloudflare Worker reads its `ENVIRONMENT` binding directly.
+is even read.
+
+- The Node.js server (`src/node-server.js`) resolves it as `--environment`,
+  else `NODE_ENV`, defaulting to `development` if neither is set.
+- The Cloudflare Worker reads its `ENVIRONMENT` binding directly.
 
 ## Environment variables
 
@@ -104,7 +105,7 @@ below). Bootstrap a fresh clone with:
 cp src/example.env.secrets src/.env.development.secrets
 ```
 
-### How the three sources merge
+### Node.js - Merging environment variables
 
 `src/node-environment.js` (`readEnvironment`, backed by
 `src/kixx/config/merge-environment-sources.js`) merges three sources for the
@@ -136,10 +137,10 @@ declares a required secret (the value is a placeholder and is discarded), and
 a `# @optional` comment line immediately above an entry marks that one name
 optional.
 
-At Node.js startup, `readEnvironment` checks the merged environment against
-this manifest: every required name must resolve to a non-empty string, or
-startup fails before any store is opened, naming every missing secret at
-once. Optional names are not checked either way.
+When starting the devserver, or any Node.js server, `readEnvironment` checks
+the merged environment against this manifest: every required name must resolve
+to a non-empty string, or startup fails before any store is opened, naming
+every missing secret at once. Optional names are not checked either way.
 
 Keeping code and manifest in sync is a two-step, ordered process in both
 directions:
@@ -174,10 +175,9 @@ The secrets manifest still applies — `example.env.secrets` is the same
 authoritative list of required secret names, checked against whatever the
 deployment tooling reports as live on the target Worker.
 
-`DATA_DIRECTORY` has no Cloudflare equivalent: `CONTENT_STORE`,
-`DOCUMENT_STORE`, `KEY_VALUE_STORE`, and `OBJECT_STORE` settings in
-`cloudflare-config.js` address D1 databases, KV namespaces, R2 buckets, and
-Durable Objects by binding name rather than filesystem path.
+Naming a D1 database, KV namespace, or R2 bucket in `cloudflare-config.js`
+does not provision it. The resource must exist and be bound to the Worker
+under the configured binding name before a deploy that reads it.
 
 ## Adding a new setting
 

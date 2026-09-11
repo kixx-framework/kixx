@@ -86,13 +86,15 @@ export default {
             OBJECT_STORE: {
                 type: 'r2_bucket',
                 buckets: {
-                    // This is just an example of a configured bucket. Buckets
-                    // will need to be configured before they are available.
-                    // files: {
-                    //     bucketName: 'kixx-app-production-files',
-                    //     bindingName: 'OBJECT_STORE_FILES',
-                    // },
+                    files: {
+                        bucketName: 'kixx-test-app-production-files',
+                        bindingName: 'OBJECT_STORE_FILES',
+                    },
                 },
+            },
+            FILES: {
+                maxUploadBytes: 52428800,
+                bucket: 'files',
             },
             CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 60 * 60 * 36,

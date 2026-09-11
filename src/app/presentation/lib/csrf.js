@@ -6,6 +6,7 @@ import { isSecureRequest } from './admin-session-cookie.js';
 
 export const CSRF_COOKIE_NAME = 'kixx_csrf_session';
 export const CSRF_FIELD_NAME = 'csrf_token';
+export const CSRF_HEADER_NAME = 'x-kixx-csrf-token';
 export const CSRF_TOKEN_TTL_SECONDS = 60 * 30;
 
 // The `code` validateCsrfFormData() reports an expired or mismatched token with.
@@ -42,6 +43,26 @@ export const INVALID_CSRF_TOKEN_CODE = 'InvalidCsrfTokenError';
  */
 export async function getCsrfFormContext(context, request, response, form, error) {
     const formContext = form.getFormContext(context, error);
+    const csrf = await getCsrfToken(context, request, response);
+
+    return Object.assign({}, formContext, { csrf });
+}
+
+/**
+ * Mints a CSRF token without building a full form render context.
+ *
+ * Use this on a page that renders several state-specific action forms — for
+ * example per-row publish/unpublish buttons whose action URLs are compiled by
+ * hand with `HttpTarget#compilePathname()` rather than through one `BaseForm`
+ * subclass. Every such form can share the one token this returns, the same
+ * way a page with a primary form reuses `form.csrf` for its other forms.
+ *
+ * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
+ * @param {import('../../../kixx/http-router/server-response.js').default} response - Response being built.
+ * @returns {Promise<{fieldName: string, token: string}>} CSRF field name and token.
+ */
+export async function getCsrfToken(context, request, response) {
     const { sid, token } = await mintCsrfToken(context, request);
 
     // Refresh the cookie on every render with the full TTL so it always
@@ -55,12 +76,10 @@ export async function getCsrfFormContext(context, request, response, form, error
         sameSite: 'Lax',
     });
 
-    return Object.assign({}, formContext, {
-        csrf: {
-            fieldName: CSRF_FIELD_NAME,
-            token,
-        },
-    });
+    return {
+        fieldName: CSRF_FIELD_NAME,
+        token,
+    };
 }
 
 /**
@@ -114,8 +133,24 @@ async function mintCsrfToken(context, request) {
  */
 export async function validateCsrfFormData(context, request) {
     const formData = await request.formData();
+    await validateCsrfToken(context, request, formData.get(CSRF_FIELD_NAME));
+
+    return formData;
+}
+
+/**
+ * Validates the CSRF header used by one-shot raw upload bodies without reading the body.
+ * @param {import('../../../kixx/context/request-context.js').default} context - Current request context.
+ * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Current request.
+ * @returns {Promise<void>}
+ * @throws {ForbiddenError} When the CSRF cookie or header token is invalid.
+ */
+export async function validateCsrfHeader(context, request) {
+    await validateCsrfToken(context, request, request.headers.get(CSRF_HEADER_NAME));
+}
+
+async function validateCsrfToken(context, request, token) {
     const sid = request.getCookie(CSRF_COOKIE_NAME);
-    const token = formData.get(CSRF_FIELD_NAME);
     const signer = context.getService('CsrfTokenSigner');
 
     const isValidToken = isNonEmptyString(sid)
@@ -128,7 +163,6 @@ export async function validateCsrfFormData(context, request) {
         });
     }
 
-    return formData;
 }
 
 /**
