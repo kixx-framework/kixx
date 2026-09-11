@@ -53,7 +53,7 @@ const END_TO_END_STRING_OPTION_NAMES = [
 
 const END_TO_END_BASE_URLS = new Map([
     [ 'development', 'http://localhost:2026/' ],
-    [ 'cloudflare', 'https://cloudflare.kixx-testing.dev/' ],
+    [ 'cloudflare', 'https://kixx-test-app.kixx.workers.dev/' ],
     [ 'nodejs', 'https://nodejs.kixx-testing.dev/' ],
 ]);
 

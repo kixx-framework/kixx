@@ -1053,7 +1053,7 @@ Phase A — agent:
 
 Phase B — operator:
 
-- [ ] Private files bucket is provisioned and bound as `OBJECT_STORE_FILES`; the
+- [x] Private files bucket is provisioned and bound as `OBJECT_STORE_FILES`; the
   deployed Worker contains this implementation. Bucket, binding, deployed
   commit, and deployment method are recorded.
 - [ ] Dedicated HTTP suite passes against the Cloudflare deployment.
@@ -1178,3 +1178,7 @@ Phase B — operator, after deploying:
     a visible focus ring, and Enter submitted Publish.
 - Blockers: None for Phase A. Phase B requires the operator to provision the
   bucket/binding and deploy this implementation.
+
+**Phase B - Progress**
+
+- Deployment via `../../devkit/kixx.js cloudflare release -e production` (resulting in commit `bb7c0b6b9e95c3519961376b65c870a0f7866856`)
