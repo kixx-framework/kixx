@@ -239,6 +239,8 @@
 (function () {
     const MAX_CONCURRENT_UPLOADS = 3;
 
+    let rowSequence = 0;
+
     function parseJsonBody(xhr) {
         try {
             return JSON.parse(xhr.responseText);
@@ -285,6 +287,21 @@
 
         filenameEl.textContent = file.name;
 
+        // Every row repeats the same labels and buttons, so give each row its
+        // own ids: labels name their fields, and the filename describes the
+        // row's progress bar and buttons for screen reader users.
+        rowSequence += 1;
+        const rowId = 'file-upload-row-' + rowSequence;
+        filenameEl.id = rowId + '-filename';
+        titleInput.id = rowId + '-title';
+        descriptionInput.id = rowId + '-description';
+        node.querySelector('[data-row-title-label]').htmlFor = titleInput.id;
+        node.querySelector('[data-row-description-label]').htmlFor = descriptionInput.id;
+        [ progressBar, cancelButton, retryButton, saveButton, publishButton ].forEach((element) => {
+            element.setAttribute('aria-describedby', filenameEl.id);
+        });
+        progressBar.setAttribute('aria-label', 'Upload progress');
+
         // Upload state ('queued' | 'uploading' | 'succeeded' | 'failed' |
         // 'canceled') is tracked separately from metadata dirty/saving state and
         // from publication state, since all three change independently once the
@@ -297,8 +314,8 @@
         let metadataSaving = false;
 
         const controller = {
-            isCanceled() {
-                return state === 'canceled';
+            isQueued() {
+                return state === 'queued';
             },
             hasUnfinishedWork() {
                 return state === 'queued' || state === 'uploading' || metadataDirty || metadataSaving;
@@ -367,11 +384,6 @@
         }
 
         function startUpload(onSettled) {
-            if (state === 'canceled') {
-                onSettled();
-                return;
-            }
-
             state = 'uploading';
             setStatus('Uploading…');
             setError(null);
@@ -544,9 +556,18 @@
                 if (ok && data.file) {
                     isPublished = Boolean(data.file.isPublished);
                     publishButton.textContent = isPublished ? 'Unpublish' : 'Publish';
+                    return;
+                }
+                // An expired session or form lands here; say so on this row
+                // rather than silently re-enabling the button.
+                if (saveStatusEl) {
+                    saveStatusEl.textContent = (data.error && data.error.message) || 'Could not change publication.';
                 }
             }).catch(() => {
                 publishButton.disabled = false;
+                if (saveStatusEl) {
+                    saveStatusEl.textContent = 'Could not change publication. Check your connection.';
+                }
             });
         }
 
@@ -592,7 +613,10 @@
             while (activeCount < MAX_CONCURRENT_UPLOADS && pending.length > 0) {
                 const row = pending.shift();
 
-                if (row.isCanceled()) {
+                // Cancel leaves a queued row's entry in place, and a retry adds
+                // another, so a row can appear twice. Start only rows still
+                // waiting; a stale entry for a started or canceled row is skipped.
+                if (!row.isQueued()) {
                     continue;
                 }
 

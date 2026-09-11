@@ -38,13 +38,15 @@
 
                 <p class="type-body-sm" data-row-error role="alert" hidden></p>
 
+                {{!-- Rows are cloned from this template, so site.js assigns each
+                      row unique ids and points these labels at their fields. --}}
                 <div class="field">
-                    <label class="field__label">Title</label>
+                    <label class="field__label" data-row-title-label>Title</label>
                     <input class="field__input" type="text" maxlength="200" data-row-title>
                 </div>
 
                 <div class="field">
-                    <label class="field__label">Description</label>
+                    <label class="field__label" data-row-description-label>Description</label>
                     <textarea class="field__input" rows="3" maxlength="2000" data-row-description></textarea>
                 </div>
 
