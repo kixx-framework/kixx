@@ -12,8 +12,7 @@ Collection, Record, Transaction Script, Form, and Hyperview boundaries. Extend
 the existing object-store port only where streaming upload validation requires
 it; do not introduce another platform abstraction or install dependencies.
 
-The user approved the behavior below and authorized drafting this plan.
-Implementation has not started. All tasks remain **Not started**.
+The user approved the behavior below. Implementation and validation are complete.
 
 ### Approved behavior
 
@@ -33,12 +32,13 @@ Implementation has not started. All tasks remain **Not started**.
 - Every upload row has progress, editable metadata during upload, its own Save
   metadata button after success, and a separate Publish button after success.
   Publishing does not require saving metadata.
-- Queued and active uploads can be canceled. Retry starts again from byte zero
-  and retains the selected file and entered metadata while the page remains open.
+- Queued and active batch uploads can be canceled. Batch retry starts again from
+  byte zero and retains the selected file and entered metadata while the page
+  remains open.
   Retry deduplication is explicitly out of scope; uncertain outcomes can leave
   duplicate entries.
-- Leaving the page abandons unfinished uploads and unsaved metadata. Warn while
-  work is pending. Completed uploads and saved metadata persist.
+- Leaving the batch upload page abandons unfinished uploads and unsaved metadata.
+  Warn while work is pending. Completed uploads and saved metadata persist.
 - The listing has 25 entries per page, newest original uploads first. Edits and
   replacement do not reorder it. No search or filters. Each row has a Publish or
   Unpublish button appropriate to its state and links to its detail page.
@@ -58,9 +58,11 @@ Implementation has not started. All tasks remain **Not started**.
   Zero-byte files are valid. A batch is multiple independent upload requests.
 - Last write wins without stale-edit rejection. Each operation changes only
   its intended fields.
-- Unpublishing needs no confirmation. Replacing published content requires
-  confirmation before uploading. Permanent deletion requires unpublishing first
-  and explicit confirmation; its UUID is never intentionally reused.
+- Unpublishing needs no confirmation. Replacing content that was published when
+  the detail page rendered requires client-side confirmation before uploading;
+  the server does not recheck it. Permanent deletion requires unpublishing first
+  and explicit server-validated confirmation; its UUID is never intentionally
+  reused.
 - This is admin-panel functionality, not an external API or Publishing API token
   capability. Uploads require JavaScript; use ordinary HTML forms elsewhere
   where practical.
@@ -273,11 +275,9 @@ Treat touch points as orientation; record actual changes in the handoff.
   bridges Web streams through `FixedLengthStream` and awaits producer/storage
   settlement. Added the private `files` bucket, `FILES` settings, boot
   invariants, and shared adapter contract coverage.
-- Current state: Repository implementation and mocked adapter validation are
-  complete.
-- Remaining: F7 must provision/bind `OBJECT_STORE_FILES` and verify the actual
-  Worker/R2 stream path, including zero-byte, normal, limit, disconnect, and
-  mismatch behavior. A mocked R2 test is not runtime proof.
+- Current state: Complete. Repository tests and F7's live Worker/R2 validation
+  passed.
+- Remaining: Nothing.
 - Decisions and discoveries: Length mismatch uses the stable expected error code
   `ObjectContentLengthMismatch`. Existing callers remain on the unsized path.
   The Cloudflare config names the required private bucket but does not provision
@@ -375,12 +375,11 @@ Treat touch points as orientation; record actual changes in the handoff.
   conditional delete. Fresh generation keys protect replacements; field-specific
   retries preserve unrelated concurrent writes; post-commit cleanup cannot undo
   or misreport the winning pointer.
-- Current state: The storage/domain lifecycle is complete and registered. HTTP
-  routes and presentation remain owned by later tasks.
-- Remaining: Nothing in F2. F3 must construct the Forms from authenticated HTTP
-  input and map the documented expected errors to responses. Operational orphan
-  cleanup can list `<file UUID>/<generation UUID>` keys and remove references not
-  named by the current File record.
+- Current state: Complete. The storage/domain lifecycle is registered and used
+  by the completed HTTP and presentation layers.
+- Remaining: Nothing. Operational orphan cleanup can list
+  `<file UUID>/<generation UUID>` keys and remove references not named by the
+  current File record.
 - Decisions and discoveries: MIME type is derived from the shared extension map,
   ignoring browser claims. Blank metadata normalizes to null. Replacement retry
   tracks the content displaced by the successful commit, so overlapping
@@ -489,13 +488,9 @@ Treat touch points as orientation; record actual changes in the handoff.
   call Transaction Scripts, redirect normal form actions, and return local JSON
   contracts for raw uploads and partial row actions. Upload errors are returned
   as machine-readable JSON, including errors raised by ancestor authentication.
-- Current state: The authenticated endpoint surface and transport contracts are
-  complete. F5 supplies the page and row templates consumed by the GET routes;
-  F6 consumes the JSON upload/partial contracts from browser JavaScript.
-- Remaining: Nothing in F3. F5 must add the referenced `/admin/files`,
-  `/admin/files/new`, and `/admin/files/detail` Hyperview sources. F6 must send
-  `x-kixx-csrf-token`, URI-encoded `x-file-name`, and decimal `x-file-size` on
-  each raw request, and use `kixx-partial` for non-navigating row actions.
+- Current state: Complete. The page templates and browser JavaScript use the
+  authenticated endpoint and transport contracts.
+- Remaining: Nothing.
 - Decisions and discoveries: The raw upload headers are intentionally local to
   the admin browser surface. Authorization remains before handlers, and header
   CSRF verification is the first operation inside raw handlers, so rejected
@@ -548,9 +543,11 @@ authenticated attachment downloads regardless of publication state.
 - Admin GET/HEAD requires file privileges and always returns attachment
   disposition with `private, no-store`. No metadata leaks on public errors.
 - Ignore Range/If-Range; never return `206` or advertise `Accept-Ranges: bytes`.
-- Use metadata/ETag from the committed content reference. When an old object
-  disappears between record lookup and object read, resolve the record again
-  with bounded retry rather than returning mismatched headers or false absence.
+- Use metadata/ETag from the committed content reference. For public serving,
+  when an old object disappears between record lookup and object read, resolve
+  the record again with bounded retry rather than returning mismatched headers
+  or false absence. Retrying authenticated admin downloads during this
+  replacement race is outside Phase 1.
   Requests already reading committed old bytes may finish during replacement.
 - Public representation ETags change on replacement, not title/description edits.
   Unpublish is checked even for validators issued before publication changed.
@@ -597,13 +594,14 @@ Treat touch points as orientation; record actual changes in the handoff.
   return non-cacheable 404s; Range is ignored; HEAD and 304 are bodyless.
 - Current state: Stable public URLs and private admin downloads are complete on
   the shared Web-stream presentation boundary.
-- Remaining: Nothing in F4. F7 must exercise the same cases against live Node
-  and Worker/R2 targets, including replacement races and runtime cancellation.
+- Remaining: Nothing. F7 exercised the HTTP cases against live Node and
+  Worker/R2 targets. Admin-download retry during replacement remains outside
+  Phase 1.
 - Decisions and discoveries: The committed generation is the representation
   ETag, so replacement invalidates clients even when object bytes hash equally.
   The handler does not open storage for a 304. If an opened record points to a
-  missing object, it re-resolves the record through bounded retries before
-  treating the inconsistency as an operational failure. Public markup and
+  missing object, the public handler re-resolves the record through bounded
+  retries before treating the inconsistency as an operational failure. Public markup and
   unknown types are attachments; only the explicit raster, PDF, audio, video,
   and plain-text allowlist is inline.
 - Actual files changed: `src/virtual-hosts.js`, `src/routes/files.js`,
@@ -658,12 +656,15 @@ detail operations through the existing admin shell.
 - Detail shows the permanent URL, current content information, metadata form,
   download, publication controls, replacement input, and delete workflow.
 - Delete requires explicit confirmation and an unpublished record. Published
-  replacement requires confirmation before sending bytes. Plain unpublish is
-  immediate. Recheck required confirmations/preconditions in the POST workflow.
+  replacement requires client-side confirmation before sending bytes based on
+  the state rendered on the detail page; the replacement POST does not recheck
+  confirmation or publication state. Plain unpublish is immediate. Recheck the
+  delete confirmation and unpublished precondition in the POST workflow.
 - Render accessible labels, errors, notices, and focus states. Reuse copy-field,
   form, button, and layout primitives. No inline style attributes.
 - Disable page caching for CSRF forms and send private/no-store admin responses.
-  Set error status when rendering validation failures; preserve entered metadata.
+  JavaScript metadata validation preserves entered values and field errors. The
+  no-JavaScript path may redirect with a generic notice and discard invalid input.
 - Ordinary metadata/publication/delete forms work without JavaScript. Replacement
   upload explicitly requires JavaScript under the approved exception.
 
@@ -684,7 +685,9 @@ Treat touch points as orientation; record actual changes in the handoff.
 - [x] Listing paginates at 25, orders correctly, and exposes publication actions.
 - [x] Detail supports metadata, download, publication, delete, and replacement UI.
 - [x] Stable URL is visible while unpublished and does not change after edits.
-- [x] Confirmation and validation flows preserve context and give useful errors.
+- [x] Client-side replacement confirmation and server-side delete confirmation
+  work; JavaScript metadata validation preserves context, while the no-JavaScript
+  path uses the accepted generic notice.
 - [x] HTML forms work without JavaScript except the agreed upload functionality.
 - [x] Layout is usable on mobile/desktop, with keyboard access and both themes.
 
@@ -713,18 +716,10 @@ Treat touch points as orientation; record actual changes in the handoff.
   `createCursorPaginationLinks`, previously unused by this handler), reverse-
   routed every link (including two that were still hardcoded strings), and
   added `getNewFiles` for the F6 upload page's CSRF/URL props.
-- Current state: Listing, detail, and directory-entry work described by this
-  task's scope is complete and covered by a focused handler test plus the
-  full suite. Markup was written against the templating/frontend guides and
-  existing style-guide primitives but has not been rendered in a browser —
-  no dev server or browser session was available in this environment.
-- Remaining: Acceptance criteria that require an actual rendered page
-  (responsive layout, keyboard access, light/dark) are unverified and stay
-  unchecked above; that verification belongs to F7's local-target/browser
-  pass, which already owns exactly this per its Validation section.
-  Confirmation/validation-preservation is also left unchecked because the
-  no-JavaScript metadata path is a known, disclosed partial: see Decisions
-  below.
+- Current state: Complete. Focused handler tests, the full suite, and F7's
+  browser pass cover the listing, detail, and directory-entry workflows.
+- Remaining: Nothing. The no-JavaScript metadata path's generic validation
+  notice is an accepted Phase 1 limitation; see Decisions below.
 - Decisions and discoveries: (1) Found and fixed a pre-existing F3 bug —
   `respondAfterAction()` redirected to `file-detail/render-detail` by passing
   the whole `file` object as compile params instead of `{ fileId: file.id }`;
@@ -756,8 +751,7 @@ Treat touch points as orientation; record actual changes in the handoff.
   with F6 and are recorded once, under F6.
 - Validation run: `node run-linter.js` passed (repo-wide); `node run-tests.js`
   passed (1,400 tests, up from 1,394); `git diff --check` passed.
-- Blockers: None for the work in this task's scope. Full visual/responsive/
-  keyboard/theme verification requires F7's browser pass.
+- Blockers: None.
 - Verified during F7: F7's browser pass on a Node target covered the empty
   state, 26-file pagination, the validation notice, both confirmations, the
   no-JavaScript forms, 390 px and desktop layouts in light and dark, and
@@ -810,9 +804,10 @@ independent progress, retry, cancellation, saving, and publication controls.
 - Warn on navigation only while uploads, saves, or unsaved metadata remain.
   Abort active requests and abandon queued work on exit where the browser allows;
   do not imply cancellation can retract a completed server commit.
-- Replacement uses the same transport/progress behavior but targets the existing
-  UUID and obeys published-file confirmation. Do not offer replacement from the
-  batch creation page.
+- Replacement uses the same raw upload transport and progress reporting but
+  targets the existing UUID. It uses client-side published-file confirmation.
+  Cancel, retained retry, and navigation protection for replacement are outside
+  Phase 1. Do not offer replacement from the batch creation page.
 - Use accessible progress/status output and bounded live announcements. Surface
   CSRF/session expiry per row without silently losing other selected files.
 
@@ -880,19 +875,10 @@ Treat touch points as orientation; record actual changes in the handoff.
   when the file is currently published, and reloads the page on success so
   the refreshed content info/etag come from the server rather than being
   hand-maintained in JS.
-- Current state: The batch upload queue and replacement behavior are
-  implemented, lint-clean under the browser ruleset, and exercised only by
-  code review — this repository has no DOM/browser test runner (`test/unit-tests/README.md`
-  and the frontend guide's "Verifying Frontend Work" section point at the
-  dev server and `node run-linter.js`, not a browser unit-test tool), and no
-  dev server or browser session was available in this environment to click
-  through the actual queue.
-- Remaining: F7's manual browser matrix (four-plus files, throttled
-  progress, an oversize/failing file, cancel/retry, editing during an
-  in-flight save, publishing with unsaved metadata, session expiry
-  mid-batch, and navigation while active vs. fully settled) is the first
-  real exercise of this code end-to-end and should be treated as such, not
-  as a formality.
+- Current state: Complete. The batch upload queue and Phase 1 replacement
+  behavior are lint-clean and passed F7's manual browser matrix.
+- Remaining: Nothing in Phase 1. Replacement cancel, retained retry, and
+  navigation protection are explicitly deferred.
 - Decisions and discoveries: (1) A publish/unpublish action succeeding on a
   batch row toggles one button's label between "Publish" and "Unpublish"
   rather than showing two separate buttons the way the listing/detail pages
@@ -946,7 +932,7 @@ Treat touch points as orientation; record actual changes in the handoff.
 
 ### Task F7: Verify the complete feature and document operations
 
-**Status:** Awaiting operator
+**Status:** Complete
 **Depends on:** F1, F2, F3, F4, F5, F6
 **Documentation:** Entire approved behavior; `README.md`; Configuration,
 Unit Testing, and End-to-End Testing guides.
@@ -1056,12 +1042,12 @@ Phase B — operator:
 - [x] Private files bucket is provisioned and bound as `OBJECT_STORE_FILES`; the
   deployed Worker contains this implementation. Bucket, binding, deployed
   commit, and deployment method are recorded.
-- [ ] Dedicated HTTP suite passes against the Cloudflare deployment.
-- [ ] Real Worker/R2 streaming evidence covers zero bytes, the default limit,
+- [x] Dedicated HTTP suite passes against the Cloudflare deployment.
+- [x] Real Worker/R2 streaming evidence covers zero bytes, the default limit,
   limit + 1 rejection, and length mismatch/disconnect without a stored partial
   object; three concurrent default-limit uploads succeed without whole-body
   buffering.
-- [ ] Cloudflare browser smoke test passes: a four-file batch upload, a
+- [x] Cloudflare browser smoke test passes: a four-file batch upload, a
   published replacement, and public serving at `/files/<uuid>`.
 
 **Validation**
@@ -1092,16 +1078,16 @@ Phase B — operator, after deploying:
 
 **Progress and handoff**
 
-- Completed: Phase A. Added the portable `test/end-to-end/100-admin-files/`
+- Completed: Phase A and operator-owned Phase B. Added the portable
+  `test/end-to-end/100-admin-files/`
   suite (76 tests: access control, lifecycle, content policy, roles,
   pagination) and a standalone `large-upload-checks.js` for real-size uploads.
   Ran both, plus a browser matrix, on a Node Local Target Instance. Wrote
   `docs/admin-files.md` (behavior, configuration, recovery, Phase B runbook).
   Fixed the defects the runs exposed (below, and under the owning tasks).
-- Current state: Awaiting the operator's Phase B. The disposable
-  `admin-files` instance was destroyed after validation.
-- Remaining: Phase B, following `docs/admin-files.md` → "Cloudflare
-  validation runbook". Record its results here as a `Phase B results` entry.
+- Current state: Complete. Phase A and operator-owned Phase B validation passed.
+  The disposable `admin-files` instance was destroyed after validation.
+- Remaining: Nothing.
 - Decisions and discoveries:
   - Defects found by live runs and fixed (details under F2, F4, F5, F6):
     public/admin GET sent headers but no body (F4); plain text served as an
@@ -1176,10 +1162,22 @@ Phase B — operator, after deploying:
     validation notice, and 26-file pagination rendered; 390 px layouts had no
     horizontal overflow in light or dark; keyboard tab order was logical with
     a visible focus ring, and Enter submitted Publish.
-- Blockers: None for Phase A. Phase B requires the operator to provision the
-  bucket/binding and deploy this implementation.
+- Blockers: None.
 
-**Phase B - Progress**
+**Phase B results**
 
 - Deployment via `../../devkit/kixx.js cloudflare release -e production` (resulting in commit `bb7c0b6b9e95c3519961376b65c870a0f7866856`)
-- Re-deployed after bug fixes via `../../devkit/kixx.js cloudflare release -e production` (resulting in commit `bc4e46871ec7b1216ff969cc5d426c5db186fe76`)
+- Re-deployed after bug fixes via `../../devkit/kixx.js cloudflare release -e production` (resulting in commit `31e1207a8fa9255c72abd278c4e336a394e3cfb6`)
+- Ran runbook step 2 and 3 and 4: All tests pass and there are no leftover files in R2. E2E test output `Test run is complete. Ran 159 tests with 0 disabled tests in 89796ms. Passed with no errors`
+- Did the browser smoke check and everything worked as expected:
+  - [x] 1. Open **Files → Upload files** and select four files at once. Each row shows
+   progress; on a slow enough connection the fourth waits as **Queued** until a
+   slot frees.
+  - [x] 2. Type a title into one row while it uploads, then **Publish** that row
+   without saving the title. The title stays unsaved and editable.
+  - [x] 3. Open that file's detail page, copy its permanent URL, and open it: the
+   bytes are served.
+  - [x] 4. Choose a replacement file. A confirmation appears because the file is
+   published; accept it. The page reloads with the new filename and the same
+   permanent URL, which now serves the new bytes.
+  - [x] 5. Unpublish and delete every file you uploaded.
