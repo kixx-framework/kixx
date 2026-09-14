@@ -10,6 +10,10 @@ import publishingApiRoutes from './routes/publishing-api-v1.js';
 import fileRoutes from './routes/files.js';
 import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
 
+// Root files like /favicon.ico are requested by fixed name and cannot be
+// fingerprinted, so allow a modest max-age instead of revalidating every view.
+const ROOT_FILE_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800';
+
 
 export default [
     {
@@ -104,6 +108,26 @@ export default [
                         methods: [ 'GET', 'HEAD' ],
                         requestHandlers: [
                             StaticAssetRequestHandler({ fingerprinted: true }),
+                        ],
+                    },
+                ],
+            },
+            {
+                // Also matches root page context URLs like /index.json, so a
+                // missing asset falls through to the page handler.
+                pattern: '/:filename.:extension',
+                name: 'root-files',
+                targets: [
+                    {
+                        name: 'serve-root-file',
+                        methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            StaticAssetRequestHandler({
+                                cacheControl: ROOT_FILE_CACHE_CONTROL,
+                                throwNotFound: false,
+                                skipWhenFound: true,
+                            }),
+                            HyperviewPageHandler({ baseTemplateId: 'default.html' }),
                         ],
                     },
                 ],

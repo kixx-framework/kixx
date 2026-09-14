@@ -806,7 +806,7 @@ For an application API endpoint that accepts or returns JSON:API documents:
 
 ### Serving Static Assets
 
-`StaticAssetRequestHandler` serves content-addressable blobs from the registered `ContentAddressableStore`. Wire it twice: a fingerprinted `/assets/:hash/*pathname` route before the catch-all, then pathname mode ahead of `HyperviewPageHandler` for fixed URLs such as `/favicon.ico`.
+`StaticAssetRequestHandler` serves content-addressable blobs from the registered `ContentAddressableStore`. Wire it twice: a fingerprinted `/assets/:hash/*pathname` route before the catch-all, then pathname mode ahead of `HyperviewPageHandler` for fixed URLs such as `/favicon.ico` (see root files below).
 
 ```js
 import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
@@ -827,6 +827,31 @@ import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request
 ```
 
 Fingerprint URLs carry an immutable content hash, use an immutable cache policy, and can return `304` for a matching `If-None-Match` without reading storage. Pathname URLs resolve through the current snapshot and revalidate by default.
+
+Root files like `/favicon.ico` and `/robots.txt` are requested by fixed name, so they cannot be fingerprinted. A `/:filename.:extension` route before the catch-all serves them with a modest `cacheControl` instead of revalidating on every page view. The pattern also matches root page context URLs such as `/index.json`, so a missing asset must fall through to `HyperviewPageHandler`:
+
+```js
+{
+    pattern: '/:filename.:extension',
+    name: 'root-files',
+    targets: [
+        {
+            name: 'serve-root-file',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [
+                StaticAssetRequestHandler({
+                    cacheControl: 'public, max-age=86400, stale-while-revalidate=604800',
+                    throwNotFound: false,
+                    skipWhenFound: true,
+                }),
+                HyperviewPageHandler({ baseTemplateId: 'default.html' }),
+            ],
+        },
+    ],
+}
+```
+
+Do not mark root files `immutable`: their URLs never change, so a published update is only seen after `max-age` expires.
 
 For lookup and caching details, see `kixx/static-assets/README.md`.
 
