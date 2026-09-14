@@ -3,13 +3,22 @@ import { assertEqual } from 'kixx-assert';
 
 import respondWithHyperviewPage from '../../../../../src/app/presentation/lib/respond-with-hyperview-page.js';
 import ServerResponse from '../../../../../src/kixx/http-router/server-response.js';
+import { sha256Hex } from '../../../../../src/kixx/utils/crypto.js';
 
 
-function makeRequest(headers, href) {
+const PUBLIC_OPTIONS = { responseOptions: { cacheControl: 'public, no-cache' } };
+
+
+function makeRequest(headers, href, method) {
     return {
+        method: method ?? 'GET',
         headers: new Headers(headers),
         url: new URL(href ?? 'https://www.example.com/'),
     };
+}
+
+async function getBodyEtag() {
+    return `"${ await sha256Hex('<main>Account</main>') }"`;
 }
 
 function makeSubject() {
@@ -115,5 +124,96 @@ describe('respondWithHyperviewPage', ({ it }) => {
 
         assertEqual('/', JSON.parse(response.body).pathname);
         assertEqual(undefined, calls[0].options.responseOptions);
+    });
+
+    it('varies every response on the render mode request headers', async () => {
+        const { context } = makeSubject();
+        const response = new ServerResponse();
+
+        await respondWithHyperviewPage(context, makeRequest(), response);
+
+        assertEqual('kixx-partial, kixx-boosted', response.headers.get('vary'));
+    });
+
+    it('adds no cache policy or validator without responseOptions.cacheControl', async () => {
+        const { context } = makeSubject();
+        const response = new ServerResponse();
+
+        await respondWithHyperviewPage(context, makeRequest(), response);
+
+        assertEqual(null, response.headers.get('cache-control'));
+        assertEqual(null, response.headers.get('etag'));
+    });
+
+    it('sets the configured cache policy and a body-hash ETag', async () => {
+        const { context } = makeSubject();
+        const response = new ServerResponse();
+
+        await respondWithHyperviewPage(context, makeRequest(), response, PUBLIC_OPTIONS);
+
+        assertEqual(200, response.status);
+        assertEqual('public, no-cache', response.headers.get('cache-control'));
+        assertEqual(await getBodyEtag(), response.headers.get('etag'));
+        assertEqual('<main>Account</main>', response.body);
+    });
+
+    it('responds 304 without a body when If-None-Match matches, including a weakened ETag', async () => {
+        const { context } = makeSubject();
+        const response = new ServerResponse();
+        const request = makeRequest({ 'if-none-match': `W/${ await getBodyEtag() }` });
+
+        await respondWithHyperviewPage(context, request, response, PUBLIC_OPTIONS);
+
+        assertEqual(304, response.status);
+        assertEqual(null, response.body);
+        assertEqual(null, response.headers.get('content-type'));
+        assertEqual(null, response.headers.get('content-length'));
+        assertEqual(await getBodyEtag(), response.headers.get('etag'));
+        assertEqual('public, no-cache', response.headers.get('cache-control'));
+        assertEqual('kixx-partial, kixx-boosted', response.headers.get('vary'));
+    });
+
+    it('responds 200 when If-None-Match does not match', async () => {
+        const { context } = makeSubject();
+        const response = new ServerResponse();
+
+        await respondWithHyperviewPage(context, makeRequest({ 'if-none-match': '"stale"' }), response, PUBLIC_OPTIONS);
+
+        assertEqual(200, response.status);
+        assertEqual('<main>Account</main>', response.body);
+    });
+
+    it('does not apply the cache policy to an error status', async () => {
+        const { context } = makeSubject();
+        const response = new ServerResponse();
+        response.status = 422;
+
+        await respondWithHyperviewPage(context, makeRequest({ 'if-none-match': await getBodyEtag() }), response, PUBLIC_OPTIONS);
+
+        assertEqual(422, response.status);
+        assertEqual(null, response.headers.get('cache-control'));
+        assertEqual(null, response.headers.get('etag'));
+    });
+
+    it('does not apply the cache policy to a POST', async () => {
+        const { context } = makeSubject();
+        const response = new ServerResponse();
+        const request = makeRequest({ 'if-none-match': await getBodyEtag() }, null, 'POST');
+
+        await respondWithHyperviewPage(context, request, response, PUBLIC_OPTIONS);
+
+        assertEqual(200, response.status);
+        assertEqual(null, response.headers.get('cache-control'));
+        assertEqual(null, response.headers.get('etag'));
+    });
+
+    it('does not pass cacheControl to the render service', async () => {
+        const { calls, context } = makeSubject();
+        const response = new ServerResponse();
+
+        await respondWithHyperviewPage(context, makeRequest(), response, PUBLIC_OPTIONS);
+
+        assertEqual(undefined, calls[0].options.responseOptions);
+        assertEqual(undefined, calls[0].options.cacheControl);
     });
 });

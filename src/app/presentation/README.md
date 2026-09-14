@@ -184,6 +184,22 @@ When middleware or a request handler throws, the router emits an `error` event; 
 
 When the error handling chain is triggered, the outbound phase is skipped for that request.
 
+### Response Cache Policy
+
+Caching is opt-in per route. Shared caches such as the Cloudflare Workers Cache store responses which carry no `Cache-Control` using heuristic freshness, and serve them without running the Worker or its authentication middleware. So on the way out, `HttpRouter` enforces:
+
+| Response | `Cache-Control` |
+|---|---|
+| No `Cache-Control` declared | `no-store` |
+| Produced by the error cascade | `no-store`; any `ETag` is removed |
+| `context.user` is set | `private, no-store` |
+
+Enforcement replaces only the storage and freshness directives, so a declared `no-transform` survives. A response a shared cache may still store also gets `Vary: host`, because the Workers Cache key omits the hostname and virtual hosts can serve different content at one path.
+
+To make a response cacheable, declare the policy on the normal (non-error) path: `cacheControl` for `StaticAssetRequestHandler`, `responseOptions.cacheControl` for `HyperviewPageHandler`, or a `cache-control` header from a custom handler. Never do this for a response built from request-specific state such as a session, cookie, or CSRF token.
+
+A content Release publish does not invalidate the edge cache. Pages built from Release content should use `public, no-cache`, which stores the page but revalidates it with the Worker on every request, rather than a `max-age`.
+
 ### Skipping Middleware and Request Handlers
 
 **The `skip()` callback** ends the **request phase** early: when called, no further inbound middleware or request handlers run. The **outbound phase still runs to completion**, so response post-processing such as formatting, shared headers, and logging is never bypassed by `skip()`. Use `skip()` when a request handler has committed a terminal response (a redirect or JSON document) and you want to stop a later request handler — such as a Hyperview render handler — from running. Do not reach for `skip()` merely because you committed a response; if no later request handler needs to be bypassed, just return the response. Outbound middleware is not passed `skip()` and cannot short-circuit the chain.
@@ -391,7 +407,18 @@ response.updateProps({ results });
 | `propsHashFunction` | Custom response-props hash, used only with page caching and props-sensitive keys |
 | `pageCacheReadTtlSeconds`, `pageCacheExpirationSeconds` | Page-cache read TTL and write expiration; default to the configured values |
 | `allowJsonResponse` | Serve assembled page context for `.json` requests; defaults to the configured value |
-| `responseOptions` | `{ contentType, headers }` used only by the facade when it commits hypertext |
+| `responseOptions` | `{ contentType, headers, cacheControl }` used only by the facade when it commits the response |
+
+Every render adds `Vary: kixx-partial, kixx-boosted`, so caches keep each render mode separately.
+
+`responseOptions.cacheControl` opts a public page into shared caching. A `200` response to `GET` or `HEAD` then carries that `Cache-Control` and a strong `ETag` hashed from the body, and a matching `If-None-Match` gets a `304` with no body. Without it the router's `no-store` default applies. See [Response Cache Policy](#response-cache-policy).
+
+```js
+HyperviewPageHandler({
+    baseTemplateId: 'default.html',
+    responseOptions: { cacheControl: 'public, no-cache' },
+})
+```
 
 Leave `includePropsInCacheKey` alone unless you are certain the page renders identically for every viewer. It defaults to `true` with page caching on precisely so a page rendered for one signed-in user is never served to the next.
 
@@ -530,7 +557,7 @@ response.clearCookie('session', { path: '/' });
 
 `setCookie` defaults to `Secure; HttpOnly; SameSite=Lax`. Pass `secure: false` for local development. Pass `httpOnly: false` for client-readable cookies.
 
-**Chaining** — all `respond*`, `setHeader`, `appendHeader`, `setCookie`, `clearCookie`, `updateProps`, and `setRenderingOptions` methods return `this`, so they can be chained or returned directly:
+**Chaining** — all `respond*`, `setHeader`, `appendHeader`, `addVary`, `setCookie`, `clearCookie`, `updateProps`, and `setRenderingOptions` methods return `this`, so they can be chained or returned directly:
 
 ```js
 return response.updateProps({ page: { title: ticket.title }, ticket });
@@ -762,7 +789,7 @@ Templates should render the hidden field directly inside the protected `<form>`:
 
 For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
 
-1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html' })`. See [Routing](#routing).
+1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html', responseOptions: { cacheControl: 'public, no-cache' } })`. See [Routing](#routing) and [Response Cache Policy](#response-cache-policy).
 2. Add or update `src/pages/<pathname>/page.json` for metadata and page context, setting its `template` directive to `page.html`.
 3. Add or update `page.html` beside `page.json` for route-specific markup.
 4. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
@@ -844,7 +871,10 @@ Root files like `/favicon.ico` and `/robots.txt` are requested by fixed name, so
                     throwNotFound: false,
                     skipWhenFound: true,
                 }),
-                HyperviewPageHandler({ baseTemplateId: 'default.html' }),
+                HyperviewPageHandler({
+                    baseTemplateId: 'default.html',
+                    responseOptions: { cacheControl: 'public, no-cache' },
+                }),
             ],
         },
     ],

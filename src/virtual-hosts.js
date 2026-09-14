@@ -14,6 +14,11 @@ import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request
 // fingerprinted, so allow a modest max-age instead of revalidating every view.
 const ROOT_FILE_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800';
 
+// Public pages change with every content Release, which does not invalidate
+// the edge cache. no-cache lets caches store a page but revalidate it by ETag
+// with the Worker on every request, so a new Release is visible immediately.
+const PUBLIC_PAGE_RESPONSE_OPTIONS = { cacheControl: 'public, no-cache' };
+
 
 export default [
     {
@@ -127,7 +132,10 @@ export default [
                                 throwNotFound: false,
                                 skipWhenFound: true,
                             }),
-                            HyperviewPageHandler({ baseTemplateId: 'default.html' }),
+                            HyperviewPageHandler({
+                                baseTemplateId: 'default.html',
+                                responseOptions: PUBLIC_PAGE_RESPONSE_OPTIONS,
+                            }),
                         ],
                     },
                 ],
@@ -144,7 +152,10 @@ export default [
                                 throwNotFound: false,
                                 skipWhenFound: true,
                             }),
-                            HyperviewPageHandler({ baseTemplateId: 'default.html' }),
+                            HyperviewPageHandler({
+                                baseTemplateId: 'default.html',
+                                responseOptions: PUBLIC_PAGE_RESPONSE_OPTIONS,
+                            }),
                         ],
                     },
                 ],
