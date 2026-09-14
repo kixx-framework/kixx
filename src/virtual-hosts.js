@@ -141,6 +141,25 @@ export default [
                 ],
             },
             {
+                pattern: '/',
+                name: 'home-page',
+                targets: [
+                    {
+                        name: 'render-home-page',
+                        methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            HyperviewPageHandler({
+                                baseTemplateId: 'default.html',
+                                // The home page takes the most traffic. A short max-age lets caches answer
+                                // most requests without invoking the Worker, at the cost of up to a minute of
+                                // staleness after a Release.
+                                responseOptions: { cacheControl: 'public, max-age=60' },
+                            }),
+                        ],
+                    },
+                ],
+            },
+            {
                 pattern: '*',
                 name: 'hyperview-static-catch-all',
                 targets: [

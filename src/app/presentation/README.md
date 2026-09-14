@@ -194,11 +194,18 @@ Caching is opt-in per route. Shared caches such as the Cloudflare Workers Cache 
 | Produced by the error cascade | `no-store`; any `ETag` is removed |
 | `context.user` is set | `private, no-store` |
 
-Enforcement replaces only the storage and freshness directives, so a declared `no-transform` survives. A response a shared cache may still store also gets `Vary: host`, because the Workers Cache key omits the hostname and virtual hosts can serve different content at one path.
+Enforcement replaces only the storage and freshness directives, so a declared `no-transform` survives. A response a shared cache may still store also gets `Vary: host`, because a shared cache key (like the Workers Cache) may omit the hostname while an origin server may intend different content for different hosts.
 
 To make a response cacheable, declare the policy on the normal (non-error) path: `cacheControl` for `StaticAssetRequestHandler`, `responseOptions.cacheControl` for `HyperviewPageHandler`, or a `cache-control` header from a custom handler. Never do this for a response built from request-specific state such as a session, cookie, or CSRF token.
 
-A content Release publish does not invalidate the edge cache. Pages built from Release content should use `public, no-cache`, which stores the page but revalidates it with the Worker on every request, rather than a `max-age`.
+Publishing a content Release does not purge shared caches, so a public page's policy sets how long visitors may see the previous Release:
+
+| Policy | After a Release | Origin requests |
+|---|---|---|
+| `public, no-cache` | Visible on the next request | Every request; an unchanged page gets a `304` |
+| `public, max-age=<seconds>` | Visible once the cached copy expires | Only after the cached copy expires |
+
+`public, no-cache` is the default choice. A short `max-age`, such as a minute, suits high-traffic pages where a brief delay after publishing is worth fewer origin requests. Browsers keep the copy for the same window, and a shared cache serves it without running the application, so keep `max-age` short for pages that change with a Release.
 
 ### Skipping Middleware and Request Handlers
 
@@ -789,7 +796,7 @@ Templates should render the hidden field directly inside the protected `<form>`:
 
 For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
 
-1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html', responseOptions: { cacheControl: 'public, no-cache' } })`. See [Routing](#routing) and [Response Cache Policy](#response-cache-policy).
+1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html', responseOptions: { cacheControl: 'public, no-cache' } })`, or use a short `max-age` for a high-traffic page. See [Routing](#routing) and [Response Cache Policy](#response-cache-policy).
 2. Add or update `src/pages/<pathname>/page.json` for metadata and page context, setting its `template` directive to `page.html`.
 3. Add or update `page.html` beside `page.json` for route-specific markup.
 4. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
