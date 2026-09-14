@@ -81,6 +81,8 @@ export default {
                 status: 500,
                 headers: {
                     'content-type': 'application/vnd.api+json',
+                    // This response bypasses the router, which otherwise enforces the cache policy.
+                    'cache-control': 'no-store',
                 },
             });
         }

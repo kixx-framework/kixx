@@ -137,6 +137,8 @@ async function handleRequest(nodeRequest, nodeResponse) {
 
         nodeResponse.statusCode = 500;
         nodeResponse.setHeader('content-type', 'text/plain; charset=utf-8');
+        // This response bypasses the router, which otherwise enforces the cache policy.
+        nodeResponse.setHeader('cache-control', 'no-store');
 
         if (isHeadRequest) {
             nodeResponse.end();

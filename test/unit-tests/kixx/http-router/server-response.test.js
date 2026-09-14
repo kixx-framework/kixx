@@ -119,6 +119,33 @@ describe('ServerResponse', ({ describe }) => {
         });
     });
 
+    describe('addVary', ({ it }) => {
+        it('adds header names to an empty Vary header', () => {
+            const response = new ServerResponse();
+
+            const returned = response.addVary('kixx-partial', 'kixx-boosted');
+
+            assertEqual(response, returned);
+            assertEqual('kixx-partial, kixx-boosted', response.headers.get('vary'));
+        });
+
+        it('skips names already listed, ignoring case', () => {
+            const response = new ServerResponse();
+            response.setHeader('vary', 'Accept-Encoding, Host');
+
+            response.addVary('host', 'accept-encoding', 'kixx-partial', 'KIXX-PARTIAL');
+
+            assertEqual('Accept-Encoding, Host, kixx-partial', response.headers.get('vary'));
+        });
+
+        it('throws an AssertionError for an empty header name', () => {
+            const caught = catchError(() => new ServerResponse().addVary(''));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+    });
+
     describe('setCookie', ({ it }) => {
         it('applies Secure, HttpOnly, and SameSite=Lax by default', () => {
             const response = new ServerResponse();
