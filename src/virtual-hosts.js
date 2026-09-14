@@ -10,6 +10,15 @@ import publishingApiRoutes from './routes/publishing-api-v1.js';
 import fileRoutes from './routes/files.js';
 import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
 
+// Root files like /favicon.ico are requested by fixed name and cannot be
+// fingerprinted, so allow a modest max-age instead of revalidating every view.
+const ROOT_FILE_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800';
+
+// Public pages change with every content Release, which does not invalidate
+// the edge cache. no-cache lets caches store a page but revalidate it by ETag
+// with the Worker on every request, so a new Release is visible immediately.
+const PUBLIC_PAGE_RESPONSE_OPTIONS = { cacheControl: 'public, no-cache' };
+
 
 export default [
     {
@@ -109,6 +118,48 @@ export default [
                 ],
             },
             {
+                // Also matches root page context URLs like /index.json, so a
+                // missing asset falls through to the page handler.
+                pattern: '/:filename.:extension',
+                name: 'root-files',
+                targets: [
+                    {
+                        name: 'serve-root-file',
+                        methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            StaticAssetRequestHandler({
+                                cacheControl: ROOT_FILE_CACHE_CONTROL,
+                                throwNotFound: false,
+                                skipWhenFound: true,
+                            }),
+                            HyperviewPageHandler({
+                                baseTemplateId: 'default.html',
+                                responseOptions: PUBLIC_PAGE_RESPONSE_OPTIONS,
+                            }),
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/',
+                name: 'home-page',
+                targets: [
+                    {
+                        name: 'render-home-page',
+                        methods: [ 'GET', 'HEAD' ],
+                        requestHandlers: [
+                            HyperviewPageHandler({
+                                baseTemplateId: 'default.html',
+                                // The home page takes the most traffic. A short max-age lets caches answer
+                                // most requests without invoking the Worker, at the cost of up to a minute of
+                                // staleness after a Release.
+                                responseOptions: { cacheControl: 'public, max-age=60' },
+                            }),
+                        ],
+                    },
+                ],
+            },
+            {
                 pattern: '*',
                 name: 'hyperview-static-catch-all',
                 targets: [
@@ -120,7 +171,10 @@ export default [
                                 throwNotFound: false,
                                 skipWhenFound: true,
                             }),
-                            HyperviewPageHandler({ baseTemplateId: 'default.html' }),
+                            HyperviewPageHandler({
+                                baseTemplateId: 'default.html',
+                                responseOptions: PUBLIC_PAGE_RESPONSE_OPTIONS,
+                            }),
                         ],
                     },
                 ],

@@ -146,6 +146,33 @@ export default class ServerResponse {
     }
 
     /**
+     * Adds request header names to the Vary header, skipping names already listed.
+     * Shared caches store a separate variant for each distinct combination of the
+     * listed request header values.
+     * @public
+     * @param {...string} headerNames - Request header names the response depends on.
+     * @returns {ServerResponse} This response instance for method chaining.
+     * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary
+     */
+    addVary(...headerNames) {
+        const listed = parseHeaderList(this.headers.get('vary'));
+        const listedLowerCase = listed.map((name) => name.toLowerCase());
+
+        for (const name of headerNames) {
+            assertNonEmptyString(name, ': vary header name must be a string');
+
+            if (!listedLowerCase.includes(name.toLowerCase())) {
+                listed.push(name);
+                listedLowerCase.push(name.toLowerCase());
+            }
+        }
+
+        this.headers.set('vary', listed.join(', '));
+
+        return this;
+    }
+
+    /**
      * Sets a cookie on the response with secure defaults (Secure, HttpOnly, SameSite=Lax).
      * Cookie values are encoded with encodeURIComponent to safely handle special characters.
      * Pass explicit false to disable individual security attributes when needed.
@@ -479,6 +506,14 @@ function validateCookieOptions({ maxAge, domain, sameSite, path }) {
     if (sameSite !== undefined) {
         assertMatches(/^(Strict|Lax|None)$/, sameSite, ': cookie sameSite must be Strict, Lax, or None');
     }
+}
+
+function parseHeaderList(value) {
+    if (!isNonEmptyString(value)) {
+        return [];
+    }
+
+    return value.split(',').map((item) => item.trim()).filter(Boolean);
 }
 
 function normalizeContentType(contentType) {

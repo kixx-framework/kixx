@@ -184,6 +184,29 @@ When middleware or a request handler throws, the router emits an `error` event; 
 
 When the error handling chain is triggered, the outbound phase is skipped for that request.
 
+### Response Cache Policy
+
+Caching is opt-in per route. Shared caches such as the Cloudflare Workers Cache store responses which carry no `Cache-Control` using heuristic freshness, and serve them without running the Worker or its authentication middleware. So on the way out, `HttpRouter` enforces:
+
+| Response | `Cache-Control` |
+|---|---|
+| No `Cache-Control` declared | `no-store` |
+| Produced by the error cascade | `no-store`; any `ETag` is removed |
+| `context.user` is set | `private, no-store` |
+
+Enforcement replaces only the storage and freshness directives, so a declared `no-transform` survives. A response a shared cache may still store also gets `Vary: host`, because a shared cache key (like the Workers Cache) may omit the hostname while an origin server may intend different content for different hosts.
+
+To make a response cacheable, declare the policy on the normal (non-error) path: `cacheControl` for `StaticAssetRequestHandler`, `responseOptions.cacheControl` for `HyperviewPageHandler`, or a `cache-control` header from a custom handler. Never do this for a response built from request-specific state such as a session, cookie, or CSRF token.
+
+Publishing a content Release does not purge shared caches, so a public page's policy sets how long visitors may see the previous Release:
+
+| Policy | After a Release | Origin requests |
+|---|---|---|
+| `public, no-cache` | Visible on the next request | Every request; an unchanged page gets a `304` |
+| `public, max-age=<seconds>` | Visible once the cached copy expires | Only after the cached copy expires |
+
+`public, no-cache` is the default choice. A short `max-age`, such as a minute, suits high-traffic pages where a brief delay after publishing is worth fewer origin requests. Browsers keep the copy for the same window, and a shared cache serves it without running the application, so keep `max-age` short for pages that change with a Release.
+
 ### Skipping Middleware and Request Handlers
 
 **The `skip()` callback** ends the **request phase** early: when called, no further inbound middleware or request handlers run. The **outbound phase still runs to completion**, so response post-processing such as formatting, shared headers, and logging is never bypassed by `skip()`. Use `skip()` when a request handler has committed a terminal response (a redirect or JSON document) and you want to stop a later request handler — such as a Hyperview render handler — from running. Do not reach for `skip()` merely because you committed a response; if no later request handler needs to be bypassed, just return the response. Outbound middleware is not passed `skip()` and cannot short-circuit the chain.
@@ -391,7 +414,18 @@ response.updateProps({ results });
 | `propsHashFunction` | Custom response-props hash, used only with page caching and props-sensitive keys |
 | `pageCacheReadTtlSeconds`, `pageCacheExpirationSeconds` | Page-cache read TTL and write expiration; default to the configured values |
 | `allowJsonResponse` | Serve assembled page context for `.json` requests; defaults to the configured value |
-| `responseOptions` | `{ contentType, headers }` used only by the facade when it commits hypertext |
+| `responseOptions` | `{ contentType, headers, cacheControl }` used only by the facade when it commits the response |
+
+Every render adds `Vary: kixx-partial, kixx-boosted`, so caches keep each render mode separately.
+
+`responseOptions.cacheControl` opts a public page into shared caching. A `200` response to `GET` or `HEAD` then carries that `Cache-Control` and a strong `ETag` hashed from the body, and a matching `If-None-Match` gets a `304` with no body. Without it the router's `no-store` default applies. See [Response Cache Policy](#response-cache-policy).
+
+```js
+HyperviewPageHandler({
+    baseTemplateId: 'default.html',
+    responseOptions: { cacheControl: 'public, no-cache' },
+})
+```
 
 Leave `includePropsInCacheKey` alone unless you are certain the page renders identically for every viewer. It defaults to `true` with page caching on precisely so a page rendered for one signed-in user is never served to the next.
 
@@ -530,7 +564,7 @@ response.clearCookie('session', { path: '/' });
 
 `setCookie` defaults to `Secure; HttpOnly; SameSite=Lax`. Pass `secure: false` for local development. Pass `httpOnly: false` for client-readable cookies.
 
-**Chaining** — all `respond*`, `setHeader`, `appendHeader`, `setCookie`, `clearCookie`, `updateProps`, and `setRenderingOptions` methods return `this`, so they can be chained or returned directly:
+**Chaining** — all `respond*`, `setHeader`, `appendHeader`, `addVary`, `setCookie`, `clearCookie`, `updateProps`, and `setRenderingOptions` methods return `this`, so they can be chained or returned directly:
 
 ```js
 return response.updateProps({ page: { title: ticket.title }, ticket });
@@ -762,7 +796,7 @@ Templates should render the hidden field directly inside the protected `<form>`:
 
 For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
 
-1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html' })`. See [Routing](#routing).
+1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html', responseOptions: { cacheControl: 'public, no-cache' } })`, or use a short `max-age` for a high-traffic page. See [Routing](#routing) and [Response Cache Policy](#response-cache-policy).
 2. Add or update `src/pages/<pathname>/page.json` for metadata and page context, setting its `template` directive to `page.html`.
 3. Add or update `page.html` beside `page.json` for route-specific markup.
 4. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
@@ -806,7 +840,7 @@ For an application API endpoint that accepts or returns JSON:API documents:
 
 ### Serving Static Assets
 
-`StaticAssetRequestHandler` serves content-addressable blobs from the registered `ContentAddressableStore`. Wire it twice: a fingerprinted `/assets/:hash/*pathname` route before the catch-all, then pathname mode ahead of `HyperviewPageHandler` for fixed URLs such as `/favicon.ico`.
+`StaticAssetRequestHandler` serves content-addressable blobs from the registered `ContentAddressableStore`. Wire it twice: a fingerprinted `/assets/:hash/*pathname` route before the catch-all, then pathname mode ahead of `HyperviewPageHandler` for fixed URLs such as `/favicon.ico` (see root files below).
 
 ```js
 import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
@@ -827,6 +861,34 @@ import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request
 ```
 
 Fingerprint URLs carry an immutable content hash, use an immutable cache policy, and can return `304` for a matching `If-None-Match` without reading storage. Pathname URLs resolve through the current snapshot and revalidate by default.
+
+Root files like `/favicon.ico` and `/robots.txt` are requested by fixed name, so they cannot be fingerprinted. A `/:filename.:extension` route before the catch-all serves them with a modest `cacheControl` instead of revalidating on every page view. The pattern also matches root page context URLs such as `/index.json`, so a missing asset must fall through to `HyperviewPageHandler`:
+
+```js
+{
+    pattern: '/:filename.:extension',
+    name: 'root-files',
+    targets: [
+        {
+            name: 'serve-root-file',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [
+                StaticAssetRequestHandler({
+                    cacheControl: 'public, max-age=86400, stale-while-revalidate=604800',
+                    throwNotFound: false,
+                    skipWhenFound: true,
+                }),
+                HyperviewPageHandler({
+                    baseTemplateId: 'default.html',
+                    responseOptions: { cacheControl: 'public, no-cache' },
+                }),
+            ],
+        },
+    ],
+}
+```
+
+Do not mark root files `immutable`: their URLs never change, so a published update is only seen after `max-age` expires.
 
 For lookup and caching details, see `kixx/static-assets/README.md`.
 

@@ -10,8 +10,9 @@ import ServerResponse from '../../../../src/kixx/http-router/server-response.js'
 import { MethodNotAllowedError, NotFoundError } from '../../../../src/kixx/errors/mod.js';
 
 
-function makeContext() {
+function makeContext(user) {
     return {
+        user: user ?? null,
         routes: null,
         useRoutes(routes) {
             this.routes = routes;
@@ -263,6 +264,91 @@ describe('HttpRouter', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertMatches('unexpected failure', caught.message);
+        });
+    });
+
+    describe('handleRequest cache policy', ({ it }) => {
+        function makeHandlerRouter(handler) {
+            return makeRouter([
+                { pattern: '/x', targets: [ makeTargetSpec({ requestHandlers: [ handler ] }) ] },
+            ]);
+        }
+
+        it('sets no-store when the handler declares no Cache-Control', async () => {
+            const router = makeHandlerRouter((_ctx, _req, res) => res.respondWithJSON(200, {}));
+
+            const response = await router.handleRequest(makeContext(), makeRequest({ pathname: '/x' }), new ServerResponse());
+
+            assertEqual('no-store', response.headers.get('cache-control'));
+            assertEqual(null, response.headers.get('vary'));
+        });
+
+        it('keeps a declared shared cache policy and varies on host', async () => {
+            const router = makeHandlerRouter((_ctx, _req, res) => {
+                return res.respondWithJSON(200, {}, { headers: { 'cache-control': 'public, max-age=60', vary: 'accept' } });
+            });
+
+            const response = await router.handleRequest(makeContext(), makeRequest({ pathname: '/x' }), new ServerResponse());
+
+            assertEqual('public, max-age=60', response.headers.get('cache-control'));
+            assertEqual('accept, host', response.headers.get('vary'));
+        });
+
+        it('does not vary a private response on host', async () => {
+            const router = makeHandlerRouter((_ctx, _req, res) => {
+                return res.respondWithJSON(200, {}, { headers: { 'cache-control': 'private="set-cookie", max-age=60' } });
+            });
+
+            const response = await router.handleRequest(makeContext(), makeRequest({ pathname: '/x' }), new ServerResponse());
+
+            assertEqual(null, response.headers.get('vary'));
+        });
+
+        it('replaces a cache policy and removes the ETag declared before an error', async () => {
+            const router = makeHandlerRouter((_ctx, _req, res) => {
+                res.setHeader('cache-control', 'public, max-age=31536000, immutable, no-transform');
+                res.setHeader('etag', '"abc"');
+                throw new NotFoundError('missing');
+            });
+
+            const response = await router.handleRequest(makeContext(), makeRequest({ pathname: '/x' }), new ServerResponse());
+
+            assertEqual(404, response.status);
+            assertEqual('no-store, no-transform', response.headers.get('cache-control'));
+            assertEqual(null, response.headers.get('etag'));
+            assertEqual(null, response.headers.get('vary'));
+        });
+
+        it('sets no-store on an error response with no declared policy', async () => {
+            const router = makeRouter([
+                { pattern: '/x', targets: [ makeTargetSpec() ] },
+            ]);
+
+            const response = await router.handleRequest(makeContext(), makeRequest({ pathname: '/missing' }), new ServerResponse());
+
+            assertEqual('no-store', response.headers.get('cache-control'));
+        });
+
+        it('makes a response for an authenticated user private and keeps other directives', async () => {
+            const router = makeHandlerRouter((_ctx, _req, res) => {
+                return res.respondWithJSON(200, {}, { headers: { 'cache-control': 'public, no-cache, no-transform', etag: '"abc"' } });
+            });
+
+            const response = await router.handleRequest(makeContext({ id: 'user-1' }), makeRequest({ pathname: '/x' }), new ServerResponse());
+
+            assertEqual('private, no-store, no-transform', response.headers.get('cache-control'));
+            assertEqual('"abc"', response.headers.get('etag'));
+            assertEqual(null, response.headers.get('vary'));
+        });
+
+        it('makes an error response for an authenticated user private', async () => {
+            const router = makeHandlerRouter(() => {
+                throw new NotFoundError('missing');
+            });
+
+            const response = await router.handleRequest(makeContext({ id: 'user-1' }), makeRequest({ pathname: '/x' }), new ServerResponse());
+
+            assertEqual('private, no-store', response.headers.get('cache-control'));
         });
     });
 
