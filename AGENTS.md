@@ -182,6 +182,8 @@ NEVER install dependencies without explicitly being asked to install them by the
 
 If you think you need a dependency that is not already vendored, stop working on that task and ask the user to install it.
 
+The deployment tooling packages every module reachable from `src/cloudflare-server.js` or `src/node-server.js` without transpiling, and rejects bare package imports, imports outside `src/`, extensions other than `.js`/`.mjs`, CommonJS, path-casing mistakes, and `import()` with a non-literal specifier. Code that breaks these rules may run in the local development environment but will fail to deploy.
+
 ## Planning Work
 
 When the user makes a request for a new feature or significant refactoring:

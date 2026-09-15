@@ -69,11 +69,15 @@ Instances are disposable: destroy and re-create one rather than trying to carry 
 
 See [`docs/configuration.md`](docs/configuration.md) for the full picture.
 
-### Production Deployment
+### Deployment
 
-Production deployment is performed by the separate Kixx deployment CLI. Run it from `src/`, which is this application's deployment project root.
+Deployment is performed by the separate Kixx deployment CLI. Run it from `src/`, which is this application's deployment project root. Deploymnet settings live in `src/.kixx/`, layered over `~/.kixx/`:
 
-The CLI's `.kixx/cloudflare-state.<environment>.json` records local Worker artifact identity and must remain available when the same environment is built from multiple machines. Publishing API Releases and build pointers are authoritative for application content.
+- `config.json` — `app.environments.<environment>.origin`. Ignored by git; copy `example.config.json`.
+- `secrets.json` — the Publishing API token and Cloudflare `accountId`/`apiToken`. Ignored by git; copy `example.secrets.json`.
+- `cloudflare-state.<environment>.json` — the last uploaded Worker version and its secret names. Committed. Every Worker build and secret change verifies it against Cloudflare's latest version, so it must be current wherever the CLI runs. Do not edit it by hand.
+
+Publishing API Releases and build pointers are authoritative for application content. See [`docs/configuration.md`](docs/configuration.md) for the build inputs and secret workflow.
 
 ### Linting
 

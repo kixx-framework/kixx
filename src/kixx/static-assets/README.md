@@ -58,6 +58,14 @@ dependency request.
 
 These pathname-mode dependencies resolve from the current snapshot and
 revalidate independently. Editing an asset changes its developer content
-hash on the next scan without an asset build or devserver restart. This
-only enables development use of the content-addressable store: production
-build and publishing tooling is not available yet.
+hash on the next scan without an asset build or devserver restart.
+
+## Production publishing
+
+Every CSS file under `static-assets/` is published as an entrypoint. Local,
+unconditioned `@import` rules are recursively inlined, so changing an imported
+stylesheet changes the entrypoint hash without adding a production request.
+Imported files are also published at their own logical pathnames. Conditioned
+and external imports remain browser imports. Browser JavaScript modules are
+not bundled; their root-relative imports remain separate requests resolved
+through the Release snapshot.

@@ -16,7 +16,7 @@ src/
 ├── templates/
 │   ├── base/                     # Full HTML documents: default.html, admin.html, admin-login.html
 │   └── partials/                 # Shared markup fragments
-├── static-assets/                # Fingerprinted, comment-stripped browser assets
+├── static-assets/                # Fingerprinted browser assets
 │   ├── stylesheets/
 │   └── javascript/
 └── public/                       # Served verbatim from the site root (favicons, webmanifest)
@@ -24,11 +24,11 @@ src/
 
 The three directories differ in how the publishing tool (outside the scope of this project) treats them:
 
-| Directory | Browser URL | Fingerprinted | Comments stripped |
+| Directory | Browser URL | Fingerprinted | Production processing |
 | --- | --- | --- | --- |
-| `static-assets/` | `/stylesheets/**`, `/javascript/**` | Yes, via the `assetUrl` template helper | Yes (`.css` and `.js`) |
-| `public/` | `/**` (site root) | No | No |
-| `pages/**/page.css` | None — inlined into the HTML | N/A | **No** |
+| `static-assets/` | `/stylesheets/**`, `/javascript/**` | Yes, via the `assetUrl` template helper | Local CSS imports are bundled; browser JavaScript modules remain separate |
+| `public/` | `/**` (site root) | No | Published verbatim |
+| `pages/**/page.css` | None — inlined into the HTML | N/A | Included verbatim in page content |
 
 See `static-assets/README.md` for more information about how fingerprinting and the content-addressable store work.
 
@@ -39,7 +39,7 @@ Templates link entrypoints through `assetUrl`, which rewrites the logical pathna
 <script type="module" src="{{ assetUrl assets "/javascript/site.js" }}"></script>
 ```
 
-There is no CSS or browser-JavaScript bundling in development. There is a bundler outside the scope of this project so you do not need to worry about the cost of splitting a stylesheet or module.
+There is no CSS or browser-JavaScript bundling in development. Production publishing recursively inlines local, unconditioned CSS imports, so splitting a stylesheet does not add a production request. Browser JavaScript is not bundled in either environment; each imported module remains a request.
 
 See `static-assets/README.md` for more information about how assets are served in development and how `assetUrl` works with the content-addressable store.
 
@@ -100,7 +100,9 @@ src/static-assets/stylesheets/
 
 Templates link public logical URLs such as `/stylesheets/stylesheet.css`; source `@import`s use root-relative logical URLs such as `/stylesheets/lib/layout.css`.
 
-Before adding a new file to `lib/`, prefer extending one of the existing files. The project favors a handful of well-documented stylesheets over many small files, so related rules stay close to the examples and comments that explain them — and because each new file is another runtime request.
+Publishing fails on a local `@import` that does not name an existing lowercase `.css` pathname inside `static-assets/`, has a query string or fragment, or forms a cycle. An `@import` with a media, `supports()`, or `layer` condition, or an external URL, is not inlined: it remains a production request and must precede all bundled content, including rules inlined by an earlier import.
+
+Before adding a new file to `lib/`, prefer extending one of the existing files. The project favors a handful of well-documented stylesheets over many small files, so related rules stay close to the examples and comments that explain them. A new import is another request during development; local, unconditioned imports are inlined into their production entrypoint.
 
 Do not add admin-only rules to a shared file. If a rule exists only to serve the admin panel, it belongs in one of the admin-specific library files.
 

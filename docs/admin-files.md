@@ -83,7 +83,8 @@ through `/files/<uuid>`, which checks publication on every request.
   (`src/cloudflare-config.js` names `kixx-test-app-production-files`). Keep it
   private: no `r2.dev` URL and no custom domain. A public bucket URL would
   serve unpublished and deleted-but-orphaned bytes.
-  The config names the bucket and binding; it does not provision them.
+  The deployment tooling creates the binding from config but neither creates
+  nor verifies the bucket.
 
 ## Storage and recovery
 

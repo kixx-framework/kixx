@@ -87,14 +87,13 @@ is even read.
 
 Per-deploy values are environment variables, split by secrecy:
 
-| File | Committed | Cloudflare binding | Holds |
+| File | Committed | Holds | Cloudflare deployment use |
 | --- | --- | --- | --- |
-| `src/.env.<environment>` | yes | plain text | `ENVIRONMENT`, `TRUST_PROXY`, `BUILD_ID`, `PORT`, `DATA_DIRECTORY` |
-| `src/.env.<environment>.secrets` | no | encrypted secret text | signing secrets and tokens |
+| `src/.env.<environment>` | yes | `ENVIRONMENT`, `TRUST_PROXY`, `BUILD_ID`, `PORT`, `DATA_DIRECTORY` | Required build input; every value becomes a plain-text binding |
+| `src/.env.<environment>.secrets` | no | signing secrets and tokens | Not read by builds; optional input to build tooling |
 
-The secrecy split follows the git boundary: a deployment can derive the
-binding type from the filename alone. There is no per-key annotation to keep
-in sync, and no way for a value to be classified two ways at once.
+The secrecy split follows the git boundary. There is no per-key annotation to
+keep in sync, and no way for a value to be classified two ways at once.
 
 `src/example.env` and `src/example.env.secrets` are the committed templates
 for each half — `example.env` documents every plain key inline, and
@@ -151,6 +150,9 @@ directions:
   the name from `example.env.secrets` (and delete the value from live
   deployments).
 
+On Cloudflare the manifest is also a deployment input; see
+[Worker secrets](#worker-secrets) below.
+
 ### `DATA_DIRECTORY` and config-relative paths
 
 `DATA_DIRECTORY` is an optional, Node.js-only per-deploy value. When set, it
@@ -168,16 +170,87 @@ deployment.
 
 ## Cloudflare specifics
 
-The Cloudflare Worker has no local dotenv files. `ENVIRONMENT`, `TRUST_PROXY`,
-and `BUILD_ID` are plain-text Worker bindings; secret values are written and
-rotated with Cloudflare's deployment tooling rather than a `.secrets` file.
-The secrets manifest still applies — `example.env.secrets` is the same
-authoritative list of required secret names, checked against whatever the
-deployment tooling reports as live on the target Worker.
+The Cloudflare Worker does not read dotenv files. The separate Kixx deployment
+CLI, run from `src/`, builds Worker versions from these inputs:
 
-Naming a D1 database, KV namespace, or R2 bucket in `cloudflare-config.js`
-does not provision it. The resource must exist and be bound to the Worker
-under the configured binding name before a deploy that reads it.
+```text
+cloudflare-config.js
+cloudflare-server.js
+.env.<environment>
+example.env.secrets
+.kixx/cloudflare-state.<environment>.json
+```
+
+### Plain bindings
+
+Every value in `.env.<environment>` becomes a plain-text binding. The CLI owns
+two names:
+
+- `ENVIRONMENT` comes from `--environment`; a value in the plain file is
+  ignored.
+- `BUILD_ID` is generated for each uploaded Worker version. Declaring it in
+  the plain file, or as a secret name, is an error.
+
+The CLI's dotenv parser supports `NAME=value`, blank lines, whole-line
+comments, and matching quotes. It does not expand variables, strip inline
+comments, or support multiline values.
+
+### Worker secrets
+
+Secret values are remote Worker-version state, not build input. Normal
+`create-worker-version` and `release` builds never open
+`.env.<environment>.secrets`. Every active assignment in `example.env.secrets`
+becomes an `inherit` binding pointing at the exact `versionId` recorded in
+`.kixx/cloudflare-state.<environment>.json`; a missing source value fails the
+upload. `example.env.secrets` is shared by every Cloudflare environment.
+
+The CLI's documented declaration rule is "active assignment", with no mention
+of `# @optional`. Treat an `@optional` name as required on Cloudflare: to
+omit it from a Worker, comment its assignment out.
+
+Change remote values with `kixx.js cloudflare set-secret`, `set-secrets`
+(defaults to reading `.env.<environment>.secrets`), or `delete-secret`. Each
+creates an undeployed version and updates the state file; promote it with
+`deploy-version` or build a later version on top of it.
+
+- **Adding a secret:** add the assignment to `example.env.secrets`, commit,
+  `set-secret` it, then `release` the code that reads it.
+- **Removing a secret:** deploy code that no longer reads it, comment out or
+  remove its assignment in `example.env.secrets` and commit, then
+  `delete-secret`. The CLI refuses to delete a name still declared.
+
+Before building, the CLI verifies that the state file names the configured
+Worker, that its `versionId` is Cloudflare's latest version, and that every
+declared name appears in its `secretNames`. Keep the state file committed with
+the project; it cannot be reconstructed from Cloudflare. A fresh environment
+starts with every `example.env.secrets` assignment commented out so the first
+`create-worker-version` can create a secret-free base version.
+
+### Worker and resource configuration
+
+`cloudflare-config.js` also carries CLI-only blocks per environment:
+
+- `WORKER` — the Worker name plus Worker-level settings (observability,
+  logpush, subdomain), applied by `create-worker` only.
+- `WORKER_VERSION` — exactly `compatibility_date`, `compatibility_flags`,
+  `limits`, `placement`, and `cache_options`. Any other key is rejected.
+- `DURABLE_OBJECT_MIGRATIONS` — optional rename, delete, and transfer
+  declarations for Durable Object classes.
+
+Resource blocks become bindings: `DOCUMENT_STORE` (D1), `KEY_VALUE_STORE` (KV),
+`CONTENT_STORE` (KV and a Durable Object namespace), and one R2 binding per
+`OBJECT_STORE.buckets` entry. The CLI verifies configured D1 and KV IDs. When
+an ID is absent, it resolves the resource by name, adopting or creating it,
+prints the ID, and stops so the ID can be added to `cloudflare-config.js`. R2
+buckets are neither verified nor created and must exist before deployment.
+
+### Worker packaging
+
+`cloudflare-server.js` is the entry module. The CLI uploads every statically
+reachable module as a separate ES module with comments removed; there is no
+transpiling, tree shaking, or minification. The build rejects bare package
+imports, modules outside `src/`, extensions other than `.js` and `.mjs`,
+CommonJS, path-casing mistakes, and `import()` with a non-literal specifier.
 
 ## Adding a new setting
 
@@ -188,7 +261,9 @@ under the configured binding name before a deploy that reads it.
    Read it from `config.env` in application code.
 3. Per-deploy, non-secret: add the key to `example.env` with an explanatory
    comment, and to each `.env.<environment>` file that needs a non-default
-   value.
+   value. Do not author `ENVIRONMENT` or `BUILD_ID` for Cloudflare; the
+   deployment CLI owns them.
 4. Per-deploy, secret: add the key to `example.env.secrets` (mark it
-   `# @optional` if a deployment may legitimately omit it), then deploy the
-   code that reads it before removing any old fallback.
+   `# @optional` if a Node.js deployment may legitimately omit it). On
+   Cloudflare, `set-secret` the value before building. Then deploy the code
+   that reads it before removing any old fallback.
