@@ -71,13 +71,9 @@ See [`docs/configuration.md`](docs/configuration.md) for the full picture.
 
 ### Production Deployment
 
-Production deployment is performed by the separate Kixx deployment CLI. Run it
-from `src/`, which is this application's deployment project root.
+Production deployment is performed by the separate Kixx deployment CLI. Run it from `src/`, which is this application's deployment project root.
 
-The CLI's `.kixx/cloudflare-state.<environment>.json` records local Worker
-artifact identity and must remain available when the same environment is
-built from multiple machines. Publishing API Releases and build pointers are
-authoritative for application content.
+The CLI's `.kixx/cloudflare-state.<environment>.json` records local Worker artifact identity and must remain available when the same environment is built from multiple machines. Publishing API Releases and build pointers are authoritative for application content.
 
 ### Linting
 
