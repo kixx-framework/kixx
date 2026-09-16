@@ -149,8 +149,6 @@ A Node adapter *could* return that boolean. It must not, because the moment appl
 
 **Keep the signature uniform even when an adapter ignores an argument.** Node adapters accept `context` "for interface compatibility" though they resolved their path at registration. A uniform signature is what lets callers stay runtime-agnostic.
 
-**State construction invariants.** Store adapters require a `logger` at construction and must throw without one. Adapters call `logger.createChild('KeyValueStore')` so diagnostics identify their source. The Cloudflare KV adapter is the exception: it takes no constructor arguments and traces through the request's `context.logger`.
-
 ## Adding a New Port
 
 1. Write the contract as `src/kixx/<component>/<name>-interface.js`, beside the framework code that consumes it. Document the logical model, invariants, the context pass-through rule, construction requirements, and — critically — *why* each capability is or is not in the contract. Include `@see` links to the adapters once they exist.
