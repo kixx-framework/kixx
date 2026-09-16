@@ -4,6 +4,7 @@ import {
     assert,
     assertNonEmptyString,
 } from '../../../kixx/assertions/mod.js';
+import TraceLogger from '../../../kixx/logger/trace-logger.js';
 
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
@@ -45,19 +46,6 @@ const DEFAULT_BINDING_NAME = 'KEY_VALUE_STORE';
  */
 export default class KeyValueStore {
 
-    #logger = null;
-
-    /**
-     * @param {Object} options - Store configuration
-     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a KeyValueStore child logger
-     * @throws {Error} When logger is not provided
-     */
-    constructor(options) {
-        const { logger } = options ?? {};
-        assert(logger, 'KeyValueStore requires a logger');
-        this.#logger = logger.createChild('KeyValueStore');
-    }
-
     /**
      * Retrieves a value by key, decoded per `options.type`.
      *
@@ -71,10 +59,17 @@ export default class KeyValueStore {
         this.#assertValidKey(key);
         const type = this.#resolveType(options);
         const cacheTtl = this.#resolveCacheTtl(options);
-        this.#logger.debug('get() loading key', { key, type });
 
         const kvStore = this.#getKVStore(context);
-        const value = await kvStore.get(key, { type, ...cacheTtl });
+        let value;
+        const trace = new TraceLogger(context.logger, 'kv-store-get', { key, options });
+        try {
+            value = await kvStore.get(key, { type, ...cacheTtl });
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
 
         return isUndefined(value) ? null : value;
     }
@@ -95,10 +90,17 @@ export default class KeyValueStore {
         const type = this.#resolveType(options);
         const storedValue = this.#encodeValue(type, value);
         const putOptions = this.#resolveExpiration(options);
-        this.#logger.debug('put() writing key', { key, type });
 
         const kvStore = this.#getKVStore(context);
-        await kvStore.put(key, storedValue, putOptions);
+        const trace = new TraceLogger(context.logger, 'kv-store-put', { key, options });
+        try {
+            const res = await kvStore.put(key, storedValue, putOptions);
+            trace.ok();
+            return res;
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
     }
 
     /**
@@ -112,10 +114,17 @@ export default class KeyValueStore {
      */
     async delete(context, key) {
         this.#assertValidKey(key);
-        this.#logger.debug('delete() removing key', { key });
 
         const kvStore = this.#getKVStore(context);
-        await kvStore.delete(key);
+        const trace = new TraceLogger(context.logger, 'kv-store-delete', { key });
+        try {
+            const res = await kvStore.delete(key);
+            trace.ok();
+            return res;
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
     }
 
     #getKVStore(context) {

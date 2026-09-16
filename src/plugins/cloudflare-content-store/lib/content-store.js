@@ -10,6 +10,7 @@ import {
     isPlainObject,
 } from '../../../kixx/assertions/mod.js';
 import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
+import TraceLogger from '../../../kixx/logger/trace-logger.js';
 
 
 /**
@@ -211,18 +212,26 @@ export default class ContentStore {
         }
 
         this.#logger.info('index isolate cache miss', { buildId });
+        const trace = new TraceLogger(context.logger, 'content-store-get-build', { buildId });
 
-        const promise = this.#fetchBuild(context, buildId);
-        const entry = { promise, cachedAt: Date.now() };
+        let promise;
+        let entry;
+        try {
+            promise = this.#fetchBuild(context, buildId);
+            entry = { promise, cachedAt: Date.now() };
 
-        // Delete first because Map#set() does not change insertion order for an
-        // existing key. An expired build becomes the newest cache entry.
-        this.#buildCache.delete(buildId);
-        this.#buildCache.set(buildId, entry);
+            // Delete first because Map#set() does not change insertion order for an
+            // existing key. An expired build becomes the newest cache entry.
+            this.#buildCache.delete(buildId);
+            this.#buildCache.set(buildId, entry);
 
-        if (this.#buildCache.size > BUILD_CACHE_MAX_SIZE) {
-            const leastRecentlyUsedBuildId = this.#buildCache.keys().next().value;
-            this.#buildCache.delete(leastRecentlyUsedBuildId);
+            if (this.#buildCache.size > BUILD_CACHE_MAX_SIZE) {
+                const leastRecentlyUsedBuildId = this.#buildCache.keys().next().value;
+                this.#buildCache.delete(leastRecentlyUsedBuildId);
+            }
+        } catch (err) {
+            trace.error();
+            throw err;
         }
 
         // Drop a failed fetch immediately so the next call retries instead of
@@ -234,7 +243,14 @@ export default class ContentStore {
             }
         });
 
-        return await promise;
+        try {
+            const res = await promise;
+            trace.ok();
+            return res;
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
     }
 
     /**
@@ -246,14 +262,25 @@ export default class ContentStore {
      */
     async getIndex(context, rootHash) {
         assertNonEmptyString(rootHash, 'CloudflareContentStore#getIndex: rootHash');
-        const result = await this.#callDurableObject(
-            context,
-            'getIndex',
-            (durableObject) => durableObject.getIndex(rootHash),
-        );
+
+        const trace = new TraceLogger(context.logger, 'content-store-get-index', { rootHash });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'getIndex',
+                (durableObject) => durableObject.getIndex(rootHash),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
         if (!result.success) {
             throw new OperationalError(`ContentStore#getIndex() was unsuccessful: ${ result.message }`);
         }
+
         return result.entries;
     }
 
@@ -265,14 +292,25 @@ export default class ContentStore {
      */
     async getBuildPointer(context, buildId) {
         assertNonEmptyString(buildId, 'ContentStore#getBuildPointer: buildId');
-        const result = await this.#callDurableObject(
-            context,
-            'getBuildPointer',
-            (durableObject) => durableObject.getBuildPointer(buildId),
-        );
+
+        const trace = new TraceLogger(context.logger, 'content-store-get-build-pointer', { buildId });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'getBuildPointer',
+                (durableObject) => durableObject.getBuildPointer(buildId),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
         if (!result.success) {
             throw new OperationalError(`ContentStore#getBuildPointer() was unsuccessful: ${ result.message }`);
         }
+
         return result.pointer;
     }
 
@@ -282,14 +320,25 @@ export default class ContentStore {
      * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string}>>} Registered build pointers
      */
     async listBuilds(context) {
-        const result = await this.#callDurableObject(
-            context,
-            'listBuilds',
-            (durableObject) => durableObject.listBuilds(),
-        );
+        const trace = new TraceLogger(context.logger, 'content-store-list-builds');
+
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'listBuilds',
+                (durableObject) => durableObject.listBuilds(),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
         if (!result.success) {
             throw new OperationalError(`ContentStore#listBuilds() was unsuccessful: ${ result.message }`);
         }
+
         return result.builds;
     }
 
@@ -304,17 +353,25 @@ export default class ContentStore {
      * @param {string} hash - Content hash identifying the blob
      * @returns {Promise<string|ArrayBuffer|ReadableStream|null>} Stored blob, or null when it does not exist
      */
-    async getFile(context, type, _pathname, hash) {
+    async getFile(context, type, pathname, hash) {
         assertValidType(type, 'getFile', GET_FILE_ACCEPTED_TYPES);
         assertNonEmptyString(hash, 'ContentStore#getFile: hash');
         const kv = this.#resolveKvStore(context);
 
         const key = this.#buildFileKey(hash);
 
-        return await kv.get(key, {
-            type,
-            cacheTtl: this.#blobReadCacheTtlSeconds,
-        });
+        const trace = new TraceLogger(context.logger, 'content-store-get-file', { pathname, hash });
+        try {
+            const res = await kv.get(key, {
+                type,
+                cacheTtl: this.#blobReadCacheTtlSeconds,
+            });
+            trace.ok();
+            return res;
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
     }
 
     /**
@@ -329,7 +386,7 @@ export default class ContentStore {
      * @returns {Promise<number>} Stored blob size in bytes
      * @throws {AssertionError} When `blob` is neither a string nor an ArrayBuffer
      */
-    async putFile(context, _pathname, hash, blob) {
+    async putFile(context, pathname, hash, blob) {
         assertNonEmptyString(hash, 'ContentStore#putFile: hash');
         assert(
             isString(blob) || blob instanceof ArrayBuffer,
@@ -340,14 +397,23 @@ export default class ContentStore {
         await kv.put(key, blob);
         const size = isString(blob) ? textEncoder.encode(blob).byteLength : blob.byteLength;
 
-        // KV is written first so a failed registry write can only produce a
-        // safe false-missing result. Repeating the idempotent upload repairs
-        // the registry. Reversing the order could validate an unreadable blob.
-        const result = await this.#callDurableObject(
-            context,
-            'registerFile',
-            (durableObject) => durableObject.registerFile(hash, size),
-        );
+        const trace = new TraceLogger(context.logger, 'content-store-put-file', { pathname, hash });
+        let result;
+        try {
+            // KV is written first so a failed registry write can only produce a
+            // safe false-missing result. Repeating the idempotent upload repairs
+            // the registry. Reversing the order could validate an unreadable blob.
+            result = await this.#callDurableObject(
+                context,
+                'registerFile',
+                (durableObject) => durableObject.registerFile(hash, size),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
         if (!result.success) {
             throw new OperationalError(`ContentStore#registerFile() was unsuccessful: ${ result.message }`);
         }
@@ -372,11 +438,20 @@ export default class ContentStore {
             `ContentStore#statFiles() accepts at most ${ KV_BULK_MAX_KEYS } hashes per call; received ${ hashes.length }`,
         );
 
-        const result = await this.#callDurableObject(
-            context,
-            'statFiles',
-            (durableObject) => durableObject.statFiles(hashes),
-        );
+        const trace = new TraceLogger(context.logger, 'content-store-stat-files');
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'statFiles',
+                (durableObject) => durableObject.statFiles(hashes),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
         if (!result.success) {
             throw new OperationalError(`ContentStore#statFiles() was unsuccessful: ${ result.message }`);
         }
@@ -410,10 +485,18 @@ export default class ContentStore {
 
         const keys = files.map(({ hash }) => this.#buildFileKey(hash));
 
-        const map = await kv.get(keys, {
-            type,
-            cacheTtl: this.#blobReadCacheTtlSeconds,
-        });
+        const trace = new TraceLogger(context.logger, 'content-store-get-files', { type });
+        let map;
+        try {
+            map = await kv.get(keys, {
+                type,
+                cacheTtl: this.#blobReadCacheTtlSeconds,
+            });
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
 
         return keys.map((key) => map.get(key) ?? null);
     }
@@ -431,11 +514,21 @@ export default class ContentStore {
         assert(isPlainObject(entries), 'put index requires entries to be a plain Object');
         assertValidTupleArity(entries);
         assertJsonSerializable(entries);
-        const result = await this.#callDurableObject(
-            context,
-            'saveIndex',
-            (durableObject) => durableObject.saveIndex(rootHash, entries),
-        );
+
+        const trace = new TraceLogger(context.logger, 'content-store-save-index', { rootHash });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'saveIndex',
+                (durableObject) => durableObject.saveIndex(rootHash, entries),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
         if (!result.success) {
             throw new OperationalError(`ContentStore#saveIndex() was unsuccessful: ${ result.message }`);
         }
@@ -461,11 +554,20 @@ export default class ContentStore {
             assertNonEmptyString(expectedRootHash, 'ContentStore#assignBuild: expectedRootHash must be a non-empty string');
         }
 
-        const result = await this.#callDurableObject(
-            context,
-            'assignBuild',
-            (durableObject) => durableObject.assignBuild(buildId, { rootHash, expectedRootHash }),
-        );
+        const trace = new TraceLogger(context.logger, 'content-assign-build', { buildId, rootHash, expectedRootHash });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'assignBuild',
+                (durableObject) => durableObject.assignBuild(buildId, { rootHash, expectedRootHash }),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
         if (!result.success) {
             throw new OperationalError(`ContentStore#assignBuild() was unsuccessful: ${ result.message }`);
         }

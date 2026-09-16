@@ -10,6 +10,7 @@ import {
     assert,
     assertNonEmptyString,
 } from '../../../kixx/assertions/mod.js';
+import TraceLogger from '../../../kixx/logger/trace-logger.js';
 
 /**
  * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
@@ -134,20 +135,27 @@ export default class KeyValueStore {
      * @returns {Promise<string|import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|null>} The decoded value, or null when absent or expired
      * @throws {AssertionError} When the key, `options.type`, or `options.cacheTtl` is invalid
      */
-    async get(_context, key, options) {
+    async get(context, key, options) {
         this.#assertValidKey(key);
         const type = this.#resolveType(options);
         this.#assertValidCacheTtl(options);
-        this.#logger.debug('get() loading key', { key, type });
 
         const db = this.#getDatabase();
         const nowSeconds = Math.floor(Date.now() / 1000);
 
-        // The expiry guard hides entries whose absolute expiry has passed; an
-        // entry with a null expires_at never expires.
-        const row = db
-            .prepare('SELECT value FROM kv WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)')
-            .get(key, nowSeconds);
+        let row;
+        const trace = new TraceLogger(context.logger, 'kv-store-get', { key, options });
+        try {
+            // The expiry guard hides entries whose absolute expiry has passed; an
+            // entry with a null expires_at never expires.
+            row = db
+                .prepare('SELECT value FROM kv WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)')
+                .get(key, nowSeconds);
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
 
         if (!row) {
             return null;
@@ -167,26 +175,32 @@ export default class KeyValueStore {
      * @returns {Promise<void>}
      * @throws {AssertionError} When the key, value, type, or expiry options are invalid
      */
-    async put(_context, key, value, options) {
+    async put(context, key, value, options) {
         this.#assertValidKey(key);
         const type = this.#resolveType(options);
         const blob = this.#encodeValue(type, value);
         const expiresAt = this.#resolveExpiresAt(options);
-        this.#logger.debug('put() writing key', { key, type });
 
         const db = this.#getDatabase();
 
-        db
-            .prepare(`
-                INSERT INTO kv (key, value, expires_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET
-                    value = excluded.value,
-                    expires_at = excluded.expires_at
-            `)
-            .run(key, blob, expiresAt);
+        const trace = new TraceLogger(context.logger, 'kv-store-put', { key, options });
+        try {
+            db
+                .prepare(`
+                    INSERT INTO kv (key, value, expires_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(key) DO UPDATE SET
+                        value = excluded.value,
+                        expires_at = excluded.expires_at
+                `)
+                .run(key, blob, expiresAt);
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
 
-        this.#maybeSweepExpired(db);
+        this.#maybeSweepExpired(context, db);
     }
 
     /**
@@ -198,12 +212,18 @@ export default class KeyValueStore {
      * @returns {Promise<void>}
      * @throws {AssertionError} When the key is invalid
      */
-    async delete(_context, key) {
+    async delete(context, key) {
         this.#assertValidKey(key);
-        this.#logger.debug('delete() removing key', { key });
 
         const db = this.#getDatabase();
-        db.prepare('DELETE FROM kv WHERE key = ?').run(key);
+        const trace = new TraceLogger(context.logger, 'kv-store-delete', { key });
+        try {
+            db.prepare('DELETE FROM kv WHERE key = ?').run(key);
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
     }
 
     /**
@@ -392,18 +412,26 @@ export default class KeyValueStore {
     /**
      * Reclaims expired rows on a sampled fraction of writes so the cost is
      * amortized rather than paid on every put or by a background timer.
-     * @param {import('node:sqlite').DatabaseSync} db - Open SQLite connection
      */
-    #maybeSweepExpired(db) {
+    #maybeSweepExpired(context, db) {
         if (Math.random() >= SWEEP_PROBABILITY) {
             return;
         }
         const nowSeconds = Math.floor(Date.now() / 1000);
-        const result = db
-            .prepare('DELETE FROM kv WHERE expires_at IS NOT NULL AND expires_at <= ?')
-            .run(nowSeconds);
+        const trace = new TraceLogger(context.logger, 'kv-store-sweep-keys');
+        let result;
+        try {
+            result = db
+                .prepare('DELETE FROM kv WHERE expires_at IS NOT NULL AND expires_at <= ?')
+                .run(nowSeconds);
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
         if (result.changes > 0) {
-            this.#logger.debug('swept expired keys', { count: result.changes });
+            this.#logger.info('swept expired keys', { count: result.changes });
         }
     }
 
@@ -440,18 +468,25 @@ export default class KeyValueStore {
      * @param {import('node:sqlite').DatabaseSync} db - Open SQLite connection
      */
     #prepareDatabase(db) {
-        // WAL lets readers proceed during a write and is the journaling mode that
-        // makes concurrent multi-process access on local disk practical.
-        db.exec('PRAGMA journal_mode = WAL');
-        db.exec(`PRAGMA busy_timeout = ${ BUSY_TIMEOUT_MS }`);
-        db.exec(`
-            CREATE TABLE IF NOT EXISTS kv (
-                key        TEXT PRIMARY KEY,
-                value      BLOB NOT NULL,
-                expires_at INTEGER
-            )
-        `);
-        this.#logger.debug('prepared key/value cache database');
+        const trace = new TraceLogger(this.#logger, 'kv-store-prepare-database');
+        try {
+            // WAL lets readers proceed during a write and is the journaling mode that
+            // makes concurrent multi-process access on local disk practical.
+            db.exec('PRAGMA journal_mode = WAL');
+            db.exec(`PRAGMA busy_timeout = ${ BUSY_TIMEOUT_MS }`);
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS kv (
+                    key        TEXT PRIMARY KEY,
+                    value      BLOB NOT NULL,
+                    expires_at INTEGER
+                )
+            `);
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+        this.#logger.info('prepared key/value cache database');
     }
 }
 

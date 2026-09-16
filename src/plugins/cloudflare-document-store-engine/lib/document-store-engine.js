@@ -12,6 +12,7 @@ import {
     assertArray,
     assertNonEmptyString,
 } from '../../../kixx/assertions/mod.js';
+import TraceLogger from '../../../kixx/logger/trace-logger.js';
 
 
 /*
@@ -308,7 +309,19 @@ export default class DocumentStoreEngine {
 
         const db = this.#getDatabase(context);
         const stmt = db.prepare(sql).bind(...params);
-        const { success, results } = await stmt.run();
+
+        const trace = new TraceLogger(context.logger, 'document-store-engine-query', { type, options });
+
+        let res;
+        try {
+            res = await stmt.run();
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        const { success, results } = res;
 
         if (!success) {
             this.#logger.error('unsuccessful query in query()', { sql });
@@ -377,7 +390,19 @@ export default class DocumentStoreEngine {
 
         const db = this.#getDatabase(context);
         const stmt = db.prepare(sql).bind(...params);
-        const { success, results } = await stmt.run();
+
+        const trace = new TraceLogger(context.logger, 'document-store-engine-scan', { type, options });
+
+        let res;
+        try {
+            res = await stmt.run();
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        const { success, results } = res;
 
         if (!success) {
             this.#logger.error('unsuccessful query in scan()', { sql });
@@ -423,10 +448,19 @@ export default class DocumentStoreEngine {
 
         const db = this.#getDatabase(context);
 
-        const row = await db
-            .prepare('SELECT sort_key, doc, version, created_at, updated_at FROM documents WHERE type = ? AND id = ?')
-            .bind(type, id)
-            .first();
+        const trace = new TraceLogger(context.logger, 'document-store-engine-get', { type, id });
+
+        let row;
+        try {
+            row = await db
+                .prepare('SELECT sort_key, doc, version, created_at, updated_at FROM documents WHERE type = ? AND id = ?')
+                .bind(type, id)
+                .first();
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
 
         if (!row) {
             return null;
@@ -487,11 +521,14 @@ export default class DocumentStoreEngine {
         // RETURNING lets us retrieve created_at and the new version in a single statement,
         // avoiding a separate SELECT after the UPDATE. SQLite 3.35+ (2021-03-15).
         // See https://sqlite.org/releaselog/3_35_1.html
+        const trace = new TraceLogger(context.logger, 'document-store-engine-put', { type, id });
 
         let row;
         try {
             row = await db.prepare(sql).bind(type, id, sortKey, createdAt, updatedAt, json).first();
+            trace.ok();
         } catch (cause) {
+            trace.error();
             const translated = this.#translateUniqueConflict(type, cause);
             if (translated) {
                 throw translated;
@@ -553,6 +590,7 @@ export default class DocumentStoreEngine {
         // See https://sqlite.org/releaselog/3_35_1.html
 
         const db = this.#getDatabase(context);
+        const trace = new TraceLogger(context.logger, 'document-store-engine-update', { type, id });
 
         let row;
         try {
@@ -560,7 +598,9 @@ export default class DocumentStoreEngine {
                 .prepare(sql)
                 .bind(json, sortKey, updatedAt, type, id, version)
                 .first();
+            trace.ok();
         } catch (cause) {
+            trace.error();
             const translated = this.#translateUniqueConflict(type, cause);
             if (translated) {
                 throw translated;
@@ -624,10 +664,14 @@ export default class DocumentStoreEngine {
         `;
 
         const db = this.#getDatabase(context);
+        const trace = new TraceLogger(context.logger, 'document-store-engine-create', { type, id });
+
         let row;
         try {
             row = await db.prepare(sql).bind(type, id, sortKey, now, now, json).first();
+            trace.ok();
         } catch (cause) {
+            trace.error();
             const translated = this.#translateUniqueConflict(type, cause);
             if (translated) {
                 throw translated;
@@ -680,23 +724,39 @@ export default class DocumentStoreEngine {
             throw new AssertionError('DocumentStoreEngine#delete() requires a positive integer version number when present');
         }
 
-        if (!isUndefined(version)) {
-            // We expect the document to exist and the version to match.
-            // Use meta.changes to detect affected rows — DELETE returns no result rows.
-            const result = await db
-                .prepare('DELETE FROM documents WHERE type = ? AND id = ? AND version = ?')
-                .bind(type, id, version)
-                .run();
+        const trace = new TraceLogger(context.logger, 'document-store-engine-delete', { type, id });
 
-            if (result.meta.changes > 0) {
-                return true;
+        if (!isUndefined(version)) {
+            try {
+                // We expect the document to exist and the version to match.
+                // Use meta.changes to detect affected rows — DELETE returns no result rows.
+                const result = await db
+                    .prepare('DELETE FROM documents WHERE type = ? AND id = ? AND version = ?')
+                    .bind(type, id, version)
+                    .run();
+
+                trace.ok();
+
+                if (result.meta.changes > 0) {
+                    return true;
+                }
+            } catch (err) {
+                trace.error();
+                throw err;
             }
 
-            // Distinguish not-found from version conflict.
-            const record = await db
-                .prepare('SELECT version FROM documents WHERE type = ? AND id = ?')
-                .bind(type, id)
-                .first();
+            let record;
+            try {
+                // Distinguish not-found from version conflict.
+                record = await db
+                    .prepare('SELECT version FROM documents WHERE type = ? AND id = ?')
+                    .bind(type, id)
+                    .first();
+                trace.ok();
+            } catch (error) {
+                trace.error();
+                throw error;
+            }
 
             if (!record) {
                 throw new DocumentNotFoundError(type, id);
@@ -705,11 +765,18 @@ export default class DocumentStoreEngine {
             throw new VersionConflictError(type, id, version, record.version);
         }
 
-        // Use meta.changes to detect affected rows — DELETE returns no result rows.
-        const result = await db
-            .prepare('DELETE FROM documents WHERE type = ? AND id = ?')
-            .bind(type, id)
-            .run();
+        let result;
+        try {
+            // Use meta.changes to detect affected rows — DELETE returns no result rows.
+            result = await db
+                .prepare('DELETE FROM documents WHERE type = ? AND id = ?')
+                .bind(type, id)
+                .run();
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
 
         return result.meta.changes > 0;
     }
@@ -790,14 +857,28 @@ export default class DocumentStoreEngine {
      * the next request can retry.
      */
     async #ensurePrepared(context) {
+        let trace;
         if (!this.#preparePromise) {
+            trace = new TraceLogger(context.logger, 'document-store-engine-prepare');
             this.#preparePromise = this.prepareDatabase(context).catch((err) => {
                 // Clear on failure so the next request gets a fresh attempt.
                 this.#preparePromise = null;
                 throw err;
             });
         }
-        return await this.#preparePromise;
+
+        try {
+            const res = await this.#preparePromise;
+            if (trace) {
+                trace.ok();
+            }
+            return res;
+        } catch (err) {
+            if (trace) {
+                trace.error();
+            }
+            throw err;
+        }
     }
 
     /**

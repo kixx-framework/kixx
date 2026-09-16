@@ -38,7 +38,7 @@ export function register(context) {
         'app requires context.config.env.FILES.bucket to name a configured object-store bucket',
     );
 
-    const documentStore = new DocumentStore();
+    const documentStore = new DocumentStore({ logger: context.logger });
     const keyValueStore = context.getService('KeyValueStore');
     const objectStore = context.getService('ObjectStore');
 

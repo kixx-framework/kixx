@@ -74,14 +74,19 @@ import {
  */
 export default class ContentSnapshot {
 
+    #logger;
     #store;
     #index;
 
     /**
      * @param {ContentStoreInterface} store - Platform adapter for blob and index persistence
      * @param {import('./content-addressable-index.js').default} index - The closure this snapshot is pinned to
+     * @param {import('../logger/logger.js').default} logger - Logger used as-is; the owner creates the named child once
+     * @throws {AssertionError} When logger is not provided
      */
-    constructor(store, index) {
+    constructor(store, index, logger) {
+        assert(logger, 'ContentSnapshot requires a logger');
+        this.#logger = logger;
         this.#store = store;
         this.#index = index;
     }
@@ -193,6 +198,7 @@ export default class ContentSnapshot {
         // The returned stream is single-use. A caller that does not consume it
         // (a HEAD request, a 304) MUST cancel it to release the underlying
         // binding or file handle.
+        this.#logger.info('get-static-asset get-file', { pathname });
         const result = await this.#getFile(context, 'stream', fullPathname);
 
         if (!result) {
@@ -216,6 +222,7 @@ export default class ContentSnapshot {
         assert(isValidPathname(pathname), 'putStaticAsset() requires a valid pathname');
         assert(arrayBuffer instanceof ArrayBuffer, 'putStaticAsset() requires an ArrayBuffer payload');
         const fullPathname = getStaticAssetPath(pathname);
+        this.#logger.info('put-static-asset put-file', { pathname });
         return await this.#putFile(context, 'arrayBuffer', fullPathname, arrayBuffer);
     }
 
@@ -238,6 +245,7 @@ export default class ContentSnapshot {
     async getGlobalTemplatePartials(context) {
         const fullPathname = getGlobalTemplatePartialsPath();
 
+        this.#logger.info('get-global-template-partials get-file', { fullPathname });
         const result = await this.#getFile(context, 'text', fullPathname);
 
         if (!result) {
@@ -260,6 +268,7 @@ export default class ContentSnapshot {
         assertArray(bundle, 'putGlobalTemplatePartials() requires an Array bundle');
         const fullPathname = getGlobalTemplatePartialsPath();
         const json = canonicalize(bundle);
+        this.#logger.info('put-global-template-partials put-file', { fullPathname });
         return await this.#putFile(context, 'text', fullPathname, json);
     }
 
@@ -283,6 +292,7 @@ export default class ContentSnapshot {
     async getBaseTemplates(context) {
         const fullPathname = getBaseTemplatesPath();
 
+        this.#logger.info('get-base-templates get-file', { fullPathname });
         const result = await this.#getFile(context, 'text', fullPathname);
 
         if (!result) {
@@ -305,6 +315,7 @@ export default class ContentSnapshot {
         assertArray(bundle, 'putBaseTemplates() requires an Array bundle');
         const fullPathname = getBaseTemplatesPath();
         const json = canonicalize(bundle);
+        this.#logger.info('put-base-templates put-file', { fullPathname });
         return await this.#putFile(context, 'text', fullPathname, json);
     }
 
@@ -337,6 +348,7 @@ export default class ContentSnapshot {
         assert(isPlainObject(obj), 'putPageMetadata() requires a metadata object');
         const fullPathname = getPageMetadataPath(pathname);
         const json = canonicalize(obj);
+        this.#logger.info('put-page-metadata put-file', { pathname });
         return await this.#putFile(context, 'text', fullPathname, json);
     }
 
@@ -365,6 +377,7 @@ export default class ContentSnapshot {
         assert(isPlainObject(bundle), 'putPageIncludes() requires a plain object bundle');
         const fullPathname = getPageIncludesPath(pathname);
         const json = canonicalize(bundle);
+        this.#logger.info('put-page-includes put-file', { pathname });
         return await this.#putFile(context, 'text', fullPathname, json);
     }
 
@@ -393,6 +406,7 @@ export default class ContentSnapshot {
         assertArray(bundle, 'putPagePartials() requires an Array bundle');
         const fullPathname = getPagePartialsPath(pathname);
         const json = canonicalize(bundle);
+        this.#logger.info('put-page-partials put-file', { pathname });
         return await this.#putFile(context, 'text', fullPathname, json);
     }
 
@@ -424,6 +438,7 @@ export default class ContentSnapshot {
         assert(isValidPathname(pathname), 'putPageTemplate() requires a valid pathname');
         assertNonEmptyString(source, 'putPageTemplate() requires a non-empty source string');
         const fullPathname = getPageTemplatePath(pathname);
+        this.#logger.info('put-page-template put-file', { pathname });
         return await this.#putFile(context, 'text', fullPathname, source);
     }
 
@@ -451,6 +466,7 @@ export default class ContentSnapshot {
         assert(isValidPathname(pathname), 'getEmailAssets() requires a valid pathname');
 
         const fullPathname = getEmailBundlePath(pathname);
+        this.#logger.info('get-email-assets get-file', { pathname });
         const result = await this.#getFile(context, 'text', fullPathname);
 
         if (!result) {
@@ -474,6 +490,7 @@ export default class ContentSnapshot {
         assert(isPlainObject(bundle), 'putEmailAssets() requires a plain object bundle');
         const fullPathname = getEmailBundlePath(pathname);
         const json = canonicalize(bundle);
+        this.#logger.info('put-email-assets put-file', { pathname });
         return await this.#putFile(context, 'text', fullPathname, json);
     }
 
@@ -509,6 +526,8 @@ export default class ContentSnapshot {
             filepaths.push(getPageMetadataPath(path));
         }
 
+        this.#logger.info('batch-get-page-assets stat-files', { pathname });
+
         const leafPage = filepaths.pop();
         const leafPageStat = this.#index.getNode(leafPage);
         if (!leafPageStat) {
@@ -530,6 +549,7 @@ export default class ContentSnapshot {
             // returns null for each of those.
             .filter((entry) => entry !== null && entry.kind === 'blob');
 
+        this.#logger.info('batch-get-page-assets get-file', { pathname });
         const results = await this.#store.getFiles(context, 'text', files);
 
         const pageDataFiles = [];

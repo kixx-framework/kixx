@@ -30,9 +30,9 @@ function makeStore() {
 }
 
 // Constructor-supplied path/database stores bypass request-config resolution, so
-// most low-level behavior tests can pass an empty context.
+// most low-level behavior tests need only a logger for tracing.
 function makeContext() {
-    return {};
+    return { logger: makeLogger() };
 }
 
 // arrayBuffer values come back as fresh ArrayBuffer instances, so identity
@@ -109,6 +109,7 @@ describe('Node KeyValueStore', ({ after, describe }) => {
             const directory = await makeTempDir();
             const sqlitePath = path.join(directory, 'key_value_store.sqlite');
             const context = {
+                logger: makeLogger(),
                 config: {
                     env: { KEY_VALUE_STORE: { path: './ignored.sqlite' } },
                     resolveFilepath() {

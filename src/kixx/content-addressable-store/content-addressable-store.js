@@ -79,6 +79,7 @@ export default class ContentAddressableStore {
 
     #store;
     #logger;
+    #snapshotLogger;
 
     // Keyed by Release root hash rather than build id, because compatibility is
     // a property of immutable content: once checked, a Release never needs
@@ -101,6 +102,9 @@ export default class ContentAddressableStore {
         assert(logger, 'ContentAddressableStore requires a logger');
         assert(contentStore, 'ContentAddressableStore requires a ContentStore');
         this.#logger = logger.createChild('ContentAddressableStore');
+        // Snapshots are opened per request. Create their child logger once,
+        // because Logger retains every child it creates.
+        this.#snapshotLogger = this.#logger.createChild('ContentSnapshot');
         this.#store = contentStore;
     }
 
@@ -165,6 +169,7 @@ export default class ContentAddressableStore {
      */
     async openSnapshot(context) {
         const buildId = context.runtime.build.id ?? null;
+        this.#logger.info('open-snapshot get-build', { buildId });
         const build = await this.#store.getBuild(context, buildId);
 
         // A missing pointer or an incompatible content contract means the
@@ -188,7 +193,7 @@ export default class ContentAddressableStore {
             await this.#verifyContentContract(context, buildId, build.rootHash, index);
         }
 
-        return new ContentSnapshot(this.#store, index);
+        return new ContentSnapshot(this.#store, index, this.#snapshotLogger);
     }
 
     // Reports (once per build id) that a build has no assigned Release. Called
@@ -199,7 +204,7 @@ export default class ContentAddressableStore {
             return;
         }
         this.#loggedMissingBuildIds.add(buildId);
-        this.#logger.error(`build "${ buildId }" cannot serve content: ${ reason }`, { buildId });
+        this.#logger.error('build cannot serve content', { buildId, reason });
     }
 
     // Verifies, once per distinct Release, that this code's content contract
@@ -256,6 +261,7 @@ export default class ContentAddressableStore {
             return null;
         }
 
+        this.#logger.info('get-current-build', { buildId });
         const build = await this.#store.getBuild(context, buildId);
         if (!build || !build.rootHash) {
             return null;
@@ -272,6 +278,7 @@ export default class ContentAddressableStore {
      */
     async getBuildPointer(context, buildId) {
         assertNonEmptyString(buildId, 'ContentAddressableStore#getBuildPointer: buildId');
+        this.#logger.info('get-build-pointer', { buildId });
         return await this.#store.getBuildPointer(context, buildId);
     }
 
@@ -281,6 +288,7 @@ export default class ContentAddressableStore {
      * @returns {Promise<Object[]>} Build pointer records
      */
     async listBuilds(context) {
+        this.#logger.info('list-builds');
         return await this.#store.listBuilds(context);
     }
 
@@ -304,11 +312,13 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#assignRelease: precondition',
         );
 
+        this.#logger.info('assign-release get-build-pointer 1', { buildId });
         const current = await this.#store.getBuildPointer(context, buildId);
         if (current?.rootHash === releaseId) {
             return { buildId, releaseId, assignedAt: current.assignedAt };
         }
 
+        this.#logger.info('assign-release assign-build', { buildId });
         const outcome = await this.#store.assignBuild(context, buildId, {
             rootHash: releaseId,
             expectedRootHash: precondition,
@@ -319,6 +329,7 @@ export default class ContentAddressableStore {
         if (outcome === BUILD_ASSIGNMENT_OUTCOME.CONFLICT) {
             throw new ConflictError('The build pointer precondition failed.', { code: 'BuildPointerConflict' });
         }
+        this.#logger.info('assign-release get-build-pointer 2', { buildId });
         const pointer = await this.#store.getBuildPointer(context, buildId);
         return { buildId, releaseId, assignedAt: pointer.assignedAt };
     }
@@ -337,6 +348,7 @@ export default class ContentAddressableStore {
         assert(isValidPathname(pathname), 'getStaticAssetByHash() requires a valid pathname');
         assert(isValidHash(hash), 'getStaticAssetByHash() requires a valid hash');
 
+        this.#logger.info('get-static-asset-by-hash get-file', { pathname, hash });
         const stream = await this.#store.getFile(
             context,
             'stream',
@@ -360,6 +372,7 @@ export default class ContentAddressableStore {
      */
     async putObject(context, payload) {
         const objectId = await hashBlob(payload);
+        this.#logger.info('put-object put-file', { objectId });
         const size = await this.#store.putFile(context, '', objectId, payload);
         return { objectId, size };
     }
@@ -371,6 +384,7 @@ export default class ContentAddressableStore {
      * @returns {Promise<Array<{size: number}|null>>} Positionally aligned object metadata
      */
     async statObjects(context, objectIds) {
+        this.#logger.info('stat-objects stat-files');
         return await this.#store.statFiles(context, objectIds);
     }
 

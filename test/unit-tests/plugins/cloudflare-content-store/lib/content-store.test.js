@@ -7,8 +7,11 @@ import contentStoreConformance from '../../../kixx/content-addressable-store/con
 
 
 const SILENT_LOGGER = {
+    info() {},
+    warn() {},
+    debug() {},
     createChild() {
-        return { info() {}, warn() {}, debug() {} };
+        return SILENT_LOGGER;
     },
 };
 
@@ -45,6 +48,7 @@ function makeContext({ durableObject, kvStore }) {
         },
     };
     return {
+        logger: SILENT_LOGGER,
         env: {
             CA_STORE_KV_STORE: kvStore,
             CA_STORE_DURABLE_OBJECT: {
@@ -375,7 +379,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.getBuild({ env: {} }, 'build-1'),
+                () => store.getBuild({ logger: SILENT_LOGGER, env: {} }, 'build-1'),
             );
 
             assert(caught, 'expected an error to be thrown');
@@ -491,6 +495,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         it('uses the stable Durable Object name scoped by wire format', async () => {
             let receivedName = null;
             const context = {
+                logger: SILENT_LOGGER,
                 env: {
                     CA_STORE_DURABLE_OBJECT: {
                         getByName(name) {

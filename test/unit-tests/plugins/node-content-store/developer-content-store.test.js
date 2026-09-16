@@ -11,7 +11,8 @@ import DeveloperContentStore from '../../../../src/plugins/node-content-store/li
 
 
 function makeLogger() {
-    return { createChild: () => ({ debug() {} }) };
+    const logger = { debug() {}, info() {}, warn() {}, error() {} };
+    return { ...logger, createChild: () => logger };
 }
 
 function makeStore(root, fileSystem) {
@@ -40,7 +41,7 @@ describe('DeveloperContentStore', ({ it }) => {
         const { rootHash, entries } = await store.getBuild({}, null);
         assertEqual(null, rootHash);
         const index = new ContentAddressableIndex(entries);
-        const snapshot = new ContentSnapshot(store, index);
+        const snapshot = new ContentSnapshot(store, index, makeLogger());
 
         const home = await snapshot.batchGetPageAssets({}, '/');
         const copyFields = await snapshot.batchGetPageAssets({}, '/admin/style-guide/copy-fields');

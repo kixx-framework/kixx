@@ -15,6 +15,7 @@ import {
 } from '../../../kixx/assertions/mod.js';
 import { OperationalError } from '../../../kixx/errors/mod.js';
 import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
+import TraceLogger from '../../../kixx/logger/trace-logger.js';
 
 const BUSY_TIMEOUT_MS = 5000;
 const SCHEMA_VERSION = 2;
@@ -92,12 +93,12 @@ export default class ContentStore {
      * @param {string} buildId - Build identifier
      * @returns {Promise<{rootHash: string, entries: Object}|null>} The assigned root hash and its encoded index table, or null when the build is not registered
      */
-    async getBuild(_context, buildId) {
+    async getBuild(context, buildId) {
         this.#assertOpen();
         assertNonEmptyString(buildId, 'NodeContentStore#getBuild: buildId');
-        const database = await this.#getDatabase();
-        this.#logger.debug('getBuild() loading build', { buildId });
 
+        const trace = new TraceLogger(context.logger, 'content-store-get-build', { buildId });
+        const database = await this.#getTracedDatabase(context, trace);
         let row;
         try {
             row = database.prepare(`
@@ -106,7 +107,9 @@ export default class ContentStore {
                 JOIN closures ON closures.root_hash = builds.root_hash
                 WHERE builds.build_id = ?
             `).get(buildId);
+            trace.ok();
         } catch (cause) {
+            trace.error();
             throw new OperationalError(`NodeContentStore failed to load build "${ buildId }"`, { cause });
         }
 
@@ -124,11 +127,20 @@ export default class ContentStore {
         return { rootHash: row.root_hash, entries };
     }
 
-    async getIndex(_context, rootHash) {
+    async getIndex(context, rootHash) {
         this.#assertOpen();
         this.#assertValidHash(rootHash, 'NodeContentStore#getIndex: rootHash');
-        const database = await this.#getDatabase();
-        const row = database.prepare('SELECT entries_json FROM closures WHERE root_hash = ?').get(rootHash);
+
+        const trace = new TraceLogger(context.logger, 'content-store-get-index', { rootHash });
+        const database = await this.#getTracedDatabase(context, trace);
+        let row;
+        try {
+            row = database.prepare('SELECT entries_json FROM closures WHERE root_hash = ?').get(rootHash);
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
         return row ? JSON.parse(row.entries_json) : null;
     }
 
@@ -138,15 +150,18 @@ export default class ContentStore {
      * @param {string} buildId - Build identifier
      * @returns {Promise<({rootHash: string, assignedAt: string}|null)>} Pointer metadata, or null when unassigned
      */
-    async getBuildPointer(_context, buildId) {
+    async getBuildPointer(context, buildId) {
         this.#assertOpen();
         assertNonEmptyString(buildId, 'NodeContentStore#getBuildPointer: buildId');
-        const database = await this.#getDatabase();
 
+        const trace = new TraceLogger(context.logger, 'content-store-get-build-pointer', { buildId });
+        const database = await this.#getTracedDatabase(context, trace);
         try {
             const row = database.prepare('SELECT root_hash, assigned_at FROM builds WHERE build_id = ?').get(buildId);
+            trace.ok();
             return row ? { rootHash: row.root_hash, assignedAt: row.assigned_at } : null;
         } catch (cause) {
+            trace.error();
             throw new OperationalError(`NodeContentStore failed to load build pointer "${ buildId }"`, { cause });
         }
     }
@@ -156,22 +171,25 @@ export default class ContentStore {
      * @param {Object} _context - Request context accepted for interface compatibility
      * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string}>>} Registered build pointers
      */
-    async listBuilds(_context) {
+    async listBuilds(context) {
         this.#assertOpen();
-        const database = await this.#getDatabase();
 
+        const trace = new TraceLogger(context.logger, 'content-store-list-builds');
+        const database = await this.#getTracedDatabase(context, trace);
         try {
             const rows = database.prepare(`
                 SELECT build_id, root_hash, assigned_at
                 FROM builds
                 ORDER BY assigned_at DESC, build_id ASC
             `).all();
+            trace.ok();
             return rows.map((row) => ({
                 buildId: row.build_id,
                 rootHash: row.root_hash,
                 assignedAt: row.assigned_at,
             }));
         } catch (cause) {
+            trace.error();
             throw new OperationalError('NodeContentStore failed to list build pointers', { cause });
         }
     }
@@ -184,22 +202,27 @@ export default class ContentStore {
      * @param {string} hash - Content hash
      * @returns {Promise<string|ArrayBuffer|ReadableStream|null>} Blob value, or null when absent
      */
-    async getFile(_context, type, _pathname, hash) {
+    async getFile(context, type, pathname, hash) {
         this.#assertOpen();
         assertValidType(type, 'getFile', GET_FILE_TYPES);
         this.#assertValidHash(hash, 'NodeContentStore#getFile: hash');
-        await this.#initialize();
         const filePath = this.#filePathForHash(hash);
-        this.#logger.debug('getFile() loading blob', { hash });
+
+        const trace = new TraceLogger(context.logger, 'content-store-get-file', { pathname, hash });
+        await this.#initialize(context);
 
         if (type === 'stream') {
-            return await this.#openStream(filePath, hash);
+            const res = await this.#openStream(filePath, hash);
+            trace.ok();
+            return res;
         }
 
         let bytes;
         try {
             bytes = await fsp.readFile(filePath);
+            trace.ok();
         } catch (cause) {
+            trace.error();
             if (cause.code === 'ENOENT') {
                 return null;
             }
@@ -220,25 +243,28 @@ export default class ContentStore {
      * @param {string|ArrayBuffer} blob - UTF-8 text or bytes to store
      * @returns {Promise<number>} Payload byte length
      */
-    async putFile(_context, _pathname, hash, blob) {
+    async putFile(context, pathname, hash, blob) {
         this.#assertOpen();
         this.#assertValidHash(hash, 'NodeContentStore#putFile: hash');
         assert(isString(blob) || blob instanceof ArrayBuffer, 'NodeContentStore#putFile: blob must be a string or an ArrayBuffer');
-        await this.#initialize();
 
         const bytes = isString(blob) ? textEncoder.encode(blob) : new Uint8Array(blob);
         const shardDirectory = this.#shardDirectoryForHash(hash);
         const filePath = this.#filePathForHash(hash);
-        this.#logger.debug('putFile() storing blob', { hash });
+
+        const trace = new TraceLogger(context.logger, 'content-store-put-file', { pathname, hash });
+        await this.#initialize(context);
 
         try {
             await fsp.mkdir(shardDirectory, { recursive: true });
         } catch (cause) {
+            trace.error();
             throw new OperationalError(`NodeContentStore failed to create blob shard for "${ hash }"`, { cause });
         }
 
         if (await this.#fileExists(filePath, hash)) {
             await this.#syncDirectory(shardDirectory, hash);
+            trace.ok();
             return bytes.byteLength;
         }
 
@@ -262,6 +288,7 @@ export default class ContentStore {
 
             await this.#syncDirectory(shardDirectory, hash);
         } catch (cause) {
+            trace.error();
             await this.#removeTemporaryFile(temporaryPath, hash);
             if (cause.name === 'OperationalError') {
                 throw cause;
@@ -270,6 +297,7 @@ export default class ContentStore {
         }
 
         await this.#removePublishedTemporaryFile(temporaryPath, hash);
+        trace.ok();
         return bytes.byteLength;
     }
 
@@ -290,7 +318,17 @@ export default class ContentStore {
         }
         assert(files.length <= BULK_FILE_LIMIT, `NodeContentStore#getFiles() accepts at most ${ BULK_FILE_LIMIT } files; received ${ files.length }`);
 
-        return await Promise.all(files.map(({ hash }) => this.getFile(context, type, '', hash)));
+        const trace = new TraceLogger(context.logger, 'content-store-get-files', { type });
+        const promises = files.map(({ hash }) => this.getFile(context, type, '', hash));
+
+        try {
+            const res = await Promise.all(promises);
+            trace.ok();
+            return res;
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
     }
 
     /**
@@ -299,16 +337,18 @@ export default class ContentStore {
      * @param {string[]} hashes - Content hashes to inspect
      * @returns {Promise<Array<({size: number}|null)>>} Positional metadata results
      */
-    async statFiles(_context, hashes) {
+    async statFiles(context, hashes) {
         this.#assertOpen();
         assertArray(hashes, 'NodeContentStore#statFiles: hashes');
         for (const [ index, hash ] of hashes.entries()) {
             this.#assertValidHash(hash, `NodeContentStore#statFiles: hashes[${ index }]`);
         }
         assert(hashes.length <= BULK_FILE_LIMIT, `NodeContentStore#statFiles() accepts at most ${ BULK_FILE_LIMIT } hashes; received ${ hashes.length }`);
-        await this.#initialize();
 
-        return await Promise.all(hashes.map(async (hash) => {
+        const trace = new TraceLogger(context.logger, 'content-store-stat-files');
+        await this.#initialize(context);
+
+        const promises = hashes.map(async (hash) => {
             try {
                 const stat = await fsp.stat(this.#filePathForHash(hash));
                 return { size: stat.size };
@@ -318,7 +358,16 @@ export default class ContentStore {
                 }
                 throw new OperationalError(`NodeContentStore failed to inspect blob "${ hash }"`, { cause });
             }
-        }));
+        });
+
+        try {
+            const res = await Promise.all(promises);
+            trace.ok();
+            return res;
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
     }
 
     /**
@@ -328,7 +377,7 @@ export default class ContentStore {
      * @param {Object} entries - Framework-validated encoded index table
      * @returns {Promise<void>}
      */
-    async saveIndex(_context, rootHash, entries) {
+    async saveIndex(context, rootHash, entries) {
         this.#assertOpen();
         this.#assertValidHash(rootHash, 'NodeContentStore#saveIndex: rootHash');
         assert(isPlainObject(entries), 'NodeContentStore#saveIndex: entries must be a plain object');
@@ -340,11 +389,13 @@ export default class ContentStore {
             throw new AssertionError('NodeContentStore#saveIndex: entries must be JSON serializable', { cause });
         }
 
-        const database = await this.#getDatabase();
-        this.#logger.debug('saveIndex() saving closure', { rootHash });
+        const trace = new TraceLogger(context.logger, 'content-store-save-index', { rootHash });
+        const database = await this.#getTracedDatabase(context, trace);
         try {
             database.prepare('INSERT OR IGNORE INTO closures (root_hash, entries_json) VALUES (?, ?)').run(rootHash, entriesJson);
+            trace.ok();
         } catch (cause) {
+            trace.error();
             throw new OperationalError(`NodeContentStore failed to save closure "${ rootHash }"`, { cause });
         }
     }
@@ -357,7 +408,7 @@ export default class ContentStore {
      * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
      * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome>}
      */
-    async assignBuild(_context, buildId, assignment) {
+    async assignBuild(context, buildId, assignment) {
         this.#assertOpen();
         assertNonEmptyString(buildId, 'NodeContentStore#assignBuild: buildId');
         assert(isPlainObject(assignment), 'NodeContentStore#assignBuild: assignment must be a plain object');
@@ -368,17 +419,28 @@ export default class ContentStore {
             this.#assertValidHash(expectedRootHash, 'NodeContentStore#assignBuild: expectedRootHash');
         }
 
-        const database = await this.#getDatabase();
-        this.#logger.debug('assignBuild() assigning build', { buildId, rootHash, expectedRootHash });
+        const trace = new TraceLogger(context.logger, 'content-store-assign-build', { buildId, rootHash, expectedRootHash });
+        const database = await this.#getTracedDatabase(context, trace);
+        try {
 
-        const assignedAt = new Date().toISOString();
-        if (expectedRootHash === undefined) {
-            return this.#assignBuildUnconditionally(database, buildId, rootHash, assignedAt);
+            const assignedAt = new Date().toISOString();
+            if (expectedRootHash === undefined) {
+                const res = this.#assignBuildUnconditionally(database, buildId, rootHash, assignedAt);
+                trace.ok();
+                return res;
+            }
+            if (expectedRootHash === null) {
+                const res = this.#assignUnassignedBuild(database, buildId, rootHash, assignedAt);
+                trace.ok();
+                return res;
+            }
+            const res = this.#assignBuildConditionally(database, buildId, rootHash, expectedRootHash, assignedAt);
+            trace.ok();
+            return res;
+        } catch (err) {
+            trace.error();
+            throw err;
         }
-        if (expectedRootHash === null) {
-            return this.#assignUnassignedBuild(database, buildId, rootHash, assignedAt);
-        }
-        return this.#assignBuildConditionally(database, buildId, rootHash, expectedRootHash, assignedAt);
     }
 
     #assignBuildUnconditionally(database, buildId, rootHash, assignedAt) {
@@ -493,24 +555,32 @@ export default class ContentStore {
         return path.join(this.#shardDirectoryForHash(hash), hash);
     }
 
-    async #initialize() {
+    async #initialize(context) {
         if (this.#initialized) {
             return;
         }
+        let trace;
         if (!this.#initialization) {
-            this.#initialization = this.#initializeStore();
+            trace = new TraceLogger(context.logger, 'content-store-initialize');
+            this.#initialization = this.#initializeStore(context);
         }
 
         try {
             await this.#initialization;
+            if (trace) {
+                trace.ok();
+            }
             this.#initialized = true;
         } catch (cause) {
+            if (trace) {
+                trace.error();
+            }
             this.#initialization = null;
             throw cause;
         }
     }
 
-    async #initializeStore() {
+    async #initializeStore(context) {
         try {
             await fsp.mkdir(this.#blobDirectory, { recursive: true });
         } catch (cause) {
@@ -525,9 +595,12 @@ export default class ContentStore {
             }
         }
 
+        const trace = new TraceLogger(context.logger, 'content-store-prepare-database');
         try {
             this.#prepareDatabase(this.#database);
+            trace.ok();
         } catch (cause) {
+            trace.error();
             if (cause.name === 'AssertionError') {
                 throw cause;
             }
@@ -535,9 +608,21 @@ export default class ContentStore {
         }
     }
 
-    async #getDatabase() {
-        await this.#initialize();
+    async #getDatabase(context) {
+        await this.#initialize(context);
         return this.#database;
+    }
+
+    // Opens the database inside an operation's trace so its duration includes
+    // connection and schema setup. The error is rethrown untouched: wrapping it
+    // here would misclassify schema AssertionErrors as OperationalErrors.
+    async #getTracedDatabase(context, trace) {
+        try {
+            return await this.#getDatabase(context);
+        } catch (cause) {
+            trace.error();
+            throw cause;
+        }
     }
 
     #prepareDatabase(database) {
@@ -557,6 +642,7 @@ export default class ContentStore {
         database.exec('BEGIN IMMEDIATE');
         try {
             const { user_version: lockedVersion } = database.prepare('PRAGMA user_version').get();
+            this.#logger.info('checked locked user version', { version: SCHEMA_VERSION, lockedVersion });
             if (lockedVersion > SCHEMA_VERSION) {
                 throw new AssertionError(`NodeContentStore database schema version ${ lockedVersion } is newer than supported version ${ SCHEMA_VERSION }`);
             }

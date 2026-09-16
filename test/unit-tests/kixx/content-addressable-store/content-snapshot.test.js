@@ -79,8 +79,12 @@ async function drain(stream) {
     return chunks;
 }
 
+function makeLogger() {
+    return { debug() {}, info() {}, warn() {}, error() {} };
+}
+
 function makeSnapshot(index, blobsByHash) {
-    return new ContentSnapshot(makeStore(blobsByHash), index);
+    return new ContentSnapshot(makeStore(blobsByHash), index, makeLogger());
 }
 
 
@@ -149,7 +153,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
                 { pathname: partialsPath, hash: 'hash-v1', size: 12 },
             ]);
             const store = makeStore(new Map([ [ 'hash-v1', '["v1"]' ] ]));
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             await snapshot.getGlobalTemplatePartials({});
 
@@ -166,7 +170,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
                 { pathname: '/assets/logo.png', hash: 'hash-logo', size: 3 },
             ]);
             const store = makeStore(new Map());
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             assertEqual(null, await snapshot.getGlobalTemplatePartials({}));
             assertEqual(0, store.getFileCalls.length);
@@ -180,7 +184,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
                 { pathname: assetPath, hash: 'hash-logo', size: 4 },
             ]);
             const store = makeStore(new Map([ [ 'hash-logo', makeStream(bytes) ] ]));
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             const asset = await snapshot.getStaticAsset({}, '/logo.png');
 
@@ -203,7 +207,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
                 { pathname: getStaticAssetPath('/logo.png'), hash: 'hash-logo', size: 4 },
             ]);
             const store = makeStore(new Map());
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             assertEqual(null, await snapshot.getStaticAsset({}, '/missing.png'));
             assertEqual(0, store.getFileCalls.length);
@@ -267,7 +271,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
                 [ 'hash-post', '{"c":3}' ],
                 [ 'hash-template', '<h1></h1>' ],
             ]));
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             const result = await snapshot.batchGetPageAssets({}, '/blog/post');
 
@@ -300,7 +304,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
                 [ 'hash-post', '{"c":3}' ],
                 [ 'hash-template', '<h1></h1>' ],
             ]));
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             const result = await snapshot.batchGetPageAssets({}, '/blog/post');
 
@@ -314,7 +318,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
                 { pathname: getPageMetadataPath('/'), hash: 'hash-root', size: 2 },
             ]);
             const store = makeStore(new Map([ [ 'hash-root', '{"a":1}' ] ]));
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             assertEqual(null, await snapshot.batchGetPageAssets({}, '/blog/post'));
             assertEqual(0, store.getFilesCalls.length);
@@ -325,7 +329,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
         it('returns the byte size reported by the content store', async () => {
             const index = await makeIndex([]);
             const store = makeStore(new Map(), { putFileSize: 37 });
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             const result = await snapshot.putGlobalTemplatePartials({}, [ 'a' ]);
 
@@ -336,7 +340,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
 
         it('rejects a non-Array bundle', async () => {
             const index = await makeIndex([]);
-            const snapshot = new ContentSnapshot(makeStore(new Map()), index);
+            const snapshot = new ContentSnapshot(makeStore(new Map()), index, makeLogger());
 
             const caught = await catchError(() => snapshot.putGlobalTemplatePartials({}, {}));
 
@@ -349,7 +353,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
         it('takes no pathname, matching statBaseTemplates()/getBaseTemplates()', async () => {
             const index = await makeIndex([]);
             const store = makeStore(new Map());
-            const snapshot = new ContentSnapshot(store, index);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
             const result = await snapshot.putBaseTemplates({}, [ 'a' ]);
 
@@ -359,7 +363,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
 
         it('rejects a non-Array bundle', async () => {
             const index = await makeIndex([]);
-            const snapshot = new ContentSnapshot(makeStore(new Map()), index);
+            const snapshot = new ContentSnapshot(makeStore(new Map()), index, makeLogger());
 
             const caught = await catchError(() => snapshot.putBaseTemplates({}, {}));
 
@@ -371,7 +375,7 @@ describe('ContentSnapshot', ({ describe, it }) => {
     describe('putPageIncludes()', ({ it }) => {
         it('reports a plain-object bundle requirement when the bundle is not a plain object', async () => {
             const index = await makeIndex([]);
-            const snapshot = new ContentSnapshot(makeStore(new Map()), index);
+            const snapshot = new ContentSnapshot(makeStore(new Map()), index, makeLogger());
 
             const caught = await catchError(() => snapshot.putPageIncludes({}, '/blog/post', []));
 

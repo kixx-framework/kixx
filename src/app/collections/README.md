@@ -136,7 +136,7 @@ Then, in app/app.js:
 
 ```js
 export function register(context) {
-    const documentStore = new DocumentStore();
+    const documentStore = new DocumentStore({ logger: context.logger });
     context.registerService('DocumentStore', documentStore);
     context.registerCollection('User', new UserCollection({ db: documentStore }));
 }

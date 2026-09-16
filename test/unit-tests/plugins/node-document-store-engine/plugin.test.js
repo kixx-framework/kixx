@@ -70,8 +70,8 @@ describe('node-document-store-engine plugin', ({ after, it }) => {
         assertEqual(1, resolveFilepath.mock.callCount());
         assertEqual('../data/document_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
 
-        await registered.service.put(null, { type: 'Note', id: 'n1', title: 'Hello' });
-        const record = await registered.service.get(null, 'Note', 'n1');
+        await registered.service.put({ logger: makeLogger() }, { type: 'Note', id: 'n1', title: 'Hello' });
+        const record = await registered.service.get({ logger: makeLogger() }, 'Note', 'n1');
 
         assertEqual('Hello', record.doc.title);
     });

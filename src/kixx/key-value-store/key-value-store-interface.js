@@ -79,9 +79,10 @@
  * surface that information; promising a boolean would be a lie on that adapter.
  *
  * ## Construction
- * Construction MUST accept an options object containing a `logger` and MUST throw
- * when the logger is missing. Implementations create a child logger for their own
- * diagnostics.
+ * Node.js adapters MUST accept an options object containing a `logger` and MUST
+ * throw when the logger is missing; they create a child logger for their own
+ * diagnostics. The Cloudflare adapter takes no constructor arguments and logs
+ * through the request's `context.logger`.
  *
  * ## Context pass-through
  * Every read and write method receives a request or execution `context` as its

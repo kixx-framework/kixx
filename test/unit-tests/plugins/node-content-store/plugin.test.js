@@ -97,7 +97,7 @@ describe('node-content-store plugin', ({ after, it }) => {
         const missingBeforeUse = await catchAsyncError(() => fsp.stat(rootDirectory));
         assertEqual('ENOENT', missingBeforeUse.code);
 
-        await registered.service.saveIndex({}, 'root', { '/': [ 'tree', 'root' ] });
+        await registered.service.saveIndex({ logger: makeLogger() }, 'root', { '/': [ 'tree', 'root' ] });
         assertEqual('directory', (await fsp.stat(rootDirectory)).isDirectory() ? 'directory' : 'missing');
         assertEqual('file', (await fsp.stat(path.join(rootDirectory, `format-${ FORMAT }`, 'index.sqlite'))).isFile() ? 'file' : 'missing');
     });

@@ -35,6 +35,10 @@ function makeLogger() {
     return new Logger({ name: 'Test', level: 'NONE' });
 }
 
+function makeContext() {
+    return { logger: makeLogger() };
+}
+
 function catchError(fn) {
     try {
         fn();
@@ -83,8 +87,8 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
             const engine = new DocumentStoreEngine({ logger: makeLogger(), path: ':memory:' });
             engine.setIndexDefinitions([]);
 
-            await engine.put(null, { type: 'Note', id: 'n1', title: 'Hello' });
-            const record = await engine.get(null, 'Note', 'n1');
+            await engine.put(makeContext(), { type: 'Note', id: 'n1', title: 'Hello' });
+            const record = await engine.get(makeContext(), 'Note', 'n1');
 
             assertEqual('Hello', record.doc.title);
             engine.close();
@@ -94,6 +98,7 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
             const directory = await makeTempDir();
             const sqlitePath = path.join(directory, 'document_store.sqlite');
             const context = {
+                logger: makeLogger(),
                 config: {
                     env: { DOCUMENT_STORE: { path: './ignored.sqlite' } },
                     resolveFilepath() {
@@ -116,7 +121,7 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
             const engine = new DocumentStoreEngine({ logger: makeLogger(), database });
             engine.setIndexDefinitions([]);
 
-            await engine.put(null, { type: 'Note', id: 'n1', title: 'Hello' });
+            await engine.put(makeContext(), { type: 'Note', id: 'n1', title: 'Hello' });
             engine.close();
             const row = database.prepare('SELECT doc FROM documents WHERE type = ? AND id = ?').get('Note', 'n1');
 
@@ -133,27 +138,27 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
                 { name: 'by_title', jsonPath: '$.title' },
             ]);
 
-            const created = await engine.create(null, {
+            const created = await engine.create(makeContext(), {
                 type: 'Note',
                 id: 'n1',
                 sortKey: 'b',
                 title: 'Beta',
             });
-            const put = await engine.put(null, {
+            const put = await engine.put(makeContext(), {
                 type: 'Note',
                 id: 'n2',
                 sortKey: 'a',
                 title: 'Alpha',
             });
-            const updated = await engine.update(null, {
+            const updated = await engine.update(makeContext(), {
                 type: 'Note',
                 id: 'n1',
                 sortKey: 'b',
                 title: 'Beta 2',
             }, created.version);
-            const loaded = await engine.get(null, 'Note', 'n1');
-            const scan = await engine.scan(null, 'Note');
-            const query = await engine.query(null, 'Note', { index: 'by_title' });
+            const loaded = await engine.get(makeContext(), 'Note', 'n1');
+            const scan = await engine.scan(makeContext(), 'Note');
+            const query = await engine.query(makeContext(), 'Note', { index: 'by_title' });
 
             const records = [
                 created,
@@ -202,7 +207,7 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
             const engine = new DocumentStoreEngine({ logger: makeLogger(), database });
             engine.setIndexDefinitions([]);
 
-            await engine.put(null, {
+            await engine.put(makeContext(), {
                 type: 'Note',
                 id: 'n1',
                 sortKey: 'column-key',
@@ -217,7 +222,7 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
                     title: 'Legacy',
                 }), 'Note', 'n1');
 
-            const record = await engine.get(null, 'Note', 'n1');
+            const record = await engine.get(makeContext(), 'Note', 'n1');
 
             assertEqual('Note', record.type);
             assertEqual('n1', record.id);
@@ -234,7 +239,7 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
         it('preserves sort metadata through a Collection get and update round trip', async () => {
             const database = new DatabaseSync(':memory:');
             const engine = new DocumentStoreEngine({ logger: makeLogger(), database });
-            const store = new DocumentStore();
+            const store = new DocumentStore({ logger: makeLogger() });
             store.initialize({
                 engine,
                 indexes: [],
@@ -242,14 +247,14 @@ describe('Node DocumentStoreEngine', ({ after, describe }) => {
             });
             const notes = new NoteCollection({ db: store });
 
-            await notes.create({}, {
+            await notes.create(makeContext(), {
                 id: 'n1',
                 sortKey: 'rank:1',
                 title: 'Before',
             });
-            const loaded = await notes.get({}, 'n1');
+            const loaded = await notes.get(makeContext(), 'n1');
             loaded.set('title', 'After');
-            const updated = await notes.update({}, loaded);
+            const updated = await notes.update(makeContext(), loaded);
 
             assertEqual('rank:1', loaded.sortKey);
             assertUndefined(loaded.get('sortKey'));

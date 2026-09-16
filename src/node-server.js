@@ -19,6 +19,7 @@ import { readConfig } from './kixx/config/read-config.js';
 import { bootApplication } from './kixx/context/boot-application.js';
 import { resolveDotenvFilepath, readEnvironment, createResolveFilepath } from './node-environment.js';
 import virtualHosts from './virtual-hosts.js';
+import TraceLogger from './kixx/logger/trace-logger.js';
 
 
 const THIS_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
@@ -116,6 +117,7 @@ router.on('error', ({ error, requestId }) => {
 
 
 async function handleRequest(nodeRequest, nodeResponse) {
+    const trace = new TraceLogger(logger, 'http-request');
     let isHeadRequest = false;
 
     try {
@@ -123,11 +125,14 @@ async function handleRequest(nodeRequest, nodeResponse) {
         isHeadRequest = request.isHeadRequest();
         const requestContext = appContext.createRequestContext(env, request);
         const response = await router.handleRequest(requestContext, request, new ServerResponse());
+        trace.ok();
         sendResponse(nodeResponse, response, isHeadRequest);
     } catch (cause) {
         // The router emits 'error' events for logging, but a rejection here still
         // needs to terminate the socket or the client hangs until it times out.
         logger.error('unhandled error while handling request', null, cause);
+
+        trace.error();
 
         if (nodeResponse.headersSent) {
             nodeResponse.destroy(cause);

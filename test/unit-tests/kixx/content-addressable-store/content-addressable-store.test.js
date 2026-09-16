@@ -84,6 +84,7 @@ function makeLogger() {
         error(message, info) {
             errors.push({ message, info });
         },
+        createChild: () => child,
     };
     return { logger: { createChild: () => child }, errors };
 }

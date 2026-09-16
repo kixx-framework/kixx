@@ -10,6 +10,7 @@ import DocumentStore, {
     MAX_SORT_KEY_CHAR,
     sortKeyPrefixRange,
 } from '../../../../src/kixx/document-store/document-store.js';
+import Logger from '../../../../src/kixx/logger/logger.js';
 
 
 const CURSOR_SIGNING_SECRET = 'document-store-test-signing-secret';
@@ -18,6 +19,10 @@ const INDEXES = [
     { name: 'by_name', jsonPath: '$.name' },
 ];
 
+
+function makeLogger() {
+    return new Logger({ name: 'Test', level: 'NONE' });
+}
 
 function makeEngine(tracker, implementations) {
     implementations = implementations ?? {};
@@ -47,7 +52,7 @@ function makeStore(args) {
     } = args ?? {};
     const tracker = new MockTracker();
     const engine = makeEngine(tracker, implementations);
-    const store = new DocumentStore();
+    const store = new DocumentStore({ logger: makeLogger() });
 
     store.initialize({ engine, indexes, cursorSigningSecret });
 
@@ -89,11 +94,33 @@ function assertInvalidCursorError(error) {
 
 describe('DocumentStore', ({ describe }) => {
 
+    describe('constructor', ({ it }) => {
+        it('throws when logger is not provided', () => {
+            const caught = catchError(() => new DocumentStore());
+            assertAssertionError(caught, 'DocumentStore requires a logger');
+        });
+
+        it('creates a named child logger', () => {
+            const names = [];
+            const logger = {
+                createChild(name) {
+                    names.push(name);
+                    return makeLogger();
+                },
+            };
+
+            new DocumentStore({ logger });
+
+            assertEqual(1, names.length);
+            assertEqual('DocumentStore', names[0]);
+        });
+    });
+
     describe('initialize', ({ it }) => {
         it('passes validated index definitions to the engine', () => {
             const tracker = new MockTracker();
             const engine = makeEngine(tracker);
-            const store = new DocumentStore();
+            const store = new DocumentStore({ logger: makeLogger() });
 
             store.initialize({
                 engine,
@@ -109,7 +136,7 @@ describe('DocumentStore', ({ describe }) => {
         it('normalizes boxed unique booleans before configuring the engine', () => {
             const tracker = new MockTracker();
             const engine = makeEngine(tracker);
-            const store = new DocumentStore();
+            const store = new DocumentStore({ logger: makeLogger() });
 
             store.initialize({
                 engine,
@@ -151,7 +178,7 @@ describe('DocumentStore', ({ describe }) => {
             ];
 
             for (const testCase of cases) {
-                const store = new DocumentStore();
+                const store = new DocumentStore({ logger: makeLogger() });
                 const caught = catchError(() => store.initialize(testCase.config));
 
                 assertAssertionError(caught, testCase.message);
@@ -201,7 +228,7 @@ describe('DocumentStore', ({ describe }) => {
             for (const testCase of cases) {
                 const tracker = new MockTracker();
                 const engine = makeEngine(tracker);
-                const store = new DocumentStore();
+                const store = new DocumentStore({ logger: makeLogger() });
                 const caught = catchError(() => store.initialize({
                     engine,
                     indexes: [ testCase.index ],
@@ -217,7 +244,7 @@ describe('DocumentStore', ({ describe }) => {
         it('rejects duplicate index names before configuring the engine', () => {
             const tracker = new MockTracker();
             const engine = makeEngine(tracker);
-            const store = new DocumentStore();
+            const store = new DocumentStore({ logger: makeLogger() });
             const caught = catchError(() => store.initialize({
                 engine,
                 indexes: [
@@ -239,7 +266,7 @@ describe('DocumentStore', ({ describe }) => {
                     throw new Error('engine configuration failed');
                 },
             });
-            const store = new DocumentStore();
+            const store = new DocumentStore({ logger: makeLogger() });
             const initializationError = catchError(() => store.initialize({
                 engine,
                 indexes: INDEXES,
@@ -292,7 +319,7 @@ describe('DocumentStore', ({ describe }) => {
 
     describe('initialization requirement', ({ it }) => {
         it('rejects every engine-backed operation before initialization', async () => {
-            const store = new DocumentStore();
+            const store = new DocumentStore({ logger: makeLogger() });
             const operations = [
                 () => store.put({}, { type: 'Note', id: '1' }),
                 () => store.create({}, { type: 'Note', id: '1' }),

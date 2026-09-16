@@ -11,6 +11,7 @@ import { plugins as generalPlugins } from './plugins/general.js';
 import { plugins as cloudflarePlugins, durableObjects } from './plugins/cloudflare.js';
 import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import virtualHosts from './virtual-hosts.js';
+import TraceLogger from './kixx/logger/trace-logger.js';
 
 
 // ENVIRONMENT selects which section of the source config is loaded, so it is
@@ -49,11 +50,14 @@ export default {
     // requestEnvironment is the per-request env binding snapshot provided by the Workers runtime.
     // It may differ from the module-level `env` used at startup (e.g. in tail worker configurations).
     async fetch(nativeRequest, requestEnvironment, cloudflare) {
+        const trace = new TraceLogger(logger, 'http-fetch');
         try {
             const request = new ServerRequest(nativeRequest);
             const requestContext = appContext.createRequestContext(requestEnvironment, request);
 
             const response = await router.handleRequest(requestContext, request, new ServerResponse());
+
+            trace.ok();
 
             return new Response(response.body, {
                 status: response.status,
@@ -76,6 +80,8 @@ export default {
             const payload = {
                 errors: [ HttpRouter.mapErrorToJsonError(error) ],
             };
+
+            trace.error();
 
             return new Response(JSON.stringify(payload, null, 4), {
                 status: 500,

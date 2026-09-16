@@ -24,6 +24,10 @@ function makeLogger() {
     return new Logger({ name: 'Test', level: 'NONE' });
 }
 
+function makeContext() {
+    return { logger: makeLogger() };
+}
+
 function makeStore(rootDirectory, options = {}) {
     return new ContentStore({
         logger: makeLogger(),
@@ -65,7 +69,7 @@ describe('Node ContentStore', ({ after, describe }) => {
         temporaryDirectories.push(rootDirectory);
         return {
             store: makeStore(rootDirectory),
-            context: {},
+            context: makeContext(),
             createStoreWithoutLogger: () => new ContentStore({ rootDirectory, format: 1 }),
         };
     });
@@ -87,7 +91,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory, { format: 7 });
 
-            await store.putFile({}, '/ignored.txt', 'abcdef', 'content');
+            await store.putFile(makeContext(), '/ignored.txt', 'abcdef', 'content');
 
             const filePath = path.join(rootDirectory, 'format-7', 'blobs', 'ab', 'abcdef');
             assertEqual('content', await fsp.readFile(filePath, 'utf8'));
@@ -99,7 +103,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
-            await store.putFile({}, '/', 'abcdef', 'content');
+            await store.putFile(makeContext(), '/', 'abcdef', 'content');
 
             const shardDirectory = path.join(rootDirectory, 'format-1', 'blobs', 'ab');
             assertEqual(JSON.stringify([ 'abcdef' ]), JSON.stringify(await fsp.readdir(shardDirectory)));
@@ -110,11 +114,11 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
-            await store.putFile({}, '/', 'stream', 'content');
-            const stream = await store.getFile({}, 'stream', '/', 'stream');
+            await store.putFile(makeContext(), '/', 'stream', 'content');
+            const stream = await store.getFile(makeContext(), 'stream', '/', 'stream');
             await stream.cancel();
 
-            assertEqual('content', await store.getFile({}, 'text', '/', 'stream'));
+            assertEqual('content', await store.getFile(makeContext(), 'text', '/', 'stream'));
             store.close();
         });
 
@@ -125,12 +129,12 @@ describe('Node ContentStore', ({ after, describe }) => {
             const firstEntries = { '/': [ 'tree', 'first' ] };
             const secondEntries = { '/': [ 'tree', 'second' ] };
 
-            await first.saveIndex({}, 'first', firstEntries);
-            await first.saveIndex({}, 'second', secondEntries);
-            await first.assignBuild({}, 'current', { rootHash: 'first' });
-            await second.assignBuild({}, 'current', { rootHash: 'second' });
+            await first.saveIndex(makeContext(), 'first', firstEntries);
+            await first.saveIndex(makeContext(), 'second', secondEntries);
+            await first.assignBuild(makeContext(), 'current', { rootHash: 'first' });
+            await second.assignBuild(makeContext(), 'current', { rootHash: 'second' });
 
-            const build = await first.getBuild({}, 'current');
+            const build = await first.getBuild(makeContext(), 'current');
             assertEqual('second', build.rootHash);
             assertEqual(JSON.stringify(secondEntries), JSON.stringify(build.entries));
             first.close();
@@ -142,28 +146,28 @@ describe('Node ContentStore', ({ after, describe }) => {
             const first = makeStore(rootDirectory);
             const second = makeStore(rootDirectory);
 
-            await first.saveIndex({}, 'first', { '/': [ 'tree', 'first' ] });
-            await first.saveIndex({}, 'second', { '/': [ 'tree', 'second' ] });
-            await first.assignBuild({}, 'current', { rootHash: 'first' });
+            await first.saveIndex(makeContext(), 'first', { '/': [ 'tree', 'first' ] });
+            await first.saveIndex(makeContext(), 'second', { '/': [ 'tree', 'second' ] });
+            await first.assignBuild(makeContext(), 'current', { rootHash: 'first' });
 
             // A second instance moves the pointer between when a caller could
             // have observed "first" and when it tries to restore it, the same
             // way a concurrent deploy or test run would.
-            await second.assignBuild({}, 'current', { rootHash: 'second' });
+            await second.assignBuild(makeContext(), 'current', { rootHash: 'second' });
 
-            const conflicted = await first.assignBuild({}, 'current', {
+            const conflicted = await first.assignBuild(makeContext(), 'current', {
                 rootHash: 'first',
                 expectedRootHash: 'first',
             });
             assertEqual('conflict', conflicted);
-            assertEqual('second', (await first.getBuild({}, 'current')).rootHash);
+            assertEqual('second', (await first.getBuild(makeContext(), 'current')).rootHash);
 
-            const assigned = await first.assignBuild({}, 'current', {
+            const assigned = await first.assignBuild(makeContext(), 'current', {
                 rootHash: 'first',
                 expectedRootHash: 'second',
             });
             assertEqual('assigned', assigned);
-            assertEqual('first', (await second.getBuild({}, 'current')).rootHash);
+            assertEqual('first', (await second.getBuild(makeContext(), 'current')).rootHash);
 
             first.close();
             second.close();
@@ -173,7 +177,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
-            await store.getFile({}, 'text', '/', 'missing');
+            await store.getFile(makeContext(), 'text', '/', 'missing');
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-1', 'index.sqlite'));
             assertEqual(2, database.prepare('PRAGMA user_version').get().user_version);
@@ -188,7 +192,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const database = new DatabaseSync(':memory:');
             const store = makeStore(rootDirectory, { database });
 
-            await store.saveIndex({}, 'root', { '/': [ 'tree', 'root' ] });
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
             store.close();
 
             assertEqual(1, database.prepare('SELECT COUNT(*) AS count FROM closures').get().count);
@@ -202,7 +206,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const store = makeStore(rootDirectory);
 
             for (const hash of [ '.', '..', 'a/b', 'a\\b', 'a\u0000b' ]) {
-                const caught = await catchAsyncError(() => store.getFile({}, 'text', '/', hash));
+                const caught = await catchAsyncError(() => store.getFile(makeContext(), 'text', '/', hash));
                 assertEqual('AssertionError', caught.name);
             }
             store.close();
@@ -212,13 +216,13 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
-            await store.saveIndex({}, 'root', { '/': [ 'tree', 'root' ] });
-            await store.assignBuild({}, 'build', { rootHash: 'root' });
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
             const database = new DatabaseSync(path.join(rootDirectory, 'format-1', 'index.sqlite'));
             database.prepare('UPDATE closures SET entries_json = ? WHERE root_hash = ?').run('{', 'root');
             database.close();
 
-            const corrupt = await catchAsyncError(() => store.getBuild({}, 'build'));
+            const corrupt = await catchAsyncError(() => store.getBuild(makeContext(), 'build'));
             assertEqual('AssertionError', corrupt.name);
             assert(corrupt.cause);
             store.close();
@@ -226,7 +230,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const newerDatabase = new DatabaseSync(':memory:');
             newerDatabase.exec('PRAGMA user_version = 3');
             const newerStore = makeStore(rootDirectory, { database: newerDatabase });
-            const newer = await catchAsyncError(() => newerStore.getBuild({}, 'build'));
+            const newer = await catchAsyncError(() => newerStore.getBuild(makeContext(), 'build'));
             assertEqual('AssertionError', newer.name);
             assertMatches('newer than supported', newer.message);
             newerStore.close();
@@ -239,7 +243,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             database.exec('PRAGMA user_version = 1');
             const store = makeStore(rootDirectory, { database });
 
-            const caught = await catchAsyncError(() => store.listBuilds({}));
+            const caught = await catchAsyncError(() => store.listBuilds(makeContext()));
 
             assertEqual('AssertionError', caught.name);
             assertMatches('does not migrate schema version 1 to 2', caught.message);
@@ -253,7 +257,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const entries = { '/': [ 'tree', 'root' ] };
             entries.self = entries;
 
-            const caught = await catchAsyncError(() => store.saveIndex({}, 'root', entries));
+            const caught = await catchAsyncError(() => store.saveIndex(makeContext(), 'root', entries));
             assertEqual('AssertionError', caught.name);
             assert(caught.cause);
             store.close();
@@ -266,7 +270,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             store.close();
             store.close();
 
-            const caught = await catchAsyncError(() => store.getFile({}, 'text', '/', 'hash'));
+            const caught = await catchAsyncError(() => store.getFile(makeContext(), 'text', '/', 'hash'));
             assertEqual('AssertionError', caught.name);
             assertMatches('has been closed', caught.message);
         });
@@ -277,7 +281,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             await fsp.writeFile(rootFile, 'file');
             const store = makeStore(rootFile);
 
-            const caught = await catchAsyncError(() => store.getFile({}, 'text', '/', 'hash'));
+            const caught = await catchAsyncError(() => store.getFile(makeContext(), 'text', '/', 'hash'));
             assertEqual('OperationalError', caught.name);
             assert(caught.cause);
             store.close();

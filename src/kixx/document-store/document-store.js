@@ -70,8 +70,20 @@ export const MAX_SORT_KEY_CHAR = '\uFFFF';
  */
 export default class DocumentStore {
 
+    #logger;
     #engine;
     #cursorSigningKey;
+
+    /**
+     * @param {Object} options
+     * @param {import('../logger/logger.js').default} options.logger - Root logger used to create a DocumentStore child logger
+     * @throws {AssertionError} When logger is not provided
+     */
+    constructor(options) {
+        const { logger } = options ?? {};
+        assert(logger, 'DocumentStore requires a logger');
+        this.#logger = logger.createChild('DocumentStore');
+    }
 
     /**
      * Configures the engine and secondary indexes used by this store.
@@ -99,6 +111,8 @@ export default class DocumentStore {
             cursorSigningSecret,
             'DocumentStore#initialize() requires a non-empty cursorSigningSecret',
         );
+
+        this.#logger.info('initialize');
 
         const indexNames = new Set();
         let configuredIndexes = indexes;
@@ -281,6 +295,7 @@ export default class DocumentStore {
             throw new AssertionError('DocumentStore#put() doc.sortKey must be a string when present');
         }
 
+        this.#logger.info('put', { type: doc.type, id: doc.id });
         return await this.#engine.put(context, doc);
     }
 
@@ -318,6 +333,7 @@ export default class DocumentStore {
             throw new AssertionError('DocumentStore#create() doc.sortKey must be a string when present');
         }
 
+        this.#logger.info('create', { type: doc.type, id: doc.id });
         return await this.#engine.create(context, doc);
     }
 
@@ -362,6 +378,7 @@ export default class DocumentStore {
             throw new AssertionError('DocumentStore#update() version must be an integer greater than zero');
         }
 
+        this.#logger.info('update', { type: doc.type, id: doc.id });
         return await this.#engine.update(context, doc, version);
     }
 
@@ -388,6 +405,7 @@ export default class DocumentStore {
             throw new AssertionError('DocumentStore#get() id contains illegal control characters');
         }
 
+        this.#logger.info('get', { type, id });
         return await this.#engine.get(context, type, id);
     }
 
@@ -425,6 +443,7 @@ export default class DocumentStore {
             throw new AssertionError('DocumentStore#delete() version must be an integer greater than zero when present');
         }
 
+        this.#logger.info('delete', { type, id });
         return await this.#engine.delete(context, type, id, version);
     }
 
@@ -466,6 +485,7 @@ export default class DocumentStore {
             ? undefined
             : await this.#unsealCursor(publicCursor, scope);
 
+        this.#logger.info('scan', { type, options });
         const result = await this.#engine.scan(context, type, {
             descending,
             limit,
@@ -522,10 +542,12 @@ export default class DocumentStore {
             descending,
             options,
         });
+
         const cursor = isUndefined(publicCursor)
             ? undefined
             : await this.#unsealCursor(publicCursor, scope);
 
+        this.#logger.info('query', { type, options });
         const result = await this.#engine.query(context, type, {
             index: options.index,
             descending,

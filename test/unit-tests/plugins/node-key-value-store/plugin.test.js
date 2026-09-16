@@ -69,8 +69,8 @@ describe('node-key-value-store plugin', ({ after, it }) => {
         assertEqual(1, resolveFilepath.mock.callCount());
         assertEqual('../data/key_value_store.sqlite', resolveFilepath.mock.getCall(0).arguments[0]);
 
-        await registered.service.put(null, 'greeting', 'hello');
-        assertEqual('hello', await registered.service.get(null, 'greeting'));
+        await registered.service.put({ logger: makeLogger() }, 'greeting', 'hello');
+        assertEqual('hello', await registered.service.get({ logger: makeLogger() }, 'greeting'));
     });
 
     it('throws during registration when the application config path is missing', () => {

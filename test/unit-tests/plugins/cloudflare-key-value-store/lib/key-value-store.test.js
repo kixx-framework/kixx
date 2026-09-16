@@ -48,20 +48,11 @@ function makeKVNamespace(initial) {
 }
 
 function makeContext(kvStore) {
-    return { env: { KEY_VALUE_STORE: kvStore ?? makeKVNamespace() } };
+    return { logger: makeLogger(), env: { KEY_VALUE_STORE: kvStore ?? makeKVNamespace() } };
 }
 
 function makeStore() {
-    return new KeyValueStore({ logger: makeLogger() });
-}
-
-function catchError(fn) {
-    try {
-        fn();
-    } catch (error) {
-        return error;
-    }
-    return null;
+    return new KeyValueStore();
 }
 
 async function catchAsyncError(fn) {
@@ -85,23 +76,6 @@ async function withFixedNow(nowMilliseconds, callback) {
 
 
 describe('KeyValueStore', ({ describe }) => {
-
-    describe('constructor', ({ it }) => {
-        it('throws when logger is not provided', () => {
-            const caught = catchError(() => new KeyValueStore({}));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('KeyValueStore requires a logger', caught.message);
-        });
-
-        it('throws when options are not provided', () => {
-            const caught = catchError(() => new KeyValueStore());
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-        });
-    });
 
     describe('get', ({ it }) => {
         it('returns null when the key does not exist', async () => {
