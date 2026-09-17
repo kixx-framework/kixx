@@ -118,21 +118,23 @@ router.on('error', ({ error, requestId }) => {
 
 async function handleRequest(nodeRequest, nodeResponse) {
     const trace = new TraceLogger(logger, 'http-request');
+    let pathname;
     let isHeadRequest = false;
 
     try {
         const request = new ServerRequest(nodeRequest, { trustProxy });
+        pathname = request.url.pathname;
         isHeadRequest = request.isHeadRequest();
         const requestContext = appContext.createRequestContext(env, request);
         const response = await router.handleRequest(requestContext, request, new ServerResponse());
-        trace.ok();
+        trace.ok({ pathname });
         sendResponse(nodeResponse, response, isHeadRequest);
     } catch (cause) {
         // The router emits 'error' events for logging, but a rejection here still
         // needs to terminate the socket or the client hangs until it times out.
         logger.error('unhandled error while handling request', null, cause);
 
-        trace.error();
+        trace.error({ pathname });
 
         if (nodeResponse.headersSent) {
             nodeResponse.destroy(cause);

@@ -51,13 +51,16 @@ export default {
     // It may differ from the module-level `env` used at startup (e.g. in tail worker configurations).
     async fetch(nativeRequest, requestEnvironment, cloudflare) {
         const trace = new TraceLogger(logger, 'http-fetch');
+        let pathname;
+
         try {
             const request = new ServerRequest(nativeRequest);
+            pathname = request.url.pathname;
             const requestContext = appContext.createRequestContext(requestEnvironment, request);
 
             const response = await router.handleRequest(requestContext, request, new ServerResponse());
 
-            trace.ok();
+            trace.ok({ pathname });
 
             return new Response(response.body, {
                 status: response.status,
@@ -81,7 +84,7 @@ export default {
                 errors: [ HttpRouter.mapErrorToJsonError(error) ],
             };
 
-            trace.error();
+            trace.error({ pathname });
 
             return new Response(JSON.stringify(payload, null, 4), {
                 status: 500,
