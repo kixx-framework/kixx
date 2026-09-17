@@ -7,9 +7,11 @@
  * Measures a single span, from construction until `ok()` or `error()` is
  * called, and writes one INFO entry with the message `trace <span>`.
  *
- * The entry's info object is a copy of the construction-time `info` with
- * `status` (`'ok'` or `'error'`) and `duration` (milliseconds, rounded to the
- * nearest 0.1) added. Call exactly one of `ok()` or `error()` per instance;
+ * The entry's info object merges construction-time `info` with optional
+ * completion-time `info`, whose fields take precedence. Neither input is
+ * mutated. Logger-generated `status` (`'ok'` or `'error'`) and `duration`
+ * (milliseconds, rounded to the nearest 0.1) override both inputs.
+ * Call exactly one of `ok()` or `error()` per instance;
  * each call logs another entry, measured from the same start time.
  *
  * @example
@@ -44,23 +46,25 @@ export default class TraceLogger {
 
     /**
      * Logs the span as completed successfully.
+     * @param {Object} [info] - Fields merged over constructor info; copied, not mutated
      * @returns {void}
      */
-    ok() {
-        this.#logger.info(this.#message, this.#getEndInfo('ok'));
+    ok(info) {
+        this.#logger.info(this.#message, this.#getEndInfo('ok', info));
     }
 
     /**
      * Logs the span as failed. Logged at INFO level; the caller remains
      * responsible for reporting or rethrowing the error itself.
+     * @param {Object} [info] - Fields merged over constructor info; copied, not mutated
      * @returns {void}
      */
-    error() {
-        this.#logger.info(this.#message, this.#getEndInfo('error'));
+    error(info) {
+        this.#logger.info(this.#message, this.#getEndInfo('error', info));
     }
 
-    #getEndInfo(status) {
+    #getEndInfo(status, info) {
         const duration = Math.round((performance.now() - this.#startTime) * 10) / 10;
-        return Object.assign({}, this.#info || {}, { status, duration });
+        return Object.assign({}, this.#info || {}, info || {}, { status, duration });
     }
 }
