@@ -1,6 +1,7 @@
 {
     "template": "page.html",
     "subpage": {
-        "title": "Files"
+        "title": "Files",
+        "section": "files"
     }
 }

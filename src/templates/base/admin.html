@@ -16,13 +16,15 @@
             "body" will exist if a page template was found and rendered. Otherwise, we
             expect page content to be defined in the page "includes.body" file
         --}}
-        {{#if body }}
-        <div class="admin-layout with-sidebar">{{{ body }}}</div>
-        {{ else }}{{#if includes.body }}
-        <div class="admin-layout with-sidebar">{{{ includes.body }}}</div>
-        {{ else }}
-        <div class="admin-layout with-sidebar">No content.</div>
-        {{/if}}{{/if}}
+        {{!--
+            The .with-sidebar primitive treats the first child as the sidebar track
+            and the last child as the fluid track, so exactly one element must
+            follow the nav partial.
+        --}}
+        <div class="admin-layout with-sidebar">
+            {{>admin-nav.html}}
+            {{#if body }}{{{ body }}}{{ else }}{{#if includes.body }}{{{ includes.body }}}{{ else }}<main class="admin-main">No content.</main>{{/if}}{{/if}}
+        </div>
 
         <script type="module" src="{{ assetUrl assets "/javascript/site.js" }}"></script>
     </body>
