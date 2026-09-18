@@ -1041,6 +1041,24 @@ Hyperview creates a `page` object and fills several metadata defaults:
 }
 ```
 
+### Admin Sidebar Navigation
+
+`templates/base/admin.html` renders the `admin-nav.html` partial as the first child of `.admin-layout.with-sidebar`, so every admin page gets the sidebar and the page template must render exactly one element (normally `<main class="admin-main">`) after it. The login page uses `admin-login.html` and has no sidebar.
+
+The sidebar highlights the current section from `subpage.section`, declared once in the section's `page.json`:
+
+```json
+{
+    "template": "page.html",
+    "subpage": {
+        "title": "Files",
+        "section": "files"
+    }
+}
+```
+
+Nested pages inherit the key through ancestor `page.json` merging, so `/admin/files/new` highlights Files without declaring anything. Do not put `subpage.section` in `src/pages/admin/page.json`; it is the ancestor of every admin page. When adding an admin section, declare its key in the section's `page.json` and add a matching link to `templates/partials/admin-nav.html`. Pages with `section` set to `style-guide` get the style guide section list instead of the admin sections.
+
 ### Hyperview Page-Data JSON Response
 
 Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request only when the pathname ends in `.json` (matched case-insensitively).

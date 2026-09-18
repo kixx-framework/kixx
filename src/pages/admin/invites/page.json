@@ -1,6 +1,7 @@
 {
     "template": "page.html",
     "subpage": {
-        "title": "Admin User Invites"
+        "title": "Admin User Invites",
+        "section": "invites"
     }
 }

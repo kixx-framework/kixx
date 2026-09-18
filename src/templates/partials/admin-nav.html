@@ -1,0 +1,55 @@
+<nav class="admin-nav" aria-label="Admin sections">
+    <div class="admin-nav__inner">
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link" href="/">View site</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin"}} aria-current="page"{{/ifEqual}} href="/admin">Admin panel</a></li>
+        </ul>
+
+        {{#ifEqual subpage.section "style-guide"}}
+        <p class="admin-nav__title">Style guide</p>
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide">Introduction</a></li>
+        </ul>
+
+        <p class="admin-nav__title">Foundations</p>
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/aesthetic"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/aesthetic">Aesthetic</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/typography"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/typography">Typography</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/colors"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/colors">Colors</a></li>
+        </ul>
+
+        <p class="admin-nav__title">Layout</p>
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/layout"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/layout">Layout</a></li>
+        </ul>
+
+        <p class="admin-nav__title">Components</p>
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/buttons"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/buttons">Buttons</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/cards"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/cards">Cards</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/forms"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/forms">Forms</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/text-fields"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/text-fields">Text Fields</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/copy-fields"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/copy-fields">Copy Fields</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/multi-line-text-areas"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/multi-line-text-areas">Multi-Line Text Areas</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual pathname "/admin/style-guide/callouts"}} aria-current="page"{{/ifEqual}} href="/admin/style-guide/callouts">Callouts</a></li>
+        </ul>
+        {{else}}
+        <p class="admin-nav__title">Content</p>
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link"{{#ifEqual subpage.section "files"}} aria-current="page"{{/ifEqual}} href="/admin/files">Files</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual subpage.section "publishing"}} aria-current="page"{{/ifEqual}} href="/admin/publishing">Publishing</a></li>
+        </ul>
+
+        <p class="admin-nav__title">Access</p>
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link"{{#ifEqual subpage.section "invites"}} aria-current="page"{{/ifEqual}} href="/admin/invites">User Invites</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual subpage.section "publishing-api-tokens"}} aria-current="page"{{/ifEqual}} href="/admin/publishing-api-tokens">Publishing API Tokens</a></li>
+        </ul>
+
+        <p class="admin-nav__title">Reference</p>
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link" href="/admin/style-guide">Style Guide</a></li>
+        </ul>
+        {{/ifEqual}}
+    </div>
+</nav>
