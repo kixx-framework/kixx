@@ -615,12 +615,21 @@ behavior.
 | present but stale | `412 BuildPointerConflict` |
 | both headers, or a malformed value (`If-Match` not one quoted valid hash, `If-None-Match` not exactly `*`) | `400 BAD_REQUEST_ERROR` |
 
-Assigning the Release a build already points at is a **success no-op**, not
-a conflict — this is what makes retry-after-lost-response and an
-unconditional restore script safe.
+Assigning the Release a build already points at is a **success no-op only
+after its precondition passes**. It returns the stored `assignedAt` and adds
+no Activation history entry. A stale `If-Match` or `If-None-Match: *` still
+returns `412 BuildPointerConflict`, even when the requested Release is
+already current.
 
 The response is `200 OK` with the resulting Build resource and a matching
 `ETag`.
+
+If a client loses a response after a successful assignment, it must read and
+reconcile the current Build before deciding what to do. Retrying the same
+conditional request may return `412` because the pointer has already moved;
+there is no unconditional retry or request-idempotency mechanism. Hash
+preconditions also cannot detect an A→B→A sequence until the assignment
+identity work in #152 lands.
 
 ## Build activation history
 
@@ -628,7 +637,8 @@ The response is `200 OK` with the resulting Build resource and a matching
 GET /publishing-api/v1/builds/:buildId/activations?limit=25&cursor=<cursor>
 ```
 
-Lists every successful assignment to one build, newest first. Returns
+Lists every changed assignment to one build, newest first. A successful
+same-target no-op creates no entry. Returns
 `404 BuildNotFound` when the build has never been assigned.
 
 ```json

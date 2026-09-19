@@ -30,12 +30,17 @@ let preStageResponse;
 let readBackResponse;
 let restagingConflictResponse;
 let staleMatchResponse;
+let conflictPointerBefore;
+let conflictPointerAfter;
+let conflictActivationsBefore;
+let conflictActivationsAfter;
 let carryForwardResponse;
 let carryForwardReadResponse;
 let forwardResponse;
 let rollbackResponse;
 let coherentReadAfterRollback;
 let noOpResponse;
+let activationsBeforeNoOp;
 let activations;
 let buildsListResponse;
 
@@ -67,8 +72,12 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
         );
         readBackResponse = await getBuild(publishingToken, buildId);
 
-        restagingConflictResponse = await putBuild(publishingToken, buildId, { releaseId: releaseB.id, ifNoneMatch: '*' });
-        staleMatchResponse = await putBuild(publishingToken, buildId, { releaseId: releaseB.id, ifMatch: releaseB.id });
+        conflictPointerBefore = await getBuild(publishingToken, buildId);
+        conflictActivationsBefore = await listBuildActivations(publishingToken, buildId);
+        restagingConflictResponse = await putBuild(publishingToken, buildId, { releaseId: releaseA.id, ifNoneMatch: '*' });
+        staleMatchResponse = await putBuild(publishingToken, buildId, { releaseId: releaseA.id, ifMatch: releaseB.id });
+        conflictPointerAfter = await getBuild(publishingToken, buildId);
+        conflictActivationsAfter = await listBuildActivations(publishingToken, buildId);
 
         carryForwardResponse = mustSucceed(
             await putBuild(publishingToken, carryForwardBuildId, { releaseId: releaseA.id, ifNoneMatch: '*' }),
@@ -89,6 +98,7 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
         // must reflect that assignment, never the pointer it replaced.
         coherentReadAfterRollback = await getBuild(publishingToken, buildId);
 
+        activationsBeforeNoOp = await listBuildActivations(publishingToken, buildId);
         noOpResponse = mustSucceed(
             await putBuild(publishingToken, buildId, { releaseId: releaseA.id, ifMatch: releaseA.id }),
             'reassign the already-current Release',
@@ -125,6 +135,11 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
         assertEqual('BuildPointerConflict', staleMatchResponse.body.errors[0].code);
     });
 
+    it('preserves the pointer and activation history after same-target conflicts', () => {
+        assertEqual(conflictPointerBefore.body.data.attributes.assignedAt, conflictPointerAfter.body.data.attributes.assignedAt);
+        assertEqual(conflictActivationsBefore.body.data.length, conflictActivationsAfter.body.data.length);
+    });
+
     it('carries one Release forward to a second build id with no manifest', () => {
         assertEqual(200, carryForwardResponse.status);
         assertEqual(releaseA.id, carryForwardReadResponse.body.data.attributes.releaseId);
@@ -146,6 +161,8 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
     it('treats reassigning the current Release as a success no-op', () => {
         assertEqual(200, noOpResponse.status);
         assertEqual(releaseA.id, noOpResponse.body.data.attributes.releaseId);
+        assertEqual(rollbackResponse.body.data.attributes.assignedAt, noOpResponse.body.data.attributes.assignedAt);
+        assertEqual(activationsBeforeNoOp.body.data.length, activations.body.data.length);
     });
 
     it('makes rollback discoverable purely from activation history, with no retained root hash', () => {

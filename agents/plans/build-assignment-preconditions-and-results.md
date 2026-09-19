@@ -310,7 +310,7 @@ Record the actual files changed in the handoff notes.
 
 ### Task BA3: Verify and document conditional no-ops through the Publishing API
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** BA1, BA2
 **Documentation:** This plan's Required behavior matrix; `docs/publishing-api.md`
 (Build pointers, Assign a Release to a build, Build activation history);
@@ -403,11 +403,22 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Local E2E covers the real Node HTTP path;
-  production Cloudflare SQL tests do not prove runtime scheduling/durability.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added HTTP response/no-op/race unit coverage, expanded the local
+  build-pointer workflow with same-target conflict and no-op audit assertions,
+  and corrected Publishing API retry and activation-history documentation.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: The handler already explicitly serialized public
+  Build fields, so no handler implementation change was necessary. Local E2E
+  covers the real Node HTTP path; production Cloudflare SQL tests do not prove
+  runtime scheduling/durability. Cloudflare deployment E2E did not run because
+  this plan does not authorize remote deployment or writes.
+- Actual files changed: `docs/publishing-api.md`,
+  `test/unit-tests/app/presentation/request-handlers/publishing-api/builds.test.js`,
+  `test/end-to-end/200-publishing-api/050-build-pointers.test.js`, and this
+  plan.
+- Validation run: `node run-tests.js test/unit-tests/app/presentation/request-handlers/publishing-api/builds.test.js` (8 passed);
+  `node run-linter.js src/app/presentation/request-handlers/publishing-api/builds.js test/unit-tests/app/presentation/request-handlers/publishing-api/builds.test.js test/end-to-end/200-publishing-api/050-build-pointers.test.js` (passed);
+  `node run-tests.js` (1453 passed); disposable local target create/seed/serve,
+  then `node run-tests.js --e2e test/end-to-end/200-publishing-api/050-build-pointers.test.js` (12 passed); target destroyed; `git diff --check` (passed).
 - Blockers: None.

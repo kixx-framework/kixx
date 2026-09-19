@@ -8,8 +8,8 @@ import { JSON_API_CONTENT_TYPE } from '../../../../../../src/app/presentation/li
 import { hashBlob } from '../../../../../../src/kixx/content-addressable-store/addressing.js';
 
 
-async function makeRequest(headers) {
-    const releaseId = await hashBlob(new TextEncoder().encode('release-new').buffer);
+async function makeRequest(headers, requestedReleaseId) {
+    const releaseId = requestedReleaseId ?? await hashBlob(new TextEncoder().encode('release-new').buffer);
     return {
         pathnameParams: { buildId: 'future-build' },
         headers: new Headers(headers),
@@ -21,6 +21,46 @@ async function makeRequest(headers) {
                 attributes: { releaseId, reason: 'publish' },
             },
         }),
+    };
+}
+
+async function makeRaceContext() {
+    const assignedReleaseId = await hashBlob(new TextEncoder().encode('release-assigned').buffer);
+    const laterReleaseId = await hashBlob(new TextEncoder().encode('release-later').buffer);
+    const assignedAt = '2026-09-01T13:00:00.000Z';
+    let currentPointer = {
+        rootHash: assignedReleaseId,
+        assignedAt,
+    };
+    const store = {
+        getBuildPointer() {
+            throw new Error('putBuild must not reread the pointer');
+        },
+        async assignRelease() {
+            return {
+                buildId: 'future-build',
+                releaseId: assignedReleaseId,
+                assignedAt,
+                isChanged: true,
+                previousReleaseId: null,
+            };
+        },
+    };
+    return {
+        assignedReleaseId,
+        laterReleaseId,
+        currentPointer: () => currentPointer,
+        user: { id: 'token-1' },
+        getService: () => store,
+        getCollection: () => ({
+            async append() {
+                currentPointer = {
+                    rootHash: laterReleaseId,
+                    assignedAt: '2026-09-01T14:00:00.000Z',
+                };
+            },
+        }),
+        logger: { error() {} },
     };
 }
 
@@ -108,6 +148,49 @@ describe('Publishing API builds', ({ it }) => {
 
         assertEqual(412, error.httpStatusCode);
         assertEqual(null, context.preconditions[0]);
+    });
+
+    it('keeps a valid no-op private and returns its preserved timestamp', async () => {
+        const releaseId = await hashBlob(new TextEncoder().encode('release-current').buffer);
+        const assignedAt = '2020-01-01T00:00:00.000Z';
+        const context = makeContext(() => ({
+            buildId: 'future-build',
+            releaseId,
+            assignedAt,
+            isChanged: false,
+            previousReleaseId: releaseId,
+        }));
+        const response = await putBuild(
+            context,
+            await makeRequest({ 'if-match': `"${ releaseId }"` }, releaseId),
+            new ServerResponse(),
+        );
+
+        const document = JSON.parse(response.body);
+        assertEqual(200, response.status);
+        assertEqual(releaseId, document.data.attributes.releaseId);
+        assertEqual(assignedAt, document.data.attributes.assignedAt);
+        assertEqual(undefined, document.data.attributes.isChanged);
+        assertEqual(undefined, document.data.attributes.previousReleaseId);
+        assertEqual(`"${ releaseId }"`, response.headers.get('etag'));
+    });
+
+    it('responds with the assignment result when a later write completes first', async () => {
+        const context = await makeRaceContext();
+        const response = await putBuild(
+            context,
+            await makeRequest(
+                { 'if-match': `"${ context.assignedReleaseId }"` },
+                context.assignedReleaseId,
+            ),
+            new ServerResponse(),
+        );
+
+        const document = JSON.parse(response.body);
+        assertEqual(context.laterReleaseId, context.currentPointer().rootHash);
+        assertEqual(context.assignedReleaseId, document.data.attributes.releaseId);
+        assertEqual('2026-09-01T13:00:00.000Z', document.data.attributes.assignedAt);
+        assertEqual(`"${ context.assignedReleaseId }"`, response.headers.get('etag'));
     });
 
     it('rejects a quoted non-hash ETag before calling the service', async () => {
