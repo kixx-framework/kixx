@@ -85,6 +85,7 @@ async function loadRunningBuild(context) {
         id: runningBuildId,
         releaseId: pointer?.rootHash ?? null,
         assignedAt: pointer?.assignedAt ?? null,
+        assignmentId: pointer?.assignmentId ?? null,
     };
 }
 
@@ -331,7 +332,7 @@ export async function postAssignRelease(context, request, response, skip) {
         await assignReleaseToRunningBuild(context, {
             buildId: form.build_id,
             releaseId: form.release_id,
-            expectedReleaseId: form.expected_release_id,
+            expectedAssignmentId: form.expected_assignment_id,
             activatedBy: context.user.id,
         });
     } catch (error) {

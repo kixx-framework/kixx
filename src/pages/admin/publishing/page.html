@@ -127,7 +127,7 @@
                             {{/if}}
                             <input type="hidden" name="release_id" value="{{ release.id }}">
                             <input type="hidden" name="build_id" value="{{ runningBuild.id }}">
-                            <input type="hidden" name="expected_release_id" value="{{ runningBuild.releaseId }}">
+                            <input type="hidden" name="expected_assignment_id" value="{{ runningBuild.assignmentId }}">
                             {{#ifEqual release.direction "rollback"}}
                             <button class="button button--secondary" type="submit">Roll back to this Release</button>
                             {{else}}

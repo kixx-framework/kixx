@@ -117,6 +117,7 @@ async function runSeedSequence(appContext, options) {
     await assignRelease(appContext, {
         buildId: env.BUILD_ID,
         releaseId: release.releaseId,
+        expectedAssignmentId: null,
         activatedBy: SEEDED_BY,
         reason: 'publish',
     });

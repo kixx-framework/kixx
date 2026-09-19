@@ -37,7 +37,7 @@ describe('Publishing API running-build publish workflow', ({ before, after, it }
 
         const restoreResponse = await putBuild(publishingToken, runningBuildId, {
             releaseId: originalReleaseId,
-            ifMatch: newRelease.id,
+            expectedAssignmentId: assignResponse.body.data.attributes.assignmentId,
             reason: 'restore',
         });
         if (restoreResponse.status !== 200) {
@@ -53,6 +53,7 @@ describe('Publishing API running-build publish workflow', ({ before, after, it }
         publishingToken = token.token;
 
         const discovery = await getDiscovery(publishingToken);
+        assertEqual(2, discovery.body.data.attributes.buildAssignmentProtocolVersion);
         runningBuildId = discovery.body.data.attributes.runningBuildId;
         if (!runningBuildId) {
             throw new Error('Publishing API discovery reports no running build id; this workflow cannot run.');
@@ -70,7 +71,7 @@ describe('Publishing API running-build publish workflow', ({ before, after, it }
             originalReleaseId = pointerResponse.body.data.attributes.releaseId;
             assignResponse = await putBuild(publishingToken, runningBuildId, {
                 releaseId: newRelease.id,
-                ifMatch: originalReleaseId,
+                expectedAssignmentId: pointerResponse.body.data.attributes.assignmentId,
                 reason: 'publish',
             });
         } else if (pointerResponse.status === 404) {
@@ -80,7 +81,7 @@ describe('Publishing API running-build publish workflow', ({ before, after, it }
             originalReleaseId = null;
             assignResponse = await putBuild(publishingToken, runningBuildId, {
                 releaseId: newRelease.id,
-                ifNoneMatch: '*',
+                expectedAssignmentId: null,
                 reason: 'publish',
             });
         } else {
@@ -93,7 +94,7 @@ describe('Publishing API running-build publish workflow', ({ before, after, it }
         activationsResponse = await listBuildActivations(publishingToken, runningBuildId);
     });
 
-    it('assigns a new Release to the running build with If-Match', () => {
+    it('assigns a new Release to the running build with its observed JSON identity', () => {
         assertEqual(200, assignResponse.status);
         assertEqual(newRelease.id, assignResponse.body.data.attributes.releaseId);
     });
@@ -101,7 +102,7 @@ describe('Publishing API running-build publish workflow', ({ before, after, it }
     it('reads the newly assigned Release back from the running build', () => {
         assertEqual(200, readBackResponse.status);
         assertEqual(newRelease.id, readBackResponse.body.data.attributes.releaseId);
-        assertEqual(`"${ newRelease.id }"`, readBackResponse.headers.get('etag'));
+        assertEqual(`"${ assignResponse.body.data.attributes.assignmentId }"`, readBackResponse.headers.get('etag'));
     });
 
     it('records the assignment in the running build activation history', () => {

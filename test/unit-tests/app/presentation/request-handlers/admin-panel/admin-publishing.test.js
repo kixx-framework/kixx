@@ -9,6 +9,8 @@ import {
 } from '../../../../../../src/app/presentation/request-handlers/admin-panel/admin-publishing.js';
 
 
+const ASSIGNMENT_ID = '00000000-0000-4000-8000-000000000001';
+
 function makeRelease(overrides) {
     return Object.assign({
         releaseId: 'release-1',
@@ -216,7 +218,7 @@ describe('getPublishingOverview', ({ it }) => {
     it('reports the running build and marks the current Release', async () => {
         const context = makeContext({
             runningBuildId: 'build-1',
-            pointers: { 'build-1': { rootHash: 'release-current', assignedAt: '2026-08-15T00:00:00.000Z' } },
+            pointers: { 'build-1': { rootHash: 'release-current', assignmentId: ASSIGNMENT_ID, assignedAt: '2026-08-15T00:00:00.000Z' } },
             releases: { 'release-current': makeRelease({ id: 'release-current', createdAt: '2026-08-15T00:00:00.000Z' }) },
             releasePage: {
                 items: [
@@ -231,6 +233,7 @@ describe('getPublishingOverview', ({ it }) => {
         await getPublishingOverview(context, makeRequest(), response);
 
         assertEqual('release-current', response.props.runningBuild.releaseId);
+        assertEqual(ASSIGNMENT_ID, response.props.runningBuild.assignmentId);
         assertEqual(true, response.props.releases[0].isCurrent);
         assertEqual(false, response.props.releases[1].isCurrent);
         assertEqual('rollback', response.props.releases[1].direction);
@@ -240,7 +243,7 @@ describe('getPublishingOverview', ({ it }) => {
     it('omits the assign control for a principal lacking the update grant', async () => {
         const context = makeContext({
             runningBuildId: 'build-1',
-            pointers: { 'build-1': { rootHash: 'release-current', assignedAt: '2026-08-15T00:00:00.000Z' } },
+            pointers: { 'build-1': { rootHash: 'release-current', assignmentId: ASSIGNMENT_ID, assignedAt: '2026-08-15T00:00:00.000Z' } },
             releases: { 'release-current': makeRelease({ id: 'release-current' }) },
             permissions: [ { action: 'urn:kixx:get', resource: 'urn:kixx:publishing:*' } ],
         });
@@ -440,7 +443,7 @@ describe('getPublishingRelease', ({ it }) => {
     it('omits the assign control for a principal lacking the update grant', async () => {
         const context = makeContext({
             runningBuildId: 'build-1',
-            pointers: { 'build-1': { rootHash: 'release-current', assignedAt: '2026-08-15T00:00:00.000Z' } },
+            pointers: { 'build-1': { rootHash: 'release-current', assignmentId: ASSIGNMENT_ID, assignedAt: '2026-08-15T00:00:00.000Z' } },
             releases: {
                 'release-1': makeRelease({ id: 'release-1' }),
                 'release-current': makeRelease({ id: 'release-current' }),
@@ -457,7 +460,7 @@ describe('getPublishingRelease', ({ it }) => {
     it('renders the assign control with a rollback direction for an older Release', async () => {
         const context = makeContext({
             runningBuildId: 'build-1',
-            pointers: { 'build-1': { rootHash: 'release-current', assignedAt: '2026-08-15T00:00:00.000Z' } },
+            pointers: { 'build-1': { rootHash: 'release-current', assignmentId: ASSIGNMENT_ID, assignedAt: '2026-08-15T00:00:00.000Z' } },
             releases: {
                 'release-1': makeRelease({ id: 'release-1', createdAt: '2026-08-01T00:00:00.000Z' }),
                 'release-current': makeRelease({ id: 'release-current', createdAt: '2026-08-15T00:00:00.000Z' }),
@@ -469,13 +472,13 @@ describe('getPublishingRelease', ({ it }) => {
 
         assert(response.props.form, 'expected an assign form context');
         assertEqual('rollback', response.props.direction);
+        assertEqual(ASSIGNMENT_ID, response.props.runningBuild.assignmentId);
     });
 });
 
 describe('postAssignRelease', ({ it }) => {
 
-    // AssignReleaseForm rejects a release_id/expected_release_id that is not a
-    // well-formed content hash, so submitted ids must match the digest pattern.
+    // Release ids are content hashes; the captured assignment token is a UUID.
     const RELEASE_CURRENT_HASH = 'a'.repeat(26);
     const RELEASE_NEW_HASH = 'b'.repeat(26);
     const RELEASE_OLD_HASH = 'c'.repeat(26);
@@ -485,9 +488,35 @@ describe('postAssignRelease', ({ it }) => {
         return Object.assign({
             release_id: RELEASE_NEW_HASH,
             build_id: 'build-1',
-            expected_release_id: RELEASE_CURRENT_HASH,
+            expected_assignment_id: ASSIGNMENT_ID,
         }, overrides);
     }
+
+    it('rejects the token captured by a form before A to B to A', async () => {
+        const pointers = {
+            'build-1': { rootHash: RELEASE_CURRENT_HASH, assignmentId: ASSIGNMENT_ID },
+        };
+        const context = makeContext({
+            pointers,
+            releases: {
+                [RELEASE_CURRENT_HASH]: makeRelease({ id: RELEASE_CURRENT_HASH }),
+                [RELEASE_NEW_HASH]: makeRelease({ id: RELEASE_NEW_HASH }),
+            },
+        });
+        const page = makeResponse();
+        await getPublishingOverview(context, makeRequest(), page);
+        const submitted = formFields({ expected_assignment_id: page.props.runningBuild.assignmentId });
+
+        pointers['build-1'] = { rootHash: RELEASE_NEW_HASH, assignmentId: crypto.randomUUID() };
+        pointers['build-1'] = { rootHash: RELEASE_CURRENT_HASH, assignmentId: crypto.randomUUID() };
+        const response = makeResponse();
+        await postAssignRelease(context, makeRequest({ formFields: submitted }), response, () => {});
+
+        assertEqual('/admin/publishing?notice=pointer_conflict', response.redirect.location);
+        assertEqual(0, context.assignCalls.length);
+        assertEqual(0, context.appendCalls.length);
+        assertEqual(RELEASE_CURRENT_HASH, pointers['build-1'].rootHash);
+    });
 
     it('redirects with form_expired when CSRF validation fails', async () => {
         const context = makeContext();
@@ -514,7 +543,7 @@ describe('postAssignRelease', ({ it }) => {
     it('redirects with release_assigned on success and records the audit reason', async () => {
         const context = makeContext({
             runningBuildId: 'build-1',
-            pointers: { 'build-1': { rootHash: RELEASE_CURRENT_HASH, assignedAt: '2026-08-15T00:00:00.000Z' } },
+            pointers: { 'build-1': { rootHash: RELEASE_CURRENT_HASH, assignmentId: ASSIGNMENT_ID, assignedAt: '2026-08-15T00:00:00.000Z' } },
             releases: {
                 [RELEASE_NEW_HASH]: makeRelease({ id: RELEASE_NEW_HASH, createdAt: '2026-09-01T00:00:00.000Z' }),
                 [RELEASE_CURRENT_HASH]: makeRelease({ id: RELEASE_CURRENT_HASH, createdAt: '2026-08-15T00:00:00.000Z' }),
@@ -530,14 +559,14 @@ describe('postAssignRelease', ({ it }) => {
         assertEqual(1, skipCalls);
         assertEqual('/admin/publishing?notice=release_assigned', response.redirect.location);
         assertEqual('publish', context.appendCalls[0].reason);
-        assertEqual(RELEASE_CURRENT_HASH, context.assignCalls[0].precondition);
+        assertEqual(ASSIGNMENT_ID, context.assignCalls[0].expectedAssignmentId);
         assertEqual('admin-1', context.appendCalls[0].activatedBy);
     });
 
     it('records rollback for an older Release', async () => {
         const context = makeContext({
             runningBuildId: 'build-1',
-            pointers: { 'build-1': { rootHash: RELEASE_CURRENT_HASH, assignedAt: '2026-08-15T00:00:00.000Z' } },
+            pointers: { 'build-1': { rootHash: RELEASE_CURRENT_HASH, assignmentId: ASSIGNMENT_ID, assignedAt: '2026-08-15T00:00:00.000Z' } },
             releases: {
                 [RELEASE_OLD_HASH]: makeRelease({ id: RELEASE_OLD_HASH, createdAt: '2026-08-01T00:00:00.000Z' }),
                 [RELEASE_CURRENT_HASH]: makeRelease({ id: RELEASE_CURRENT_HASH, createdAt: '2026-08-15T00:00:00.000Z' }),
@@ -580,7 +609,7 @@ describe('postAssignRelease', ({ it }) => {
     it('redirects with pointer_conflict when the expected Release is stale', async () => {
         const context = makeContext({
             runningBuildId: 'build-1',
-            pointers: { 'build-1': { rootHash: RELEASE_DIFFERENT_HASH, assignedAt: '2026-08-15T00:00:00.000Z' } },
+            pointers: { 'build-1': { rootHash: RELEASE_DIFFERENT_HASH, assignmentId: crypto.randomUUID(), assignedAt: '2026-08-15T00:00:00.000Z' } },
             releases: { [RELEASE_NEW_HASH]: makeRelease({ id: RELEASE_NEW_HASH }) },
         });
         const response = makeResponse();
@@ -593,7 +622,7 @@ describe('postAssignRelease', ({ it }) => {
     it('redirects with release_not_found for an unknown Release', async () => {
         const context = makeContext({
             runningBuildId: 'build-1',
-            pointers: { 'build-1': { rootHash: RELEASE_CURRENT_HASH, assignedAt: '2026-08-15T00:00:00.000Z' } },
+            pointers: { 'build-1': { rootHash: RELEASE_CURRENT_HASH, assignmentId: ASSIGNMENT_ID, assignedAt: '2026-08-15T00:00:00.000Z' } },
         });
         const response = makeResponse();
 

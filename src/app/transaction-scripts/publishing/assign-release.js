@@ -1,4 +1,5 @@
-import { assertNonEmptyString } from '../../../kixx/assertions/mod.js';
+import { isValidAssignmentId } from '../../../kixx/content-addressable-store/build-assignment.js';
+import { assert, assertNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { OperationalError } from '../../../kixx/errors/mod.js';
 import { ACTIVATION_REASONS } from '../../collections/activation-record.js';
 
@@ -9,23 +10,24 @@ import { ACTIVATION_REASONS } from '../../collections/activation-record.js';
  * @param {Object} args - Assignment arguments.
  * @param {string} args.buildId - Build pointer to assign.
  * @param {string} args.releaseId - Release to assign.
- * @param {string|null} [args.precondition] - Expected current Release or null for unassigned.
+ * @param {string|null} args.expectedAssignmentId - Expected assignment UUID or null for unassigned.
  * @param {string} args.activatedBy - Publishing token id.
  * @param {'publish'|'rollback'|'carry-forward'|'restore'} args.reason - Audit reason.
- * @returns {Promise<{buildId: string, releaseId: string, assignedAt: string, isChanged: boolean, previousReleaseId: (string|null)}>} Authoritative assignment result.
+ * @returns {Promise<{buildId: string, releaseId: string, assignedAt: string, assignmentId: string, isChanged: boolean, previousReleaseId: (string|null)}>} Authoritative assignment result.
  * @throws {NotFoundError} When the Release does not exist.
- * @throws {ConflictError} When the pointer precondition fails.
+ * @throws {ConflictError} When the assignment precondition fails.
  */
 export async function assignRelease(context, args) {
     const {
         buildId,
         releaseId,
-        precondition,
+        expectedAssignmentId,
         activatedBy,
         reason,
     } = args ?? {};
     assertNonEmptyString(buildId, 'assignRelease: buildId');
     assertNonEmptyString(releaseId, 'assignRelease: releaseId');
+    assert(expectedAssignmentId === null || isValidAssignmentId(expectedAssignmentId), 'assignRelease: expectedAssignmentId');
     assertNonEmptyString(activatedBy, 'assignRelease: activatedBy');
     assertNonEmptyString(reason, 'assignRelease: reason');
     if (!ACTIVATION_REASONS.has(reason)) {
@@ -33,7 +35,7 @@ export async function assignRelease(context, args) {
     }
 
     const store = context.getService('ContentAddressableStore');
-    const pointer = await store.assignRelease(context, buildId, { releaseId, precondition });
+    const pointer = await store.assignRelease(context, buildId, { releaseId, expectedAssignmentId });
     if (!pointer.isChanged) {
         return pointer;
     }

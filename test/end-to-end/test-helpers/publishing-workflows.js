@@ -263,26 +263,20 @@ export async function getBuild(publishingToken, buildId) {
  * @param {Object} assignment - Desired assignment.
  * @param {string} assignment.releaseId - Release id to assign.
  * @param {string} [assignment.reason] - Audit reason (`publish`, `rollback`, `carry-forward`, `restore`).
- * @param {string} [assignment.ifMatch] - Unquoted Release id the current pointer must equal.
- * @param {string} [assignment.ifNoneMatch] - Pass `'*'` to require the build be currently unassigned.
+ * @param {string|null} assignment.expectedAssignmentId - Observed assignment identity, or null for an unassigned build.
  * @returns {Promise<{status: number, headers: Headers, body: Object}>} Raw Build response.
  */
 export async function putBuild(publishingToken, buildId, assignment) {
-    const { releaseId, reason, ifMatch, ifNoneMatch } = assignment;
-    const headers = {};
-    if (ifMatch !== undefined) {
-        headers['if-match'] = `"${ ifMatch }"`;
+    const { releaseId, reason, expectedAssignmentId } = assignment;
+    const attributes = { releaseId, expectedAssignmentId };
+    if (reason !== undefined) {
+        attributes.reason = reason;
     }
-    if (ifNoneMatch !== undefined) {
-        headers['if-none-match'] = ifNoneMatch;
-    }
-    const attributes = reason ? { releaseId, reason } : { releaseId };
     return await jsonRequest(
         publishingToken,
         'PUT',
         `builds/${ buildId }`,
         jsonApiDocument('Build', attributes, buildId),
-        headers,
     );
 }
 

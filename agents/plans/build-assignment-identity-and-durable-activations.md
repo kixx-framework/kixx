@@ -8,7 +8,7 @@ JSON and require it in conditional writes. Deliver pending events to the
 existing Activation Collection idempotently, with automatic recovery after
 crashes on Node.js and Cloudflare.
 
-ID1 is complete; ID2 is next. This intermediate state is not deployable.
+ID1 and ID2 are complete; AU1 is next. This intermediate state is not deployable.
 Baseline: `ff3e9e65` on `fix-publishing`.
 The completed `build-assignment-preconditions-and-results.md` fixes #153/#154:
 preconditions run before no-op detection, and storage returns operation-owned
@@ -422,7 +422,7 @@ storage write compares that identity atomically, closing the A→B→A hole.
 
 ### Task ID2: Require JSON assignment tokens across public and admin workflows
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** ID1
 **Documentation:** This plan, Assignment identity and public protocol;
 `docs/publishing-api.md`; `src/app/presentation/README.md`;
@@ -468,13 +468,13 @@ they observed, independently of response-header rewriting.
 
 **Acceptance criteria**
 
-- [ ] GET/list/PUT Build JSON includes assignment identity; PUT enforces the matrix.
-- [ ] Changed, weakened, missing, or proxy-generated GET ETags do not affect a
+- [x] GET/list/PUT Build JSON includes assignment identity; PUT enforces the matrix.
+- [x] Changed, weakened, missing, or proxy-generated GET ETags do not affect a
       subsequent write constructed from JSON.
-- [ ] Old header-only writes fail and cannot silently bypass concurrency checks.
-- [ ] An admin form from before A→B→A conflicts rather than reassigning the build.
-- [ ] Public JSON excludes private event/delivery fields; body and ETag agree.
-- [ ] All in-repository publishing callers and restoration paths use JSON tokens.
+- [x] Old header-only writes fail and cannot silently bypass concurrency checks.
+- [x] An admin form from before A→B→A conflicts rather than reassigning the build.
+- [x] Public JSON excludes private event/delivery fields; body and ETag agree.
+- [x] All in-repository publishing callers and restoration paths use JSON tokens.
 
 **Validation**
 
@@ -485,14 +485,85 @@ they observed, independently of response-header rewriting.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Current admin controls store a Release hash in two
-  hidden inputs; changing only the Publishing API would leave that stale-write hole.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Build GET/list/PUT expose assignmentId, single-Build ETags use the
+  captured identity, and PUT requires JSON expectedAssignmentId (explicit null
+  for first assignment). Discovery advertises protocol 2 while Release contract
+  version remains 1. Both admin forms capture expected_assignment_id, validate
+  the UUID, and retain it through the running-build guard and storage CAS.
+  Seed and all in-repository HTTP assignment/restoration callers are migrated.
+  API documentation and E2E operating notes describe the new contract.
+- Current state: Complete. ID1 was verified at db02d967
+  before starting with a clean tree. Stopped here at the user's explicit ID2
+  boundary. The disposable assignment-id2 target was stopped and destroyed.
+- Remaining: None for ID2. AU1 is the next unblocked task. Do not deploy this
+  intermediate state: audit writes are still best-effort until AU1–AU3 complete.
+- Decisions and discoveries:
+  - Required-field presence is distinct from null. Malformed supplied tokens
+    produce a field ValidationError; missing tokens produce 428 after existing
+    resource validation. Valid JSON tokens plus either legacy conditional header
+    (including an empty header) produce 400 without calling storage.
+  - Assignment tokens are copied verbatim; the hidden form UUID is not trimmed.
+    An admin submission must match the observed identity before reason inference,
+    and still passes that same token to storage if a later writer intervenes.
+  - The application assignment script now requires a valid UUID or explicit null;
+    only the lower-level framework facade retains unconditional omission.
+  - ETag interference is simulated deterministically in unit tests (changed,
+    weak, absent, proxy-generated). Real HTTP checks cover API A→B→A, no-op,
+    listing identity, and both rendered admin forms after A→B→A.
+  - New 070-admin-assignment.test.js uses the running build. It captures both
+    forms while the original Release is served, temporarily assigns a fixture,
+    returns to the original Release, then submits the stale forms. Its failure
+    cleanup uses only its own successful assignment's token. E2E README now
+    identifies both running-build tests and their temporary rendering impact.
+  - Cloudflare runtime and audit-recovery checks remain later-task work. No remote
+    target, external CLI, deployment, or dependency installation was touched.
+- Actual files changed:
+  - `agents/plans/build-assignment-identity-and-durable-activations.md`
+  - `docs/publishing-api.md`
+  - `src/app/presentation/forms/publishing/assign-release-form.js`
+  - `src/app/presentation/request-handlers/admin-panel/admin-publishing.js`
+  - `src/app/presentation/request-handlers/publishing-api/builds.js`
+  - `src/app/presentation/request-handlers/publishing-api/constants.js`
+  - `src/app/presentation/request-handlers/publishing-api/discovery.js`
+  - `src/app/transaction-scripts/publishing/assign-release-to-running-build.js`
+  - `src/app/transaction-scripts/publishing/assign-release.js`
+  - `src/pages/admin/publishing/page.html`
+  - `src/pages/admin/publishing/releases/page.html`
+  - `test/end-to-end/200-publishing-api/050-build-pointers.test.js`
+  - `test/end-to-end/200-publishing-api/060-running-build.test.js`
+  - `test/end-to-end/README.md`
+  - `test/end-to-end/test-helpers/publishing-workflows.js`
+  - `test/unit-tests/app/presentation/forms/publishing/assign-release-form.test.js`
+  - `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-publishing.test.js`
+  - `test/unit-tests/app/presentation/request-handlers/publishing-api/builds.test.js`
+  - `test/unit-tests/app/presentation/request-handlers/publishing-api/discovery.test.js`
+  - `test/unit-tests/app/transaction-scripts/publishing/assign-release-to-running-build.test.js`
+  - `test/unit-tests/app/transaction-scripts/publishing/assign-release.test.js`
+  - `tools/local-target/seed.js`
+  - `test/end-to-end/200-publishing-api/070-admin-assignment.test.js` (new)
+- Validation run:
+  - Listed focused unit command: 70 passed, 0 disabled.
+  - Listed lint command: passed without diagnostics, including the new admin
+    HTTP test. Initial test formatting findings were fixed.
+  - `node run-tests.js`: 1,472 passed, 0 disabled.
+  - Listed `rg` audit: only ID1's explicit legacy-argument rejection, unrelated
+    HTTP cache validators, and negative assertions that the old HTML field is
+    absent remain. No publishing caller uses header/hash preconditions.
+  - `node tools/local-target.js create assignment-id2` and
+    `node tools/local-target.js seed assignment-id2`: passed, proving explicit
+    null seeding on a writable format-4 store.
+  - `node tools/local-target.js serve assignment-id2`: started for HTTP checks.
+  - `node run-tests.js --e2e test/end-to-end/200-publishing-api`: 40 passed,
+    0 disabled, including 070-admin-assignment.test.js. A Node wrapper read
+    credentials.json and passed baseUrl/username/password through the three
+    E2E_TESTS_* environment variables without printing secrets.
+  - Local port reservation and HTTP connections initially hit sandbox EPERM;
+    approved retries passed. These were environment restrictions, not test skips.
+  - Stopped the server with Ctrl-C, then
+    `node tools/local-target.js destroy assignment-id2`: passed.
+  - `git diff --check`: passed.
+- Blockers: None for AU1. ID2 does not claim durable audit delivery or rollout
+  readiness; the remaining tasks retain those obligations.
 
 ### Task AU1: Commit recoverable audit obligations with every changed pointer
 

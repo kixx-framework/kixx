@@ -40,6 +40,7 @@ let forwardResponse;
 let rollbackResponse;
 let coherentReadAfterRollback;
 let noOpResponse;
+let staleAfterRollbackResponse;
 let activationsBeforeNoOp;
 let activations;
 let buildsListResponse;
@@ -67,40 +68,44 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
         unassignedReadResponse = await getBuild(publishingToken, buildId);
 
         preStageResponse = mustSucceed(
-            await putBuild(publishingToken, buildId, { releaseId: releaseA.id, ifNoneMatch: '*' }),
+            await putBuild(publishingToken, buildId, { releaseId: releaseA.id, expectedAssignmentId: null }),
             'pre-stage a never-assigned build',
         );
         readBackResponse = await getBuild(publishingToken, buildId);
 
         conflictPointerBefore = await getBuild(publishingToken, buildId);
         conflictActivationsBefore = await listBuildActivations(publishingToken, buildId);
-        restagingConflictResponse = await putBuild(publishingToken, buildId, { releaseId: releaseA.id, ifNoneMatch: '*' });
-        staleMatchResponse = await putBuild(publishingToken, buildId, { releaseId: releaseA.id, ifMatch: releaseB.id });
+        restagingConflictResponse = await putBuild(publishingToken, buildId, { releaseId: releaseA.id, expectedAssignmentId: null });
+        staleMatchResponse = await putBuild(publishingToken, buildId, { releaseId: releaseA.id, expectedAssignmentId: crypto.randomUUID() });
         conflictPointerAfter = await getBuild(publishingToken, buildId);
         conflictActivationsAfter = await listBuildActivations(publishingToken, buildId);
 
         carryForwardResponse = mustSucceed(
-            await putBuild(publishingToken, carryForwardBuildId, { releaseId: releaseA.id, ifNoneMatch: '*' }),
+            await putBuild(publishingToken, carryForwardBuildId, { releaseId: releaseA.id, expectedAssignmentId: null }),
             'carry the same Release forward to a second build id',
         );
         carryForwardReadResponse = await getBuild(publishingToken, carryForwardBuildId);
 
         forwardResponse = mustSucceed(
-            await putBuild(publishingToken, buildId, { releaseId: releaseB.id, ifMatch: releaseA.id, reason: 'publish' }),
+            await putBuild(publishingToken, buildId, { releaseId: releaseB.id, expectedAssignmentId: readBackResponse.body.data.attributes.assignmentId, reason: 'publish' }),
             'publish forward to Release B',
         );
 
         rollbackResponse = mustSucceed(
-            await putBuild(publishingToken, buildId, { releaseId: releaseA.id, ifMatch: releaseB.id, reason: 'rollback' }),
+            await putBuild(publishingToken, buildId, { releaseId: releaseA.id, expectedAssignmentId: forwardResponse.body.data.attributes.assignmentId, reason: 'rollback' }),
             'roll back to Release A',
         );
         // Coherent reads: a read immediately following a successful assignment
         // must reflect that assignment, never the pointer it replaced.
         coherentReadAfterRollback = await getBuild(publishingToken, buildId);
 
+        staleAfterRollbackResponse = await putBuild(publishingToken, buildId, {
+            releaseId: releaseA.id,
+            expectedAssignmentId: readBackResponse.body.data.attributes.assignmentId,
+        });
         activationsBeforeNoOp = await listBuildActivations(publishingToken, buildId);
         noOpResponse = mustSucceed(
-            await putBuild(publishingToken, buildId, { releaseId: releaseA.id, ifMatch: releaseA.id }),
+            await putBuild(publishingToken, buildId, { releaseId: releaseA.id, expectedAssignmentId: coherentReadAfterRollback.body.data.attributes.assignmentId }),
             'reassign the already-current Release',
         );
 
@@ -122,15 +127,15 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
         assertEqual(200, preStageResponse.status);
         assertEqual(200, readBackResponse.status);
         assertEqual(releaseA.id, readBackResponse.body.data.attributes.releaseId);
-        assertEqual(`"${ releaseA.id }"`, readBackResponse.headers.get('etag'));
+        assertEqual(`"${ readBackResponse.body.data.attributes.assignmentId }"`, readBackResponse.headers.get('etag'));
     });
 
-    it('conflicts when If-None-Match: * targets an already-assigned build', () => {
+    it('conflicts when explicit null targets an already-assigned build', () => {
         assertEqual(412, restagingConflictResponse.status);
         assertEqual('BuildPointerConflict', restagingConflictResponse.body.errors[0].code);
     });
 
-    it('rejects a stale If-Match precondition', () => {
+    it('rejects a stale JSON identity', () => {
         assertEqual(412, staleMatchResponse.status);
         assertEqual('BuildPointerConflict', staleMatchResponse.body.errors[0].code);
     });
@@ -145,7 +150,7 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
         assertEqual(releaseA.id, carryForwardReadResponse.body.data.attributes.releaseId);
     });
 
-    it('publishes forward and rolls back using an If-Match precondition', () => {
+    it('publishes forward and rolls back using a JSON identity precondition', () => {
         assertEqual(200, forwardResponse.status);
         assertEqual(releaseB.id, forwardResponse.body.data.attributes.releaseId);
         assertEqual(200, rollbackResponse.status);
@@ -155,13 +160,20 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
     it('reads a coherent pointer immediately after an assignment', () => {
         assertEqual(200, coherentReadAfterRollback.status);
         assertEqual(releaseA.id, coherentReadAfterRollback.body.data.attributes.releaseId);
-        assertEqual(`"${ releaseA.id }"`, coherentReadAfterRollback.headers.get('etag'));
+        assertEqual(`"${ coherentReadAfterRollback.body.data.attributes.assignmentId }"`, coherentReadAfterRollback.headers.get('etag'));
+    });
+
+    it('rejects the original A identity after A to B to A', () => {
+        assertEqual(412, staleAfterRollbackResponse.status);
+        const ids = [ preStageResponse, forwardResponse, rollbackResponse ].map((response) => response.body.data.attributes.assignmentId);
+        assertEqual(3, new Set(ids).size);
     });
 
     it('treats reassigning the current Release as a success no-op', () => {
         assertEqual(200, noOpResponse.status);
         assertEqual(releaseA.id, noOpResponse.body.data.attributes.releaseId);
         assertEqual(rollbackResponse.body.data.attributes.assignedAt, noOpResponse.body.data.attributes.assignedAt);
+        assertEqual(rollbackResponse.body.data.attributes.assignmentId, noOpResponse.body.data.attributes.assignmentId);
         assertEqual(activationsBeforeNoOp.body.data.length, activations.body.data.length);
     });
 
@@ -181,6 +193,8 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
         const ids = buildsListResponse.body.data.map((resource) => resource.id);
         assert(ids.includes(`${ RUN_PREFIX }-next`));
         assert(ids.includes(`${ RUN_PREFIX }-carry`));
+        const listed = buildsListResponse.body.data.find((resource) => resource.id === `${ RUN_PREFIX }-next`);
+        assertEqual(noOpResponse.body.data.attributes.assignmentId, listed.attributes.assignmentId);
     });
 }, { disabled: IS_DEVELOPMENT_TARGET });
 

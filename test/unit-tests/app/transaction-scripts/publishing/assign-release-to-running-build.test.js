@@ -2,7 +2,10 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
 import { assignReleaseToRunningBuild } from '../../../../../src/app/transaction-scripts/publishing/assign-release-to-running-build.js';
+import { ConflictError } from '../../../../../src/kixx/errors/mod.js';
 
+
+const ASSIGNMENT_ID = '00000000-0000-4000-8000-000000000001';
 
 const RELEASES = {
     'release-old': { releaseId: 'release-old', createdAt: '2026-08-01T00:00:00.000Z', createdBy: 'a' },
@@ -14,6 +17,7 @@ function makeContext(options) {
     const {
         runningBuildId = 'build-1',
         pointerReleaseId = 'release-current',
+        assignmentId = ASSIGNMENT_ID,
         currentReleaseExists = true,
         releases = RELEASES,
     } = options ?? {};
@@ -39,7 +43,7 @@ function makeContext(options) {
     const store = {
         async getBuildPointer(_context, buildId) {
             storeCalls.push(buildId);
-            return pointerReleaseId ? { rootHash: pointerReleaseId } : null;
+            return pointerReleaseId ? { rootHash: pointerReleaseId, assignmentId } : null;
         },
         async assignRelease(_context, buildId, attributes) {
             assignCalls.push({ buildId, ...attributes });
@@ -72,12 +76,42 @@ function catchAsyncError(fn) {
 
 describe('assignReleaseToRunningBuild', ({ it }) => {
 
+    it('retains the submitted token when another writer wins after the initial read', async () => {
+        const context = makeContext();
+        const store = context.getService();
+        const conflict = new ConflictError('intervening assignment', { code: 'BuildPointerConflict' });
+        store.assignRelease = async (_context, _buildId, assignment) => {
+            assertEqual(ASSIGNMENT_ID, assignment.expectedAssignmentId);
+            throw conflict;
+        };
+
+        const error = await catchAsyncError(() => assignReleaseToRunningBuild(context, {
+            buildId: 'build-1', releaseId: 'release-new',
+            expectedAssignmentId: ASSIGNMENT_ID, activatedBy: 'admin-1',
+        }));
+
+        assertEqual(conflict, error);
+        assertEqual(0, context.appendCalls.length);
+    });
+
+    it('rejects a stale identity even when the same Release is current again', async () => {
+        const context = makeContext({ assignmentId: crypto.randomUUID() });
+        const error = await catchAsyncError(() => assignReleaseToRunningBuild(context, {
+            buildId: 'build-1', releaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID, activatedBy: 'admin-1',
+        }));
+
+        assertEqual('BuildPointerConflict', error.code);
+        assertEqual(0, context.assignCalls.length);
+        assertEqual(0, context.appendCalls.length);
+    });
+
     it('records rollback for an older Release', async () => {
         const context = makeContext();
         await assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-old',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         });
 
@@ -89,23 +123,23 @@ describe('assignReleaseToRunningBuild', ({ it }) => {
         await assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-new',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         });
 
         assertEqual('publish', context.appendCalls[0].reason);
     });
 
-    it('passes expectedReleaseId as precondition and activatedBy through', async () => {
+    it('passes expectedAssignmentId as the captured token and activatedBy through', async () => {
         const context = makeContext();
         await assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-new',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         });
 
-        assertEqual('release-current', context.assignCalls[0].precondition);
+        assertEqual(ASSIGNMENT_ID, context.assignCalls[0].expectedAssignmentId);
         assertEqual('admin-1', context.appendCalls[0].activatedBy);
     });
 
@@ -114,7 +148,7 @@ describe('assignReleaseToRunningBuild', ({ it }) => {
         const error = await catchAsyncError(() => assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-new',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         }));
 
@@ -129,7 +163,7 @@ describe('assignReleaseToRunningBuild', ({ it }) => {
         const error = await catchAsyncError(() => assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-new',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         }));
 
@@ -142,7 +176,7 @@ describe('assignReleaseToRunningBuild', ({ it }) => {
         const error = await catchAsyncError(() => assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-new',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         }));
 
@@ -152,12 +186,12 @@ describe('assignReleaseToRunningBuild', ({ it }) => {
         assertEqual(0, context.assignCalls.length);
     });
 
-    it('throws BuildPointerConflict when expectedReleaseId is stale', async () => {
-        const context = makeContext({ pointerReleaseId: 'release-new' });
+    it('throws BuildPointerConflict when expectedAssignmentId is stale', async () => {
+        const context = makeContext({ pointerReleaseId: 'release-new', assignmentId: crypto.randomUUID() });
         const error = await catchAsyncError(() => assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-old',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         }));
 
@@ -172,7 +206,7 @@ describe('assignReleaseToRunningBuild', ({ it }) => {
         const error = await catchAsyncError(() => assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-missing',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         }));
 
@@ -186,7 +220,7 @@ describe('assignReleaseToRunningBuild', ({ it }) => {
         await assignReleaseToRunningBuild(context, {
             buildId: 'build-1',
             releaseId: 'release-old',
-            expectedReleaseId: 'release-current',
+            expectedAssignmentId: ASSIGNMENT_ID,
             activatedBy: 'admin-1',
         });
 

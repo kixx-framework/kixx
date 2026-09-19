@@ -17,6 +17,7 @@ function makeContext(options) {
                 buildId: 'build-1',
                 releaseId: 'release-new',
                 assignedAt: '2026-09-01T12:00:00.000Z',
+                assignmentId: crypto.randomUUID(),
                 isChanged: true,
                 previousReleaseId: 'release-old',
             };
@@ -53,7 +54,7 @@ describe('assignRelease', ({ it }) => {
         const result = await assignRelease(context, {
             buildId: 'build-1',
             releaseId: 'release-new',
-            precondition: 'release-old',
+            expectedAssignmentId: crypto.randomUUID(),
             activatedBy: 'token-1',
             reason: 'rollback',
         });
@@ -70,6 +71,7 @@ describe('assignRelease', ({ it }) => {
         const result = await assignRelease(context, {
             buildId: 'build-1',
             releaseId: 'release-new',
+            expectedAssignmentId: crypto.randomUUID(),
             activatedBy: 'token-1',
             reason: 'publish',
         });
@@ -86,12 +88,13 @@ describe('assignRelease', ({ it }) => {
             buildId: 'build-1',
             releaseId: 'release-current',
             assignedAt: '2020-01-01T00:00:00.000Z',
+            assignmentId: crypto.randomUUID(),
             isChanged: false,
             previousReleaseId: 'release-current',
         } });
 
         const result = await assignRelease(context, {
-            buildId: 'build-1', releaseId: 'release-current', activatedBy: 'token-1', reason: 'publish',
+            buildId: 'build-1', releaseId: 'release-current', expectedAssignmentId: crypto.randomUUID(), activatedBy: 'token-1', reason: 'publish',
         });
 
         assertEqual('2020-01-01T00:00:00.000Z', result.assignedAt);
@@ -103,7 +106,7 @@ describe('assignRelease', ({ it }) => {
         let caught = null;
         try {
             await assignRelease(context, {
-                buildId: 'build-1', releaseId: 'release-new', activatedBy: 'token-1', reason: 'publish',
+                buildId: 'build-1', releaseId: 'release-new', expectedAssignmentId: crypto.randomUUID(), activatedBy: 'token-1', reason: 'publish',
             });
         } catch (error) {
             caught = error;
@@ -129,7 +132,7 @@ describe('assignRelease', ({ it }) => {
             let caught = null;
             try {
                 await assignRelease(context, {
-                    buildId: 'build-1', releaseId: 'release-new', activatedBy: 'token-1', reason: 'publish',
+                    buildId: 'build-1', releaseId: 'release-new', expectedAssignmentId: crypto.randomUUID(), activatedBy: 'token-1', reason: 'publish',
                 });
             } catch (cause) {
                 caught = cause;

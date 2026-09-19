@@ -1,3 +1,4 @@
+import { isValidAssignmentId } from '../../../../kixx/content-addressable-store/build-assignment.js';
 import { ValidationError } from '../../../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../../../kixx/assertions/mod.js';
 import { isValidHash } from '../../../../kixx/content-addressable-store/addressing.js';
@@ -31,7 +32,7 @@ export default class AssignReleaseForm extends BaseForm {
 
     /**
      * JSON Schema for the assign request: the target Release, the build the
-     * page was rendered for, and the Release expected to currently be assigned.
+     * page was rendered for, and the observed assignment identity.
      * @type {Object}
      * @static
      * @readonly
@@ -41,30 +42,29 @@ export default class AssignReleaseForm extends BaseForm {
         properties: {
             release_id: { type: 'string', fieldType: 'hidden' },
             build_id: { type: 'string', fieldType: 'hidden' },
-            expected_release_id: { type: 'string', fieldType: 'hidden' },
+            expected_assignment_id: { type: 'string', fieldType: 'hidden' },
         },
-        required: [ 'release_id', 'build_id', 'expected_release_id' ],
+        required: [ 'release_id', 'build_id', 'expected_assignment_id' ],
     };
 
     /**
      * @param {Object} [attributes] - Raw submitted assign attributes.
      * @param {*} [attributes.release_id] - Release id to assign.
      * @param {*} [attributes.build_id] - Build the page was rendered for.
-     * @param {*} [attributes.expected_release_id] - Release expected to be currently assigned.
+     * @param {*} [attributes.expected_assignment_id] - Assignment identity captured when the page rendered.
      */
     constructor(attributes) {
         super();
 
-        const { release_id, build_id, expected_release_id } = attributes ?? {};
+        const { release_id, build_id, expected_assignment_id } = attributes ?? {};
         this.release_id = normalizeStringAttribute(release_id);
         this.build_id = normalizeStringAttribute(build_id);
-        this.expected_release_id = normalizeStringAttribute(expected_release_id);
+        this.expected_assignment_id = expected_assignment_id;
     }
 
     /**
-     * Validates that every hidden field was submitted and that the two Release
-     * ids are well-formed content hashes, rejecting a forged value before any
-     * store read.
+     * Validates hidden fields, including the Release hash and assignment UUID,
+     * before any store read.
      * @returns {void}
      * @throws {ValidationError} When a field is missing or malformed.
      */
@@ -81,10 +81,10 @@ export default class AssignReleaseForm extends BaseForm {
             error.push('Build id is required', 'build_id');
         }
 
-        if (!isNonEmptyString(this.expected_release_id)) {
-            error.push('Expected Release id is required', 'expected_release_id');
-        } else if (!isValidHash(this.expected_release_id)) {
-            error.push('Expected Release id is malformed', 'expected_release_id');
+        if (!isNonEmptyString(this.expected_assignment_id)) {
+            error.push('Expected assignment id is required', 'expected_assignment_id');
+        } else if (!isValidAssignmentId(this.expected_assignment_id)) {
+            error.push('Expected assignment id is malformed', 'expected_assignment_id');
         }
 
         if (error.length) {

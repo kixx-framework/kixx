@@ -1,4 +1,5 @@
-import { assertNonEmptyString } from '../../../kixx/assertions/mod.js';
+import { isValidAssignmentId } from '../../../kixx/content-addressable-store/build-assignment.js';
+import { assert, assertNonEmptyString } from '../../../kixx/assertions/mod.js';
 import { ConflictError, NotFoundError } from '../../../kixx/errors/mod.js';
 import { getRelease } from './get-release.js';
 import { assignRelease } from './assign-release.js';
@@ -11,24 +12,24 @@ import { assignRelease } from './assign-release.js';
  * @param {Object} args - Assignment arguments.
  * @param {string} args.buildId - Build pointer the caller expects to be running.
  * @param {string} args.releaseId - Release to assign.
- * @param {string} args.expectedReleaseId - Release the caller expects is currently assigned.
+ * @param {string} args.expectedAssignmentId - Assignment identity captured by the caller.
  * @param {string} args.activatedBy - Admin user id performing the assignment.
  * @returns {Promise<Object>} Authoritative resulting build pointer.
  * @throws {ConflictError} With code `RunningBuildMismatch` when `buildId` is
  *   not the running build, `RunningBuildUnassigned` when the running build has
- *   no current pointer, or `BuildPointerConflict` when `expectedReleaseId` is stale.
+ *   no current pointer, or `BuildPointerConflict` when `expectedAssignmentId` is stale.
  * @throws {NotFoundError} With code `ReleaseNotFound` when `releaseId` does not exist.
  */
 export async function assignReleaseToRunningBuild(context, args) {
     const {
         buildId,
         releaseId,
-        expectedReleaseId,
+        expectedAssignmentId,
         activatedBy,
     } = args ?? {};
     assertNonEmptyString(buildId, 'assignReleaseToRunningBuild: buildId');
     assertNonEmptyString(releaseId, 'assignReleaseToRunningBuild: releaseId');
-    assertNonEmptyString(expectedReleaseId, 'assignReleaseToRunningBuild: expectedReleaseId');
+    assert(isValidAssignmentId(expectedAssignmentId), 'assignReleaseToRunningBuild: expectedAssignmentId');
     assertNonEmptyString(activatedBy, 'assignReleaseToRunningBuild: activatedBy');
 
     const runningBuildId = context.runtime.build.id ?? null;
@@ -61,7 +62,7 @@ export async function assignReleaseToRunningBuild(context, args) {
             { code: 'RunningBuildUnassigned' },
         );
     }
-    if (pointer.rootHash !== expectedReleaseId) {
+    if (pointer.assignmentId !== expectedAssignmentId) {
         throw new ConflictError(
             'The running Release has changed. Reload and try again.',
             { code: 'BuildPointerConflict' },
@@ -79,7 +80,7 @@ export async function assignReleaseToRunningBuild(context, args) {
     return await assignRelease(context, {
         buildId,
         releaseId,
-        precondition: expectedReleaseId,
+        expectedAssignmentId,
         activatedBy,
         reason,
     });

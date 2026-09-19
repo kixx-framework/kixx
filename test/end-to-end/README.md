@@ -122,7 +122,7 @@ it. See each directory for what it covers.
 | `010-csrf/` | Fetch-based checks of server responses and cookie attributes — not a browser's `SameSite=Lax` enforcement. Normal runs do not wait 30 minutes, rotate the signing secret, or restart the app without that secret. |
 | `050-admin-panel/` | Admin-panel HTML workflows. No target-specific caveats. |
 | `100-admin-files/` | Admin file library over HTTP. Writes to the target's document and object stores and deletes what it creates; see below. |
-| `200-publishing-api/` | See below — this directory changes behavior with `--development` and has one file that mutates a real deployment. |
+| `200-publishing-api/` | See below — this directory changes behavior with `--development` and has two files that mutate the running build. |
 
 ### Admin files: fixtures and large uploads
 
@@ -152,7 +152,7 @@ lists the expected results.
 Because the developer content store is read-only, every `200-publishing-api/`
 test that would upload an object or create a Release is disabled under
 `--development`: `020-objects.test.js`, `050-build-pointers.test.js`, and
-`060-running-build.test.js` in full, plus both Release `describe` blocks in
+`060-running-build.test.js`, and `070-admin-assignment.test.js` in full, plus both Release `describe` blocks in
 `030-releases.test.js`. Release verification requires persisted-object metadata
 even when the expected result is a missing-object error. The exceptions which
 run unconditionally are `010-authentication.test.js` and
@@ -160,18 +160,21 @@ run unconditionally are `010-authentication.test.js` and
 
 ### Publishing API: `060-running-build.test.js` mutates a real build
 
-This is the one file that touches the target's actual running build rather
-than a build id generated for the run. Running it against `--cloudflare` or
+This file touches the target's actual running build rather than a build id
+generated for the run. Running it against `--cloudflare` or
 `--nodejs` will:
 
-1. Read the running build's pointer and retain its `releaseId` before making
+1. Read the running build's pointer and retain its `releaseId` and `assignmentId` before making
    any mutating request.
-2. Assign a freshly created Release with `If-Match: "<observed-releaseId>"`,
+2. Assign a freshly created Release with JSON
+   `expectedAssignmentId: "<observed-assignmentId>"`,
    so a pointer moved concurrently (another deploy, another test run) fails
    the assignment with `412 BuildPointerConflict` instead of being silently
    overwritten.
 3. Restore the original pointer in an `after` hook, registered before any
-   mutating request so it still runs if setup fails partway through.
+   mutating request so it still runs if setup fails partway through. Restore
+   using the identity returned by this run’s assignment, never a freshly read
+   token or an ETag. A→B→A still invalidates the captured identity.
 
 Restoration is skipped, not attempted, when the running build had no prior
 Release (a genuinely fresh deploy) or the assignment never confirmed —
@@ -183,6 +186,19 @@ compare-and-swap safety net, not a distributed lock. Avoid running this file
 concurrently with itself against the same target, or overlapping it with a
 real deploy, when a deterministic result matters.
 
+### Publishing API: `070-admin-assignment.test.js` verifies stale HTML forms
+
+This file also mutates the running build and requires an already seeded target
+with the admin templates available. It captures the overview and Release-detail
+forms, assigns A→B→A using JSON tokens, and verifies both old forms redirect to
+the conflict notice without changing the restored pointer. B is a temporary
+content Release; admin pages can be unavailable until A is restored.
+
+If setup fails while B is assigned, its `after` hook restores A using only the
+identity from this test's successful B assignment. A concurrent writer causes
+cleanup to fail rather than overwrite newer state. Do not run this file
+concurrently with a deploy or another running-build test against the same target.
+
 ### What a run leaves behind
 
 A successful run against a deployed target does not delete anything it
@@ -191,8 +207,8 @@ has no delete operation by design; see `content-store-interface.js`),
 Release and Activation metadata accumulate without limit, build pointers
 created under a run-generated build id are never cleaned up, and minted
 Publishing API tokens keep their normal expiry rather than being revoked by
-the test. Only the running build's pointer is touched, and only by
-`060-running-build.test.js`, which restores it conditionally as described
-above. Routine cleanup between runs is unnecessary — UUID-namespaced run
+the test. The running build's pointer is touched by
+`060-running-build.test.js` and `070-admin-assignment.test.js`, which restore
+its original Release conditionally as described above. Routine cleanup between runs is unnecessary — UUID-namespaced run
 prefixes keep each run's fixture pathnames and build ids from colliding with
 real content or with each other.
