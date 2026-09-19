@@ -559,7 +559,7 @@ publishing or requiring another reset.
 
 ### Task VR1: Verify assignment correctness under the reduced scope
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** CL1
 **Documentation:** This plan, Assignment identity and Best-effort Activation
 contract; `README.md`; `test/unit-tests/README.md`; `test/end-to-end/README.md`.
@@ -600,12 +600,12 @@ new failure-injection or recovery harness.
 
 **Acceptance criteria**
 
-- [ ] API and admin A→B→A stale-token rejection remains covered and passing.
-- [ ] JSON-based writes remain independent of GET ETag changes/removal.
-- [ ] Valid no-op preserves identity/timestamp and appends no Activation.
-- [ ] An operational Activation failure does not fail a committed assignment or
+- [x] API and admin A→B→A stale-token rejection remains covered and passing.
+- [x] JSON-based writes remain independent of GET ETag changes/removal.
+- [x] Valid no-op preserves identity/timestamp and appends no Activation.
+- [x] An operational Activation failure does not fail a committed assignment or
       prevent a later valid publish; unexpected failures are not swallowed.
-- [ ] Full unit suite, affected-file lint, and local publishing HTTP suite pass
+- [x] Full unit suite, affected-file lint, and local publishing HTTP suite pass
       without relevant disabled cases. No audit-recovery guarantee is claimed.
 
 **Validation**
@@ -623,17 +623,43 @@ new failure-injection or recovery harness.
 
 **Progress and handoff**
 
-- Completed: Prior evidence available from ID1/ID2: 1,472 unit tests and 40 local
-  HTTP tests passed at ID2, including stale overview/detail forms and restoration.
-- Current state: Not started for the reduced final scope.
-- Remaining: Review existing evidence, close any concrete best-effort behavior
-  gap, and verify the state after CL1. Do not reproduce already proven cases.
-- Decisions and discoveries: `assign-release.test.js` already checks operational
-  append failure, unexpected failure propagation, and no-op suppression.
-- Actual files changed: None yet.
-- Validation run: No new runs for this revised task; prior counts above are
-  historical, not validation of unimplemented CL1.
-- Blockers: None after CL1.
+- Completed: Reviewed existing ID1/ID2 coverage, added the one missing
+  best-effort proof, and verified the post-CL1 state against a fresh local
+  target over HTTP.
+- Current state: Complete. The disposable `assignment-identity` target was
+  stopped and destroyed. No remote target or deployment was touched.
+- Remaining: None for VR1. RL1 (documentation) is next.
+- Decisions and discoveries:
+  - `assign-release.test.js` already covered operational append failure,
+    unexpected propagation, no-op suppression, and no append on a failed
+    assignment. Only the "later publish proceeds from the pointer identity
+    after history fails" case was missing; it was added there rather than in a
+    new failure-injection harness.
+  - ETag independence and A→B→A rejection are covered by the ID2 unit tests
+    and HTTP 050/060/070; no edits were needed and none were made.
+  - A freshly seeded format-4 store contains only `closures` and `builds` at
+    `user_version = 3`, before and after the HTTP suite. This confirms CL1's
+    removal on a real writable store.
+  - SQL bridge and Node disk tests still do not prove Cloudflare Workers
+    runtime behavior. That limitation stands and is not addressed here.
+- Actual files changed:
+  - `test/unit-tests/app/transaction-scripts/publishing/assign-release.test.js`
+  - `agents/plans/build-assignment-identity-and-durable-activations.md`
+- Validation run:
+  - `node run-tests.js test/unit-tests/app/transaction-scripts/publishing`:
+    19 passed, 0 disabled.
+  - `node run-linter.js test/unit-tests/app/transaction-scripts/publishing`:
+    passed without diagnostics.
+  - `node run-tests.js`: 1,475 passed, 0 disabled.
+  - `node tools/local-target.js create assignment-identity` and `seed`: passed.
+  - `node run-tests.js --e2e test/end-to-end/200-publishing-api`: 40 passed,
+    0 disabled. A Node wrapper read credentials.json and passed the
+    E2E_TESTS_* variables through the environment without printing secrets.
+  - Inspected the target's `content_store/format-4/index.sqlite` twice: only
+    `closures` and `builds`, no `pending_build_assignments*` object.
+  - `node tools/local-target.js destroy assignment-identity`: passed.
+  - `git diff --check`: passed.
+- Blockers: None.
 
 ### Task RL1: Document the breaking client transition and accepted audit limits
 

@@ -141,4 +141,46 @@ describe('assignRelease', ({ it }) => {
             assertEqual(0, context.calls.length);
         }
     });
+
+    it('lets a later publish proceed from the pointer identity after history fails', async () => {
+        // The pointer is authoritative: a missing Activation must not keep the
+        // next publisher from using the identity it was handed.
+        let pointer = {
+            buildId: 'build-1',
+            releaseId: 'release-old',
+            assignedAt: '2026-09-01T12:00:00.000Z',
+            assignmentId: crypto.randomUUID(),
+            isChanged: true,
+            previousReleaseId: null,
+        };
+        const store = {
+            async assignRelease(_context, buildId, { releaseId, expectedAssignmentId }) {
+                if (expectedAssignmentId !== pointer.assignmentId) {
+                    throw new ConflictError('stale', { code: 'BuildPointerConflict' });
+                }
+                pointer = {
+                    buildId,
+                    releaseId,
+                    assignedAt: '2026-09-01T12:05:00.000Z',
+                    assignmentId: crypto.randomUUID(),
+                    isChanged: true,
+                    previousReleaseId: pointer.releaseId,
+                };
+                return pointer;
+            },
+        };
+        const context = makeContext({ failHistory: true });
+        context.getService = () => store;
+
+        const first = await assignRelease(context, {
+            buildId: 'build-1', releaseId: 'release-old', expectedAssignmentId: pointer.assignmentId, activatedBy: 'token-1', reason: 'publish',
+        });
+        const second = await assignRelease(context, {
+            buildId: 'build-1', releaseId: 'release-new', expectedAssignmentId: first.assignmentId, activatedBy: 'token-1', reason: 'publish',
+        });
+
+        assertEqual('release-new', second.releaseId);
+        assertEqual('release-old', second.previousReleaseId);
+        assertEqual(2, context.errors.length);
+    });
 });
