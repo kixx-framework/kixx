@@ -120,7 +120,7 @@ occurs in a different millisecond.
 
 ### Task BA1: Make assignment decisions and results atomic on both runtimes
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** This plan's Assignment contract and Required behavior matrix;
 `src/plugins/README.md`; `src/kixx/content-addressable-store/content-store-interface.js`;
@@ -219,17 +219,17 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Contract and SQL test boundary specified above.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added atomic assignment result objects, strict same-target preconditions, and no-op preservation in both adapters and the facade.
+- Current state: All BA1 acceptance behavior is implemented and validated.
+- Remaining: BA2 activation orchestration and BA3 HTTP/documentation work.
+- Decisions and discoveries: Node uses `BEGIN IMMEDIATE` through commit around the complete decision. Cloudflare's extracted helper runs the production SQL sequence; its Node SQLite bridge only adapts `exec(...).toArray()` and does not duplicate decisions. Successful facade results use operation-captured metadata and never reread the pointer.
+- Actual files changed: `src/kixx/content-addressable-store/content-store-interface.js`, `src/kixx/content-addressable-store/content-addressable-store.js`, `src/plugins/node-content-store/lib/content-store.js`, `src/plugins/cloudflare-content-store/lib/content-addressable-index-store.js`, `src/plugins/cloudflare-content-store/lib/assign-build.js`, and their listed unit tests.
+- Validation run: `node run-tests.js test/unit-tests/kixx/content-addressable-store test/unit-tests/plugins/node-content-store test/unit-tests/plugins/cloudflare-content-store` (317 passed); `node run-linter.js src/kixx/content-addressable-store src/plugins/node-content-store src/plugins/cloudflare-content-store test/unit-tests/kixx/content-addressable-store test/unit-tests/plugins/node-content-store test/unit-tests/plugins/cloudflare-content-store` (passed); `node run-tests.js` (1448 passed); `git diff --check` (passed).
 - Blockers: None.
 
 ### Task BA2: Record activations only for actual assignments
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** BA1
 **Documentation:** This plan's Assignment contract; `src/app/transaction-scripts/README.md`;
 `src/app/collections/README.md`; `src/docs/server-error-handling.md`;
@@ -300,13 +300,12 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Committed audit metadata addresses part of #155;
-  crash recovery and idempotent delivery remain unresolved.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: The transaction script derives every audit field from the atomic assignment result and suppresses audit writes for no-ops.
+- Current state: All BA2 acceptance behavior is implemented and validated.
+- Remaining: BA3 HTTP and documentation coverage.
+- Decisions and discoveries: Audit appends remain best-effort only for `OperationalError`; unexpected failures propagate. This still does not provide #155's durable delivery or retry behavior.
+- Actual files changed: `src/app/transaction-scripts/publishing/assign-release.js`, `test/unit-tests/app/transaction-scripts/publishing/assign-release.test.js`, `test/unit-tests/app/transaction-scripts/publishing/assign-release-to-running-build.test.js`, `test/unit-tests/app/presentation/request-handlers/publishing-api/builds.test.js`, and `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-publishing.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/app/transaction-scripts/publishing test/unit-tests/app/presentation/request-handlers/publishing-api test/unit-tests/app/presentation/request-handlers/admin-panel/admin-publishing.test.js` (56 passed); `node run-linter.js src/app/transaction-scripts/publishing test/unit-tests/app/transaction-scripts/publishing test/unit-tests/app/presentation/request-handlers/publishing-api test/unit-tests/app/presentation/request-handlers/admin-panel/admin-publishing.test.js` (passed); `node run-tests.js` (1451 passed).
 - Blockers: None.
 
 ### Task BA3: Verify and document conditional no-ops through the Publishing API

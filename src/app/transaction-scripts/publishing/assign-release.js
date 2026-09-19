@@ -1,4 +1,5 @@
 import { assertNonEmptyString } from '../../../kixx/assertions/mod.js';
+import { OperationalError } from '../../../kixx/errors/mod.js';
 import { ACTIVATION_REASONS } from '../../collections/activation-record.js';
 
 
@@ -11,7 +12,7 @@ import { ACTIVATION_REASONS } from '../../collections/activation-record.js';
  * @param {string|null} [args.precondition] - Expected current Release or null for unassigned.
  * @param {string} args.activatedBy - Publishing token id.
  * @param {'publish'|'rollback'|'carry-forward'|'restore'} args.reason - Audit reason.
- * @returns {Promise<Object>} Authoritative resulting build pointer.
+ * @returns {Promise<{buildId: string, releaseId: string, assignedAt: string, isChanged: boolean, previousReleaseId: (string|null)}>} Authoritative assignment result.
  * @throws {NotFoundError} When the Release does not exist.
  * @throws {ConflictError} When the pointer precondition fails.
  */
@@ -32,25 +33,34 @@ export async function assignRelease(context, args) {
     }
 
     const store = context.getService('ContentAddressableStore');
-    const activations = context.getCollection('Activation');
-    const current = await store.getBuildPointer(context, buildId);
     const pointer = await store.assignRelease(context, buildId, { releaseId, precondition });
+    if (!pointer.isChanged) {
+        return pointer;
+    }
+
+    const activations = context.getCollection('Activation');
 
     try {
         await activations.append(context, {
             buildId,
-            fromReleaseId: current?.rootHash ?? null,
-            toReleaseId: releaseId,
+            fromReleaseId: pointer.previousReleaseId,
+            toReleaseId: pointer.releaseId,
+            activatedAt: pointer.assignedAt,
             activatedBy,
             reason,
         });
     } catch (cause) {
+        if (cause.name !== OperationalError.name) {
+            throw cause;
+        }
+
         // The pointer is authoritative and has already moved. Failing the
         // request would invite a retry that misrepresents the completed write.
         context.logger.error('failed to record Release activation', {
             buildId,
-            fromReleaseId: current?.rootHash ?? null,
-            toReleaseId: releaseId,
+            fromReleaseId: pointer.previousReleaseId,
+            toReleaseId: pointer.releaseId,
+            activatedAt: pointer.assignedAt,
             activatedBy,
             reason,
         }, cause);

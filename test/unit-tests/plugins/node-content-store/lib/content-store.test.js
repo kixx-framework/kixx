@@ -159,18 +159,68 @@ describe('Node ContentStore', ({ after, describe }) => {
                 rootHash: 'first',
                 expectedRootHash: 'first',
             });
-            assertEqual('conflict', conflicted);
+            assertEqual('conflict', conflicted.outcome);
             assertEqual('second', (await first.getBuild(makeContext(), 'current')).rootHash);
 
             const assigned = await first.assignBuild(makeContext(), 'current', {
                 rootHash: 'first',
                 expectedRootHash: 'second',
             });
-            assertEqual('assigned', assigned);
+            assertEqual('assigned', assigned.outcome);
             assertEqual('first', (await second.getBuild(makeContext(), 'current')).rootHash);
 
             first.close();
             second.close();
+        });
+
+        it('preserves a seeded pointer timestamp for a same-target no-op', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const store = makeStore(rootDirectory);
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+
+            const database = new DatabaseSync(path.join(rootDirectory, 'format-1', 'index.sqlite'));
+            database.prepare('UPDATE builds SET assigned_at = ? WHERE build_id = ?').run('2000-01-01T00:00:00.000Z', 'build');
+            database.close();
+
+            const result = await store.assignBuild(makeContext(), 'build', {
+                rootHash: 'root',
+                expectedRootHash: 'root',
+            });
+
+            assertEqual('unchanged', result.outcome);
+            assertEqual('2000-01-01T00:00:00.000Z', result.pointer.assignedAt);
+            assertEqual('root', result.previousRootHash);
+            store.close();
+        });
+
+        it('rolls back a failed commit and leaves the connection usable', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const database = new DatabaseSync(':memory:');
+            let failCommit = false;
+            const failingDatabase = {
+                exec(statement) {
+                    if (statement === 'COMMIT' && failCommit) {
+                        failCommit = false;
+                        throw new Error('injected commit failure');
+                    }
+                    return database.exec(statement);
+                },
+                prepare(statement) {
+                    return database.prepare(statement);
+                },
+            };
+            const store = makeStore(rootDirectory, { database: failingDatabase });
+
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            failCommit = true;
+            const failed = await catchAsyncError(() => store.assignBuild(makeContext(), 'build', { rootHash: 'root' }));
+            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+
+            assertEqual('OperationalError', failed.name);
+            assertEqual('assigned', assigned.outcome);
+            store.close();
+            database.close();
         });
 
         it('initializes schema version two with required SQLite pragmas', async () => {

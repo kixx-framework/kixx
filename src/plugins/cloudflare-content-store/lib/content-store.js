@@ -541,7 +541,7 @@ export default class ContentStore {
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to assign
      * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
-     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome>}
+     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      */
     async assignBuild(context, buildId, assignment) {
@@ -582,7 +582,8 @@ export default class ContentStore {
             this.#buildCache.delete(buildId);
         }
 
-        return result.outcome;
+        const { success: _success, ...assignmentResult } = result;
+        return assignmentResult;
     }
 }
 

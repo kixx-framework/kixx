@@ -1,25 +1,35 @@
 import { describe } from 'kixx-test';
-import { assertEqual } from 'kixx-assert';
+import { assert, assertEqual } from 'kixx-assert';
 
 import { assignRelease } from '../../../../../src/app/transaction-scripts/publishing/assign-release.js';
+import { ConflictError, NotFoundError, OperationalError } from '../../../../../src/kixx/errors/mod.js';
 
 
 function makeContext(options) {
     const calls = [];
     const errors = [];
     const store = {
-        async getBuildPointer() {
-            return { rootHash: 'release-old', assignedAt: '2026-09-01T11:00:00.000Z' };
+        getBuildPointer() {
+            throw new Error('transaction script must not read the pointer');
         },
         async assignRelease() {
-            return { buildId: 'build-1', releaseId: 'release-new', assignedAt: '2026-09-01T12:00:00.000Z' };
+            return options?.pointer ?? {
+                buildId: 'build-1',
+                releaseId: 'release-new',
+                assignedAt: '2026-09-01T12:00:00.000Z',
+                isChanged: true,
+                previousReleaseId: 'release-old',
+            };
         },
     };
     const activations = {
         async append(_context, attributes) {
             calls.push(attributes);
             if (options?.failHistory) {
-                throw new Error('history unavailable');
+                throw new OperationalError('history unavailable');
+            }
+            if (options?.failUnexpectedly) {
+                throw new TypeError('broken audit record');
             }
         },
     };
@@ -51,6 +61,7 @@ describe('assignRelease', ({ it }) => {
         assertEqual('release-new', result.releaseId);
         assertEqual('release-old', context.calls[0].fromReleaseId);
         assertEqual('release-new', context.calls[0].toReleaseId);
+        assertEqual('2026-09-01T12:00:00.000Z', context.calls[0].activatedAt);
         assertEqual('rollback', context.calls[0].reason);
     });
 
@@ -66,5 +77,65 @@ describe('assignRelease', ({ it }) => {
         assertEqual('release-new', result.releaseId);
         assertEqual(1, context.errors.length);
         assertEqual('failed to record Release activation', context.errors[0][0]);
+        assertEqual('release-old', context.errors[0][1].fromReleaseId);
+        assertEqual('2026-09-01T12:00:00.000Z', context.errors[0][1].activatedAt);
+    });
+
+    it('does not read a pointer or append an activation for a valid no-op', async () => {
+        const context = makeContext({ pointer: {
+            buildId: 'build-1',
+            releaseId: 'release-current',
+            assignedAt: '2020-01-01T00:00:00.000Z',
+            isChanged: false,
+            previousReleaseId: 'release-current',
+        } });
+
+        const result = await assignRelease(context, {
+            buildId: 'build-1', releaseId: 'release-current', activatedBy: 'token-1', reason: 'publish',
+        });
+
+        assertEqual('2020-01-01T00:00:00.000Z', result.assignedAt);
+        assertEqual(0, context.calls.length);
+    });
+
+    it('propagates unexpected activation failures', async () => {
+        const context = makeContext({ failUnexpectedly: true });
+        let caught = null;
+        try {
+            await assignRelease(context, {
+                buildId: 'build-1', releaseId: 'release-new', activatedBy: 'token-1', reason: 'publish',
+            });
+        } catch (error) {
+            caught = error;
+        }
+
+        assert(caught);
+        assertEqual('TypeError', caught.name);
+        assertEqual(0, context.errors.length);
+    });
+
+    it('does not append an activation when assignment fails', async () => {
+        for (const error of [
+            new ConflictError('stale', { code: 'BuildPointerConflict' }),
+            new NotFoundError('missing', { code: 'ReleaseNotFound' }),
+        ]) {
+            const context = makeContext();
+            context.getService = () => ({
+                async assignRelease() {
+                    throw error;
+                },
+            });
+
+            let caught = null;
+            try {
+                await assignRelease(context, {
+                    buildId: 'build-1', releaseId: 'release-new', activatedBy: 'token-1', reason: 'publish',
+                });
+            } catch (cause) {
+                caught = cause;
+            }
+            assertEqual(error, caught);
+            assertEqual(0, context.calls.length);
+        }
     });
 });

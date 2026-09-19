@@ -160,8 +160,8 @@
  * `listBuilds()` returns every pointer newest assignment first.
  *
  * `assignBuild()` resolves one of `BUILD_ASSIGNMENT_OUTCOME.ASSIGNED`,
- * `.CONFLICT`, or `.MISSING_CLOSURE` rather than throwing for any of these
- * three outcomes, because all three can now result from public request input
+ * `.UNCHANGED`, `.CONFLICT`, or `.MISSING_CLOSURE` rather than throwing for
+ * any of these outcomes, because all can result from public request input
  * (an API client's stale `expectedRootHash`, or a desired closure it never
  * published) rather than only from programmer error.
  *
@@ -303,10 +303,23 @@
  */
 
 /**
- * The result of `assignBuild()`. See `BUILD_ASSIGNMENT_OUTCOME` for the
- * three possible values.
+ * The outcome of `assignBuild()`.
  *
- * @typedef {('assigned'|'conflict'|'missingClosure')} ContentBuildAssignmentOutcome
+ * @typedef {('assigned'|'unchanged'|'conflict'|'missingClosure')} ContentBuildAssignmentOutcome
+ */
+
+/**
+ * An atomic `assignBuild()` result. Successful results contain the pointer
+ * captured by the storage operation and its actual predecessor. An unchanged
+ * result preserves the existing pointer timestamp and uses its root hash as
+ * the predecessor.
+ *
+ * @typedef {(
+ *   {outcome: 'assigned', pointer: ContentBuildPointer, previousRootHash: (string|null)} |
+ *   {outcome: 'unchanged', pointer: ContentBuildPointer, previousRootHash: string} |
+ *   {outcome: 'conflict'} |
+ *   {outcome: 'missingClosure'}
+ * )} ContentBuildAssignmentResult
  */
 
 /**
@@ -358,22 +371,25 @@
  *   — only `assignBuild()` does that. Adapters reject values their backing
  *   representation cannot store faithfully.
  *
- * @property {function(Object, string, ContentBuildAssignment): Promise<ContentBuildAssignmentOutcome>} assignBuild
+ * @property {function(Object, string, ContentBuildAssignment): Promise<ContentBuildAssignmentResult>} assignBuild
  *   Points a build id at a previously saved closure, optionally only when the
- *   build's current pointer still equals `expectedRootHash`. On an `ASSIGNED`
+ *   build's current pointer still equals `expectedRootHash`. An `UNCHANGED`
+ *   result means the explicit precondition passed and the target was already
+ *   current; it preserves the stored timestamp. On an `ASSIGNED`
  *   outcome, makes a best effort to invalidate locally cached indexes for that
  *   build; concurrent reads and other instances may still serve the previous
- *   closure until their cache entries expire. A `CONFLICT` or `MISSING_CLOSURE`
- *   outcome leaves the pointer and every cache untouched.
+ *   closure until their cache entries expire. An `UNCHANGED`, `CONFLICT`, or
+ *   `MISSING_CLOSURE` outcome leaves the pointer and every cache untouched.
  */
 
 /**
- * The three possible resolutions of `assignBuild()`.
+ * The possible outcomes of `assignBuild()`.
  *
- * @type {{ASSIGNED: 'assigned', CONFLICT: 'conflict', MISSING_CLOSURE: 'missingClosure'}}
+ * @type {{ASSIGNED: 'assigned', UNCHANGED: 'unchanged', CONFLICT: 'conflict', MISSING_CLOSURE: 'missingClosure'}}
  */
 export const BUILD_ASSIGNMENT_OUTCOME = Object.freeze({
     ASSIGNED: 'assigned',
+    UNCHANGED: 'unchanged',
     CONFLICT: 'conflict',
     MISSING_CLOSURE: 'missingClosure',
 });

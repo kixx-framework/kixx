@@ -33,7 +33,13 @@ function makeContext(assignImplementation) {
             if (assignImplementation) {
                 return await assignImplementation();
             }
-            return { buildId: 'future-build', releaseId: 'release-new', assignedAt: '2026-09-01T13:00:00.000Z' };
+            return {
+                buildId: 'future-build',
+                releaseId: 'release-new',
+                assignedAt: '2026-09-01T13:00:00.000Z',
+                isChanged: true,
+                previousReleaseId: 'release-old',
+            };
         },
     };
     return {

@@ -72,7 +72,13 @@ function makeContext(options) {
             if (assignOutcome) {
                 return assignOutcome(buildId, assignment);
             }
-            return { buildId, releaseId: assignment.releaseId, assignedAt: '2026-09-01T00:00:00.000Z' };
+            return {
+                buildId,
+                releaseId: assignment.releaseId,
+                assignedAt: '2026-09-01T00:00:00.000Z',
+                isChanged: true,
+                previousReleaseId: pointers[buildId]?.rootHash ?? null,
+            };
         },
     };
     const csrfSigner = {

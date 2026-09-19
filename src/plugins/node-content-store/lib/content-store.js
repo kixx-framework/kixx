@@ -406,7 +406,7 @@ export default class ContentStore {
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string} buildId - Build identifier
      * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
-     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome>}
+     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
      */
     async assignBuild(context, buildId, assignment) {
         this.#assertOpen();
@@ -423,18 +423,7 @@ export default class ContentStore {
         const database = await this.#getTracedDatabase(context, trace);
         try {
 
-            const assignedAt = new Date().toISOString();
-            if (expectedRootHash === undefined) {
-                const res = this.#assignBuildUnconditionally(database, buildId, rootHash, assignedAt);
-                trace.ok();
-                return res;
-            }
-            if (expectedRootHash === null) {
-                const res = this.#assignUnassignedBuild(database, buildId, rootHash, assignedAt);
-                trace.ok();
-                return res;
-            }
-            const res = this.#assignBuildConditionally(database, buildId, rootHash, expectedRootHash, assignedAt);
+            const res = this.#assignBuildAtomically(database, buildId, rootHash, expectedRootHash);
             trace.ok();
             return res;
         } catch (err) {
@@ -443,79 +432,66 @@ export default class ContentStore {
         }
     }
 
-    #assignBuildUnconditionally(database, buildId, rootHash, assignedAt) {
-        let result;
+    #assignBuildAtomically(database, buildId, rootHash, expectedRootHash) {
+        let began = false;
         try {
-            result = database.prepare(`
+            database.exec('BEGIN IMMEDIATE');
+            began = true;
+
+            const closure = database.prepare('SELECT 1 FROM closures WHERE root_hash = ?').get(rootHash);
+            if (!closure) {
+                database.exec('COMMIT');
+                began = false;
+                return { outcome: BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE };
+            }
+
+            const current = database.prepare(
+                'SELECT root_hash, assigned_at FROM builds WHERE build_id = ?',
+            ).get(buildId);
+            const currentRootHash = current?.root_hash ?? null;
+            if (expectedRootHash !== undefined && expectedRootHash !== currentRootHash) {
+                database.exec('COMMIT');
+                began = false;
+                return { outcome: BUILD_ASSIGNMENT_OUTCOME.CONFLICT };
+            }
+
+            if (currentRootHash === rootHash) {
+                const pointer = { rootHash: current.root_hash, assignedAt: current.assigned_at };
+                database.exec('COMMIT');
+                began = false;
+                return {
+                    outcome: BUILD_ASSIGNMENT_OUTCOME.UNCHANGED,
+                    pointer,
+                    previousRootHash: pointer.rootHash,
+                };
+            }
+
+            const assignedAt = new Date().toISOString();
+            database.prepare(`
                 INSERT INTO builds (build_id, root_hash, assigned_at)
-                SELECT ?, root_hash, ? FROM closures WHERE root_hash = ?
+                VALUES (?, ?, ?)
                 ON CONFLICT(build_id) DO UPDATE SET
                     root_hash = excluded.root_hash,
                     assigned_at = excluded.assigned_at
-            `).run(buildId, assignedAt, rootHash);
+            `).run(buildId, rootHash, assignedAt);
+            const result = {
+                outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
+                pointer: { rootHash, assignedAt },
+                previousRootHash: currentRootHash,
+            };
+            database.exec('COMMIT');
+            began = false;
+            return result;
         } catch (cause) {
+            if (began) {
+                try {
+                    database.exec('ROLLBACK');
+                } catch {
+                    // SQLite may have rolled the transaction back already.
+                }
+            }
             throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
         }
-
-        return result.changes === 0 ? BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE : BUILD_ASSIGNMENT_OUTCOME.ASSIGNED;
-    }
-
-    #assignUnassignedBuild(database, buildId, rootHash, assignedAt) {
-        let result;
-        try {
-            result = database.prepare(`
-                INSERT INTO builds (build_id, root_hash, assigned_at)
-                SELECT ?, root_hash, ? FROM closures WHERE root_hash = ?
-                ON CONFLICT(build_id) DO NOTHING
-            `).run(buildId, assignedAt, rootHash);
-        } catch (cause) {
-            throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
-        }
-
-        if (result.changes > 0) {
-            return BUILD_ASSIGNMENT_OUTCOME.ASSIGNED;
-        }
-        return this.#resolveFailedAssignment(database, buildId, rootHash);
-    }
-
-    // A single UPDATE with the expected pointer and closure existence both in
-    // its WHERE clause is the compare-and-swap: SQLite evaluates and applies
-    // it as one statement, so no concurrent writer can observe or act between
-    // the comparison and the update.
-    #assignBuildConditionally(database, buildId, rootHash, expectedRootHash, assignedAt) {
-        let result;
-        try {
-            result = database.prepare(`
-                UPDATE builds
-                SET root_hash = ?, assigned_at = ?
-                WHERE build_id = ?
-                  AND root_hash = ?
-                  AND EXISTS (SELECT 1 FROM closures WHERE root_hash = ?)
-            `).run(rootHash, assignedAt, buildId, expectedRootHash, rootHash);
-        } catch (cause) {
-            throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
-        }
-
-        if (result.changes > 0) {
-            return BUILD_ASSIGNMENT_OUTCOME.ASSIGNED;
-        }
-
-        // The UPDATE above affected no rows either because the desired closure
-        // does not exist or because the pointer had already moved. Closures
-        // are never deleted, so this follow-up read cannot race with the
-        // closure being removed and safely tells the two cases apart.
-        return this.#resolveFailedAssignment(database, buildId, rootHash);
-    }
-
-    #resolveFailedAssignment(database, buildId, rootHash) {
-        let closureRow;
-        try {
-            closureRow = database.prepare('SELECT 1 FROM closures WHERE root_hash = ?').get(rootHash);
-        } catch (cause) {
-            throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
-        }
-
-        return closureRow ? BUILD_ASSIGNMENT_OUTCOME.CONFLICT : BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE;
     }
 
     /**

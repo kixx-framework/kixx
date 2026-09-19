@@ -43,7 +43,13 @@ function makeContext(options) {
         },
         async assignRelease(_context, buildId, attributes) {
             assignCalls.push({ buildId, ...attributes });
-            return { buildId, releaseId: attributes.releaseId };
+            return {
+                buildId,
+                releaseId: attributes.releaseId,
+                assignedAt: '2026-09-01T00:00:00.000Z',
+                isChanged: true,
+                previousReleaseId: pointerReleaseId,
+            };
         },
     };
 

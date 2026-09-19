@@ -160,8 +160,8 @@ export default function contentStoreConformance(describe, makeContentStore) {
                 expectedRootHash: null,
             });
 
-            assertEqual('assigned', assigned);
-            assertEqual('conflict', conflict);
+            assertEqual('assigned', assigned.outcome);
+            assertEqual('conflict', conflict.outcome);
             assertEqual('first-hash', (await store.getBuildPointer(context, 'build-1')).rootHash);
         });
 
@@ -179,7 +179,7 @@ export default function contentStoreConformance(describe, makeContentStore) {
             const build = await store.getBuild(context, 'build-1');
             const closure = await store.getIndex(context, 'root-hash');
 
-            assertEqual('assigned', outcome);
+            assertEqual('assigned', outcome.outcome);
             assertEqual(JSON.stringify(build.entries), JSON.stringify(closure));
             assertEqual('root-hash', build.rootHash);
             assertEqual(2, build.entries['/'].length);
@@ -191,7 +191,7 @@ export default function contentStoreConformance(describe, makeContentStore) {
             const { store, context } = makeContentStore();
 
             assertEqual(null, await store.getBuild(context, 'missing-build'));
-            assertEqual('missingClosure', await store.assignBuild(context, 'build-1', { rootHash: 'missing-hash' }));
+            assertEqual('missingClosure', (await store.assignBuild(context, 'build-1', { rootHash: 'missing-hash' })).outcome);
             assertEqual(null, await store.getBuild(context, 'build-1'));
         });
 
@@ -223,15 +223,44 @@ export default function contentStoreConformance(describe, makeContentStore) {
                 rootHash: 'second-hash',
                 expectedRootHash: 'wrong-hash',
             });
-            assertEqual('conflict', stale);
+            assertEqual('conflict', stale.outcome);
             assertEqual('first-hash', (await store.getBuild(context, 'build-1')).rootHash);
 
             const matched = await store.assignBuild(context, 'build-1', {
                 rootHash: 'second-hash',
                 expectedRootHash: 'first-hash',
             });
-            assertEqual('assigned', matched);
+            assertEqual('assigned', matched.outcome);
             assertEqual('second-hash', (await store.getBuild(context, 'build-1')).rootHash);
+        });
+
+        it('returns a preserved pointer for a valid same-target no-op', async () => {
+            const { store, context } = makeContentStore();
+            await store.saveIndex(context, 'root-hash', { '/': [ 'tree', 'root-hash' ] });
+            const assigned = await store.assignBuild(context, 'build-1', { rootHash: 'root-hash' });
+            const unchanged = await store.assignBuild(context, 'build-1', {
+                rootHash: 'root-hash',
+                expectedRootHash: 'root-hash',
+            });
+
+            assertEqual('assigned', assigned.outcome);
+            assertEqual('unchanged', unchanged.outcome);
+            assertEqual('root-hash', unchanged.pointer.rootHash);
+            assertEqual(assigned.pointer.assignedAt, unchanged.pointer.assignedAt);
+            assertEqual('root-hash', unchanged.previousRootHash);
+        });
+
+        it('checks a same-target request against its explicit precondition', async () => {
+            const { store, context } = makeContentStore();
+            await store.saveIndex(context, 'root-hash', { '/': [ 'tree', 'root-hash' ] });
+            const assigned = await store.assignBuild(context, 'build-1', { rootHash: 'root-hash' });
+            const conflict = await store.assignBuild(context, 'build-1', {
+                rootHash: 'root-hash',
+                expectedRootHash: null,
+            });
+
+            assertEqual('conflict', conflict.outcome);
+            assertEqual(assigned.pointer.assignedAt, (await store.getBuildPointer(context, 'build-1')).assignedAt);
         });
 
         it('reports a missing closure rather than conflict when the desired root does not exist', async () => {
@@ -244,7 +273,7 @@ export default function contentStoreConformance(describe, makeContentStore) {
                 expectedRootHash: 'first-hash',
             });
 
-            assertEqual('missingClosure', outcome);
+            assertEqual('missingClosure', outcome.outcome);
             assertEqual('first-hash', (await store.getBuild(context, 'build-1')).rootHash);
         });
 

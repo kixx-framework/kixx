@@ -299,7 +299,7 @@ export default class ContentAddressableStore {
      * @param {Object} assignment - Release and pointer precondition
      * @param {string} assignment.releaseId - Existing Release id
      * @param {(string|null)} [assignment.precondition] - Expected current Release, null for unassigned, or absent for unconditional
-     * @returns {Promise<Object>} Resulting build pointer
+     * @returns {Promise<{buildId: string, releaseId: string, assignedAt: string, isChanged: boolean, previousReleaseId: (string|null)}>} Assignment result
      * @throws {NotFoundError} When the Release does not exist
      * @throws {ConflictError} When the pointer precondition fails
      */
@@ -312,26 +312,32 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#assignRelease: precondition',
         );
 
-        this.#logger.info('assign-release get-build-pointer 1', { buildId });
-        const current = await this.#store.getBuildPointer(context, buildId);
-        if (current?.rootHash === releaseId) {
-            return { buildId, releaseId, assignedAt: current.assignedAt };
-        }
-
         this.#logger.info('assign-release assign-build', { buildId });
-        const outcome = await this.#store.assignBuild(context, buildId, {
+        const result = await this.#store.assignBuild(context, buildId, {
             rootHash: releaseId,
             expectedRootHash: precondition,
         });
-        if (outcome === BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE) {
+        if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE) {
             throw new NotFoundError(`Release "${ releaseId }" was not found.`, { code: 'ReleaseNotFound' });
         }
-        if (outcome === BUILD_ASSIGNMENT_OUTCOME.CONFLICT) {
+        if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.CONFLICT) {
             throw new ConflictError('The build pointer precondition failed.', { code: 'BuildPointerConflict' });
         }
-        this.#logger.info('assign-release get-build-pointer 2', { buildId });
-        const pointer = await this.#store.getBuildPointer(context, buildId);
-        return { buildId, releaseId, assignedAt: pointer.assignedAt };
+        assert(
+            result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED
+                || result.outcome === BUILD_ASSIGNMENT_OUTCOME.UNCHANGED,
+            'ContentAddressableStore#assignRelease: unexpected assignment result',
+        );
+        assert(result.pointer && isValidHash(result.pointer.rootHash), 'ContentAddressableStore#assignRelease: assignment result pointer');
+        assert(typeof result.pointer.assignedAt === 'string', 'ContentAddressableStore#assignRelease: assignment result assignedAt');
+        assert(result.previousRootHash === null || isValidHash(result.previousRootHash), 'ContentAddressableStore#assignRelease: assignment result previousRootHash');
+        return {
+            buildId,
+            releaseId: result.pointer.rootHash,
+            assignedAt: result.pointer.assignedAt,
+            isChanged: result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
+            previousReleaseId: result.previousRootHash,
+        };
     }
 
     /**

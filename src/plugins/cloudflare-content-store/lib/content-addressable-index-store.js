@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { assert, assertNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
-import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
+import assignBuild from './assign-build.js';
 import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
 
 
@@ -265,38 +265,6 @@ export default class ContentAddressableIndexStore extends DurableObject {
      * @returns {Promise<{success: true, outcome: import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome}>}
      */
     async assignBuild(buildId, assignment) {
-        assertNonEmptyString(buildId, 'ContentAddressableIndexStore#assignBuild: buildId');
-        assert(isPlainObject(assignment), 'ContentAddressableIndexStore#assignBuild: assignment must be a plain object');
-
-        const { rootHash, expectedRootHash } = assignment;
-        assertNonEmptyString(rootHash, 'ContentAddressableIndexStore#assignBuild: rootHash');
-
-        const closureRows = this.#sql.exec(
-            'SELECT 1 FROM closure_entries WHERE root_hash = ? LIMIT 1',
-            rootHash,
-        ).toArray();
-        if (closureRows.length === 0) {
-            return { success: true, outcome: BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE };
-        }
-
-        if (expectedRootHash !== undefined) {
-            if (expectedRootHash !== null) {
-                assertNonEmptyString(expectedRootHash, 'ContentAddressableIndexStore#assignBuild: expectedRootHash');
-            }
-            if (this.#getBuildRootHash(buildId) !== expectedRootHash) {
-                return { success: true, outcome: BUILD_ASSIGNMENT_OUTCOME.CONFLICT };
-            }
-        }
-
-        const assignedAt = new Date().toISOString();
-        this.#sql.exec(`
-            INSERT INTO builds (build_id, root_hash, assigned_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(build_id) DO UPDATE SET
-                root_hash = EXCLUDED.root_hash,
-                assigned_at = EXCLUDED.assigned_at
-        `, buildId, rootHash, assignedAt);
-
-        return { success: true, outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED };
+        return { success: true, ...assignBuild(this.#sql, buildId, assignment) };
     }
 }
