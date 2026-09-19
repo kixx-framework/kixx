@@ -1,3 +1,4 @@
+import { isValidAssignmentId } from '../../../kixx/content-addressable-store/build-assignment.js';
 import {
     AssertionError,
     OperationalError,
@@ -288,7 +289,7 @@ export default class ContentStore {
      * Retrieves build pointer metadata without loading closure entries.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to resolve
-     * @returns {Promise<({rootHash: string, assignedAt: string}|null)>} Pointer metadata, or null when unassigned
+     * @returns {Promise<({rootHash: string, assignedAt: string, assignmentId: string}|null)>} Pointer metadata, or null when unassigned
      */
     async getBuildPointer(context, buildId) {
         assertNonEmptyString(buildId, 'ContentStore#getBuildPointer: buildId');
@@ -317,7 +318,7 @@ export default class ContentStore {
     /**
      * Lists every build pointer newest assignment first.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
-     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string}>>} Registered build pointers
+     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string, assignmentId: string}>>} Registered build pointers
      */
     async listBuilds(context) {
         const trace = new TraceLogger(context.logger, 'content-store-list-builds');
@@ -536,31 +537,32 @@ export default class ContentStore {
 
     /**
      * Points a build at a previously persisted index closure, optionally only
-     * when the build's currently assigned root hash still equals
-     * `expectedRootHash`.
+     * when the build's current assignment identity still equals
+     * `expectedAssignmentId`.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to assign
-     * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
+     * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
      * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      */
     async assignBuild(context, buildId, assignment) {
         assertNonEmptyString(buildId, 'put index requires buildId to be a non-empty string');
         assert(isPlainObject(assignment), 'ContentStore#assignBuild: assignment must be a plain object');
+        assert(!Object.hasOwn(assignment, 'expectedRootHash'), 'ContentStore#assignBuild: use expectedAssignmentId');
 
-        const { rootHash, expectedRootHash } = assignment;
+        const { rootHash, expectedAssignmentId } = assignment;
         assertNonEmptyString(rootHash, 'put index requires rootHash to be a non-empty string');
-        if (expectedRootHash !== undefined && expectedRootHash !== null) {
-            assertNonEmptyString(expectedRootHash, 'ContentStore#assignBuild: expectedRootHash must be a non-empty string');
+        if (expectedAssignmentId !== undefined && expectedAssignmentId !== null) {
+            assert(isValidAssignmentId(expectedAssignmentId), 'ContentStore#assignBuild: expectedAssignmentId');
         }
 
-        const trace = new TraceLogger(context.logger, 'content-assign-build', { buildId, rootHash, expectedRootHash });
+        const trace = new TraceLogger(context.logger, 'content-assign-build', { buildId, rootHash, expectedAssignmentId });
         let result;
         try {
             result = await this.#callDurableObject(
                 context,
                 'assignBuild',
-                (durableObject) => durableObject.assignBuild(buildId, { rootHash, expectedRootHash }),
+                (durableObject) => durableObject.assignBuild(buildId, { rootHash, expectedAssignmentId }),
             );
             trace.ok();
         } catch (err) {

@@ -140,7 +140,7 @@
  *
  * ## Conditional assignment is a compare-and-swap on one pointer
  * `assignBuild()` accepts an assignment object carrying `rootHash` and an
- * optional `expectedRootHash`. A string requires the current pointer to equal
+ * optional `expectedAssignmentId`. A UUID requires the current assignment identity to equal
  * that value; `null` requires the build to be unassigned; omission performs an
  * unconditional assignment. For either explicit precondition, the adapter
  * MUST compare it against the build's currently stored pointer and perform the
@@ -150,8 +150,12 @@
  * MUST leave the pointer and every cache untouched and MUST be reported as
  * `CONFLICT`, not thrown as an error, because a stale caller-observed pointer
  * is an expected outcome of concurrent publication rather than a programmer
- * mistake. Omitting `expectedRootHash` performs the existing unconditional
+ * mistake. Omitting `expectedAssignmentId` performs the existing unconditional
  * assignment.
+ *
+ * Changed assignments generate a new UUID inside the atomic operation. A valid
+ * same-target no-op preserves both the stored identity and timestamp. Compare
+ * identities before no-op detection, so stale same-target writes still conflict.
  *
  * ## Pointer reads do not load closures
  * `getBuildPointer()` and `listBuilds()` read only mutable pointer metadata.
@@ -162,7 +166,7 @@
  * `assignBuild()` resolves one of `BUILD_ASSIGNMENT_OUTCOME.ASSIGNED`,
  * `.UNCHANGED`, `.CONFLICT`, or `.MISSING_CLOSURE` rather than throwing for
  * any of these outcomes, because all can result from public request input
- * (an API client's stale `expectedRootHash`, or a desired closure it never
+ * (an API client's stale `expectedAssignmentId`, or a desired closure it never
  * published) rather than only from programmer error.
  *
  * ## Resolving a build never throws for absence
@@ -281,6 +285,7 @@
  * @typedef {Object} ContentBuildPointer
  * @property {string} rootHash - Root hash currently assigned to the build.
  * @property {string} assignedAt - ISO 8601 timestamp of the latest assignment.
+ * @property {string} assignmentId - Server-generated UUID unique to this assignment.
  */
 
 /**
@@ -290,6 +295,7 @@
  * @property {string} buildId - Operator-chosen build identifier.
  * @property {string} rootHash - Root hash currently assigned to the build.
  * @property {string} assignedAt - ISO 8601 timestamp of the latest assignment.
+ * @property {string} assignmentId - Server-generated UUID unique to this assignment.
  */
 
 /**
@@ -297,8 +303,8 @@
  *
  * @typedef {Object} ContentBuildAssignment
  * @property {string} rootHash - Root hash of the closure the build should point at.
- * @property {(string|null)} [expectedRootHash] - A string requires the stored
- *   pointer to equal that hash; `null` requires no stored pointer. The
+ * @property {(string|null)} [expectedAssignmentId] - A string requires the stored
+ *   assignment identity to equal that UUID; `null` requires no stored pointer. The
  *   comparison and update are one atomic operation. Omission is unconditional.
  */
 
@@ -373,9 +379,9 @@
  *
  * @property {function(Object, string, ContentBuildAssignment): Promise<ContentBuildAssignmentResult>} assignBuild
  *   Points a build id at a previously saved closure, optionally only when the
- *   build's current pointer still equals `expectedRootHash`. An `UNCHANGED`
+ *   build's current assignment identity still equals `expectedAssignmentId`. An `UNCHANGED`
  *   result means the explicit precondition passed and the target was already
- *   current; it preserves the stored timestamp. On an `ASSIGNED`
+ *   current; it preserves the stored timestamp and identity. On an `ASSIGNED`
  *   outcome, makes a best effort to invalidate locally cached indexes for that
  *   build; concurrent reads and other instances may still serve the previous
  *   closure until their cache entries expire. An `UNCHANGED`, `CONFLICT`, or

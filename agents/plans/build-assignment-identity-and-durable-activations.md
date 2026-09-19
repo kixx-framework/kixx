@@ -8,7 +8,8 @@ JSON and require it in conditional writes. Deliver pending events to the
 existing Activation Collection idempotently, with automatic recovery after
 crashes on Node.js and Cloudflare.
 
-Implementation has not started. Baseline: `ff3e9e65` on `fix-publishing`.
+ID1 is complete; ID2 is next. This intermediate state is not deployable.
+Baseline: `ff3e9e65` on `fix-publishing`.
 The completed `build-assignment-preconditions-and-results.md` fixes #153/#154:
 preconditions run before no-op detection, and storage returns operation-owned
 metadata. Preserve those behaviors throughout this work. This document
@@ -297,7 +298,7 @@ step in its handoff. Mark acceptance boxes only after verification.
 
 ### Task ID1: Persist unique identities for atomic build assignments
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** This plan, Assignment identity and Storage reset sections;
 `src/plugins/README.md`; `src/kixx/content-addressable-store/content-store-interface.js`;
@@ -341,13 +342,13 @@ storage write compares that identity atomically, closing the A→B→A hole.
 
 **Acceptance criteria**
 
-- [ ] A→B→A produces three distinct IDs; a token from the first A fails.
-- [ ] Current-token no-op preserves exact historical timestamp and identity.
-- [ ] Stale/null same-target requests conflict; missing closures retain precedence.
-- [ ] Every successful result describes its own operation despite a later writer.
-- [ ] Failure releases Node locks and preserves state; two connections exercise
+- [x] A→B→A produces three distinct IDs; a token from the first A fails.
+- [x] Current-token no-op preserves exact historical timestamp and identity.
+- [x] Stale/null same-target requests conflict; missing closures retain precedence.
+- [x] Every successful result describes its own operation despite a later writer.
+- [x] Failure releases Node locks and preserves state; two connections exercise
       stale tokens against committed state; no await occurs inside the transaction.
-- [ ] Fresh/reopened format-4 stores work; incompatible schemas fail explicitly.
+- [x] Fresh/reopened format-4 stores work; incompatible schemas fail explicitly.
 
 **Validation**
 
@@ -357,14 +358,67 @@ storage write compares that identity atomically, closing the A→B→A hole.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Format isolation already selects both Node directories
-  and the Cloudflare DO instance; no independent namespace mechanism is needed.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Format 4 and schema version 3; UUID identity validation, generation,
+  atomic comparison, captured assignment results, pointer reads/lists, and fresh
+  pending-event tables/indexes on both backends. Updated internal doubles and
+  regression coverage for A→B→A, no-op identity/timestamp preservation, null/stale
+  conflicts, missing-closure precedence, Node rollback/connection reuse,
+  cross-connection CAS, schema rejection, and disk close/reopen on both SQL paths.
+- Current state: Complete. No server or target was started and no external
+  state was changed.
+- Remaining: None for ID1. Begin ID2 by reading its documentation and migrating
+  API/admin scripts, request handlers, forms, seed callers, and HTTP helpers.
+  AU1 owns pending-event writes/queue operations; the tables are intentionally
+  empty until then. Do not deploy this intermediate state.
+- Decisions and discoveries:
+  - Removed `precondition` (facade) and `expectedRootHash` (adapters) arguments
+    assert rather than silently becoming unconditional writes. ID2 consumers
+    still use the removed facade argument and must be migrated. Their unit
+    doubles currently hide that integration gap despite the full suite passing.
+  - Cloudflare schema initialization lives in `initialize-schema.js`, exercised
+    through the real production SQL in the SQLite bridge. It uses a persisted
+    `content_schema` version row, rejects incompatible/unversioned stores, and
+    ignores SQLite/Cloudflare internal tables. Production initialization uses
+    `ctx.storage.transactionSync()`. AU1 still must wrap assignment's future
+    pointer-plus-event writes in transactionSync and test rollback.
+  - Node uses `PRAGMA user_version = 3` in the format-4 directory. Existing
+    format namespaces are untouched. CONTENT_CONTRACT_VERSION remains 1.
+  - Reviewed Cloudflare's linked SQLite storage/transaction contract. SQL bridge
+    and disk reopen tests are not Workers runtime evidence; RL1 retains that gate.
+  - Stopped after this task because less than half the context remains, per the
+    executor instructions.
+- Actual files changed:
+  - `src/kixx/content-addressable-store/addressing.js`
+  - `src/kixx/content-addressable-store/build-assignment.js` (new)
+  - `src/kixx/content-addressable-store/content-store-interface.js`
+  - `src/kixx/content-addressable-store/content-addressable-store.js`
+  - `src/plugins/node-content-store/lib/content-store.js`
+  - `src/plugins/cloudflare-content-store/lib/assign-build.js`
+  - `src/plugins/cloudflare-content-store/lib/initialize-schema.js` (new)
+  - `src/plugins/cloudflare-content-store/lib/content-addressable-index-store.js`
+  - `src/plugins/cloudflare-content-store/lib/content-store.js`
+  - `test/unit-tests/kixx/content-addressable-store/addressing.test.js`
+  - `test/unit-tests/kixx/content-addressable-store/build-assignment.test.js` (new)
+  - `test/unit-tests/kixx/content-addressable-store/content-addressable-store.test.js`
+  - `test/unit-tests/kixx/content-addressable-store/content-store-conformance.js`
+  - `test/unit-tests/plugins/node-content-store/lib/content-store.test.js`
+  - `test/unit-tests/plugins/cloudflare-content-store/lib/assign-build.test.js`
+  - `test/unit-tests/plugins/cloudflare-content-store/lib/content-store.test.js`
+  - `test/unit-tests/app/presentation/request-handlers/publishing-api/discovery.test.js`
+    (format-4 expectation only)
+  - `agents/plans/build-assignment-identity-and-durable-activations.md`
+- Validation run:
+  - Listed focused test command: 329 passed, 0 disabled.
+  - Listed lint command plus
+    `test/unit-tests/app/presentation/request-handlers/publishing-api/discovery.test.js`:
+    passed without diagnostics.
+  - `node run-tests.js`: 1,465 passed, 0 disabled. Initial stale format-3
+    discovery expectation was corrected; final run has no failures.
+  - `git diff --check`: passed.
+  - Inspected Node BEGIN IMMEDIATE through COMMIT: no intervening await; UUID
+    generation occurs only after closure/precondition/no-op checks.
+- Blockers: None for ID2. Integrated publishing and durable audit delivery remain
+  unfinished until the remaining tasks complete.
 
 ### Task ID2: Require JSON assignment tokens across public and admin workflows
 

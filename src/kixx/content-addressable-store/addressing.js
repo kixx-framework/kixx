@@ -45,10 +45,12 @@ import {
  * - `3` — string and array-buffer blobs were merged into one byte-addressed
  *   domain. A string and its UTF-8 encoding now have one content address.
  *   Nothing had been deployed at the time, so no migration was required.
+ * - `4` — clean assignment-schema reset for UUID identities and durable pending
+ *   events. Republish content; old namespaces remain untouched.
  * @type {number}
  * @readonly
  */
-export const FORMAT = 3;
+export const FORMAT = 4;
 
 /**
  * Storage-key prefixes for each persisted content-addressing structure.

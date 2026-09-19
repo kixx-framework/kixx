@@ -15,10 +15,11 @@ import {
 } from '../../../kixx/assertions/mod.js';
 import { OperationalError } from '../../../kixx/errors/mod.js';
 import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
+import { isValidAssignmentId } from '../../../kixx/content-addressable-store/build-assignment.js';
 import TraceLogger from '../../../kixx/logger/trace-logger.js';
 
 const BUSY_TIMEOUT_MS = 5000;
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const GET_FILE_TYPES = [ 'text', 'arrayBuffer', 'stream' ];
 const GET_FILES_TYPES = [ 'text' ];
 const BULK_FILE_LIMIT = 100;
@@ -148,7 +149,7 @@ export default class ContentStore {
      * Retrieves build pointer metadata without loading closure entries.
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string} buildId - Build identifier
-     * @returns {Promise<({rootHash: string, assignedAt: string}|null)>} Pointer metadata, or null when unassigned
+     * @returns {Promise<({rootHash: string, assignedAt: string, assignmentId: string}|null)>} Pointer metadata, or null when unassigned
      */
     async getBuildPointer(context, buildId) {
         this.#assertOpen();
@@ -157,9 +158,9 @@ export default class ContentStore {
         const trace = new TraceLogger(context.logger, 'content-store-get-build-pointer', { buildId });
         const database = await this.#getTracedDatabase(context, trace);
         try {
-            const row = database.prepare('SELECT root_hash, assigned_at FROM builds WHERE build_id = ?').get(buildId);
+            const row = database.prepare('SELECT root_hash, assigned_at, assignment_id FROM builds WHERE build_id = ?').get(buildId);
             trace.ok();
-            return row ? { rootHash: row.root_hash, assignedAt: row.assigned_at } : null;
+            return row ? { rootHash: row.root_hash, assignedAt: row.assigned_at, assignmentId: row.assignment_id } : null;
         } catch (cause) {
             trace.error();
             throw new OperationalError(`NodeContentStore failed to load build pointer "${ buildId }"`, { cause });
@@ -169,7 +170,7 @@ export default class ContentStore {
     /**
      * Lists every build pointer newest assignment first.
      * @param {Object} _context - Request context accepted for interface compatibility
-     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string}>>} Registered build pointers
+     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string, assignmentId: string}>>} Registered build pointers
      */
     async listBuilds(context) {
         this.#assertOpen();
@@ -178,7 +179,7 @@ export default class ContentStore {
         const database = await this.#getTracedDatabase(context, trace);
         try {
             const rows = database.prepare(`
-                SELECT build_id, root_hash, assigned_at
+                SELECT build_id, root_hash, assigned_at, assignment_id
                 FROM builds
                 ORDER BY assigned_at DESC, build_id ASC
             `).all();
@@ -187,6 +188,7 @@ export default class ContentStore {
                 buildId: row.build_id,
                 rootHash: row.root_hash,
                 assignedAt: row.assigned_at,
+                assignmentId: row.assignment_id,
             }));
         } catch (cause) {
             trace.error();
@@ -402,28 +404,29 @@ export default class ContentStore {
 
     /**
      * Atomically assigns a build to a previously saved closure, optionally
-     * only when the build's stored pointer still equals `expectedRootHash`.
+     * only when the build's stored assignment identity still equals `expectedAssignmentId`.
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string} buildId - Build identifier
-     * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
+     * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
      * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
      */
     async assignBuild(context, buildId, assignment) {
         this.#assertOpen();
         assertNonEmptyString(buildId, 'NodeContentStore#assignBuild: buildId');
         assert(isPlainObject(assignment), 'NodeContentStore#assignBuild: assignment must be a plain object');
+        assert(!Object.hasOwn(assignment, 'expectedRootHash'), 'NodeContentStore#assignBuild: use expectedAssignmentId');
 
-        const { rootHash, expectedRootHash } = assignment;
+        const { rootHash, expectedAssignmentId } = assignment;
         this.#assertValidHash(rootHash, 'NodeContentStore#assignBuild: rootHash');
-        if (expectedRootHash !== undefined && expectedRootHash !== null) {
-            this.#assertValidHash(expectedRootHash, 'NodeContentStore#assignBuild: expectedRootHash');
+        if (expectedAssignmentId !== undefined && expectedAssignmentId !== null) {
+            assert(isValidAssignmentId(expectedAssignmentId), 'NodeContentStore#assignBuild: expectedAssignmentId');
         }
 
-        const trace = new TraceLogger(context.logger, 'content-store-assign-build', { buildId, rootHash, expectedRootHash });
+        const trace = new TraceLogger(context.logger, 'content-store-assign-build', { buildId, rootHash, expectedAssignmentId });
         const database = await this.#getTracedDatabase(context, trace);
         try {
 
-            const res = this.#assignBuildAtomically(database, buildId, rootHash, expectedRootHash);
+            const res = this.#assignBuildAtomically(database, buildId, rootHash, expectedAssignmentId);
             trace.ok();
             return res;
         } catch (err) {
@@ -432,7 +435,7 @@ export default class ContentStore {
         }
     }
 
-    #assignBuildAtomically(database, buildId, rootHash, expectedRootHash) {
+    #assignBuildAtomically(database, buildId, rootHash, expectedAssignmentId) {
         let began = false;
         try {
             database.exec('BEGIN IMMEDIATE');
@@ -446,17 +449,17 @@ export default class ContentStore {
             }
 
             const current = database.prepare(
-                'SELECT root_hash, assigned_at FROM builds WHERE build_id = ?',
+                'SELECT root_hash, assigned_at, assignment_id FROM builds WHERE build_id = ?',
             ).get(buildId);
             const currentRootHash = current?.root_hash ?? null;
-            if (expectedRootHash !== undefined && expectedRootHash !== currentRootHash) {
+            if (expectedAssignmentId !== undefined && expectedAssignmentId !== (current?.assignment_id ?? null)) {
                 database.exec('COMMIT');
                 began = false;
                 return { outcome: BUILD_ASSIGNMENT_OUTCOME.CONFLICT };
             }
 
             if (currentRootHash === rootHash) {
-                const pointer = { rootHash: current.root_hash, assignedAt: current.assigned_at };
+                const pointer = { rootHash: current.root_hash, assignedAt: current.assigned_at, assignmentId: current.assignment_id };
                 database.exec('COMMIT');
                 began = false;
                 return {
@@ -466,17 +469,19 @@ export default class ContentStore {
                 };
             }
 
+            const assignmentId = crypto.randomUUID();
             const assignedAt = new Date().toISOString();
             database.prepare(`
-                INSERT INTO builds (build_id, root_hash, assigned_at)
-                VALUES (?, ?, ?)
+                INSERT INTO builds (build_id, root_hash, assigned_at, assignment_id)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(build_id) DO UPDATE SET
                     root_hash = excluded.root_hash,
-                    assigned_at = excluded.assigned_at
-            `).run(buildId, rootHash, assignedAt);
+                    assigned_at = excluded.assigned_at,
+                    assignment_id = excluded.assignment_id
+            `).run(buildId, rootHash, assignedAt, assignmentId);
             const result = {
                 outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
-                pointer: { rootHash, assignedAt },
+                pointer: { rootHash, assignedAt, assignmentId },
                 previousRootHash: currentRootHash,
             };
             database.exec('COMMIT');
@@ -631,8 +636,22 @@ export default class ContentStore {
                     CREATE TABLE builds (
                         build_id   TEXT PRIMARY KEY,
                         root_hash  TEXT NOT NULL REFERENCES closures(root_hash),
-                        assigned_at TEXT NOT NULL
+                        assigned_at TEXT NOT NULL,
+                        assignment_id TEXT NOT NULL UNIQUE
                     );
+                    CREATE TABLE pending_build_assignments (
+                        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                        assignment_id TEXT NOT NULL UNIQUE,
+                        build_id TEXT NOT NULL,
+                        root_hash TEXT NOT NULL,
+                        previous_root_hash TEXT,
+                        assigned_at TEXT NOT NULL,
+                        metadata_json TEXT NOT NULL,
+                        attempt_count INTEGER NOT NULL DEFAULT 0,
+                        next_attempt_at TEXT NOT NULL
+                    );
+                    CREATE INDEX pending_build_assignments_due
+                        ON pending_build_assignments (next_attempt_at, sequence);
                     PRAGMA user_version = ${ SCHEMA_VERSION };
                 `);
                 this.#logger.info('migrated content store database', { version: SCHEMA_VERSION });

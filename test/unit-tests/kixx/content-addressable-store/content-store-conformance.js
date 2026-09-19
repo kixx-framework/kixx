@@ -146,18 +146,57 @@ export default function contentStoreConformance(describe, makeContentStore) {
             assertEqual(undefined, builds[0].entries);
         });
 
-        it('assigns only an unassigned build when expectedRootHash is null', async () => {
+        it('rejects the original identity after A to B to A', async () => {
+            const { store, context } = makeContentStore();
+            await store.saveIndex(context, 'first-hash', { '/': [ 'tree', 'first-hash' ] });
+            await store.saveIndex(context, 'second-hash', { '/': [ 'tree', 'second-hash' ] });
+            const first = await store.assignBuild(context, 'build', { rootHash: 'first-hash', expectedAssignmentId: null });
+            const second = await store.assignBuild(context, 'build', {
+                rootHash: 'second-hash', expectedAssignmentId: first.pointer.assignmentId,
+            });
+            const third = await store.assignBuild(context, 'build', {
+                rootHash: 'first-hash', expectedAssignmentId: second.pointer.assignmentId,
+            });
+            const stale = await store.assignBuild(context, 'build', {
+                rootHash: 'first-hash', expectedAssignmentId: first.pointer.assignmentId,
+            });
+
+            assertEqual(3, new Set([ first, second, third ].map((result) => result.pointer.assignmentId)).size);
+            assertEqual('conflict', stale.outcome);
+            assertEqual(third.pointer.assignmentId, (await store.getBuildPointer(context, 'build')).assignmentId);
+            assertEqual(third.pointer.assignmentId, (await store.listBuilds(context))[0].assignmentId);
+            assertEqual('first-hash', first.pointer.rootHash);
+            assertEqual(null, first.previousRootHash);
+        });
+
+        it('rejects removed hash preconditions instead of writing unconditionally', async () => {
+            const { store, context } = makeContentStore();
+            await assertAssertionError(() => store.assignBuild(context, 'build', {
+                rootHash: 'first-hash', expectedRootHash: null,
+            }));
+        });
+
+        it('rejects malformed assignment identities', async () => {
+            const { store, context } = makeContentStore();
+            for (const expectedAssignmentId of [ '', 'first-hash', 1, {}, false ]) {
+                await assertAssertionError(() => store.assignBuild(context, 'build', {
+                    rootHash: 'first-hash', expectedAssignmentId,
+                }));
+            }
+        });
+
+        it('assigns only an unassigned build when expectedAssignmentId is null', async () => {
             const { store, context } = makeContentStore();
             await store.saveIndex(context, 'first-hash', { '/': [ 'tree', 'first-hash' ] });
             await store.saveIndex(context, 'second-hash', { '/': [ 'tree', 'second-hash' ] });
 
             const assigned = await store.assignBuild(context, 'build-1', {
                 rootHash: 'first-hash',
-                expectedRootHash: null,
+                expectedAssignmentId: null,
             });
             const conflict = await store.assignBuild(context, 'build-1', {
                 rootHash: 'second-hash',
-                expectedRootHash: null,
+                expectedAssignmentId: null,
             });
 
             assertEqual('assigned', assigned.outcome);
@@ -221,14 +260,14 @@ export default function contentStoreConformance(describe, makeContentStore) {
 
             const stale = await store.assignBuild(context, 'build-1', {
                 rootHash: 'second-hash',
-                expectedRootHash: 'wrong-hash',
+                expectedAssignmentId: crypto.randomUUID(),
             });
             assertEqual('conflict', stale.outcome);
             assertEqual('first-hash', (await store.getBuild(context, 'build-1')).rootHash);
 
             const matched = await store.assignBuild(context, 'build-1', {
                 rootHash: 'second-hash',
-                expectedRootHash: 'first-hash',
+                expectedAssignmentId: (await store.getBuildPointer(context, 'build-1')).assignmentId,
             });
             assertEqual('assigned', matched.outcome);
             assertEqual('second-hash', (await store.getBuild(context, 'build-1')).rootHash);
@@ -240,13 +279,14 @@ export default function contentStoreConformance(describe, makeContentStore) {
             const assigned = await store.assignBuild(context, 'build-1', { rootHash: 'root-hash' });
             const unchanged = await store.assignBuild(context, 'build-1', {
                 rootHash: 'root-hash',
-                expectedRootHash: 'root-hash',
+                expectedAssignmentId: assigned.pointer.assignmentId,
             });
 
             assertEqual('assigned', assigned.outcome);
             assertEqual('unchanged', unchanged.outcome);
             assertEqual('root-hash', unchanged.pointer.rootHash);
             assertEqual(assigned.pointer.assignedAt, unchanged.pointer.assignedAt);
+            assertEqual(assigned.pointer.assignmentId, unchanged.pointer.assignmentId);
             assertEqual('root-hash', unchanged.previousRootHash);
         });
 
@@ -256,7 +296,7 @@ export default function contentStoreConformance(describe, makeContentStore) {
             const assigned = await store.assignBuild(context, 'build-1', { rootHash: 'root-hash' });
             const conflict = await store.assignBuild(context, 'build-1', {
                 rootHash: 'root-hash',
-                expectedRootHash: null,
+                expectedAssignmentId: null,
             });
 
             assertEqual('conflict', conflict.outcome);
@@ -270,7 +310,7 @@ export default function contentStoreConformance(describe, makeContentStore) {
 
             const outcome = await store.assignBuild(context, 'build-1', {
                 rootHash: 'never-saved-hash',
-                expectedRootHash: 'first-hash',
+                expectedAssignmentId: (await store.getBuildPointer(context, 'build-1')).assignmentId,
             });
 
             assertEqual('missingClosure', outcome.outcome);

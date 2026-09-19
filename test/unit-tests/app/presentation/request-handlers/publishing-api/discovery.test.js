@@ -17,7 +17,7 @@ describe('Publishing API discovery', ({ it }) => {
 
         assertEqual('build-42', attributes.runningBuildId);
         assertEqual(1, attributes.contentContractVersion);
-        assertEqual(3, attributes.addressingFormat);
+        assertEqual(4, attributes.addressingFormat);
         assertEqual(100, attributes.limits.maxObjectStatusIds);
         assertEqual(10_000, attributes.limits.maxManifestEntries);
     });

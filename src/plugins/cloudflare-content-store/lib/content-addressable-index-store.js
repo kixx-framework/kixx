@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { assert, assertNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
 import assignBuild from './assign-build.js';
+import initializeSchema from './initialize-schema.js';
 import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
 
 
@@ -52,32 +53,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
      * @returns {Promise<void>}
      */
     async migrate() {
-        this.#sql.exec(`
-            CREATE TABLE IF NOT EXISTS closure_entries (
-                root_hash TEXT    NOT NULL,
-                pathname  TEXT    NOT NULL,
-                kind      TEXT    NOT NULL,
-                hash      TEXT    NOT NULL,
-                size      INTEGER,
-                metadata  TEXT,
-                PRIMARY KEY (root_hash, pathname)
-            )
-        `);
-
-        this.#sql.exec(`
-            CREATE TABLE IF NOT EXISTS builds (
-                build_id   TEXT    NOT NULL PRIMARY KEY,
-                root_hash  TEXT    NOT NULL,
-                assigned_at TEXT   NOT NULL
-            )
-        `);
-
-        this.#sql.exec(`
-            CREATE TABLE IF NOT EXISTS objects (
-                hash TEXT    NOT NULL PRIMARY KEY,
-                size INTEGER NOT NULL
-            )
-        `);
+        this.ctx.storage.transactionSync(() => initializeSchema(this.#sql));
     }
 
     #getBuildRootHash(buildId) {
@@ -149,25 +125,25 @@ export default class ContentAddressableIndexStore extends DurableObject {
     /**
      * Retrieves pointer metadata without loading closure entries.
      * @param {string} buildId - Build identifier to resolve
-     * @returns {Promise<{success: true, pointer: ({rootHash: string, assignedAt: string}|null)}>} Pointer result
+     * @returns {Promise<{success: true, pointer: ({rootHash: string, assignedAt: string, assignmentId: string}|null)}>} Pointer result
      */
     async getBuildPointer(buildId) {
         assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getBuildPointer: buildId');
         const [ row ] = this.#sql.exec(
-            'SELECT root_hash, assigned_at FROM builds WHERE build_id = ?',
+            'SELECT root_hash, assigned_at, assignment_id FROM builds WHERE build_id = ?',
             buildId,
         ).toArray();
-        const pointer = row ? { rootHash: row.root_hash, assignedAt: row.assigned_at } : null;
+        const pointer = row ? { rootHash: row.root_hash, assignedAt: row.assigned_at, assignmentId: row.assignment_id } : null;
         return { success: true, pointer };
     }
 
     /**
      * Lists every build pointer newest assignment first.
-     * @returns {Promise<{success: true, builds: Array<{buildId: string, rootHash: string, assignedAt: string}>}>}
+     * @returns {Promise<{success: true, builds: Array<{buildId: string, rootHash: string, assignedAt: string, assignmentId: string}>}>}
      */
     async listBuilds() {
         const cursor = this.#sql.exec(`
-            SELECT build_id, root_hash, assigned_at
+            SELECT build_id, root_hash, assigned_at, assignment_id
             FROM builds
             ORDER BY assigned_at DESC, build_id ASC
         `);
@@ -175,6 +151,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
             buildId: row.build_id,
             rootHash: row.root_hash,
             assignedAt: row.assigned_at,
+            assignmentId: row.assignment_id,
         }));
         return { success: true, builds };
     }
@@ -253,16 +230,14 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
     /**
      * Atomically points a build at a non-empty, previously committed closure,
-     * optionally only when the build's current pointer still equals
-     * `expectedRootHash`.
+     * optionally only when the build's current assignment identity still equals
+     * `expectedAssignmentId`.
      *
-     * A Durable Object instance runs at most one method at a time, and every
-     * check and write below is synchronous SQLite storage access with no
-     * `await` between them, so the read-compare-write sequence cannot be
-     * interleaved by a concurrent call.
+     * All checks and the write run synchronously before yielding, so another
+     * call cannot interleave the read-compare-write sequence.
      * @param {string} buildId - Build identifier to assign
-     * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
-     * @returns {Promise<{success: true, outcome: import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome}>}
+     * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
+     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult & {success: true}>}
      */
     async assignBuild(buildId, assignment) {
         return { success: true, ...assignBuild(this.#sql, buildId, assignment) };

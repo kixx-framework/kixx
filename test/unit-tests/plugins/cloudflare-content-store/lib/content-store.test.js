@@ -116,7 +116,7 @@ function makeConformanceStore() {
             const build = builds.get(buildId) ?? null;
             return {
                 success: true,
-                pointer: build ? { rootHash: build.rootHash, assignedAt: build.assignedAt } : null,
+                pointer: build ? { rootHash: build.rootHash, assignedAt: build.assignedAt, assignmentId: build.assignmentId } : null,
             };
         },
         async listBuilds() {
@@ -131,13 +131,13 @@ function makeConformanceStore() {
             return { success: true };
         },
         async assignBuild(buildId, assignment) {
-            const { rootHash, expectedRootHash } = assignment;
+            const { rootHash, expectedAssignmentId } = assignment;
             if (!closures.has(rootHash)) {
                 return { success: true, outcome: 'missingClosure' };
             }
             const current = builds.get(buildId) ?? null;
             const currentRootHash = current?.rootHash ?? null;
-            if (expectedRootHash !== undefined && currentRootHash !== expectedRootHash) {
+            if (expectedAssignmentId !== undefined && (current?.assignmentId ?? null) !== expectedAssignmentId) {
                 return { success: true, outcome: 'conflict' };
             }
             if (currentRootHash === rootHash) {
@@ -152,6 +152,7 @@ function makeConformanceStore() {
             const pointer = {
                 rootHash,
                 assignedAt: String(assignmentSequence).padStart(10, '0'),
+                assignmentId: crypto.randomUUID(),
             };
             builds.set(buildId, pointer);
             return { success: true, outcome: 'assigned', pointer, previousRootHash: currentRootHash };
@@ -476,13 +477,13 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             const outcome = await store.assignBuild(makeContext({ durableObject }), 'build-1', {
                 rootHash: 'root-hash',
-                expectedRootHash: 'stale-hash',
+                expectedAssignmentId: '00000000-0000-4000-8000-000000000001',
             });
 
             assertEqual('conflict', outcome.outcome);
         });
 
-        it('passes rootHash and expectedRootHash through to the Durable Object', async () => {
+        it('passes rootHash and expectedAssignmentId through to the Durable Object', async () => {
             let received = null;
             const durableObject = {
                 async assignBuild(buildId, assignment) {
@@ -494,12 +495,12 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             await store.assignBuild(makeContext({ durableObject }), 'build-1', {
                 rootHash: 'root-hash',
-                expectedRootHash: 'previous-hash',
+                expectedAssignmentId: '00000000-0000-4000-8000-000000000001',
             });
 
             assertEqual('build-1', received.buildId);
             assertEqual('root-hash', received.assignment.rootHash);
-            assertEqual('previous-hash', received.assignment.expectedRootHash);
+            assertEqual('00000000-0000-4000-8000-000000000001', received.assignment.expectedAssignmentId);
         });
 
         it('uses the stable Durable Object name scoped by wire format', async () => {
@@ -568,7 +569,7 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             await store.getBuild(context, 'build-1');
 
-            await store.assignBuild(context, 'build-1', { rootHash: 'hash-old', expectedRootHash: 'stale' });
+            await store.assignBuild(context, 'build-1', { rootHash: 'hash-old', expectedAssignmentId: '00000000-0000-4000-8000-000000000001' });
 
             const after = await store.getBuild(context, 'build-1');
             assertEqual('hash-new', after.entries['/a.txt'][1]);
@@ -655,7 +656,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual(0, calls);
         });
 
-        it('rejects an empty expectedRootHash before calling the Durable Object', async () => {
+        it('rejects an empty expectedAssignmentId before calling the Durable Object', async () => {
             let calls = 0;
             const durableObject = {
                 async assignBuild() {
@@ -666,7 +667,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'root-hash', expectedRootHash: '' }),
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'root-hash', expectedAssignmentId: '' }),
             );
 
             assertEqual('AssertionError', caught.name);
