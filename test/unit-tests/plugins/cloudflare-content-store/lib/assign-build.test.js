@@ -77,7 +77,7 @@ describe('assignBuild', ({ after, it }) => {
         assertEqual('conflict', assignBuild(sql, 'build', { rootHash: 'first', expectedAssignmentId: first.pointer.assignmentId }).outcome);
         assertEqual('conflict', assignBuild(sql, 'build', { rootHash: 'first', expectedAssignmentId: null }).outcome);
         assertEqual(third.pointer.assignmentId, sql.database.prepare('SELECT assignment_id FROM builds').get().assignment_id);
-        assertEqual(0, sql.database.prepare('SELECT COUNT(*) AS count FROM pending_build_assignments').get().count);
+        assertEqual(0, sql.database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name LIKE 'pending_build_assignments%'").get().count);
     });
 
     it('rejects incompatible schemas without silently resetting them', () => {
@@ -98,6 +98,17 @@ describe('assignBuild', ({ after, it }) => {
             assertEqual('AssertionError', caught.name);
             assertEqual(assigned.pointer.assignmentId, sql.database.prepare('SELECT assignment_id FROM builds').get().assignment_id);
         }
+    });
+
+    it('accepts a store which retains an unused table from an earlier schema', () => {
+        const sql = makeSql();
+        databases.push(sql.database);
+        saveClosure(sql, 'first');
+        const assigned = assignBuild(sql, 'build', { rootHash: 'first' });
+        sql.database.exec('CREATE TABLE pending_build_assignments (sequence INTEGER PRIMARY KEY AUTOINCREMENT)');
+        initializeSchema(sql);
+
+        assertEqual(assigned.pointer.assignmentId, sql.database.prepare('SELECT assignment_id FROM builds').get().assignment_id);
     });
 
     it('preserves identities when reopening the production schema on disk', () => {

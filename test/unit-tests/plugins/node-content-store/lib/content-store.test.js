@@ -87,7 +87,7 @@ describe('Node ContentStore', ({ after, describe }) => {
     });
 
     describe('durable storage', ({ it }) => {
-        it('reopens format four without changing assignment identity or pending schema', async () => {
+        it('reopens format four without changing assignment identity', async () => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
@@ -98,9 +98,26 @@ describe('Node ContentStore', ({ after, describe }) => {
             const pointer = await reopened.getBuildPointer(makeContext(), 'build');
             assertEqual(JSON.stringify(assigned.pointer), JSON.stringify(pointer));
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
-            assertEqual(0, database.prepare('SELECT COUNT(*) AS count FROM pending_build_assignments').get().count);
-            assertEqual(1, database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name = 'pending_build_assignments_due'").get().count);
+            assertEqual(0, database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name LIKE 'pending_build_assignments%'").get().count);
             database.close();
+            reopened.close();
+        });
+
+        it('reopens a store which retains an unused table from an earlier schema', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const store = makeStore(rootDirectory);
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            store.close();
+
+            const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
+            database.exec('CREATE TABLE pending_build_assignments (sequence INTEGER PRIMARY KEY AUTOINCREMENT)');
+            database.close();
+
+            const reopened = makeStore(rootDirectory);
+            const pointer = await reopened.getBuildPointer(makeContext(), 'build');
+
+            assertEqual(assigned.pointer.assignmentId, pointer.assignmentId);
             reopened.close();
         });
 

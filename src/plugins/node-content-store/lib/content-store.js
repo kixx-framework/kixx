@@ -639,19 +639,6 @@ export default class ContentStore {
                         assigned_at TEXT NOT NULL,
                         assignment_id TEXT NOT NULL UNIQUE
                     );
-                    CREATE TABLE pending_build_assignments (
-                        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-                        assignment_id TEXT NOT NULL UNIQUE,
-                        build_id TEXT NOT NULL,
-                        root_hash TEXT NOT NULL,
-                        previous_root_hash TEXT,
-                        assigned_at TEXT NOT NULL,
-                        metadata_json TEXT NOT NULL,
-                        attempt_count INTEGER NOT NULL DEFAULT 0,
-                        next_attempt_at TEXT NOT NULL
-                    );
-                    CREATE INDEX pending_build_assignments_due
-                        ON pending_build_assignments (next_attempt_at, sequence);
                     PRAGMA user_version = ${ SCHEMA_VERSION };
                 `);
                 this.#logger.info('migrated content store database', { version: SCHEMA_VERSION });

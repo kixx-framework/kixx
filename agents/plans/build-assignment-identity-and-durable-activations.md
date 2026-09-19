@@ -468,7 +468,7 @@ These completion notes record the implementation at its task boundary. The
 
 ### Task CL1: Remove unused durable-audit schema scaffolding
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** ID2
 **Documentation:** This plan, Best-effort Activation contract and Storage reset
 and cleanup strategy; `src/plugins/README.md`; code style/documentation/error
@@ -510,12 +510,12 @@ publishing or requiring another reset.
 
 **Acceptance criteria**
 
-- [ ] Fresh stores create neither a pending table nor a pending-event index.
-- [ ] Fresh and previously initialized format-4 stores preserve assignment
+- [x] Fresh stores create neither a pending table nor a pending-event index.
+- [x] Fresh and previously initialized format-4 stores preserve assignment
       identities and reopen successfully, including stores with inert old tables.
-- [ ] Required-schema incompatibility still fails explicitly.
-- [ ] No recovery runtime, queue API, or audit-schema change is introduced.
-- [ ] Focused/full tests and affected-file lint pass; format history is accurate.
+- [x] Required-schema incompatibility still fails explicitly.
+- [x] No recovery runtime, queue API, or audit-schema change is introduced.
+- [x] Focused/full tests and affected-file lint pass; format history is accurate.
 
 **Validation**
 
@@ -526,14 +526,35 @@ publishing or requiring another reset.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started. Scope review verified the two unused schema
-  definitions and their tests at commit 99048d15; no source was edited.
-- Remaining: Remove creation and update the related tests/history wording.
-- Decisions and discoveries: Keeping existing unused tables costs no runtime
-  work; a migration to remove them would recreate unnecessary complexity.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Removed `pending_build_assignments` and its due index from the
+  fresh Node and Cloudflare schemas, corrected the format-4 history comment,
+  and replaced the three tests that asserted the removed scaffolding.
+- Current state: Complete. No server or target was started; no external state
+  changed.
+- Remaining: None for CL1. VR1 is next.
+- Decisions and discoveries:
+  - Both adapters already tolerate extra tables: Node returns early once
+    `PRAGMA user_version` matches, and Cloudflare's `initializeSchema` only
+    requires a `content_schema` row at the supported version. No code change
+    was needed to accept stores that still hold the inert table.
+  - Node and Cloudflare tests now assert no `pending_build_assignments*` object
+    exists in `sqlite_master` after a fresh initialization, and each gained one
+    test proving a store carrying that inert table reopens with its assignment
+    identity intact.
+  - Schema version stays 3 and FORMAT stays 4. Dropping the table would have
+    required a migration path, which the scope revision rejects.
+- Actual files changed:
+  - `src/plugins/node-content-store/lib/content-store.js`
+  - `src/plugins/cloudflare-content-store/lib/initialize-schema.js`
+  - `src/kixx/content-addressable-store/addressing.js`
+  - `test/unit-tests/plugins/node-content-store/lib/content-store.test.js`
+  - `test/unit-tests/plugins/cloudflare-content-store/lib/assign-build.test.js`
+  - `agents/plans/build-assignment-identity-and-durable-activations.md`
+- Validation run:
+  - Listed focused test command: 331 passed, 0 disabled.
+  - Listed lint command: passed without diagnostics.
+  - `node run-tests.js`: 1,474 passed, 0 disabled.
+  - `git diff --check`: passed.
 - Blockers: None.
 
 ### Task VR1: Verify assignment correctness under the reduced scope

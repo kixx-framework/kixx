@@ -44,20 +44,7 @@ export default function initializeSchema(sql) {
             size INTEGER NOT NULL
         )
     `);
-    sql.exec(`
-        CREATE TABLE pending_build_assignments (
-            sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-            assignment_id TEXT NOT NULL UNIQUE,
-            build_id TEXT NOT NULL,
-            root_hash TEXT NOT NULL,
-            previous_root_hash TEXT,
-            assigned_at TEXT NOT NULL,
-            metadata_json TEXT NOT NULL,
-            attempt_count INTEGER NOT NULL DEFAULT 0,
-            next_attempt_at TEXT NOT NULL
-        )
-    `);
-    sql.exec('CREATE INDEX pending_build_assignments_due ON pending_build_assignments (next_attempt_at, sequence)');
+
     sql.exec('CREATE TABLE content_schema (version INTEGER NOT NULL)');
     sql.exec('INSERT INTO content_schema (version) VALUES (?)', SCHEMA_VERSION);
 }
