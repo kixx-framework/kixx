@@ -678,6 +678,15 @@ same-target no-op creates no entry. Returns
 Together with `GET /releases`, this is enough to plan and execute a rollback
 using no root hash the client happened to keep from an earlier publish.
 
+Activation history is best-effort. The build pointer commits first, then the
+server makes one attempt to append the Activation. A crash, timeout, or storage
+failure between those two steps can leave an assignment with no history entry,
+and that gap is permanent: nothing retries the append and no repair command
+exists. Treat the history as an informational record, not an audit guarantee.
+
+The pointer, not the history, is authoritative. A missing entry never blocks
+the next publish: read `GET /builds/:buildId` and use its `assignmentId`.
+
 ## Workflows
 
 ### 1. Content-only publish

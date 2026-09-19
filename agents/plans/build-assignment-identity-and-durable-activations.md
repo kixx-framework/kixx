@@ -663,7 +663,7 @@ new failure-injection or recovery harness.
 
 ### Task RL1: Document the breaking client transition and accepted audit limits
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** VR1
 **Documentation:** This plan; `docs/publishing-api.md`; `docs/configuration.md`;
 `README.md`.
@@ -714,13 +714,13 @@ needed to use protocol 2 and cut over to format 4, with honest audit semantics.
 
 **Acceptance criteria**
 
-- [ ] API documentation consistently uses JSON identities and explicitly permits
+- [x] API documentation consistently uses JSON identities and explicitly permits
       permanent gaps in Activation history; no eventual-delivery promise remains.
-- [ ] External CLI upgrade is the explicit compatibility dependency, with space
+- [x] External CLI upgrade is the explicit compatibility dependency, with space
       to record its revision and target validation when rollout is authorized.
-- [ ] Format-4 cutover/reset scope, temporary availability impact, preservation
+- [x] Format-4 cutover/reset scope, temporary availability impact, preservation
       of unrelated data, and rollback are documented without new tooling.
-- [ ] No audit-recovery or scheduling gate remains. Local test evidence and
+- [x] No audit-recovery or scheduling gate remains. Local test evidence and
       unperformed platform/remote checks are distinguished accurately.
 
 **Validation**
@@ -734,13 +734,31 @@ needed to use protocol 2 and cut over to format 4, with honest audit semantics.
 
 **Progress and handoff**
 
-- Completed: ID2 already updated protocol examples in docs/publishing-api.md;
-  retain those and add only the missing best-effort and transition details.
-- Current state: Not started for the revised task.
-- Remaining: Concise handoff/cutover notes and accepted audit-loss semantics.
-- Decisions and discoveries: External CLI work remains outside this repository.
-  No deployment or data reset is authorized by this planning revision.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Added the best-effort Activation limits to the API documentation,
+  wrote `docs/build-assignment-rollout.md` with the client handoff and the
+  cutover checklist, and linked it from the README deployment section.
+- Current state: Complete. Nothing was deployed, reset, or executed.
+- Remaining: None in this repository. Rollout itself is unperformed.
+- Decisions and discoveries:
+  - ID2's protocol examples were already accurate, so the API document gained
+    only the history-gap paragraphs; the matrix and workflows are unchanged.
+  - The reset SQL is documented but deliberately not run, and is scoped to
+    `Release` and `Activation` documents in one selected database.
+  - The rollout document carries placeholder lines for the external CLI
+    revision and its target validation. Both remain pending; this task
+    completes with that dependency open.
+- Actual files changed:
+  - `docs/publishing-api.md`
+  - `docs/build-assignment-rollout.md` (new)
+  - `README.md`
+  - `agents/plans/build-assignment-identity-and-durable-activations.md`
+- Validation run:
+  - Listed `rg` audit over `docs` and `README.md`: the only conditional-header
+    hits are the explicit `400` rejection rows, and the only `eventual` hit is
+    the unrelated Cloudflare KV consistency note. No eventual-delivery promise
+    remains.
+  - Reviewed the examples against `assign-release.js` and the ID2/VR1 behavior.
+  - `node run-tests.js`: 1,475 passed, 0 disabled.
+  - `git diff --check`: passed.
 - Blockers: None for documentation. Rollout requires the external CLI upgrade
-  and an explicitly selected target/maintenance window, not audit recovery.
+  and an explicitly selected target and maintenance window.
