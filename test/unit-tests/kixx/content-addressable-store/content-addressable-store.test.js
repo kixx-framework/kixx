@@ -62,14 +62,22 @@ function makeContentStore() {
         async assignBuild(_context, buildId, assignment) {
             calls.push('assignBuild');
             if (!closures.has(assignment.rootHash)) {
-                return 'missingClosure';
+                return { outcome: 'missingClosure' };
             }
-            const current = builds.get(buildId)?.rootHash ?? null;
-            if (assignment.expectedRootHash !== undefined && assignment.expectedRootHash !== current) {
-                return 'conflict';
+            const current = builds.get(buildId) ?? null;
+            if (assignment.expectedAssignmentId !== undefined && assignment.expectedAssignmentId !== (current?.assignmentId ?? null)) {
+                return { outcome: 'conflict' };
             }
-            builds.set(buildId, { rootHash: assignment.rootHash, assignedAt: '2026-09-01T00:00:00.000Z' });
-            return 'assigned';
+            if (current?.rootHash === assignment.rootHash) {
+                return {
+                    outcome: 'unchanged',
+                    pointer: current,
+                    previousRootHash: current.rootHash,
+                };
+            }
+            const pointer = { rootHash: assignment.rootHash, assignedAt: '2026-09-01T00:00:00.000Z', assignmentId: crypto.randomUUID() };
+            builds.set(buildId, pointer);
+            return { outcome: 'assigned', pointer, previousRootHash: current?.rootHash ?? null };
         },
     };
 }
@@ -242,14 +250,23 @@ describe('ContentAddressableStore', ({ describe, it }) => {
 
     describe('assignment', ({ it }) => {
         it('assigns to a non-running unassigned build and retries as a no-op', async () => {
-            const { store, contentStore } = makeStore();
+            const { store } = makeStore();
             const object = await uploadText(store, 'abc');
             const release = await store.createRelease({}, { staticAssets: { '/a': object } });
-            const pointer = await store.assignRelease({}, 'future', { releaseId: release.releaseId, precondition: null });
+            const pointer = await store.assignRelease({}, 'future', { releaseId: release.releaseId, expectedAssignmentId: null });
             assertEqual(release.releaseId, pointer.releaseId);
-            const count = contentStore.calls.filter((call) => call === 'assignBuild').length;
-            await store.assignRelease({}, 'future', { releaseId: release.releaseId, precondition: 'aaaaaaaaaaaaaaaaaaaaaaaaaa' });
-            assertEqual(count, contentStore.calls.filter((call) => call === 'assignBuild').length);
+            const unchanged = await store.assignRelease({}, 'future', { releaseId: release.releaseId, expectedAssignmentId: pointer.assignmentId });
+            assertEqual(false, unchanged.isChanged);
+            assertEqual(release.releaseId, unchanged.previousReleaseId);
+        });
+
+        it('rejects the removed precondition argument instead of writing unconditionally', async () => {
+            const { store, contentStore } = makeStore();
+            const caught = await catchAsyncError(() => store.assignRelease({}, 'build', {
+                releaseId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa', precondition: null,
+            }));
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, contentStore.calls.length);
         });
 
         it('translates missing Releases and stale pointers', async () => {
@@ -260,9 +277,31 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const release = await store.createRelease({}, { staticAssets: { '/a': object } });
             const conflict = await catchAsyncError(() => store.assignRelease({}, 'build', {
                 releaseId: release.releaseId,
-                precondition: 'bbbbbbbbbbbbbbbbbbbbbbbbbb',
+                expectedAssignmentId: crypto.randomUUID(),
             }));
             assertEqual('BuildPointerConflict', conflict.code);
+        });
+
+        it('uses the captured assignment result without reading the pointer again', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const first = await store.createRelease({}, { staticAssets: { '/first': object } });
+            const second = await store.createRelease({}, { staticAssets: { '/second': object } });
+            contentStore.assignBuild = async () => ({
+                outcome: 'assigned',
+                pointer: { rootHash: first.releaseId, assignedAt: '2020-01-01T00:00:00.000Z', assignmentId: '00000000-0000-4000-8000-000000000001' },
+                previousRootHash: null,
+            });
+            contentStore.getBuildPointer = async () => {
+                throw new Error(`later assignment to ${ second.releaseId }`);
+            };
+
+            const result = await store.assignRelease({}, 'build', { releaseId: first.releaseId });
+
+            assertEqual(first.releaseId, result.releaseId);
+            assertEqual('2020-01-01T00:00:00.000Z', result.assignedAt);
+            assertEqual(true, result.isChanged);
+            assertEqual(null, result.previousReleaseId);
         });
     });
 
@@ -271,7 +310,7 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const { store, contentStore } = makeStore();
             const object = await uploadText(store, 'abc');
             const release = await store.createRelease({}, { staticAssets: { '/a': object } });
-            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, precondition: null });
+            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, expectedAssignmentId: null });
 
             const context = { runtime: { build: { id: 'build-1' } } };
             const snapshot = await store.openSnapshot(context);
@@ -318,7 +357,7 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const { store, contentStore, errors } = makeStore();
             const object = await uploadText(store, 'abc');
             const release = await store.createRelease({}, { staticAssets: { '/a': object } });
-            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, precondition: null });
+            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, expectedAssignmentId: null });
 
             const index = new ContentAddressableIndex(contentStore.closures.get(release.releaseId));
             const contractHash = index.getNode(CONTENT_CONTRACT_PATH).hash;

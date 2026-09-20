@@ -5,6 +5,7 @@ import {
     PreconditionFailedError,
     ValidationError,
 } from '../../../../kixx/errors/mod.js';
+import { isValidAssignmentId } from '../../../../kixx/content-addressable-store/build-assignment.js';
 import { isValidHash } from '../../../../kixx/content-addressable-store/addressing.js';
 import { ACTIVATION_REASONS } from '../../../collections/activation-record.js';
 import { assignRelease as assignReleaseScript } from '../../../transaction-scripts/publishing/assign-release.js';
@@ -37,7 +38,7 @@ export async function listBuilds(context, _request, response) {
  * @param {Object} context - Active request context.
  * @param {Object} request - Request carrying the build route id.
  * @param {Object} response - Response to populate.
- * @returns {Promise<Object>} JSON:API Build response with an ETag.
+ * @returns {Promise<Object>} JSON:API Build response.
  * @throws {NotFoundError} When the build is unassigned.
  */
 export async function getBuild(context, request, response) {
@@ -49,16 +50,13 @@ export async function getBuild(context, request, response) {
     }
     return response.respondWithJSON(200, {
         data: buildResource({ buildId, ...pointer }),
-    }, {
-        contentType: JSON_API_CONTENT_TYPE,
-        headers: buildPointerHeaders(pointer.rootHash),
-    });
+    }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
 /**
- * Assigns a Release using a mandatory HTTP pointer precondition.
+ * Assigns a Release using a mandatory JSON assignment identity.
  * @param {Object} context - Authenticated request context.
- * @param {Object} request - JSON:API Build request with a pointer precondition.
+ * @param {Object} request - JSON:API Build request with an expected assignment identity.
  * @param {Object} response - Response to populate.
  * @returns {Promise<Object>} Resulting JSON:API Build response.
  * @throws {PreconditionFailedError} When the pointer precondition is stale.
@@ -67,7 +65,7 @@ export async function putBuild(context, request, response) {
     assertJsonApiContentType(request);
     const buildId = request.pathnameParams.buildId;
     const { id, attributes } = await parseJsonApiResource(request, 'Build');
-    const { releaseId, reason = 'publish' } = attributes;
+    const { releaseId, expectedAssignmentId, reason = 'publish' } = attributes;
     const error = new ValidationError('Invalid Build assignment', { code: 'InvalidBuildAssignment' });
     if (id !== buildId) {
         error.push('Build resource id must match the route build id', 'data.id');
@@ -78,17 +76,31 @@ export async function putBuild(context, request, response) {
     if (!ACTIVATION_REASONS.has(reason)) {
         error.push('Build attributes.reason is invalid', 'attributes.reason');
     }
+    if (Object.hasOwn(attributes, 'expectedAssignmentId') && expectedAssignmentId !== null && !isValidAssignmentId(expectedAssignmentId)) {
+        error.push('Build attributes.expectedAssignmentId must be an assignment UUID or null', 'attributes.expectedAssignmentId');
+    }
     if (error.length) {
         throw error;
     }
 
-    const precondition = parsePointerPrecondition(request);
+    if (!Object.hasOwn(attributes, 'expectedAssignmentId')) {
+        throw new OperationalError('A build assignment requires attributes.expectedAssignmentId in JSON.', {
+            expected: true,
+            httpStatusCode: 428,
+            code: 'PreconditionRequired',
+            name: 'PreconditionRequiredError',
+        });
+    }
+    if (request.headers.has('if-match') || request.headers.has('if-none-match')) {
+        throw new BadRequestError('Build write preconditions belong in JSON attributes.expectedAssignmentId; omit If-Match and If-None-Match.');
+    }
+
     let pointer;
     try {
         pointer = await assignReleaseScript(context, {
             buildId,
             releaseId,
-            precondition,
+            expectedAssignmentId,
             reason,
             activatedBy: context.user.id,
         });
@@ -107,11 +119,9 @@ export async function putBuild(context, request, response) {
             buildId: pointer.buildId,
             rootHash: pointer.releaseId,
             assignedAt: pointer.assignedAt,
+            assignmentId: pointer.assignmentId,
         }),
-    }, {
-        contentType: JSON_API_CONTENT_TYPE,
-        headers: buildPointerHeaders(pointer.releaseId),
-    });
+    }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
 /**
@@ -139,36 +149,6 @@ export async function listBuildActivations(context, request, response) {
     }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
-function parsePointerPrecondition(request) {
-    const ifMatch = request.headers.get('if-match');
-    const ifNoneMatch = request.headers.get('if-none-match');
-    if (ifMatch && ifNoneMatch) {
-        throw new BadRequestError('Use either If-Match or If-None-Match, not both.');
-    }
-    if (ifNoneMatch) {
-        if (ifNoneMatch.trim() !== '*') {
-            throw new BadRequestError('If-None-Match must be * for a build assignment.');
-        }
-        return null;
-    }
-    if (ifMatch) {
-        const match = /^"([^"]+)"$/.exec(ifMatch.trim());
-        if (!match) {
-            throw new BadRequestError('If-Match must contain one quoted build ETag.');
-        }
-        if (!isValidHash(match[1])) {
-            throw new BadRequestError('If-Match must contain a valid build ETag.');
-        }
-        return match[1];
-    }
-    throw new OperationalError('A build assignment requires If-Match or If-None-Match.', {
-        expected: true,
-        httpStatusCode: 428,
-        code: 'PreconditionRequired',
-        name: 'PreconditionRequiredError',
-    });
-}
-
 function buildResource(build) {
     const buildId = build.buildId ?? build.id;
     return {
@@ -177,6 +157,7 @@ function buildResource(build) {
         attributes: {
             releaseId: build.rootHash,
             assignedAt: build.assignedAt,
+            assignmentId: build.assignmentId,
         },
     };
 }
@@ -184,17 +165,4 @@ function buildResource(build) {
 function activationResource(activation) {
     const { id, type: _type, meta: _meta, buildActivationKey: _key, ...attributes } = activation;
     return { type: 'Activation', id, attributes };
-}
-
-function quoteEtag(value) {
-    return `"${ value }"`;
-}
-
-function buildPointerHeaders(rootHash) {
-    return {
-        // Cloudflare otherwise compresses JSON and weakens the ETag, which cannot
-        // serve as the strong If-Match precondition required by pointer writes.
-        'cache-control': 'no-transform',
-        etag: quoteEtag(rootHash),
-    };
 }

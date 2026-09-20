@@ -46,11 +46,11 @@ describe('addressing', ({ describe }) => {
 
     describe('FORMAT and KEY', ({ it }) => {
         it('exposes the current wire format version', () => {
-            assertEqual(3, FORMAT);
+            assertEqual(4, FORMAT);
         });
 
         it('prefixes blob storage keys with the format version', () => {
-            assertEqual('b:3:', KEY.blob);
+            assertEqual('b:4:', KEY.blob);
         });
     });
 

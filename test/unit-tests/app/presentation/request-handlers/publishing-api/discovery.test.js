@@ -17,8 +17,14 @@ describe('Publishing API discovery', ({ it }) => {
 
         assertEqual('build-42', attributes.runningBuildId);
         assertEqual(1, attributes.contentContractVersion);
-        assertEqual(3, attributes.addressingFormat);
+        assertEqual(2, attributes.buildAssignmentProtocolVersion);
+        assertEqual(4, attributes.addressingFormat);
         assertEqual(100, attributes.limits.maxObjectStatusIds);
         assertEqual(10_000, attributes.limits.maxManifestEntries);
+        assertEqual(
+            '["maxObjectBytes","maxObjectStatusIds","maxManifestEntries"]',
+            JSON.stringify(Object.keys(attributes.limits)),
+        );
+        assertEqual(false, Object.hasOwn(attributes.limits, 'maxInlineContentBytes'));
     });
 });

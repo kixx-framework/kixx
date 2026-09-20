@@ -77,6 +77,8 @@ Deployment is performed by the separate Kixx deployment CLI. Run it from `src/`,
 - `secrets.json` — the Publishing API token and Cloudflare `accountId`/`apiToken`. Ignored by git; copy `example.secrets.json`.
 - `cloudflare-state.<environment>.json` — the last uploaded Worker version and its secret names. Committed. Every Worker build and secret change verifies it against Cloudflare's latest version, so it must be current wherever the CLI runs. Do not edit it by hand.
 
+See [`docs/build-assignment-rollout.md`](docs/build-assignment-rollout.md) for the build assignment protocol 2 and content format 4 cutover.
+
 Publishing API Releases and build pointers are authoritative for application content. See [`docs/configuration.md`](docs/configuration.md) for the build inputs and secret workflow.
 
 ### Linting

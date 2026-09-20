@@ -116,7 +116,7 @@ function makeConformanceStore() {
             const build = builds.get(buildId) ?? null;
             return {
                 success: true,
-                pointer: build ? { rootHash: build.rootHash, assignedAt: build.assignedAt } : null,
+                pointer: build ? { rootHash: build.rootHash, assignedAt: build.assignedAt, assignmentId: build.assignmentId } : null,
             };
         },
         async listBuilds() {
@@ -131,20 +131,31 @@ function makeConformanceStore() {
             return { success: true };
         },
         async assignBuild(buildId, assignment) {
-            const { rootHash, expectedRootHash } = assignment;
+            const { rootHash, expectedAssignmentId } = assignment;
             if (!closures.has(rootHash)) {
                 return { success: true, outcome: 'missingClosure' };
             }
-            const currentRootHash = builds.get(buildId)?.rootHash ?? null;
-            if (expectedRootHash !== undefined && currentRootHash !== expectedRootHash) {
+            const current = builds.get(buildId) ?? null;
+            const currentRootHash = current?.rootHash ?? null;
+            if (expectedAssignmentId !== undefined && (current?.assignmentId ?? null) !== expectedAssignmentId) {
                 return { success: true, outcome: 'conflict' };
             }
+            if (currentRootHash === rootHash) {
+                return {
+                    success: true,
+                    outcome: 'unchanged',
+                    pointer: current,
+                    previousRootHash: current.rootHash,
+                };
+            }
             assignmentSequence += 1;
-            builds.set(buildId, {
+            const pointer = {
                 rootHash,
                 assignedAt: String(assignmentSequence).padStart(10, '0'),
-            });
-            return { success: true, outcome: 'assigned' };
+                assignmentId: crypto.randomUUID(),
+            };
+            builds.set(buildId, pointer);
+            return { success: true, outcome: 'assigned', pointer, previousRootHash: currentRootHash };
         },
     };
 
@@ -451,7 +462,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const outcome = await store.assignBuild(context, 'build-1', { rootHash: 'missing-hash' });
             const build = await store.getBuild(context, 'build-1');
 
-            assertEqual('missingClosure', outcome);
+            assertEqual('missingClosure', outcome.outcome);
             assertEqual('hash-new', build.rootHash);
             assertEqual(1, getBuildCalls);
         });
@@ -466,13 +477,13 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             const outcome = await store.assignBuild(makeContext({ durableObject }), 'build-1', {
                 rootHash: 'root-hash',
-                expectedRootHash: 'stale-hash',
+                expectedAssignmentId: '00000000-0000-4000-8000-000000000001',
             });
 
-            assertEqual('conflict', outcome);
+            assertEqual('conflict', outcome.outcome);
         });
 
-        it('passes rootHash and expectedRootHash through to the Durable Object', async () => {
+        it('passes rootHash and expectedAssignmentId through to the Durable Object', async () => {
             let received = null;
             const durableObject = {
                 async assignBuild(buildId, assignment) {
@@ -484,12 +495,12 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             await store.assignBuild(makeContext({ durableObject }), 'build-1', {
                 rootHash: 'root-hash',
-                expectedRootHash: 'previous-hash',
+                expectedAssignmentId: '00000000-0000-4000-8000-000000000001',
             });
 
             assertEqual('build-1', received.buildId);
             assertEqual('root-hash', received.assignment.rootHash);
-            assertEqual('previous-hash', received.assignment.expectedRootHash);
+            assertEqual('00000000-0000-4000-8000-000000000001', received.assignment.expectedAssignmentId);
         });
 
         it('uses the stable Durable Object name scoped by wire format', async () => {
@@ -558,10 +569,37 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             await store.getBuild(context, 'build-1');
 
-            await store.assignBuild(context, 'build-1', { rootHash: 'hash-old', expectedRootHash: 'stale' });
+            await store.assignBuild(context, 'build-1', { rootHash: 'hash-old', expectedAssignmentId: '00000000-0000-4000-8000-000000000001' });
 
             const after = await store.getBuild(context, 'build-1');
             assertEqual('hash-new', after.entries['/a.txt'][1]);
+            assertEqual(1, getBuildCalls);
+        });
+
+        it('does not invalidate the isolate cache on an unchanged result', async () => {
+            let getBuildCalls = 0;
+            const durableObject = {
+                async getBuild() {
+                    getBuildCalls += 1;
+                    return { success: true, rootHash: 'hash-new', entries: makeEntries('hash-new') };
+                },
+                async assignBuild() {
+                    return {
+                        success: true,
+                        outcome: 'unchanged',
+                        pointer: { rootHash: 'hash-new', assignedAt: '2000-01-01T00:00:00.000Z' },
+                        previousRootHash: 'hash-new',
+                    };
+                },
+            };
+            const store = makeStore({ indexCacheTtlSeconds: 600 });
+            const context = makeContext({ durableObject });
+
+            await store.getBuild(context, 'build-1');
+            const result = await store.assignBuild(context, 'build-1', { rootHash: 'hash-new' });
+            await store.getBuild(context, 'build-1');
+
+            assertEqual('unchanged', result.outcome);
             assertEqual(1, getBuildCalls);
         });
 
@@ -618,7 +656,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual(0, calls);
         });
 
-        it('rejects an empty expectedRootHash before calling the Durable Object', async () => {
+        it('rejects an empty expectedAssignmentId before calling the Durable Object', async () => {
             let calls = 0;
             const durableObject = {
                 async assignBuild() {
@@ -629,7 +667,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'root-hash', expectedRootHash: '' }),
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'root-hash', expectedAssignmentId: '' }),
             );
 
             assertEqual('AssertionError', caught.name);

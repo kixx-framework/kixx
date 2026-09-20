@@ -15,10 +15,11 @@ import {
 } from '../../../kixx/assertions/mod.js';
 import { OperationalError } from '../../../kixx/errors/mod.js';
 import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
+import { isValidAssignmentId } from '../../../kixx/content-addressable-store/build-assignment.js';
 import TraceLogger from '../../../kixx/logger/trace-logger.js';
 
 const BUSY_TIMEOUT_MS = 5000;
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const GET_FILE_TYPES = [ 'text', 'arrayBuffer', 'stream' ];
 const GET_FILES_TYPES = [ 'text' ];
 const BULK_FILE_LIMIT = 100;
@@ -148,7 +149,7 @@ export default class ContentStore {
      * Retrieves build pointer metadata without loading closure entries.
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string} buildId - Build identifier
-     * @returns {Promise<({rootHash: string, assignedAt: string}|null)>} Pointer metadata, or null when unassigned
+     * @returns {Promise<({rootHash: string, assignedAt: string, assignmentId: string}|null)>} Pointer metadata, or null when unassigned
      */
     async getBuildPointer(context, buildId) {
         this.#assertOpen();
@@ -157,9 +158,9 @@ export default class ContentStore {
         const trace = new TraceLogger(context.logger, 'content-store-get-build-pointer', { buildId });
         const database = await this.#getTracedDatabase(context, trace);
         try {
-            const row = database.prepare('SELECT root_hash, assigned_at FROM builds WHERE build_id = ?').get(buildId);
+            const row = database.prepare('SELECT root_hash, assigned_at, assignment_id FROM builds WHERE build_id = ?').get(buildId);
             trace.ok();
-            return row ? { rootHash: row.root_hash, assignedAt: row.assigned_at } : null;
+            return row ? { rootHash: row.root_hash, assignedAt: row.assigned_at, assignmentId: row.assignment_id } : null;
         } catch (cause) {
             trace.error();
             throw new OperationalError(`NodeContentStore failed to load build pointer "${ buildId }"`, { cause });
@@ -169,7 +170,7 @@ export default class ContentStore {
     /**
      * Lists every build pointer newest assignment first.
      * @param {Object} _context - Request context accepted for interface compatibility
-     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string}>>} Registered build pointers
+     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string, assignmentId: string}>>} Registered build pointers
      */
     async listBuilds(context) {
         this.#assertOpen();
@@ -178,7 +179,7 @@ export default class ContentStore {
         const database = await this.#getTracedDatabase(context, trace);
         try {
             const rows = database.prepare(`
-                SELECT build_id, root_hash, assigned_at
+                SELECT build_id, root_hash, assigned_at, assignment_id
                 FROM builds
                 ORDER BY assigned_at DESC, build_id ASC
             `).all();
@@ -187,6 +188,7 @@ export default class ContentStore {
                 buildId: row.build_id,
                 rootHash: row.root_hash,
                 assignedAt: row.assigned_at,
+                assignmentId: row.assignment_id,
             }));
         } catch (cause) {
             trace.error();
@@ -402,39 +404,29 @@ export default class ContentStore {
 
     /**
      * Atomically assigns a build to a previously saved closure, optionally
-     * only when the build's stored pointer still equals `expectedRootHash`.
+     * only when the build's stored assignment identity still equals `expectedAssignmentId`.
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string} buildId - Build identifier
-     * @param {{rootHash: string, expectedRootHash?: (string|null)}} assignment - Desired closure and optional pointer precondition
-     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentOutcome>}
+     * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
+     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
      */
     async assignBuild(context, buildId, assignment) {
         this.#assertOpen();
         assertNonEmptyString(buildId, 'NodeContentStore#assignBuild: buildId');
         assert(isPlainObject(assignment), 'NodeContentStore#assignBuild: assignment must be a plain object');
+        assert(!Object.hasOwn(assignment, 'expectedRootHash'), 'NodeContentStore#assignBuild: use expectedAssignmentId');
 
-        const { rootHash, expectedRootHash } = assignment;
+        const { rootHash, expectedAssignmentId } = assignment;
         this.#assertValidHash(rootHash, 'NodeContentStore#assignBuild: rootHash');
-        if (expectedRootHash !== undefined && expectedRootHash !== null) {
-            this.#assertValidHash(expectedRootHash, 'NodeContentStore#assignBuild: expectedRootHash');
+        if (expectedAssignmentId !== undefined && expectedAssignmentId !== null) {
+            assert(isValidAssignmentId(expectedAssignmentId), 'NodeContentStore#assignBuild: expectedAssignmentId');
         }
 
-        const trace = new TraceLogger(context.logger, 'content-store-assign-build', { buildId, rootHash, expectedRootHash });
+        const trace = new TraceLogger(context.logger, 'content-store-assign-build', { buildId, rootHash, expectedAssignmentId });
         const database = await this.#getTracedDatabase(context, trace);
         try {
 
-            const assignedAt = new Date().toISOString();
-            if (expectedRootHash === undefined) {
-                const res = this.#assignBuildUnconditionally(database, buildId, rootHash, assignedAt);
-                trace.ok();
-                return res;
-            }
-            if (expectedRootHash === null) {
-                const res = this.#assignUnassignedBuild(database, buildId, rootHash, assignedAt);
-                trace.ok();
-                return res;
-            }
-            const res = this.#assignBuildConditionally(database, buildId, rootHash, expectedRootHash, assignedAt);
+            const res = this.#assignBuildAtomically(database, buildId, rootHash, expectedAssignmentId);
             trace.ok();
             return res;
         } catch (err) {
@@ -443,79 +435,68 @@ export default class ContentStore {
         }
     }
 
-    #assignBuildUnconditionally(database, buildId, rootHash, assignedAt) {
-        let result;
+    #assignBuildAtomically(database, buildId, rootHash, expectedAssignmentId) {
+        let began = false;
         try {
-            result = database.prepare(`
-                INSERT INTO builds (build_id, root_hash, assigned_at)
-                SELECT ?, root_hash, ? FROM closures WHERE root_hash = ?
+            database.exec('BEGIN IMMEDIATE');
+            began = true;
+
+            const closure = database.prepare('SELECT 1 FROM closures WHERE root_hash = ?').get(rootHash);
+            if (!closure) {
+                database.exec('COMMIT');
+                began = false;
+                return { outcome: BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE };
+            }
+
+            const current = database.prepare(
+                'SELECT root_hash, assigned_at, assignment_id FROM builds WHERE build_id = ?',
+            ).get(buildId);
+            const currentRootHash = current?.root_hash ?? null;
+            if (expectedAssignmentId !== undefined && expectedAssignmentId !== (current?.assignment_id ?? null)) {
+                database.exec('COMMIT');
+                began = false;
+                return { outcome: BUILD_ASSIGNMENT_OUTCOME.CONFLICT };
+            }
+
+            if (currentRootHash === rootHash) {
+                const pointer = { rootHash: current.root_hash, assignedAt: current.assigned_at, assignmentId: current.assignment_id };
+                database.exec('COMMIT');
+                began = false;
+                return {
+                    outcome: BUILD_ASSIGNMENT_OUTCOME.UNCHANGED,
+                    pointer,
+                    previousRootHash: pointer.rootHash,
+                };
+            }
+
+            const assignmentId = crypto.randomUUID();
+            const assignedAt = new Date().toISOString();
+            database.prepare(`
+                INSERT INTO builds (build_id, root_hash, assigned_at, assignment_id)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(build_id) DO UPDATE SET
                     root_hash = excluded.root_hash,
-                    assigned_at = excluded.assigned_at
-            `).run(buildId, assignedAt, rootHash);
+                    assigned_at = excluded.assigned_at,
+                    assignment_id = excluded.assignment_id
+            `).run(buildId, rootHash, assignedAt, assignmentId);
+            const result = {
+                outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
+                pointer: { rootHash, assignedAt, assignmentId },
+                previousRootHash: currentRootHash,
+            };
+            database.exec('COMMIT');
+            began = false;
+            return result;
         } catch (cause) {
+            if (began) {
+                try {
+                    database.exec('ROLLBACK');
+                } catch {
+                    // SQLite may have rolled the transaction back already.
+                }
+            }
             throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
         }
-
-        return result.changes === 0 ? BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE : BUILD_ASSIGNMENT_OUTCOME.ASSIGNED;
-    }
-
-    #assignUnassignedBuild(database, buildId, rootHash, assignedAt) {
-        let result;
-        try {
-            result = database.prepare(`
-                INSERT INTO builds (build_id, root_hash, assigned_at)
-                SELECT ?, root_hash, ? FROM closures WHERE root_hash = ?
-                ON CONFLICT(build_id) DO NOTHING
-            `).run(buildId, assignedAt, rootHash);
-        } catch (cause) {
-            throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
-        }
-
-        if (result.changes > 0) {
-            return BUILD_ASSIGNMENT_OUTCOME.ASSIGNED;
-        }
-        return this.#resolveFailedAssignment(database, buildId, rootHash);
-    }
-
-    // A single UPDATE with the expected pointer and closure existence both in
-    // its WHERE clause is the compare-and-swap: SQLite evaluates and applies
-    // it as one statement, so no concurrent writer can observe or act between
-    // the comparison and the update.
-    #assignBuildConditionally(database, buildId, rootHash, expectedRootHash, assignedAt) {
-        let result;
-        try {
-            result = database.prepare(`
-                UPDATE builds
-                SET root_hash = ?, assigned_at = ?
-                WHERE build_id = ?
-                  AND root_hash = ?
-                  AND EXISTS (SELECT 1 FROM closures WHERE root_hash = ?)
-            `).run(rootHash, assignedAt, buildId, expectedRootHash, rootHash);
-        } catch (cause) {
-            throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
-        }
-
-        if (result.changes > 0) {
-            return BUILD_ASSIGNMENT_OUTCOME.ASSIGNED;
-        }
-
-        // The UPDATE above affected no rows either because the desired closure
-        // does not exist or because the pointer had already moved. Closures
-        // are never deleted, so this follow-up read cannot race with the
-        // closure being removed and safely tells the two cases apart.
-        return this.#resolveFailedAssignment(database, buildId, rootHash);
-    }
-
-    #resolveFailedAssignment(database, buildId, rootHash) {
-        let closureRow;
-        try {
-            closureRow = database.prepare('SELECT 1 FROM closures WHERE root_hash = ?').get(rootHash);
-        } catch (cause) {
-            throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
-        }
-
-        return closureRow ? BUILD_ASSIGNMENT_OUTCOME.CONFLICT : BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE;
     }
 
     /**
@@ -655,7 +636,8 @@ export default class ContentStore {
                     CREATE TABLE builds (
                         build_id   TEXT PRIMARY KEY,
                         root_hash  TEXT NOT NULL REFERENCES closures(root_hash),
-                        assigned_at TEXT NOT NULL
+                        assigned_at TEXT NOT NULL,
+                        assignment_id TEXT NOT NULL UNIQUE
                     );
                     PRAGMA user_version = ${ SCHEMA_VERSION };
                 `);

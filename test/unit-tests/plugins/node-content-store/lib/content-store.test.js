@@ -32,7 +32,7 @@ function makeStore(rootDirectory, options = {}) {
     return new ContentStore({
         logger: makeLogger(),
         rootDirectory,
-        format: 1,
+        format: 4,
         ...options,
     });
 }
@@ -70,14 +70,14 @@ describe('Node ContentStore', ({ after, describe }) => {
         return {
             store: makeStore(rootDirectory),
             context: makeContext(),
-            createStoreWithoutLogger: () => new ContentStore({ rootDirectory, format: 1 }),
+            createStoreWithoutLogger: () => new ContentStore({ rootDirectory, format: 4 }),
         };
     });
 
     describe('construction', ({ it }) => {
         it('requires a logger, root directory, and positive format', () => {
-            const missingLogger = catchError(() => new ContentStore({ rootDirectory: '/tmp', format: 1 }));
-            const missingDirectory = catchError(() => new ContentStore({ logger: makeLogger(), format: 1 }));
+            const missingLogger = catchError(() => new ContentStore({ rootDirectory: '/tmp', format: 4 }));
+            const missingDirectory = catchError(() => new ContentStore({ logger: makeLogger(), format: 4 }));
             const invalidFormat = catchError(() => new ContentStore({ logger: makeLogger(), rootDirectory: '/tmp', format: 0 }));
 
             assertEqual('AssertionError', missingLogger.name);
@@ -87,6 +87,40 @@ describe('Node ContentStore', ({ after, describe }) => {
     });
 
     describe('durable storage', ({ it }) => {
+        it('reopens format four without changing assignment identity', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const store = makeStore(rootDirectory);
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            store.close();
+
+            const reopened = makeStore(rootDirectory);
+            const pointer = await reopened.getBuildPointer(makeContext(), 'build');
+            assertEqual(JSON.stringify(assigned.pointer), JSON.stringify(pointer));
+            const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
+            assertEqual(0, database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name LIKE 'pending_build_assignments%'").get().count);
+            database.close();
+            reopened.close();
+        });
+
+        it('reopens a store which retains an unused table from an earlier schema', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const store = makeStore(rootDirectory);
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            store.close();
+
+            const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
+            database.exec('CREATE TABLE pending_build_assignments (sequence INTEGER PRIMARY KEY AUTOINCREMENT)');
+            database.close();
+
+            const reopened = makeStore(rootDirectory);
+            const pointer = await reopened.getBuildPointer(makeContext(), 'build');
+
+            assertEqual(assigned.pointer.assignmentId, pointer.assignmentId);
+            reopened.close();
+        });
+
         it('uses the format namespace and two-character blob shard', async () => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory, { format: 7 });
@@ -105,7 +139,7 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await store.putFile(makeContext(), '/', 'abcdef', 'content');
 
-            const shardDirectory = path.join(rootDirectory, 'format-1', 'blobs', 'ab');
+            const shardDirectory = path.join(rootDirectory, 'format-4', 'blobs', 'ab');
             assertEqual(JSON.stringify([ 'abcdef' ]), JSON.stringify(await fsp.readdir(shardDirectory)));
             store.close();
         });
@@ -148,39 +182,90 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await first.saveIndex(makeContext(), 'first', { '/': [ 'tree', 'first' ] });
             await first.saveIndex(makeContext(), 'second', { '/': [ 'tree', 'second' ] });
-            await first.assignBuild(makeContext(), 'current', { rootHash: 'first' });
+            const original = await first.assignBuild(makeContext(), 'current', { rootHash: 'first' });
 
             // A second instance moves the pointer between when a caller could
             // have observed "first" and when it tries to restore it, the same
             // way a concurrent deploy or test run would.
-            await second.assignBuild(makeContext(), 'current', { rootHash: 'second' });
+            const replacement = await second.assignBuild(makeContext(), 'current', { rootHash: 'second' });
 
             const conflicted = await first.assignBuild(makeContext(), 'current', {
                 rootHash: 'first',
-                expectedRootHash: 'first',
+                expectedAssignmentId: original.pointer.assignmentId,
             });
-            assertEqual('conflict', conflicted);
+            assertEqual('conflict', conflicted.outcome);
             assertEqual('second', (await first.getBuild(makeContext(), 'current')).rootHash);
 
             const assigned = await first.assignBuild(makeContext(), 'current', {
                 rootHash: 'first',
-                expectedRootHash: 'second',
+                expectedAssignmentId: replacement.pointer.assignmentId,
             });
-            assertEqual('assigned', assigned);
+            assertEqual('assigned', assigned.outcome);
             assertEqual('first', (await second.getBuild(makeContext(), 'current')).rootHash);
 
             first.close();
             second.close();
         });
 
-        it('initializes schema version two with required SQLite pragmas', async () => {
+        it('preserves a seeded pointer timestamp for a same-target no-op', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const store = makeStore(rootDirectory);
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+
+            const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
+            database.prepare('UPDATE builds SET assigned_at = ? WHERE build_id = ?').run('2000-01-01T00:00:00.000Z', 'build');
+            database.close();
+
+            const result = await store.assignBuild(makeContext(), 'build', {
+                rootHash: 'root',
+                expectedAssignmentId: (await store.getBuildPointer(makeContext(), 'build')).assignmentId,
+            });
+
+            assertEqual('unchanged', result.outcome);
+            assertEqual('2000-01-01T00:00:00.000Z', result.pointer.assignedAt);
+            assertEqual('root', result.previousRootHash);
+            store.close();
+        });
+
+        it('rolls back a failed commit and leaves the connection usable', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const database = new DatabaseSync(':memory:');
+            let failCommit = false;
+            const failingDatabase = {
+                exec(statement) {
+                    if (statement === 'COMMIT' && failCommit) {
+                        failCommit = false;
+                        throw new Error('injected commit failure');
+                    }
+                    return database.exec(statement);
+                },
+                prepare(statement) {
+                    return database.prepare(statement);
+                },
+            };
+            const store = makeStore(rootDirectory, { database: failingDatabase });
+
+            await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            failCommit = true;
+            const failed = await catchAsyncError(() => store.assignBuild(makeContext(), 'build', { rootHash: 'root' }));
+            assertEqual(null, await store.getBuildPointer(makeContext(), 'build'));
+            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+
+            assertEqual('OperationalError', failed.name);
+            assertEqual('assigned', assigned.outcome);
+            store.close();
+            database.close();
+        });
+
+        it('initializes schema version three with required SQLite pragmas', async () => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
             await store.getFile(makeContext(), 'text', '/', 'missing');
 
-            const database = new DatabaseSync(path.join(rootDirectory, 'format-1', 'index.sqlite'));
-            assertEqual(2, database.prepare('PRAGMA user_version').get().user_version);
+            const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
+            assertEqual(3, database.prepare('PRAGMA user_version').get().user_version);
             assertEqual(1, database.prepare('PRAGMA foreign_keys').get().foreign_keys);
             assertEqual('wal', database.prepare('PRAGMA journal_mode').get().journal_mode);
             database.close();
@@ -218,7 +303,7 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
             await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
-            const database = new DatabaseSync(path.join(rootDirectory, 'format-1', 'index.sqlite'));
+            const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
             database.prepare('UPDATE closures SET entries_json = ? WHERE root_hash = ?').run('{', 'root');
             database.close();
 
@@ -228,7 +313,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             store.close();
 
             const newerDatabase = new DatabaseSync(':memory:');
-            newerDatabase.exec('PRAGMA user_version = 3');
+            newerDatabase.exec('PRAGMA user_version = 4');
             const newerStore = makeStore(rootDirectory, { database: newerDatabase });
             const newer = await catchAsyncError(() => newerStore.getBuild(makeContext(), 'build'));
             assertEqual('AssertionError', newer.name);
@@ -246,7 +331,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const caught = await catchAsyncError(() => store.listBuilds(makeContext()));
 
             assertEqual('AssertionError', caught.name);
-            assertMatches('does not migrate schema version 1 to 2', caught.message);
+            assertMatches('does not migrate schema version 1 to 3', caught.message);
             store.close();
             database.close();
         });
