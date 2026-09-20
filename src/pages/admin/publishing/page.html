@@ -2,62 +2,8 @@
     <article class="admin-content-section flow">
         <header class="admin-content-section__header">
             <h1>Publishing</h1>
-            <p>Review the running build, every build pointer, and the Release history. Assign a Release to the running build to publish or roll back.</p>
+            <p>Review the running build, every build pointer, and the Release history. Assign a Release to a build through the Publishing API.</p>
         </header>
-
-        {{#ifEqual notice "release_assigned"}}
-        <div class="callout callout--info" role="status">
-            <span class="callout__icon" aria-hidden="true">[i]</span>
-            <div class="callout__body flow">
-                <p class="type-body-sm">The running build now points at the selected Release.</p>
-            </div>
-        </div>
-        {{/ifEqual}}
-        {{#ifEqual notice "pointer_conflict"}}
-        <div class="callout callout--error" role="alert">
-            <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body flow">
-                <p class="callout__title">The running Release changed</p>
-                <p class="type-body-sm">Nothing was changed. Reload this page and try again.</p>
-            </div>
-        </div>
-        {{/ifEqual}}
-        {{#ifEqual notice "build_mismatch"}}
-        <div class="callout callout--error" role="alert">
-            <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body flow">
-                <p class="callout__title">The running build changed</p>
-                <p class="type-body-sm">Nothing was changed. Reload this page and try again.</p>
-            </div>
-        </div>
-        {{/ifEqual}}
-        {{#ifEqual notice "build_unassigned"}}
-        <div class="callout callout--error" role="alert">
-            <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body flow">
-                <p class="callout__title">The running build has no Release assigned</p>
-                <p class="type-body-sm">Use the Publishing API to assign a first Release before assigning from here.</p>
-            </div>
-        </div>
-        {{/ifEqual}}
-        {{#ifEqual notice "release_not_found"}}
-        <div class="callout callout--error" role="alert">
-            <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body flow">
-                <p class="callout__title">That Release could not be found</p>
-                <p class="type-body-sm">Nothing was changed.</p>
-            </div>
-        </div>
-        {{/ifEqual}}
-        {{#ifEqual notice "form_expired"}}
-        <div class="callout callout--error" role="alert">
-            <span class="callout__icon" aria-hidden="true">[x]</span>
-            <div class="callout__body flow">
-                <p class="callout__title">That form had expired</p>
-                <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
-            </div>
-        </div>
-        {{/ifEqual}}
 
         <section class="flow">
             <h2>Running build</h2>
@@ -117,25 +63,6 @@
                         Created {{ formatDate release.createdAt format="DATETIME_MED" }} by {{ release.createdBy }}
                     </p>
                     <p class="type-body-sm">{{ release.objectCount }} objects, {{ release.totalBytes }} bytes</p>
-                    {{#if release.isCurrent}}
-                    <p class="type-caption">Current</p>
-                    {{else}}
-                        {{#if form}}
-                        <form class="cluster" method="{{ form.method }}" action="{{ form.url }}">
-                            {{#if form.csrf}}
-                            <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
-                            {{/if}}
-                            <input type="hidden" name="release_id" value="{{ release.id }}">
-                            <input type="hidden" name="build_id" value="{{ runningBuild.id }}">
-                            <input type="hidden" name="expected_assignment_id" value="{{ runningBuild.assignmentId }}">
-                            {{#ifEqual release.direction "rollback"}}
-                            <button class="button button--secondary" type="submit">Roll back to this Release</button>
-                            {{else}}
-                            <button class="button button--secondary" type="submit">Roll forward to this Release</button>
-                            {{/ifEqual}}
-                        </form>
-                        {{/if}}
-                    {{/if}}
                 </li>
             {{/each}}
             </ul>

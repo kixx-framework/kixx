@@ -23,22 +23,6 @@
                 <p class="type-body-sm">No provenance recorded.</p>
                 {{/if}}
             </div>
-
-            {{#if form}}
-            <form class="cluster" method="{{ form.method }}" action="{{ form.url }}">
-                {{#if form.csrf}}
-                <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
-                {{/if}}
-                <input type="hidden" name="release_id" value="{{ release.id }}">
-                <input type="hidden" name="build_id" value="{{ runningBuild.id }}">
-                <input type="hidden" name="expected_assignment_id" value="{{ runningBuild.assignmentId }}">
-                {{#ifEqual direction "rollback"}}
-                <button class="button button--primary" type="submit">Roll back to this Release</button>
-                {{else}}
-                <button class="button button--primary" type="submit">Roll forward to this Release</button>
-                {{/ifEqual}}
-            </form>
-            {{/if}}
         </div>
 
         <section class="flow">
