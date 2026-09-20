@@ -618,9 +618,10 @@ same-target no-op creates no entry. Returns
     "data": [
         {
             "type": "Activation",
-            "id": "<activation-id>",
+            "id": "production:<assignment-id>",
             "attributes": {
                 "buildId": "production",
+                "assignmentId": "<assignment-id>",
                 "fromReleaseId": "<previous-release-id>",
                 "toReleaseId": "<release-id>",
                 "activatedAt": "2026-09-01T00:00:00.000Z",
@@ -636,11 +637,18 @@ same-target no-op creates no entry. Returns
 Together with `GET /releases`, this is enough to plan and execute a rollback
 using no root hash the client happened to keep from an earlier publish.
 
+Each entry carries the `assignmentId` of the assignment it records, and its
+`id` is derived from `<buildId>:<assignmentId>`. One committed assignment
+therefore has exactly one history entry: appending the same assignment twice
+rewrites that one entry rather than adding a duplicate.
+
 Activation history is best-effort. The build pointer commits first, then the
 server makes one attempt to append the Activation. A crash, timeout, or storage
 failure between those two steps can leave an assignment with no history entry,
-and that gap is permanent: nothing retries the append and no repair command
-exists. Treat the history as an informational record, not an audit guarantee.
+and that gap is permanent today: nothing retries the append and no repair
+command exists. Treat the history as an informational record, not an audit
+guarantee. The append is idempotent, so a retry or repair path may be added
+later without risking duplicate entries.
 
 The pointer, not the history, is authoritative. A missing entry never blocks
 the next publish: read `GET /builds/:buildId` and use its `assignmentId`.

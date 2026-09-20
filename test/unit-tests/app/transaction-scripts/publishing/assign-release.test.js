@@ -5,6 +5,9 @@ import { assignRelease } from '../../../../../src/app/transaction-scripts/publis
 import { ConflictError, NotFoundError, OperationalError } from '../../../../../src/kixx/errors/mod.js';
 
 
+const ASSIGNMENT_ID = '11111111-1111-4111-8111-111111111111';
+
+
 function makeContext(options) {
     const calls = [];
     const errors = [];
@@ -17,7 +20,7 @@ function makeContext(options) {
                 buildId: 'build-1',
                 releaseId: 'release-new',
                 assignedAt: '2026-09-01T12:00:00.000Z',
-                assignmentId: crypto.randomUUID(),
+                assignmentId: ASSIGNMENT_ID,
                 isChanged: true,
                 previousReleaseId: 'release-old',
             };
@@ -60,6 +63,7 @@ describe('assignRelease', ({ it }) => {
         });
 
         assertEqual('release-new', result.releaseId);
+        assertEqual(ASSIGNMENT_ID, context.calls[0].assignmentId);
         assertEqual('release-old', context.calls[0].fromReleaseId);
         assertEqual('release-new', context.calls[0].toReleaseId);
         assertEqual('2026-09-01T12:00:00.000Z', context.calls[0].activatedAt);
@@ -79,6 +83,7 @@ describe('assignRelease', ({ it }) => {
         assertEqual('release-new', result.releaseId);
         assertEqual(1, context.errors.length);
         assertEqual('failed to record Release activation', context.errors[0][0]);
+        assertEqual(ASSIGNMENT_ID, context.errors[0][1].assignmentId);
         assertEqual('release-old', context.errors[0][1].fromReleaseId);
         assertEqual('2026-09-01T12:00:00.000Z', context.errors[0][1].activatedAt);
     });

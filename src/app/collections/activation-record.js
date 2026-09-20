@@ -1,6 +1,7 @@
 import Record from './base-document-store-record.js';
 import { ValidationError } from '../../kixx/errors/mod.js';
 import { isNonEmptyString } from '../../kixx/assertions/mod.js';
+import { isValidAssignmentId } from '../../kixx/content-addressable-store/build-assignment.js';
 import { isIsoDateTime } from '../lib/iso-date-time.js';
 
 
@@ -22,6 +23,7 @@ export default class ActivationRecord extends Record {
         type: 'object',
         properties: {
             buildId: { type: 'string' },
+            assignmentId: { type: 'string' },
             fromReleaseId: { type: [ 'string', 'null' ] },
             toReleaseId: { type: 'string' },
             activatedAt: { type: 'string', format: 'date-time' },
@@ -31,6 +33,7 @@ export default class ActivationRecord extends Record {
         },
         required: [
             'buildId',
+            'assignmentId',
             'fromReleaseId',
             'toReleaseId',
             'activatedAt',
@@ -51,6 +54,9 @@ export default class ActivationRecord extends Record {
 
         if (!isNonEmptyString(this.get('buildId'))) {
             error.push('Activation buildId is required', 'buildId');
+        }
+        if (!isValidAssignmentId(this.get('assignmentId'))) {
+            error.push('Activation assignmentId must be the assignment UUID', 'assignmentId');
         }
         if (fromReleaseId !== null && !isNonEmptyString(fromReleaseId)) {
             error.push('Activation fromReleaseId must be a non-empty string or null', 'fromReleaseId');

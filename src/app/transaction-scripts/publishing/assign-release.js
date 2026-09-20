@@ -45,6 +45,7 @@ export async function assignRelease(context, args) {
     try {
         await activations.append(context, {
             buildId,
+            assignmentId: pointer.assignmentId,
             fromReleaseId: pointer.previousReleaseId,
             toReleaseId: pointer.releaseId,
             activatedAt: pointer.assignedAt,
@@ -60,6 +61,7 @@ export async function assignRelease(context, args) {
         // request would invite a retry that misrepresents the completed write.
         context.logger.error('failed to record Release activation', {
             buildId,
+            assignmentId: pointer.assignmentId,
             fromReleaseId: pointer.previousReleaseId,
             toReleaseId: pointer.releaseId,
             activatedAt: pointer.assignedAt,

@@ -110,5 +110,11 @@ describe('Publishing API running-build publish workflow', ({ before, after, it }
         const latest = activationsResponse.body.data[0];
         assertEqual(newRelease.id, latest.attributes.toReleaseId);
         assertEqual('publish', latest.attributes.reason);
+
+        // The entry is identified by the assignment it records, so it can be
+        // correlated with the build pointer and appended again without duplicating.
+        const { assignmentId } = assignResponse.body.data.attributes;
+        assertEqual(assignmentId, latest.attributes.assignmentId);
+        assertEqual(`${ runningBuildId }:${ assignmentId }`, latest.id);
     });
 }, { disabled: IS_DEVELOPMENT_TARGET });
