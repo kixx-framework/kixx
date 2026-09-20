@@ -61,23 +61,6 @@ in which build id and which Release:
   write.
 - **Rollback**: assign an earlier Release back to a build id.
 
-A named channel (`production`) that survives code deploys was considered and
-rejected. That is precisely the property the atomic release model refuses to
-allow: it would let one build's code serve content authored for a different
-build — the exact `(code, content)` mismatch this design exists to prevent.
-The build-keyed pointer, not a channel, is what makes `(code, content)` one
-revertible coordinate.
-
-### Cloudflare consistency note
-
-On Cloudflare, blobs live in KV, which is eventually consistent; build
-pointers and the object registry live in a Durable Object, which is strongly
-consistent. A Release can therefore validate successfully while a freshly
-uploaded blob is not yet readable in every colo. Pre-staging absorbs this
-gap: content is published, verified, and given time to propagate *before*
-the deploy that serves it goes live. This is another reason to prefer
-pre-staging over publishing straight to a running build.
-
 ## Endpoint summary
 
 | Method | Path | Required permission | Purpose |
@@ -396,9 +379,8 @@ Creation runs, and fails before persisting anything if any step fails:
    bundles, page metadata, email bundles, includes).
 
 Template source is not compiled and partial references are not resolved during
-release validation or creation. Hyperview compiles templates when rendering;
-syntax errors surface there, and missing partials render as empty output.
-Successful release validation does not guarantee successful rendering.
+release validation or creation. Successful release validation does not
+guarantee successful rendering.
 
 A manifest naming an object the store does not hold fails with
 `422 MissingContentObjects`, listing every missing reference — not just the
@@ -532,8 +514,8 @@ Lists every registered build pointer, newest assignment first:
 }
 ```
 
-This is what surfaces a phantom build id created by a typo during
-pre-staging — it appears here even though nothing is running it yet.
+This is what surfaces a phantom or orphaned build id — it appears here even
+though nothing is running it yet.
 
 ```http
 GET /publishing-api/v1/builds/:buildId
