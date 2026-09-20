@@ -38,7 +38,7 @@ export async function listBuilds(context, _request, response) {
  * @param {Object} context - Active request context.
  * @param {Object} request - Request carrying the build route id.
  * @param {Object} response - Response to populate.
- * @returns {Promise<Object>} JSON:API Build response with an ETag.
+ * @returns {Promise<Object>} JSON:API Build response.
  * @throws {NotFoundError} When the build is unassigned.
  */
 export async function getBuild(context, request, response) {
@@ -50,10 +50,7 @@ export async function getBuild(context, request, response) {
     }
     return response.respondWithJSON(200, {
         data: buildResource({ buildId, ...pointer }),
-    }, {
-        contentType: JSON_API_CONTENT_TYPE,
-        headers: buildPointerHeaders(pointer.assignmentId),
-    });
+    }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
 /**
@@ -124,10 +121,7 @@ export async function putBuild(context, request, response) {
             assignedAt: pointer.assignedAt,
             assignmentId: pointer.assignmentId,
         }),
-    }, {
-        contentType: JSON_API_CONTENT_TYPE,
-        headers: buildPointerHeaders(pointer.assignmentId),
-    });
+    }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
 /**
@@ -171,17 +165,4 @@ function buildResource(build) {
 function activationResource(activation) {
     const { id, type: _type, meta: _meta, buildActivationKey: _key, ...attributes } = activation;
     return { type: 'Activation', id, attributes };
-}
-
-function quoteEtag(value) {
-    return `"${ value }"`;
-}
-
-function buildPointerHeaders(assignmentId) {
-    return {
-        // Preserve the representation validator through intermediary transforms.
-        // Writes use only the identity in JSON, independently of this header.
-        'cache-control': 'no-transform',
-        etag: quoteEtag(assignmentId),
-    };
 }

@@ -127,7 +127,6 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
         assertEqual(200, preStageResponse.status);
         assertEqual(200, readBackResponse.status);
         assertEqual(releaseA.id, readBackResponse.body.data.attributes.releaseId);
-        assertEqual(`"${ readBackResponse.body.data.attributes.assignmentId }"`, readBackResponse.headers.get('etag'));
     });
 
     it('conflicts when explicit null targets an already-assigned build', () => {
@@ -160,7 +159,6 @@ describe('Publishing API build-pointer workflows', ({ before, it }) => {
     it('reads a coherent pointer immediately after an assignment', () => {
         assertEqual(200, coherentReadAfterRollback.status);
         assertEqual(releaseA.id, coherentReadAfterRollback.body.data.attributes.releaseId);
-        assertEqual(`"${ coherentReadAfterRollback.body.data.attributes.assignmentId }"`, coherentReadAfterRollback.headers.get('etag'));
     });
 
     it('rejects the original A identity after A to B to A', () => {

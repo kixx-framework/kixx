@@ -525,14 +525,8 @@ Gets one build's authoritative pointer, whether or not that build is
 currently running. Returns `404 BuildNotFound` when the build has never been
 assigned. Copy `attributes.assignmentId` verbatim into the next write's JSON
 precondition. Every changed assignment gets a new UUID, even when returning to
-a previously assigned Release. The response also carries an `ETag` derived
-from that identity, but writes never consume the header:
-
-```http
-HTTP/1.1 200 OK
-ETag: "<assignment-id>"
-Content-Type: application/vnd.api+json; charset=utf-8
-```
+a previously assigned Release. The assignment identity appears only in the
+response body; Build responses carry no `ETag` and no validator of any kind:
 
 ```json
 {
@@ -599,11 +593,10 @@ Assigning the current Release is a success no-op only after its precondition
 passes. It preserves `assignedAt` and `assignmentId` and adds no Activation.
 A→B→A creates three distinct identities, so the first A token remains stale.
 
-The response is `200 OK` with the resulting Build resource and a matching
-identity-derived `ETag`. GET and PUT retain `Cache-Control: no-transform`.
-A changed, weakened, missing, or proxy-generated GET ETag has no effect on a
-write constructed from the JSON identity. Build JSON contains only
-`releaseId`, `assignedAt`, and `assignmentId` attributes.
+The response is `200 OK` with the resulting Build resource, carrying the
+assignment identity the next write must quote. Build JSON contains only
+`releaseId`, `assignedAt`, and `assignmentId` attributes. Every Publishing API
+response is authenticated, so all of them are `private, no-store`.
 
 If a client loses a response after a successful assignment, it must read and
 reconcile the current Build before deciding what to do. Retrying the same

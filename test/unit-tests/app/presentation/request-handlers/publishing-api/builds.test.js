@@ -115,8 +115,6 @@ describe('Publishing API builds', ({ it }) => {
         const response = await putBuild(context, makeRequest({ expectedAssignmentId: null }), new ServerResponse());
         assertEqual(null, context.assignments[0].expectedAssignmentId);
         assertEqual(NEXT_ASSIGNMENT_ID, JSON.parse(response.body).data.attributes.assignmentId);
-        assertEqual(`"${ NEXT_ASSIGNMENT_ID }"`, response.headers.get('etag'));
-        assertEqual('no-transform', response.headers.get('cache-control'));
     });
 
     it('maps stale and null conflicts to 412 while preserving the cause', async () => {
@@ -156,7 +154,6 @@ describe('Publishing API builds', ({ it }) => {
         assertEqual('assignedAt,assignmentId,releaseId', Object.keys(attributes).sort().join(','));
         assertEqual('2020-01-01T00:00:00.000Z', attributes.assignedAt);
         assertEqual(ASSIGNMENT_ID, attributes.assignmentId);
-        assertEqual(`"${ ASSIGNMENT_ID }"`, response.headers.get('etag'));
         assertEqual(0, context.appends.length);
     });
 
@@ -175,34 +172,29 @@ describe('Publishing API builds', ({ it }) => {
         assertEqual(RELEASE_ID, attributes.releaseId);
         assertEqual(NEXT_ASSIGNMENT_ID, attributes.assignmentId);
         assertEqual('2026-09-01T13:00:00.000Z', attributes.assignedAt);
-        assertEqual(`"${ NEXT_ASSIGNMENT_ID }"`, response.headers.get('etag'));
     });
 
     it('exposes identity in GET and list without private storage fields', async () => {
         const context = makeContext();
         const response = await getBuild(context, makeRequest(), new ServerResponse());
         assertEqual(ASSIGNMENT_ID, JSON.parse(response.body).data.attributes.assignmentId);
-        assertEqual(`"${ ASSIGNMENT_ID }"`, response.headers.get('etag'));
-        assertEqual('no-transform', response.headers.get('cache-control'));
         const listing = await listBuilds(context, makeRequest(), new ServerResponse());
         const attributes = JSON.parse(listing.body).data[0].attributes;
         assertEqual(ASSIGNMENT_ID, attributes.assignmentId);
         assertEqual('assignedAt,assignmentId,releaseId', Object.keys(attributes).sort().join(','));
     });
 
-    it('uses JSON tokens despite changed, weak, absent or proxy-generated GET ETags', async () => {
-        for (const etag of [ '"changed"', `W/"${ ASSIGNMENT_ID }"`, null, '"proxy-generated"' ]) {
-            const context = makeContext();
-            const read = await getBuild(context, makeRequest(), new ServerResponse());
-            if (etag === null) {
-                read.headers.delete('etag');
-            } else {
-                read.headers.set('etag', etag);
-            }
-            const expectedAssignmentId = JSON.parse(read.body).data.attributes.assignmentId;
-            const response = await putBuild(context, makeRequest({ expectedAssignmentId }), new ServerResponse());
-            assertEqual(200, response.status);
-            assertEqual(ASSIGNMENT_ID, context.assignments[0].expectedAssignmentId);
-        }
+    it('carries the assignment identity in JSON alone, with no header validator', async () => {
+        const context = makeContext();
+        const read = await getBuild(context, makeRequest(), new ServerResponse());
+        assertEqual(null, read.headers.get('etag'));
+        assertEqual(null, read.headers.get('cache-control'));
+
+        // The only identity a client can copy is the one in the body.
+        const expectedAssignmentId = JSON.parse(read.body).data.attributes.assignmentId;
+        const response = await putBuild(context, makeRequest({ expectedAssignmentId }), new ServerResponse());
+        assertEqual(200, response.status);
+        assertEqual(null, response.headers.get('etag'));
+        assertEqual(ASSIGNMENT_ID, context.assignments[0].expectedAssignmentId);
     });
 });

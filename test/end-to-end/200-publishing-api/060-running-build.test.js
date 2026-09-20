@@ -102,7 +102,7 @@ describe('Publishing API running-build publish workflow', ({ before, after, it }
     it('reads the newly assigned Release back from the running build', () => {
         assertEqual(200, readBackResponse.status);
         assertEqual(newRelease.id, readBackResponse.body.data.attributes.releaseId);
-        assertEqual(`"${ assignResponse.body.data.attributes.assignmentId }"`, readBackResponse.headers.get('etag'));
+        assertEqual(assignResponse.body.data.attributes.assignmentId, readBackResponse.body.data.attributes.assignmentId);
     });
 
     it('records the assignment in the running build activation history', () => {

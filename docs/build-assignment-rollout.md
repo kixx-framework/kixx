@@ -21,8 +21,9 @@ protocol 2 server it must:
   `PUT /builds/:buildId`: the `assignmentId` observed in Build JSON, or
   explicit `null` for a build that has never been assigned. Omitting the field
   is `428`. `If-Match` and `If-None-Match` are rejected with `400`.
-- Treat the identity as an opaque string and copy it verbatim. Never derive a
-  precondition from an ETag, a root hash, or a Release id.
+- Treat the identity as an opaque string and copy it verbatim from Build JSON.
+  Never derive a precondition from a response header, a root hash, or a
+  Release id.
 - Use the same conditional form for publish, carry-forward, rollback, and
   restore. There is no unconditional write.
 - After a `412` or a lost response, re-read the Build and reconcile before
