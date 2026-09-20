@@ -4,7 +4,6 @@ import {
     NotFoundError,
     ValidationError,
 } from '../../../../kixx/errors/mod.js';
-import { hashBlob } from '../../../../kixx/content-addressable-store/addressing.js';
 import { validateReleaseManifest } from '../../../../kixx/content-addressable-store/release-manifest.js';
 import { createRelease as createReleaseScript } from '../../../transaction-scripts/publishing/create-release.js';
 import { getRelease as getReleaseScript } from '../../../transaction-scripts/publishing/get-release.js';
@@ -15,7 +14,7 @@ import {
     jsonApiResource,
     parseJsonApiResource,
 } from '../../lib/json-api.js';
-import { MAX_INLINE_CONTENT_BYTES, MAX_MANIFEST_ENTRIES } from './constants.js';
+import { MAX_MANIFEST_ENTRIES } from './constants.js';
 
 
 /**
@@ -27,7 +26,12 @@ import { MAX_INLINE_CONTENT_BYTES, MAX_MANIFEST_ENTRIES } from './constants.js';
  */
 export async function createRelease(context, request, response) {
     const attributes = await parseReleaseRequest(request);
-    const manifest = await prepareInlineContent(context, attributes.manifest);
+    let manifest;
+    try {
+        manifest = enforceManifestEntryLimit(attributes.manifest);
+    } catch (cause) {
+        throw classifyReleaseError(cause);
+    }
 
     let release;
     try {
@@ -52,7 +56,12 @@ export async function createRelease(context, request, response) {
  */
 export async function validateRelease(context, request, response) {
     const attributes = await parseReleaseRequest(request);
-    const manifest = await prepareInlineContent(context, attributes.manifest, { persist: false });
+    let manifest;
+    try {
+        manifest = enforceManifestEntryLimit(attributes.manifest);
+    } catch (cause) {
+        throw classifyReleaseError(cause);
+    }
     const store = context.getService('ContentAddressableStore');
 
     let result;
@@ -131,66 +140,12 @@ async function parseReleaseRequest(request) {
     return attributes;
 }
 
-async function prepareInlineContent(context, manifest, options) {
-    const { persist = true } = options ?? {};
-    const transformed = structuredClone(manifest);
-    const inlineState = { objects: [], totalBytes: 0 };
-    await replaceInlineReferences(transformed, inlineState);
-    const files = validateReleaseManifest(transformed);
+function enforceManifestEntryLimit(manifest) {
+    const files = validateReleaseManifest(manifest);
     if (files.length > MAX_MANIFEST_ENTRIES) {
         throw new BadRequestError(`A Release may contain at most ${ MAX_MANIFEST_ENTRIES } manifest entries.`);
     }
-
-    if (!persist && inlineState.objects.length > 0) {
-        throw new BadRequestError('Inline content is accepted only when creating a Release.');
-    }
-
-    const store = context.getService('ContentAddressableStore');
-    for (const object of inlineState.objects) {
-        await store.putObject(context, object.payload);
-    }
-    return transformed;
-}
-
-async function replaceInlineReferences(value, inlineState) {
-    if (Array.isArray(value)) {
-        for (const item of value) {
-            await replaceInlineReferences(item, inlineState);
-        }
-        return;
-    }
-    if (!value || Object.getPrototypeOf(value) !== Object.prototype) {
-        return;
-    }
-
-    const keys = Object.keys(value);
-    const isInlineReference = Object.hasOwn(value, 'content') &&
-        keys.every((key) => key === 'content' || key === 'mediaType');
-    if (isInlineReference) {
-        if (typeof value.content !== 'string') {
-            throw releaseValidationError('Inline content must be a string', 'InvalidReleaseManifest', 'content');
-        }
-        const payload = new TextEncoder().encode(value.content);
-        inlineState.totalBytes += payload.byteLength;
-        if (inlineState.totalBytes > MAX_INLINE_CONTENT_BYTES) {
-            throw new BadRequestError(`Inline content exceeds the ${ MAX_INLINE_CONTENT_BYTES } byte limit.`);
-        }
-        const objectId = await hashBlob(payload.buffer);
-        const mediaType = value.mediaType;
-        for (const key of keys) {
-            delete value[key];
-        }
-        Object.assign(value, { objectId, size: payload.byteLength });
-        if (mediaType) {
-            value.mediaType = mediaType;
-        }
-        inlineState.objects.push({ objectId, payload: payload.buffer });
-        return;
-    }
-
-    for (const child of Object.values(value)) {
-        await replaceInlineReferences(child, inlineState);
-    }
+    return manifest;
 }
 
 function classifyReleaseError(cause) {
@@ -209,12 +164,6 @@ function classifyReleaseError(cause) {
         : 'InvalidReleaseManifest';
     const error = new ValidationError(cause.message, { cause, code });
     errors.forEach((entry) => error.push(entry.message, entry.source));
-    return error;
-}
-
-function releaseValidationError(message, code, source) {
-    const error = new ValidationError(message, { code });
-    error.push(message, source);
     return error;
 }
 

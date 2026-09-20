@@ -50,7 +50,7 @@ describe('Publishing API Release verification', ({ before, it }) => {
     let unresolvedTemplateResponse;
     let validationResponse;
     let validationReadBackResponse;
-    let inlineInValidationResponse;
+    let inlineCreateResponse;
     let idempotentManifest;
     let firstCreate;
     let secondCreate;
@@ -92,7 +92,7 @@ describe('Publishing API Release verification', ({ before, it }) => {
         validationResponse = await validateRelease(publishingToken, validationManifest);
         validationReadBackResponse = await getRelease(publishingToken, validationResponse.body.data.id);
 
-        inlineInValidationResponse = await validateRelease(publishingToken, {
+        inlineCreateResponse = await createRelease(publishingToken, {
             staticAssets: { [createRunScopedPathname(RUN_PREFIX, 'inline.css')]: { content: 'body{}', mediaType: 'text/css' } },
         });
 
@@ -132,9 +132,9 @@ describe('Publishing API Release verification', ({ before, it }) => {
         assertEqual('ReleaseNotFound', validationReadBackResponse.body.errors[0].code);
     });
 
-    it('rejects inline content during validation', () => {
-        assertEqual(400, inlineInValidationResponse.status);
-        assertEqual('BAD_REQUEST_ERROR', inlineInValidationResponse.body.errors[0].code);
+    it('rejects inline content during creation', () => {
+        assertEqual(422, inlineCreateResponse.status);
+        assertEqual('InvalidReleaseManifest', inlineCreateResponse.body.errors[0].code);
     });
 
     it('creates identical content idempotently', () => {

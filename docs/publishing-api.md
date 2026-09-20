@@ -191,7 +191,7 @@ Error codes used by this API:
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `400` | `BAD_REQUEST_ERROR` | Malformed JSON:API request, bad pagination, or inline content used outside Release creation |
+| `400` | `BAD_REQUEST_ERROR` | Malformed JSON:API request or bad pagination |
 | `401` | `UNAUTHENTICATED_ERROR` | Bearer credentials are absent, malformed, or unknown |
 | `403` | `FORBIDDEN_ERROR` | The token lacks the endpoint permission |
 | `403` | `PublishingApiTokenInactive` | The token is expired or revoked |
@@ -238,8 +238,7 @@ mistake a later request would reject.
             "limits": {
                 "maxObjectBytes": 26214400,
                 "maxObjectStatusIds": 100,
-                "maxManifestEntries": 10000,
-                "maxInlineContentBytes": 262144
+                "maxManifestEntries": 10000
             }
         }
     }
@@ -438,22 +437,6 @@ content-idempotent, and there are no idempotency keys anywhere in this API.
 Creating a Release never assigns it to any build; see
 [Assign a Release to a build](#assign-a-release-to-a-build) below.
 
-### Inline content
-
-A manifest reference may carry inline text instead of an `objectId`, for a
-small site that wants to publish in one request:
-
-```json
-{ "content": "body { margin: 0; }", "mediaType": "text/css" }
-```
-
-The server hashes and stores the content as an object during Release
-creation, subject to `maxInlineContentBytes` (256 KiB) total across the
-whole manifest. Inline content is accepted only when creating a Release —
-`POST /releases/validation` returns `400 Bad Request` if the manifest
-contains any, because validation must never persist anything, including the
-object an inline reference would otherwise create.
-
 ## Verify a Release without publishing it
 
 ```http
@@ -461,8 +444,8 @@ POST /publishing-api/v1/releases/validation
 Content-Type: application/vnd.api+json
 ```
 
-Same request body as `POST /releases` (minus inline content), same
-verification pipeline, but nothing is persisted on success or failure — no
+Same request body as `POST /releases`, same verification pipeline, but nothing
+is persisted on success or failure — no
 objects, no closure, no Release record. Use this to gate a CI build without
 creating an unreferenced closure for every candidate commit.
 
