@@ -19,12 +19,12 @@ When establishing a project's design:
 3. Update the live specimens, stated values, usage guidance, and CSS comments in the same change. Document why a choice fits the project, particularly when replacing a starter choice.
 4. Check public and admin pages, control states, narrow screens, keyboard use, text enlargement, and every supported color scheme.
 
-## Developer Documentation
-Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each linked document — the index entries are summaries only. Keep the available documentation in mind as you work and review relevant documentation as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
-
 *Note: Remove this section after establishing the aesthetic and style guide for your project.*
 
 ---
+
+## Developer Documentation
+Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each linked document — the index entries are summaries only. Keep the available documentation in mind as you work and review relevant documentation as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
 
 ### Code Style Guide
 
