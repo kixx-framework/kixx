@@ -4,9 +4,9 @@
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">A card is a flat, hairline-bordered panel with a small corner radius &mdash; the structural building block for dashboards, settings groups, and list modules. Depth comes from the 1px rule, never a shadow.</p>
+    <p class="type-body-lg">The starter card is a flat, hairline-bordered panel with a small corner radius for dashboards, settings groups, and lists. Borders, fills, shadows, and accent markers can change with your project's design. Keep the card responsible for its surface and contents, with outside spacing owned by the parent layout.</p>
 
-    <p>Because it&rsquo;s built entirely from semantic tokens &mdash; <code>--color-rule</code> for the border, <code>--color-bg</code> for the fill, and <code>--color-ink</code> / <code>--color-ink-muted</code> for the accent marker &mdash; a card is correct in both light and dark with no extra work. It&rsquo;s a small, concrete demonstration of the <a href="/admin/style-guide/colors">color contract</a>.</p>
+    <p>Its semantic tokens &mdash; <code>--color-rule</code> for the border, <code>--color-bg</code> for the fill, and <code>--color-ink</code> / <code>--color-ink-muted</code> for the accent marker &mdash; follow the project's scheme model. Check the resulting surface and text contrast when changing those roles. See the <a href="/admin/style-guide/colors">color contract</a>.</p>
 
     <p><strong>When to use:</strong> group related content into a distinct surface. When you only need to space things out, reach for <a href="/admin/style-guide/layout"><code>.flow</code> or a layout primitive</a> instead &mdash; a card is a surface, not a spacer.</p>
 </div>
@@ -98,11 +98,11 @@
     <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don&rsquo;t</p>
         <ul>
-            <li>Add drop shadows or faux elevation &mdash; the default stays flat; depth comes from the hairline box, not shadow.</li>
+            <li>Add isolated surface treatments that bypass the project's shared card rules.</li>
             <li>Reach past the radius token for a one-off corner value &mdash; change <code>--radius-md</code> if you want a different radius everywhere.</li>
             <li>Nest bordered cards more than one level deep; the rules start to fight.</li>
             <li>Use a card just to create space &mdash; that&rsquo;s the job of <code>.flow</code> and the layout primitives.</li>
-            <li>Tint the surface or paint a full colored border; the accent is a left marker in ink or muted, nothing more.</li>
+            <li>Change a surface color without checking the contrast of its text, links, and controls.</li>
         </ul>
     </div>
 </div>

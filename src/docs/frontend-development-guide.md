@@ -69,9 +69,9 @@ Before writing or reviewing any frontend markup or CSS, check the live style gui
 - Layout: `layout/`.
 - Components: `buttons/`, `cards/`, `forms/`, `text-fields/`, `copy-fields/`, `multi-line-text-areas/`, `callouts/`.
 
-Treat the style guide as the source of truth for aesthetic decisions: color use, type roles, spacing rhythm, component anatomy, and state treatment. Its shell and navigation examples are admin examples; copy those only for admin pages. Public pages should borrow the shared tokens, typography roles, layout primitives, and reusable components without inheriting admin-panel chrome by default.
+Treat the style guide as the source of truth for the project's current design: color use, type roles, spacing rhythm, component anatomy, and state treatment. It documents choices you can revise when establishing a new aesthetic. Its shell and navigation examples are admin examples; copy those only for admin pages. Public pages should borrow the shared tokens, typography roles, layout primitives, and reusable components without inheriting admin-panel chrome by default.
 
-The style guide ships as a place-holder. When a fork establishes its own aesthetic, update these pages — a component added to `components.css` without a style-guide example is a component the next agent will not find.
+The style guide ships as a working starter reference. Evolve it into your project's guide as the design changes — a component added to `components.css` without a style-guide example is a component the next agent will not find.
 
 ## Never Use Inline Styles
 
@@ -204,7 +204,7 @@ Prefer a scoped CSS custom property over a new modifier class when only a value 
 
 ## Design Tokens
 
-Every design token in the project is defined in `static-assets/stylesheets/lib/design-tokens.css`. That file's header comment indexes the token families, and each family's section comment states its own rules. Read it before adding a token, and add one only when nothing existing fits.
+Shared design tokens are defined in `static-assets/stylesheets/lib/design-tokens.css`; component-local custom properties live with their components. That file's header comment indexes the shipped token families. Read it before adding a token. Reuse a suitable token, revise values when the design changes, and add a family when the project needs a new reusable design decision. The starter's vocabulary is not a closed set.
 
 Two rules govern every other stylesheet:
 
@@ -215,7 +215,7 @@ The Colors page of the style guide documents the color contract in full.
 
 ## Color Scheme and Theming
 
-Light and dark are handled with the native CSS `light-dark()` function, not a duplicated dark-mode stylesheet:
+The starter supports light and dark schemes with the native CSS `light-dark()` function. This is the shipped implementation, not a requirement of Kixx:
 
 - `:root` in `design-tokens.css` declares `color-scheme: light dark`, and every semantic `--color-*` token resolves as `light-dark(<light value>, <dark value>)`. Define both values once at the semantic tier and everything downstream themes for free.
 - A reader's explicit choice is stored in `localStorage` under the key in `window.COLOR_SCHEME_STORAGE_KEY` and applied to `<html>` as `data-color-scheme="light"` or `"dark"` by the inline script in `templates/partials/common-site-meta.html`. That script runs before paint, so the page never flashes the wrong theme.
@@ -223,7 +223,7 @@ Light and dark are handled with the native CSS `light-dark()` function, not a du
 - With no attribute set, the page follows the operating system preference.
 - The toggle control is `class="button theme-toggle"` with `data-js-behavior="theme-toggle"`; `static-assets/javascript/site.js` owns its click handling and `aria-pressed` state.
 
-**Never write a `prefers-color-scheme` media query for a color.** Put both values in a `light-dark()` semantic token instead; that is the whole point of the tier.
+While using this scheme model, put color pairs in `light-dark()` semantic tokens instead of component-level `prefers-color-scheme` queries. Scheme resolution belongs at the semantic tier.
 
 A theme-conditional rule that is *not* a color is the one case that needs more. `light-dark()` only resolves colors, and `[data-color-scheme]` is absent until the reader clicks the toggle, so neither mechanism alone covers both a system preference and an explicit choice. Such a rule has to spell out both branches — the system preference guarded against an explicit opt-out, plus the explicit choice:
 
@@ -239,9 +239,19 @@ A theme-conditional rule that is *not* a color is the one case that needs more. 
 }
 ```
 
+### Replacing the Scheme Model
+
+A project may use one fixed scheme, follow system preference without a toggle, or implement its own scheme model. Keep color roles and the one-way token references even when `light-dark()` is no longer needed.
+
+Change the machinery together: semantic tokens and `color-scheme` declarations in `design-tokens.css`, scheme-dependent rules in `reset.css`, the pre-paint script in `templates/partials/common-site-meta.html`, toggle markup in templates, and the `theme-toggle` behavior in `static-assets/javascript/site.js`. Remove unused attribute selectors, storage-key wiring, and toggle specimens when removing switching. Update this guide and the Colors page to describe the result. For a fixed scheme, declare the appropriate `color-scheme` so native controls match; an old stored preference must not override that choice.
+
 ## Typography
 
 The type system is documented in the style guide at `/admin/style-guide/typography`: Read the style guide page before sizing text.
+
+System fonts, the current scale, and zero tracking are starter choices. A project may load web fonts and change `--font-body`, `--font-display`, `--text-*`, `--leading-*`, and `--weight-*` in the shared stylesheets. Keep role names meaningful and update the specimens when their values change.
+
+The starter has no `--tracking-*` family because its system sans does not need one. Tracking can serve legibility: a condensed gothic set in capitals may need more space between letters. Add a small family when the chosen typefaces and roles justify it; four values are reasonable if four distinct uses exist, not a required count. Document each use and apply it in the owning typography or component rules. Check the explicit `letter-spacing: 0` declarations on headings and buttons in `reset.css`; adding tokens alone does not change those rules. Test the actual font, fallback font, enlarged text, and wrapping.
 
 ## Layout Primitives
 

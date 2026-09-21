@@ -10,8 +10,9 @@
     Golden rule: choose a heading level for document STRUCTURE, then, if the size
     is wrong, restyle it with a .type-* class. Never pick a level for its size.
 
-    Hierarchy is carried by SIZE and WEIGHT alone — never color, italics, or
-    decoration. A heading is bigger and heavier; it is never a different hue.
+    The starter uses size and weight for hierarchy. Projects may revise fonts,
+    scale, tracking, and color roles while keeping semantic heading structure
+    and legibility. Keep the Typography style guide aligned with these rules.
 ----------------------------------------------------------------------------- */
 
 /* Structural headings. */
@@ -91,9 +92,8 @@ kbd {
     background: var(--color-surface-sunken);
 }
 
-/* Blockquote — set off by a left rule, the way a quoted passage is marked in a
-   plain-text document. Uses the rule color, not the link accent: color is a
-   signal reserved for links and status, not decoration. */
+/* Starter blockquote treatment: a left rule and muted text. Projects may
+   replace this visual treatment while preserving the quotation's semantics. */
 blockquote {
     margin: 0;
     padding-left: var(--space-sm);

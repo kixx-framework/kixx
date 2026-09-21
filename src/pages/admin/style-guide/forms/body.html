@@ -6,7 +6,7 @@
 <div class="doc-prose">
     <p class="type-body-lg">A form is not its own component. It is a composition of primitives: stack <a href="/admin/style-guide/text-fields">fields</a> in a <code>.flow</code>, give that flow the form rhythm with <code>.field-stack</code>, and sit the submit in a <code>.cluster</code>. On a standalone form page, cap the column with <code>.center--form</code>. The form-specific decision is rhythm, not a new wrapper vocabulary.</p>
 
-    <p>Fields need more air between them than the default <code>.flow</code> gap gives. <code>.field-stack</code> binds that spacing to <code>--form-field-gap</code>, so every form can move together when the rhythm is retuned.</p>
+    <p>The starter gives fields more air than ordinary document flow. <code>.field-stack</code> binds that spacing to <code>--form-field-gap</code>, so forms move together when the project retunes its rhythm. Adjust the shared value for your content and typeface while keeping labels and feedback clearly associated with their controls.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Anatomy</h3>
@@ -76,7 +76,7 @@
     <pre class="code-block"><code>.field-stack {
 --flow-space: var(--form-field-gap);
 }</code></pre>
-    <p><code>--form-field-gap</code> sits intentionally between <code>--space-lg</code> and <code>--space-xl</code>. It is roomier than ordinary document flow, but still part of the same measured, utilitarian rhythm.</p>
+    <p>The starter maps <code>--form-field-gap</code> to <code>--space-md</code>. This is a starting value; the parent-owned spacing contract survives a change in density.</p>
 </div>
 
 <h3 class="type-h3 doc-section-heading">Hints and Errors</h3>

@@ -4,14 +4,14 @@
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">Kixx is a starter framework. What ships in this repository is meant to be built on, so the default frontend is deliberately <strong>neutral, accessible, and easy to override</strong> &mdash; not a house style you fight to remove. A downstream site is expected to reskin the visible defaults; it is not expected to rewrite the structure underneath them.</p>
+    <p class="type-body-lg">This repository includes the Kixx framework, a reference app, and a starter theme. The public website and admin panel provide a <strong>neutral, accessible starting point</strong> for your project. You own the theme: replace its visible design while retaining the structural conventions that make it maintainable.</p>
 
     <p>That split &mdash; structure you keep, look you change &mdash; is the organizing idea for the rest of this guide. The sections below spell it out: what is fixed, what is a default, and the accessibility floor that applies either way.</p>
 </div>
 
 <hr>
 
-<h3 class="type-h3 doc-section-heading">What is fixed</h3>
+<h3 class="type-h3 doc-section-heading">Structure to preserve</h3>
 <p class="doc-lede">These are structural rules, not aesthetic choices. A downstream site keeps them even after it changes every token and modifier.</p>
 <div class="doc-prose">
     <ul>
@@ -19,7 +19,7 @@
         <li><strong>BEM ownership</strong> &mdash; a block owns its elements and its internal layout, never its own outside margin. An element is only ever styled from inside its own block&rsquo;s rules.</li>
         <li><strong>Flow spacing</strong> &mdash; vertical rhythm between siblings is owned by the parent <code>.flow</code>, not by the component. See <a href="/admin/style-guide/layout">Layout</a> for the full contract.</li>
         <li><strong>Composition</strong> &mdash; page structure is layout primitives &rarr; blocks &rarr; elements, in that order of responsibility. A layout class never carries block styling; a block never lays out its siblings.</li>
-        <li><strong>Tokens before literals</strong> &mdash; a component rule reads a semantic <code>--color-*</code> token, never a raw <code>--palette-*</code> value or a color literal.</li>
+        <li><strong>One-way color tokens</strong> &mdash; component &rarr; semantic &rarr; reference palette. A component rule reads a semantic <code>--color-*</code> token or a component token built from one, never a raw palette value or a color literal.</li>
         <li><strong>No inline styles</strong> &mdash; ever. Resolve styling through an existing component, a shared stylesheet, or a page-local <code>page_stylesheet</code> include.</li>
     </ul>
 </div>
@@ -27,16 +27,25 @@
 <hr>
 
 <h3 class="type-h3 doc-section-heading">What is a default</h3>
-<p class="doc-lede">Everything below is a starting value, chosen to be inoffensive and get out of the way &mdash; not a rule to defend. Change it through a token first, a modifier second.</p>
+<p class="doc-lede">These choices give the starter a usable baseline. Revise shared tokens and owning stylesheets for a new design; use modifiers for variants that need to coexist.</p>
 <div class="doc-prose">
     <ul>
-        <li><strong>A generic system sans-serif</strong> &mdash; no downloaded font files. Change it by overriding <code>--font-body</code> / <code>--font-display</code> in your own base template.</li>
+        <li><strong>Typography</strong> &mdash; a system sans-serif, a fixed type scale, and zero tracking. Choose fonts, sizes, weights, line heights, and tracking for your content. Define shared choices in <code>design-tokens.css</code> and apply them in the owning stylesheets.</li>
         <li><strong>The palette</strong> &mdash; a warm-paper-and-near-black-ink base with one link accent and a status family. Change it in the <code>--palette-*</code> tier; see <a href="/admin/style-guide/colors">Colors</a>.</li>
         <li><strong>A small corner radius</strong> &mdash; <code>0.25rem</code> on buttons, fields, cards, and callouts, all sharing <code>--control-radius</code> / <code>--radius-md</code>. Change the token to go square or pill-shaped.</li>
-        <li><strong>Hairline borders, no shadows</strong> &mdash; depth comes from a 1px rule, never a drop shadow. Add shadows in your own stylesheet if your design calls for them.</li>
-        <li><strong>Hover inversion</strong> &mdash; buttons and similar controls flip fill and text color on hover rather than shifting a shadow or scale. Add a new modifier if you want a different interaction language.</li>
-        <li><strong>A single link accent</strong> &mdash; one color for links, focus rings, and code, so color stays a signal. Add more only as new status tokens, not decoration.</li>
+        <li><strong>Visual structure</strong> &mdash; hairline borders, flat surfaces, and left-edge markers. Replace these devices with the borders, surfaces, shadows, or other treatments your design needs, while preserving layout and block ownership.</li>
+        <li><strong>Hover inversion</strong> &mdash; buttons flip fill and text color on hover. You can replace this treatment while keeping focus and other control states distinguishable.</li>
+        <li><strong>A single link accent</strong> &mdash; a restrained starting palette. A project may add brand or decorative colors through meaningful semantic roles; keep status roles distinct.</li>
+        <li><strong>Light and dark schemes with a toggle</strong> &mdash; a starter feature. A project may choose one scheme, follow system preference, or replace the switching model. Update tokens, scripts, controls, and documentation together.</li>
     </ul>
+</div>
+
+<hr>
+
+<h3 class="type-h3 doc-section-heading">A typeface can change the rules</h3>
+<div class="doc-prose">
+    <p>The system sans ships without tracking tokens. A condensed gothic set in capitals may need tracking to stay legible. Adding a small <code>--tracking-*</code> family is a valid response to that typeface choice; tracking is not inherently decoration. Document the roles and values in <a href="/admin/style-guide/typography">Typography</a> and apply them in the owning CSS rules.</p>
+    <p>A redesign can change the palette, typefaces, scale, tracking, scheme model, visual structure, and theme-switching machinery while retaining BEM ownership, parent-owned spacing, composition, one-way color tokens, no inline styles, and the accessibility floor. Update this guide to describe the resulting design.</p>
 </div>
 
 <hr>
@@ -47,7 +56,7 @@
     <ul>
         <li><strong>Visible focus</strong> &mdash; every interactive control shows a <code>--color-focus-outline</code> ring on keyboard focus (<code>:focus-visible</code>), never removed.</li>
         <li><strong>Comfortable targets</strong> &mdash; buttons and fields hold at least a <code>2.5rem</code> minimum dimension (WCAG 2.5.8).</li>
-        <li><strong>Token contrast</strong> &mdash; text and status tokens are tuned to hold AA contrast on both color schemes; don&rsquo;t recolor body text to a status hue tuned for a 3:1 mark.</li>
+        <li><strong>Token contrast</strong> &mdash; verify text, controls, and status indicators against their actual backgrounds in every scheme the project supports. Don&rsquo;t recolor body text to a status hue tuned only for a foreground mark.</li>
         <li><strong>Native controls stay native</strong> &mdash; <code>select</code>, checkboxes, radios, file inputs, and range inputs keep their platform affordance. Only text-like inputs and <code>textarea</code> get a custom box.</li>
         <li><strong>Zoom-safe type</strong> &mdash; shared roles use fixed <code>rem</code> steps (WCAG 1.4.4); fluid <code>clamp()</code> sizing is reserved for bounded, page-local display type and always keeps a <code>rem</code> floor and ceiling.</li>
     </ul>

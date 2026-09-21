@@ -30,10 +30,10 @@
       --leading-*        Line heights; role-dependent, not size-dependent
       --weight-*         Font weights
 
-    There is deliberately no letter-spacing family. reset.css sets
-    `letter-spacing: 0` on headings and buttons because hierarchy in this system
-    comes from size and weight alone; adding a tracking token would invite the
-    decoration those rules exist to prevent.
+    The starter has no letter-spacing family; reset.css sets zero tracking on
+    headings and buttons for its system sans. A project's typefaces may need
+    tracking for legibility. Add --tracking-* roles when needed, apply them in
+    the owning rules, and document their uses in the Typography style guide.
 ----------------------------------------------------------------------------- */
 
 :root {
@@ -76,7 +76,7 @@
     --palette-line-light: hsl(30 8% 74%);
     --palette-line-dark: hsl(220 8% 28%);
 
-    /* Signals — used ONLY as a signal (link, status, metric), never as mood.
+    /* Starter signal colors. Projects may add brand and decorative roles.
        Link resolves close to the classic web blue on light, a brighter cyan-
        blue on dark. Status and selection tokens carry light + dark values so
        the mark holds contrast on either ground. */
@@ -107,8 +107,8 @@
     --color-rule: light-dark(var(--palette-line-light), var(--palette-line-dark));
     --color-rule-strong: var(--color-ink);
 
-    /* The single accent. Links carry it in text + underline; nothing else
-       borrows it for decoration. */
+    /* The starter's link accent. Add separate semantic roles when a project's
+       design needs other accents or decorative colors. */
     --color-ink-link: light-dark(var(--palette-link-light), var(--palette-link-dark));
     /* Focus is the link blue too — a cool signal that clears 3:1 (WCAG 1.4.11)
        on either ground and never reads as a status color. */
@@ -185,8 +185,8 @@
         Type scale
 
         Shared reusable roles use fixed rem steps: fixed rem honors browser zoom
-        (WCAG 1.4.4). Hierarchy comes from SIZE and WEIGHT, not color or
-        decoration. Public marketing pages may add bounded, page-local display
+        (WCAG 1.4.4). The starter uses size and weight for hierarchy; projects
+        may revise the typefaces and roles. Public pages may add page-local display
         sizing for mastheads or heroes; do not put those exceptions in this
         shared scale.
 

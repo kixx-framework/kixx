@@ -1,7 +1,30 @@
 Read the @README.md for the project overview, including what this project is and why it exists.
 
+---
+
+*Note: Remove this section after establishing the aesthetic and style guide for your project.*
+
+## A Starter Theme for Your Project
+
+This repository contains the Kixx framework in `src/kixx/`, a reference application, and a starter theme for new projects. The public website and admin panel provide a blank canvas: working pages and components with a neutral visual starting point. Their appearance is application code you own, not a framework requirement.
+
+Preserve the structural conventions: semantic HTML, BEM ownership, parent-owned flow spacing, layout primitives → blocks → elements, component → semantic → reference color tokens, no inline styles, and progressive enhancement. Preserve the accessibility floor: readable contrast, visible keyboard focus, usable targets, labeled controls, logical reading order, and text that remains usable when enlarged.
+
+Adapt the visible design to the project. Palette, typefaces, type scale, tracking, spacing values, borders, shadows, surface treatments, and interaction styling are starter choices. The color-scheme model and theme-switching machinery are also replaceable. A project can change all of these while retaining the structure above.
+
+When establishing a project's design:
+
+1. Define the intended aesthetic on the style guide's Aesthetic page.
+2. Revise shared tokens and their owning stylesheets together. Edit the starter files directly; a redesign does not need to accumulate overrides or modifiers for defaults it no longer uses.
+3. Update the live specimens, stated values, usage guidance, and CSS comments in the same change. Document why a choice fits the project, particularly when replacing a starter choice.
+4. Check public and admin pages, control states, narrow screens, keyboard use, text enlargement, and every supported color scheme.
+
 ## Developer Documentation
 Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each linked document — the index entries are summaries only. Keep the available documentation in mind as you work and review relevant documentation as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
+
+*Note: Remove this section after establishing the aesthetic and style guide for your project.*
+
+---
 
 ### Code Style Guide
 

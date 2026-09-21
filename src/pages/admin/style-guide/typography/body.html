@@ -1,16 +1,20 @@
 <header class="admin-content-section__header">
     <h2>Typography</h2>
-    <p>A generic system sans-serif. Hierarchy from size and weight alone.</p>
+    <p>The starter&rsquo;s type roles and scale, ready to adapt to your project.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">A single <strong>system sans-serif stack</strong> carries body text, headings, and UI copy. Hierarchy is set by <strong>scale and weight</strong>, never color or decoration, so the page stays legible and predictable at any zoom level.</p>
+    <p class="type-body-lg">The starter uses a single <strong>system sans-serif stack</strong> for body text, headings, and UI copy, with hierarchy set by <strong>scale and weight</strong>. These are starting choices. Adapt the typefaces and roles to your project while keeping semantic structure, legibility, and text enlargement intact.</p>
 
-    <h3 class="type-h3">System fonts &mdash; no web fonts at all</h3>
-    <p>The theme downloads <strong>zero text font files</strong>. It renders in the operating system&rsquo;s own UI face, resolved through the <code>--font-sans</code> stack and pointed to by <code>--font-body</code> / <code>--font-display</code>. Monospace (<code>--font-mono</code>) is reserved for <code>code</code>, <code>pre</code>, <code>kbd</code>, and copy-field values &mdash; it is not the default voice. A downstream site that wants a web font adds it in its own base template and overrides <code>--font-body</code> / <code>--font-display</code>; it does not edit the shared token file.</p>
+    <h3 class="type-h3">The shipped font choices</h3>
+    <p>The starter downloads <strong>zero text font files</strong>. It uses the operating system&rsquo;s UI face through <code>--font-sans</code>, referenced by <code>--font-body</code> and <code>--font-display</code>. <code>--font-mono</code> serves code, keyboard notation, and copy-field values. A project may load web fonts and revise these tokens in <code>design-tokens.css</code>. Define font loading in shared CSS, keep usable fallbacks, and update the examples here.</p>
+
+    <h3 class="type-h3">Tracking follows the typeface</h3>
+    <p>The starter has no <code>--tracking-*</code> tokens. Its zero letter spacing suits the shipped system sans; it does not prohibit tracking. A condensed gothic set in capitals may need extra spacing for legibility. Add a small reusable family when the chosen typefaces and roles need it &mdash; for example, four values if the design has four distinct uses. Document the purpose of each value rather than copying a scale without a use for it.</p>
+    <p>Apply tracking in the owning typography or component rules, accounting for the explicit <code>letter-spacing: 0</code> on headings and buttons in <code>reset.css</code>. Test the actual and fallback fonts, wrapping, and enlarged text. Tracking tokens alone do not change the rendered type.</p>
 
     <h3 class="type-h3">Roles</h3>
-    <p>Three families of role exist, all weights and sizes of the one sans-serif face:</p>
+    <p>The starter provides three role families. Their values and font assignments can change with the project:</p>
     <ul>
         <li><strong>Structural headings</strong> &mdash; <code>h1</code>&ndash;<code>h4</code>, semibold and progressively larger.</li>
         <li><strong>Reading &amp; UI text</strong> &mdash; from <code>.type-body-lg</code> down to <code>.type-caption</code>.</li>
@@ -18,7 +22,7 @@
     </ul>
 
     <h3 class="type-h3">Typeface sizing by surface</h3>
-    <p>Admin pages and public marketing pages share the same system-provided sans-serif family, but they do not size text for the same job. Admin screens use the fixed <code>rem</code> scale documented below because headings are structural labels inside dense tools. Public marketing pages may add bounded, page-local display sizing for mastheads or heroes where the text is part of the composition.</p>
+    <p>The starter's admin and public pages share a system sans-serif family, with sizing chosen for different jobs. Admin screens use the fixed <code>rem</code> scale documented below because headings label sections inside dense tools. A project may revise that scale and font assignment. Public pages may add bounded, page-local display sizing for mastheads or heroes where the text is part of the composition.</p>
     <p>For admin pages, keep typography on the shared fixed <code>rem</code> roles:</p>
     <ul>
         <li><strong>Predictable density.</strong> A section title is the same size every time, so dense screens and data tables stay stable instead of breathing with the viewport.</li>
@@ -50,7 +54,7 @@ font-size: clamp(2rem, 6vw, 3rem);</code></pre>
 </div>
 
 <h3 class="type-h3 doc-section-heading">The scale</h3>
-<p class="doc-lede">Each specimen shows the live role with its class, size, weight, and line-height. Samples use the <code>.type-*</code> utility classes so they don&rsquo;t disturb the page&rsquo;s heading outline.</p>
+<p class="doc-lede">Each specimen shows a live starter role with its class, size, weight, and line-height. Update these descriptions when changing tokens. Samples use <code>.type-*</code> utilities so they don&rsquo;t disturb the page&rsquo;s heading outline.</p>
 
 <div class="specimen-list">
     <article class="card card--flush specimen">
@@ -158,7 +162,7 @@ font-size: clamp(2rem, 6vw, 3rem);</code></pre>
 <div class="doc-prose">
     <p>Run <code>node run-tests.js</code> to execute the suite; press <kbd>Tab</kbd> to move focus, or <kbd>Ctrl</kbd>+<kbd>C</kbd> to copy a selection.</p>
     <blockquote>
-        <p>A block quotation is set off by a left rule in <code>--color-rule-strong</code>, not the link accent &mdash; color stays reserved for links and status, never decoration.</p>
+        <p>The starter sets a block quotation off with a left rule in <code>--color-rule-strong</code>. Its visual treatment can change with the project while the quotation retains its semantic markup.</p>
     </blockquote>
 </div>
 
@@ -168,7 +172,7 @@ font-size: clamp(2rem, 6vw, 3rem);</code></pre>
         <p class="guideline__label">Do</p>
         <ul>
             <li>Reach for semantic elements first &mdash; <code>h1</code>&ndash;<code>h4</code> and <code>p</code> render correctly with no classes.</li>
-            <li>Signal importance with size and weight, not color, italics, or underlines.</li>
+            <li>Establish a consistent hierarchy through type roles; keep it readable without relying on color alone.</li>
             <li>Let paragraphs breathe: <code>.type-body-lg</code> at 1.65 for anything people actually read.</li>
             <li>Keep a single <code>h1</code> per screen as the page title.</li>
             <li>Scope public marketing display sizes to the page stylesheet; keep admin screens on the shared <code>.type-*</code> roles.</li>
@@ -177,9 +181,9 @@ font-size: clamp(2rem, 6vw, 3rem);</code></pre>
     <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don&rsquo;t</p>
         <ul>
-            <li>Download a web font for body or heading text &mdash; the default is the system sans-serif stack, with no downloaded files.</li>
+            <li>Treat system fonts or zero tracking as requirements of the framework.</li>
             <li>Pick a heading level for its size &mdash; choose the level for structure, then restyle with a <code>.type-*</code> class.</li>
-            <li>Invent new reusable or admin font sizes; shared roles live in <code>--text-*</code> tokens.</li>
+            <li>Scatter reusable font sizes across components; revise or extend the shared <code>--text-*</code> roles and document them here.</li>
             <li>Use fluid <code>clamp()</code> type in admin panels, shared components, or reusable <code>.type-*</code> roles.</li>
             <li>Give a <code>clamp()</code> a bare <code>vw</code> preferred value &mdash; it ignores browser zoom.</li>
         </ul>

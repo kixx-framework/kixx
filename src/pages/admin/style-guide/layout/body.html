@@ -1,12 +1,12 @@
 <header class="admin-content-section__header">
     <h2>Layout</h2>
-    <p>The composable primitives that arrange everything else in the Kixx Admin Panel theme.</p>
+    <p>Shared layout primitives for public pages and the admin panel.</p>
 </header>
 
 <div class="doc-prose">
     <p class="type-body-lg">Layout is handled by six small, single-purpose primitives in the <a href="https://every-layout.dev/" rel="noreferrer">Every Layout</a> tradition. Each is one class, tuned by its own scoped custom properties &mdash; so you arrange a page by <strong>nesting primitives</strong>, not by writing a new <code>flex</code> or <code>grid</code> rule every time.</p>
 
-    <p>Every primitive defaults to a design token, so the untouched class already does the right thing. To adjust one axis, set its custom property on the element (or any ancestor):</p>
+    <p>Every primitive starts with a design-token default. Adapt spacing, measures, and thresholds to your project's content while preserving parent-owned spacing and composition. Set custom properties through stylesheet classes on the container or an appropriate ancestor, never inline styles:</p>
     <ul>
         <li><code>.flow</code> &mdash; vertical stack; parent-owned gap between siblings via <code>--flow-space</code>.</li>
         <li><code>.cluster</code> &mdash; horizontal group that wraps; <code>--cluster-space</code>, <code>--cluster-align</code>, <code>--cluster-justify</code>.</li>
@@ -104,7 +104,7 @@
             <li>Reach for a bespoke <code>display: flex</code> / <code>grid</code> rule before checking the six primitives.</li>
             <li>Reach for a child-scoped <code>--flow-space</code> override as a first move; it's the exception path for one child, not a substitute for a container-level rhythm change.</li>
             <li>Add media-query breakpoints where <code>.grid-auto</code> or <code>.switcher</code> already adapt.</li>
-            <li>Hard-code pixel gaps; the spacing ladder is the contract.</li>
+            <li>Scatter hard-coded gaps across pages; revise the shared spacing ladder when the project needs a different rhythm.</li>
         </ul>
     </div>
 </div>

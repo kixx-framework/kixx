@@ -1,20 +1,20 @@
 <header class="admin-content-section__header">
     <h2>Style Guide</h2>
-    <p>The working frontend reference for Kixx pages, templates, and shared CSS.</p>
+    <p>A working reference for the Kixx starter theme and the project you build from it.</p>
 </header>
 
-<div class="callout callout--warning">
-    <span class="callout__icon" aria-hidden="true">!</span>
+<div class="callout">
+    <span class="callout__icon" aria-hidden="true">*</span>
     <div class="callout__body flow">
-        <p class="callout__title">Style Guide Place-Holder</p>
-        <p class="type-body-sm">This style guide is a place-holder as part of your default Kixx installation. The intention is for you to replace it once you have established the aesthetic for your site.</p>
+        <p class="callout__title">Your starting point</p>
+        <p class="type-body-sm">These working examples document the shipped starter theme. Adapt the palette, typography, components, and color schemes to your project, and update this guide with them.</p>
     </div>
 </div>
 
 <div class="doc-prose">
     <p class="type-body-lg">Use this style guide before changing any frontend markup or CSS. It is the live source of truth for the site&rsquo;s aesthetic, design tokens, layout primitives, type roles, components, form controls, and documentation patterns.</p>
 
-    <p>Kixx ships a <strong>blank canvas</strong>: a neutral, accessible default meant to be built on, not a house style. Read <a href="/admin/style-guide/aesthetic">Aesthetic</a> for what is a structural rule you keep and what is a default you are expected to change.</p>
+    <p>This repository contains the Kixx framework in <code>src/kixx/</code>, a reference application, and a starter theme. Its public pages and admin panel are a <strong>blank canvas</strong> for a new project. Read <a href="/admin/style-guide/aesthetic">Aesthetic</a> for the structural conventions to preserve and the visual defaults you can replace.</p>
 
     <p>For implementation details, pair this guide with <code>docs/frontend-development-guide.md</code>. That document explains where frontend source lives, the no-inline-styles rule, the stylesheet organization, BEM naming, theming, and the page-local stylesheet pattern &mdash; including its &ldquo;when to add what&rdquo; decision table. The tokens and layout primitives themselves are documented in the stylesheets that define them, under <code>static-assets/stylesheets/lib/</code>.</p>
 </div>
@@ -24,7 +24,7 @@
 <div class="card-gallery grid-auto">
     <div class="card flow">
         <h4 class="type-h4">1. Read the intent</h4>
-        <p class="type-body-sm">Start with <a href="/admin/style-guide/aesthetic">Aesthetic</a>. It defines the tone behind every later choice: fast, plain, structured, document-like, and honest.</p>
+        <p class="type-body-sm">Start with <a href="/admin/style-guide/aesthetic">Aesthetic</a>. It separates durable structural conventions from starter choices. When establishing a new design, record its intent here.</p>
     </div>
     <div class="card flow">
         <h4 class="type-h4">2. Reuse foundations</h4>
@@ -42,7 +42,8 @@
 
     <p>For implementation work, treat each page as a decision checklist, following the guide&rsquo;s &ldquo;when to add what&rdquo; table:</p>
     <ul>
-        <li>A value changes on one instance &mdash; a scoped custom property, not a new class.</li>
+        <li>A value changes on one instance &mdash; a scoped custom property set through a stylesheet class.</li>
+        <li>The project adopts a new aesthetic &mdash; revise the shared tokens and owning stylesheets, then update the specimens and guidance together.</li>
         <li>A variant of an existing block &mdash; a modifier class in the block&rsquo;s file.</li>
         <li>A new reusable component with parts &mdash; a block in <code>components.css</code> or <code>forms.css</code>.</li>
         <li>Styling that belongs to exactly one page &mdash; that page&rsquo;s <code>page_stylesheet</code> include.</li>
@@ -70,7 +71,7 @@
             <li>Raw color literals or direct <code>--palette-*</code> references inside component rules.</li>
             <li>New wrappers, modifiers, or utilities when a primitive or component already fits.</li>
             <li>Reaching past a token or modifier straight to a one-off override for radius, shadow, or color.</li>
-            <li>Adding dependencies, web fonts, or icon libraries for visual polish.</li>
+            <li>Treating the starter palette, system fonts, or theme toggle as framework requirements.</li>
         </ul>
     </div>
 </div>

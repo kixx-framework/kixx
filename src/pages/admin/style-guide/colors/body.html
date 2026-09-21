@@ -1,10 +1,10 @@
 <header class="admin-content-section__header">
     <h2>Colors</h2>
-    <p>High-contrast monochrome, with color reserved for a single functional signal.</p>
+    <p>A neutral starter palette built on reusable color roles.</p>
 </header>
 
 <div class="doc-prose">
-    <p class="type-body-lg">The base scheme is <strong>dark-gray-and-off-white</strong> &mdash; a faintly warm paper and a near-black ink that read like a printed spec sheet, not a glaring screen. Color is a <strong>signal, not a mood</strong>: one accent for a link, and a small functional family for status. Nothing else is tinted.</p>
+    <p class="type-body-lg">The starter uses <strong>dark gray and off-white</strong>, one link accent, and a small status family. This restrained palette leaves room for your project's identity. Replace or extend its colors and surface treatments through the token system.</p>
 
     <p>It is still a <strong>three-tier token system</strong>. Each tier has one job, and references flow in a single direction &mdash; so a value changes in exactly one place, and theming is something the system does, not something a component worries about.</p>
 
@@ -14,7 +14,11 @@
         <li><strong>Component</strong> (e.g. <code>--color-field-border</code>, <code>--card-accent</code>) &mdash; scoped tokens built from the semantic layer for one component.</li>
     </ul>
 
-    <p>The single direction is what makes it a contract: <code>component &rarr; semantic &rarr; reference</code>. The <code>light-dark()</code> theming all happens in the semantic tier, so a component written against <code>--color-rule</code> is correct in both themes for free.</p>
+    <p>The structural contract is <code>component &rarr; semantic &rarr; reference</code>. The starter resolves light and dark values with <code>light-dark()</code> at the semantic tier. Components inherit those choices; verify contrast against their actual backgrounds whenever the palette changes.</p>
+
+    <h3 class="type-h3">Choose the project's scheme model</h3>
+    <p>The light/dark pair and header toggle are starter features. A project may use a fixed scheme, follow system preference without a toggle, or replace the switching model. Preserve the token tiers while changing scheme resolution. Update <code>design-tokens.css</code>, scheme-dependent reset rules, the pre-paint script in <code>common-site-meta.html</code>, toggle markup, and the <code>theme-toggle</code> behavior in <code>site.js</code> together. Remove obsolete controls and storage wiring if switching is removed; set <code>color-scheme</code> to match the supported scheme so native controls follow it.</p>
+    <p>Keep these swatches and descriptions aligned with the result. Brand and decorative color roles are welcome; name their purpose and keep status meanings clear.</p>
 
     <div class="callout">
         <span class="callout__icon" aria-hidden="true">*</span>
@@ -182,8 +186,8 @@
         <ul>
             <li>Style components with semantic <code>--color-*</code> tokens &mdash; <code>--color-ink</code>, <code>--color-rule</code>, <code>--color-bg</code>.</li>
             <li>When a role is missing, add a semantic token instead of hardcoding.</li>
-            <li>Let <code>light-dark()</code> in the semantic tier handle theming; keep components theme-agnostic.</li>
-            <li>Reserve color for signals: the link accent and the status family. Everything else is ink on paper.</li>
+            <li>Resolve schemes at the semantic tier; the starter uses <code>light-dark()</code>. Keep components independent of the switching mechanism.</li>
+            <li>Give brand, surface, and status colors meaningful roles, and verify contrast in every supported scheme.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont flow">
@@ -191,7 +195,7 @@
         <ul>
             <li>Name a raw <code>--palette-*</code> token or write an <code>hsl()</code> / hex literal in a component rule.</li>
             <li>Reach past the semantic layer &mdash; not even &ldquo;just this once.&rdquo;</li>
-            <li>Tint a surface, border, or control for decoration &mdash; color must earn its place as a signal.</li>
+            <li>Reuse a status token for unrelated decoration; define a semantic role for the intended treatment.</li>
             <li>Lean on color alone to carry meaning &mdash; pair it with weight, a mark, or text.</li>
         </ul>
     </div>
