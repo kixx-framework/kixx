@@ -326,7 +326,7 @@ const browserRules = Object.assign({}, rules, {});
 export default [
     {
         ignores: [
-            'src/data/',
+            'data/',
             'src/kixx/vendor/',
             'node_modules/',
             'tmp/',
