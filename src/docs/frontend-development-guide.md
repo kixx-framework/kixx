@@ -12,7 +12,7 @@ Related documents:
 
 ```text
 src/
-├── pages/                        # Route-specific page.json, page.html, body.html, page.css
+├── pages/                        # Route-specific page data, templates, partials, and includes
 ├── templates/
 │   ├── base/                     # Full HTML documents: default.html, admin.html, admin-login.html
 │   └── partials/                 # Shared markup fragments
@@ -21,6 +21,16 @@ src/
 │   └── javascript/
 └── public/                       # Served verbatim from the site root (favicons, webmanifest)
 ```
+
+Files beside a `pages/**/page.json` are processed according to the directive that names them, not their extension:
+
+| `page.json` directive | Typical file | Processing rule |
+| --- | --- | --- |
+| `template` | `page.html` | Compiled as the page's primary Kixx template; template syntax is processed |
+| `partials` | Any page-local `.html` or text template | Compiled as a Kixx template and available to the primary page template by its configured id |
+| `includes` | `body.html`, `page.css`, or supporting text | Loaded verbatim as a string under `includes`; template syntax inside the file is not processed |
+
+For example, `body.html` and `page.html` can sit in the same directory and share an `.html` extension while following different rules. A `body.html` file named by `includes` is trusted HTML content for a template to emit with `{{{ includes.body }}}` or `{{ unescape includes.body }}`. Put interpolation, helpers, `{{!-- comments --}}`, or partial tags in `page.html` or a configured partial instead.
 
 The three directories differ in how the publishing tool (outside the scope of this project) treats them:
 

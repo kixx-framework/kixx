@@ -913,9 +913,9 @@ translated into the immutable storage layout used by `ContentSnapshot`:
 | Storage namespace | Developer source | Behavior |
 | --- | --- | --- |
 | `/pages/<pathname>/page.json` | `src/pages/<pathname>/page.json` | Direct file |
-| `/pages/<pathname>/<template basename>` | `src/pages/<pathname>/<template>` | Direct file named by the leaf `page.json` |
-| `/pages/<pathname>/__page-includes-bundle` | Files named by leaf `page.json` `includes` | Assembled JSON bundle |
-| `/pages/<pathname>/__page-partials-bundle` | Files named by leaf `page.json` `partials` | Assembled JSON bundle |
+| `/pages/<pathname>/<template basename>` | `src/pages/<pathname>/<template>` | Compiled as the page template at render time |
+| `/pages/<pathname>/__page-includes-bundle` | Files named by leaf `page.json` `includes` | Loaded verbatim as strings in the page context |
+| `/pages/<pathname>/__page-partials-bundle` | Files named by leaf `page.json` `partials` | Compiled as page-local templates at render time |
 | `/templates/__template-partials-bundle` | `src/templates/partials/**` | Assembled JSON bundle |
 | `/templates/__base-templates-bundle` | `src/templates/base/**` | Assembled JSON bundle |
 | `/assets/**` | `src/static-assets/**` | Direct file |
@@ -997,6 +997,8 @@ Top-level build directives include:
 - `template`: Names the page template relative to the current page directory; use `page.html` for the primary page template.
 - `partials`: Lists page-local partial ids and template filenames relative to the current page directory.
 - `includes`: Maps context names to text files in the current page directory.
+
+Include files are loaded verbatim as strings in the template context. Their contents are not compiled, so interpolation, comments, helpers, and partial tags are not processed. Use `template` or `partials` for content that requires template syntax. A file's extension does not determine how it is processed; the directive that names it does.
 
 Build directives direct source assembly and are not exposed in the assembled template context. Runtime response props named `template` or `partials` remain available because response props are merged after the published directives are removed. The `includes` directive is replaced by the resolved content under `includes`.
 
