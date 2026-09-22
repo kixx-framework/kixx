@@ -58,7 +58,7 @@
         <li><strong>Comfortable targets</strong> &mdash; buttons and fields hold at least a <code>2.5rem</code> minimum dimension (WCAG 2.5.8).</li>
         <li><strong>Token contrast</strong> &mdash; verify text, controls, and status indicators against their actual backgrounds in every scheme the project supports. Don&rsquo;t recolor body text to a status hue tuned only for a foreground mark.</li>
         <li><strong>Native controls stay native</strong> &mdash; <code>select</code>, checkboxes, radios, file inputs, and range inputs keep their platform affordance. Only text-like inputs and <code>textarea</code> get a custom box.</li>
-        <li><strong>Zoom-safe type</strong> &mdash; shared roles use fixed <code>rem</code> steps (WCAG 1.4.4); fluid <code>clamp()</code> sizing is reserved for bounded, page-local display type and always keeps a <code>rem</code> floor and ceiling.</li>
+        <li><strong>Zoom-safe type</strong> &mdash; the <code>--text-*</code> ladder stays fixed <code>rem</code> (WCAG 1.4.4); fluid sizing lives on the separate <code>--display-*</code> register and is always bounded, with a <code>rem</code> floor, ceiling, and preferred term.</li>
     </ul>
 </div>
 

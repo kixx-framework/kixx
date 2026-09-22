@@ -184,11 +184,13 @@
     /* -------------------------------------------------------------------------
         Type scale
 
-        Shared reusable roles use fixed rem steps: fixed rem honors browser zoom
-        (WCAG 1.4.4). The starter uses size and weight for hierarchy; projects
-        may revise the typefaces and roles. Public pages may add page-local display
-        sizing for mastheads or heroes; do not put those exceptions in this
-        shared scale.
+        This ladder is the fixed rem scale: every step is a plain rem value, so
+        text tracks browser zoom (WCAG 1.4.4). Keep it that way. A viewport-coupled
+        step never belongs on --text-*, whatever page needs it; oversized display
+        type belongs on the --display-* register below.
+
+        The starter uses size and weight for hierarchy; projects may revise the
+        typefaces and role values.
 
         Role mapping:
           --text-h1        32px page title (one per screen)
@@ -208,6 +210,31 @@
     --text-body: 1rem;
     --text-body-sm: 0.875rem;
     --text-caption: 0.8125rem;
+
+    /* -------------------------------------------------------------------------
+        Display register
+
+        Oversized public type: a masthead, a band headline, the lede beneath one.
+        Separate from the --text-* ladder because these roles ARE viewport
+        coupled, and mixing the two models corrupts the fixed scale that admin
+        screens and body copy depend on.
+
+        Every step is bounded and zoom-safe: a rem floor, a rem ceiling, and a
+        rem term inside the preferred value, so browser zoom still scales the
+        text and vw only adds viewport response on top. A bare vw preferred
+        value regresses WCAG 1.4.4 — never ship one.
+
+        Role mapping:
+          --display-lg     40-64px page masthead / hero title
+          --display-md     28-40px band or section display heading
+          --display-sm     18-24px lede or standfirst under display type
+
+        Public surfaces only. Admin screens stay on the fixed --text-* roles so
+        dense tools keep a predictable density.
+    ------------------------------------------------------------------------- */
+    --display-lg: clamp(2.5rem, calc(1.875rem + 2.5vw), 4rem);
+    --display-md: clamp(1.75rem, calc(1.375rem + 1.5vw), 2.5rem);
+    --display-sm: clamp(1.125rem, calc(1rem + 0.5vw), 1.5rem);
 
     /* Line-height is ROLE-DEPENDENT.
        - tight: large headings (h1, h2)

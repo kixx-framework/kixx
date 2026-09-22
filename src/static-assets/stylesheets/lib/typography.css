@@ -10,6 +10,11 @@
     Golden rule: choose a heading level for document STRUCTURE, then, if the size
     is wrong, restyle it with a .type-* class. Never pick a level for its size.
 
+    Two ladders live here. The fixed rem roles (h1-h4, .type-body-*) size every
+    surface, admin included. The .type-display-* roles are bounded fluid type for
+    public display text only; they are a separate register, never extra rungs on
+    the fixed scale.
+
     The starter uses size and weight for hierarchy. Projects may revise fonts,
     scale, tracking, and color roles while keeping semantic heading structure
     and legibility. Keep the Typography style guide aligned with these rules.
@@ -42,6 +47,34 @@ h4,
     font-size: var(--text-h4);
     font-weight: var(--weight-semibold);
     line-height: var(--leading-snug);
+}
+
+/* Display roles — oversized public type for a masthead, a band headline, or the
+   lede under one. These are the only reusable roles that are viewport coupled,
+   and they are bounded: see the --display-* register in design-tokens.css for
+   why fixed rem and fluid sizing stay in separate ladders.
+
+   Public surfaces only. They carry no semantics, so pick the heading level for
+   document structure and apply the display class for size. */
+.type-display-lg {
+    font-size: var(--display-lg);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-tight);
+}
+
+.type-display-md {
+    font-size: var(--display-md);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-tight);
+}
+
+/* A lede is subordinate reading copy, not a heading: regular weight, open
+   leading, muted against the display heading it follows. */
+.type-display-sm {
+    font-size: var(--display-sm);
+    font-weight: var(--weight-regular);
+    line-height: var(--leading-body);
+    color: var(--color-ink-muted);
 }
 
 /* Reading & UI text. */

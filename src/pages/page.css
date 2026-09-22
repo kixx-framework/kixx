@@ -64,8 +64,12 @@
     flex-direction: column;
     gap: var(--space-3xs);
 }
+/* Page-local display sizing, not the shared --display-* register: this masthead
+   belongs to one fixed demo document with its own proportions, so generalizing
+   it would add a shared role no other page wants. Bounded and zoom-safe all the
+   same — rem floor, rem ceiling, rem term in the preferred value. */
 .intro h1 {
-    font-size: clamp(2rem, 6vw, 3rem);
+    font-size: clamp(2rem, calc(1.625rem + 1.5vw), 3rem);
     line-height: var(--leading-tight);
 }
 /* The tagline is subordinate: smaller and muted, never a second color accent. */

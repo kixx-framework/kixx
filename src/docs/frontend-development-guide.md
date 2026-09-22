@@ -259,7 +259,11 @@ Change the machinery together: semantic tokens and `color-scheme` declarations i
 
 The type system is documented in the style guide at `/admin/style-guide/typography`: Read the style guide page before sizing text.
 
-System fonts, the current scale, and zero tracking are starter choices. A project may load web fonts and change `--font-body`, `--font-display`, `--text-*`, `--leading-*`, and `--weight-*` in the shared stylesheets. Keep role names meaningful and update the specimens when their values change.
+System fonts, the current scale, and zero tracking are starter choices. A project may load web fonts and change `--font-body`, `--font-display`, `--text-*`, `--display-*`, `--leading-*`, and `--weight-*` in the shared stylesheets. Keep role names meaningful and update the specimens when their values change.
+
+Type sizing uses two separate ladders, and the separation is a rule rather than a starter choice. `--text-*` is the fixed `rem` scale every surface depends on; never add a viewport-coupled step to it. `--display-*` is the bounded fluid register for oversized public type, and every one of its steps keeps a `rem` floor, a `rem` ceiling, and a `rem` term in the preferred value so browser zoom still scales the text (WCAG 1.4.4). Admin screens stay on the fixed roles.
+
+Which file a display rule lands in is not part of that rule — it is the ordinary reuse question the resolution order above answers. A treatment that recurs across public pages is reusable and belongs in `typography.css`; one that belongs to a single page belongs in that page's `page_stylesheet`. `src/pages/page.css` shows the second case.
 
 The starter has no `--tracking-*` family because its system sans does not need one. Tracking can serve legibility: a condensed gothic set in capitals may need more space between letters. Add a small family when the chosen typefaces and roles justify it; four values are reasonable if four distinct uses exist, not a required count. Document each use and apply it in the owning typography or component rules. Check the explicit `letter-spacing: 0` declarations on headings and buttons in `reset.css`; adding tokens alone does not change those rules. Test the actual font, fallback font, enlarged text, and wrapping.
 
@@ -288,6 +292,7 @@ Page structure is layout primitives → blocks → elements, in that order of re
 | A new reusable component with parts | A new block in `components.css` or `forms.css`, plus a style-guide page |
 | Admin shell structure (header, nav, content sections) | `admin-shell.css` |
 | Style-guide specimen or documentation chrome | `admin-style-guide.css` |
+| Oversized public display type (masthead, band headline, lede) | A `.type-display-*` role from the `--display-*` register in `typography.css`; a bounded, zoom-safe `clamp()` in the page's `page_stylesheet` if it belongs to one page |
 | Styling that belongs to exactly one page | The page's `page_stylesheet` include |
 | A new color or size is needed | Check existing tokens first (`design-tokens.css`); add a token only if nothing fits |
 | Behavior that needs the DOM | A `data-js-behavior` block in `static-assets/javascript/site.js` |
