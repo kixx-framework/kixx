@@ -23,14 +23,23 @@ async function makeWorkspace(files = {}) {
     return root;
 }
 
-function makeScanner(root, fileSystem) {
+function makeScanner(root, fileSystem, options = {}) {
     return new DeveloperSourceScanner({
         pagesDirectory: path.join(root, 'pages'),
         templatesDirectory: path.join(root, 'templates'),
         staticAssetsDirectory: path.join(root, 'static-assets'),
         emailsDirectory: path.join(root, 'emails'),
         fileSystem,
+        ...options,
     });
+}
+
+function makeIsolatingScanner(root) {
+    return makeScanner(root, undefined, { isolatePageErrors: true });
+}
+
+function pageKeys(manifest, prefix) {
+    return [ ...manifest.keys() ].filter((pathname) => pathname.startsWith(prefix)).join(',');
 }
 
 async function catchAsyncError(fn) {
@@ -277,6 +286,114 @@ describe('DeveloperSourceScanner', ({ it }) => {
             assertEqual(1, readCount);
         } finally {
             await fsp.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects a missing referenced page file by default', async () => {
+        const root = await makeWorkspace({
+            'pages/page.json': JSON.stringify({ template: 'page.html' }),
+        });
+
+        try {
+            const caught = await catchAsyncError(() => makeScanner(root).scan());
+
+            assertEqual('ValidationError', caught.name);
+            assertMatches(path.join(root, 'pages/page.html'), caught.message);
+        } finally {
+            await fsp.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    it('records a page with a missing referenced file as an error recipe when isolating', async () => {
+        const cases = [
+            [ 'template', { template: 'page.html' }, 'page.html' ],
+            [ 'partial', { partials: [ { id: 'card.html', filename: 'card.html' } ] }, 'card.html' ],
+            [ 'include', { includes: { body: { filename: 'body.html' } } }, 'body.html' ],
+        ];
+
+        for (const [ label, json, missingFilename ] of cases) {
+            const root = await makeWorkspace({
+                'pages/page.json': JSON.stringify({ template: 'page.html' }),
+                'pages/page.html': 'Home',
+                'pages/broken/page.json': JSON.stringify(json),
+                'pages/broken/child/page.json': JSON.stringify({ template: 'page.html' }),
+                'pages/broken/child/page.html': 'Child',
+            });
+
+            try {
+                const manifest = await makeIsolatingScanner(root).scan();
+                const metadata = manifest.get('/pages/broken/page.json');
+                const recipe = manifest.get('/pages/broken/__page-partials-bundle');
+
+                assertEqual('file', metadata.kind, label);
+                assertEqual('error', recipe.kind, label);
+                assertEqual('ValidationError', recipe.error.name, label);
+                assertMatches(path.join(root, 'pages/broken', missingFilename), recipe.error.message);
+                assertEqual(0, recipe.sources.length, label);
+                assertEqual(path.join(root, 'pages/broken/page.json'), recipe.manifests[0].filepath, label);
+                assertEqual(
+                    JSON.stringify({ name: 'page', pathname: '/broken', field: 'partials' }),
+                    JSON.stringify(recipe.facet),
+                );
+                assertFalsy(manifest.has('/pages/broken/page.html'), label);
+                assertFalsy(manifest.has('/pages/broken/__page-includes-bundle'), label);
+                assert(manifest.has('/pages/page.html'), label);
+                assert(manifest.has('/pages/broken/child/page.html'), label);
+            } finally {
+                await fsp.rm(root, { recursive: true, force: true });
+            }
+        }
+    });
+
+    it('records invalid page metadata as an error recipe when isolating', async () => {
+        const cases = [
+            [ 'malformed JSON', '{ nope', 'malformed JSON' ],
+            [ 'invalid shape', JSON.stringify({ template: 42 }), 'template must be a string' ],
+        ];
+
+        for (const [ label, source, message ] of cases) {
+            const root = await makeWorkspace({
+                'pages/page.json': JSON.stringify({ template: 'page.html' }),
+                'pages/page.html': 'Home',
+                'pages/broken/page.json': source,
+                'pages/broken/page.html': 'Broken',
+            });
+
+            try {
+                const manifest = await makeIsolatingScanner(root).scan();
+                const recipe = manifest.get('/pages/broken/page.json');
+
+                assertEqual('error', recipe.kind, label);
+                assertEqual('ValidationError', recipe.error.name, label);
+                assertMatches(message, recipe.error.message);
+                assertEqual(
+                    JSON.stringify({ name: 'page', pathname: '/broken', field: 'metadata' }),
+                    JSON.stringify(recipe.facet),
+                );
+                assertEqual('/pages/broken/page.json', pageKeys(manifest, '/pages/broken/'), label);
+                assert(manifest.has('/pages/page.html'), label);
+            } finally {
+                await fsp.rm(root, { recursive: true, force: true });
+            }
+        }
+    });
+
+    it('still fails the whole scan for errors it cannot attribute to a page when isolating', async () => {
+        const cases = [
+            [ 'pages/Bad Dir/page.json', JSON.stringify({}), 'ValidationError' ],
+            [ 'static-assets/Bad Name.txt', 'invalid', 'ValidationError' ],
+        ];
+
+        for (const [ relativePath, source, name ] of cases) {
+            const root = await makeWorkspace({ [relativePath]: source });
+
+            try {
+                const caught = await catchAsyncError(() => makeIsolatingScanner(root).scan());
+
+                assertEqual(name, caught.name, relativePath);
+            } finally {
+                await fsp.rm(root, { recursive: true, force: true });
+            }
         }
     });
 });

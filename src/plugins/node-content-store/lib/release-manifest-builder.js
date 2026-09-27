@@ -25,6 +25,8 @@ export async function buildReleaseManifest(options) {
     const manifest = {};
 
     for (const [ pathname, recipe ] of recipes) {
+        // A Release must not publish a broken page; only a strict scanner belongs here.
+        assert(recipe.kind !== 'error', `buildReleaseManifest: scanner recorded an invalid page at "${ pathname }"; use a scanner without isolatePageErrors`);
         const bytes = await getDeveloperBlob(recipes, pathname, 'arrayBuffer', fileSystem);
         const reference = await putObject(bytes, pathname);
         placeReference(manifest, recipe.facet, reference);

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertUndefined } from 'kixx-assert';
+import { assert, assertEqual, assertMatches, assertUndefined } from 'kixx-assert';
 
 import DeveloperSourceScanner from '../../../../src/plugins/node-content-store/lib/developer-source-scanner.js';
 import { buildReleaseManifest } from '../../../../src/plugins/node-content-store/lib/release-manifest-builder.js';
@@ -57,6 +57,15 @@ const FIXTURE_FILES = {
     'emails/welcome/message.html': 'Welcome email',
 };
 
+
+async function catchAsyncError(fn) {
+    try {
+        await fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}
 
 describe('buildReleaseManifest', ({ it }) => {
 
@@ -124,6 +133,31 @@ describe('buildReleaseManifest', ({ it }) => {
             assertUndefined(manifest.baseTemplates);
 
             validateReleaseManifest(manifest);
+        } finally {
+            await fsp.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects a broken page from both strict and isolating scanners', async () => {
+        const root = await makeWorkspace({ 'pages/page.json': JSON.stringify({ template: 'page.html' }) });
+
+        try {
+            const putObject = makeRecordingPutObject([]);
+            const strict = await catchAsyncError(() => buildReleaseManifest({ scanner: makeScanner(root), putObject }));
+            const isolating = await catchAsyncError(() => buildReleaseManifest({
+                scanner: new DeveloperSourceScanner({
+                    pagesDirectory: path.join(root, 'pages'),
+                    templatesDirectory: path.join(root, 'templates'),
+                    staticAssetsDirectory: path.join(root, 'static-assets'),
+                    emailsDirectory: path.join(root, 'emails'),
+                    isolatePageErrors: true,
+                }),
+                putObject,
+            }));
+
+            assertEqual('ValidationError', strict.name);
+            assertEqual('AssertionError', isolating.name);
+            assertMatches('invalid page', isolating.message);
         } finally {
             await fsp.rm(root, { recursive: true, force: true });
         }

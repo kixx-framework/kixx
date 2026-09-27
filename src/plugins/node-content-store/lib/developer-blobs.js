@@ -13,6 +13,7 @@ import { canonicalize } from '../../../kixx/content-addressable-store/addressing
  * @param {'text'|'arrayBuffer'|'stream'} type - Requested representation
  * @param {Object} [fileSystem] - Promise-based filesystem API used by tests
  * @returns {Promise<string|ArrayBuffer|ReadableStream|null>} Materialized value, or null when absent
+ * @throws {OperationalError} When the recipe records an invalid developer page (code `InvalidDeveloperPage`)
  */
 export async function getDeveloperBlob(manifest, pathname, type, fileSystem = fsp) {
     assert(manifest instanceof Map, 'getDeveloperBlob: manifest must be a Map');
@@ -46,6 +47,17 @@ async function materializeRecipe(recipe, fileSystem) {
         if (!await sourceExists(manifest, fileSystem)) {
             return null;
         }
+    }
+
+    // An isolated page error is reported on every read of the broken page.
+    // A new error each time keeps the stack tied to the failing request.
+    if (recipe.kind === 'error') {
+        const { error: cause, facet } = recipe;
+        throw new OperationalError(`Developer page "${ facet.pathname }" is invalid: ${ cause.message }`, {
+            cause,
+            code: 'InvalidDeveloperPage',
+            httpStatusCode: 500,
+        });
     }
 
     if (recipe.kind === 'file') {

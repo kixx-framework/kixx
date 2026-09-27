@@ -37,6 +37,14 @@ function validationError(filepath, message, cause) {
  *
  * Manifest JSON is cached by file identity between scans. Content files are
  * only inspected with `stat`; their bytes remain unread until materialization.
+ *
+ * By default the first invalid source fails the whole scan, which keeps a
+ * broken page out of a Release. With `isolatePageErrors`, a page whose
+ * `page.json` is invalid or references a missing file is recorded as a
+ * `kind: 'error'` recipe carrying its ValidationError, so the developer
+ * server can fail only that page's reads. The recipe replaces the page's
+ * metadata entry when `page.json` itself is invalid, and its partials entry
+ * when a referenced file is missing.
  */
 export default class DeveloperSourceScanner {
 
@@ -45,6 +53,7 @@ export default class DeveloperSourceScanner {
     #templatesDirectory;
     #staticAssetsDirectory;
     #emailsDirectory;
+    #isolatePageErrors;
     #jsonCache = new Map();
 
     /**
@@ -53,6 +62,7 @@ export default class DeveloperSourceScanner {
      * @param {string} options.templatesDirectory - Root containing shared partials and base templates
      * @param {string} options.staticAssetsDirectory - Root of directly served static assets
      * @param {string} options.emailsDirectory - Root of email manifests and assets
+     * @param {boolean} [options.isolatePageErrors=false] - Record an invalid page as an error recipe instead of failing the scan
      * @param {Object} [options.fileSystem] - Promise-based filesystem API used by tests
      */
     constructor(options) {
@@ -61,6 +71,7 @@ export default class DeveloperSourceScanner {
             templatesDirectory,
             staticAssetsDirectory,
             emailsDirectory,
+            isolatePageErrors = false,
             fileSystem = fsp,
         } = options ?? {};
 
@@ -74,13 +85,14 @@ export default class DeveloperSourceScanner {
         this.#templatesDirectory = templatesDirectory;
         this.#staticAssetsDirectory = staticAssetsDirectory;
         this.#emailsDirectory = emailsDirectory;
+        this.#isolatePageErrors = isolatePageErrors;
         this.#fileSystem = fileSystem;
     }
 
     /**
      * Scans all source roots without reading content-file bytes.
      * @returns {Promise<Map<string, Object>>} Storage pathname to materialization recipe
-     * @throws {ValidationError} When source metadata or a source pathname is invalid
+     * @throws {ValidationError} When source metadata or a source pathname is invalid; page errors are recorded as recipes instead when isolating page errors
      * @throws {OperationalError} When a filesystem operation fails
      */
     async scan() {
@@ -99,15 +111,29 @@ export default class DeveloperSourceScanner {
     async #scanPages(entries) {
         const files = await this.#walkFiles(this.#pagesDirectory);
         const metadataFiles = files.filter(({ relativePath }) => path.posix.basename(relativePath) === 'page.json');
-        const pages = new Map();
+        const pages = [];
 
         for (const file of metadataFiles) {
             this.#assertValidRelativePath(file.relativePath, file.filepath);
             const pagePath = path.posix.dirname(file.relativePath);
             const pathname = pagePath === '.' ? '/' : `/${ pagePath }`;
-            const json = await this.#readJson(file);
-            this.#validatePageJson(file.filepath, json);
-            pages.set(pathname, { file, json });
+            const manifest = makeFileIdentity(file.filepath, file.stats);
+
+            let json;
+            try {
+                json = await this.#readJson(file);
+                this.#validatePageJson(file.filepath, json);
+            } catch (error) {
+                // Descendants read this page's metadata as inherited defaults,
+                // so an error at the metadata path fails them too.
+                entries.push([
+                    getPageMetadataPath(pathname),
+                    this.#makePageErrorRecipe(error, manifest, pathname, 'metadata'),
+                ]);
+                continue;
+            }
+
+            pages.push({ pathname, file, json, manifest });
             entries.push([
                 getPageMetadataPath(pathname),
                 {
@@ -119,63 +145,91 @@ export default class DeveloperSourceScanner {
             ]);
         }
 
-        for (const [ pathname, page ] of pages) {
-            const manifest = makeFileIdentity(page.file.filepath, page.file.stats);
-            const { template, partials = [], includes = {} } = page.json;
-
-            if (template) {
-                const templateFile = await this.#getNamedFile(
-                    path.dirname(page.file.filepath),
-                    template,
-                );
-                const filename = path.posix.basename(template);
-                assert(!RESERVED_PAGE_FILENAMES.has(filename), `Developer page template "${ templateFile.filepath }" collides with a reserved filename`);
-                const templatePathname = pathname === '/' ? `/${ filename }` : `${ pathname }/${ filename }`;
+        for (const page of pages) {
+            try {
+                entries.push(...await this.#scanPageSources(page));
+            } catch (error) {
+                // Only the leaf page reads its own partials bundle, so an error
+                // placed there fails this page without failing its descendants.
                 entries.push([
-                    getPageTemplatePath(templatePathname),
-                    {
-                        kind: 'file',
-                        sources: [ makeFileIdentity(templateFile.filepath, templateFile.stats) ],
-                        manifests: [ manifest ],
-                        facet: { name: 'page', pathname, field: 'templates', filename },
-                    },
+                    getPagePartialsPath(page.pathname),
+                    this.#makePageErrorRecipe(error, page.manifest, page.pathname, 'partials'),
                 ]);
             }
+        }
+    }
 
-            const partialSources = [];
-            const sortedPartials = partials.slice().sort((left, right) => compareStrings(left.id, right.id));
-            for (const { id, filename } of sortedPartials) {
-                const sourceFile = await this.#getNamedFile(
-                    path.dirname(page.file.filepath),
-                    filename,
-                );
-                partialSources.push({ id, ...makeFileIdentity(sourceFile.filepath, sourceFile.stats) });
-            }
+    // Resolves every file a page's metadata references. Returns the page's
+    // entries only once all of them resolve, so a broken page never emits a
+    // partial set of entries.
+    async #scanPageSources({ pathname, file, json, manifest }) {
+        const entries = [];
+        const directory = path.dirname(file.filepath);
+        const { template, partials = [], includes = {} } = json;
+
+        if (template) {
+            const templateFile = await this.#getNamedFile(directory, template);
+            const filename = path.posix.basename(template);
+            assert(!RESERVED_PAGE_FILENAMES.has(filename), `Developer page template "${ templateFile.filepath }" collides with a reserved filename`);
+            const templatePathname = pathname === '/' ? `/${ filename }` : `${ pathname }/${ filename }`;
             entries.push([
-                getPagePartialsPath(pathname),
+                getPageTemplatePath(templatePathname),
                 {
-                    kind: 'partials',
-                    sources: partialSources,
+                    kind: 'file',
+                    sources: [ makeFileIdentity(templateFile.filepath, templateFile.stats) ],
                     manifests: [ manifest ],
-                    facet: { name: 'page', pathname, field: 'partials' },
-                },
-            ]);
-
-            const includeSources = [];
-            for (const name of Object.keys(includes).sort(compareStrings)) {
-                const sourceFile = await this.#getNamedFile(path.dirname(page.file.filepath), includes[name].filename);
-                includeSources.push({ name, ...makeFileIdentity(sourceFile.filepath, sourceFile.stats) });
-            }
-            entries.push([
-                getPageIncludesPath(pathname),
-                {
-                    kind: 'includes',
-                    sources: includeSources,
-                    manifests: [ makeFileIdentity(page.file.filepath, page.file.stats) ],
-                    facet: { name: 'page', pathname, field: 'includes' },
+                    facet: { name: 'page', pathname, field: 'templates', filename },
                 },
             ]);
         }
+
+        const partialSources = [];
+        const sortedPartials = partials.slice().sort((left, right) => compareStrings(left.id, right.id));
+        for (const { id, filename } of sortedPartials) {
+            const sourceFile = await this.#getNamedFile(directory, filename);
+            partialSources.push({ id, ...makeFileIdentity(sourceFile.filepath, sourceFile.stats) });
+        }
+        entries.push([
+            getPagePartialsPath(pathname),
+            {
+                kind: 'partials',
+                sources: partialSources,
+                manifests: [ manifest ],
+                facet: { name: 'page', pathname, field: 'partials' },
+            },
+        ]);
+
+        const includeSources = [];
+        for (const name of Object.keys(includes).sort(compareStrings)) {
+            const sourceFile = await this.#getNamedFile(directory, includes[name].filename);
+            includeSources.push({ name, ...makeFileIdentity(sourceFile.filepath, sourceFile.stats) });
+        }
+        entries.push([
+            getPageIncludesPath(pathname),
+            {
+                kind: 'includes',
+                sources: includeSources,
+                manifests: [ manifest ],
+                facet: { name: 'page', pathname, field: 'includes' },
+            },
+        ]);
+
+        return entries;
+    }
+
+    // Converts a page's ValidationError into an error recipe when isolating
+    // page errors. Any other error, or any error in strict mode, is rethrown.
+    #makePageErrorRecipe(error, manifest, pathname, field) {
+        if (!this.#isolatePageErrors || error.name !== 'ValidationError') {
+            throw error;
+        }
+        return {
+            kind: 'error',
+            sources: [],
+            manifests: [ manifest ],
+            error,
+            facet: { name: 'page', pathname, field },
+        };
     }
 
     async #scanTemplateBundle(entries, directoryName, storagePathname) {

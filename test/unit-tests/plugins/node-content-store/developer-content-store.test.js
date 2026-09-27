@@ -26,6 +26,21 @@ function makeStore(root, fileSystem) {
     });
 }
 
+async function makeWorkspace(files) {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-developer-store-'));
+    for (const [ relativePath, source ] of Object.entries(files)) {
+        const filepath = path.join(root, relativePath);
+        await fsp.mkdir(path.dirname(filepath), { recursive: true });
+        await fsp.writeFile(filepath, source);
+    }
+    return root;
+}
+
+async function openSnapshot(store) {
+    const { entries } = await store.getBuild({}, null);
+    return new ContentSnapshot(store, new ContentAddressableIndex(entries), makeLogger());
+}
+
 async function catchAsyncError(fn) {
     try {
         await fn();
@@ -127,5 +142,100 @@ describe('DeveloperContentStore', ({ it }) => {
 
         assertEqual('OperationalError', caught.name);
         assertEqual(cause, caught.cause);
+    });
+
+    it('fails only the page which references a missing file', async () => {
+        const cases = [
+            [ 'template', { template: 'page.html' }, 'page.html' ],
+            [ 'partial', { template: 'page.html', partials: [ { id: 'card.html', filename: 'card.html' } ] }, 'card.html' ],
+            [ 'include', { template: 'page.html', includes: { body: { filename: 'body.html' } } }, 'body.html' ],
+        ];
+
+        for (const [ label, json, missingFilename ] of cases) {
+            const files = {
+                'pages/page.json': JSON.stringify({ template: 'page.html' }),
+                'pages/page.html': 'Home',
+                'pages/sibling/page.json': JSON.stringify({ template: 'page.html' }),
+                'pages/sibling/page.html': 'Sibling',
+                'pages/broken/page.json': JSON.stringify(json),
+                'pages/broken/child/page.json': JSON.stringify({ template: 'page.html' }),
+                'pages/broken/child/page.html': 'Child',
+            };
+            if (missingFilename !== 'page.html') {
+                files['pages/broken/page.html'] = 'Broken';
+            }
+            const root = await makeWorkspace(files);
+
+            try {
+                const snapshot = await openSnapshot(makeStore(root));
+
+                const home = await snapshot.batchGetPageAssets({}, '/');
+                const sibling = await snapshot.batchGetPageAssets({}, '/sibling');
+                const child = await snapshot.batchGetPageAssets({}, '/broken/child');
+                const caught = await catchAsyncError(() => snapshot.batchGetPageAssets({}, '/broken'));
+
+                assertEqual('Home', home.template.text, label);
+                assertEqual('Sibling', sibling.template.text, label);
+                assertEqual('Child', child.template.text, label);
+                assertEqual('OperationalError', caught.name, label);
+                assertEqual('InvalidDeveloperPage', caught.code, label);
+                assertEqual(500, caught.httpStatusCode, label);
+                assertMatches('"/broken"', caught.message);
+                assertMatches(path.join(root, 'pages/broken', missingFilename), caught.message);
+                assertEqual('ValidationError', caught.cause.name, label);
+            } finally {
+                await fsp.rm(root, { recursive: true, force: true });
+            }
+        }
+    });
+
+    it('fails a page with malformed metadata and its descendants', async () => {
+        const root = await makeWorkspace({
+            'pages/page.json': JSON.stringify({ template: 'page.html' }),
+            'pages/page.html': 'Home',
+            'pages/broken/page.json': '{ nope',
+            'pages/broken/page.html': 'Broken',
+            'pages/broken/child/page.json': JSON.stringify({ template: 'page.html' }),
+            'pages/broken/child/page.html': 'Child',
+        });
+
+        try {
+            const snapshot = await openSnapshot(makeStore(root));
+
+            const home = await snapshot.batchGetPageAssets({}, '/');
+            const broken = await catchAsyncError(() => snapshot.batchGetPageAssets({}, '/broken'));
+            const child = await catchAsyncError(() => snapshot.batchGetPageAssets({}, '/broken/child'));
+
+            assertEqual('Home', home.template.text);
+            for (const caught of [ broken, child ]) {
+                assertEqual('InvalidDeveloperPage', caught.code);
+                assertMatches('"/broken"', caught.message);
+                assertMatches('malformed JSON', caught.message);
+            }
+        } finally {
+            await fsp.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    it('serves a broken page once its missing file is added', async () => {
+        const root = await makeWorkspace({
+            'pages/page.json': JSON.stringify({ template: 'page.html' }),
+        });
+
+        try {
+            const store = makeStore(root);
+            const before = await catchAsyncError(async () => {
+                const snapshot = await openSnapshot(store);
+                await snapshot.batchGetPageAssets({}, '/');
+            });
+
+            await fsp.writeFile(path.join(root, 'pages/page.html'), 'Fixed');
+            const page = await (await openSnapshot(store)).batchGetPageAssets({}, '/');
+
+            assertEqual('InvalidDeveloperPage', before.code);
+            assertEqual('Fixed', page.template.text);
+        } finally {
+            await fsp.rm(root, { recursive: true, force: true });
+        }
     });
 });

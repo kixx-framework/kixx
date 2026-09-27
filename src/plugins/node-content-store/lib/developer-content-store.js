@@ -21,6 +21,9 @@ const BULK_FILE_LIMIT = 100;
  * requests interleave scans. This deliberately weakens snapshot pinning for a
  * single-developer local server; production adapters remain content-addressed.
  *
+ * An invalid page does not fail the scan. Reads of that page reject with an
+ * `InvalidDeveloperPage` OperationalError while the rest of the site serves.
+ *
  * @implements {import('../../../kixx/content-addressable-store/content-store-interface.js').ContentStoreInterface}
  */
 export default class DeveloperContentStore {
@@ -46,7 +49,11 @@ export default class DeveloperContentStore {
         assert(logger, 'DeveloperContentStore requires a logger');
         this.#logger = logger.createChild('DeveloperContentStore');
         this.#fileSystem = fileSystem;
-        this.#scanner = new DeveloperSourceScanner({ ...sourceDirectories, fileSystem });
+        this.#scanner = new DeveloperSourceScanner({
+            ...sourceDirectories,
+            fileSystem,
+            isolatePageErrors: true,
+        });
     }
 
     /**
