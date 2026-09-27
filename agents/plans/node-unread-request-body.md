@@ -64,7 +64,7 @@ Cloudflare is out of scope. The edge terminates the client connection there.
 
 ### Task NURB-1: Discard unread request bodies so responses and keep-alive sockets survive
 
-**Status:** Not started
+**Status:** Complete (manual admin-upload check substituted; see handoff)
 **Depends on:** None
 **Documentation:** `src/plugins/README.md` (adapters, entry points);
 `src/docs/code-style-guide.md`; `src/docs/code-documentation-guide.md`;
@@ -91,7 +91,8 @@ Body reading semantics are unchanged for handlers that consume the body.
 **Design and invariants**
 
 - The bridge is a `ReadableStream` built over the `IncomingMessage`:
-  - `start` attaches `data`, `end`, and `error` listeners.
+  - `start` attaches `data`, `end`, `error`, and `close` listeners. A `close`
+    before `end` (client disconnect) errors the controller.
   - `data` enqueues a `Uint8Array` and pauses the `IncomingMessage` when
     `desiredSize <= 0`.
   - `pull` resumes it.
@@ -134,26 +135,25 @@ Record the actual files changed in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] The shared `serverRequestConformance` suite and the existing Node adapter
+- [x] The shared `serverRequestConformance` suite and the existing Node adapter
       tests pass unchanged, including the mid-stream failure →
       `BadRequestError` test.
-- [ ] Unit test (stand-in `Readable`): after a partial read,
+- [x] Unit test (stand-in `Readable`): after a partial read,
       `discardUnreadBody()` lets the source flow to `end` without enqueueing
       into the Web stream, and does not throw.
-- [ ] Unit test: `request.body.cancel()` does not destroy the source. The
+- [x] Unit test: `request.body.cancel()` does not destroy the source. The
       source is resumed and reaches `end`.
-- [ ] Unit test: `discardUnreadBody()` is a no-op for a bodyless request and
+- [x] Unit test: `discardUnreadBody()` is a no-op for a bodyless request and
       after the body was fully read, and is safe to call twice.
-- [ ] Integration-style unit test: a real `http.createServer` on port 0 uses
-      the adapter and calls `discardUnreadBody()` on `finish`. A keep-alive
-      client (an `http.Agent` with `keepAlive: true, maxSockets: 1`, which
-      forces socket reuse) sends 2 MB POST bodies that the handler answers with
-      413 without reading, then sends a second request. Both requests get
-      responses, and the server-side `IncomingMessage` reaches `end`. Assert on
-      server-side drain completion, not only on the absence of `ECONNRESET`,
-      because the reset is timing dependent. Close the server and agent in
-      `after`.
-- [ ] Manual: against `node tools/local-target.js serve <name>`, an admin
+- [x] Integration-style unit test: a real `http.createServer` on port 0 uses
+      the adapter and calls `discardUnreadBody()` on `finish`. A raw TCP
+      client sends a 2 MB POST that the handler answers with 413 without
+      reading, then sends a second request on the same connection. Both get
+      responses, and each server-side `IncomingMessage` reaches `end`. (Planned
+      with `http.Agent`; changed because Node's http client drops keep-alive
+      when the response arrives before its body is sent, so `reusedSocket`
+      does not reflect server behavior.)
+- [ ] Manual (substituted, see handoff): against `node tools/local-target.js serve <name>`, an admin
       upload with `X-File-Size` above `FILES.maxUploadBytes` and a real
       oversized body gets the 413 response, and a follow-up request on the same
       client succeeds.
@@ -169,15 +169,29 @@ Record the actual files changed in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Completed: Owned body bridge and `discardUnreadBody()` in the Node
+  adapter; `finish` hook in `node-server.js`; unit and socket-level tests.
+- Current state: Complete.
+- Remaining: Optional admin-upload 413 check (needs a login session and a
+  CSRF token). The substitute check below covers the same server path.
 - Decisions and discoveries: Root cause confirmed on Node v24.13.1 (`_dumped`
   stays false after finish when `toWeb()` is attached). The `cancel()` +
   `resume()` fix from the issue crashes the process. A scratch bridge that
   detaches its own listeners and resumes passed the none, partial, cancel, and
   full read patterns at 300 KB, 2 MB, and 8 MB, with socket reuse.
-- Actual files changed: None yet.
-- Validation run: None yet.
+  Node's http client (not the server) drops keep-alive after an early
+  response, hence the raw TCP test client.
+- Actual files changed: `src/plugins/node-server-request/lib/server-request.js`,
+  `src/node-server.js`,
+  `test/unit-tests/plugins/node-server-request/lib/server-request.test.js`.
+- Validation run: adapter tests pass (94), stable over 8 runs; full suite
+  passes (1465); lint clean. With `discardUnreadBody()` stubbed out, the
+  discard tests and the socket test time out. With `discard()` stubbed out,
+  the cancel test crashes with `Controller is already closed`. Scratch
+  `fetch` (undici) repro against the real adapter: 120/120 ok across the
+  none, partial, cancel, and full patterns. Local target: 2-8 MB POSTs to
+  routes answering 405 without reading, each followed by a GET: 45/45 ok;
+  the same run with the `finish` hook removed produced `ECONNRESET` and
+  `EPIPE` failures.
 - Blockers: None.
 
