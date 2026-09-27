@@ -1,4 +1,3 @@
-import { Readable } from 'node:stream';
 import {
     isNonEmptyString,
     isString,
@@ -24,10 +23,16 @@ let serverRequestSequence = 0;
  * - `ip` is the transport peer address by default, and the leftmost
  *   `X-Forwarded-For` entry only when the operator opts in via `trustProxy`.
  *
+ * Node leaves an unread request body on the connection once this adapter
+ * starts reading it, which resets the client connection. The entry point must
+ * call `discardUnreadBody()` when the response finishes.
+ *
  * @implements {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface}
  * @extends BaseServerRequest
  */
 export default class ServerRequest extends BaseServerRequest {
+
+    #bodyBridge = null;
 
     /**
      * @param {import('node:http').IncomingMessage} nativeRequest - Node request to adapt
@@ -46,13 +51,15 @@ export default class ServerRequest extends BaseServerRequest {
         );
 
         const requestInit = { method, headers };
+        let bodyBridge = null;
 
         if (hasRequestBody(method, nativeRequest)) {
             // Bridge the Node Readable into a Web Request so body/json/formData
             // can delegate to the runtime's spec-compliant parsing (including
             // multipart). duplex:'half' is required when constructing a Request
             // with a stream body.
-            requestInit.body = Readable.toWeb(nativeRequest);
+            bodyBridge = new RequestBodyBridge(nativeRequest);
+            requestInit.body = bodyBridge.stream;
             requestInit.duplex = 'half';
         }
 
@@ -72,6 +79,105 @@ export default class ServerRequest extends BaseServerRequest {
             headers,
             bodyDelegate,
         });
+
+        this.#bodyBridge = bodyBridge;
+    }
+
+    /**
+     * Discards whatever part of the request body has not been read, so the
+     * response reaches the client and the keep-alive socket stays reusable.
+     * Call it when the Node response finishes. Node-only; not part of
+     * `ServerRequestInterface`.
+     *
+     * Draining is unbounded, as with Node's own discard. The server's
+     * `requestTimeout` closes the connection for a client that never stops
+     * sending. Safe to call more than once, and a no-op for a bodyless or
+     * fully read request.
+     */
+    discardUnreadBody() {
+        this.#bodyBridge?.discard();
+    }
+}
+
+// Exposes an IncomingMessage as a Web ReadableStream. Replaces
+// Readable.toWeb(), which starts reading the message: Node then skips its own
+// discard of an unread body when the response finishes, and the unread bytes
+// reset the client connection. toWeb()'s cancel() also destroys the message,
+// which resets the socket. Owning the bridge lets cancel() and discard() stop
+// forwarding and let the rest of the body flow away instead.
+class RequestBodyBridge {
+
+    #nativeRequest;
+    #isSettled = false;
+    #detach = null;
+
+    constructor(nativeRequest) {
+        this.#nativeRequest = nativeRequest;
+
+        this.stream = new ReadableStream({
+            start: (controller) => this.#attach(controller),
+            pull: () => this.#nativeRequest.resume(),
+            cancel: () => this.discard(),
+        });
+    }
+
+    discard() {
+        if (this.#isSettled) {
+            return;
+        }
+
+        this.#settle();
+
+        // With no 'data' listener left, a flowing stream drops its chunks.
+        this.#nativeRequest.resume();
+    }
+
+    #attach(controller) {
+        const nativeRequest = this.#nativeRequest;
+
+        const onData = (chunk) => {
+            // Enqueue a plain Uint8Array copy of the Buffer, matching toWeb().
+            controller.enqueue(new Uint8Array(chunk));
+
+            if (controller.desiredSize <= 0) {
+                nativeRequest.pause();
+            }
+        };
+
+        const onEnd = () => {
+            this.#settle();
+            controller.close();
+        };
+
+        const onError = (cause) => {
+            this.#settle();
+            controller.error(cause);
+        };
+
+        // A client that disconnects mid-body can close the message without
+        // 'end'; error the stream so a pending read does not hang.
+        const onClose = () => {
+            onError(new Error('Request body closed before it was fully received'));
+        };
+
+        nativeRequest.on('data', onData);
+        nativeRequest.on('end', onEnd);
+        nativeRequest.on('error', onError);
+        nativeRequest.on('close', onClose);
+
+        this.#detach = () => {
+            nativeRequest.off('data', onData);
+            nativeRequest.off('end', onEnd);
+            nativeRequest.off('error', onError);
+            nativeRequest.off('close', onClose);
+        };
+    }
+
+    // Detaching before any controller call means a late event can never
+    // enqueue into, close, or error a stream that has already settled.
+    #settle() {
+        this.#isSettled = true;
+        this.#detach?.();
     }
 }
 

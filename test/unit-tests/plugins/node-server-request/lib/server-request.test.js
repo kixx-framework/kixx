@@ -1,3 +1,6 @@
+import http from 'node:http';
+import net from 'node:net';
+import { once } from 'node:events';
 import { Readable } from 'node:stream';
 import { Buffer } from 'node:buffer';
 import { describe } from 'kixx-test';
@@ -24,14 +27,16 @@ function makeIncoming(options) {
         headers[ key.toLowerCase() ] = value;
     }
 
-    const hasBody = opts.body !== undefined;
+    // `chunks` delivers the body in several reads, so a test can stop partway.
+    const hasBody = opts.body !== undefined || opts.chunks !== undefined;
+    const chunks = (opts.chunks ?? (hasBody ? [ opts.body ] : [])).map((chunk) => Buffer.from(chunk));
 
     // Frame the body so the adapter detects it, unless the caller set framing.
     if (hasBody && headers['content-length'] === undefined && headers['transfer-encoding'] === undefined) {
-        headers['content-length'] = String(Buffer.byteLength(opts.body));
+        headers['content-length'] = String(Buffer.concat(chunks).byteLength);
     }
 
-    const incoming = hasBody ? Readable.from([ Buffer.from(opts.body) ]) : Readable.from([]);
+    const incoming = Readable.from(chunks);
     incoming.method = opts.method ?? 'GET';
     // `path` is the conformance suite's request-target option; `url` is the
     // equivalent used by the platform-specific tests below.
@@ -70,6 +75,68 @@ async function catchAsyncError(fn) {
         return error;
     }
     return null;
+}
+
+// Resolves when the source emits 'end', which proves the whole body was read
+// off the source. A destroyed source emits 'close' without 'end'.
+function waitForEnd(readable) {
+    return new Promise((resolve, reject) => {
+        readable.once('end', resolve);
+        readable.once('close', () => {
+            if (!readable.readableEnded) {
+                reject(new Error('source closed without ending'));
+            }
+        });
+    });
+}
+
+// Sends POSTs over one raw TCP connection, each only after the previous
+// response arrived, and resolves with the response status lines. A raw socket
+// is used because Node's http client abandons keep-alive when a response
+// arrives before its request body is sent, which would hide server behavior.
+function postSequentially(port, byteLengths, responseBody) {
+    return new Promise((resolve, reject) => {
+        const socket = net.connect(port, '127.0.0.1');
+        let received = '';
+        let responseCount = 0;
+
+        const sendNext = () => {
+            const byteLength = byteLengths[responseCount];
+            socket.write(`POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: ${ byteLength }\r\n\r\n`);
+            socket.write(Buffer.alloc(byteLength));
+        };
+
+        const onClose = () => {
+            reject(new Error(`socket closed after ${ responseCount } responses`));
+        };
+
+        socket.setEncoding('latin1');
+        socket.on('connect', sendNext);
+        socket.on('error', reject);
+        socket.on('close', onClose);
+
+        socket.on('data', (data) => {
+            received += data;
+
+            // Every response ends with the same short body, so counting it
+            // counts complete responses.
+            const count = received.split(responseBody).length - 1;
+            if (count === responseCount) {
+                return;
+            }
+
+            responseCount = count;
+
+            if (responseCount < byteLengths.length) {
+                sendNext();
+                return;
+            }
+
+            socket.off('close', onClose);
+            socket.destroy();
+            resolve(received.match(/HTTP\/1\.1 \d{3}/g));
+        });
+    });
 }
 
 
@@ -338,5 +405,126 @@ describe('Node ServerRequest', ({ describe }) => {
             assertEqual('BadRequestError', caught.name);
             assert(caught.cause, 'expected the original error to be preserved as cause');
         });
+
+        it('resumes the source instead of destroying it when the body is cancelled', async () => {
+            // Destroying the IncomingMessage would reset the client socket.
+            const incoming = makeIncoming({ method: 'POST', chunks: [ 'a', 'b', 'c' ] });
+            const request = new ServerRequest(incoming);
+            const ended = waitForEnd(incoming);
+
+            await request.body.cancel();
+            await ended;
+
+            assertFalsy(incoming.destroyed && !incoming.readableEnded);
+            assertEqual(0, incoming.listenerCount('data'));
+        });
     });
+
+    describe('discardUnreadBody()', ({ it }) => {
+        it('drains the rest of a partially read body', async () => {
+            const incoming = makeIncoming({ method: 'POST', chunks: [ 'a', 'b', 'c' ] });
+            const request = new ServerRequest(incoming);
+            const ended = waitForEnd(incoming);
+
+            const { value } = await request.body.getReader().read();
+            assertEqual('a', Buffer.from(value).toString());
+
+            request.discardUnreadBody();
+            await ended;
+
+            assertEqual(0, incoming.listenerCount('data'));
+        });
+
+        it('drains a body that was never read', async () => {
+            const incoming = makeIncoming({ method: 'POST', chunks: [ 'a', 'b', 'c' ] });
+            const request = new ServerRequest(incoming);
+            const ended = waitForEnd(incoming);
+
+            request.discardUnreadBody();
+            await ended;
+
+            assertEqual(0, incoming.listenerCount('data'));
+        });
+
+        it('leaves a fully read body intact', async () => {
+            const request = makeServerRequest({
+                method: 'POST',
+                headers: { 'content-type': 'text/plain' },
+                chunks: [ 'a', 'b', 'c' ],
+            });
+
+            assertEqual('abc', await request.text());
+
+            request.discardUnreadBody();
+            request.discardUnreadBody();
+        });
+
+        it('is a no-op for a bodyless request', () => {
+            const request = makeServerRequest({ method: 'GET' });
+
+            request.discardUnreadBody();
+
+            assertEqual(null, request.body);
+        });
+
+        it('is safe to call more than once', async () => {
+            const incoming = makeIncoming({ method: 'POST', chunks: [ 'a', 'b', 'c' ] });
+            const request = new ServerRequest(incoming);
+            const ended = waitForEnd(incoming);
+
+            request.discardUnreadBody();
+            request.discardUnreadBody();
+            await ended;
+        });
+    });
+
+    describe('with a real Node HTTP server', ({ before, after, it }) => {
+        const LARGE_BODY_BYTES = 2 * 1024 * 1024;
+
+        const RESPONSE_BODY = 'too large';
+
+        const serverRequestsEnded = [];
+        let server;
+        let port;
+
+        before(async () => {
+            // Mirrors node-server.js: an early 413 without reading the body, with
+            // the discard registered on response finish. The short delay makes
+            // the response async, as a real router is.
+            server = http.createServer((nativeRequest, nativeResponse) => {
+                serverRequestsEnded.push(once(nativeRequest, 'end'));
+
+                const request = new ServerRequest(nativeRequest);
+                nativeResponse.once('finish', () => request.discardUnreadBody());
+
+                setTimeout(() => {
+                    nativeResponse.statusCode = 413;
+                    nativeResponse.end(RESPONSE_BODY);
+                }, 20);
+            });
+
+            server.listen(0, '127.0.0.1');
+            await once(server, 'listening');
+            port = server.address().port;
+        });
+
+        after(async () => {
+            server.closeAllConnections();
+            server.close();
+            await once(server, 'close');
+        });
+
+        it('drains an unread body so the connection serves the next request', async () => {
+            // Without the discard, the server never reads past the first body,
+            // so the second response never arrives and the test times out.
+            const statusLines = await postSequentially(port, [ LARGE_BODY_BYTES, 10 ], RESPONSE_BODY);
+
+            assertEqual(2, statusLines.length);
+            assertEqual('HTTP/1.1 413', statusLines[0]);
+            assertEqual('HTTP/1.1 413', statusLines[1]);
+
+            // Both bodies were read to the end, not abandoned.
+            await Promise.all(serverRequestsEnded);
+        });
+    }, { timeout: 5000 });
 });
