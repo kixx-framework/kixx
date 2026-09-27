@@ -123,6 +123,12 @@ async function handleRequest(nodeRequest, nodeResponse) {
 
     try {
         const request = new ServerRequest(nodeRequest, { trustProxy });
+
+        // Registered before routing so every response path, including the 500
+        // below, discards an unread body. Node skips its own discard once the
+        // adapter starts reading the body.
+        nodeResponse.once('finish', () => request.discardUnreadBody());
+
         pathname = request.url.pathname;
         isHeadRequest = request.isHeadRequest();
         const requestContext = appContext.createRequestContext(env, request);
