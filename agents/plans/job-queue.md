@@ -888,7 +888,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task JQ-10: Documentation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-7, JQ-8, JQ-9
 **Documentation:** `AGENTS.md` index format; `src/plugins/README.md`; `docs/configuration.md`
 
@@ -933,8 +933,8 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Every decision in "Decisions" that affects authors or operators is documented where they will look.
-- [ ] The `AGENTS.md` index entry follows the existing "When to use / What it provides" format.
+- [x] Every decision in "Decisions" that affects authors or operators is documented where they will look.
+- [x] The `AGENTS.md` index entry follows the existing "When to use / What it provides" format.
 
 **Validation**
 
@@ -943,10 +943,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria. Every author/operator-facing decision is in `src/app/jobs/README.md`; configuration in `docs/configuration.md` ("Job queue settings"); architecture in `src/plugins/README.md`.
+- Current state: Complete.
+- Remaining: Nothing for JQ-10. The plan as a whole is still open on JQ-8's manual Cloudflare deployment check. After that check, fold any findings (RPC error names, alarm-throw behavior) into `src/app/jobs/README.md` if they change author guidance.
+- Decisions and discoveries: Documented `retryable` as a plain property (not a constructor option). Documented the `BadRequestError` (400) choice only in the JQ-9 handoff, not the README (README lists status codes 404/409 for retry only).
+- Actual files changed: `src/app/jobs/README.md`, `AGENTS.md`, `src/plugins/README.md`, `docs/configuration.md`.
+- Validation run: `node run-linter.js` clean; reviewed against the Decisions list.
 - Blockers: None.

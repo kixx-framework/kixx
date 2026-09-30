@@ -90,6 +90,14 @@ src/app/collections/README.md
 
 **What this document provides:** The data persistence and gateway API — how to define and register Collections, write methods (`create`, `put`, `update`, `updateWithRetry`) and when to use each, the two delete methods (`delete`, `deleteStrict`) and when to use each, reading with `get`/`scan`/`query`, optimistic concurrency via `version`, Record attribute accessors, how to subclass Collection and Record, secondary index configuration, custom gateway boundaries, and how to author and register custom data access gateways.
 
+### Background Jobs
+
+src/app/jobs/README.md
+
+**When to use this document:** Apply this guide whenever you are adding, changing, or reviewing background work: registering a job, writing a job handler, enqueueing a job from a Transaction Script or request handler, declaring a recurring schedule, or debugging failed or retried jobs.
+
+**What this document provides:** The job queue authoring guide — the registry and handler signature, at-least-once delivery and idempotency, dedupe keys, UTC cron schedules (catch-up once, no overlap), error classes and retry behavior, the one-Cloudflare-invocation limit, payload limit, retention, the Admin API routes, platform differences (Node polling latency), and how to test with `processDueJobs({ now })`.
+
 ### Transaction Scripts
 
 src/app/transaction-scripts/README.md

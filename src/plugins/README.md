@@ -21,6 +21,8 @@ A port is a contract, written as a JSDoc-only module with no executable code. It
 
 An adapter is a concrete class implementing one port against one platform's API. `plugins/cloudflare-key-value-store/lib/key-value-store.js` implements the key/value port over a Cloudflare KV binding; `plugins/node-key-value-store/lib/key-value-store.js` implements the same port over SQLite. Neither knows the other exists. Each is marked with `@implements` pointing back at its port.
 
+The job queue is a fuller example. Its port is `kixx/jobs/job-queue-interface.js`, and all queue semantics live once in platform-neutral `kixx/jobs/` code over a synchronous SQL executor. `plugins/node-job-queue` supplies a `DatabaseSync` executor and an in-process loop. `plugins/cloudflare-job-queue` supplies a SQLite-backed Durable Object (`JobQueueStore`, run from `alarm()`) plus a Worker-side service that calls it over RPC. A Durable Object is constructed by the runtime, not the application, so it reads its registry, logger, and job-context factory from a process-local host that the plugin fills during `register()`; the plugin never imports `app/`.
+
 **Composition root** — `node-server.js`, `cloudflare-server.js`
 
 The entry point is the only place in the system that decides which set of adapters is real. This is the seam. Everything platform-specific collapses into one import:
