@@ -351,7 +351,10 @@ export default [
             ecmaVersion: 2022,
             sourceType: 'module',
             globals: {
+                AbortController: 'readonly',
+                AbortSignal: 'readonly',
                 Blob: 'readonly',
+                DOMException: 'readonly',
                 ArrayBuffer: 'readonly',
                 Uint8Array: 'readonly',
                 TextEncoder: 'readonly',

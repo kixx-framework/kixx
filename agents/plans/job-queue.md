@@ -192,7 +192,7 @@ In the Durable Object it is `ctx.storage.transactionSync`.
 
 ### Task JQ-1: Devkit `JOB_QUEUE` resource block
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `devkit/AGENTS.md`; `kixx/docs/configuration.md` "Worker and resource configuration"
 
@@ -226,10 +226,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] With a `JOB_QUEUE` block, the version upload includes the Durable Object binding and the SQLite class export.
-- [ ] Missing required fields fail with a `UsageError` that names the exact field path.
-- [ ] Without the block, output is byte-identical to before.
-- [ ] Tests and docs updated.
+- [x] With a `JOB_QUEUE` block, the version upload includes the Durable Object binding and the SQLite class export.
+- [x] Missing required fields fail with a `UsageError` that names the exact field path.
+- [x] Without the block, output is byte-identical to before.
+- [x] Tests and docs updated.
 
 **Validation**
 
@@ -238,19 +238,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete. Changes are uncommitted in the `devkit` repo (`../devkit`).
+- Remaining: Nothing.
+- Decisions and discoveries: Missing-field errors reuse `requireField`, so messages read `JOB_QUEUE.<field> is required and must be a non-empty string`. Binding-name collisions with other sources are caught by the existing `checkCollisions`. With no `JOB_QUEUE` block both new code paths return early, so output is unchanged.
+- Actual files changed (in `../devkit`): `lib/cloudflare/worker-bindings.js`, `lib/cloudflare/durable-object-exports.js`, `docs/cloudflare.md`, `test/unit-tests/lib/cloudflare/worker-bindings.test.js`, `test/unit-tests/lib/cloudflare/durable-object-exports.test.js`.
+- Validation run: `node run-tests.js` (622 tests, pass); `node run-linter.js lib test` (clean).
 - Blockers: None.
 
 ---
 
 ### Task JQ-2: Cron parser and next-occurrence calculation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/docs/code-style-guide.md`, `src/docs/code-documentation-guide.md`, `test/unit-tests/README.md`
 
@@ -283,11 +283,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Parses every supported form. Rejects each unsupported form with a field-specific message.
-- [ ] Correct UTC next occurrence across day, month, year, and leap-day boundaries, independent of the host timezone.
-- [ ] The day-of-month/day-of-week OR rule is covered.
-- [ ] Impossible expressions throw instead of looping.
-- [ ] JSDoc per the documentation guide.
+- [x] Parses every supported form. Rejects each unsupported form with a field-specific message.
+- [x] Correct UTC next occurrence across day, month, year, and leap-day boundaries, independent of the host timezone.
+- [x] The day-of-month/day-of-week OR rule is covered.
+- [x] Impossible expressions throw instead of looping.
+- [x] JSDoc per the documentation guide.
 
 **Validation**
 
@@ -296,19 +296,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete; uncommitted in the working tree.
+- Remaining: Nothing.
+- Decisions and discoveries: `ParsedCron` is `{ expression, minutes, hours, daysOfMonth, months, daysOfWeek, isDayOfMonthRestricted, isDayOfWeekRestricted }` (sorted frozen arrays; 7 folded into 0). A day field counts as restricted unless its text starts with `*`. `a/n` (step on a bare number) is rejected as ambiguous. Search bound is 8 years, not 5, because Feb 29 can be 8 years apart (2096 to 2104). Errors are `ValidationError` with the field label in the message.
+- Actual files changed: `src/kixx/jobs/cron.js`, `test/unit-tests/kixx/jobs/cron.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/jobs` (21 pass, also under TZ=America/Los_Angeles and Pacific/Auckland); `node run-linter.js src/kixx/jobs test/unit-tests/kixx/jobs` clean.
 - Blockers: None.
 
 ---
 
 ### Task JQ-3: Port contract, registry validation, and retry policy
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-2
 **Documentation:** `src/plugins/README.md` ("How the Contracts Are Written"), `src/docs/server-error-handling.md`, `src/app/migrations/mod.js` (registry precedent)
 
@@ -357,9 +357,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The interface documents every method, its invariants, and *why* each capability is or isn't in the contract.
-- [ ] Registry validation accepts an empty map and rejects bad names, non-function handlers, invalid option values, bad cron, and unsupported concurrency/timezone options with precise messages.
-- [ ] Classification and backoff are tested, including `retryable` overrides and the backoff cap.
+- [x] The interface documents every method, its invariants, and *why* each capability is or isn't in the contract.
+- [x] Registry validation accepts an empty map and rejects bad names, non-function handlers, invalid option values, bad cron, and unsupported concurrency/timezone options with precise messages.
+- [x] Classification and backoff are tested, including `retryable` overrides and the backoff cap.
 
 **Validation**
 
@@ -368,19 +368,23 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete; uncommitted in the working tree.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - `validateJobRegistry(map)` returns a NEW `Map` of frozen `ResolvedJobEntry` `{ name, description, handler, maxAttempts, timeoutSeconds, schedule }`. `schedule` is `null` or frozen `{ cron, parsed }` where `parsed` is the JQ-2 `ParsedCron`. Unknown entry fields and unknown `schedule` fields are rejected, with dedicated messages for `concurrency` and `timezone`. Bad cron surfaces as an `AssertionError` wrapping the `ValidationError` message. `DEFAULT_MAX_ATTEMPTS` and `DEFAULT_TIMEOUT_SECONDS` are exported.
+  - `retryable` is NOT a `WrappedError` option; the base class ignores it. It is a plain property a handler assigns (`Object.assign(error, { retryable: false })`). Authoring docs (JQ-10) should say so. The error classes were not changed.
+  - `nextRetryDelayMs` clamps the exponent at 20 to avoid overflow; `attempt` must be an integer >= 1.
+  - The interface file exports typedefs only (`export {}`), including public `JobRecord`, `JobScheduleRecord`, `JobEnqueueOptions`, `JobEnqueueResult`, `JobHandler`, and `JobQueueInterface`. `start`/`stop`/`processDueJobs` are documented as adapter lifecycle, not port methods.
+- Actual files changed: `src/kixx/jobs/job-queue-interface.js`, `src/kixx/jobs/job-registry.js`, `src/kixx/jobs/retry-policy.js`, `test/unit-tests/kixx/jobs/job-registry.test.js`, `test/unit-tests/kixx/jobs/retry-policy.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/jobs` (47 pass); `node run-linter.js src/kixx/jobs test/unit-tests/kixx/jobs` clean.
 - Blockers: None.
 
 ---
 
 ### Task JQ-4: Shared SQLite job state store
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-2, JQ-3
 **Documentation:** "Data model" and "Cross-cutting invariants" above
 
@@ -441,15 +445,15 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Dedupe: a second enqueue with an active key returns the existing job. After completion the key is reusable.
-- [ ] Claim order, unique claim tokens, and lease expiry leading to a retry attempt are covered.
-- [ ] Late completion and failure cannot change a job after lease expiry, reclamation, or manual retry, even when attempt numbers repeat. Recovery applies once per expired claim.
-- [ ] Schedules: catch-up once after a long gap, skip while an occurrence is pending or running, reconcile on add/change/remove, and atomic occurrence creation plus schedule advancement.
-- [ ] Two executors sharing a database cannot materialize duplicate or overlapping occurrences. Rollback leaves no partial enqueue or schedule advancement.
-- [ ] Manual retry conflicts with an active dedupe key or schedule name without changing the failed job.
-- [ ] Retention deletes only terminal rows past their age, and is batched and gated.
-- [ ] `nextWakeTime` is correct across all sources.
-- [ ] Payload size limit enforced with `PayloadTooLargeError`.
+- [x] Dedupe: a second enqueue with an active key returns the existing job. After completion the key is reusable.
+- [x] Claim order, unique claim tokens, and lease expiry leading to a retry attempt are covered.
+- [x] Late completion and failure cannot change a job after lease expiry, reclamation, or manual retry, even when attempt numbers repeat. Recovery applies once per expired claim.
+- [x] Schedules: catch-up once after a long gap, skip while an occurrence is pending or running, reconcile on add/change/remove, and atomic occurrence creation plus schedule advancement.
+- [x] Two executors sharing a database cannot materialize duplicate or overlapping occurrences. Rollback leaves no partial enqueue or schedule advancement.
+- [x] Manual retry conflicts with an active dedupe key or schedule name without changing the failed job.
+- [x] Retention deletes only terminal rows past their age, and is batched and gated.
+- [x] `nextWakeTime` is correct across all sources.
+- [x] Payload size limit enforced with `PayloadTooLargeError`.
 
 **Validation**
 
@@ -458,19 +462,31 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete; uncommitted in the working tree.
+- Remaining: Nothing.
+- Decisions and discoveries (API JQ-5/7/8 must use):
+  - `new JobStateStore({ sql, logger, random? })`, default export of `src/kixx/jobs/job-state-store.js`; also exports `SCHEMA_VERSION` and `MAX_PAYLOAD_BYTES`. `random` is the backoff jitter source used for lease-expiry retries.
+  - `claimNext(now, { leaseMs })` has NO `registry` argument. `leaseMs` is a number OR a function of the claimed job's name, so the runner can size each lease from that job's registry timeout. It returns the public `JobRecord` plus `claimToken`, or `null`.
+  - `materializeDueSchedules(now, registry)` DOES take the resolved registry (for `maxAttempts` and the parsed cron); it returns `{ enqueued, skipped }`. `reconcileSchedules(now, registry)` takes the same resolved registry from `validateJobRegistry()`.
+  - `enqueue(now, { name, payload, runAt, key, maxAttempts })` takes no `scheduleName`/`scheduledFor`; those are set only by `materializeDueSchedules`. It returns the port's `{ id, name, key, status, runAt, created }`. The adapter service resolves `maxAttempts` from the registry and asserts the name is registered.
+  - `complete`, `failAttempt`, `failTerminal` return a boolean (`false` = stale claim, row untouched). `failAttempt(..., retryAt)` with `retryAt === null` delegates to `failTerminal`.
+  - `SqlExecutor.all` is used for `INSERT/UPDATE/DELETE ... RETURNING`, which is how the store learns whether a write applied (needs SQLite >= 3.35: Node 24 bundles 3.51, Durable Objects support it). `run` returns nothing.
+  - `purgeExpired(now, retention)` deletes at most 500 per status per call and leaves `last_purge_at` unset when a batch was full, so the next pass continues; `nextWakeTime` therefore returns an already-due time until drained. It treats a never-purged queue as due now.
+  - `nextWakeTime(now)` returns a `Date` that may be <= `now`; callers clamp.
+  - `list()` and `retry()` throw `ValidationError` / `NotFoundError` / `ConflictError` directly.
+  - Lease recovery runs inside `claimNext`; a `running` job whose lease expired but which nobody has claimed past stays `running` until the next `claimNext`, though `complete`/`fail*` already reject it via the `lease_expires_at > now` check.
+  - `mostRecentOccurrence` walks forward one occurrence at a time; fine for minute-granularity crons over long gaps (O(1) per step).
+  - Added an index `jobs_created_at_id` for keyset listing (not in the plan's index list).
+- Actual files changed: `src/kixx/jobs/job-state-store.js`, `test/unit-tests/kixx/jobs/job-state-store.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/jobs` (99 pass); `node run-linter.js src/kixx/jobs test/unit-tests/kixx/jobs` clean; full `node run-tests.js` (1574 pass).
 - Blockers: None.
 
 ---
 
 ### Task JQ-5: Shared job runner and job context
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-3, JQ-4
 **Documentation:** `src/docs/server-error-handling.md`; `src/kixx/context/application-context.js`
 
@@ -517,12 +533,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] A slow job doesn't block other slots, which refill independently.
-- [ ] The deadline stops new claims while in-flight jobs finish.
-- [ ] The timeout aborts the signal. Retry, terminal, and unexpected paths each reach the right store call.
-- [ ] An unexpected error stops further claims and is returned to the caller.
-- [ ] Every outcome carries the original claim token. Stale outcomes leave newer attempts untouched; stale unexpected errors still propagate to the adapter.
-- [ ] `createJobContext` tests.
+- [x] A slow job doesn't block other slots, which refill independently.
+- [x] The deadline stops new claims while in-flight jobs finish.
+- [x] The timeout aborts the signal. Retry, terminal, and unexpected paths each reach the right store call.
+- [x] An unexpected error stops further claims and is returned to the caller.
+- [x] Every outcome carries the original claim token. Stale outcomes leave newer attempts untouched; stale unexpected errors still propagate to the adapter.
+- [x] `createJobContext` tests.
 
 **Validation**
 
@@ -531,12 +547,20 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete; uncommitted in the working tree.
+- Remaining: Nothing.
+- Decisions and discoveries (API JQ-7/8 must use):
+  - `new JobRunner({ store, registry, logger, concurrency, retention, random? })`; `retention` was added to the plan's constructor list because the runner runs the purge. `runDueJobs({ now?, deadline?, createContext })`: `now` is `() => Date` (defaults to the system clock), `deadline` is a `Date`, `createContext(claimedJob)` receives the claimed `JobRecord` (with `claimToken`) and returns the handler context. Adapters should pass `(job) => appContext.createJobContext(env, job)`. Returns `{ ran, unexpectedError }`.
+  - The loop re-polls `claimNext` each time a job settles, so recovery of expired leases also runs then. A handler that outlives its lease therefore usually ends `pending` (lease-expired retry) rather than `running`; its own late outcome is discarded either way.
+  - Purge runs only when no unexpected error occurred.
+  - A store failure while recording an outcome is treated as an unexpected error (logged at error, returned from `runDueJobs`), not thrown.
+  - Lease = `timeoutSeconds * 1000 + 30 s`. Unknown job names use the default 60 s timeout for the lease.
+  - `createJobContext(env, job)` returns a `RequestContext` (no `JobContext` class): `requestId` undefined, `user` null. Its logger is a new `JobLogger` (`src/kixx/jobs/job-logger.js`) wrapping the app logger and adding `jobId`/`jobName`, NOT `Logger#createChild()`: children are retained by the parent forever and the finalized application logger throws on `createChild`.
+  - `eslint.config.js`: added `AbortController`, `AbortSignal`, and `DOMException` to the server globals block (portable Web APIs).
+  - Timeout abort reason is `DOMException` named `TimeoutError`.
+- Actual files changed: `src/kixx/jobs/job-runner.js`, `src/kixx/jobs/job-logger.js`, `src/kixx/jobs/job-state-store.js` (function-valued `leaseMs`), `src/kixx/context/application-context.js`, `eslint.config.js`, `test/unit-tests/kixx/jobs/job-runner.test.js`, `test/unit-tests/kixx/jobs/job-logger.test.js`, `test/unit-tests/kixx/jobs/job-state-store.test.js`, `test/unit-tests/kixx/context/application-context.test.js`.
+- Validation run: `node run-tests.js` (1608 pass); `node run-linter.js src test eslint.config.js` clean.
 - Blockers: None.
 
 ---
@@ -589,7 +613,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 - Completed: Nothing yet.
 - Current state: Not started.
 - Remaining: Everything described above.
-- Decisions and discoveries: None yet.
+- Decisions and discoveries: Not started, but note for the next agent: `app.register()` (`src/app/app.js`) already calls `context.getService('KeyValueStore')`, so platform plugin services are registered before it runs. Wiring `context.getService('JobQueue').setRegistry(jobs)` there will throw at boot until an adapter registers the `JobQueue` service (JQ-7 Node, JQ-8 Cloudflare). Either land the `app.js` wiring together with JQ-7, or do the `mod.js` registry and its tests in JQ-6 and defer the one-line wiring to JQ-7. Use `validateJobRegistry` from `src/kixx/jobs/job-registry.js` (JQ-3); the service, not `app.js`, validates.
 - Actual files changed: None yet.
 - Validation run: None yet.
 - Blockers: None.

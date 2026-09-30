@@ -288,6 +288,81 @@ describe('ApplicationContext', ({ describe }) => {
         });
     });
 
+    describe('createJobContext', ({ it }) => {
+        const job = { id: 'job-1', name: 'send-email' };
+
+        it('shares config and runtime and carries the job environment', () => {
+            const config = { name: 'job-app' };
+            const context = makeApplicationContext({ config, env: { APP_ONLY: 'yes' } });
+
+            const jobContext = context.createJobContext({ JOB_ONLY: 'yes' }, job);
+
+            assert(jobContext instanceof RequestContext, 'expected a RequestContext');
+            assertEqual(config, jobContext.config);
+            assertEqual(context.runtime, jobContext.runtime);
+            assertEqual('yes', jobContext.env.JOB_ONLY);
+            assertUndefined(jobContext.env.APP_ONLY);
+        });
+
+        it('has no request or user', () => {
+            const jobContext = makeApplicationContext().createJobContext({}, job);
+
+            assertUndefined(jobContext.requestId);
+            assertEqual(null, jobContext.user);
+            assertEqual(0, jobContext.getAllHttpTargets().length);
+        });
+
+        it('shares the service and collection registries by reference', () => {
+            const context = makeApplicationContext();
+            const jobContext = context.createJobContext({}, job);
+
+            context.registerService('svc', { id: 1 });
+            context.registerCollection('app.User', { name: 'User' });
+
+            assertEqual(1, jobContext.getService('svc').id);
+            assertEqual('User', jobContext.getCollection('app.User').name);
+        });
+
+        it('logs through the application logger stamped with the job id and name', () => {
+            const entries = [];
+            const logger = {
+                name: 'app',
+                info(message, info) {
+                    entries.push({ message, info });
+                },
+                error(message, info) {
+                    entries.push({ message, info });
+                },
+            };
+
+            const jobContext = makeApplicationContext({ logger }).createJobContext({}, job);
+
+            jobContext.logger.info('sending', { to: 'a@example.com' });
+            jobContext.logger.error('failed');
+
+            assertEqual('sending', entries[0].message);
+            assertEqual('job-1', entries[0].info.jobId);
+            assertEqual('send-email', entries[0].info.jobName);
+            assertEqual('a@example.com', entries[0].info.to);
+            assertEqual('job-1', entries[1].info.jobId);
+        });
+
+        it('does not create a child logger, which the finalized application logger would reject', () => {
+            let childCount = 0;
+            const logger = {
+                name: 'app',
+                createChild() {
+                    childCount += 1;
+                    throw new Error('finalized');
+                },
+            };
+
+            makeApplicationContext({ logger }).createJobContext({}, job);
+
+            assertEqual(0, childCount);
+        });
+    });
+
     describe('close', ({ it }) => {
         it('calls close() on each registered service that exposes one', async () => {
             const context = makeApplicationContext();
