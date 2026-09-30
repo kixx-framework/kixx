@@ -1,5 +1,6 @@
 import RequestContext from './request-context.js';
 import BaseContext from './base-context.js';
+import JobLogger from '../jobs/job-logger.js';
 import {
     assert,
     isFunction,
@@ -131,6 +132,29 @@ export default class ApplicationContext extends BaseContext {
             services: this.#services,
             collections: this.#collections,
             logger: this.logger,
+        });
+    }
+
+    /**
+     * Creates the context a job handler runs with.
+     *
+     * Like a request context it shares the application config, runtime,
+     * services, and collections, and carries the given environment. It has no
+     * request: `requestId` is undefined and `user` is null. Its logger stamps
+     * every entry with `jobId` and `jobName`.
+     *
+     * @param {Object} env - Environment variables, secrets, and bindings for this job run
+     * @param {{id: string, name: string}} job - The claimed job
+     * @returns {RequestContext} Context for running one job
+     */
+    createJobContext(env, job) {
+        return new RequestContext({
+            env,
+            config: this.config,
+            runtime: this.runtime,
+            services: this.#services,
+            collections: this.#collections,
+            logger: new JobLogger(this.logger, { jobId: job.id, jobName: job.name }),
         });
     }
 

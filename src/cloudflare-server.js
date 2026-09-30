@@ -44,7 +44,11 @@ router.on('error', ({ error, requestId }) => {
 });
 
 // Export the Cloudflare Durable Objects which are part of this Worker.
-export const { ContentAddressableIndexStore } = durableObjects;
+export const { ContentAddressableIndexStore, JobQueueStore } = durableObjects;
+
+// The JobQueueStore Durable Object reconciles schedules when it is constructed,
+// so each isolate pings it once, in the background, after a deploy.
+let hasPingedJobQueue = false;
 
 export default {
     // requestEnvironment is the per-request env binding snapshot provided by the Workers runtime.
@@ -57,6 +61,11 @@ export default {
             const request = new ServerRequest(nativeRequest);
             pathname = request.url.pathname;
             const requestContext = appContext.createRequestContext(requestEnvironment, request);
+
+            if (!hasPingedJobQueue) {
+                hasPingedJobQueue = true;
+                cloudflare.waitUntil(pingJobQueue(requestContext));
+            }
 
             const response = await router.handleRequest(requestContext, request, new ServerResponse());
 
@@ -97,6 +106,16 @@ export default {
         }
     },
 };
+
+// Never fails the request: a failed ping only delays schedule pickup until the
+// next job or request that instantiates the Durable Object.
+async function pingJobQueue(requestContext) {
+    try {
+        await appContext.getService('JobQueue').ping(requestContext);
+    } catch (error) {
+        logger.warn('job queue ping failed', null, error);
+    }
+}
 
 async function waitToThrow(milliseconds, error) {
     await scheduler.wait(milliseconds);

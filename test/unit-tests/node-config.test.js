@@ -32,6 +32,7 @@ describe('node-config local environment', ({ it }) => {
 
         assertEqual('./document_store.sqlite', local.DOCUMENT_STORE.path);
         assertEqual('./key_value_store.sqlite', local.KEY_VALUE_STORE.path);
+        assertEqual('./job_queue.sqlite', local.JOB_QUEUE.path);
         assertEqual('./object_store', local.OBJECT_STORE.path);
         assertEqual('./content_store', local.CONTENT_STORE.rootDirectory);
     });

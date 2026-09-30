@@ -52,6 +52,94 @@ export default [
         ],
     },
     {
+        pattern: '/jobs',
+        name: 'jobs',
+        inboundMiddleware: [
+            authenticateAdminApiRequest,
+        ],
+        routes: [
+            {
+                pattern: '{/}',
+                name: 'list',
+                targets: [
+                    {
+                        name: 'get',
+                        methods: [ 'GET' ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:list',
+                                    resource: 'urn:kixx:admin:jobs',
+                                },
+                            ]),
+                            AdminAPI.listJobs,
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/:id/retry',
+                name: 'retry',
+                targets: [
+                    {
+                        name: 'post',
+                        methods: [ 'POST' ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:update',
+                                    resource: 'urn:kixx:admin:jobs',
+                                },
+                            ]),
+                            AdminAPI.retryJob,
+                        ],
+                    },
+                ],
+            },
+            {
+                pattern: '/:id',
+                name: 'get',
+                targets: [
+                    {
+                        name: 'get',
+                        methods: [ 'GET' ],
+                        requestHandlers: [
+                            authorize([
+                                {
+                                    action: 'urn:kixx:get',
+                                    resource: 'urn:kixx:admin:jobs',
+                                },
+                            ]),
+                            AdminAPI.getJob,
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        pattern: '/job-schedules{/}',
+        name: 'job-schedules',
+        inboundMiddleware: [
+            authenticateAdminApiRequest,
+        ],
+        targets: [
+            {
+                name: 'get',
+                methods: [ 'GET' ],
+                requestHandlers: [
+                    authorize([
+                        {
+                            action: 'urn:kixx:list',
+                            resource: 'urn:kixx:admin:jobs',
+                        },
+                    ]),
+                    AdminAPI.listJobSchedules,
+                ],
+            },
+        ],
+    },
+    {
         pattern: '/users/invite{/}',
         name: 'accept-invite',
         targets: [

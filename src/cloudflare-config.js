@@ -36,6 +36,9 @@ export default {
                     enabled: true,
                     cross_version_cache: false,
                 },
+                // A job must finish inside one Durable Object alarm invocation.
+                // Jobs that need more than the default CPU budget (30 s) must
+                // raise cpu_ms (maximum 300000); otherwise split them into chained jobs.
                 // limits: {
                 //     cpu_ms: 0,
                 //     subrequests: 0,
@@ -100,6 +103,20 @@ export default {
             FILES: {
                 maxUploadBytes: 52428800,
                 bucket: 'files',
+            },
+            // Background jobs run inside one SQLite-backed Durable Object via alarm().
+            // softDeadlineSeconds: stop claiming new jobs after this long in one
+            // invocation, then re-arm the alarm for a fresh CPU budget.
+            JOB_QUEUE: {
+                enabled: true,
+                durableObjectBindingName: 'JOB_QUEUE_DURABLE_OBJECT',
+                durableObjectClassName: 'JobQueueStore',
+                concurrency: 4,
+                softDeadlineSeconds: 20,
+                retention: {
+                    completedMaxAgeDays: 7,
+                    failedMaxAgeDays: 30,
+                },
             },
             CONTENT_STORE: {
                 blobReadCacheTtlSeconds: 60 * 60 * 36,

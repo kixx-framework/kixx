@@ -60,6 +60,7 @@ const ROLE_DEFINITIONS = deepFreeze([
             { action: Array.from(FILE_ACTIONS), resource: FILE_RESOURCE },
             { action: '*', resource: 'urn:kixx:admin:api-tokens:*' },
             { action: '*', resource: 'urn:kixx:admin:migrations' },
+            { action: '*', resource: 'urn:kixx:admin:jobs' },
         ],
     },
     {

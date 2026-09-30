@@ -157,7 +157,7 @@ On Cloudflare the manifest is also a deployment input; see
 
 `DATA_DIRECTORY` is an optional, Node.js-only per-deploy value. When set, it
 overrides the directory that config-relative store paths (`DOCUMENT_STORE`,
-`KEY_VALUE_STORE`, `OBJECT_STORE`, `CONTENT_STORE`) resolve against, in place
+`KEY_VALUE_STORE`, `OBJECT_STORE`, `CONTENT_STORE`, `JOB_QUEUE`) resolve against, in place
 of `src/`. `createResolveFilepath` in `src/node-environment.js` builds the
 `resolveFilepath` function passed into `readConfig`; it joins a config path's
 POSIX-style segments against `DATA_DIRECTORY` when set, or against `src/`
@@ -167,6 +167,23 @@ This exists for [local target instances](../README.md#local-target-instances),
 where every instance's stores must live inside that instance's own directory
 rather than the shared development data. Leave it unset for every other
 deployment.
+
+## Job queue settings
+
+`JOB_QUEUE` is a per-environment block in both config modules. See `src/app/jobs/README.md` for behavior.
+
+| Key | Platform | Meaning |
+| --- | --- | --- |
+| `enabled` | both | `false` records jobs but never runs them. |
+| `path` | Node | SQLite file: `../data/nodejs_app/job_queue.sqlite` (development, production), `./job_queue.sqlite` (`local`, instance-relative). |
+| `pollIntervalSeconds` | Node | Idle wait between passes (default 1). |
+| `concurrency` | both | Maximum jobs running at once (default 4). |
+| `drainTimeoutSeconds` | Node | Longest shutdown waits for in-flight jobs (default 8). Keep below `SHUTDOWN_TIMEOUT_MS` in `node-server.js`. |
+| `softDeadlineSeconds` | Cloudflare | Stop claiming new jobs after this long in one alarm invocation (default 20). |
+| `durableObjectBindingName`, `durableObjectClassName` | Cloudflare | Required by the deployment CLI to bind and export the `JobQueueStore` class. |
+| `retention.completedMaxAgeDays`, `retention.failedMaxAgeDays` | both | Age-based purge (7 and 30). |
+
+A job must complete within one Cloudflare alarm invocation. For CPU-heavy jobs raise `WORKER_VERSION.limits.cpu_ms`.
 
 ## Cloudflare specifics
 
@@ -238,7 +255,7 @@ starts with every `example.env.secrets` assignment commented out so the first
   declarations for Durable Object classes.
 
 Resource blocks become bindings: `DOCUMENT_STORE` (D1), `KEY_VALUE_STORE` (KV),
-`CONTENT_STORE` (KV and a Durable Object namespace), and one R2 binding per
+`CONTENT_STORE` (KV and a Durable Object namespace), `JOB_QUEUE` (a Durable Object namespace with a SQLite-backed class), and one R2 binding per
 `OBJECT_STORE.buckets` entry. The CLI verifies configured D1 and KV IDs. When
 an ID is absent, it resolves the resource by name, adopting or creating it,
 prints the ID, and stops so the ID can be added to `cloudflare-config.js`. R2

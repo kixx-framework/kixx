@@ -10,6 +10,7 @@ import ReleaseCollection from './collections/release-collection.js';
 import UserSessionCollection from './collections/user-session-collection.js';
 import FileCollection from './collections/file-collection.js';
 import FileContentCollection from './collections/file-content-collection.js';
+import { jobs } from './jobs/mod.js';
 import { assert, assertNonEmptyString, isPlainObject } from '../kixx/assertions/mod.js';
 
 
@@ -43,6 +44,9 @@ export function register(context) {
     const objectStore = context.getService('ObjectStore');
 
     context.registerService('DocumentStore', documentStore);
+
+    // The service validates the registry and owns scheduling.
+    context.getService('JobQueue').setRegistry(jobs);
 
     context.registerCollection('AdminUser', new AdminUserCollection({ db: documentStore }));
     context.registerCollection('Activation', new ActivationCollection({ db: documentStore }));

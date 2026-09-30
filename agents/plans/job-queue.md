@@ -192,7 +192,7 @@ In the Durable Object it is `ctx.storage.transactionSync`.
 
 ### Task JQ-1: Devkit `JOB_QUEUE` resource block
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `devkit/AGENTS.md`; `kixx/docs/configuration.md` "Worker and resource configuration"
 
@@ -226,10 +226,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] With a `JOB_QUEUE` block, the version upload includes the Durable Object binding and the SQLite class export.
-- [ ] Missing required fields fail with a `UsageError` that names the exact field path.
-- [ ] Without the block, output is byte-identical to before.
-- [ ] Tests and docs updated.
+- [x] With a `JOB_QUEUE` block, the version upload includes the Durable Object binding and the SQLite class export.
+- [x] Missing required fields fail with a `UsageError` that names the exact field path.
+- [x] Without the block, output is byte-identical to before.
+- [x] Tests and docs updated.
 
 **Validation**
 
@@ -238,19 +238,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete. Changes are uncommitted in the `devkit` repo (`../devkit`).
+- Remaining: Nothing.
+- Decisions and discoveries: Missing-field errors reuse `requireField`, so messages read `JOB_QUEUE.<field> is required and must be a non-empty string`. Binding-name collisions with other sources are caught by the existing `checkCollisions`. With no `JOB_QUEUE` block both new code paths return early, so output is unchanged.
+- Actual files changed (in `../devkit`): `lib/cloudflare/worker-bindings.js`, `lib/cloudflare/durable-object-exports.js`, `docs/cloudflare.md`, `test/unit-tests/lib/cloudflare/worker-bindings.test.js`, `test/unit-tests/lib/cloudflare/durable-object-exports.test.js`.
+- Validation run: `node run-tests.js` (622 tests, pass); `node run-linter.js lib test` (clean).
 - Blockers: None.
 
 ---
 
 ### Task JQ-2: Cron parser and next-occurrence calculation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `src/docs/code-style-guide.md`, `src/docs/code-documentation-guide.md`, `test/unit-tests/README.md`
 
@@ -283,11 +283,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Parses every supported form. Rejects each unsupported form with a field-specific message.
-- [ ] Correct UTC next occurrence across day, month, year, and leap-day boundaries, independent of the host timezone.
-- [ ] The day-of-month/day-of-week OR rule is covered.
-- [ ] Impossible expressions throw instead of looping.
-- [ ] JSDoc per the documentation guide.
+- [x] Parses every supported form. Rejects each unsupported form with a field-specific message.
+- [x] Correct UTC next occurrence across day, month, year, and leap-day boundaries, independent of the host timezone.
+- [x] The day-of-month/day-of-week OR rule is covered.
+- [x] Impossible expressions throw instead of looping.
+- [x] JSDoc per the documentation guide.
 
 **Validation**
 
@@ -296,19 +296,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete; uncommitted in the working tree.
+- Remaining: Nothing.
+- Decisions and discoveries: `ParsedCron` is `{ expression, minutes, hours, daysOfMonth, months, daysOfWeek, isDayOfMonthRestricted, isDayOfWeekRestricted }` (sorted frozen arrays; 7 folded into 0). A day field counts as restricted unless its text starts with `*`. `a/n` (step on a bare number) is rejected as ambiguous. Search bound is 8 years, not 5, because Feb 29 can be 8 years apart (2096 to 2104). Errors are `ValidationError` with the field label in the message.
+- Actual files changed: `src/kixx/jobs/cron.js`, `test/unit-tests/kixx/jobs/cron.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/jobs` (21 pass, also under TZ=America/Los_Angeles and Pacific/Auckland); `node run-linter.js src/kixx/jobs test/unit-tests/kixx/jobs` clean.
 - Blockers: None.
 
 ---
 
 ### Task JQ-3: Port contract, registry validation, and retry policy
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-2
 **Documentation:** `src/plugins/README.md` ("How the Contracts Are Written"), `src/docs/server-error-handling.md`, `src/app/migrations/mod.js` (registry precedent)
 
@@ -357,9 +357,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The interface documents every method, its invariants, and *why* each capability is or isn't in the contract.
-- [ ] Registry validation accepts an empty map and rejects bad names, non-function handlers, invalid option values, bad cron, and unsupported concurrency/timezone options with precise messages.
-- [ ] Classification and backoff are tested, including `retryable` overrides and the backoff cap.
+- [x] The interface documents every method, its invariants, and *why* each capability is or isn't in the contract.
+- [x] Registry validation accepts an empty map and rejects bad names, non-function handlers, invalid option values, bad cron, and unsupported concurrency/timezone options with precise messages.
+- [x] Classification and backoff are tested, including `retryable` overrides and the backoff cap.
 
 **Validation**
 
@@ -368,19 +368,23 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete; uncommitted in the working tree.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - `validateJobRegistry(map)` returns a NEW `Map` of frozen `ResolvedJobEntry` `{ name, description, handler, maxAttempts, timeoutSeconds, schedule }`. `schedule` is `null` or frozen `{ cron, parsed }` where `parsed` is the JQ-2 `ParsedCron`. Unknown entry fields and unknown `schedule` fields are rejected, with dedicated messages for `concurrency` and `timezone`. Bad cron surfaces as an `AssertionError` wrapping the `ValidationError` message. `DEFAULT_MAX_ATTEMPTS` and `DEFAULT_TIMEOUT_SECONDS` are exported.
+  - `retryable` is NOT a `WrappedError` option; the base class ignores it. It is a plain property a handler assigns (`Object.assign(error, { retryable: false })`). Authoring docs (JQ-10) should say so. The error classes were not changed.
+  - `nextRetryDelayMs` clamps the exponent at 20 to avoid overflow; `attempt` must be an integer >= 1.
+  - The interface file exports typedefs only (`export {}`), including public `JobRecord`, `JobScheduleRecord`, `JobEnqueueOptions`, `JobEnqueueResult`, `JobHandler`, and `JobQueueInterface`. `start`/`stop`/`processDueJobs` are documented as adapter lifecycle, not port methods.
+- Actual files changed: `src/kixx/jobs/job-queue-interface.js`, `src/kixx/jobs/job-registry.js`, `src/kixx/jobs/retry-policy.js`, `test/unit-tests/kixx/jobs/job-registry.test.js`, `test/unit-tests/kixx/jobs/retry-policy.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/jobs` (47 pass); `node run-linter.js src/kixx/jobs test/unit-tests/kixx/jobs` clean.
 - Blockers: None.
 
 ---
 
 ### Task JQ-4: Shared SQLite job state store
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-2, JQ-3
 **Documentation:** "Data model" and "Cross-cutting invariants" above
 
@@ -441,15 +445,15 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Dedupe: a second enqueue with an active key returns the existing job. After completion the key is reusable.
-- [ ] Claim order, unique claim tokens, and lease expiry leading to a retry attempt are covered.
-- [ ] Late completion and failure cannot change a job after lease expiry, reclamation, or manual retry, even when attempt numbers repeat. Recovery applies once per expired claim.
-- [ ] Schedules: catch-up once after a long gap, skip while an occurrence is pending or running, reconcile on add/change/remove, and atomic occurrence creation plus schedule advancement.
-- [ ] Two executors sharing a database cannot materialize duplicate or overlapping occurrences. Rollback leaves no partial enqueue or schedule advancement.
-- [ ] Manual retry conflicts with an active dedupe key or schedule name without changing the failed job.
-- [ ] Retention deletes only terminal rows past their age, and is batched and gated.
-- [ ] `nextWakeTime` is correct across all sources.
-- [ ] Payload size limit enforced with `PayloadTooLargeError`.
+- [x] Dedupe: a second enqueue with an active key returns the existing job. After completion the key is reusable.
+- [x] Claim order, unique claim tokens, and lease expiry leading to a retry attempt are covered.
+- [x] Late completion and failure cannot change a job after lease expiry, reclamation, or manual retry, even when attempt numbers repeat. Recovery applies once per expired claim.
+- [x] Schedules: catch-up once after a long gap, skip while an occurrence is pending or running, reconcile on add/change/remove, and atomic occurrence creation plus schedule advancement.
+- [x] Two executors sharing a database cannot materialize duplicate or overlapping occurrences. Rollback leaves no partial enqueue or schedule advancement.
+- [x] Manual retry conflicts with an active dedupe key or schedule name without changing the failed job.
+- [x] Retention deletes only terminal rows past their age, and is batched and gated.
+- [x] `nextWakeTime` is correct across all sources.
+- [x] Payload size limit enforced with `PayloadTooLargeError`.
 
 **Validation**
 
@@ -458,19 +462,31 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete; uncommitted in the working tree.
+- Remaining: Nothing.
+- Decisions and discoveries (API JQ-5/7/8 must use):
+  - `new JobStateStore({ sql, logger, random? })`, default export of `src/kixx/jobs/job-state-store.js`; also exports `SCHEMA_VERSION` and `MAX_PAYLOAD_BYTES`. `random` is the backoff jitter source used for lease-expiry retries.
+  - `claimNext(now, { leaseMs })` has NO `registry` argument. `leaseMs` is a number OR a function of the claimed job's name, so the runner can size each lease from that job's registry timeout. It returns the public `JobRecord` plus `claimToken`, or `null`.
+  - `materializeDueSchedules(now, registry)` DOES take the resolved registry (for `maxAttempts` and the parsed cron); it returns `{ enqueued, skipped }`. `reconcileSchedules(now, registry)` takes the same resolved registry from `validateJobRegistry()`.
+  - `enqueue(now, { name, payload, runAt, key, maxAttempts })` takes no `scheduleName`/`scheduledFor`; those are set only by `materializeDueSchedules`. It returns the port's `{ id, name, key, status, runAt, created }`. The adapter service resolves `maxAttempts` from the registry and asserts the name is registered.
+  - `complete`, `failAttempt`, `failTerminal` return a boolean (`false` = stale claim, row untouched). `failAttempt(..., retryAt)` with `retryAt === null` delegates to `failTerminal`.
+  - `SqlExecutor.all` is used for `INSERT/UPDATE/DELETE ... RETURNING`, which is how the store learns whether a write applied (needs SQLite >= 3.35: Node 24 bundles 3.51, Durable Objects support it). `run` returns nothing.
+  - `purgeExpired(now, retention)` deletes at most 500 per status per call and leaves `last_purge_at` unset when a batch was full, so the next pass continues; `nextWakeTime` therefore returns an already-due time until drained. It treats a never-purged queue as due now.
+  - `nextWakeTime(now)` returns a `Date` that may be <= `now`; callers clamp.
+  - `list()` and `retry()` throw `ValidationError` / `NotFoundError` / `ConflictError` directly.
+  - Lease recovery runs inside `claimNext`; a `running` job whose lease expired but which nobody has claimed past stays `running` until the next `claimNext`, though `complete`/`fail*` already reject it via the `lease_expires_at > now` check.
+  - `mostRecentOccurrence` walks forward one occurrence at a time; fine for minute-granularity crons over long gaps (O(1) per step).
+  - Added an index `jobs_created_at_id` for keyset listing (not in the plan's index list).
+- Actual files changed: `src/kixx/jobs/job-state-store.js`, `test/unit-tests/kixx/jobs/job-state-store.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/kixx/jobs` (99 pass); `node run-linter.js src/kixx/jobs test/unit-tests/kixx/jobs` clean; full `node run-tests.js` (1574 pass).
 - Blockers: None.
 
 ---
 
 ### Task JQ-5: Shared job runner and job context
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-3, JQ-4
 **Documentation:** `src/docs/server-error-handling.md`; `src/kixx/context/application-context.js`
 
@@ -517,12 +533,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] A slow job doesn't block other slots, which refill independently.
-- [ ] The deadline stops new claims while in-flight jobs finish.
-- [ ] The timeout aborts the signal. Retry, terminal, and unexpected paths each reach the right store call.
-- [ ] An unexpected error stops further claims and is returned to the caller.
-- [ ] Every outcome carries the original claim token. Stale outcomes leave newer attempts untouched; stale unexpected errors still propagate to the adapter.
-- [ ] `createJobContext` tests.
+- [x] A slow job doesn't block other slots, which refill independently.
+- [x] The deadline stops new claims while in-flight jobs finish.
+- [x] The timeout aborts the signal. Retry, terminal, and unexpected paths each reach the right store call.
+- [x] An unexpected error stops further claims and is returned to the caller.
+- [x] Every outcome carries the original claim token. Stale outcomes leave newer attempts untouched; stale unexpected errors still propagate to the adapter.
+- [x] `createJobContext` tests.
 
 **Validation**
 
@@ -531,19 +547,27 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete; uncommitted in the working tree.
+- Remaining: Nothing.
+- Decisions and discoveries (API JQ-7/8 must use):
+  - `new JobRunner({ store, registry, logger, concurrency, retention, random? })`; `retention` was added to the plan's constructor list because the runner runs the purge. `runDueJobs({ now?, deadline?, createContext })`: `now` is `() => Date` (defaults to the system clock), `deadline` is a `Date`, `createContext(claimedJob)` receives the claimed `JobRecord` (with `claimToken`) and returns the handler context. Adapters should pass `(job) => appContext.createJobContext(env, job)`. Returns `{ ran, unexpectedError }`.
+  - The loop re-polls `claimNext` each time a job settles, so recovery of expired leases also runs then. A handler that outlives its lease therefore usually ends `pending` (lease-expired retry) rather than `running`; its own late outcome is discarded either way.
+  - Purge runs only when no unexpected error occurred.
+  - A store failure while recording an outcome is treated as an unexpected error (logged at error, returned from `runDueJobs`), not thrown.
+  - Lease = `timeoutSeconds * 1000 + 30 s`. Unknown job names use the default 60 s timeout for the lease.
+  - `createJobContext(env, job)` returns a `RequestContext` (no `JobContext` class): `requestId` undefined, `user` null. Its logger is a new `JobLogger` (`src/kixx/jobs/job-logger.js`) wrapping the app logger and adding `jobId`/`jobName`, NOT `Logger#createChild()`: children are retained by the parent forever and the finalized application logger throws on `createChild`.
+  - `eslint.config.js`: added `AbortController`, `AbortSignal`, and `DOMException` to the server globals block (portable Web APIs).
+  - Timeout abort reason is `DOMException` named `TimeoutError`.
+- Actual files changed: `src/kixx/jobs/job-runner.js`, `src/kixx/jobs/job-logger.js`, `src/kixx/jobs/job-state-store.js` (function-valued `leaseMs`), `src/kixx/context/application-context.js`, `eslint.config.js`, `test/unit-tests/kixx/jobs/job-runner.test.js`, `test/unit-tests/kixx/jobs/job-logger.test.js`, `test/unit-tests/kixx/jobs/job-state-store.test.js`, `test/unit-tests/kixx/context/application-context.test.js`.
+- Validation run: `node run-tests.js` (1608 pass); `node run-linter.js src test eslint.config.js` clean.
 - Blockers: None.
 
 ---
 
 ### Task JQ-6: Application job registry
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-3
 **Documentation:** `src/app/presentation/README.md`, `src/app/transaction-scripts/README.md`, `src/app/migrations/mod.js`
 
@@ -575,9 +599,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The registry validates at boot. A test proves the shipped registry is valid.
-- [ ] `app.js` hands the registry to the service.
-- [ ] Normal boot registers no example jobs or schedules. A validated recurring test registry is available for the adapter tests in JQ-7 and JQ-8.
+- [x] The registry validates at boot. A test proves the shipped registry is valid.
+- [x] `app.js` hands the registry to the service. (Deferred to JQ-7; see handoff.)
+- [x] Normal boot registers no example jobs or schedules. A validated recurring test registry is available for the adapter tests in JQ-7 and JQ-8.
 
 **Validation**
 
@@ -586,19 +610,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `mod.js` empty registry, recurring test fixture, tests. `app.js` wiring intentionally deferred to JQ-7 (see below).
+- Current state: Complete; the `app.js` wiring landed in JQ-7.
+- Remaining: JQ-7 must add `context.getService('JobQueue').setRegistry(jobs)` (import `jobs` from `./jobs/mod.js`) to `app.register()` together with the Node adapter; JQ-8 relies on the same line. Doing it now would break boot: no `JobQueue` service exists yet.
+- Decisions and discoveries: `jobs` is exported from `src/app/jobs/mod.js` as an unvalidated `Map`; the service validates. Fixture `test/fixtures/jobs/example-noop-heartbeat.js` exports `heartbeat`, `heartbeatRuns`, `createRecurringTestRegistry()` (raw Map, `*/15 * * * *`) and `createValidatedRecurringTestRegistry()`. `test/fixtures/` is a new directory.
+- Actual files changed: `src/app/jobs/mod.js`, `test/fixtures/jobs/example-noop-heartbeat.js`, `test/unit-tests/app/jobs/mod.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/app/jobs` (3 pass); `node run-linter.js src/app test/unit-tests/app test/fixtures` clean.
 - Blockers: None.
 
 ---
 
 ### Task JQ-7: Node.js adapter and server lifecycle
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-4, JQ-5, JQ-6
 **Documentation:** `src/plugins/README.md` ("Adding a New Port"), `docs/configuration.md`
 
@@ -646,6 +670,7 @@ gracefully on unexpected job errors.
   - `onUnexpectedError` calls `shutdown('fatal job error', { force: false, exitCode: 1 })`.
   - In `shutdown`, await `jobQueue.stop()` before `appContext.close()`, inside the existing `SHUTDOWN_TIMEOUT_MS` backstop.
   - `drainTimeoutSeconds` must stay below that timeout.
+- Add `context.getService('JobQueue').setRegistry(jobs)` to `app.register()` in `src/app/app.js` (deferred from JQ-6).
 - `tools/local-target.js seed` boots in-process without listening. Confirm it doesn't call `start()`, so seed doesn't run jobs.
 
 **Expected touch points**
@@ -658,12 +683,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Immediate, delayed, and UTC cron jobs run once due and survive a restart. With free slots, an idle loop observes due work on the next poll.
-- [ ] The loop never overlaps passes, refills slots while work is available, and waits the fixed interval when idle. Tests use the recurring fixture, not an application heartbeat.
-- [ ] SIGTERM drains in-flight jobs. A job interrupted by a kill is retried after its lease expires.
-- [ ] An unexpected handler error fails the job and exits the process with code 1 through graceful shutdown.
-- [ ] `enabled: false` records jobs without running them.
-- [ ] Two processes on one file never run the same claim (test with two executors on one temp-file DB).
+- [x] Immediate, delayed, and UTC cron jobs run once due and survive a restart. With free slots, an idle loop observes due work on the next poll.
+- [x] The loop never overlaps passes, refills slots while work is available, and waits the fixed interval when idle. Tests use the recurring fixture, not an application heartbeat.
+- [x] SIGTERM drains in-flight jobs. A job interrupted by a kill is retried after its lease expires.
+- [x] An unexpected handler error fails the job and exits the process with code 1 through graceful shutdown.
+- [x] `enabled: false` records jobs without running them.
+- [x] Two processes on one file never run the same claim (test with two executors on one temp-file DB).
 
 **Validation**
 
@@ -676,19 +701,26 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria; `app.js` now calls `setRegistry(jobs)` (deferred from JQ-6).
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - Service is `src/plugins/node-job-queue/lib/job-queue.js`; it lazily opens/migrates the DB on first use (so `enqueue` works before `start()` and when disabled) and reconciles schedules once per registry, using the injected clock when driven by `processDueJobs({ now })`. `now` accepts a `Date` or a function.
+  - Added `shouldStop` option to `JobRunner#runDueJobs` (with a test) so `stop()` halts claiming mid-pass. JQ-8 can use it too.
+  - Loop re-runs immediately after a pass that ran jobs, else sleeps `pollIntervalSeconds` (unref'd timer, woken early by `stop()`/`close()`). After the drain timeout, stuck jobs keep their lease and are retried after expiry.
+  - Plugin `createContext` is `(job) => context.createJobContext(context.env, job)`, built at `register()`.
+  - `node-server.js`: `start()` right after `listen`; `stop()` awaited before `appContext.close()` in the `server.close` callback. `local-target seed` never calls `start()`.
+  - Executor `transaction` is non-nested `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK`.
+  - Manual check on a Local Target Instance with a temporary `* * * * *` handler: ran at the UTC minute boundary; SIGTERM exited 0. Registration reverted. The exit-code-1 path is only unit-tested via `onUnexpectedError`.
+- Actual files changed: `src/plugins/node-job-queue/{plugin.js,lib/job-queue.js,lib/sqlite-executor.js}`, `src/plugins/node.js`, `src/node-config.js`, `src/node-server.js`, `src/app/app.js`, `src/kixx/jobs/job-runner.js`, `test/unit-tests/plugins/node-job-queue/job-queue.test.js`, `test/unit-tests/node-config.test.js`, `test/unit-tests/kixx/jobs/job-runner.test.js`.
+- Validation run: `node run-tests.js` (1629 pass, node-job-queue suite stable over repeated runs); `node run-linter.js src test eslint.config.js` clean; manual check above.
 - Blockers: None.
 
 ---
 
 ### Task JQ-8: Cloudflare adapter (Durable Object)
 
-**Status:** Not started
+**Status:** Blocked
 **Depends on:** JQ-1, JQ-4, JQ-5, JQ-6
 **Documentation:** `src/plugins/README.md`; `src/plugins/cloudflare-content-store/` (Durable Object precedent); Cloudflare "Rules of Durable Objects" (initialize in the constructor)
 
@@ -747,12 +779,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The constructor migrates, reconciles, and re-arms under `blockConcurrencyWhile`.
-- [ ] `alarm()` runs due jobs within the deadline and re-arms correctly: "now" when work remains, otherwise the next wake time.
-- [ ] Enqueue from the Worker and from inside a handler both work, and the inside path never calls its own stub.
-- [ ] The per-isolate ping fires once and doesn't affect responses.
-- [ ] A test-only registry exercises UTC recurring execution with a controlled clock; normal application boot registers no example schedule.
-- [ ] Deployed to a Cloudflare environment with the updated devkit. Immediate, delayed, and scheduled jobs all run.
+- [x] The constructor migrates, reconciles, and re-arms under `blockConcurrencyWhile`.
+- [x] `alarm()` runs due jobs within the deadline and re-arms correctly: "now" when work remains, otherwise the next wake time.
+- [x] Enqueue from the Worker and from inside a handler both work, and the inside path never calls its own stub.
+- [x] The per-isolate ping fires once and doesn't affect responses.
+- [x] A test-only registry exercises UTC recurring execution with a controlled clock; normal application boot registers no example schedule.
+- [x] (BLOCKED: needs the project owner to deploy) Deployed to a Cloudflare environment with the updated devkit. Immediate, delayed, and scheduled jobs all run.
 
 **Validation**
 
@@ -766,19 +798,28 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: All code and unit-test criteria. Not done: the real-deployment criterion and its manual validation.
+- Current state: Blocked only on the manual Cloudflare deployment check. Code is committed and unit-tested.
+- Remaining: Deploy to a test environment with the updated devkit; temporarily register a UTC-scheduled no-op handler and an explicit temporary test route that enqueues immediate and delayed jobs; confirm execution in Workers logs and `GET /job-schedules` (needs JQ-9) next-run values; then remove the temporary registration and redeploy. Also verify the two unverified assumptions below.
+- Decisions and discoveries:
+  - Mechanism for registry/context access: a process-local `JobQueueHost` (`lib/job-queue-host.js`, default singleton). `register()` (in `lib/register-job-queue.js`, split from `plugin.js` so tests can import it without `cloudflare:workers`) fills in logger, config, and `createJobContext`; the Worker-side service's `setRegistry()` stores the validated registry. The Durable Object (same isolate as the module-scope boot) reads them from the host. `app/` is never imported by the plugin.
+  - All Durable Object behaviour is in `lib/job-queue-store-core.js` (testable with a fake `ctx`); `lib/job-queue-store.js` is a thin `DurableObject` subclass exposing RPC methods `ping, enqueue, get, list, retry, listSchedules, alarm`. The core exposes `ready` (the `blockConcurrencyWhile` promise) for tests.
+  - Inside-DO enqueue: the DO registers each job context in `host.directQueues` (a `WeakMap`); the service checks it first, so a handler's `JobQueue.enqueue` calls the local core, never its own stub.
+  - Extracted `src/kixx/jobs/enqueue-options.js` (`resolveEnqueue`) shared by Node, the Worker service, and the DO; Node service refactored to use it. The Worker service validates before RPC so callers get `AssertionError`s.
+  - Errors over RPC: the service re-creates `ConflictError`/`NotFoundError`/`PayloadTooLargeError`/`ValidationError` from `error.name`. UNVERIFIED: that Workers RPC preserves `error.name` for custom classes; check on deploy.
+  - Alarm errors: an unexpected job error is logged at error level and NOT rethrown (the alarm is re-armed first). UNVERIFIED against Cloudflare: how a throw from `alarm()` interacts with automatic alarm retries and an alarm set in the same invocation; Durable Object `ctx.waitUntil` is a no-op, so there is no `waitUntil` reporting path. Revisit on deploy if platform-level exception reporting is wanted.
+  - Re-arm floor: after a pass that ran nothing the alarm is never set sooner than 1 s out (avoids a hot loop on a stale wake time); after a pass that ran jobs it may be "now". The first alarm after a fresh DO is 1 s out because the first retention purge is due immediately.
+  - The per-isolate ping (`cloudflare-server.js`, `waitUntil(pingJobQueue(...))`, failure logged at warn) is not unit-tested: the entry point imports `cloudflare:workers`.
+  - `cloudflare-config.js`: added `JOB_QUEUE` (with `enabled`) and a comment on `WORKER_VERSION.limits.cpu_ms`. Binding name `JOB_QUEUE_DURABLE_OBJECT`; the service uses `idFromName('default')`.
+- Actual files changed: `src/plugins/cloudflare-job-queue/{plugin.js,lib/job-queue-host.js,lib/durable-object-sql-executor.js,lib/job-queue-store-core.js,lib/job-queue-store.js,lib/job-queue.js,lib/register-job-queue.js}`, `src/plugins/cloudflare.js`, `src/cloudflare-server.js`, `src/cloudflare-config.js`, `src/kixx/jobs/enqueue-options.js`, `src/plugins/node-job-queue/lib/job-queue.js`, `test/unit-tests/plugins/cloudflare-job-queue/job-queue.test.js`, `test/unit-tests/kixx/jobs/enqueue-options.test.js`.
+- Validation run: `node run-tests.js` (1649 pass); `node run-linter.js src test eslint.config.js` clean. Manual deployment: not run.
+- Blockers: Manual Cloudflare deployment verification (needs the project owner's Cloudflare credentials and environment).
 
 ---
 
 ### Task JQ-9: Admin API for jobs and schedules
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-3, JQ-7 (JQ-8 for the Cloudflare manual check)
 **Documentation:** `src/app/presentation/README.md`, `src/app/transaction-scripts/README.md`, `src/routes/admin-api-v1.js` (`/migrations` precedent)
 
@@ -816,10 +857,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] All four endpoints work and are authorized. Unauthorized users are rejected.
-- [ ] Retry resets a failed job, which then runs. Error cases return 404, 409, and 400.
-- [ ] Pagination round-trips the cursor.
-- [ ] Handlers call the service directly after HTTP input validation, with no pass-through Transaction Scripts.
+- [x] All four endpoints work and are authorized. Unauthorized users are rejected.
+- [x] Retry resets a failed job, which then runs. Error cases return 404, 409, and 400.
+- [x] Pagination round-trips the cursor.
+- [x] Handlers call the service directly after HTTP input validation, with no pass-through Transaction Scripts.
 
 **Validation**
 
@@ -831,19 +872,23 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete. The Cloudflare manual check (JQ-8 deployment) is still outstanding and also exercises these routes.
+- Remaining: Nothing for JQ-9.
+- Decisions and discoveries:
+  - Query-input errors (bad `status`, out-of-range/non-integer `limit`, repeated params, and an invalid cursor from the service) throw `BadRequestError` (400), not `ValidationError` (which maps to 422 here). This satisfies the acceptance criterion's 400 and matches the migrations handler precedent.
+  - Route order under `/jobs`: `{/}`, `/:id/retry`, `/:id`. Verified live that `/:id` does not shadow `/:id/retry`.
+  - Responses: `Job` resources (id, then attributes incl. `lastError`), `JobSchedule` resources keyed by name, list `meta.cursor`. Permission resource `urn:kixx:admin:jobs`; only the `developer` role (via the existing role that holds `migrations`) plus Root Admin's wildcard get access.
+  - Live check on a Local Target Instance (temporary `* * * * *` handler, reverted): 401 unauthenticated; list/get/schedules 200; 404 missing job; 400 bad status/limit; retry of a completed job 409, missing 404. Retry of a genuinely failed job is covered by JQ-4/JQ-7 service tests, not exercised over HTTP.
+- Actual files changed: `src/app/presentation/request-handlers/admin-api/{job-resources,list-jobs,get-job,retry-job,list-job-schedules,mod}.js`, `src/routes/admin-api-v1.js`, `src/app/permissions/roles.js`, `test/unit-tests/app/presentation/request-handlers/admin-api/jobs.test.js`.
+- Validation run: `node run-tests.js` (full suite pass); `node run-linter.js src test eslint.config.js` clean; manual check above.
 - Blockers: None.
 
 ---
 
 ### Task JQ-10: Documentation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-7, JQ-8, JQ-9
 **Documentation:** `AGENTS.md` index format; `src/plugins/README.md`; `docs/configuration.md`
 
@@ -888,8 +933,8 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Every decision in "Decisions" that affects authors or operators is documented where they will look.
-- [ ] The `AGENTS.md` index entry follows the existing "When to use / What it provides" format.
+- [x] Every decision in "Decisions" that affects authors or operators is documented where they will look.
+- [x] The `AGENTS.md` index entry follows the existing "When to use / What it provides" format.
 
 **Validation**
 
@@ -898,10 +943,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria. Every author/operator-facing decision is in `src/app/jobs/README.md`; configuration in `docs/configuration.md` ("Job queue settings"); architecture in `src/plugins/README.md`.
+- Current state: Complete.
+- Remaining: Nothing for JQ-10. The plan as a whole is still open on JQ-8's manual Cloudflare deployment check. After that check, fold any findings (RPC error names, alarm-throw behavior) into `src/app/jobs/README.md` if they change author guidance.
+- Decisions and discoveries: Documented `retryable` as a plain property (not a constructor option). Documented the `BadRequestError` (400) choice only in the JQ-9 handoff, not the README (README lists status codes 404/409 for retry only).
+- Actual files changed: `src/app/jobs/README.md`, `AGENTS.md`, `src/plugins/README.md`, `docs/configuration.md`.
+- Validation run: `node run-linter.js` clean; reviewed against the Decisions list.
 - Blockers: None.
