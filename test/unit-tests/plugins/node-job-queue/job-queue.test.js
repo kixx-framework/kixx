@@ -379,8 +379,9 @@ describe('node-job-queue', ({ after, describe }) => {
                 }) ]),
             });
 
-            const first = await queue.enqueue({}, 'one', { n: 1 });
-            const second = await queue.enqueue({}, 'one', { n: 2 });
+            // Distinct run_at values make the claim order deterministic.
+            const first = await queue.enqueue({}, 'one', { n: 1 }, { runAt: new Date(Date.now() - 2000) });
+            const second = await queue.enqueue({}, 'one', { n: 2 }, { runAt: new Date(Date.now() - 1000) });
 
             queue.start({ onUnexpectedError: () => {} });
             await waitFor(() => started.length === 1);

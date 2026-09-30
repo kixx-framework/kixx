@@ -178,8 +178,9 @@ describe('cloudflare-job-queue', ({ after, describe }) => {
             });
             const { core, ctx } = await makeCore(host, { clock });
 
-            const first = await core.enqueue('one', null);
-            const second = await core.enqueue('one', null);
+            // Distinct run_at values make the claim order deterministic.
+            const first = await core.enqueue('one', null, { runAt: new Date(T0) });
+            const second = await core.enqueue('one', null, { runAt: new Date(T0 + 1) });
 
             await core.alarm();
 
