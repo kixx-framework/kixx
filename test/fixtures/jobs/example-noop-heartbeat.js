@@ -7,7 +7,7 @@ import { validateJobRegistry } from '../../../src/kixx/jobs/job-registry.js';
  */
 export const heartbeatRuns = [];
 
-export async function heartbeat(context, job) {
+export async function heartbeat(_context, job) {
     heartbeatRuns.push({ id: job.id, attempt: job.attempt, scheduledFor: job.scheduledFor });
 }
 
