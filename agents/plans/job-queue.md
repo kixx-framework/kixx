@@ -567,7 +567,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task JQ-6: Application job registry
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-3
 **Documentation:** `src/app/presentation/README.md`, `src/app/transaction-scripts/README.md`, `src/app/migrations/mod.js`
 
@@ -599,9 +599,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The registry validates at boot. A test proves the shipped registry is valid.
-- [ ] `app.js` hands the registry to the service.
-- [ ] Normal boot registers no example jobs or schedules. A validated recurring test registry is available for the adapter tests in JQ-7 and JQ-8.
+- [x] The registry validates at boot. A test proves the shipped registry is valid.
+- [x] `app.js` hands the registry to the service. (Deferred to JQ-7; see handoff.)
+- [x] Normal boot registers no example jobs or schedules. A validated recurring test registry is available for the adapter tests in JQ-7 and JQ-8.
 
 **Validation**
 
@@ -610,12 +610,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Not started, but note for the next agent: `app.register()` (`src/app/app.js`) already calls `context.getService('KeyValueStore')`, so platform plugin services are registered before it runs. Wiring `context.getService('JobQueue').setRegistry(jobs)` there will throw at boot until an adapter registers the `JobQueue` service (JQ-7 Node, JQ-8 Cloudflare). Either land the `app.js` wiring together with JQ-7, or do the `mod.js` registry and its tests in JQ-6 and defer the one-line wiring to JQ-7. Use `validateJobRegistry` from `src/kixx/jobs/job-registry.js` (JQ-3); the service, not `app.js`, validates.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `mod.js` empty registry, recurring test fixture, tests. `app.js` wiring intentionally deferred to JQ-7 (see below).
+- Current state: Complete, except the `app.js` wiring criterion, which moves to JQ-7.
+- Remaining: JQ-7 must add `context.getService('JobQueue').setRegistry(jobs)` (import `jobs` from `./jobs/mod.js`) to `app.register()` together with the Node adapter; JQ-8 relies on the same line. Doing it now would break boot: no `JobQueue` service exists yet.
+- Decisions and discoveries: `jobs` is exported from `src/app/jobs/mod.js` as an unvalidated `Map`; the service validates. Fixture `test/fixtures/jobs/example-noop-heartbeat.js` exports `heartbeat`, `heartbeatRuns`, `createRecurringTestRegistry()` (raw Map, `*/15 * * * *`) and `createValidatedRecurringTestRegistry()`. `test/fixtures/` is a new directory.
+- Actual files changed: `src/app/jobs/mod.js`, `test/fixtures/jobs/example-noop-heartbeat.js`, `test/unit-tests/app/jobs/mod.test.js`.
+- Validation run: `node run-tests.js test/unit-tests/app/jobs` (3 pass); `node run-linter.js src/app test/unit-tests/app test/fixtures` clean.
 - Blockers: None.
 
 ---
@@ -670,6 +670,7 @@ gracefully on unexpected job errors.
   - `onUnexpectedError` calls `shutdown('fatal job error', { force: false, exitCode: 1 })`.
   - In `shutdown`, await `jobQueue.stop()` before `appContext.close()`, inside the existing `SHUTDOWN_TIMEOUT_MS` backstop.
   - `drainTimeoutSeconds` must stay below that timeout.
+- Add `context.getService('JobQueue').setRegistry(jobs)` to `app.register()` in `src/app/app.js` (deferred from JQ-6).
 - `tools/local-target.js seed` boots in-process without listening. Confirm it doesn't call `start()`, so seed doesn't run jobs.
 
 **Expected touch points**
