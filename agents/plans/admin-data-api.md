@@ -1,0 +1,421 @@
+# Administrative Data API
+
+## Implementation Approach
+
+Build a trusted administrative JSON:API surface at `/admin-data-api/v1/`.
+Application-owned resource registrations explicitly expose Collections and
+separately enable direct writes. Shared administrative Transaction Scripts own
+authorization, input restrictions, validation, concurrency, and persistence.
+Direct writes intentionally bypass application workflows, but never Record
+validation or the resource registration's restrictions.
+
+Use a dedicated bearer-token Collection. Administrators create and revoke tokens
+through session-authenticated, CSRF-protected admin pages. Secrets appear only
+in the creation response; store only a cryptographic verifier. Tokens carry
+explicit per-Collection grants, independent of Publishing API roles.
+
+The first resource is `File`. Its metadata lives in the Document Store, while
+its bytes live behind the custom `FileContent` Collection. The user selected
+record-only CRUD: this API neither uploads nor deletes bytes. Do not reuse
+existing file update/delete retry behavior: reject stale client versions.
+
+Keep protocol code portable, use existing gateways, and install no dependencies.
+Implement ordinary modules and functions, with shared mechanics rather than a
+new inheritance hierarchy. This plan is a design draft; application code has
+not been changed.
+
+### Confirmed requirements
+
+- Trusted administrative access, using JSON:API resource documents.
+- Exact route prefix: `/admin-data-api/v1/`.
+- Bearer API access tokens; no username/password Basic authentication here.
+- Admin-panel token creation/revocation; secret shown once at creation.
+- Per-Collection grants.
+- Explicit Collection exposure and explicit direct-write enablement.
+- Direct edits may bypass application workflows.
+- At least one complete CRUD resource, using File, with checked versions.
+- File CRUD edits records and content references only; binary lifecycle is outside scope.
+
+### Proposed defaults
+
+- Public resource type `files` maps to Collection `File`.
+- Grants name registered Collections and explicit actions: `list`, `get`,
+  `create`, `update`, `delete`. No implicit wildcard grants to future Collections.
+- Effective access is the intersection of token grants and current registration.
+- Token grants are immutable; replace/revoke tokens to change access. Include
+  description, creator, creation time, expiration, and revocation time.
+- Use a distinct token prefix and Collection; reuse cryptographic primitives
+  from the Publishing API implementation without accepting its credentials.
+- Dedicated token-management permission for administrators. Follow the current
+  Root/Developer token-management pattern; document eligible roles explicitly.
+  This permission authorizes delegation only within registered data resources.
+- `GET /admin-data-api/v1/` describes the caller's accessible resources, schemas,
+  query capabilities, and operations. Discovery does not replace authorization.
+- Resource reads include `data.meta.version`. PATCH submits the observed version
+  in `data.meta.version`; DELETE uses `Kixx-Expected-Version` to avoid a DELETE
+  body. Missing/invalid versions are `400`; stale versions are `409`.
+- Client type/id mismatches are `409`; missing records are `404`; unsupported
+  operations are `405`; invalid input is `422`; authentication failure is `401`
+  with a Bearer challenge; insufficient grants are `403`.
+- PATCH preserves omitted fields, validates explicit null, and replaces supplied
+  attribute values rather than performing an undocumented recursive merge.
+- Page size defaults to 25 and is capped at 100. Use `page[size]` and
+  `page[after]`, signed store cursors, and complete `links.next` URLs.
+- Only declared query plans are allowed. File initially supports newest-first
+  primary scans; it has no declared secondary indexes today.
+- Explicit output projection and writable fields. Storage identity, version,
+  timestamps, and sort keys are server-owned unless the registration deliberately
+  defines another contract. Record schemas alone are not enforcement.
+- Sparse fieldsets are supported; relationship expansion/mutation, bulk writes,
+  arbitrary query expressions, total counts, and API token minting are deferred.
+- Structured mutation audit logs contain principal, resource/id, action,
+  request id, and outcome. Never log bearer secrets or full request payloads.
+  This is operational logging, not a transactional durable audit ledger.
+
+### Decision F1: File records only (confirmed)
+
+The user selected record-only CRUD. There are no upload, download, replacement,
+or binary cleanup endpoints in this API. POST requires an existing content
+reference supplied by the caller; existing admin upload/file inspection can
+provide it. The API does not copy bytes or transfer their ownership.
+
+Proposed File contract:
+
+- Read attributes: title, description, isPublished, originalUploadedAt, content.
+- Create input: title, description, isPublished, and the complete content object.
+  Generate a fresh ID and upload-order metadata using createFile(). Document
+  originalUploadedAt as record creation time for this administrative create path.
+- Update input: title, description, isPublished, and complete replacement content.
+  Preserve omitted attributes; nested content is replaced as one attribute.
+- Content must satisfy FileRecord validation. Do not claim that shape validation
+  proves the referenced object exists. Return internal content references only
+  to principals granted File access; this is intentionally administrative data.
+- Delete uses deleteStrict() once and removes only the document, even when it is
+  published. This deliberately bypasses the HTML workflow's publication guard.
+- Updating content or deleting a File never invokes FileContent cleanup. The API
+  does not add reference counting or shared-object ownership. Existing HTML file
+  workflows may delete bytes they own, so duplicating references can leave other
+  records dangling; detaching a reference can leave unused bytes. Document these
+  limitations with the record-only contract and do not imply lifecycle safety.
+
+### Repository findings
+
+- `src/app/collections/file-record.js` requires a content reference, publication
+  state, and original upload time; validation checks shape, not object existence.
+- `FileCollection#createFile()` sets immutable upload-order metadata.
+- `FileCollection#patch()` retries optimistic conflicts; unsuitable for client
+  version-checked edits. Existing delete workflow also retries and prohibits
+  deleting published files.
+- `FileContentCollection` owns private object keys and immutable generations.
+  Existing cleanup is best-effort and logs errors; document/object commits are
+  not atomic.
+- Publishing tokens already use SHA-256 verifier lookup, expiration/revocation,
+  and one-time display. They currently derive permissions from publishing roles.
+- The router defaults to no-store and sets private/no-store for authenticated
+  principals. Error handling skips outbound middleware; API errors need their
+  own complete protocol formatting.
+- Existing JSON:API helpers ignore Content-Type parameters, require attributes,
+  omit relationships/meta on input, and pass plain field names as error source.
+  Tightening shared helpers must account for existing endpoint compatibility.
+- `test/README.md` does not exist. Use root README, `test/unit-tests/README.md`,
+  and `test/end-to-end/README.md`.
+
+## Implementation Tasks
+
+### Task D1: Define enforceable resource registrations and API contract
+
+**Status:** Not started
+**Depends on:** None
+**Documentation:** This plan; Collections README; Presentation README; Transaction Scripts README
+
+**Objective**
+
+Make exposed resources, allowed operations, fields, and query capabilities
+explicit and usable by both enforcement and discovery.
+
+**Scope**
+
+- In: Registration contract, validation, permission mapping, API documentation.
+- Out: Token persistence/UI (D2/D3), HTTP execution (D4), file lifecycle (D5).
+
+**Design and invariants**
+
+- No automatic Collection enumeration or default write exposure.
+- Shared administrative scripts operate only through validated registrations.
+- Use exact Collection/action grants compatible with the existing permission
+  evaluator; retired registrations/grants confer no access.
+- Finalize field projection, version input, pagination, and error contracts.
+- Apply the confirmed record-only boundary in F1 to the File registration.
+
+**Expected touch points**
+
+- `src/app/admin-data-api/` — application-owned resource definitions and lookup.
+- `src/app/permissions/` — scoped permission identifiers and management policy.
+- `docs/admin-data-api.md` — client and application-author contracts.
+
+**Acceptance criteria**
+
+- [ ] Invalid or duplicate registrations fail as programmer errors.
+- [ ] Unregistered Collections and disabled actions cannot be selected.
+- [ ] Read/write field and query contracts are explicit and discoverable.
+- [ ] File record-only contract and reference limitations are documented.
+
+**Validation**
+
+- `node run-linter.js` — JavaScript style and correctness checks.
+- `node run-tests.js` — full suite, including registration/grant boundary tests.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Design draft.
+- Remaining: Everything described above.
+- Decisions and discoveries: See repository findings and proposed defaults.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+
+### Task D2: Authenticate scoped administrative data tokens
+
+**Status:** Not started
+**Depends on:** D1
+**Documentation:** This plan; Collections README; server-error-handling.md; code-style-guide.md; code-documentation-guide.md; unit testing guide
+
+**Objective**
+
+Mint, verify, expire, and revoke tokens carrying explicit Collection grants.
+
+**Scope**
+
+- In: Token Collection/Record, lifecycle Forms/scripts, bearer middleware.
+- Out: Admin interface (D3), resource HTTP handlers (D4).
+
+**Design and invariants**
+
+- Reuse established random-secret/hash primitives; never persist plaintext.
+- Distinct token purpose and prefix; reject Publishing API tokens and Basic auth.
+- Set an authenticated principal on context.user with normalized scoped grants.
+- Check current token state on each request; no stale positive auth cache.
+- Revocation prevents subsequent authentications; do not promise cancellation
+  of requests already authenticated before revocation.
+- Reject unknown/action-invalid grants at minting and ignore retired grants at
+  authorization. API tokens cannot mint tokens or grant themselves authority.
+
+**Expected touch points**
+
+- `src/app/collections/admin-data-api-token-*.js` — persistent verifier/lifecycle.
+- `src/app/transaction-scripts/admin-data-api-tokens/` — lifecycle operations.
+- `src/app/presentation/forms/admin-data-api-tokens/` — normalized inputs.
+- `src/app/presentation/middleware/` — bearer authentication.
+- `src/app/app.js` — Collection registration.
+
+**Acceptance criteria**
+
+- [ ] Mint returns the secret once; stored/listed data cannot recover it.
+- [ ] Missing, wrong-purpose, expired, and revoked credentials are rejected.
+- [ ] Tokens cannot access other Collections or ungranted actions.
+- [ ] Concurrent revocation preserves the original revocation event.
+
+**Validation**
+
+- `node run-linter.js` — lint all changed runtime JavaScript.
+- `node run-tests.js` — lifecycle, permission isolation, expiry, and conflict tests.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: Publishing token code is a pattern, not a shared credential domain.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+
+### Task D3: Manage data tokens in the admin panel
+
+**Status:** Not started
+**Depends on:** D1, D2
+**Documentation:** Presentation README; templates README; frontend-development-guide.md; this plan
+
+**Objective**
+
+Let authorized administrators select per-Collection actions, create a token,
+copy its one-time secret, inspect token status, and revoke it.
+
+**Scope**
+
+- In: Token pages, handlers, forms, navigation, management authorization.
+- Out: Redesigning the admin theme or migrating existing Publishing API tokens.
+
+**Design and invariants**
+
+- Reuse session authentication, CSRF, reverse routing, and existing visual rules.
+- Generate grant options from current registrations; validate server-side.
+- Render the secret only on successful creation, with caching disabled. Do not
+  put it in redirects, logs, storage, subsequent GETs, or template-context JSON.
+- List metadata, grants, expiration, and revocation without revealing secrets.
+
+**Expected touch points**
+
+- `src/routes/admin-panel.js` — management routes and permission checks.
+- `src/app/presentation/request-handlers/admin-panel/` — token UI workflows.
+- `src/pages/admin/` — token-management page and specimens as needed.
+- `src/templates/partials/admin-nav.html` — navigation.
+
+**Acceptance criteria**
+
+- [ ] Authorized administrators can create/list/revoke scoped tokens.
+- [ ] Unauthorized and CSRF-invalid requests do not mutate token state.
+- [ ] Secret appears on creation only; validation failures preserve safe fields.
+- [ ] Controls work with keyboard, narrow screens, enlarged text, and supported themes.
+
+**Validation**
+
+- `node run-linter.js` — runtime and browser JavaScript checks as applicable.
+- `node run-tests.js` — Form/handler and authorization coverage.
+- Local-target browser check — create, copy, revisit, revoke, validation states,
+  keyboard, themes, and responsive layout. Read relevant guides before editing.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: Existing Publishing token creation renders directly to show the secret once.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+
+### Task D4: Serve the JSON:API resource protocol and checked writes
+
+**Status:** Not started
+**Depends on:** D1, D2
+**Documentation:** JSON:API 1.1 (https://jsonapi.org/format/1.1/); Presentation README; Transaction Scripts README; server-error-handling.md; unit testing guide
+
+**Objective**
+
+Provide authenticated discovery and reusable collection CRUD mechanics with
+explicit projection, stable errors, cursor pagination, and conflict detection.
+
+**Scope**
+
+- In: Route subtree, negotiation, parsing, serialization, resource dispatch,
+  shared administrative scripts, protocol tests, mutation logging.
+- Out: File registration (D5), binary lifecycle, relationship expansion, bulk operations.
+
+**Design and invariants**
+
+- Mount `/admin-data-api/v1` before the public catch-all, accepting trailing slash.
+- Correct JSON:API Content-Type/Accept handling and structured error source
+  pointers/parameters; preserve unexpected-error propagation to router policy.
+- Preserve meta.version on input; sparse fields never add unauthorized fields.
+- Validate protocol input before calling Collection assertions. No blind merges
+  of payloads into Records and no unrestricted query/index selection.
+- Check the client version against the loaded Record, then use update/deleteStrict
+  on that same version. Translate both initial mismatch and persistence race to
+  conflict; never retry user updates or deletes against a newer version.
+- Server-generated IDs avoid accidental reuse; verify store version semantics
+  before supporting client IDs and delete/recreate of the same identifier.
+- Retain existing API behavior when extracting or extending shared JSON helpers;
+  test affected endpoints rather than silently changing their contracts.
+- Error responses are complete even though outbound middleware does not run.
+
+**Expected touch points**
+
+- `src/routes/admin-data-api-v1.js`, `src/virtual-hosts.js` — mounted subtree.
+- `src/app/presentation/request-handlers/admin-data-api/` — HTTP adapters.
+- `src/app/presentation/lib/` — JSON:API mechanics and pagination.
+- `src/app/presentation/error-handlers/` — API error projection.
+- `src/app/transaction-scripts/admin-data-api/` — shared direct-edit workflows.
+- `test/unit-tests/` — protocol and two-writer race coverage.
+
+**Acceptance criteria**
+
+- [ ] Discovery returns only currently accessible capabilities.
+- [ ] GET/list output is explicit and cursor links preserve query semantics.
+- [ ] Two clients reading the same version cannot both update/delete successfully.
+- [ ] Rejected writes do not alter stored state; unknown fields are not persisted.
+- [ ] Malformed payloads, unsupported media, missing grants, invalid cursors, and
+  stale versions receive documented responses with no internal details leaked.
+
+**Validation**
+
+- `node run-linter.js` — changed JavaScript is clean.
+- `node run-tests.js` — full suite including compatibility and concurrency tests.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: Existing helpers are incomplete for the proposed protocol.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None; dependencies must complete first.
+
+### Task D5: Deliver and verify File CRUD end to end
+
+**Status:** Not started
+**Depends on:** D1, D2, D3, D4
+**Documentation:** This plan including F1; docs/admin-files.md; Collections README; test/end-to-end/README.md
+
+**Objective**
+
+Make File the first explicitly enabled, version-checked administrative CRUD
+resource, proven with tokens created and revoked through the admin panel.
+
+**Scope**
+
+- In: File resource registration, record-only create/update/delete, integration
+  tests, client examples, author documentation.
+- Out: Binary lifecycle, additional operational Collections, changing HTML file workflows.
+
+**Design and invariants**
+
+- Follow F1: intentionally bypass application publication restrictions and
+  content cleanup while preserving Record validation and version checks.
+- Preserve upload-order sort keys on update; server generates them on create.
+- Never call FileContent create/delete from this API. Content references are
+  caller-supplied and shape-validated, without object-existence guarantees.
+- Tests must prove that deleting or repointing a File leaves bytes untouched.
+- Integration fixtures use isolated IDs and clean up only their own resources.
+
+**Expected touch points**
+
+- `src/app/admin-data-api/` — File registration and discovery schema.
+- `src/app/transaction-scripts/admin-data-api/` — record-only File behavior.
+- `src/app/presentation/forms/`, `src/routes/admin-data-api-v1.js` — File transport.
+- `test/end-to-end/300-admin-data-api/` — dedicated integration suite.
+- `docs/admin-data-api.md`, `docs/admin-files.md` — curl examples and guarantees.
+
+**Acceptance criteria**
+
+- [ ] Admin-created scoped token can create/list/get/update/delete Files as documented.
+- [ ] Read-only and wrong-Collection grants fail writes; revoked tokens fail auth.
+- [ ] Stale PATCH/DELETE and a race after load cannot overwrite/delete newer state.
+- [ ] Create/update/delete never mutate bytes; reference limitations are documented.
+- [ ] Discovery, schemas, examples, permissions, and runtime behavior agree.
+
+**Validation**
+
+- `node run-linter.js` — full linter.
+- `node run-tests.js` — full unit suite.
+- `node tools/local-target.js create admin-data-api` — disposable writable target.
+- `node tools/local-target.js seed admin-data-api` — seed app and administrator.
+- `node tools/local-target.js serve admin-data-api` — run writable target.
+- `node run-tests.js --e2e test/end-to-end/300-admin-data-api` — with target URL and
+  root credentials supplied through the documented E2E environment variables.
+- Browser-check D3 against this target. Stop the server, then run
+  `node tools/local-target.js destroy admin-data-api` after verification.
+- Record which runtime was exercised; do not claim deployed Cloudflare validation
+  from Node tests. No deployment is part of this plan.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: File records reference another gateway, but API mutations touch only the document store.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None; dependencies must complete first.
