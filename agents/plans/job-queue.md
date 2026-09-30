@@ -720,7 +720,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task JQ-8: Cloudflare adapter (Durable Object)
 
-**Status:** Not started
+**Status:** Blocked
 **Depends on:** JQ-1, JQ-4, JQ-5, JQ-6
 **Documentation:** `src/plugins/README.md`; `src/plugins/cloudflare-content-store/` (Durable Object precedent); Cloudflare "Rules of Durable Objects" (initialize in the constructor)
 
@@ -779,12 +779,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The constructor migrates, reconciles, and re-arms under `blockConcurrencyWhile`.
-- [ ] `alarm()` runs due jobs within the deadline and re-arms correctly: "now" when work remains, otherwise the next wake time.
-- [ ] Enqueue from the Worker and from inside a handler both work, and the inside path never calls its own stub.
-- [ ] The per-isolate ping fires once and doesn't affect responses.
-- [ ] A test-only registry exercises UTC recurring execution with a controlled clock; normal application boot registers no example schedule.
-- [ ] Deployed to a Cloudflare environment with the updated devkit. Immediate, delayed, and scheduled jobs all run.
+- [x] The constructor migrates, reconciles, and re-arms under `blockConcurrencyWhile`.
+- [x] `alarm()` runs due jobs within the deadline and re-arms correctly: "now" when work remains, otherwise the next wake time.
+- [x] Enqueue from the Worker and from inside a handler both work, and the inside path never calls its own stub.
+- [x] The per-isolate ping fires once and doesn't affect responses.
+- [x] A test-only registry exercises UTC recurring execution with a controlled clock; normal application boot registers no example schedule.
+- [x] (BLOCKED: needs the project owner to deploy) Deployed to a Cloudflare environment with the updated devkit. Immediate, delayed, and scheduled jobs all run.
 
 **Validation**
 
@@ -798,13 +798,22 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: All code and unit-test criteria. Not done: the real-deployment criterion and its manual validation.
+- Current state: Blocked only on the manual Cloudflare deployment check. Code is committed and unit-tested.
+- Remaining: Deploy to a test environment with the updated devkit; temporarily register a UTC-scheduled no-op handler and an explicit temporary test route that enqueues immediate and delayed jobs; confirm execution in Workers logs and `GET /job-schedules` (needs JQ-9) next-run values; then remove the temporary registration and redeploy. Also verify the two unverified assumptions below.
+- Decisions and discoveries:
+  - Mechanism for registry/context access: a process-local `JobQueueHost` (`lib/job-queue-host.js`, default singleton). `register()` (in `lib/register-job-queue.js`, split from `plugin.js` so tests can import it without `cloudflare:workers`) fills in logger, config, and `createJobContext`; the Worker-side service's `setRegistry()` stores the validated registry. The Durable Object (same isolate as the module-scope boot) reads them from the host. `app/` is never imported by the plugin.
+  - All Durable Object behaviour is in `lib/job-queue-store-core.js` (testable with a fake `ctx`); `lib/job-queue-store.js` is a thin `DurableObject` subclass exposing RPC methods `ping, enqueue, get, list, retry, listSchedules, alarm`. The core exposes `ready` (the `blockConcurrencyWhile` promise) for tests.
+  - Inside-DO enqueue: the DO registers each job context in `host.directQueues` (a `WeakMap`); the service checks it first, so a handler's `JobQueue.enqueue` calls the local core, never its own stub.
+  - Extracted `src/kixx/jobs/enqueue-options.js` (`resolveEnqueue`) shared by Node, the Worker service, and the DO; Node service refactored to use it. The Worker service validates before RPC so callers get `AssertionError`s.
+  - Errors over RPC: the service re-creates `ConflictError`/`NotFoundError`/`PayloadTooLargeError`/`ValidationError` from `error.name`. UNVERIFIED: that Workers RPC preserves `error.name` for custom classes; check on deploy.
+  - Alarm errors: an unexpected job error is logged at error level and NOT rethrown (the alarm is re-armed first). UNVERIFIED against Cloudflare: how a throw from `alarm()` interacts with automatic alarm retries and an alarm set in the same invocation; Durable Object `ctx.waitUntil` is a no-op, so there is no `waitUntil` reporting path. Revisit on deploy if platform-level exception reporting is wanted.
+  - Re-arm floor: after a pass that ran nothing the alarm is never set sooner than 1 s out (avoids a hot loop on a stale wake time); after a pass that ran jobs it may be "now". The first alarm after a fresh DO is 1 s out because the first retention purge is due immediately.
+  - The per-isolate ping (`cloudflare-server.js`, `waitUntil(pingJobQueue(...))`, failure logged at warn) is not unit-tested: the entry point imports `cloudflare:workers`.
+  - `cloudflare-config.js`: added `JOB_QUEUE` (with `enabled`) and a comment on `WORKER_VERSION.limits.cpu_ms`. Binding name `JOB_QUEUE_DURABLE_OBJECT`; the service uses `idFromName('default')`.
+- Actual files changed: `src/plugins/cloudflare-job-queue/{plugin.js,lib/job-queue-host.js,lib/durable-object-sql-executor.js,lib/job-queue-store-core.js,lib/job-queue-store.js,lib/job-queue.js,lib/register-job-queue.js}`, `src/plugins/cloudflare.js`, `src/cloudflare-server.js`, `src/cloudflare-config.js`, `src/kixx/jobs/enqueue-options.js`, `src/plugins/node-job-queue/lib/job-queue.js`, `test/unit-tests/plugins/cloudflare-job-queue/job-queue.test.js`, `test/unit-tests/kixx/jobs/enqueue-options.test.js`.
+- Validation run: `node run-tests.js` (1649 pass); `node run-linter.js src test eslint.config.js` clean. Manual deployment: not run.
+- Blockers: Manual Cloudflare deployment verification (needs the project owner's Cloudflare credentials and environment).
 
 ---
 

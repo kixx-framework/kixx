@@ -5,13 +5,13 @@ import { DatabaseSync } from 'node:sqlite';
 import JobStateStore from '../../../kixx/jobs/job-state-store.js';
 import JobRunner from '../../../kixx/jobs/job-runner.js';
 import { validateJobRegistry } from '../../../kixx/jobs/job-registry.js';
+import { resolveEnqueue } from '../../../kixx/jobs/enqueue-options.js';
 import { createSqliteExecutor } from './sqlite-executor.js';
 import {
     AssertionError,
     assert,
     assertFunction,
     assertNonEmptyString,
-    isUndefined,
 } from '../../../kixx/assertions/mod.js';
 
 
@@ -115,36 +115,13 @@ export default class JobQueue {
      * @returns {Promise<import('../../../kixx/jobs/job-queue-interface.js').JobEnqueueResult>}
      */
     async enqueue(_context, name, payload, options) {
-        assertNonEmptyString(name, 'JobQueue#enqueue() name');
-
-        const entry = this.#registry.get(name);
-        assert(entry, `JobQueue#enqueue() "${ name }" is not a registered job`);
-
-        const { runAt, delaySeconds, key } = options ?? {};
-
-        assert(
-            isUndefined(runAt) || isUndefined(delaySeconds),
-            'JobQueue#enqueue() options.runAt and options.delaySeconds are mutually exclusive',
-        );
-
         const now = new Date();
-        let runAtDate = now;
-
-        if (!isUndefined(runAt)) {
-            runAtDate = new Date(runAt);
-            assert(!Number.isNaN(runAtDate.getTime()), 'JobQueue#enqueue() options.runAt must be a valid date');
-        } else if (!isUndefined(delaySeconds)) {
-            assert(
-                Number.isFinite(delaySeconds) && delaySeconds >= 0,
-                'JobQueue#enqueue() options.delaySeconds must be a non-negative number',
-            );
-            runAtDate = new Date(now.getTime() + (delaySeconds * 1000));
-        }
+        const { entry, runAt, key } = resolveEnqueue(this.#registry, name, options, now);
 
         return this.#getStore().enqueue(now, {
             name,
             payload,
-            runAt: runAtDate,
+            runAt,
             key,
             maxAttempts: entry.maxAttempts,
         });
