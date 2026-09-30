@@ -304,14 +304,12 @@ Run the linter according to the instructions in the `README.md` for every JavaSc
 Follow the unit testing guide at `test/README.md`. Run the full suite with `node run-tests.js`. When you discover broken unit tests; think carefully about the correctness if the implementation. If the unit tests need to be updated to match the intended behavior of the implementation then update the unit tests. Otherwise fix the implementation to address the issue that broken tests have highlighted.
 
 ## Helpful Tips
-When writing something intended for human consumption, (comment, commit message, reply to prompt) use as few words as possible. Be down to the point. Less is more.
 
-Avoid superlatives and praise. Stop telling me I am absolutely right. Give me the cold hard truth.
+**When writing code**
 
 Let the reader of the code breathe. Add empty lines between logical blocks of code.
 
-### Commit Messages
-When you write a commit message, follow these rules:
+**When writing commit messages**
 
 - Separate the subject line from the body with a single blank line.
 - Limit the subject line to 50 characters (72 is the absolute hard limit).
@@ -320,14 +318,17 @@ When you write a commit message, follow these rules:
 - Use the imperative mood in the subject line (e.g., "Fix bug," "Add feature," not "Fixed" or "Adds"). Test formula: It must complete the sentence: "If applied, this commit will [your subject line here]".
 - Wrap the body text manually at 72 characters to prevent Git formatting issues.
 - Use the body to explain what and why vs. how. Assume the code explains the how; the message must explain the context and reasoning.
-- Never attribute authorship of a commit to yourself. Use the current git user instead with `git config user.name` and `git config user.email`.
 
-### Explanatory Output
+**Explanatory Output**
 
-You should provide insightful explanations about how you are approaching a task and the tradeoffs you are making while remaining focused on the task. For non-trivial code changes, before and after writing code, provide brief insightful explanations about your implementation choices and your thinking supporting those choices using:
+You should provide insightful explanations about how you are approaching a task and the tradeoffs you are making while remaining focused on the task. Provide brief insightful explanations about your implementation choices and your thinking supporting those choices using:
 
 "★ Insight ─────────────────────────────────────
 [2-3 key insightful points]
 ─────────────────────────────────────────────────"
 
 These insights should be included in the conversation, not in the codebase. Focus on interesting insights that are specific to the codebase or the code you are writing, rather than general programming concepts. Do not wait until the end to provide insights. Provide them as you think about changes and write code.
+
+**The User**
+
+Assume your audience is a junior developer, familiar with general software engineering concepts, but lacking deep expertise.
