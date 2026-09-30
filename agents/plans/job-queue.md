@@ -819,7 +819,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task JQ-9: Admin API for jobs and schedules
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-3, JQ-7 (JQ-8 for the Cloudflare manual check)
 **Documentation:** `src/app/presentation/README.md`, `src/app/transaction-scripts/README.md`, `src/routes/admin-api-v1.js` (`/migrations` precedent)
 
@@ -857,10 +857,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] All four endpoints work and are authorized. Unauthorized users are rejected.
-- [ ] Retry resets a failed job, which then runs. Error cases return 404, 409, and 400.
-- [ ] Pagination round-trips the cursor.
-- [ ] Handlers call the service directly after HTTP input validation, with no pass-through Transaction Scripts.
+- [x] All four endpoints work and are authorized. Unauthorized users are rejected.
+- [x] Retry resets a failed job, which then runs. Error cases return 404, 409, and 400.
+- [x] Pagination round-trips the cursor.
+- [x] Handlers call the service directly after HTTP input validation, with no pass-through Transaction Scripts.
 
 **Validation**
 
@@ -872,12 +872,16 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria.
+- Current state: Complete. The Cloudflare manual check (JQ-8 deployment) is still outstanding and also exercises these routes.
+- Remaining: Nothing for JQ-9.
+- Decisions and discoveries:
+  - Query-input errors (bad `status`, out-of-range/non-integer `limit`, repeated params, and an invalid cursor from the service) throw `BadRequestError` (400), not `ValidationError` (which maps to 422 here). This satisfies the acceptance criterion's 400 and matches the migrations handler precedent.
+  - Route order under `/jobs`: `{/}`, `/:id/retry`, `/:id`. Verified live that `/:id` does not shadow `/:id/retry`.
+  - Responses: `Job` resources (id, then attributes incl. `lastError`), `JobSchedule` resources keyed by name, list `meta.cursor`. Permission resource `urn:kixx:admin:jobs`; only the `developer` role (via the existing role that holds `migrations`) plus Root Admin's wildcard get access.
+  - Live check on a Local Target Instance (temporary `* * * * *` handler, reverted): 401 unauthenticated; list/get/schedules 200; 404 missing job; 400 bad status/limit; retry of a completed job 409, missing 404. Retry of a genuinely failed job is covered by JQ-4/JQ-7 service tests, not exercised over HTTP.
+- Actual files changed: `src/app/presentation/request-handlers/admin-api/{job-resources,list-jobs,get-job,retry-job,list-job-schedules,mod}.js`, `src/routes/admin-api-v1.js`, `src/app/permissions/roles.js`, `test/unit-tests/app/presentation/request-handlers/admin-api/jobs.test.js`.
+- Validation run: `node run-tests.js` (full suite pass); `node run-linter.js src test eslint.config.js` clean; manual check above.
 - Blockers: None.
 
 ---
