@@ -39,6 +39,19 @@ export default {
             KEY_VALUE_STORE: {
                 path: '../data/nodejs_app/key_value_store.sqlite',
             },
+            // Background jobs run in-process. drainTimeoutSeconds must stay below
+            // SHUTDOWN_TIMEOUT_MS in node-server.js.
+            JOB_QUEUE: {
+                enabled: true,
+                path: '../data/nodejs_app/job_queue.sqlite',
+                pollIntervalSeconds: 1,
+                concurrency: 4,
+                drainTimeoutSeconds: 8,
+                retention: {
+                    completedMaxAgeDays: 7,
+                    failedMaxAgeDays: 30,
+                },
+            },
             OBJECT_STORE: {
                 path: '../data/nodejs_app/object_store',
                 buckets: {
@@ -100,6 +113,19 @@ export default {
             KEY_VALUE_STORE: {
                 path: './key_value_store.sqlite',
             },
+            // Background jobs run in-process. drainTimeoutSeconds must stay below
+            // SHUTDOWN_TIMEOUT_MS in node-server.js.
+            JOB_QUEUE: {
+                enabled: true,
+                path: './job_queue.sqlite',
+                pollIntervalSeconds: 1,
+                concurrency: 4,
+                drainTimeoutSeconds: 8,
+                retention: {
+                    completedMaxAgeDays: 7,
+                    failedMaxAgeDays: 30,
+                },
+            },
             OBJECT_STORE: {
                 path: './object_store',
                 buckets: {
@@ -151,6 +177,19 @@ export default {
             },
             KEY_VALUE_STORE: {
                 path: '../data/nodejs_app/key_value_store.sqlite',
+            },
+            // Background jobs run in-process. drainTimeoutSeconds must stay below
+            // SHUTDOWN_TIMEOUT_MS in node-server.js.
+            JOB_QUEUE: {
+                enabled: true,
+                path: '../data/nodejs_app/job_queue.sqlite',
+                pollIntervalSeconds: 1,
+                concurrency: 4,
+                drainTimeoutSeconds: 8,
+                retention: {
+                    completedMaxAgeDays: 7,
+                    failedMaxAgeDays: 30,
+                },
             },
             OBJECT_STORE: {
                 path: '../data/nodejs_app/object_store',

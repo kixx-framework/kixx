@@ -242,7 +242,14 @@ nodeServer.on('listening', () => {
 // State transitions to 'listening' (emits event above) or 'error' if port unavailable
 nodeServer.listen(port);
 
-// Milliseconds to wait for in-flight requests to drain before forcing exit.
+// Start the in-process job runner once the server is bound. An unexpected
+// handler error is fatal, like an unexpected request error.
+appContext.getService('JobQueue').start({
+    onUnexpectedError: () => shutdown('fatal job error', { force: false, exitCode: 1 }),
+});
+
+// Milliseconds to wait for in-flight requests and jobs to drain before forcing
+// exit. JOB_QUEUE.drainTimeoutSeconds must stay below this.
 const SHUTDOWN_TIMEOUT_MS = 10000;
 
 // Shut down the process: stop accepting new connections, then exit.
@@ -274,6 +281,10 @@ function shutdown(reason, options) {
         if (cause) {
             logger.error('error closing server during shutdown', null, cause);
         }
+
+        // Let in-flight jobs finish (bounded by JOB_QUEUE.drainTimeoutSeconds)
+        // before their stores are closed underneath them.
+        await appContext.getService('JobQueue').stop();
 
         // In-flight requests have drained, so it is now safe to close store
         // connections (SQLite databases) without interrupting a request

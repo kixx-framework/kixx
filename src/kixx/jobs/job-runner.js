@@ -62,11 +62,13 @@ export default class JobRunner {
      * @param {function(): Date} [options.now] - Clock; a function so tests can advance time. Defaults to the system clock.
      * @param {Date} [options.deadline] - Stop claiming once `now()` reaches this time. No deadline when omitted.
      * @param {function(Object): Object} options.createContext - Builds the handler context from the claimed job record.
+     * @param {function(): boolean} [options.shouldStop] - Polled before each claim; once true, no further jobs are claimed
+     *   (in-flight jobs still finish). Lets an adapter drain on shutdown.
      * @returns {Promise<{ran: number, unexpectedError: (Error|null)}>} Jobs settled, and the first unexpected error if any.
      *   The caller owns the platform's fatal-error policy.
      */
     async runDueJobs(options) {
-        const { now = () => new Date(), deadline, createContext } = options ?? {};
+        const { now = () => new Date(), deadline, createContext, shouldStop } = options ?? {};
 
         assertFunction(createContext, 'JobRunner#runDueJobs() options.createContext');
 
@@ -77,6 +79,7 @@ export default class JobRunner {
 
         const canClaim = () => {
             return result.unexpectedError === null
+                && !(shouldStop?.() === true)
                 && inFlight.size < this.#concurrency
                 && (isUndefined(deadline) || now().getTime() < deadline.getTime());
         };

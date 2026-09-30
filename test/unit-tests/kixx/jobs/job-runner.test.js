@@ -123,6 +123,24 @@ describe('JobRunner', ({ describe }) => {
             assertEqual('pending', h.store.get(ids[2]).status);
         });
 
+        it('stops claiming once shouldStop returns true while in-flight jobs finish', async () => {
+            let stop = false;
+            const h = makeHarness({
+                concurrency: 1,
+                entries: [ { name: 'one', handler: async () => {
+                    stop = true;
+                } } ],
+            });
+
+            const ids = [ 1, 2 ].map((n) => h.enqueue('one', null, n).id);
+
+            const result = await h.run({ shouldStop: () => stop });
+
+            assertEqual(1, result.ran);
+            assertEqual('completed', h.store.get(ids[0]).status);
+            assertEqual('pending', h.store.get(ids[1]).status);
+        });
+
         it('does not claim anything when the deadline has already passed', async () => {
             const h = makeHarness({ entries: [ { name: 'one', handler: async () => {} } ] });
 

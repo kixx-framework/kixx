@@ -611,7 +611,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 **Progress and handoff**
 
 - Completed: `mod.js` empty registry, recurring test fixture, tests. `app.js` wiring intentionally deferred to JQ-7 (see below).
-- Current state: Complete, except the `app.js` wiring criterion, which moves to JQ-7.
+- Current state: Complete; the `app.js` wiring landed in JQ-7.
 - Remaining: JQ-7 must add `context.getService('JobQueue').setRegistry(jobs)` (import `jobs` from `./jobs/mod.js`) to `app.register()` together with the Node adapter; JQ-8 relies on the same line. Doing it now would break boot: no `JobQueue` service exists yet.
 - Decisions and discoveries: `jobs` is exported from `src/app/jobs/mod.js` as an unvalidated `Map`; the service validates. Fixture `test/fixtures/jobs/example-noop-heartbeat.js` exports `heartbeat`, `heartbeatRuns`, `createRecurringTestRegistry()` (raw Map, `*/15 * * * *`) and `createValidatedRecurringTestRegistry()`. `test/fixtures/` is a new directory.
 - Actual files changed: `src/app/jobs/mod.js`, `test/fixtures/jobs/example-noop-heartbeat.js`, `test/unit-tests/app/jobs/mod.test.js`.
@@ -622,7 +622,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task JQ-7: Node.js adapter and server lifecycle
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** JQ-4, JQ-5, JQ-6
 **Documentation:** `src/plugins/README.md` ("Adding a New Port"), `docs/configuration.md`
 
@@ -683,12 +683,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Immediate, delayed, and UTC cron jobs run once due and survive a restart. With free slots, an idle loop observes due work on the next poll.
-- [ ] The loop never overlaps passes, refills slots while work is available, and waits the fixed interval when idle. Tests use the recurring fixture, not an application heartbeat.
-- [ ] SIGTERM drains in-flight jobs. A job interrupted by a kill is retried after its lease expires.
-- [ ] An unexpected handler error fails the job and exits the process with code 1 through graceful shutdown.
-- [ ] `enabled: false` records jobs without running them.
-- [ ] Two processes on one file never run the same claim (test with two executors on one temp-file DB).
+- [x] Immediate, delayed, and UTC cron jobs run once due and survive a restart. With free slots, an idle loop observes due work on the next poll.
+- [x] The loop never overlaps passes, refills slots while work is available, and waits the fixed interval when idle. Tests use the recurring fixture, not an application heartbeat.
+- [x] SIGTERM drains in-flight jobs. A job interrupted by a kill is retried after its lease expires.
+- [x] An unexpected handler error fails the job and exits the process with code 1 through graceful shutdown.
+- [x] `enabled: false` records jobs without running them.
+- [x] Two processes on one file never run the same claim (test with two executors on one temp-file DB).
 
 **Validation**
 
@@ -701,12 +701,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All acceptance criteria; `app.js` now calls `setRegistry(jobs)` (deferred from JQ-6).
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - Service is `src/plugins/node-job-queue/lib/job-queue.js`; it lazily opens/migrates the DB on first use (so `enqueue` works before `start()` and when disabled) and reconciles schedules once per registry, using the injected clock when driven by `processDueJobs({ now })`. `now` accepts a `Date` or a function.
+  - Added `shouldStop` option to `JobRunner#runDueJobs` (with a test) so `stop()` halts claiming mid-pass. JQ-8 can use it too.
+  - Loop re-runs immediately after a pass that ran jobs, else sleeps `pollIntervalSeconds` (unref'd timer, woken early by `stop()`/`close()`). After the drain timeout, stuck jobs keep their lease and are retried after expiry.
+  - Plugin `createContext` is `(job) => context.createJobContext(context.env, job)`, built at `register()`.
+  - `node-server.js`: `start()` right after `listen`; `stop()` awaited before `appContext.close()` in the `server.close` callback. `local-target seed` never calls `start()`.
+  - Executor `transaction` is non-nested `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK`.
+  - Manual check on a Local Target Instance with a temporary `* * * * *` handler: ran at the UTC minute boundary; SIGTERM exited 0. Registration reverted. The exit-code-1 path is only unit-tested via `onUnexpectedError`.
+- Actual files changed: `src/plugins/node-job-queue/{plugin.js,lib/job-queue.js,lib/sqlite-executor.js}`, `src/plugins/node.js`, `src/node-config.js`, `src/node-server.js`, `src/app/app.js`, `src/kixx/jobs/job-runner.js`, `test/unit-tests/plugins/node-job-queue/job-queue.test.js`, `test/unit-tests/node-config.test.js`, `test/unit-tests/kixx/jobs/job-runner.test.js`.
+- Validation run: `node run-tests.js` (1629 pass, node-job-queue suite stable over repeated runs); `node run-linter.js src test eslint.config.js` clean; manual check above.
 - Blockers: None.
 
 ---
