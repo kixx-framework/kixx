@@ -32,7 +32,7 @@ delivery has been verified by unit tests.
 
 ### Task TED-1: Render and send one published email on Node and Cloudflare
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `README.md`; `docs/configuration.md` (per-environment
 configuration); `src/plugins/README.md` (ports, adapters, plugin lifecycle,
@@ -139,25 +139,25 @@ Record actual changes in the handoff notes.
 
 **Acceptance criteria**
 
-- [ ] `renderEmail()` for an unpublished pathname throws `AssertionError`.
-- [ ] HTML-only, text-only, and two-body bundles produce the expected sender
+- [x] `renderEmail()` for an unpublished pathname throws `AssertionError`.
+- [x] HTML-only, text-only, and two-body bundles produce the expected sender
   payload and return its message ID.
-- [ ] An empty recipient, or rendered content lacking a subject or any body,
+- [x] An empty recipient, or rendered content lacking a subject or any body,
   does not call the sender.
-- [ ] Render and sender failures propagate unchanged.
-- [ ] Cloudflare uses the current request binding (configured name or default)
+- [x] Render and sender failures propagate unchanged.
+- [x] Cloudflare uses the current request binding (configured name or default)
   and configured sender, omits `null` bodies, and asserts when the binding is
   missing; Node logs one message and generates an ID without delivering or
   writing a file.
-- [ ] Normal plugin composition exposes `Mailer` and the runtime's
+- [x] Normal plugin composition exposes `Mailer` and the runtime's
   `EmailSender`.
-- [ ] The committed example renders caller data in subject, HTML, and text and
+- [x] The committed example renders caller data in subject, HTML, and text and
   reaches the Node log adapter with a returned ID.
-- [ ] Cloudflare configuration and documentation identify the binding and
+- [x] Cloudflare configuration and documentation identify the binding and
   verified-sender prerequisites; no placeholder is described as production
   ready.
-- [ ] No workflow sends automatically, and no third-party dependency is added.
-- [ ] Changed-file lint, the full unit suite, and whitespace check pass.
+- [x] No workflow sends automatically, and no third-party dependency is added.
+- [x] Changed-file lint, the full unit suite, and whitespace check pass.
 
 **Validation**
 
@@ -170,17 +170,43 @@ Record actual changes in the handoff notes.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
+- Completed: TED-1 implementation and all local acceptance criteria.
+- Current state: Complete.
+- Remaining: Live Cloudflare rollout prerequisites only; separate deployment
+  tooling, DNS, and account setup are outside this task.
 - Decisions and discoveries: Existing `HyperviewService.renderEmail()` already
   returns subject, HTML, and text from one content snapshot, and has no callers
   outside its tests. The reference PR uses Cloudflare's structured `send()` API
   and a Node logging adapter. The developer content scanner already discovers
   `emails/<name>/email.json` and its named template files. No storage change is
   planned. Production binding support lives in the separate deployment CLI and
-  has not been verified here.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None for local implementation; deployment prerequisites remain for
-  live Cloudflare delivery.
+  has not been verified here. The HTML example uses escaped interpolation;
+  plain-text interpolation uses triple braces because ordinary template
+  interpolation escapes values in both output formats. The Cloudflare plugin
+  map imports Worker-only modules, so its map cannot be loaded in Node tests;
+  adapter binding behavior is tested independently and registration is present
+  in `src/plugins/cloudflare.js`.
+- Actual files changed:
+  - `src/kixx/hyperview/hyperview-service.js`
+  - `src/kixx/email-sender/email-sender-interface.js`
+  - `src/plugins/mailer/lib/mailer.js`, `src/plugins/mailer/plugin.js`
+  - `src/plugins/cloudflare-email-sender/lib/email-sender.js` and `plugin.js`
+  - `src/plugins/node-email-sender/lib/email-sender.js` and `plugin.js`
+  - `src/plugins/general.js`, `src/plugins/node.js`, `src/plugins/cloudflare.js`
+  - `src/cloudflare-config.js`
+  - `src/emails/example/email.json`, `body.html`, and `body.txt`
+  - `docs/configuration.md`, `src/app/transaction-scripts/README.md`
+  - `test/unit-tests/kixx/hyperview/hyperview-service.test.js`
+  - `test/unit-tests/plugins/mailer/{mailer,example-email}.test.js`
+  - `test/unit-tests/plugins/cloudflare-email-sender/email-sender.test.js`
+  - `test/unit-tests/plugins/node-email-sender/email-sender.test.js`
+  - `agents/plans/transactional-email-delivery.md`
+- Validation run:
+  - Changed-file lint — passed.
+  - `node run-tests.js` — 1475 tests passed. The existing Node HTTP server
+    test required localhost listening permission.
+  - Focused Hyperview and email sender suite — 89 tests passed.
+  - `git diff --check` — passed.
+- Blockers: None for local implementation. Live Cloudflare delivery remains
+  unverified until the sender domain/address and `send_email` binding are
+  configured through the deployment process.

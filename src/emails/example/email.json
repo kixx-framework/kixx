@@ -1,0 +1,15 @@
+{
+    "contextData": {
+        "subject": {
+            "template": "A note for {{ name }}"
+        }
+    },
+    "htmlTemplate": {
+        "id": "example.html",
+        "filename": "body.html"
+    },
+    "textTemplate": {
+        "id": "example.txt",
+        "filename": "body.txt"
+    }
+}

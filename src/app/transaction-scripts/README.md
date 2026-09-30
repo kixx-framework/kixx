@@ -108,7 +108,7 @@ const objectStore = context.getService('ObjectStore');
 const { tempKey, contentHash } = await objectStore.streamToTemp(context, body, { contentType });
 
 const mailer = context.getService('Mailer');
-const { messageId } = await mailer.send(context, 'password-reset', {
+const { messageId } = await mailer.send(context, '/password-reset', {
     to: user.email_address,
     data: { user, resetUrl },
 });
