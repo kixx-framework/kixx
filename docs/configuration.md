@@ -244,6 +244,13 @@ an ID is absent, it resolves the resource by name, adopting or creating it,
 prints the ID, and stops so the ID can be added to `cloudflare-config.js`. R2
 buckets are neither verified nor created and must exist before deployment.
 
+Cloudflare email sending reads `SEND_EMAIL.from` from the selected environment
+in `cloudflare-config.js`. The configured value is a placeholder; replace it
+with a verified sender address before enabling a workflow that sends email.
+The Worker also needs a `send_email` binding named `SEND_EMAIL` (the adapter's
+default binding name), plus an onboarded sender domain and verified sender
+address.
+
 ### Worker packaging
 
 `cloudflare-server.js` is the entry module. The CLI uploads every statically

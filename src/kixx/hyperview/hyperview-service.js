@@ -1,4 +1,4 @@
-import { NotFoundError } from '../errors/mod.js';
+import { AssertionError, NotFoundError } from '../errors/mod.js';
 import HyperviewPage from './hyperview-page.js';
 import * as templating from '../templating/mod.js';
 import formatDate from './helpers/format-date.js';
@@ -838,7 +838,7 @@ export default class HyperviewService {
      * @param {string} pathname - Canonical pathname identifying the email content
      * @param {Object} props - Runtime values merged into the email template context
      * @returns {Promise<{subject: string|null, html: string|null, text: string|null}>} Rendered email fields; unavailable fields are null
-     * @throws {NotFoundError} When no email bundle is published at the pathname
+     * @throws {AssertionError} When no email bundle is published at the pathname
      */
     async renderEmail(context, pathname, props) {
         assert(
@@ -852,10 +852,10 @@ export default class HyperviewService {
 
         const email = await this.#getEmail(context, content, pathname);
 
-        // An unpublished pathname is an ordinary outcome, not a programmer error;
-        // report it the same way renderPage() reports a missing page.
+        // Callers choose email pathnames in code, so a missing published bundle
+        // indicates a deployment mismatch rather than a missing request resource.
         if (!email) {
-            throw new NotFoundError(`No email found for pathname "${ pathname }"`, { pathname });
+            throw new AssertionError(`No email found for pathname "${ pathname }"`, { pathname });
         }
 
         const globalPartials = await this.#loadGlobalTemplatePartials(context, content);

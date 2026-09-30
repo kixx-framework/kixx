@@ -1264,7 +1264,7 @@ describe('HyperviewService', ({ describe }) => {
             }
         });
 
-        it('throws NotFoundError when no bundle is published at the pathname', async () => {
+        it('throws AssertionError when no bundle is published at the pathname', async () => {
             const { service } = makeSubject(makeEmailSpec());
 
             const caught = await catchAsyncError(() => {
@@ -1272,7 +1272,7 @@ describe('HyperviewService', ({ describe }) => {
             });
 
             assert(caught, 'expected an error to be thrown');
-            assertEqual('NotFoundError', caught.name);
+            assertEqual('AssertionError', caught.name);
             assertMatches('/missing', caught.message);
         });
 

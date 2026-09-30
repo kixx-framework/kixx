@@ -44,6 +44,11 @@ export default {
             LOGGER: {
                 level: 'info',
             },
+            SEND_EMAIL: {
+                // Placeholder only: replace with an address on an onboarded,
+                // verified sender domain before enabling production sending.
+                from: 'replace-me@example.com',
+            },
             HYPERVIEW: {
                 useTemplateCache: true,
                 usePageCache: true,
