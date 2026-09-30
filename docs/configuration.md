@@ -170,7 +170,8 @@ deployment.
 
 ## Job queue settings
 
-`JOB_QUEUE` is a per-environment block in both config modules. See `src/app/jobs/README.md` for behavior.
+`JOB_QUEUE` is a per-environment block in both config modules.
+See `src/app/jobs/README.md` for behavior.
 
 | Key | Platform | Meaning |
 | --- | --- | --- |
@@ -183,7 +184,8 @@ deployment.
 | `durableObjectBindingName`, `durableObjectClassName` | Cloudflare | Required by the deployment CLI to bind and export the `JobQueueStore` class. |
 | `retention.completedMaxAgeDays`, `retention.failedMaxAgeDays` | both | Age-based purge (7 and 30). |
 
-A job must complete within one Cloudflare alarm invocation. For CPU-heavy jobs raise `WORKER_VERSION.limits.cpu_ms`.
+On Cloudflare, a job must complete within one Durable Object alarm invocation.
+For CPU-heavy jobs raise `WORKER_VERSION.limits.cpu_ms`.
 
 ## Cloudflare specifics
 
