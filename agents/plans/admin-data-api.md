@@ -520,6 +520,8 @@ explicit projection, stable errors, cursor pagination, and conflict detection.
   - The store throws AssertionError for ids with control characters, so
     `findRecord()` treats such ids as absent (404) instead of crashing.
   - Form `presentation/forms/admin-data-api/admin-data-record-form.js`
+    owns JSON:API document parsing, identity/version checks, and validation;
+    handlers own media-type checks and body reading. The Form
     rejects undeclared/read-only attributes and missing required create
     attributes as 422 (source = attribute name → `/data/attributes/<name>`).
     Record `ValidationError` field paths (`content.key`) map to pointers too.

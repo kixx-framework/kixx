@@ -494,6 +494,28 @@ describe('Administrative Data API v1', ({ describe }) => {
 
     describe('update', ({ it }) => {
 
+        it('preserves document validation precedence before writable field checks', async () => {
+            const harness = makeHarness();
+            const { token } = await harness.mint(ALL_FILE_GRANTS);
+            const path = '/admin-data-api/v1/files/example';
+            const cases = [
+                [ { data: { type: 'wrong', id: 'wrong', attributes: null } }, 409, 'JsonApiResourceTypeMismatch', '/data/type' ],
+                [ { data: { type: 'files', id: 'wrong', attributes: null } }, 409, 'JsonApiResourceIdMismatch', '/data/id' ],
+                [ { data: { type: 'files', id: 'example', attributes: null } }, 400, 'JsonApiInvalidDocument', '/data/attributes' ],
+                [ { data: { type: 'files', id: 'example', attributes: { unknown: true }, meta: null } },
+                    400, 'AdminDataInvalidVersion', '/data/meta/version' ],
+                [ { data: { type: 'files', id: 'example', attributes: { unknown: true }, meta: { version: 1 } } },
+                    422, 'VALIDATION_ERROR', '/data/attributes/unknown' ],
+            ];
+
+            for (const [ body, status, code, pointer ] of cases) {
+                const result = await harness.send('PATCH', path, { token, body });
+                assertEqual(status, result.status);
+                assertEqual(code, firstError(result).code);
+                assertEqual(pointer, firstError(result).source.pointer);
+            }
+        });
+
         it('replaces supplied attributes whole and preserves omitted ones', async () => {
             const harness = makeHarness();
             const { token } = await harness.mint(ALL_FILE_GRANTS);

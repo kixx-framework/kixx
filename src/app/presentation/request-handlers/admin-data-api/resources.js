@@ -1,7 +1,7 @@
 import { MethodNotAllowedError, NotFoundError } from '../../../../kixx/errors/mod.js';
 import { adminDataResources } from '../../../admin-data-api/mod.js';
 import AdminDataRecordForm from '../../forms/admin-data-api/admin-data-record-form.js';
-import { respondWithJsonApi, withErrorSource } from '../../lib/json-api.js';
+import { assertStrictJsonApiContentType, respondWithJsonApi, withErrorSource } from '../../lib/json-api.js';
 import { authorizeAdminDataAction } from '../../../transaction-scripts/admin-data-api/lib.js';
 import { createAdminDataRecord } from '../../../transaction-scripts/admin-data-api/create-admin-data-record.js';
 import { deleteAdminDataRecord } from '../../../transaction-scripts/admin-data-api/delete-admin-data-record.js';
@@ -14,7 +14,6 @@ import {
     parseFieldsQuery,
     parseListQuery,
     readExpectedVersionHeader,
-    readResourceDocument,
     serializeResource,
 } from './protocol.js';
 
@@ -114,9 +113,10 @@ async function getRecord(context, request, response, resource, id) {
 
 async function createRecord(context, request, response, resource) {
     const fields = parseFieldsQuery(request, resource);
-    const parsed = await readResourceDocument(request, { type: resource.type, action: 'create' });
+    assertStrictJsonApiContentType(request);
+    const document = await request.json();
 
-    const form = AdminDataRecordForm.fromJsonApi(parsed, resource, 'create');
+    const form = AdminDataRecordForm.fromJsonApi(document, resource, 'create');
     form.validate();
 
     const record = await createAdminDataRecord(context, form);
@@ -131,9 +131,10 @@ async function createRecord(context, request, response, resource) {
 
 async function updateRecord(context, request, response, resource, id) {
     const fields = parseFieldsQuery(request, resource);
-    const parsed = await readResourceDocument(request, { type: resource.type, id, action: 'update' });
+    assertStrictJsonApiContentType(request);
+    const document = await request.json();
 
-    const form = AdminDataRecordForm.fromJsonApi(parsed, resource, 'update');
+    const form = AdminDataRecordForm.fromJsonApi(document, resource, 'update', id);
     form.validate();
 
     const record = await updateAdminDataRecord(context, form);

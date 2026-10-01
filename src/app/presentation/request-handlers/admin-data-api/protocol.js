@@ -1,7 +1,7 @@
-import { isNonEmptyString, isPlainObject, isUndefined } from '../../../../kixx/assertions/mod.js';
-import { BadRequestError, ConflictError, ForbiddenError } from '../../../../kixx/errors/mod.js';
+import { isNonEmptyString, isUndefined } from '../../../../kixx/assertions/mod.js';
+import { BadRequestError } from '../../../../kixx/errors/mod.js';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '../../../admin-data-api/resource-registry.js';
-import { assertStrictJsonApiContentType, withErrorSource } from '../../lib/json-api.js';
+import { withErrorSource } from '../../lib/json-api.js';
 
 
 /**
@@ -27,13 +27,6 @@ export const EXPECTED_VERSION_HEADER = 'Kixx-Expected-Version';
 const SORT_PARAMETER = 'sort';
 const PAGE_SIZE_PARAMETER = 'page[size]';
 const PAGE_AFTER_PARAMETER = 'page[after]';
-
-// Top-level and resource object members this API reads. Everything else the
-// JSON:API specification defines (included, relationships, lid, links) is a
-// feature the API does not support, so it is rejected rather than ignored.
-const DOCUMENT_MEMBERS = new Set([ 'data', 'meta', 'jsonapi' ]);
-const RESOURCE_MEMBERS = new Set([ 'type', 'id', 'attributes', 'meta' ]);
-
 
 /**
  * Rejects every query parameter, for endpoints that accept none.
@@ -119,94 +112,6 @@ export function parseListQuery(request, resource) {
         fields: parseFieldset(params[fieldsParameter], resource, fieldsParameter),
         preserved,
     };
-}
-
-/**
- * Reads and structurally validates a JSON:API resource document for a write.
- *
- * Protocol shape is checked here so Collections and Records only ever see a
- * well-formed attributes object. Attribute names are checked against the
- * operation contract later, by AdminDataRecordForm.
- * @param {Object} request - Incoming request.
- * @param {Object} args - Expectations taken from the URL and operation.
- * @param {string} args.type - Resource type from the URL.
- * @param {string} [args.id] - Resource id from the URL; present for updates.
- * @param {string} args.action - `create` or `update`.
- * @returns {Promise<{ type: string, id?: string, version?: number, attributes: Object }>} Parsed resource values.
- * @throws {UnsupportedMediaTypeError} When the Content-Type is not acceptable JSON:API.
- * @throws {BadRequestError} When the body is not JSON, a member is malformed or unsupported, or the update version is missing or invalid.
- * @throws {ConflictError} When `data.type` or `data.id` does not match the URL.
- * @throws {ForbiddenError} When a create supplies `data.id`.
- */
-export async function readResourceDocument(request, args) {
-    const { type, id, action } = args;
-
-    assertStrictJsonApiContentType(request);
-
-    const document = await request.json();
-
-    if (!isPlainObject(document)) {
-        throw invalidDocument('The request body must be a JSON:API document object.', '');
-    }
-    rejectUnsupportedMembers(document, DOCUMENT_MEMBERS, '');
-
-    const { data } = document;
-
-    if (!isPlainObject(data)) {
-        throw invalidDocument('data must be a resource object.', '/data');
-    }
-    rejectUnsupportedMembers(data, RESOURCE_MEMBERS, '/data');
-
-    if (!isNonEmptyString(data.type)) {
-        throw invalidDocument('data.type must be a non-empty string.', '/data/type');
-    }
-    if (data.type !== type) {
-        throw withErrorSource(new ConflictError(
-            'data.type does not match the resource type in the URL.',
-            { code: 'JsonApiResourceTypeMismatch' },
-        ), { pointer: '/data/type' });
-    }
-
-    const parsed = { type };
-
-    if (action === 'create') {
-        // Ids are server-generated, and JSON:API 1.1 answers an unsupported
-        // client-generated id with 403.
-        if (Object.hasOwn(data, 'id')) {
-            throw withErrorSource(new ForbiddenError(
-                'Client-generated ids are not supported.',
-                { code: 'JsonApiClientIdNotSupported' },
-            ), { pointer: '/data/id' });
-        }
-
-        if (!isPlainObject(data.attributes)) {
-            throw invalidDocument('data.attributes must be an object.', '/data/attributes');
-        }
-    } else {
-        if (!isNonEmptyString(data.id)) {
-            throw invalidDocument('data.id must be a non-empty string.', '/data/id');
-        }
-        if (data.id !== id) {
-            throw withErrorSource(new ConflictError(
-                'data.id does not match the resource id in the URL.',
-                { code: 'JsonApiResourceIdMismatch' },
-            ), { pointer: '/data/id' });
-        }
-        if (!isUndefined(data.attributes) && !isPlainObject(data.attributes)) {
-            throw invalidDocument('data.attributes must be an object.', '/data/attributes');
-        }
-
-        parsed.id = id;
-        parsed.version = readBodyVersion(data.meta);
-    }
-
-    if (!isUndefined(data.meta) && !isPlainObject(data.meta)) {
-        throw invalidDocument('data.meta must be an object.', '/data/meta');
-    }
-
-    parsed.attributes = data.attributes ?? {};
-
-    return parsed;
 }
 
 /**
@@ -331,33 +236,6 @@ function parseFieldset(value, resource, parameter) {
 
 function fieldsParameterName(resource) {
     return `fields[${ resource.type }]`;
-}
-
-function readBodyVersion(meta) {
-    const version = isPlainObject(meta) ? meta.version : undefined;
-
-    if (!Number.isSafeInteger(version) || version <= 0) {
-        throw withErrorSource(new BadRequestError(
-            'data.meta.version must be the positive integer version last read.',
-            { code: 'AdminDataInvalidVersion' },
-        ), { pointer: '/data/meta/version' });
-    }
-
-    return version;
-}
-
-function rejectUnsupportedMembers(object, allowedMembers, pointer) {
-    for (const name of Object.keys(object)) {
-        if (!allowedMembers.has(name)) {
-            // RFC 6901: escape "~" before "/" so an escaped "/" is not re-escaped.
-            const segment = name.replaceAll('~', '~0').replaceAll('/', '~1');
-            throw invalidDocument(`The '${ name }' member is not supported.`, `${ pointer }/${ segment }`);
-        }
-    }
-}
-
-function invalidDocument(message, pointer) {
-    return withErrorSource(new BadRequestError(message, { code: 'JsonApiInvalidDocument' }), { pointer });
 }
 
 function invalidParameter(message, parameter) {
