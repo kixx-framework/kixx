@@ -1,0 +1,7 @@
+{
+    "template": "page.html",
+    "subpage": {
+        "title": "Admin Data API Tokens",
+        "section": "admin-data-api-tokens"
+    }
+}

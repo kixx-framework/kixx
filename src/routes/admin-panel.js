@@ -4,9 +4,13 @@ import * as AdminPanel from '../app/presentation/request-handlers/admin-panel/mo
 import { getAdminFileDownload } from '../app/presentation/request-handlers/files/mod.js';
 import fileUploadErrorHandler from '../app/presentation/error-handlers/file-upload-error-handler.js';
 import fileActionErrorHandler from '../app/presentation/error-handlers/file-action-error-handler.js';
+import { ADMIN_DATA_TOKEN_MANAGEMENT_RESOURCE } from '../app/permissions/admin-data-api.js';
 
 const FILE_RESOURCE = 'urn:kixx:publishing:files';
 const fileDecision = (action) => [ { action: `urn:kixx:${ action }`, resource: FILE_RESOURCE } ];
+const adminDataTokenDecision = (action) => [
+    { action: `urn:kixx:${ action }`, resource: ADMIN_DATA_TOKEN_MANAGEMENT_RESOURCE },
+];
 
 
 export default [
@@ -220,6 +224,49 @@ export default [
                         },
                     ]),
                     AdminPanel.postCreatePublishingApiToken,
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
+                ],
+            },
+        ],
+    },
+    {
+        // Revoke is its own route because it shares the POST method with
+        // create-token; one route cannot host two POST targets.
+        pattern: '/admin-data-api-tokens/revoke',
+        name: 'admin-data-api-tokens-revoke',
+        targets: [
+            {
+                name: 'revoke',
+                methods: [ 'POST' ],
+                requestHandlers: [
+                    authorize(adminDataTokenDecision('revoke')),
+                    AdminPanel.postRevokeAdminDataApiToken,
+                ],
+            },
+        ],
+    },
+    {
+        pattern: '/admin-data-api-tokens',
+        name: 'admin-data-api-tokens',
+        targets: [
+            {
+                name: 'render-token-list',
+                methods: [ 'GET', 'HEAD' ],
+                requestHandlers: [
+                    authorize(adminDataTokenDecision('list')),
+                    AdminPanel.getAdminDataApiTokens,
+                    // Every render mints a fresh session-bound CSRF token, and
+                    // the create response carries a one-time secret, so the
+                    // page cache must never store or serve these pages.
+                    HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
+                ],
+            },
+            {
+                name: 'create-token',
+                methods: [ 'POST' ],
+                requestHandlers: [
+                    authorize(adminDataTokenDecision('create')),
+                    AdminPanel.postCreateAdminDataApiToken,
                     HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false }),
                 ],
             },

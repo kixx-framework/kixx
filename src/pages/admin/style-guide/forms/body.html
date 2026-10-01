@@ -163,6 +163,59 @@
     <p>None of these get a custom box. <code>.field__select</code> shares a text field&rsquo;s width, border, and radius but is never given <code>appearance: none</code>, so the browser&rsquo;s own dropdown affordance stays intact. Checkboxes, radios, and file inputs receive only <code>font: inherit</code> (from the reset) and <code>accent-color</code> (from the design tokens) &mdash; the OS draws the rest. <code>.field--choice</code> only lays a control beside its label; it does not touch the control itself.</p>
 </div>
 
+<h3 class="type-h3 doc-section-heading">Field Groups</h3>
+<p class="doc-lede">When several checkboxes or radios answer one question, wrap them in a <code>fieldset.field-group</code> whose <code>legend</code> names the question.</p>
+<div class="example-grid grid-auto">
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <fieldset class="field-group flow">
+                <legend class="field-group__legend">Access</legend>
+                <p class="field-group__hint">Choose exactly what this token may do.</p>
+                <fieldset class="field-group flow">
+                    <legend class="field-group__legend">Files</legend>
+                    <div class="cluster">
+                        <div class="field--choice">
+                            <input type="checkbox" id="group-files-list" checked>
+                            <label for="group-files-list">list</label>
+                        </div>
+                        <div class="field--choice">
+                            <input type="checkbox" id="group-files-get" checked>
+                            <label for="group-files-get">get</label>
+                        </div>
+                        <div class="field--choice">
+                            <input type="checkbox" id="group-files-update">
+                            <label for="group-files-update">update</label>
+                        </div>
+                    </div>
+                </fieldset>
+            </fieldset>
+        </div>
+        <div class="example__label"><code>.field-group</code><span class="example__note">Nested groups with a hint</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview">
+            <fieldset class="field-group flow" aria-describedby="group-error-message">
+                <legend class="field-group__legend">Notify me about</legend>
+                <div class="flow">
+                    <div class="field--choice">
+                        <input type="checkbox" id="group-error-releases" aria-invalid="true">
+                        <label for="group-error-releases">Releases</label>
+                    </div>
+                    <div class="field--choice">
+                        <input type="checkbox" id="group-error-files" aria-invalid="true">
+                        <label for="group-error-files">Files</label>
+                    </div>
+                </div>
+                <p class="field-group__error" id="group-error-message">Choose at least one</p>
+            </fieldset>
+        </div>
+        <div class="example__label"><code>.field-group__error</code><span class="example__note">Group-level validation message</span></div>
+    </div>
+</div>
+<div class="doc-prose">
+    <p>The group resets the browser&rsquo;s fieldset border, padding, and minimum width, and styles only its legend, hint, and error; the native controls stay untouched. Compose it with <code>.flow</code> and lay the choices out with <code>.cluster</code> or <code>.flow</code>. Point the fieldset&rsquo;s <code>aria-describedby</code> at the hint and error so they are read with the group.</p>
+</div>
+
 <h3 class="type-h3 doc-section-heading">Standalone Form Pages</h3>
 <p class="doc-lede">A form that is the page &mdash; login, signup, settings &mdash; sits in a centered column capped to the form measure so its lines never stretch too wide to scan.</p>
 <div class="doc-prose">

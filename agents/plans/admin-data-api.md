@@ -338,7 +338,7 @@ Mint, verify, expire, and revoke tokens carrying explicit Collection grants.
 
 ### Task D3: Manage data tokens in the admin panel
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D1, D2
 **Documentation:** Presentation README; templates README; frontend-development-guide.md; this plan
 
@@ -369,10 +369,10 @@ copy its one-time secret, inspect token status, and revoke it.
 
 **Acceptance criteria**
 
-- [ ] Authorized administrators can create/list/revoke scoped tokens.
-- [ ] Unauthorized and CSRF-invalid requests do not mutate token state.
-- [ ] Secret appears on creation only; validation failures preserve safe fields.
-- [ ] Controls work with keyboard, narrow screens, enlarged text, and supported themes.
+- [x] Authorized administrators can create/list/revoke scoped tokens.
+- [x] Unauthorized and CSRF-invalid requests do not mutate token state.
+- [x] Secret appears on creation only; validation failures preserve safe fields.
+- [x] Controls work with keyboard, narrow screens, enlarged text, and supported themes.
 
 **Validation**
 
@@ -383,12 +383,47 @@ copy its one-time secret, inspect token status, and revoke it.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Existing Publishing token creation renders directly to show the secret once.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Routes, handlers, page, nav/landing links, field-group
+  component with style-guide specimen, unit tests, and a local-target browser
+  check.
+- Current state: Complete.
+- Remaining: None for D3.
+- Decisions and discoveries:
+  - Existing Publishing token creation renders directly to show the secret
+    once; the data-token page follows the same pattern
+    (`request-handlers/admin-panel/admin-data-api-tokens.js`).
+  - Routes (`src/routes/admin-panel.js`): `/admin/admin-data-api-tokens`
+    (`render-token-list` GET/HEAD gated `urn:kixx:list`, `create-token` POST
+    gated `urn:kixx:create`) and `/admin/admin-data-api-tokens/revoke`
+    (`revoke` POST gated `urn:kixx:revoke`), all on
+    `ADMIN_DATA_TOKEN_MANAGEMENT_RESOURCE`, `usePageCache: false`. Root Admin
+    and Developer pass; Admin and Editor get 403 (tested).
+  - The list shows each grant by public type (`files: list, get`); grants for
+    a Collection that is no longer registered render as "(no longer exposed)".
+  - Added a reusable `.field-group` fieldset component to
+    `static-assets/stylesheets/lib/forms.css` and a "Field Groups" specimen in
+    the style guide forms page. It resets only inline margin (block margin
+    belongs to the parent `.flow`; an initial `margin: 0` erased it, which the
+    browser check caught) and sets its children's `--flow-space`.
+  - ValidationError re-renders with status 422 (not 400).
+- Actual files changed:
+  - `src/app/presentation/request-handlers/admin-panel/admin-data-api-tokens.js` (new), `.../admin-panel/mod.js`
+  - `src/routes/admin-panel.js`
+  - `src/pages/admin/admin-data-api-tokens/page.{html,json}` (new)
+  - `src/pages/admin/page.html`, `src/templates/partials/admin-nav.html`
+  - `src/static-assets/stylesheets/lib/forms.css`, `src/pages/admin/style-guide/forms/body.html`
+  - `test/unit-tests/app/presentation/request-handlers/admin-panel/admin-data-api-tokens.test.js` (new)
+- Validation run: `node run-linter.js` — clean. `node run-tests.js` — 1729
+  passed. Local target `d3-tokens` (Node runtime) browser check in Chrome:
+  login, page render, empty-grant validation (error shown, description kept),
+  keyboard-only checkbox selection with visible focus and submit, one-time
+  secret display, revisit/`.json` context/HTML contain no secret,
+  `Cache-Control: private, no-store`, revoke → status "revoked" and no
+  revoke control, dark and light themes, 200% root font size, and 360px
+  width without horizontal overflow. The local target served the CSS from
+  seed time, so the final `.field-group` CSS was verified by injecting the
+  same rules into the page; the style-guide specimen itself was not
+  rendered in the browser. Target destroyed afterwards.
 - Blockers: None.
 
 ### Task D4: Serve the JSON:API resource protocol and checked writes

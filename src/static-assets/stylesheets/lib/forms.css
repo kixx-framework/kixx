@@ -165,6 +165,68 @@ textarea.field__input {
 }
 
 /* -----------------------------------------------------------------------------
+    Field Group
+
+    A <fieldset> that names a set of related choices with its <legend>, so
+    assistive technology announces the group name with each control ("Access,
+    Files, list, checkbox"). Use it whenever several checkboxes or radios answer
+    one question; a lone .field--choice needs no group. Groups may nest: an
+    outer group for the question, inner groups for each subject it covers.
+
+    This removes the browser's fieldset border, padding, inline margin, and
+    minimum width (the min-inline-size reset lets the group shrink on narrow
+    screens instead of overflowing). Compose with .flow to space the legend,
+    hint, choices, and error; the group sets that rhythm for its own children.
+    Lay the choices themselves out with .cluster or .flow.
+
+    Expected structure:
+        fieldset.field-group.flow
+          legend.field-group__legend
+          .field-group__hint     (optional)
+          .cluster or .flow of .field--choice rows, or nested .field-group
+          .field-group__error    (optional)
+----------------------------------------------------------------------------- */
+
+.field-group {
+    min-inline-size: 0;
+    /* Only the inline margin is reset: the block margin above the group
+       belongs to the parent .flow, and zeroing it here would erase it. */
+    margin-inline: 0;
+    padding: 0;
+    border: 0;
+}
+
+/* The group owns its internal rhythm. Its children would otherwise inherit
+   the surrounding form's wide field gap; hint and error sit as tightly to
+   their legend and choices as .field's do to its label and control. */
+.field-group > * {
+    --flow-space: var(--space-xs);
+}
+.field-group > .field-group__hint,
+.field-group > .field-group__error {
+    --flow-space: var(--space-2xs);
+}
+
+.field-group__legend {
+    padding: 0;
+    font-size: var(--text-body);
+    font-weight: var(--weight-medium);
+    color: var(--color-ink);
+}
+
+.field-group__hint {
+    font-size: var(--text-caption);
+    line-height: var(--leading-normal);
+    color: var(--color-ink-muted);
+}
+
+.field-group__error {
+    font-size: var(--text-caption);
+    line-height: var(--leading-normal);
+    color: var(--color-status-danger);
+}
+
+/* -----------------------------------------------------------------------------
     Copy Field
 
     A labeled, read-only value paired with a copy-to-clipboard button — the
