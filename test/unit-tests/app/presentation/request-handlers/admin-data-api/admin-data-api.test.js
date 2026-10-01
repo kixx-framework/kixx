@@ -404,6 +404,44 @@ describe('Administrative Data API v1', ({ describe }) => {
         });
     });
 
+    describe('download-safe content references', ({ it }) => {
+
+        it('rejects unsafe content on create and update without persisting it', async () => {
+            const harness = makeHarness();
+            const { token } = await harness.mint(ALL_FILE_GRANTS);
+            const created = await createFile(harness, token);
+
+            const cases = [
+                [ { contentType: 'image/png\r\nX-Test: bad' }, 'contentType' ],
+                [ { filename: '\ud800.txt' }, 'filename' ],
+            ];
+
+            for (const [ overrides, field ] of cases) {
+                const content = makeContent(overrides);
+                const create = await harness.send('POST', '/admin-data-api/v1/files', {
+                    token,
+                    body: fileDocument({ content }),
+                });
+                const update = await harness.send('PATCH', `/admin-data-api/v1/files/${ created.id }`, {
+                    token,
+                    body: patchDocument(created.id, created.meta.version, { content }),
+                });
+
+                for (const result of [ create, update ]) {
+                    assertEqual(422, result.status);
+                    assertEqual(`/data/attributes/content/${ field }`, firstError(result).source.pointer);
+                }
+            }
+
+            const stored = await harness.files.get(harness.makeContext(), created.id);
+            assertEqual(created.meta.version, stored.version);
+            assertEqual(created.attributes.content.key, stored.get('content').key);
+            const list = await harness.send('GET', '/admin-data-api/v1/files', { token });
+            assertEqual(1, list.document.data.length);
+            assertEqual(0, harness.objectStoreCalls.length);
+        });
+    });
+
     describe('get', ({ it }) => {
 
         it('returns declared attributes narrowed by a sparse fieldset', async () => {

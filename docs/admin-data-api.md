@@ -265,6 +265,11 @@ have exactly these six members; any other member is `422`:
 }
 ```
 
+The filename must contain valid Unicode, and the content type must be a safe
+HTTP header value (no control characters other than tabs, and no characters
+above U+00FF). Invalid values are `422` before persistence, so downloads can
+encode the filename and set their headers safely.
+
 Lists are newest-first by `originalUploadedAt`. For files created through
 this API, `originalUploadedAt` is the record creation time.
 
