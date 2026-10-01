@@ -48,6 +48,7 @@ export default {
                 level: 'info',
             },
             SEND_EMAIL: {
+                bindingName: 'EMAIL',
                 // Placeholder only: replace with an address on an onboarded,
                 // verified sender domain before enabling production sending.
                 from: 'replace-me@example.com',
