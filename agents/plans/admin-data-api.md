@@ -230,7 +230,7 @@ explicit and usable by both enforcement and discovery.
 
 ### Task D2: Authenticate scoped administrative data tokens
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D1
 **Documentation:** This plan; Collections README; server-error-handling.md; code-style-guide.md; code-documentation-guide.md; unit testing guide
 
@@ -264,10 +264,10 @@ Mint, verify, expire, and revoke tokens carrying explicit Collection grants.
 
 **Acceptance criteria**
 
-- [ ] Mint returns the secret once; stored/listed data cannot recover it.
-- [ ] Missing, wrong-purpose, expired, and revoked credentials are rejected.
-- [ ] Tokens cannot access other Collections or ungranted actions.
-- [ ] Concurrent revocation preserves the original revocation event.
+- [x] Mint returns the secret once; stored/listed data cannot recover it.
+- [x] Missing, wrong-purpose, expired, and revoked credentials are rejected.
+- [x] Tokens cannot access other Collections or ungranted actions.
+- [x] Concurrent revocation preserves the original revocation event.
 
 **Validation**
 
@@ -276,12 +276,64 @@ Mint, verify, expire, and revoke tokens carrying explicit Collection grants.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Publishing token code is a pattern, not a shared credential domain.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Token Record/Collection, lifecycle scripts, admin Forms, bearer
+  middleware, Collection registration, tests, and doc updates.
+- Current state: Complete.
+- Remaining: None for D2. D3 must add the routes the Forms target and mount
+  the pages; D4 must attach the middleware to the API subtree.
+- Decisions and discoveries:
+  - Publishing token code is a pattern, not a shared credential domain.
+  - Collection `AdminDataApiToken` (registered in `app.js`), prefix `kxadt_`
+    (`ADMIN_DATA_API_TOKEN_PREFIX`), record id = SHA-256 hex of the token,
+    sort key = creation time. Stored grants are canonical
+    `[{ collection, actions }]`, sorted by Collection with actions in
+    `ADMIN_DATA_ACTIONS` order. `createToken()` asserts every grant against
+    `adminDataResources` (unregistered Collection, disabled action, empty or
+    repeated Collection are AssertionErrors); Record validation checks shape
+    only, so retiring a registration never invalidates stored tokens.
+  - `authenticateAdminDataApiToken()` rejects anything not matching
+    `^kxadt_[0-9a-f]{64}$` before lookup (so Publishing tokens and Basic auth
+    never reach storage). Unlike the Publishing API, expired/revoked tokens are
+    `401` (`UnauthenticatedError`, code `AdminDataApiTokenInactive`), matching
+    the plan's "authentication failure is 401". No caching.
+  - Middleware `presentation/middleware/authenticate-admin-data-api-token.js`
+    sets `context.user = { id, type, grants, permissions, createdBy,
+    tokenCreationDate, tokenExpirationDate }`, with `permissions` from
+    `toAdminDataPermissions(grants)` only (no roles). D4 authorizes with
+    `adminDataResources.isAuthorized(context.user.permissions, type, action)`.
+    The `WWW-Authenticate: Bearer` challenge is NOT set yet; D4's API error
+    handler must add it to 401 responses.
+  - Revocation is version-checked and never retried: a concurrent revoke gets
+    `VersionConflictError` → `ConflictError` `AdminDataApiTokenConflict`; a
+    re-revoke gets `AdminDataApiTokenNotRevocable`. Original `revokedAt` is
+    preserved (tested).
+  - Forms (`presentation/forms/admin-data-api-tokens/admin-data-api-token-admin-form.js`):
+    `AdminDataApiTokenCreateForm` (fields `description` ≤ 200 chars,
+    `grants` multi-value checkboxes with values `"<Collection>:<action>"`,
+    `time_to_live_seconds` select, default 30 days, max 365) with
+    `fromFormData()` using `getAll('grants')`; `getDynamicFieldMetadata()`
+    returns `{ grants: { resources: [{ type, collection, description,
+    actions: [{ value, action, isChecked }] }] } }` for D3 rendering.
+    `AdminDataApiTokenRevokeForm` (`token_id`). Targets D3 must define:
+    `admin-panel/admin-data-api-tokens/create-token` and
+    `admin-panel/admin-data-api-tokens-revoke/revoke`.
+  - Extracted the Publishing admin form's private TTL parser into
+    `normalizeIntegerStringAttribute(value, defaultValue)` in
+    `presentation/forms/utils.js`; both admin token forms use it (behavior
+    unchanged; existing form tests pass).
+- Actual files changed:
+  - `src/app/collections/admin-data-api-token-record.js` (new)
+  - `src/app/collections/admin-data-api-token-collection.js` (new)
+  - `src/app/transaction-scripts/admin-data-api-tokens/{create,authenticate,list,revoke}-admin-data-api-token(s).js` (new)
+  - `src/app/presentation/forms/admin-data-api-tokens/admin-data-api-token-admin-form.js` (new)
+  - `src/app/presentation/middleware/authenticate-admin-data-api-token.js` (new)
+  - `src/app/presentation/forms/utils.js`, `src/app/presentation/forms/publishing-api-tokens/publishing-api-token-admin-form.js` — shared TTL parser
+  - `src/app/app.js` — Collection registration
+  - `docs/admin-data-api.md` — status and token behavior
+  - `test/unit-tests/app/transaction-scripts/admin-data-api-tokens/admin-data-api-token-lifecycle.test.js` (new; real in-memory SQLite store)
+  - `test/unit-tests/app/presentation/forms/admin-data-api-tokens/admin-data-api-token-admin-form.test.js` (new)
+- Validation run: `node run-linter.js` — clean. `node run-tests.js` — 1719
+  tests passed, 0 failures.
 - Blockers: None.
 
 ### Task D3: Manage data tokens in the admin panel

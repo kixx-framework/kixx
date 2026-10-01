@@ -5,6 +5,7 @@ import {
 } from '../../../kixx/assertions/mod.js';
 
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const INTEGER_STRING_PATTERN = /^[0-9]+$/u;
 
 /**
  * Trims a submitted string field while preserving missing or non-string values.
@@ -58,6 +59,41 @@ export function normalizeOptionalStringAttribute(value) {
 
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Parses a submitted whole-number field, such as a select of lifetimes in seconds.
+ *
+ * Missing and blank input take the default. A string that is not entirely
+ * digits is returned trimmed rather than parsed, because Number.parseInt()
+ * accepts partial numbers like "604800abc"; validate() then reports it. The
+ * raw string (not Number.NaN) is kept because it round-trips through
+ * getFormContext()'s echoed field value into response props, which must stay
+ * JSON-canonicalizable for the page cache key.
+ *
+ * @param {*} value - Submitted field value.
+ * @param {number} defaultValue - Value used when the field is missing or blank.
+ * @returns {*} Parsed integer, the default, or the original non-integer value.
+ */
+export function normalizeIntegerStringAttribute(value, defaultValue) {
+    if (value === null || isUndefined(value)) {
+        return defaultValue;
+    }
+
+    if (!isString(value)) {
+        return value;
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+        return defaultValue;
+    }
+
+    if (!INTEGER_STRING_PATTERN.test(trimmed)) {
+        return trimmed;
+    }
+
+    return Number.parseInt(trimmed, 10);
 }
 
 /**

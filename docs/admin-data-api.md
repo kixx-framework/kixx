@@ -14,11 +14,12 @@ The API is mounted at:
 ```
 
 > **Implementation status.** The resource registration contract, the
-> permission model, and the File registration exist
-> (`src/app/admin-data-api/`, `src/app/permissions/admin-data-api.js`). Token
-> minting, the admin-panel token pages, and the HTTP endpoints are delivered by
-> later tasks of `agents/plans/admin-data-api.md`; the protocol sections below
-> are the contract those tasks implement.
+> permission model, the File registration, and token minting, verification,
+> and revocation exist (`src/app/admin-data-api/`,
+> `src/app/permissions/admin-data-api.js`, the `AdminDataApiToken`
+> Collection). The admin-panel token pages and the HTTP endpoints are
+> delivered by later tasks of `agents/plans/admin-data-api.md`; the protocol
+> sections below are the contract those tasks implement.
 
 ## Exposure model
 
@@ -48,7 +49,13 @@ Authorization: Bearer kxadt_<secret>
 These tokens are a separate credential domain. Publishing API tokens
 (`kxpat_`), admin passwords, and HTTP Basic credentials are rejected. A missing,
 malformed, unknown, expired, or revoked token returns `401` with a
-`WWW-Authenticate: Bearer` challenge.
+`WWW-Authenticate: Bearer` challenge; expired and revoked tokens carry code
+`AdminDataApiTokenInactive`.
+
+The server stores only the SHA-256 digest of each token, so a lost secret
+cannot be recovered; mint a new token. Token state is read on every request:
+a revocation applies to every request that authenticates after it is stored,
+but does not cancel a request that had already authenticated.
 
 Each token carries immutable, explicit grants:
 

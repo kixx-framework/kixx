@@ -1,5 +1,6 @@
 import DocumentStore from '../kixx/document-store/document-store.js';
 import CsrfTokenSigner from './presentation/lib/csrf-token-signer.js';
+import AdminDataApiTokenCollection from './collections/admin-data-api-token-collection.js';
 import AdminInviteCollection from './collections/admin-invite-collection.js';
 import AdminUserCollection from './collections/admin-user-collection.js';
 import ActivationCollection from './collections/activation-collection.js';
@@ -51,6 +52,7 @@ export function register(context) {
 
     context.registerCollection('AdminUser', new AdminUserCollection({ db: documentStore }));
     context.registerCollection('Activation', new ActivationCollection({ db: documentStore }));
+    context.registerCollection('AdminDataApiToken', new AdminDataApiTokenCollection({ db: documentStore }));
     context.registerCollection('AdminInvite', new AdminInviteCollection({ db: documentStore }));
     context.registerCollection('Migration', new MigrationCollection({ db: documentStore }));
     context.registerCollection('PublishingApiToken', new PublishingApiTokenCollection({ db: documentStore }));
