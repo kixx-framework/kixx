@@ -13,14 +13,6 @@ The API is mounted at:
 /admin-data-api/v1/
 ```
 
-> **Implementation status.** The registration contract, permission model,
-> tokens and their admin-panel pages, and the HTTP protocol below are
-> implemented (`src/app/admin-data-api/`, `src/routes/admin-data-api-v1.js`,
-> `src/app/presentation/request-handlers/admin-data-api/`,
-> `src/app/transaction-scripts/admin-data-api/`). End-to-end verification of
-> File CRUD against a running instance is the remaining task of
-> `agents/plans/admin-data-api.md`.
-
 ## Exposure model
 
 Nothing is exposed by default. A Collection is reachable only when the
@@ -257,7 +249,8 @@ Resource type `files` exposes the `File` Collection with `list`, `get`,
 | `originalUploadedAt` | Yes | Server-assigned | No |
 | `content` | Yes | Required (complete object) | Yes, replaced whole |
 
-`content` is a reference to bytes that already exist in file storage:
+`content` is a reference to bytes that already exist in file storage. It must
+have exactly these six members; any other member is `422`:
 
 ```json
 {
@@ -272,6 +265,74 @@ Resource type `files` exposes the `File` Collection with `list`, `get`,
 
 Lists are newest-first by `originalUploadedAt`. For files created through
 this API, `originalUploadedAt` is the record creation time.
+
+### Examples
+
+These use a token created in the admin panel at **Admin Data API Tokens**
+with every `files` action granted. Copy the token from the creation page; it
+is not shown again.
+
+```bash
+export KIXX_URL=https://example.com
+export KIXX_DATA_TOKEN=kxadt_...
+
+# What can this token do?
+curl -s "$KIXX_URL/admin-data-api/v1/" \
+  -H "Authorization: Bearer $KIXX_DATA_TOKEN"
+
+# Newest Files first, ten at a time; follow links.next for the next page.
+curl -s "$KIXX_URL/admin-data-api/v1/files?page%5Bsize%5D=10" \
+  -H "Authorization: Bearer $KIXX_DATA_TOKEN"
+
+# Read one File, including the content reference and meta.version.
+curl -s "$KIXX_URL/admin-data-api/v1/files/$FILE_ID" \
+  -H "Authorization: Bearer $KIXX_DATA_TOKEN"
+```
+
+Create a second record that points at an existing File's bytes, using the
+`content` object copied from that File:
+
+```bash
+curl -s -X POST "$KIXX_URL/admin-data-api/v1/files" \
+  -H "Authorization: Bearer $KIXX_DATA_TOKEN" \
+  -H "Content-Type: application/vnd.api+json" \
+  -d '{
+    "data": {
+      "type": "files",
+      "attributes": {
+        "title": "Logo (press kit)",
+        "description": null,
+        "isPublished": false,
+        "content": {
+          "key": "5b0c.../9e1d...",
+          "filename": "logo.png",
+          "contentType": "image/png",
+          "etag": "...",
+          "generation": "9e1d...",
+          "length": 1024
+        }
+      }
+    }
+  }'
+```
+
+Update the title, sending the version you last read. A `409` means someone
+else changed the record; read it again before retrying:
+
+```bash
+curl -s -X PATCH "$KIXX_URL/admin-data-api/v1/files/$FILE_ID" \
+  -H "Authorization: Bearer $KIXX_DATA_TOKEN" \
+  -H "Content-Type: application/vnd.api+json" \
+  -d '{ "data": { "type": "files", "id": "'"$FILE_ID"'", "attributes": { "title": "New title" }, "meta": { "version": 3 } } }'
+```
+
+Delete the record (never its bytes) at the version you last read:
+
+```bash
+curl -s -X DELETE "$KIXX_URL/admin-data-api/v1/files/$FILE_ID" \
+  -H "Authorization: Bearer $KIXX_DATA_TOKEN" \
+  -H "Kixx-Expected-Version: 4"
+```
 
 ### Record-only contract and its limits
 
@@ -289,8 +350,21 @@ This resource edits File **records** only:
 - Duplicating a reference across records is not tracked. The admin panel's
   file workflows delete the bytes a record owns, so deleting or replacing one
   record there can leave another record's reference dangling.
+- Deleting the admin-panel File that uploaded the bytes deletes those bytes,
+  even if API-created records still reference them. Delete or repoint those
+  records first.
 - Content references are internal storage details. They are returned to any
   token granted access to `File`; treat such tokens as administrative.
+
+### Verification
+
+`test/end-to-end/300-admin-data-api/` exercises this contract against a
+running target: tokens created and revoked through the admin panel, scoped
+grants, every File operation, stale versions and two concurrent writers, and
+byte checks after every repoint and delete. The deterministic race in which a
+write lands between load and persist is covered by the unit tests in
+`test/unit-tests/app/presentation/request-handlers/admin-data-api/`, which also
+prove that no API request reaches the file object store.
 
 ## Adding a resource
 

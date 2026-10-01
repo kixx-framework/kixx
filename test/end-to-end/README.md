@@ -123,6 +123,7 @@ it. See each directory for what it covers.
 | `050-admin-panel/` | Admin-panel HTML workflows. No target-specific caveats. |
 | `100-admin-files/` | Admin file library over HTTP. Writes to the target's document and object stores and deletes what it creates; see below. |
 | `200-publishing-api/` | See below — this directory changes behavior with `--development` and has two files that mutate the running build. |
+| `300-admin-data-api/` | Admin Data API tokens and File CRUD. Needs a writable target; see below. |
 
 ### Admin files: fixtures and large uploads
 
@@ -146,6 +147,21 @@ back and hash-checked), three limit-size files at once, two limit + 1
 uploads, and a connection that drops after half its declared bytes. It
 deletes what it created. [`docs/admin-files.md`](../../docs/admin-files.md)
 lists the expected results.
+
+### Admin Data API: fixtures and leftovers
+
+`300-admin-data-api/` mints its Admin Data API tokens through the admin-panel
+form and revokes every one it creates in `after` hooks. It uploads two
+`e2e-admin-data-*` files through the admin panel, creates File records through
+the API that reference those files' bytes, and checks after every API repoint
+and delete that the uploaded bytes are unchanged. Cleanup deletes the API
+records first and then the uploaded files, because deleting an uploaded file in
+the admin panel removes the bytes the API records point at.
+
+Run it against a writable target such as a local target instance; it has
+not been verified under `--development`. Each run leaves behind its revoked
+tokens and the Admin and Developer accounts it invites to check who may
+manage tokens.
 
 ### Publishing API: `--development` disables writes
 
