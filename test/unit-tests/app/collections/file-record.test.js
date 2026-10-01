@@ -43,4 +43,47 @@ describe('FileRecord', ({ it }) => {
         assert(error);
         assertEqual('title', error.errors[0].source);
     });
+
+    it('rejects content reference members it does not define', () => {
+        const record = makeRecord();
+        const content = Object.assign({}, record.get('content'), { ownerId: 'someone' });
+        const error = catchError(() => makeRecord({ content }).validate());
+        assert(error);
+        assertEqual(1, error.errors.length);
+        assertEqual('content.ownerId', error.errors[0].source);
+    });
+
+    it('rejects content types that cannot safely become download headers', () => {
+        for (const contentType of [ 'image/png\r\nX-Test: bad', 'text/plain\u0000', 'text/\u0100' ]) {
+            const record = makeRecord();
+            record.set('content', Object.assign({}, record.get('content'), { contentType }));
+
+            const error = catchError(() => record.validate());
+            assert(error);
+            assertEqual('ValidationError', error.name);
+            assertEqual('content.contentType', error.errors[0].source);
+        }
+    });
+
+    it('rejects filenames that cannot be encoded for download disposition', () => {
+        for (const filename of [ '\ud800.txt', 'file\udfff.txt' ]) {
+            const record = makeRecord();
+            record.set('content', Object.assign({}, record.get('content'), { filename }));
+
+            const error = catchError(() => record.validate());
+            assert(error);
+            assertEqual('ValidationError', error.name);
+            assertEqual('content.filename', error.errors[0].source);
+        }
+    });
+
+    it('accepts Unicode filenames and content types with parameters', () => {
+        const record = makeRecord();
+        record.set('content', Object.assign({}, record.get('content'), {
+            filename: 'café-📄.txt',
+            contentType: 'text/plain; charset=utf-8',
+        }));
+
+        assertEqual(undefined, record.validate());
+    });
 });

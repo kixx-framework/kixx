@@ -838,6 +838,8 @@ For an application API endpoint that accepts or returns JSON:API documents:
 3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the whole returned resource into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script. `fromJsonApi(resource)` always takes the resource and reads `resource.attributes` itself — the form owns the mapping from wire shape to domain shape. If destructuring the JSON API payload is trivial, it can be done in the request handler, otherwise use an API form.
 4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
 
+`src/app/presentation/lib/json-api.js` also has stricter JSON:API 1.1 helpers, used by the Administrative Data API (`request-handlers/admin-data-api/`): `assertStrictJsonApiContentType()` (rejects every media type parameter except `profile`), `assertAcceptsJsonApi()` (406 negotiation), `withErrorSource()` and `toJsonApiErrorObjects()` (structured `source` pointers, parameters, and headers), and `respondWithJsonApi()` (sends the Content-Type without the `charset` parameter JSON:API forbids). Those protocol errors need a route error handler such as `error-handlers/admin-data-api-error-handler.js`, because the router fallback does not add `WWW-Authenticate` on 401.
+
 ### Serving Static Assets
 
 `StaticAssetRequestHandler` serves content-addressable blobs from the registered `ContentAddressableStore`. Wire it twice: a fingerprinted `/assets/:hash/*pathname` route before the catch-all, then pathname mode ahead of `HyperviewPageHandler` for fixed URLs such as `/favicon.ico` (see root files below).

@@ -1,0 +1,189 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <h1>Admin Data API tokens</h1>
+            <p>Create and revoke bearer tokens that read and edit application records through the Admin Data API. Direct edits bypass application workflows, so grant only the access a tool needs.</p>
+        </header>
+
+        {{!--
+            form_expired means a submission was rejected because its CSRF token was
+            no longer live, typically a page left open too long or a back-button
+            resubmit.
+        --}}
+        {{#ifEqual form.errorCode "form_expired"}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body flow">
+                <p class="callout__title">That form had expired</p>
+                <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+
+        {{!--
+            newToken is present only on the response that just minted a token. Only
+            its hash is stored, so it is shown once here and cannot be retrieved.
+        --}}
+        {{#if newToken}}
+        <div class="callout callout--info" role="status">
+            <span class="callout__icon" aria-hidden="true">[i]</span>
+            <div class="callout__body flow">
+                <p class="type-body-sm">New token created. Copy it now &mdash; it is shown only once and cannot be retrieved later.</p>
+                <div class="copy-field">
+                    <label class="copy-field__label" for="new-token">Token</label>
+                    <div class="copy-field__row">
+                        <input class="field__input copy-field__value" id="new-token" type="text" value="{{ newToken }}" readonly>
+                        <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="new-token" aria-label="Copy token">
+                            <span class="copy-field__icon" aria-hidden="true">copy</span>
+                        </button>
+                    </div>
+                    <p class="copy-field__status" role="status" aria-live="polite"></p>
+                </div>
+            </div>
+        </div>
+        {{/if}}
+
+        <form class="flow field-stack" method="{{ form.method }}" action="{{ form.url }}">
+            {{#if form.csrf}}
+            <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+            {{/if}}
+
+            <div class="field{{#if form.fields.description.error}} field--error{{/if}}">
+                <label class="field__label" for="description">{{ form.fields.description.label }}</label>
+                <input
+                    class="field__input"
+                    id="description"
+                    name="description"
+                    type="text"
+                    maxlength="{{ form.fields.description.maxLength }}"
+                    value="{{ form.fields.description.value }}"
+                    aria-describedby="description-hint{{#if form.fields.description.error}} description-error{{/if}}"
+                    {{#if form.fields.description.error}}aria-invalid="true"{{/if}}
+                >
+                <p class="field__hint" id="description-hint">{{ form.fields.description.hint }}</p>
+                {{#if form.fields.description.error}}
+                <p class="field__error" id="description-error" role="alert">{{ form.fields.description.error }}</p>
+                {{/if}}
+            </div>
+
+            {{!--
+                One checkbox per enabled operation of each registered resource. Every
+                checkbox shares the name "grants" and submits "<Collection>:<action>";
+                the server re-validates each value against the current registry.
+            --}}
+            <fieldset class="field-group flow" aria-describedby="grants-hint{{#if form.fields.grants.error}} grants-error{{/if}}">
+                <legend class="field-group__legend">{{ form.fields.grants.label }}</legend>
+                <p class="field-group__hint" id="grants-hint">{{ form.fields.grants.hint }}</p>
+                {{#each form.fields.grants.resources as |resource| }}
+                <fieldset class="field-group flow">
+                    <legend class="field-group__legend">{{ resource.type }}</legend>
+                    <p class="field-group__hint">{{ resource.description }}</p>
+                    <div class="cluster">
+                    {{#each resource.actions as |option| }}
+                        <div class="field--choice">
+                            <input
+                                type="checkbox"
+                                id="grant-{{ resource.type }}-{{ option.action }}"
+                                name="grants"
+                                value="{{ option.value }}"
+                                {{#if option.isChecked}}checked{{/if}}
+                                {{#if form.fields.grants.error}}aria-invalid="true"{{/if}}
+                            >
+                            <label for="grant-{{ resource.type }}-{{ option.action }}">{{ option.action }}</label>
+                        </div>
+                    {{/each}}
+                    </div>
+                </fieldset>
+                {{/each}}
+                {{#if form.fields.grants.error}}
+                <p class="field-group__error" id="grants-error" role="alert">{{ form.fields.grants.error }}</p>
+                {{/if}}
+            </fieldset>
+
+            <div class="field{{#if form.fields.time_to_live_seconds.error}} field--error{{/if}}">
+                <label class="field__label" for="time_to_live_seconds">{{ form.fields.time_to_live_seconds.label }}</label>
+                <select
+                    class="field__select"
+                    id="time_to_live_seconds"
+                    name="time_to_live_seconds"
+                    {{#if form.fields.time_to_live_seconds.error}}aria-describedby="time_to_live_seconds-error" aria-invalid="true"{{/if}}
+                >
+                {{#each form.fields.time_to_live_seconds.options as |option| }}
+                    <option value="{{ option.value }}" {{#ifEqual option.value form.fields.time_to_live_seconds.value}}selected{{/ifEqual}}>{{ option.label }}</option>
+                {{/each}}
+                </select>
+                {{#if form.fields.time_to_live_seconds.error}}
+                <p class="field__error" id="time_to_live_seconds-error" role="alert">{{ form.fields.time_to_live_seconds.error }}</p>
+                {{/if}}
+            </div>
+
+            <div class="cluster">
+                <button class="button button--primary" type="submit">Create token</button>
+            </div>
+        </form>
+
+        {{#if tokens}}
+        <ul class="flow list-unstyled">
+        {{#each tokens as |token| }}
+            <li class="card flow">
+                <p class="type-caption">{{ token.status }}</p>
+                {{#if token.description}}
+                <p class="type-body-sm">{{ token.description }}</p>
+                {{else}}
+                <p class="type-body-sm">No description provided.</p>
+                {{/if}}
+                <ul class="flow">
+                {{#each token.grants as |grant| }}
+                    <li class="type-body-sm">
+                        {{#if grant.isRetired}}
+                        {{ grant.collection }} (no longer exposed): {{ grant.actions }}
+                        {{else}}
+                        {{ grant.type }}: {{ grant.actions }}
+                        {{/if}}
+                    </li>
+                {{/each}}
+                </ul>
+                <p class="type-body-sm">
+                    Created {{ formatDate token.createdAt format="DATETIME_MED" }} by {{ token.createdBy }}
+                </p>
+                {{#if token.revokedAt}}
+                <p class="type-body-sm">
+                    Revoked {{ formatDate token.revokedAt format="DATETIME_MED" }}
+                </p>
+                {{else}}
+                <p class="type-body-sm">
+                    Expires {{ formatDate token.expiresAt format="DATETIME_MED" }}
+                </p>
+                {{/if}}
+                {{#ifEqual token.status "active"}}
+                {{!-- Revoke posts to its own route with the token id as a hidden field;
+                      the CSRF token is shared across every form on this page. --}}
+                <form class="cluster" method="POST" action="{{ links.revokeToken }}">
+                    {{#if form.csrf}}
+                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                    {{/if}}
+                    <input type="hidden" name="token_id" value="{{ token.id }}">
+                    <button class="button button--secondary" type="submit">Revoke</button>
+                </form>
+                {{/ifEqual}}
+            </li>
+        {{/each}}
+        </ul>
+        {{else}}
+        <p class="type-body-sm">No tokens yet. Create one to authorize an external tool.</p>
+        {{/if}}
+
+        {{!-- Pagination stays outside the list conditional so an emptied later
+              page still offers its "Previous page" link. --}}
+        {{#if showPagination}}
+        <p class="cluster">
+            {{#if links.previousPage}}
+            <a class="button button--secondary" href="{{ links.previousPage }}">Previous page</a>
+            {{/if}}
+            {{#if links.nextPage}}
+            <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
+            {{/if}}
+        </p>
+        {{/if}}
+    </article>
+</main>

@@ -9,6 +9,15 @@ import {
 import { isIsoDateTime } from '../lib/iso-date-time.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const HEADER_VALUE_PATTERN = /^[\t\x20-\x7e\x80-\xff]+$/u;
+// In Unicode mode, valid surrogate pairs match as a single code point outside
+// this range. Only unpaired surrogates remain, which encodeURIComponent rejects.
+const UNPAIRED_SURROGATE_PATTERN = /[\uD800-\uDFFF]/u;
+
+// The complete content reference FileContentCollection#create() returns.
+// Unknown members are rejected so a direct record edit cannot store extra data
+// inside the reference.
+const CONTENT_FIELDS = [ 'key', 'filename', 'contentType', 'etag', 'generation', 'length' ];
 
 /** Stored metadata and the active immutable object reference for an admin file. */
 export default class FileRecord extends Record {
@@ -56,10 +65,23 @@ function validateContent(error, content) {
         error.push('File content must be an object', 'content');
         return;
     }
-    for (const field of [ 'key', 'filename', 'contentType', 'etag', 'generation' ]) {
+    for (const field of Object.keys(content)) {
+        if (!CONTENT_FIELDS.includes(field)) {
+            error.push(`File content ${ field } is not a recognized field`, `content.${ field }`);
+        }
+    }
+    for (const field of CONTENT_FIELDS.filter((name) => name !== 'length')) {
         if (!isNonEmptyString(content[field])) {
             error.push(`File content ${ field } is required`, `content.${ field }`);
         }
+    }
+    // Downloads place contentType directly in a Web Headers value, whose
+    // ByteString conversion rejects characters above U+00FF and CR/LF/NUL.
+    if (isNonEmptyString(content.contentType) && !HEADER_VALUE_PATTERN.test(content.contentType)) {
+        error.push('File content type must be a safe HTTP header value', 'content.contentType');
+    }
+    if (isNonEmptyString(content.filename) && UNPAIRED_SURROGATE_PATTERN.test(content.filename)) {
+        error.push('File content filename must contain valid Unicode', 'content.filename');
     }
     if (!Number.isSafeInteger(content.length) || content.length < 0) {
         error.push('File content length must be a nonnegative safe integer', 'content.length');

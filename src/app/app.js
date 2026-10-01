@@ -1,5 +1,6 @@
 import DocumentStore from '../kixx/document-store/document-store.js';
 import CsrfTokenSigner from './presentation/lib/csrf-token-signer.js';
+import AdminDataApiTokenCollection from './collections/admin-data-api-token-collection.js';
 import AdminInviteCollection from './collections/admin-invite-collection.js';
 import AdminUserCollection from './collections/admin-user-collection.js';
 import ActivationCollection from './collections/activation-collection.js';
@@ -11,6 +12,7 @@ import UserSessionCollection from './collections/user-session-collection.js';
 import FileCollection from './collections/file-collection.js';
 import FileContentCollection from './collections/file-content-collection.js';
 import { jobs } from './jobs/mod.js';
+import { adminDataResources } from './admin-data-api/mod.js';
 import { assert, assertNonEmptyString, isPlainObject } from '../kixx/assertions/mod.js';
 
 
@@ -50,6 +52,7 @@ export function register(context) {
 
     context.registerCollection('AdminUser', new AdminUserCollection({ db: documentStore }));
     context.registerCollection('Activation', new ActivationCollection({ db: documentStore }));
+    context.registerCollection('AdminDataApiToken', new AdminDataApiTokenCollection({ db: documentStore }));
     context.registerCollection('AdminInvite', new AdminInviteCollection({ db: documentStore }));
     context.registerCollection('Migration', new MigrationCollection({ db: documentStore }));
     context.registerCollection('PublishingApiToken', new PublishingApiTokenCollection({ db: documentStore }));
@@ -87,4 +90,9 @@ export function initialize(context) {
     });
 
     context.registerService('CsrfTokenSigner', new CsrfTokenSigner(csrfTokenSigningSecret));
+
+    // Collections are all registered by now. Check the Administrative Data
+    // API registrations against them so a stale attribute, method, or index
+    // name fails boot rather than a request.
+    adminDataResources.assertCollections(context);
 }

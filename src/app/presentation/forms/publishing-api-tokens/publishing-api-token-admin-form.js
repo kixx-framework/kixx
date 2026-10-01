@@ -1,8 +1,12 @@
 import { ValidationError } from '../../../../kixx/errors/mod.js';
-import { isNonEmptyString, isUndefined, isString } from '../../../../kixx/assertions/mod.js';
+import { isNonEmptyString, isString } from '../../../../kixx/assertions/mod.js';
 import BaseForm from '../base-form.js';
 import { ROLE_EDITOR } from '../../../permissions/roles.js';
-import { normalizeOptionalStringAttribute, normalizeStringAttribute } from '../utils.js';
+import {
+    normalizeIntegerStringAttribute,
+    normalizeOptionalStringAttribute,
+    normalizeStringAttribute,
+} from '../utils.js';
 import {
     DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS,
     MAX_PUBLISHING_API_TOKEN_TTL_SECONDS,
@@ -10,7 +14,6 @@ import {
 
 
 const ONE_DAY_IN_SECONDS = 60 * 60 * 24;
-const INTEGER_STRING_PATTERN = /^[0-9]+$/u;
 
 // Editor is the only publishing role today, so every admin-panel-created
 // token is assigned it directly with no picker. A live role selector is
@@ -90,7 +93,10 @@ export default class PublishingApiTokenCreateForm extends BaseForm {
         const { description, time_to_live_seconds } = attributes ?? {};
 
         this.description = normalizeOptionalStringAttribute(description);
-        this.time_to_live_seconds = normalizeTimeToLiveSeconds(time_to_live_seconds);
+        this.time_to_live_seconds = normalizeIntegerStringAttribute(
+            time_to_live_seconds,
+            DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS,
+        );
     }
 
     /**
@@ -134,33 +140,6 @@ export default class PublishingApiTokenCreateForm extends BaseForm {
         };
     }
 }
-
-function normalizeTimeToLiveSeconds(value) {
-    if (value === null || isUndefined(value)) {
-        return DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS;
-    }
-
-    if (!isString(value)) {
-        return value;
-    }
-
-    const trimmed = value.trim();
-    if (trimmed.length === 0) {
-        return DEFAULT_PUBLISHING_API_TOKEN_TTL_SECONDS;
-    }
-
-    // Number.parseInt() accepts partial numbers like "604800abc"; keep forged
-    // non-integer submissions invalid so validate() can report the field error.
-    // The raw string is kept (not Number.NaN) because it round-trips through
-    // getFormContext()'s echoed field value into response props, which must
-    // stay JSON-canonicalizable for the page cache key.
-    if (!INTEGER_STRING_PATTERN.test(trimmed)) {
-        return trimmed;
-    }
-
-    return Number.parseInt(trimmed, 10);
-}
-
 
 /**
  * Backs the per-row "revoke" control in the Publishing API token management UI.
