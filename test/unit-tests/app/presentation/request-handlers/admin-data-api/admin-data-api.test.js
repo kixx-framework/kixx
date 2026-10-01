@@ -724,6 +724,77 @@ describe('Administrative Data API v1', ({ describe }) => {
 
     describe('audit logging and unexpected errors', ({ it }) => {
 
+        it('logs rejected mutations once, including failures before authorization', async () => {
+            const harness = makeHarness();
+            const { token, id: tokenId } = await harness.mint(ALL_FILE_GRANTS);
+            const reader = await harness.mint([ 'File:get' ]);
+            const cases = [
+                [ 'POST', '/admin-data-api/v1/files', {}, 401, null, 'create' ],
+                [ 'DELETE', '/admin-data-api/v1/files/example', { token: reader.token }, 403, reader.id, 'delete' ],
+                [ 'PATCH', '/admin-data-api/v1/unknown/example', { token }, 404, tokenId, 'update' ],
+                [ 'POST', '/admin-data-api/v1/files', { token, rawBody: '{invalid' }, 400, tokenId, 'create' ],
+                [ 'POST', '/admin-data-api/v1/files', {
+                    token,
+                    headers: { accept: `${ JSON_API }; ext="unsupported"` },
+                }, 406, tokenId, 'create' ],
+                [ 'POST', '/admin-data-api/v1/files', {
+                    token,
+                    headers: { 'content-type': 'application/json' },
+                    body: fileDocument(),
+                }, 415, tokenId, 'create' ],
+                [ 'POST', '/admin-data-api/v1/files', {
+                    token,
+                    body: fileDocument({ secret: 'Never log this payload' }),
+                }, 422, tokenId, 'create' ],
+            ];
+
+            for (const [ method, path, options, status, principal, action ] of cases) {
+                harness.logEntries.length = 0;
+                const result = await harness.send(method, path, options);
+                assertEqual(status, result.status);
+
+                const entries = harness.logEntries.filter((entry) => entry.message.startsWith('admin data mutation'));
+                assertEqual(1, entries.length);
+                const [ entry ] = entries;
+                assertEqual('warn', entry.level);
+                assertEqual('failed', entry.info.outcome);
+                assertEqual(status, entry.info.status);
+                assertEqual(firstError(result).code, entry.info.code);
+                assertEqual(principal, entry.info.principal);
+                assertEqual(action, entry.info.action);
+                assertEqual(path.split('/')[3], entry.info.type);
+                assertEqual(path.split('/')[4], entry.info.id);
+                assert(entry.info.requestId);
+                assertEqual(false, JSON.stringify(entries).includes(token));
+                assertEqual(false, JSON.stringify(entries).includes('Never log this payload'));
+            }
+
+            harness.logEntries.length = 0;
+            await harness.send('GET', '/admin-data-api/v1/files');
+            assertEqual(0, harness.logEntries.filter((entry) => entry.message.startsWith('admin data mutation')).length);
+        });
+
+        it('logs successful create, update, and delete once with their record id', async () => {
+            const harness = makeHarness();
+            const { token } = await harness.mint(ALL_FILE_GRANTS);
+            const created = await createFile(harness, token);
+            await harness.send('PATCH', `/admin-data-api/v1/files/${ created.id }`, {
+                token,
+                body: patchDocument(created.id, 1, { title: 'Updated' }),
+            });
+            await harness.send('DELETE', `/admin-data-api/v1/files/${ created.id }`, {
+                token,
+                headers: { 'kixx-expected-version': '2' },
+            });
+
+            const entries = harness.logEntries.filter((entry) => entry.message.startsWith('admin data mutation'));
+            assertEqual('create,update,delete', entries.map((entry) => entry.info.action).join(','));
+            for (const entry of entries) {
+                assertEqual('succeeded', entry.info.outcome);
+                assertEqual(created.id, entry.info.id);
+            }
+        });
+
         it('logs every mutation outcome without secrets or payloads', async () => {
             const harness = makeHarness();
             const { id: tokenId, token } = await harness.mint(ALL_FILE_GRANTS);
@@ -755,7 +826,7 @@ describe('Administrative Data API v1', ({ describe }) => {
             assertEqual(false, logged.includes('Sensitive title'));
         });
 
-        it('lets unexpected storage errors propagate past the API error handler', async () => {
+        it('logs unexpected mutation failures and still propagates them past the API error handler', async () => {
             const harness = makeHarness();
             const { token } = await harness.mint(ALL_FILE_GRANTS);
             const tracker = new MockTracker();
@@ -766,7 +837,10 @@ describe('Administrative Data API v1', ({ describe }) => {
 
             let error;
             try {
-                await harness.send('GET', '/admin-data-api/v1/files/any-id', { token });
+                await harness.send('PATCH', '/admin-data-api/v1/files/any-id', {
+                    token,
+                    body: patchDocument('any-id', 1, { title: 'Private payload' }),
+                });
             } catch (cause) {
                 error = cause;
             }
@@ -774,6 +848,13 @@ describe('Administrative Data API v1', ({ describe }) => {
 
             assert(error);
             assertEqual('AssertionError', error.name);
+            const entries = harness.logEntries.filter((entry) => entry.message.startsWith('admin data mutation'));
+            assertEqual(1, entries.length);
+            assertEqual('failed', entries[0].info.outcome);
+            assertEqual(500, entries[0].info.status);
+            assertEqual('update', entries[0].info.action);
+            assertEqual('any-id', entries[0].info.id);
+            assertEqual(false, JSON.stringify(entries).includes('Private payload'));
         });
     });
 });

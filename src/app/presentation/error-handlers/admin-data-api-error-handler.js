@@ -8,13 +8,31 @@ import { respondWithJsonApi, toJsonApiErrorObjects } from '../lib/json-api.js';
  * header an error needs is set here: the Bearer challenge on 401 and Allow on
  * 405. Unexpected errors are left to the router so they still reach the
  * platform's fatal-error policy.
- * @param {import('../../../kixx/context/request-context.js').default} _context - Active request context.
+ * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
  * @param {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface} request - Request that failed.
  * @param {import('../../../kixx/http-router/server-response.js').default} response - Response to populate.
  * @param {Error} error - Error raised while handling the request.
  * @returns {import('../../../kixx/http-router/server-response.js').default|false} Error response, or false to continue the cascade.
  */
-export default function adminDataApiErrorHandler(_context, request, response, error) {
+export default function adminDataApiErrorHandler(context, request, response, error) {
+    // Log before classifying the error so authentication failures and unexpected
+    // errors are included, even when this handler passes the error onward.
+    const action = { POST: 'create', PATCH: 'update', DELETE: 'delete' }[request.method];
+    const { type, id } = request.pathnameParams;
+
+    if (action && type) {
+        context.logger.warn('admin data mutation failed', {
+            principal: context.user?.id ?? null,
+            requestId: context.requestId,
+            action,
+            type,
+            id,
+            outcome: 'failed',
+            status: error.httpStatusCode ?? 500,
+            code: error.code ?? error.name,
+        });
+    }
+
     if (!error.expected || !error.httpError) {
         return false;
     }

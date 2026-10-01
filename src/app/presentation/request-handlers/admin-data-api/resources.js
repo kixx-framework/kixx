@@ -43,9 +43,7 @@ export async function handleCollectionRequest(context, request, response) {
         return await listRecords(context, request, response, resource);
     }
 
-    return await auditMutation(context, { action, type }, async () => {
-        return await createRecord(context, request, response, resource);
-    });
+    return await createRecord(context, request, response, resource);
 }
 
 /**
@@ -67,12 +65,10 @@ export async function handleResourceRequest(context, request, response) {
         return await getRecord(context, request, response, resource, id);
     }
 
-    return await auditMutation(context, { action, type, id }, async () => {
-        if (action === 'update') {
-            return await updateRecord(context, request, response, resource, id);
-        }
-        return await deleteRecord(context, request, response, resource, id);
-    });
+    if (action === 'update') {
+        return await updateRecord(context, request, response, resource, id);
+    }
+    return await deleteRecord(context, request, response, resource, id);
 }
 
 async function listRecords(context, request, response, resource) {
@@ -126,7 +122,8 @@ async function createRecord(context, request, response, resource) {
         headers: { location: new URL(data.links.self, request.url.origin).href },
     });
 
-    return { response, id: record.id };
+    logMutationSuccess(context, 'create', resource.type, record.id);
+    return response;
 }
 
 async function updateRecord(context, request, response, resource, id) {
@@ -141,7 +138,8 @@ async function updateRecord(context, request, response, resource, id) {
 
     respondWithJsonApi(response, 200, { data: serializeResource(context, record, fields) });
 
-    return { response, id };
+    logMutationSuccess(context, 'update', resource.type, id);
+    return response;
 }
 
 async function deleteRecord(context, request, response, resource, id) {
@@ -152,7 +150,8 @@ async function deleteRecord(context, request, response, resource, id) {
 
     response.respond(204);
 
-    return { response, id };
+    logMutationSuccess(context, 'delete', resource.type, id);
+    return response;
 }
 
 // Resolves the registration and operation, then authorizes, before any query
@@ -183,32 +182,14 @@ function selectOperation(context, request, type, operations) {
     return { resource, action };
 }
 
-// Operational audit trail for every attempted mutation, success or failure.
-// It records who, what, and the outcome; never the bearer secret or payload.
-// This is logging, not a transactional ledger: a crash between the write and
-// this line loses the entry.
-async function auditMutation(context, entry, mutate) {
-    const details = Object.assign({
-        principal: context.user?.id ?? null,
+// Log only identity and outcome; never bearer secrets or record attributes.
+function logMutationSuccess(context, action, type, id) {
+    context.logger.info('admin data mutation succeeded', {
+        principal: context.user.id,
         requestId: context.requestId,
-    }, entry);
-
-    let result;
-    try {
-        result = await mutate();
-    } catch (error) {
-        context.logger.warn('admin data mutation failed', Object.assign(details, {
-            outcome: 'failed',
-            status: error.httpStatusCode ?? 500,
-            code: error.code ?? error.name,
-        }));
-        throw error;
-    }
-
-    context.logger.info('admin data mutation succeeded', Object.assign(details, {
-        id: result.id,
+        action,
+        type,
+        id,
         outcome: 'succeeded',
-    }));
-
-    return result.response;
+    });
 }

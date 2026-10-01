@@ -529,8 +529,9 @@ explicit projection, stable errors, cursor pagination, and conflict detection.
     `assertStrictJsonApiContentType`, `assertAcceptsJsonApi`,
     `withErrorSource`, `toJsonApiErrorObjects`, `respondWithJsonApi` (resets
     Content-Type to drop the `charset` that `respondWithJSON` appends).
-  - Audit logging lives in the handler (`auditMutation`) rather than the
-    scripts so it sees every outcome, including 403/415/422 rejections:
+  - Success audit logging lives in the resource handlers; failure logging
+    lives in the API error handler before classification, including failed
+    authentication, denied grants, and unexpected errors passed onward:
     info `admin data mutation succeeded` / warn `admin data mutation failed`
     with principal (token id), requestId, action, type, id, status, code.
   - Client ids are rejected (403); delete/recreate of a client-chosen id is

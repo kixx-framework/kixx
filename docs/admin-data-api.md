@@ -232,9 +232,11 @@ any other method there with `405` before authenticating.
 Every attempted mutation is logged with the token id (`principal`), resource
 type and id, action, request id, and outcome: `admin data mutation succeeded`
 at info, or `admin data mutation failed` at warn with the HTTP status and
-error code. Bearer secrets and request payloads are never logged. This is
-operational logging, not a transactional audit ledger: a crash between the
-write and the log line loses the entry.
+error code. Failures include rejected authentication, denied grants, invalid
+requests, and unexpected errors passed onward to the router. The principal is
+null when authentication did not succeed. Bearer secrets and request payloads
+are never logged. This is operational logging, not a transactional audit ledger:
+a crash between the write and the log line loses the entry.
 
 ## Files
 
