@@ -10,6 +10,11 @@ import { isIsoDateTime } from '../lib/iso-date-time.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
+// The complete content reference FileContentCollection#create() returns.
+// Unknown members are rejected so a direct record edit cannot store extra data
+// inside the reference.
+const CONTENT_FIELDS = [ 'key', 'filename', 'contentType', 'etag', 'generation', 'length' ];
+
 /** Stored metadata and the active immutable object reference for an admin file. */
 export default class FileRecord extends Record {
 
@@ -56,7 +61,12 @@ function validateContent(error, content) {
         error.push('File content must be an object', 'content');
         return;
     }
-    for (const field of [ 'key', 'filename', 'contentType', 'etag', 'generation' ]) {
+    for (const field of Object.keys(content)) {
+        if (!CONTENT_FIELDS.includes(field)) {
+            error.push(`File content ${ field } is not a recognized field`, `content.${ field }`);
+        }
+    }
+    for (const field of CONTENT_FIELDS.filter((name) => name !== 'length')) {
         if (!isNonEmptyString(content[field])) {
             error.push(`File content ${ field } is required`, `content.${ field }`);
         }

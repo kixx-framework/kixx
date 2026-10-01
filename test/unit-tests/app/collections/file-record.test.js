@@ -43,4 +43,13 @@ describe('FileRecord', ({ it }) => {
         assert(error);
         assertEqual('title', error.errors[0].source);
     });
+
+    it('rejects content reference members it does not define', () => {
+        const record = makeRecord();
+        const content = Object.assign({}, record.get('content'), { ownerId: 'someone' });
+        const error = catchError(() => makeRecord({ content }).validate());
+        assert(error);
+        assertEqual(1, error.errors.length);
+        assertEqual('content.ownerId', error.errors[0].source);
+    });
 });

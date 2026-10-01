@@ -12,6 +12,7 @@ import DocumentStore from '../../../../../../src/kixx/document-store/document-st
 import DocumentStoreEngine from '../../../../../../src/plugins/node-document-store-engine/lib/document-store-engine.js';
 import Logger from '../../../../../../src/kixx/logger/logger.js';
 import FileCollection from '../../../../../../src/app/collections/file-collection.js';
+import FileContentCollection from '../../../../../../src/app/collections/file-content-collection.js';
 import AdminDataApiTokenCollection from '../../../../../../src/app/collections/admin-data-api-token-collection.js';
 import AdminDataApiTokenCreateForm from '../../../../../../src/app/presentation/forms/admin-data-api-tokens/admin-data-api-token-admin-form.js';
 import { createAdminDataApiToken } from '../../../../../../src/app/transaction-scripts/admin-data-api-tokens/create-admin-data-api-token.js';
@@ -33,8 +34,26 @@ function makeHarness() {
         cursorSigningSecret: 'admin-data-api-test-secret',
     });
 
+    // The API is record-only. Registering the real content gateway over a
+    // recording object store lets tests prove no request reaches the bytes.
+    const objectStoreCalls = [];
+    const objectStore = {
+        async put(_context, _bucket, key) {
+            objectStoreCalls.push(`put ${ key }`);
+            return { contentLength: 0, etag: 'etag' };
+        },
+        async get(_context, _bucket, key) {
+            objectStoreCalls.push(`get ${ key }`);
+            return null;
+        },
+        async delete(_context, _bucket, key) {
+            objectStoreCalls.push(`delete ${ key }`);
+        },
+    };
+
     const collections = new Map([
         [ 'File', new FileCollection({ db: store }) ],
+        [ 'FileContent', new FileContentCollection({ store: objectStore, bucket: 'files', maxUploadBytes: 1024 }) ],
         [ 'AdminDataApiToken', new AdminDataApiTokenCollection({ db: store }) ],
     ]);
 
@@ -113,6 +132,7 @@ function makeHarness() {
         mint,
         makeContext,
         logEntries,
+        objectStoreCalls,
         files: collections.get('File'),
     };
 }
@@ -629,6 +649,54 @@ describe('Administrative Data API v1', ({ describe }) => {
             assertEqual(409, result.status);
             const stored = await harness.files.get(harness.makeContext(), created.id);
             assertEqual('Concurrent', stored.get('title'));
+        });
+    });
+
+    describe('record-only File content references', ({ it }) => {
+
+        it('never reads, writes, or deletes bytes on create, repoint, or delete', async () => {
+            const harness = makeHarness();
+            const { token } = await harness.mint(ALL_FILE_GRANTS);
+            const created = await createFile(harness, token, { isPublished: true });
+            const path = `/admin-data-api/v1/files/${ created.id }`;
+
+            const replacement = makeContent({ key: 'files/other/generation', filename: 'other.png' });
+            const repointed = await harness.send('PATCH', path, {
+                token,
+                body: patchDocument(created.id, 1, { content: replacement }),
+            });
+            assertEqual(200, repointed.status);
+            assertEqual('files/other/generation', repointed.document.data.attributes.content.key);
+
+            const deleted = await harness.send('DELETE', path, { token, headers: { 'kixx-expected-version': '2' } });
+            assertEqual(204, deleted.status);
+
+            assertEqual(0, harness.objectStoreCalls.length);
+        });
+
+        it('rejects content reference members FileRecord does not define', async () => {
+            const harness = makeHarness();
+            const { token } = await harness.mint(ALL_FILE_GRANTS);
+
+            const created = await harness.send('POST', '/admin-data-api/v1/files', {
+                token,
+                body: fileDocument({ content: makeContent({ ownerId: 'someone' }) }),
+            });
+            assertEqual(422, created.status);
+            assertEqual('/data/attributes/content/ownerId', firstError(created).source.pointer);
+
+            const list = await harness.send('GET', '/admin-data-api/v1/files', { token });
+            assertEqual(0, list.document.data.length);
+        });
+
+        it('advertises the closed content reference shape in discovery', async () => {
+            const harness = makeHarness();
+            const { token } = await harness.mint([ 'File:get' ]);
+            const result = await harness.send('GET', '/admin-data-api/v1/', { token });
+
+            const [ files ] = result.document.meta.resources;
+            assertEqual(false, files.attributes.content.schema.additionalProperties);
+            assertEqual(6, files.attributes.content.schema.required.length);
         });
     });
 

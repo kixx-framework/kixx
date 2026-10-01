@@ -4,7 +4,7 @@ import FileRecord from '../../collections/file-record.js';
 const FILE_SCHEMA = FileRecord.schema.properties;
 
 // FileRecord.schema only says `content` is an object; FileRecord#validate()
-// enforces the fields below. Publish them here so discovery tells a client
+// enforces the fields below and rejects any others. Publish them here so discovery tells a client
 // what a valid content reference looks like.
 const CONTENT_SCHEMA = {
     type: 'object',
@@ -17,6 +17,7 @@ const CONTENT_SCHEMA = {
         length: { type: 'integer', minimum: 0 },
     },
     required: [ 'key', 'filename', 'contentType', 'etag', 'generation', 'length' ],
+    additionalProperties: false,
 };
 
 /**
