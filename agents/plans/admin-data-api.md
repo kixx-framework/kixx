@@ -559,7 +559,7 @@ explicit projection, stable errors, cursor pagination, and conflict detection.
 
 ### Task D5: Deliver and verify File CRUD end to end
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D1, D2, D3, D4
 **Documentation:** This plan including F1; docs/admin-files.md; Collections README; test/end-to-end/README.md
 
@@ -594,11 +594,11 @@ resource, proven with tokens created and revoked through the admin panel.
 
 **Acceptance criteria**
 
-- [ ] Admin-created scoped token can create/list/get/update/delete Files as documented.
-- [ ] Read-only and wrong-Collection grants fail writes; revoked tokens fail auth.
-- [ ] Stale PATCH/DELETE and a race after load cannot overwrite/delete newer state.
-- [ ] Create/update/delete never mutate bytes; reference limitations are documented.
-- [ ] Discovery, schemas, examples, permissions, and runtime behavior agree.
+- [x] Admin-created scoped token can create/list/get/update/delete Files as documented.
+- [x] Read-only and wrong-Collection grants fail writes; revoked tokens fail auth.
+- [x] Stale PATCH/DELETE and a race after load cannot overwrite/delete newer state.
+- [x] Create/update/delete never mutate bytes; reference limitations are documented.
+- [x] Discovery, schemas, examples, permissions, and runtime behavior agree.
 
 **Validation**
 
@@ -616,10 +616,53 @@ resource, proven with tokens created and revoked through the admin panel.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: File records reference another gateway, but API mutations touch only the document store.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None; dependencies must complete first.
+- Completed: Closed File content-reference shape, byte-isolation unit tests,
+  `300-admin-data-api` E2E suite, docs/curl examples, local-target run, and
+  browser check.
+- Current state: Complete. All plan tasks (D1–D5) are complete.
+- Remaining: None. Not done by design: Cloudflare/deployed validation and any
+  deployment (plan scope).
+- Decisions and discoveries:
+  - The File registration from D1 already satisfied F1; D5 did not change the
+    transaction scripts, Forms, or routes.
+  - Resolved D4's open note: `FileRecord#validate()` now rejects content
+    members outside `key, filename, contentType, etag, generation, length`
+    (`CONTENT_FIELDS`, mirroring `FileContentCollection#create()`'s return
+    value). This is enforced for every writer, not only the API; discovery's
+    content schema now has `additionalProperties: false`. The admin-files
+    E2E suite still passes against a live target with the stricter rule.
+  - The unit harness registers the real `FileContentCollection` over a
+    recording object store; the test asserts zero `put/get/delete` calls
+    across create, content repoint, and published-File delete.
+  - "Wrong-Collection grants": File is the only registered Collection, so
+    E2E proves it by refusing to mint `AdminUser:list` (422) and returning 404
+    for an unregistered type. The deterministic race-after-load case stays in
+    unit tests (D4); E2E covers two concurrent PATCHes at the same version
+    (exactly one 200, one 409).
+  - E2E records borrow content references from files uploaded in the admin
+    panel. Cleanup must delete API records before the uploads (admin delete
+    removes bytes); documented in the E2E README and in the Files limits.
+  - The `.json` template-context route depends on `allowJsonResponse`, so the
+    E2E suite does not assert on it (would be vacuous on targets without it).
+  - `docs/admin-files.md` does not exist; the E2E README already linked to it
+    before this plan. Left as is (out of scope).
+- Actual files changed:
+  - `src/app/collections/file-record.js` — closed content shape
+  - `src/app/admin-data-api/resources/files.js` — `additionalProperties: false`
+  - `test/unit-tests/app/collections/file-record.test.js`
+  - `test/unit-tests/app/presentation/request-handlers/admin-data-api/admin-data-api.test.js` — FileContent gateway + 3 tests
+  - `test/end-to-end/300-admin-data-api/{helpers,010-tokens.test,020-file-crud.test}.js` (new)
+  - `test/end-to-end/README.md`, `docs/admin-data-api.md` — status note removed, examples, verification, limits
+- Validation run (Node.js runtime only; no Cloudflare or deployed check):
+  - `node run-linter.js` — clean. `node run-tests.js` — 1766 passed, 0 failed.
+  - Local target `admin-data-api` created/seeded/served;
+    `node run-tests.js --e2e test/end-to-end/300-admin-data-api` with
+    `E2E_TESTS_*` from `credentials.json` — 24 passed; second run together
+    with `100-admin-files` — 100 passed. Document store afterwards: 0 File
+    records, every data token revoked.
+  - Browser (built-in, Node target): login, keyboard grant selection with
+    visible focus, create `list,get` token, one-time secret (list 200, create
+    403, `private, no-store`), revisit without secret, UI revoke → API 401
+    `AdminDataApiTokenInactive`, 360px light theme without overflow (dark
+    theme seen on desktop). Server stopped; target destroyed.
+- Blockers: None.
