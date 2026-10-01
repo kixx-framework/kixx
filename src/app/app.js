@@ -11,6 +11,7 @@ import UserSessionCollection from './collections/user-session-collection.js';
 import FileCollection from './collections/file-collection.js';
 import FileContentCollection from './collections/file-content-collection.js';
 import { jobs } from './jobs/mod.js';
+import { adminDataResources } from './admin-data-api/mod.js';
 import { assert, assertNonEmptyString, isPlainObject } from '../kixx/assertions/mod.js';
 
 
@@ -87,4 +88,9 @@ export function initialize(context) {
     });
 
     context.registerService('CsrfTokenSigner', new CsrfTokenSigner(csrfTokenSigningSecret));
+
+    // Collections are all registered by now. Check the Administrative Data
+    // API registrations against them so a stale attribute, method, or index
+    // name fails boot rather than a request.
+    adminDataResources.assertCollections(context);
 }

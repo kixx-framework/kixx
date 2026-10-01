@@ -21,8 +21,7 @@ existing file update/delete retry behavior: reject stale client versions.
 
 Keep protocol code portable, use existing gateways, and install no dependencies.
 Implement ordinary modules and functions, with shared mechanics rather than a
-new inheritance hierarchy. This plan is a design draft; application code has
-not been changed.
+new inheritance hierarchy. Implementation progress is recorded per task below.
 
 ### Confirmed requirements
 
@@ -124,7 +123,7 @@ Proposed File contract:
 
 ### Task D1: Define enforceable resource registrations and API contract
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** This plan; Collections README; Presentation README; Transaction Scripts README
 
@@ -155,10 +154,10 @@ explicit and usable by both enforcement and discovery.
 
 **Acceptance criteria**
 
-- [ ] Invalid or duplicate registrations fail as programmer errors.
-- [ ] Unregistered Collections and disabled actions cannot be selected.
-- [ ] Read/write field and query contracts are explicit and discoverable.
-- [ ] File record-only contract and reference limitations are documented.
+- [x] Invalid or duplicate registrations fail as programmer errors.
+- [x] Unregistered Collections and disabled actions cannot be selected.
+- [x] Read/write field and query contracts are explicit and discoverable.
+- [x] File record-only contract and reference limitations are documented.
 
 **Validation**
 
@@ -167,12 +166,66 @@ explicit and usable by both enforcement and discovery.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Design draft.
-- Remaining: Everything described above.
-- Decisions and discoveries: See repository findings and proposed defaults.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Registry, permission mapping, File registration, boot-time
+  registration checks, unit tests, and `docs/admin-data-api.md`.
+- Current state: Complete.
+- Remaining: None for D1.
+- Decisions and discoveries:
+  - `ResourceRegistry` (`src/app/admin-data-api/resource-registry.js`) is the
+    single authority. Use `getResource(type)`, `getResourceByCollection()`,
+    `isOperationEnabled()`, `isAuthorized(permissions, type, action)`,
+    `listAuthorizedActions()`, and `describeAccessibleResources(permissions)`.
+    The app instance is `adminDataResources` in `src/app/admin-data-api/mod.js`.
+  - Registration shape: `{ type, collection, description, attributes: { name:
+    { description, schema } }, operations: { list: { sorts: [{ name,
+    description, descending, index? }] }, get: {}, create: { attributes,
+    required, persist? }, update: { attributes }, delete: {} } }`. Presence of
+    an operation enables it; unknown keys anywhere are assertion errors.
+    Registrations are deep-frozen; schemas are cloned first.
+  - Sorts double as JSON:API `sort` values (first is default) and are the only
+    declared query plans. Page constants: `DEFAULT_PAGE_SIZE` 25,
+    `MAX_PAGE_SIZE` 100, exported from the registry module.
+  - `create.persist(context, collection, attributes)` is the optional hook for
+    server-generated values; File uses it to call `createFile()` with
+    `crypto.randomUUID()`. D4's generic create must call it when present and
+    `collection.create()` otherwise.
+  - File create requires all four writable attributes (title/description may
+    be null). `originalUploadedAt` is read-only.
+  - Permissions (`src/app/permissions/admin-data-api.js`): stored token grants
+    are `[{ collection, actions }]`; `toAdminDataPermissions()` converts them
+    to exact evaluator grants (`urn:kixx:<action>` on
+    `urn:kixx:admin-data:collections:<Collection>`) and silently drops
+    malformed/wildcard-capable entries. D2 must build the principal's
+    permissions ONLY from token grants: Root Admin's `*` role grant would
+    otherwise satisfy any data resource (registry tests show the registration
+    still bounds it, but grants must not include role permissions).
+  - Token management resource: `ADMIN_DATA_TOKEN_MANAGEMENT_RESOURCE` =
+    `urn:kixx:admin:api-tokens:admin-data`; Root Admin and Developer hold it
+    through existing grants, so `roles.js` needed no change.
+  - `app.initialize()` calls `adminDataResources.assertCollections(context)`,
+    which checks Collection presence, required methods per operation,
+    attributes against `Record.schema.properties`, and sort indexes against
+    the Collection's static `INDEXES`.
+  - Protocol choices recorded in `docs/admin-data-api.md` beyond the plan
+    defaults: token prefix `kxadt_`; discovery returns resources under
+    top-level `meta.resources`; resource `meta` carries version, createdAt,
+    updatedAt; client-supplied id on create is `403`; undeclared/read-only
+    attributes are `422`; unknown query parameters (including `filter[...]`)
+    are `400`; `406` for unacceptable Accept; delete success is `204`. The doc
+    has an "Implementation status" note to remove in D5.
+  - The plan references `docs/admin-files.md`, which does not exist; File
+    record-only guarantees live in `docs/admin-data-api.md` ("Files").
+- Actual files changed:
+  - `src/app/admin-data-api/resource-registry.js` (new)
+  - `src/app/admin-data-api/resources/files.js` (new)
+  - `src/app/admin-data-api/mod.js` (new)
+  - `src/app/permissions/admin-data-api.js` (new)
+  - `src/app/app.js` — boot-time registration check
+  - `docs/admin-data-api.md` (new)
+  - `test/unit-tests/app/admin-data-api/resource-registry.test.js` (new)
+  - `test/unit-tests/app/permissions/admin-data-api.test.js` (new)
+- Validation run: `node run-linter.js` on changed files — clean.
+  `node run-tests.js` — 1695 tests passed, 0 failures.
 - Blockers: None.
 
 ### Task D2: Authenticate scoped administrative data tokens
