@@ -43,9 +43,7 @@ export default class Mailer {
         assertNonEmptyString(to, 'Mailer.send() requires a non-empty "to" address');
         const email = await this.#hyperviewService.renderEmail(context, pathname, data);
         assert(
-            isNonEmptyString(email.subject) && email.subject.trim().length > 0
-                && ((isNonEmptyString(email.html) && email.html.trim().length > 0)
-                    || (isNonEmptyString(email.text) && email.text.trim().length > 0)),
+            isNonEmptyString(email.subject) && (isNonEmptyString(email.html) || isNonEmptyString(email.text)),
             'Mailer.send() requires a non-empty subject and at least one non-empty body',
         );
 

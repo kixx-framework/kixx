@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 /**
  * Node adapter that records rendered messages for local development.
  * @implements {import('../../../kixx/email-sender/email-sender-interface.js').EmailSenderInterface}
@@ -23,7 +21,7 @@ export default class EmailSender {
      * @returns {Promise<import('../../../kixx/email-sender/email-sender-interface.js').EmailSendResult>} Generated local message ID
      */
     async send(_context, message) {
-        const messageId = randomUUID();
+        const messageId = crypto.randomUUID();
         const { to, subject, html, text } = message;
         this.#logger.info('logged email message', {
             messageId,
