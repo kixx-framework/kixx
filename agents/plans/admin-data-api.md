@@ -515,7 +515,8 @@ explicit projection, stable errors, cursor pagination, and conflict detection.
     `requireRecordAtVersion()` compares the client version to the loaded
     Record, then update/deleteStrict use that same Record; store
     VersionConflictError → 409 `AdminDataVersionConflict`; never retried.
-    Update uses `record.set()` per attribute (whole replacement, no merge).
+    Update uses shallow `record.merge()` (whole replacement of supplied
+    attributes).
     `projectRecord()` copies only declared attributes (cloned).
   - The store throws AssertionError for ids with control characters, so
     `findRecord()` treats such ids as absent (404) instead of crashing.
@@ -534,6 +535,11 @@ explicit projection, stable errors, cursor pagination, and conflict detection.
     authentication, denied grants, and unexpected errors passed onward:
     info `admin data mutation succeeded` / warn `admin data mutation failed`
     with principal (token id), requestId, action, type, id, status, code.
+  - Review follow-up: moved document validation into the Form, removed the
+    audit callback/response wrapper, and used shallow Record merge for PATCH.
+    Added regression coverage for validation precedence, denied and unexpected
+    mutation audit entries, success audit entries, and incomplete replacement
+    content. Validation: full unit suite passed (1770 tests), full linter clean.
   - Client ids are rejected (403); delete/recreate of a client-chosen id is
     therefore not reachable and was not designed for.
   - File content objects with extra keys pass `FileRecord#validate()` and

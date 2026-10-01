@@ -536,6 +536,22 @@ describe('Administrative Data API v1', ({ describe }) => {
             assertEqual(created.attributes.originalUploadedAt, data.attributes.originalUploadedAt);
         });
 
+        it('rejects incomplete replacement content without borrowing stored members', async () => {
+            const harness = makeHarness();
+            const { token } = await harness.mint(ALL_FILE_GRANTS);
+            const created = await createFile(harness, token);
+            const result = await harness.send('PATCH', `/admin-data-api/v1/files/${ created.id }`, {
+                token,
+                body: patchDocument(created.id, 1, { content: { filename: 'replacement.png' } }),
+            });
+
+            assertEqual(422, result.status);
+            assert(result.document.errors.some((error) => error.source.pointer === '/data/attributes/content/key'));
+            const stored = await harness.files.get(harness.makeContext(), created.id);
+            assertEqual(1, stored.version);
+            assertEqual(created.attributes.content.filename, stored.get('content').filename);
+        });
+
         it('requires a valid observed version and a matching id', async () => {
             const harness = makeHarness();
             const { token } = await harness.mint(ALL_FILE_GRANTS);

@@ -33,11 +33,8 @@ export async function updateAdminDataRecord(context, form) {
     const collection = context.getCollection(resource.collection);
     const record = await requireRecordAtVersion(context, collection, id, version);
 
-    // set() rather than merge() so a nested object such as File content is
-    // replaced as a whole, never combined with the stored value.
-    for (const [ name, value ] of Object.entries(attributes)) {
-        record.set(name, value);
-    }
+    // merge() is shallow: supplied nested objects replace the stored value whole.
+    record.merge(attributes);
 
     let updated;
     try {
