@@ -13,13 +13,13 @@ The API is mounted at:
 /admin-data-api/v1/
 ```
 
-> **Implementation status.** The resource registration contract, the
-> permission model, the File registration, and token minting, verification,
-> and revocation exist (`src/app/admin-data-api/`,
-> `src/app/permissions/admin-data-api.js`, the `AdminDataApiToken`
-> Collection). The admin-panel token pages and the HTTP endpoints are
-> delivered by later tasks of `agents/plans/admin-data-api.md`; the protocol
-> sections below are the contract those tasks implement.
+> **Implementation status.** The registration contract, permission model,
+> tokens and their admin-panel pages, and the HTTP protocol below are
+> implemented (`src/app/admin-data-api/`, `src/routes/admin-data-api-v1.js`,
+> `src/app/presentation/request-handlers/admin-data-api/`,
+> `src/app/transaction-scripts/admin-data-api/`). End-to-end verification of
+> File CRUD against a running instance is the remaining task of
+> `agents/plans/admin-data-api.md`.
 
 ## Exposure model
 
@@ -89,12 +89,17 @@ operations. An API token can never mint tokens or extend its own grants.
 
 ### Media types
 
-Request bodies must use `Content-Type: application/vnd.api+json` without media
-type parameters other than those JSON:API allows; anything else is `415`.
-Responses use `application/vnd.api+json`. An `Accept` header that lists the
-JSON:API media type only with unsupported parameters is `406`.
+Request bodies must use `Content-Type: application/vnd.api+json`. The only
+media type parameter accepted is `profile`; anything else, including
+`charset` or an `ext` (no extensions are supported), is `415`. Responses use
+exactly `application/vnd.api+json`. An `Accept` header that lists the JSON:API
+media type only with parameters other than `profile` (and the `q` weight) is
+`406`; an absent `Accept`, or one without the JSON:API media type, is not
+rejected.
 
-Responses are `Cache-Control: private, no-store`.
+Responses are never cacheable: authenticated responses are
+`Cache-Control: private, no-store`, and errors raised before authentication
+succeeds are `no-store`.
 
 ### Discovery
 
@@ -192,35 +197,52 @@ second receives `409`. Re-read the resource and decide again.
 | `fields[<type>]` | Sparse fieldset. |
 
 Only declared sorts are allowed; arbitrary filters, index selection, and total
-counts are not supported, so `filter[...]` and any other parameter is `400`.
-When more results exist, `links.next` is a complete URL preserving `sort`,
-`page[size]`, and `fields`. Cursors are signed; a tampered cursor, or one used
-with a different sort, is `400`.
+counts are not supported, so `filter[...]`, `include`, and any other parameter
+is `400`, as is any parameter given more than once. The response carries
+`links.self` (the request URL) and, when more results exist, `links.next`: a
+complete URL repeating whichever of `sort`, `page[size]`, and `fields` the
+request supplied. Follow `links.next` rather than building cursors. Cursors
+are signed; a tampered cursor, or one used with a different sort, is `400`.
+The last page has no `links.next`.
+
+Single-resource reads and writes accept only `fields[<type>]`; delete and
+discovery accept no query parameters.
 
 ### Errors
 
-Errors use JSON:API error documents with a `status`, `code`, `title`, and,
-where applicable, `source.pointer` (body members, e.g.
-`/data/attributes/title`), `source.parameter` (query parameters), or
-`source.header`. Internal details are never included.
+Errors use JSON:API error documents with a `status`, `code`, `title`,
+`detail`, and, where applicable, `source.pointer` (body members, e.g.
+`/data/attributes/content/key`), `source.parameter` (query parameters), or
+`source.header`. An invalid record produces one error object per invalid
+field. Internal details and causes are never included; an unexpected server
+fault is a generic `500`.
+
+Checks run in this order, so a token without the grant learns nothing about
+what a valid request would look like: authentication, `Accept`, resource type,
+operation (`405`), grant (`403`), then query parameters and the body. The one
+exception is the discovery URL, which serves only `GET`: the router answers
+any other method there with `405` before authenticating.
 
 | Status | When |
 | --- | --- |
-| `400` | Malformed JSON or document, missing/invalid version, invalid query parameter, sort, fieldset, page size, or cursor |
-| `401` | Missing or invalid bearer token (`WWW-Authenticate: Bearer`) |
-| `403` | Token lacks the action on that Collection, or a client-supplied id on create |
-| `404` | Unknown resource type or record |
-| `405` | Operation not enabled for the resource (`Allow` lists enabled methods) |
+| `400` | Malformed JSON or document (`JsonApiInvalidDocument`), missing/invalid version (`AdminDataInvalidVersion`), invalid query parameter, sort, fieldset, or page size (`JsonApiInvalidQueryParameter`), or cursor (`AdminDataInvalidCursor`) |
+| `401` | Missing or invalid bearer token. `WWW-Authenticate: Bearer realm="admin-data-api"`, plus `error="invalid_token"` when a token was presented |
+| `403` | Token lacks the action on that Collection (`AdminDataActionNotGranted`), or a client-supplied id on create (`JsonApiClientIdNotSupported`) |
+| `404` | Unknown resource type (`AdminDataResourceTypeNotFound`) or record (`AdminDataRecordNotFound`) |
+| `405` | Method selects no enabled operation, including `HEAD` and `PUT` (`Allow` lists the methods the current registration enables) |
 | `406` | Unacceptable `Accept` header |
-| `409` | Type or id mismatch between URL and body, or a stale version |
+| `409` | Type or id mismatch between URL and body (`JsonApiResourceTypeMismatch`, `JsonApiResourceIdMismatch`), or a stale version (`AdminDataVersionConflict`) |
 | `415` | Unsupported request `Content-Type` |
 | `422` | Undeclared, read-only, or invalid attribute values |
 
 ### Audit logging
 
-Every mutation is logged with the token id, resource type and id, action,
-request id, and outcome. Bearer secrets and request payloads are never logged.
-This is operational logging, not a transactional audit ledger.
+Every attempted mutation is logged with the token id (`principal`), resource
+type and id, action, request id, and outcome: `admin data mutation succeeded`
+at info, or `admin data mutation failed` at warn with the HTTP status and
+error code. Bearer secrets and request payloads are never logged. This is
+operational logging, not a transactional audit ledger: a crash between the
+write and the log line loses the entry.
 
 ## Files
 

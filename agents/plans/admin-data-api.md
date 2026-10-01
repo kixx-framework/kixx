@@ -428,7 +428,7 @@ copy its one-time secret, inspect token status, and revoke it.
 
 ### Task D4: Serve the JSON:API resource protocol and checked writes
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D1, D2
 **Documentation:** JSON:API 1.1 (https://jsonapi.org/format/1.1/); Presentation README; Transaction Scripts README; server-error-handling.md; unit testing guide
 
@@ -471,11 +471,11 @@ explicit projection, stable errors, cursor pagination, and conflict detection.
 
 **Acceptance criteria**
 
-- [ ] Discovery returns only currently accessible capabilities.
-- [ ] GET/list output is explicit and cursor links preserve query semantics.
-- [ ] Two clients reading the same version cannot both update/delete successfully.
-- [ ] Rejected writes do not alter stored state; unknown fields are not persisted.
-- [ ] Malformed payloads, unsupported media, missing grants, invalid cursors, and
+- [x] Discovery returns only currently accessible capabilities.
+- [x] GET/list output is explicit and cursor links preserve query semantics.
+- [x] Two clients reading the same version cannot both update/delete successfully.
+- [x] Rejected writes do not alter stored state; unknown fields are not persisted.
+- [x] Malformed payloads, unsupported media, missing grants, invalid cursors, and
   stale versions receive documented responses with no internal details leaked.
 
 **Validation**
@@ -485,13 +485,77 @@ explicit projection, stable errors, cursor pagination, and conflict detection.
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: Existing helpers are incomplete for the proposed protocol.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None; dependencies must complete first.
+- Completed: Mounted subtree, JSON:API 1.1 negotiation and error projection,
+  protocol parsing/serialization, record Form, shared Transaction Scripts,
+  audit logging, router-level protocol tests, helper tests, and docs.
+- Current state: Complete.
+- Remaining: None for D4. D5 owns end-to-end File verification.
+- Decisions and discoveries:
+  - Mount: `/admin-data-api/v1` in `src/virtual-hosts.js` (after the
+    Publishing API, before assets/catch-alls) with inbound
+    `authenticateAdminDataApiToken` then `negotiateJsonApi` (406), and route
+    error handler `admin-data-api-error-handler.js` (sets
+    `WWW-Authenticate: Bearer realm="admin-data-api"[, error="invalid_token"]`
+    on 401 and `Allow` on 405; returns false for unexpected errors so they
+    still reach the router/platform fatal policy — tested).
+  - Routes (`src/routes/admin-data-api-v1.js`): `{/}` discovery (GET only,
+    so other methods 405 before auth); `/:type{/}` and `/:type/:id{/}` each
+    have one `dispatch` target accepting every router method. Handlers
+    (`request-handlers/admin-data-api/resources.js`) map method → operation
+    and answer unsupported methods (incl. HEAD/PUT) with a registry-derived
+    Allow after authentication. Order: auth → Accept → type 404 → operation
+    405 → grant 403 → query/body. Target names are referenced by
+    `RESOURCE_TARGET_NAME`/`COLLECTION_TARGET_NAME` in `protocol.js`.
+  - Reverse-compiling a `{/}` pattern emits the trailing slash;
+    `compileApiPathname()` in `protocol.js` strips it for canonical links.
+  - Shared scripts in `transaction-scripts/admin-data-api/`
+    (`get-`, `list-`, `create-`, `update-`, `delete-admin-data-record.js`,
+    plus `lib.js`). Every script calls `authorizeAdminDataAction()` itself
+    (the handler also calls it early, so 403 precedes body errors).
+    `requireRecordAtVersion()` compares the client version to the loaded
+    Record, then update/deleteStrict use that same Record; store
+    VersionConflictError → 409 `AdminDataVersionConflict`; never retried.
+    Update uses `record.set()` per attribute (whole replacement, no merge).
+    `projectRecord()` copies only declared attributes (cloned).
+  - The store throws AssertionError for ids with control characters, so
+    `findRecord()` treats such ids as absent (404) instead of crashing.
+  - Form `presentation/forms/admin-data-api/admin-data-record-form.js`
+    rejects undeclared/read-only attributes and missing required create
+    attributes as 422 (source = attribute name → `/data/attributes/<name>`).
+    Record `ValidationError` field paths (`content.key`) map to pointers too.
+  - New `json-api.js` exports (existing exports unchanged):
+    `assertStrictJsonApiContentType`, `assertAcceptsJsonApi`,
+    `withErrorSource`, `toJsonApiErrorObjects`, `respondWithJsonApi` (resets
+    Content-Type to drop the `charset` that `respondWithJSON` appends).
+  - Audit logging lives in the handler (`auditMutation`) rather than the
+    scripts so it sees every outcome, including 403/415/422 rejections:
+    info `admin data mutation succeeded` / warn `admin data mutation failed`
+    with principal (token id), requestId, action, type, id, status, code.
+  - Client ids are rejected (403); delete/recreate of a client-chosen id is
+    therefore not reachable and was not designed for.
+  - File content objects with extra keys pass `FileRecord#validate()` and
+    would be stored; D5 may want to tighten the File contract (e.g. reject
+    unknown content keys) when it finalizes File CRUD.
+  - Unit tests build `HttpRouter` from the real `virtual-hosts.js`; the
+    router must have an `error` listener or its EventEmitter throws the
+    event payload. File sort keys are ms timestamps, so tests creating
+    several Files wait for the next millisecond to get a stable order.
+- Actual files changed:
+  - `src/routes/admin-data-api-v1.js` (new), `src/virtual-hosts.js`
+  - `src/app/presentation/request-handlers/admin-data-api/{mod,discovery,resources,protocol}.js` (new)
+  - `src/app/presentation/forms/admin-data-api/admin-data-record-form.js` (new)
+  - `src/app/presentation/middleware/negotiate-json-api.js` (new)
+  - `src/app/presentation/error-handlers/admin-data-api-error-handler.js` (new)
+  - `src/app/presentation/lib/json-api.js` — new JSON:API 1.1 helpers
+  - `src/app/transaction-scripts/admin-data-api/*.js` (new)
+  - `docs/admin-data-api.md`, `src/app/presentation/README.md`
+  - `test/unit-tests/app/presentation/request-handlers/admin-data-api/admin-data-api.test.js` (new)
+  - `test/unit-tests/app/presentation/lib/json-api.test.js`
+- Validation run: `node run-linter.js` — clean. `node run-tests.js` — 1762
+  tests passed, 0 failures (27 protocol tests including two-writer and
+  race-after-load update/delete, 4 new helper tests). Node runtime only; no
+  Cloudflare or running-server check (D5).
+- Blockers: None.
 
 ### Task D5: Deliver and verify File CRUD end to end
 
