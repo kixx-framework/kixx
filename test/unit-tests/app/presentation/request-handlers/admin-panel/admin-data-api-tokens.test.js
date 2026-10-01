@@ -232,12 +232,30 @@ describe('Admin data API token request handlers', ({ describe }) => {
 
             const error = await catchAsyncError(() => postRevokeAdminDataApiToken(
                 context,
-                makeRequest([ [ 'token_id', 'missing' ] ]),
+                makeRequest([ [ 'token_id', '0'.repeat(64) ] ]),
                 makeResponse(),
                 () => {},
             ));
 
             assertEqual('NotFoundError', error?.name);
+        });
+
+        it('rejects malformed token ids before accessing storage', async () => {
+            const context = makeContext();
+            context.getCollection = () => {
+                throw new Error('Malformed token ids must not reach storage');
+            };
+
+            const error = await catchAsyncError(() => postRevokeAdminDataApiToken(
+                context,
+                makeRequest([ [ 'token_id', 'invalid\u0000id' ] ]),
+                makeResponse(),
+                () => {},
+            ));
+
+            assertEqual('ValidationError', error?.name);
+            assertEqual(422, error.httpStatusCode);
+            assertEqual('token_id', error.errors[0].source);
         });
     });
 

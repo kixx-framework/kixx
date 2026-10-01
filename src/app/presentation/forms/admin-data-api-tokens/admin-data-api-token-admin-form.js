@@ -25,6 +25,7 @@ export const DEFAULT_ADMIN_DATA_API_TOKEN_TTL_SECONDS = ONE_DAY_IN_SECONDS * 30;
 export const MAX_ADMIN_DATA_API_TOKEN_TTL_SECONDS = ONE_DAY_IN_SECONDS * 365;
 
 const MAX_DESCRIPTION_LENGTH = 200;
+const TOKEN_ID_PATTERN = /^[0-9a-f]{64}$/u;
 
 // The longest option equals the maximum so the bound is reachable from the UI.
 const TIME_TO_LIVE_OPTIONS = [
@@ -281,7 +282,7 @@ export class AdminDataApiTokenRevokeForm extends BaseForm {
     static schema = {
         type: 'object',
         properties: {
-            token_id: { type: 'string', fieldType: 'hidden' },
+            token_id: { type: 'string', fieldType: 'hidden', pattern: TOKEN_ID_PATTERN.source },
         },
         required: [ 'token_id' ],
     };
@@ -298,15 +299,19 @@ export class AdminDataApiTokenRevokeForm extends BaseForm {
     }
 
     /**
-     * Validates that a token id was submitted.
+     * Validates that the submitted id has the stored SHA-256 hash shape.
      * @returns {void}
-     * @throws {ValidationError} When the token id is missing.
+     * @throws {ValidationError} When the token id is missing or malformed.
      */
     validate() {
         const error = new ValidationError('The revoke token request is invalid');
 
         if (!isNonEmptyString(this.token_id)) {
             error.push('Token id is required', 'token_id');
+        } else if (!TOKEN_ID_PATTERN.test(this.token_id)) {
+            // Validate untrusted ids before storage, which treats control
+            // characters as an internal invariant violation.
+            error.push('Token id must be a 64-character lowercase hexadecimal hash', 'token_id');
         }
 
         if (error.length) {

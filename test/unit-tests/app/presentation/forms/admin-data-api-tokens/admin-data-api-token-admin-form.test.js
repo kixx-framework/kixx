@@ -104,10 +104,23 @@ describe('admin-data-api-token-admin-form', ({ describe }) => {
     describe('AdminDataApiTokenRevokeForm', ({ it }) => {
         it('requires a token id', () => {
             assertEqual('token_id', fieldErrors(new AdminDataApiTokenRevokeForm({})).join());
+        });
 
-            const form = new AdminDataApiTokenRevokeForm({ token_id: ' abc ' });
+        it('accepts and trims a stored token hash', () => {
+            const tokenId = '0123456789abcdef'.repeat(4);
+            const form = new AdminDataApiTokenRevokeForm({ token_id: ` ${ tokenId } ` });
             form.validate();
-            assert(form.token_id === 'abc');
+            assertEqual(tokenId, form.token_id);
+        });
+
+        it('rejects malformed hashes and control characters', () => {
+            for (const tokenId of [ 'abc', 'a'.repeat(63), 'a'.repeat(65), 'A'.repeat(64),
+                'g'.repeat(64), 'invalid\u0000id', `${ 'a'.repeat(63) }\u0001` ]) {
+                const error = catchError(() => new AdminDataApiTokenRevokeForm({ token_id: tokenId }).validate());
+                assert(error);
+                assertEqual('ValidationError', error.name);
+                assertEqual('token_id', error.errors[0].source);
+            }
         });
     });
 
