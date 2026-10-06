@@ -26,6 +26,7 @@ import {
     getDotenvPath,
     getCredentialsPath,
     generateSecret,
+    readInstancePort,
     formatCredentials,
     writeCredentials,
 } from './instance.js';
@@ -46,7 +47,7 @@ const SEEDED_BY = 'local-target-seed';
  *
  * @param {string} name - Instance name.
  * @returns {Promise<Object>} The credentials object written to credentials.json.
- * @throws {OperationalError} When the instance does not exist or credentials.json already exists.
+ * @throws {OperationalError} When the instance does not exist, has no recorded port, or credentials.json already exists.
  */
 export async function seedInstance(name) {
     assertValidName(name);
@@ -60,6 +61,10 @@ export async function seedInstance(name) {
     if (await fileExists(credentialsPath)) {
         throw new OperationalError(`Local target instance "${ name }" already has ${ credentialsPath }; destroy and re-create the instance to seed it again`);
     }
+
+    // Read before any write, so an instance with no recorded port fails
+    // without leaving a half-seeded store behind.
+    const port = readInstancePort(name);
 
     const dotenvFile = getDotenvPath(name);
     const env = readEnvironment({ dotenvFile });
@@ -79,14 +84,14 @@ export async function seedInstance(name) {
     });
 
     try {
-        return await runSeedSequence(appContext, { name, env, srcDirectory });
+        return await runSeedSequence(appContext, { name, port, env, srcDirectory });
     } finally {
         await appContext.close();
     }
 }
 
 async function runSeedSequence(appContext, options) {
-    const { name, env, srcDirectory } = options;
+    const { name, port, env, srcDirectory } = options;
 
     // Developer source content always lives in the repository's own src/ tree,
     // never inside the instance directory, so this resolver deliberately
@@ -136,7 +141,7 @@ async function runSeedSequence(appContext, options) {
     const tokenResult = await createPublishingApiToken(appContext, tokenForm, user.id);
 
     const credentials = formatCredentials({
-        port: Number.parseInt(env.PORT, 10),
+        port,
         buildId: env.BUILD_ID,
         username: emailAddress,
         password,

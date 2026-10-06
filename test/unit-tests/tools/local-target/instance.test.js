@@ -1,8 +1,12 @@
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import net from 'node:net';
 import path from 'node:path';
 import process from 'node:process';
+import { once } from 'node:events';
 
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches } from 'kixx-assert';
+import { assert, assertEqual, assertFalsy, assertMatches, assertNotMatches } from 'kixx-assert';
 
 import {
     NAME_PATTERN,
@@ -11,12 +15,16 @@ import {
     getDotenvPath,
     getDotenvSecretsPath,
     getCredentialsPath,
+    getInstanceMetadataPath,
     generateBuildId,
     generateSecret,
     formatPlainDotenv,
     formatSecretsDotenv,
     findProcessEnvCollisions,
     formatCredentials,
+    createInstance,
+    destroyInstance,
+    readInstancePort,
 } from '../../../../tools/local-target/instance.js';
 import { isValidBuildId } from '../../../../src/kixx/utils/build-id.js';
 
@@ -24,6 +32,15 @@ import { isValidBuildId } from '../../../../src/kixx/utils/build-id.js';
 function catchError(fn) {
     try {
         fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
+}
+
+async function catchAsyncError(fn) {
+    try {
+        await fn();
     } catch (error) {
         return error;
     }
@@ -85,16 +102,15 @@ describe('local-target instance', ({ describe }) => {
     });
 
     describe('formatPlainDotenv', ({ it }) => {
-        it('writes ENVIRONMENT, TRUST_PROXY, PORT, BUILD_ID, and DATA_DIRECTORY', () => {
+        it('writes ENVIRONMENT, TRUST_PROXY, BUILD_ID, and DATA_DIRECTORY, and no PORT', () => {
             const content = formatPlainDotenv({
-                port: 4000,
                 buildId: 'local-alpha-1',
                 dataDirectory: '/tmp/alpha',
             });
 
             assertMatches('ENVIRONMENT=local', content);
             assertMatches('TRUST_PROXY=false', content);
-            assertMatches('PORT=4000', content);
+            assertNotMatches(/^PORT=/m, content);
             assertMatches('BUILD_ID=local-alpha-1', content);
             assertMatches('DATA_DIRECTORY=/tmp/alpha', content);
             assert(content.endsWith('\n'), 'expected the file content to end with a newline');
@@ -142,6 +158,108 @@ describe('local-target instance', ({ describe }) => {
                     process.env.BUILD_ID = original;
                 }
             }
+        });
+
+        it('does not report an exported PORT as a dotenv collision', () => {
+            const original = process.env.PORT;
+            process.env.PORT = '3000';
+
+            try {
+                assertFalsy(findProcessEnvCollisions().includes('PORT'));
+            } finally {
+                if (original === undefined) {
+                    delete process.env.PORT;
+                } else {
+                    process.env.PORT = original;
+                }
+            }
+        });
+    });
+
+    // Instances live in the real data/local-targets/ directory, so each test
+    // uses a name unique to this process and removes it afterwards.
+    describe('instance port', ({ after, it }) => {
+        const namePrefix = `unit-test-${ process.pid }`;
+        const names = [];
+
+        after(async () => {
+            for (const name of names) {
+                await fsp.rm(getInstanceDirectory(name), { recursive: true, force: true });
+            }
+        });
+
+        function nextName() {
+            const name = `${ namePrefix }-${ names.length }`;
+            names.push(name);
+            return name;
+        }
+
+        it('records the port in instance.json and leaves PORT out of .env', async () => {
+            const name = nextName();
+
+            const { port } = await createInstance(name, { port: 50999 });
+
+            assertEqual(50999, port);
+            assertEqual(50999, JSON.parse(await fsp.readFile(getInstanceMetadataPath(name), 'utf8')).port);
+            assertEqual(50999, readInstancePort(name));
+
+            const dotenv = await fsp.readFile(getDotenvPath(name), 'utf8');
+            assertNotMatches(/^PORT=/m, dotenv);
+            assertMatches(/^BUILD_ID=local-/m, dotenv);
+        });
+
+        it('rejects reading the port of an instance with no instance.json', async () => {
+            const name = nextName();
+            await createInstance(name, { port: 50998 });
+            await fsp.rm(getInstanceMetadataPath(name));
+
+            const caught = catchError(() => readInstancePort(name));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
+            assertMatches('destroy and re-create the instance', caught.message);
+        });
+
+        it('rejects an instance.json without a valid port', async () => {
+            const name = nextName();
+            await createInstance(name, { port: 50997 });
+            await fsp.writeFile(getInstanceMetadataPath(name), JSON.stringify({ port: '50997' }));
+
+            const caught = catchError(() => readInstancePort(name));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
+            assertMatches('has no valid port', caught.message);
+        });
+
+        it('refuses to destroy an instance while its recorded port is serving', async () => {
+            const name = nextName();
+            const server = net.createServer();
+            server.listen(0, '127.0.0.1');
+            await once(server, 'listening');
+
+            try {
+                await createInstance(name, { port: server.address().port });
+
+                const caught = await catchAsyncError(() => destroyInstance(name));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('OperationalError', caught.name);
+                assertMatches('is still serving on port', caught.message);
+                assert(fs.existsSync(getInstanceDirectory(name)));
+            } finally {
+                server.close();
+            }
+        });
+
+        it('destroys an instance created before the port moved to instance.json', async () => {
+            const name = nextName();
+            await createInstance(name, { port: 50996 });
+            await fsp.rm(getInstanceMetadataPath(name));
+
+            await destroyInstance(name);
+
+            assertFalsy(fs.existsSync(getInstanceDirectory(name)));
         });
     });
 

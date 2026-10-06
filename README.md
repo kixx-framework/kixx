@@ -56,12 +56,14 @@ node tools/local-target.js destroy alpha
 
 | Verb | Effect |
 | --- | --- |
-| `create <name>` | Creates `data/local-targets/<name>/` and writes its `.env`/`.env.secrets` pair — a fresh port, Build ID, and random secrets. |
+| `create <name>` | Creates `data/local-targets/<name>/`, records a fresh port in `instance.json`, and writes its `.env`/`.env.secrets` pair — a fresh Build ID and random secrets. |
 | `seed <name>` | Boots the app in-process, publishes the working tree as a Release assigned to the instance's Build ID, creates the root admin, mints a Publishing API token, and writes `credentials.json`. |
-| `serve <name>` | Runs `node src/node-server.js --environment local --dotenv <instance>/.env` in the foreground. |
+| `serve <name>` | Runs `node src/node-server.js --environment local --dotenv <instance>/.env --port <port>` in the foreground, with the port from `instance.json`. |
 | `destroy <name>` | Deletes the instance directory (refuses while its server is still listening). |
 
 `credentials.json` holds the root admin's email and password, a Publishing API token, the Build ID, and the base URL — everything needed to log in to the admin panel or call the Publishing API. It is plain text inside `data/local-targets/<name>/`, which `.gitignore` excludes; treat it like any other local secret.
+
+The port lives in `instance.json` rather than as `PORT` in `.env`, so a shell or launcher that exports `PORT` never collides with the instance's dotenv file at startup. Starting `src/node-server.js` against an instance by hand therefore needs `--port` as well as `--dotenv`. An instance created before this layout has no `instance.json`: `serve` and `seed` refuse it, and `destroy` still removes it.
 
 Instances are disposable: destroy and re-create one rather than trying to carry it forward, and `seed` refuses to run a second time against the same instance (delete `credentials.json`, or `destroy` and `create` again).
 

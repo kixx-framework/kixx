@@ -31,7 +31,7 @@ export const INSTANCES_ROOT = path.join(REPO_ROOT, 'data', 'local-targets');
  */
 export const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const PLAIN_ENV_KEYS = [ 'ENVIRONMENT', 'TRUST_PROXY', 'PORT', 'BUILD_ID', 'DATA_DIRECTORY' ];
+const PLAIN_ENV_KEYS = [ 'ENVIRONMENT', 'TRUST_PROXY', 'BUILD_ID', 'DATA_DIRECTORY' ];
 const SECRET_ENV_KEYS = [ 'DOCUMENT_STORE_CURSOR_SIGNING_SECRET', 'CSRF_TOKEN_SIGNING_SECRET', 'ADMIN_BOOTSTRAP_TOKEN' ];
 
 /**
@@ -82,6 +82,18 @@ export function getCredentialsPath(name) {
 }
 
 /**
+ * The instance's own tooling state, kept apart from the server's dotenv pair.
+ * The port lives here rather than as PORT in `.env`, so a launcher which
+ * exports PORT never collides with the instance under the
+ * no-key-defined-twice startup rule; `serve` passes it as `--port`.
+ * @param {string} name - Instance name.
+ * @returns {string} Absolute path to the instance's metadata file.
+ */
+export function getInstanceMetadataPath(name) {
+    return path.join(getInstanceDirectory(name), 'instance.json');
+}
+
+/**
  * @param {string} name - Instance name.
  * @returns {boolean} True when the instance directory exists.
  */
@@ -110,14 +122,14 @@ export function generateSecret(byteLength = 32) {
 
 /**
  * Formats the plain (committed-shape) dotenv file content for an instance.
+ * It carries no PORT; see getInstanceMetadataPath().
  * @param {Object} options
- * @param {number} options.port - The instance's server port.
  * @param {string} options.buildId - The instance's Build ID.
  * @param {string} options.dataDirectory - Absolute path stores resolve against.
  * @returns {string} Dotenv file content, newline-terminated.
  */
 export function formatPlainDotenv(options) {
-    const { port, buildId, dataDirectory } = options ?? {};
+    const { buildId, dataDirectory } = options ?? {};
 
     assertNonEmptyString(buildId, 'formatPlainDotenv: buildId');
     assertNonEmptyString(dataDirectory, 'formatPlainDotenv: dataDirectory');
@@ -125,7 +137,6 @@ export function formatPlainDotenv(options) {
     return [
         'ENVIRONMENT=local',
         'TRUST_PROXY=false',
-        `PORT=${ port }`,
         `BUILD_ID=${ buildId }`,
         `DATA_DIRECTORY=${ dataDirectory }`,
         '',
@@ -163,11 +174,12 @@ export function findProcessEnvCollisions() {
 }
 
 /**
- * Creates a fresh instance directory and writes its dotenv pair.
+ * Creates a fresh instance directory, and writes its dotenv pair and its
+ * metadata file holding the assigned port.
  * @param {string} name - Instance name.
  * @param {Object} [options]
  * @param {number} [options.port] - Port to assign; a free port is discovered when omitted.
- * @returns {Promise<{ port: number, buildId: string, dataDirectory: string }>} The values written to the dotenv pair.
+ * @returns {Promise<{ port: number, buildId: string, dataDirectory: string }>} The values written to the instance files.
  * @throws {OperationalError} When the instance directory already exists.
  */
 export async function createInstance(name, options) {
@@ -185,7 +197,9 @@ export async function createInstance(name, options) {
 
     await fsp.mkdir(instanceDirectory, { recursive: true });
 
-    await fsp.writeFile(getDotenvPath(name), formatPlainDotenv({ port, buildId, dataDirectory }));
+    await fsp.writeFile(getInstanceMetadataPath(name), JSON.stringify({ port }, null, 2) + '\n');
+
+    await fsp.writeFile(getDotenvPath(name), formatPlainDotenv({ buildId, dataDirectory }));
 
     const { content: secretsContent } = formatSecretsDotenv();
     await fsp.writeFile(getDotenvSecretsPath(name), secretsContent);
@@ -207,14 +221,52 @@ export async function destroyInstance(name) {
         throw new OperationalError(`Local target instance "${ name }" does not exist at ${ instanceDirectory }`);
     }
 
-    const port = readInstancePort(name);
-    if (isNonEmptyString(port) && await isPortAccepting(Number.parseInt(port, 10))) {
+    // An instance created before the port moved to instance.json has no
+    // metadata file; skip the serving check rather than make it undeletable.
+    const port = fs.existsSync(getInstanceMetadataPath(name)) ? readInstancePort(name) : null;
+    if (port !== null && await isPortAccepting(port)) {
         throw new OperationalError(
             `Local target instance "${ name }" is still serving on port ${ port }; stop it before running destroy`,
         );
     }
 
     await fsp.rm(instanceDirectory, { recursive: true, force: true });
+}
+
+/**
+ * Reads the port `create` assigned to an instance.
+ * @param {string} name - Instance name.
+ * @returns {number} The instance's server port.
+ * @throws {OperationalError} When the metadata file is missing, unreadable, or holds no valid port.
+ */
+export function readInstancePort(name) {
+    const metadataPath = getInstanceMetadataPath(name);
+
+    let source;
+    try {
+        source = fs.readFileSync(metadataPath, 'utf8');
+    } catch (cause) {
+        if (cause.code === 'ENOENT') {
+            throw new OperationalError(
+                `Local target instance "${ name }" has no ${ metadataPath }; destroy and re-create the instance`,
+            );
+        }
+        throw new OperationalError(`Unable to read instance metadata file at ${ metadataPath }`, { cause });
+    }
+
+    let metadata;
+    try {
+        metadata = JSON.parse(source);
+    } catch (cause) {
+        throw new OperationalError(`Unable to parse instance metadata file at ${ metadataPath }`, { cause });
+    }
+
+    const port = metadata?.port;
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new OperationalError(`Instance metadata file at ${ metadataPath } has no valid port`);
+    }
+
+    return port;
 }
 
 /**
@@ -304,18 +356,6 @@ export function findFreePort() {
             server.close(() => resolve(port));
         });
     });
-}
-
-function readInstancePort(name) {
-    const dotenvPath = getDotenvPath(name);
-    let source;
-    try {
-        source = fs.readFileSync(dotenvPath, 'utf8');
-    } catch {
-        return null;
-    }
-    const match = source.match(/^PORT=(\d+)$/m);
-    return match ? match[1] : null;
 }
 
 function isPortAccepting(port) {

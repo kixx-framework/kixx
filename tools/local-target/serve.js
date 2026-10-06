@@ -9,18 +9,20 @@ import {
     instanceExists,
     getInstanceDirectory,
     getDotenvPath,
+    readInstancePort,
 } from './instance.js';
 
 
 /**
- * Spawns `src/node-server.js --environment local --dotenv <instance>/.env` in
- * the foreground, with inherited stdio, forwarding SIGINT and SIGTERM to the
+ * Spawns `src/node-server.js --environment local --dotenv <instance>/.env
+ * --port <port>` in the foreground, with the port read from the instance's
+ * metadata file, with inherited stdio, forwarding SIGINT and SIGTERM to the
  * child. Does not restart the child on source changes; use the devserver for
  * that during ordinary read-only development.
  *
  * @param {string} name - Instance name.
  * @returns {Promise<number>} The child process's exit code.
- * @throws {OperationalError} When the instance does not exist.
+ * @throws {OperationalError} When the instance does not exist or has no recorded port.
  */
 export function serveInstance(name) {
     assertValidName(name);
@@ -32,11 +34,13 @@ export function serveInstance(name) {
 
     const nodeServerPath = path.join(REPO_ROOT, 'src', 'node-server.js');
     const dotenvPath = getDotenvPath(name);
+    const port = readInstancePort(name);
 
     const child = spawn(process.execPath, [
         nodeServerPath,
         '--environment', 'local',
         '--dotenv', dotenvPath,
+        '--port', String(port),
     ], { stdio: 'inherit' });
 
     const forwardSignal = (signal) => child.kill(signal);
