@@ -1,5 +1,5 @@
 import process from 'node:process';
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { describe } from 'kixx-test';
 import {
     assert,
@@ -72,7 +72,7 @@ describe('GET /login/admin/new', ({ before, it }) => {
     it('renders valid HTML', async () => {
         // The response body is a full HTML document, so it can be validated directly.
         await validateHtml(body);
-        const document = new FastHTMLParser(body);
+        const document = parseHTML(body);
         const [ bodyNode ] = document.getElementsByTagName('body');
         assertEqual('BODY', bodyNode.nodeName);
     });

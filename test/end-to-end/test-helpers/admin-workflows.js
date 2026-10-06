@@ -1,5 +1,5 @@
 import process from 'node:process';
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { assert, assertNonEmptyString } from 'kixx-assert';
 import { assertHtmlCsrfToken } from './html.js';
 import { getBaseUrl } from './target-url.js';
@@ -123,8 +123,8 @@ export async function createAdminInvite(adminCookies, roleId = 'developer') {
     }
 
     const createInviteBody = await createInviteResponse.text();
-    const document = new FastHTMLParser(createInviteBody);
-    const inviteUrlField = document.getElementById('new-invite-url');
+    const document = parseHTML(createInviteBody);
+    const inviteUrlField = document.querySelector('#new-invite-url');
     const signupUrl = inviteUrlField?.getAttribute('value');
     if (!signupUrl) {
         throw new Error('createAdminInvite: no invite URL found in /admin/invites response');
@@ -155,8 +155,8 @@ async function createSuperAdmin(rootUserCookies, username, password, roleId) {
     const signupFormBody = await signupFormResponse.text();
     const signupCsrfToken = assertHtmlCsrfToken(signupFormBody);
 
-    const signupDocument = new FastHTMLParser(signupFormBody);
-    const [ inviteTokenField ] = signupDocument.getElementsByName('invite_token');
+    const signupDocument = parseHTML(signupFormBody);
+    const [ inviteTokenField ] = signupDocument.querySelectorAll('[name="invite_token"]');
     const inviteToken = inviteTokenField?.getAttribute('value');
     if (!inviteToken) {
         throw new Error('createSuperAdmin: no invite_token field found in /users/admin/new');

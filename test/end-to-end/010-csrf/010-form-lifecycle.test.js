@@ -1,4 +1,4 @@
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertNotEqual } from 'kixx-assert';
 import { CSRF_TOKEN_TTL_SECONDS } from '../../../src/app/presentation/lib/csrf.js';
@@ -157,8 +157,8 @@ function assertTokenExpiresNear(payload, receivedAt) {
 }
 
 function assertNoPlaintextToken(html) {
-    const document = new FastHTMLParser(html);
-    assert(!document.getElementById('new-token'), 'new-token field');
+    const document = parseHTML(html);
+    assert(!document.querySelector('#new-token'), 'new-token field');
 }
 
 function waitForNextTokenTimestamp() {

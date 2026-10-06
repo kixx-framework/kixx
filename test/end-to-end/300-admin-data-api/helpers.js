@@ -1,4 +1,4 @@
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import { assertHtmlCsrfToken } from '../test-helpers/html.js';
 import { getBaseUrl } from '../test-helpers/target-url.js';
@@ -91,7 +91,7 @@ export async function createDataToken(cookies, grants) {
     const { status, html } = await submitTokenForm(cookies, { grants });
     assertEqual(200, status, 'create data token status');
 
-    const document = new FastHTMLParser(html);
+    const document = parseHTML(html);
     const field = document.getElementsByTagName('input')
         .find((element) => element.getAttribute('id') === 'new-token');
     assert(field, 'one-time token field');

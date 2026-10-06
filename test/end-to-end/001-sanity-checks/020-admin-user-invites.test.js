@@ -5,7 +5,7 @@ import {
     assertMatches,
     assertNonEmptyString,
 } from 'kixx-assert';
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import CookieJar from '../test-helpers/cookies.js';
 import { assertHtmlCsrfToken } from '../test-helpers/html.js';
 import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
@@ -82,7 +82,7 @@ describe('GET /admin/invites as root', ({ before, it }) => {
     it('renders valid HTML', async () => {
         // The response body is a full HTML document, so it can be validated directly.
         await validateHtml(body);
-        const document = new FastHTMLParser(body);
+        const document = parseHTML(body);
         const [ bodyNode ] = document.getElementsByTagName('body');
         assertEqual('BODY', bodyNode.nodeName);
     });
@@ -122,8 +122,8 @@ describe('POST /admin/invites create developer admin as root', ({ before, it }) 
 
         body = await response.text();
 
-        const document = new FastHTMLParser(body);
-        const field = document.getElementById('new-invite-url');
+        const document = parseHTML(body);
+        const field = document.querySelector('#new-invite-url');
         const href = field?.getAttribute('value');
         assertNonEmptyString(href, 'new invite URL');
         inviteLink = new URL(href);
@@ -141,7 +141,7 @@ describe('POST /admin/invites create developer admin as root', ({ before, it }) 
     it('renders valid HTML', async () => {
         // The response body is a full HTML document, so it can be validated directly.
         await validateHtml(body);
-        const document = new FastHTMLParser(body);
+        const document = parseHTML(body);
         const [ bodyNode ] = document.getElementsByTagName('body');
         assertEqual('BODY', bodyNode.nodeName);
     });
@@ -168,8 +168,8 @@ describe('GET /users/admin/new redeem invite link', ({ before, it }) => {
 
         body = await response.text();
 
-        const document = new FastHTMLParser(body);
-        const [ inviteField ] = document.getElementsByName('invite_token');
+        const document = parseHTML(body);
+        const [ inviteField ] = document.querySelectorAll('[name="invite_token"]');
         formCsrfToken = assertHtmlCsrfToken(body);
         inviteToken = inviteField?.getAttribute('value');
     });
@@ -186,7 +186,7 @@ describe('GET /users/admin/new redeem invite link', ({ before, it }) => {
     it('renders valid HTML', async () => {
         // The response body is a full HTML document, so it can be validated directly.
         await validateHtml(body);
-        const document = new FastHTMLParser(body);
+        const document = parseHTML(body);
         const [ bodyNode ] = document.getElementsByTagName('body');
         assertEqual('BODY', bodyNode.nodeName);
     });
@@ -273,7 +273,7 @@ describe('GET /admin/style-guide as invited admin', ({ before, it }) => {
 
     it('renders valid HTML', async () => {
         await validateHtml(body);
-        const document = new FastHTMLParser(body);
+        const document = parseHTML(body);
         const [ bodyNode ] = document.getElementsByTagName('body');
         assertEqual('BODY', bodyNode.nodeName);
     });
@@ -296,14 +296,14 @@ describe('GET /users/admin/new after redeeming invite', ({ before, it }) => {
         assertEqual(inviteLink.href, response.url);
         assertMatches('Invalid invite', body);
 
-        const document = new FastHTMLParser(body);
-        const [ inviteField ] = document.getElementsByName('invite_token');
+        const document = parseHTML(body);
+        const [ inviteField ] = document.querySelectorAll('[name="invite_token"]');
         assertEqual(undefined, inviteField);
     });
 
     it('renders valid HTML', async () => {
         await validateHtml(body);
-        const document = new FastHTMLParser(body);
+        const document = parseHTML(body);
         const [ bodyNode ] = document.getElementsByTagName('body');
         assertEqual('BODY', bodyNode.nodeName);
     });

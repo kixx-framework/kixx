@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { assert, assertEqual, assertNonEmptyString } from 'kixx-assert';
 import CookieJar from '../test-helpers/cookies.js';
 import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
@@ -223,7 +223,7 @@ async function createPublishingApiToken(cookies) {
     const created = await fetchPathname(cookies, '/admin/publishing-api-tokens', { method: 'POST', body: form });
     assertEqual(200, created.status, 'create Publishing API token');
 
-    const bearerToken = new FastHTMLParser(created.text).getElementById('new-token')?.getAttribute('value');
+    const bearerToken = parseHTML(created.text).querySelector('#new-token')?.getAttribute('value');
     assertNonEmptyString(bearerToken, 'new Publishing API token');
 
     const tokenId = getTokenIds(created.text).find((id) => !idsBefore.includes(id));
@@ -244,7 +244,7 @@ async function revokePublishingApiToken(cookies, tokenId) {
 }
 
 function getTokenIds(html) {
-    return new FastHTMLParser(html).getElementsByName('token_id')
+    return parseHTML(html).querySelectorAll('[name="token_id"]')
         .map((field) => field.getAttribute('value'));
 }
 

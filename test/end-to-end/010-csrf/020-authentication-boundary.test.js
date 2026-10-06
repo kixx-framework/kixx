@@ -1,5 +1,5 @@
 import process from 'node:process';
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { describe } from 'kixx-test';
 import {
     assert,
@@ -175,8 +175,8 @@ function assertAuthenticatedJar(cookieJar, response) {
 }
 
 function getHtmlFieldValue(html, name) {
-    const document = new FastHTMLParser(html);
-    const [ field ] = document.getElementsByName(name);
+    const document = parseHTML(html);
+    const [ field ] = document.querySelectorAll(`[name="${ name }"]`);
     const value = field?.getAttribute('value');
     assertNonEmptyString(value, `${ name } form field`);
 

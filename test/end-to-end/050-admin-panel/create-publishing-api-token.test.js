@@ -5,7 +5,7 @@ import {
     assertMatches,
     assertNonEmptyString,
 } from 'kixx-assert';
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { getSuperAdmin } from '../test-helpers/admin-workflows.js';
 import { assertHtmlCsrfToken } from '../test-helpers/html.js';
 import { getBaseUrl } from '../test-helpers/target-url.js';
@@ -51,7 +51,7 @@ describe('GET /admin/publishing-api-tokens', ({ before, it }) => {
     it('renders valid HTML', async () => {
         // The response body is a full HTML document, so it can be validated directly.
         await validateHtml(body);
-        const document = new FastHTMLParser(body);
+        const document = parseHTML(body);
         const [ bodyNode ] = document.getElementsByTagName('body');
         assertEqual('BODY', bodyNode.nodeName);
     });
@@ -107,14 +107,14 @@ describe('POST /admin/publishing-api-tokens', ({ before, it }) => {
     it('renders valid HTML', async () => {
         // The response body is a full HTML document, so it can be validated directly.
         await validateHtml(body);
-        const document = new FastHTMLParser(body);
+        const document = parseHTML(body);
         const [ bodyNode ] = document.getElementsByTagName('body');
         assertEqual('BODY', bodyNode.nodeName);
     });
 
     it('includes the new token', () => {
-        const document = new FastHTMLParser(body);
-        const field = document.getElementById('new-token');
+        const document = parseHTML(body);
+        const field = document.querySelector('#new-token');
         const token = field.getAttribute('value');
         assertNonEmptyString(token);
     });

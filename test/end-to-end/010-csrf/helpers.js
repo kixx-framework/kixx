@@ -1,4 +1,4 @@
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { assert, assertEqual, assertNonEmptyString } from 'kixx-assert';
 import {
     CSRF_COOKIE_NAME,
@@ -98,8 +98,8 @@ export function decodeCsrfToken(token) {
  * @returns {string[]} Record ids in document order.
  */
 export function getRenderedRecordIds(html, fieldName) {
-    const document = new FastHTMLParser(html);
-    const fields = document.getElementsByName(fieldName);
+    const document = parseHTML(html);
+    const fields = document.querySelectorAll(`[name="${ fieldName }"]`);
     const recordIds = [];
 
     for (const field of fields) {

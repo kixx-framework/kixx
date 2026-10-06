@@ -1,4 +1,4 @@
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { assert, assertEqual, assertNonEmptyString, isString } from 'kixx-assert';
 import CookieJar from '../test-helpers/cookies.js';
 import { getBaseUrl } from '../test-helpers/target-url.js';
@@ -43,7 +43,7 @@ export async function openUploadPage(cookies) {
     cookies.applyResponse(response);
     assertEqual(200, response.status, 'GET /admin/files/new status');
 
-    const document = new FastHTMLParser(await response.text());
+    const document = parseHTML(await response.text());
     const queue = document.getElementsByTagName('div')
         .find((element) => element.getAttribute('data-js-behavior') === 'file-upload-queue');
     assert(queue, 'file-upload-queue container');
@@ -201,7 +201,7 @@ export async function fetchPathname(cookies, pathname, init) {
  * @returns {Array<{id: string, isPublished: boolean}>}
  */
 export function getListingRows(html) {
-    const document = new FastHTMLParser(html);
+    const document = parseHTML(html);
     const rows = [];
 
     for (const form of document.getElementsByTagName('form')) {
@@ -221,11 +221,11 @@ export function getListingRows(html) {
  * @returns {string|null} Root-relative href, or null when absent.
  */
 export function getPaginationHref(html, label) {
-    const document = new FastHTMLParser(html);
+    const document = parseHTML(html);
     const link = document.getElementsByTagName('a')
         .find((element) => element.textContent.trim() === label);
 
-    return link ? decodeHtmlAttribute(link.getAttribute('href')) : null;
+    return link ? link.getAttribute('href') : null;
 }
 
 /**
@@ -340,8 +340,4 @@ async function readJsonResult(response) {
     }
 
     return { response, status: response.status, json, text };
-}
-
-function decodeHtmlAttribute(value) {
-    return value ? value.replaceAll('&amp;', '&') : value;
 }

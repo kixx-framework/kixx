@@ -1,4 +1,4 @@
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { assert, assertNonEmptyString } from 'kixx-assert';
 
 
@@ -8,8 +8,8 @@ import { assert, assertNonEmptyString } from 'kixx-assert';
  * @returns {string} CSRF token value.
  */
 export function assertHtmlCsrfToken(html) {
-    const document = new FastHTMLParser(html);
-    const [ field ] = document.getElementsByName('csrf_token');
+    const document = parseHTML(html);
+    const [ field ] = document.querySelectorAll('[name="csrf_token"]');
     assert(field);
     const token = field.getAttribute('value');
     assertNonEmptyString(token);

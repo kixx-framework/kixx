@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { FastHTMLParser } from 'fast-html-dom-parser';
+import { parseHTML } from 'parse-html-dom';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
 import { getBaseUrl } from '../test-helpers/target-url.js';
@@ -130,8 +130,8 @@ describe('Admin file lifecycle', ({ before, after, describe }) => {
             assertEqual(200, detail.status);
             await validateHtml(detail.text);
 
-            const document = new FastHTMLParser(detail.text);
-            assertEqual(`${ getBaseUrl() }${ publicPathname }`, document.getElementById('file-public-url').getAttribute('value'));
+            const document = parseHTML(detail.text);
+            assertEqual(`${ getBaseUrl() }${ publicPathname }`, document.querySelector('#file-public-url').getAttribute('value'));
             assertMatches('Unpublished', detail.text);
         });
 
