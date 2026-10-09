@@ -1,1 +1,334 @@
-Use the @AGENTS.md file
+Read the @README.md for the project overview, including what this project is and why it exists.
+
+---
+
+*Note: Remove this section after establishing the aesthetic and style guide for your project.*
+
+## A Starter Theme for Your Project
+
+This repository contains the Kixx framework in `src/kixx/`, a reference application, and a starter theme for new projects. The public website and admin panel provide a blank canvas: working pages and components with a neutral visual starting point. Their appearance is application code you own, not a framework requirement.
+
+Preserve the structural conventions: semantic HTML, BEM ownership, parent-owned flow spacing, layout primitives → blocks → elements, component → semantic → reference color tokens, no inline styles, and progressive enhancement. Preserve the accessibility floor: readable contrast, visible keyboard focus, usable targets, labeled controls, logical reading order, and text that remains usable when enlarged.
+
+Adapt the visible design to the project. Palette, typefaces, type scale, tracking, spacing values, borders, shadows, surface treatments, and interaction styling are starter choices. The color-scheme model and theme-switching machinery are also replaceable. A project can change all of these while retaining the structure above.
+
+When establishing a project's design:
+
+1. Define the intended aesthetic on the style guide's Aesthetic page.
+2. Revise shared tokens and their owning stylesheets together. Edit the starter files directly; a redesign does not need to accumulate overrides or modifiers for defaults it no longer uses.
+3. Update the live specimens, stated values, usage guidance, and CSS comments in the same change. Document why a choice fits the project, particularly when replacing a starter choice.
+4. Check public and admin pages, control states, narrow screens, keyboard use, text enlargement, and every supported color scheme.
+
+*Note: Remove this section after establishing the aesthetic and style guide for your project.*
+
+---
+
+## Developer Documentation
+Use this documentation index to identify which linked documents are relevant to your task, then read the full text of each linked document — the index entries are summaries only. Keep the available documentation in mind as you work and review relevant documentation as your understanding of the task deepens. Avoid going off task or doing incorrect work because you did not review the relevant documentation.
+
+### Code Style Guide
+
+src/docs/code-style-guide.md
+
+**When to use this document:** Apply this guide whenever you are writing or modifying any non-browser JavaScript source files. This includes:
+
+- New functions, classes, modules, inline code comments, or any other JavaScript code you write from scratch.
+- Edits to existing source files, including adding, updating, and improving inline code comments.
+- Code review: Fix code style violations and update and clarify inline code comments even when not explicitly asked to.
+- Deciding whether behavior belongs in a class, module, helper function, or existing object.
+- Improving code structure while making a scoped feature or bug fix.
+- Reviewing abstractions for responsibility ownership, encapsulation, layering, naming, or accidental complexity.
+
+**What this document provides:** The project's JavaScript style conventions and structural design principles — naming, formatting, module organization, and how to decide where behavior belongs.
+
+### Code Documentation Guide
+
+src/docs/code-documentation-guide.md
+
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or improving JSDoc block comments in non-browser JavaScript source files. This includes:
+
+- Adding documentation to new functions, classes, methods, or modules you write.
+- Reviewing or updating existing documentation for accuracy and completeness.
+- Deciding whether a given symbol *needs* documentation at all.
+- Choosing the right JSDoc tags for a given situation.
+
+**What this document provides:** The project's JSDoc conventions — when documentation is warranted, tag usage, and formatting standards.
+
+### Server Error Handling
+
+src/docs/server-error-handling.md
+
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or refactoring server-side JavaScript error handling. This includes throwing application errors, handling errors, validating request input, asserting internal invariants, writing route error handlers, and deciding whether an error should propagate as expected or unexpected.
+
+**What this document provides:** The project's error-handling model — the distinction between expected and unexpected errors, application error conventions, input validation, invariant assertions, and route error handler responsibilities.
+
+### Configuration
+
+docs/configuration.md
+
+**When to use this document:** Apply this guide whenever you are adding, changing, or reviewing a runtime setting — deciding whether a value belongs in `src/node-config.js`/`src/cloudflare-config.js` versus a dotenv or secrets file, editing `example.env` or `example.env.secrets`, working with `src/kixx/config/` or `src/node-environment.js`, or touching `DATA_DIRECTORY`, `ENVIRONMENT`, or environment/config loading in an entry point.
+
+**What this document provides:** The full configuration model — the per-deploy vs. per-environment split, the shape and loading of config modules (`readConfig`), how dotenv files and `process.env` merge and are validated (`mergeEnvironmentSources`, the secrets manifest), Cloudflare-specific differences, and the checklist for adding a new setting.
+
+### Unit Testing Guide
+
+test/unit-tests/README.md
+
+**When to use this document:** Apply this guide whenever you are:
+
+- Creating a new `*.test.js` file under `test/unit-tests/`.
+- Adding or modifying test cases, hooks, or assertions in an existing test file.
+- Writing mocks with `MockTracker` or testing thrown errors and rejected promises.
+
+**What this document provides:** The project's unit testing conventions — file structure, test organization, mocking with `MockTracker`, and asserting thrown errors and rejected promises.
+
+### Collections
+
+src/app/collections/README.md
+
+**When to use this document:** Apply this guide whenever you are creating, modifying, or reviewing Collections, Records, document store access, secondary indexes, KV store access, custom storage gateways, or any code that reads from or writes to a persistence layer.
+
+**What this document provides:** The data persistence and gateway API — how to define and register Collections, write methods (`create`, `put`, `update`, `updateWithRetry`) and when to use each, the two delete methods (`delete`, `deleteStrict`) and when to use each, reading with `get`/`scan`/`query`, optimistic concurrency via `version`, Record attribute accessors, how to subclass Collection and Record, secondary index configuration, custom gateway boundaries, and how to author and register custom data access gateways.
+
+### Background Jobs
+
+src/app/jobs/README.md
+
+**When to use this document:** Apply this guide whenever you are adding, changing, or reviewing background work: registering a job, writing a job handler, enqueueing a job from a Transaction Script or request handler, declaring a recurring schedule, or debugging failed or retried jobs.
+
+**What this document provides:** The job queue authoring guide — the registry and handler signature, at-least-once delivery and idempotency, dedupe keys, UTC cron schedules (catch-up once, no overlap), error classes and retry behavior, the one-Cloudflare-invocation limit, payload limit, retention, the Admin API routes, platform differences (Node polling latency), and how to test with `processDueJobs({ now })`.
+
+### Transaction Scripts
+
+src/app/transaction-scripts/README.md
+
+**When to use this document:** Apply this guide whenever you are writing, modifying, or reviewing Transaction Scripts — the procedures that enforce business rules, read or write data, translate storage errors, and return results to the presentation layer.
+
+**What this document provides:** The Transaction Script pattern used for domain logic — file and naming conventions, function signatures for read and write scripts, how middleware calls Transaction Scripts, how Forms feed write workflows, data access via Collections, calling external services through registered gateways, domain error rules, storage-error translation with `cause`, and complete annotated examples.
+
+### Presentation Layer Guide
+
+src/app/presentation/README.md
+
+**When to use this document:** Apply this guide whenever you are adding, modifying, or reviewing application web presentation behavior. This includes:
+
+- Adding or changing static Hyperview pages, dynamic routes, request handlers, middleware, forms, or HTML error handlers.
+- Deciding where presentation-layer changes belong in `pages/`, `templates/`, `virtual-hosts.js`, or `app/`.
+- Handling route parameters, request payloads, redirects, response props, or form-backed HTML workflows.
+- Understanding how root, ancestor, leaf, include, and runtime response props are merged into the template context.
+
+**What this document provides:** The main presentation-layer guide for this Hypermedia Driven Application — where presentation files live, common recipes for static pages, dynamic pages, forms, and progressive enhancement, route matching behavior, middleware and request handler responsibilities, `HyperviewPageHandler` options, form conventions, request and response object APIs, and HTML error handler guidance.
+
+### Templating Guide
+
+src/templates/README.md
+
+**When to use this document:** Apply this guide whenever you are writing, reviewing, or debugging frontend templates. This includes:
+
+- Editing any templates in `templates/` including page templates, base templates, partials, or templated include files.
+- Choosing interpolation, raw output, nested property access, bracket notation, sections, loops, conditionals, helpers, or partials in templates.
+- Understanding HTML escaping, Markdown rendering, whitespace behavior, name resolution, delimiter changes, custom helpers, or template errors.
+
+**What this document provides:** The Kixx template syntax and behavior reference used by Hyperview — compilation stages, supported Mustache-style features, expression resolution, section semantics, built-in helpers, Hyperview helpers, escaping rules, partial usage, helper authoring, public APIs, and error behavior.
+
+### Frontend Development Guide
+
+src/docs/frontend-development-guide.md
+
+**When to use this document:** Apply this guide whenever you are writing or reviewing any HTML template markup or CSS in this project. This includes:
+
+- Styling new or existing pages, components, or layout structure.
+- Deciding where a new CSS rule belongs — an existing primitive, a new shared utility, or a page-local stylesheet.
+- Naming classes, adding design tokens, or tuning a component's custom properties.
+
+**What this document provides:** The frontend conventions for this project — how to use the live style guide as the design reference, the no-inline-styles resolution order, how `src/static-assets/stylesheets/` is organized into shared vs. admin-only files, BEM class naming, CSS formatting and comment conventions, light/dark theming, composition rules, and the page-local `page_stylesheet` include pattern. Design tokens and layout primitives are documented in the stylesheets that define them (`design-tokens.css`, `layout.css`), and typography in the live style guide; the guide points at those rather than restating them.
+
+### Plugins and Cross-Platform Architecture
+
+src/plugins/README.md
+
+**When to use this document:** Apply this guide whenever you are working on the ports-and-adapters layer that lets one application run across deploy targets (Node.js, Cloudflare Workers, and future Deno/AWS Lambda). This includes:
+
+- Writing or modifying a platform adapter under `plugins/`, or its `plugin.js` lifecycle module.
+- Adding, changing, or reviewing an interface contract (`kixx/**/*-interface.js`).
+- Registering a service through a plugin, or wiring dependencies between services.
+- Editing an entry point (`node-server.js`, `cloudflare-server.js`) or a source config module.
+- Adding support for a new deploy target, or deciding whether a new capability needs a port at all.
+
+**What this document provides:** The cross-platform design reference — the three roles (ports, adapters, and entry-points), the plugin module contract and its two-phase `register()`/`initialize()` lifecycle, plugin-registry merge semantics, where platform differences live, the rules interface contracts are written by, and checklists for adding a new port or a new platform.
+
+## Respect Existing Architecture
+
+Project-specific architecture guidance takes precedence over your general knowledge about code organization and architecture.
+
+- Frontend Development:
+    + src/docs/frontend-development-guide.md
+    + src/app/presentation/README.md
+    + src/static-assets/stylesheets/
+    + src/static-assets/javascript/
+    + src/pages/
+    + src/templates
+- Presentation Layer - src/app/presentation/README.md
+- Domain Layer (Transaction Scripts) - src/app/transaction-scripts/README.md
+- Data Source Layer (Collections and Records) - src/app/collections/README.md
+- Platform Portability (Plugins, Adapters, and Ports) - src/plugins/README.md
+
+The JavaScript code in `app/` must run on multiple platforms:
+
+- Node.js
+- Deno
+- Cloudflare Workers
+- AWS Lambda
+
+Therefore, it is critically important that the code in `app/` is cross platform, using modern Web Platform APIs. Never use Node, Deno, Cloudflare Worker, or AWS Lambda specific APIs for the JavaScript code in `app/`. Platform targeted logic can be implemented using the *adapters and ports* pattern described in `src/plugins/README.md`.
+
+## Development Server
+
+Run the development server with:
+
+```bash
+node tools/devserver.js --port 2026
+```
+
+Use this wrapper for normal development instead of running `src/node-server.js` directly. It keeps `--port` as the public browser-facing port, starts the app server child on a temporary internal port, and forwards `--environment` and `--dotenv` to the child process.
+
+Change the --port option to avoid port conflicts if needed.
+
+The wrapper restarts the child app server after the site has been idle for a few seconds, so JavaScript source changes are picked up on the next request without manually restarting the command. Server restarts are not needed for changes to templates, page data, or browser assets under `src/static-assets/`.
+
+The developer content store scans browser assets under `src/static-assets/stylesheets/` and `src/static-assets/javascript/`. `assetUrl` fingerprints template-linked entrypoints, while their root-relative `/stylesheets/**` and `/javascript/**` imports use pathname mode and revalidate independently. The devserver only proxies asset requests; cache policy comes from the application. This does not build or publish production assets.
+
+Add `.json` to the end of any URL to get the template context object as JSON, including the page's includes content:
+
+`http://localhost:2026/index.json` -> context object for `http://localhost:2026/`
+`http://localhost:2026/users/admin/new.json` -> context object for `http://localhost:2026/users/admin/new`
+
+The devserver's content store is read-only: `DeveloperContentStore` serves `pages/`, `templates/`, `static-assets/`, and `emails/` from the working tree, and its write methods throw. If a task needs to write through the Publishing API, sign up an admin, or otherwise exercise a real write path, use `node tools/local-target.js` instead (see README.md, "Local Target Instances") rather than trying to make the devserver do it.
+
+## Dependencies
+
+This project uses vendored dependencies. They live in the `src/kixx/vendor/` tree and are imported using relative paths directly in project files — not as package names. Do not use `npm install` or bare package name imports for vendored deps.
+
+NEVER install dependencies without explicitly being asked to install them by the user.
+
+If you think you need a dependency that is not already vendored, stop working on that task and ask the user to install it.
+
+The deployment tooling packages every module reachable from `src/cloudflare-server.js` or `src/node-server.js` without transpiling, and rejects bare package imports, imports outside `src/`, extensions other than `.js`/`.mjs`, CommonJS, path-casing mistakes, and `import()` with a non-literal specifier. Code that breaks these rules may run in the local development environment but will fail to deploy.
+
+## Planning Work
+
+When the user makes a request for a new feature or significant refactoring:
+
+Do NOT begin writing code or making changes.
+
+FIRST: Ensure you have a conversation to elicit information from the user so that you have a complete understanding of the work to be done, tradeoffs made, etc. Pose as many questions as you need to fill in the gaps and avoid confusion.
+
+You and the user may mutually decide that the work can be done without an implementation plan. However, if you do decide to create an Implementation plan, or the user requests one, then follow this guide:
+
+An implementation plan is durable project state, not a disposable checklist or a copy of one agent's intended call sequence. Write it so an agent with no conversation history can understand the intended outcome, verify the completed work, and continue from the exact point where another agent stopped.
+
+Each task must be a logical, reviewable partition of the implementation. It should produce one coherent outcome, have explicit boundaries, and be independently verifiable where practical. Prefer tasks aligned with behavior or an owned invariant over arbitrary file-by-file tasks. If a task cannot reasonably fit in one agent's context window, split it before implementation.
+
+Use stable task IDs and record dependencies by ID.
+
+Use this template for every implementation task:
+
+```markdown
+### Task <ID>: <outcome-oriented title>
+
+**Status:** Not started
+**Depends on:** <task IDs, or "None">
+**Documentation:** <specification or document sections, or "None">
+
+**Objective**
+
+<Describe the observable outcome and why this task is a coherent partition of the plan. This should remain true even if the implementation details change.>
+
+**Scope**
+
+- In: <behavior, packages, interfaces, migrations, or documentation owned by this task>
+- Out: <nearby work intentionally deferred to other task IDs>
+
+**Design and invariants**
+
+- <Constraints the implementation must preserve.>
+- <Important API, ownership, concurrency, security, or error-handling choices.>
+- <Known decisions that a later agent should not have to rediscover.>
+
+**Expected touch points**
+
+- `<anticipated file or package>` — <purpose of the change>
+
+Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
+
+**Acceptance criteria**
+
+- [ ] <Specific, observable behavior or artifact.>
+- [ ] <Required success and failure behavior.>
+- [ ] <Tests and documentation required for this task.>
+
+**Validation**
+
+- `<exact command>` — <what it proves>
+- <Unit test coverage.>
+- <Manual or integration check that cannot be expressed as a command, if any.>
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: None yet.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+```
+
+An Implementation Plan should begin with an Implementation Approach section summarizing the overall strategy and any cross-cutting concerns across the tasks.
+
+Write implementation plans into the agents/plans/ directory.
+
+## Work Verification
+
+- Always run the linter when you change JavaScript files for the Node.js or Cloudflare runtimes. See [Linting](#linting) below.
+- Always run the unit tests when you change JavaScript source files for the Node.js or Cloudflare runtimes. See [Testing](#testing) below.
+
+If you need to run a server, start a Local Target Instance (see README.md for more information).
+
+### Linting
+
+Run the linter according to the instructions in the `README.md` for every JavaScript source file you changed during your task. Fix any linting errors you find for the code you have written during your task before you are done.
+
+### Testing
+
+Follow the unit testing guide at `test/README.md`. Run the full suite with `node run-tests.js`. When you discover broken unit tests; think carefully about the correctness if the implementation. If the unit tests need to be updated to match the intended behavior of the implementation then update the unit tests. Otherwise fix the implementation to address the issue that broken tests have highlighted.
+
+## Helpful Tips
+
+**When writing code**
+
+Let the reader of the code breathe. Add empty lines between logical blocks of code.
+
+**When writing commit messages**
+
+- Separate the subject line from the body with a single blank line.
+- Limit the subject line to 50 characters (72 is the absolute hard limit).
+- Capitalize the first letter of the subject line.
+- Do not end the subject line with a period.
+- Use the imperative mood in the subject line (e.g., "Fix bug," "Add feature," not "Fixed" or "Adds"). Test formula: It must complete the sentence: "If applied, this commit will [your subject line here]".
+- Wrap the body text manually at 72 characters to prevent Git formatting issues.
+- Use the body to explain what and why vs. how. Assume the code explains the how; the message must explain the context and reasoning.
+
+**Explanatory Output**
+
+You should provide insightful explanations about how you are approaching a task and the tradeoffs you are making while remaining focused on the task. Provide brief insightful explanations about your implementation choices and your thinking supporting those choices using:
+
+"★ Insight ─────────────────────────────────────
+[2-3 key insightful points]
+─────────────────────────────────────────────────"
+
+These insights should be included in the conversation, not in the codebase. Focus on interesting insights that are specific to the codebase or the code you are writing, rather than general programming concepts. Do not wait until the end to provide insights. Provide them as you think about changes and write code.
+
+**The User**
+
+Assume your audience is a junior developer, familiar with general software engineering concepts, but lacking deep expertise.
