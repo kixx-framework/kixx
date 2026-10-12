@@ -42,3 +42,6 @@ data/
 .env.*.secrets
 src/.kixx/config.json
 src/.kixx/secrets.json
+
+# Generated from cloudflare-config.jsonc by the deployment CLI at build time.
+framework/src/cloudflare-config.generated.js

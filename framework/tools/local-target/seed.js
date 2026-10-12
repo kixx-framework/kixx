@@ -2,10 +2,9 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 
 import { OperationalError } from '../../src/kixx/errors/mod.js';
-import sourceConfig from '../../src/node-config.js';
 import { readConfig } from '../../src/kixx/config/read-config.js';
 import { bootApplication } from '../../src/kixx/context/boot-application.js';
-import { readEnvironment, createResolveFilepath } from '../../src/node-environment.js';
+import { readEnvironment, readSourceConfigFile, createResolveFilepath } from '../../src/node-environment.js';
 import LoggerWriter from '../../src/plugins/node-logger-writer/lib/logger-writer.js';
 import * as app from '../../src/app/app.js';
 import { plugins as generalPlugins } from '../../src/plugins/general.js';
@@ -71,6 +70,7 @@ export async function seedInstance(name) {
 
     const srcDirectory = path.join(REPO_ROOT, 'src');
     const storeResolveFilepath = createResolveFilepath({ baseDirectory: srcDirectory, dataDirectory: env.DATA_DIRECTORY });
+    const sourceConfig = readSourceConfigFile(path.join(srcDirectory, 'node-config.jsonc'));
     const config = readConfig(sourceConfig, 'local', { resolveFilepath: storeResolveFilepath });
 
     const plugins = mergePluginMaps(generalPlugins, nodePlugins);

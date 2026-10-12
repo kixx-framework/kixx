@@ -10,14 +10,18 @@ import HttpRouter from './kixx/http-router/http-router.js';
 import LoggerWriter from './plugins/node-logger-writer/lib/logger-writer.js';
 import ServerRequest from './plugins/node-server-request/lib/server-request.js';
 import ServerResponse from './kixx/http-router/server-response.js';
-import sourceConfig from './node-config.js';
 import * as app from './app/app.js';
 import { plugins as generalPlugins } from './plugins/general.js';
 import { plugins as nodePlugins } from './plugins/node.js';
 import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
 import { readConfig } from './kixx/config/read-config.js';
 import { bootApplication } from './kixx/context/boot-application.js';
-import { resolveDotenvFilepath, readEnvironment, createResolveFilepath } from './node-environment.js';
+import {
+    resolveDotenvFilepath,
+    readEnvironment,
+    readSourceConfigFile,
+    createResolveFilepath,
+} from './node-environment.js';
 import virtualHosts from './virtual-hosts.js';
 import TraceLogger from './kixx/logger/trace-logger.js';
 
@@ -62,6 +66,8 @@ const resolveFilepath = createResolveFilepath({
     baseDirectory: THIS_DIRECTORY,
     dataDirectory: env.DATA_DIRECTORY,
 });
+
+const sourceConfig = readSourceConfigFile(path.join(THIS_DIRECTORY, 'node-config.jsonc'));
 
 const config = readConfig(sourceConfig, environment, {
     resolveFilepath,

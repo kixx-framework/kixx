@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
@@ -9,7 +10,11 @@ import { register } from '../../../../src/plugins/node-content-store/plugin.js';
 import { plugins } from '../../../../src/plugins/node.js';
 import { FORMAT } from '../../../../src/kixx/content-addressable-store/addressing.js';
 import Logger from '../../../../src/kixx/logger/logger.js';
-import nodeConfig from '../../../../src/node-config.js';
+import { readSourceConfigFile } from '../../../../src/node-environment.js';
+
+
+const SRC_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'src');
+const nodeConfig = readSourceConfigFile(path.join(SRC_DIRECTORY, 'node-config.jsonc'));
 
 
 const temporaryDirectories = [];

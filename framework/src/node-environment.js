@@ -6,6 +6,7 @@ import { assertNonEmptyString, isNonEmptyString } from './kixx/assertions/mod.js
 import { OperationalError } from './kixx/errors/mod.js';
 import { mergeEnvironmentSources } from './kixx/config/merge-environment-sources.js';
 import { parseSecretsManifest } from './kixx/config/secrets-manifest.js';
+import { parseJsonc } from './kixx/config/parse-jsonc.js';
 
 
 // Reads UTF-8 text, throwing the raw filesystem error. Injectable wherever it
@@ -123,6 +124,30 @@ function assertRequiredSecrets(env, secretsManifestFile, readFile) {
             {},
             readEnvironment,
         );
+    }
+}
+
+/**
+ * Reads a JSONC source config file such as `node-config.jsonc`. Unlike a
+ * dotenv file, the source config is always required.
+ *
+ * @param {string} filepath - Absolute path to the JSONC config file.
+ * @param {(filepath: string) => string} [readFile] - UTF-8 file reader, defaulting to `fs.readFileSync`.
+ * @returns {Object} The parsed source config, ready for `readConfig`.
+ * @throws {OperationalError} When the file cannot be read or parsed.
+ */
+export function readSourceConfigFile(filepath, readFile = defaultReadFile) {
+    let source;
+    try {
+        source = readFile(filepath);
+    } catch (cause) {
+        throw new OperationalError(`Unable to read config file from ${ filepath }`, { cause });
+    }
+
+    try {
+        return parseJsonc(source);
+    } catch (cause) {
+        throw new OperationalError(`Unable to parse config file from ${ filepath }`, { cause });
     }
 }
 

@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
-import sourceConfig from './cloudflare-config.js';
+// Generated from cloudflare-config.jsonc by the deployment CLI; not committed.
+import sourceConfig from './cloudflare-config.generated.js';
 import { readConfig } from './kixx/config/read-config.js';
 import HttpRouter from './kixx/http-router/http-router.js';
 import LoggerWriter from './plugins/cloudflare-logger-writer/lib/logger-writer.js';

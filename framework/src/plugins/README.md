@@ -157,7 +157,7 @@ A Node adapter *could* return that boolean. It must not, because the moment appl
 2. Implement one adapter package per platform: `plugins/<platform>-<name>/lib/<name>.js`, tagged `@implements` with the port's typedef.
 3. Add a `plugins/<platform>-<name>/plugin.js` exporting `register()` — and `initialize()` only if it consumes other services.
 4. Register the package in each platform registry (`plugins/node.js`, `plugins/cloudflare.js`) under a descriptive key.
-5. Add any config the adapter needs to `node-config.js` and `cloudflare-config.js`, and assert its presence in `register()` with a message naming the plugin and the exact config path.
+5. Add any config the adapter needs to `node-config.jsonc` and `cloudflare-config.jsonc`, and assert its presence in `register()` with a message naming the plugin and the exact config path.
 6. If the adapter holds a resource that must be released (a database handle), give it a `close()` method — `ApplicationContext#close()` calls it during graceful shutdown.
 
 Do not add a port for something the application can do portably on its own. A port is justified by a genuine platform difference.

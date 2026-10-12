@@ -1,8 +1,14 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import sourceConfig from '../../src/node-config.js';
 import { readConfig } from '../../src/kixx/config/read-config.js';
+import { readSourceConfigFile } from '../../src/node-environment.js';
+
+
+const SRC_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'src');
+const sourceConfig = readSourceConfigFile(path.join(SRC_DIRECTORY, 'node-config.jsonc'));
 
 
 describe('node-config local environment', ({ it }) => {

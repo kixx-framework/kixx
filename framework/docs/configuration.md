@@ -13,8 +13,8 @@ deploy that shares behavior. A **deploy** is one specific running instance —
 one Node.js process, one Cloudflare Worker version. Two deploys of the same
 environment share configuration but not environment variables.
 
-- Per-environment values are **configuration**: `src/node-config.js` or
-  `src/cloudflare-config.js`, under the `environments` map.
+- Per-environment values are **configuration**: `src/node-config.jsonc` or
+  `src/cloudflare-config.jsonc`, under the `environments` map.
 - Per-deploy values are **environment variables**: dotenv files (Node.js) or
   Cloudflare bindings, split again by secrecy (see below).
 
@@ -24,18 +24,29 @@ duplicate it.
 
 ## Configuration modules
 
-`src/node-config.js` and `src/cloudflare-config.js` are plain JavaScript
-modules exporting:
+`src/node-config.jsonc` and `src/cloudflare-config.jsonc` are JSONC files:
+JSON plus `//` and `/* */` comments and trailing commas. Keeping them as data
+rather than JavaScript lets build tooling read and rewrite them without
+executing code.
 
-```js
-export default {
-    name: 'kixx-app',
-    environments: {
-        development: { /* ... */ },
-        production: { /* ... */ },
+```jsonc
+{
+    "name": "kixx-app",
+    "environments": {
+        "development": { /* ... */ },
+        "production": { /* ... */ },
     },
-};
+}
 ```
+
+Values must be literals, so durations are written out in seconds with a
+comment (`"pageCacheReadTtlSeconds": 3600, // 1 hour`) instead of as
+arithmetic.
+
+`src/kixx/config/parse-jsonc.js` (`parseJsonc`) is the framework's own JSONC
+parser. It has no dependencies and runs on every platform. It supports only
+the syntax above, not JSON5 extensions like unquoted keys or single-quoted
+strings.
 
 Top-level settings like `name` are rare. Everything else lives under
 `environments`, keyed by environment name. Each environment section holds every
@@ -55,10 +66,16 @@ uses:
 
 ```js
 import { readConfig } from './kixx/config/read-config.js';
-import sourceConfig from './node-config.js';
+import { readSourceConfigFile } from './node-environment.js';
 
+const sourceConfig = readSourceConfigFile(path.join(THIS_DIRECTORY, 'node-config.jsonc'));
 const config = readConfig(sourceConfig, environment, { resolveFilepath });
 ```
+
+On Node.js, `readSourceConfigFile` reads the file and parses it with
+`parseJsonc`. The Cloudflare Worker has no filesystem, so it imports a
+module generated from the JSONC file at build time instead (see
+[Worker packaging](#worker-packaging)).
 
 It throws if `config.environments` is not a plain object, or if
 `environment` does not match a key in it. The returned object is deep-frozen
@@ -193,7 +210,7 @@ The Cloudflare Worker does not read dotenv files. The separate Kixx deployment
 CLI, run from `src/`, builds Worker versions from these inputs:
 
 ```text
-cloudflare-config.js
+cloudflare-config.jsonc
 cloudflare-server.js
 .env.<environment>
 example.env.secrets
@@ -247,7 +264,7 @@ starts with every `example.env.secrets` assignment commented out so the first
 
 ### Worker and resource configuration
 
-`cloudflare-config.js` also carries CLI-only blocks per environment:
+`cloudflare-config.jsonc` also carries CLI-only blocks per environment:
 
 - `WORKER` — the Worker name plus Worker-level settings (observability,
   logpush, subdomain), applied by `create-worker` only.
@@ -260,11 +277,11 @@ Resource blocks become bindings: `DOCUMENT_STORE` (D1), `KEY_VALUE_STORE` (KV),
 `CONTENT_STORE` (KV and a Durable Object namespace), `JOB_QUEUE` (a Durable Object namespace with a SQLite-backed class), and one R2 binding per
 `OBJECT_STORE.buckets` entry. The CLI verifies configured D1 and KV IDs. When
 an ID is absent, it resolves the resource by name, adopting or creating it,
-prints the ID, and stops so the ID can be added to `cloudflare-config.js`. R2
+prints the ID, and stops so the ID can be added to `cloudflare-config.jsonc`. R2
 buckets are neither verified nor created and must exist before deployment.
 
 Cloudflare email sending reads `SEND_EMAIL.from` from the selected environment
-in `cloudflare-config.js`. The configured value is a placeholder; replace it
+in `cloudflare-config.jsonc`. The configured value is a placeholder; replace it
 with a verified sender address before enabling a workflow that sends email.
 The Worker also needs a `send_email` binding named `SEND_EMAIL` (the adapter's
 default binding name), plus an onboarded sender domain and verified sender
@@ -278,12 +295,19 @@ transpiling, tree shaking, or minification. The build rejects bare package
 imports, modules outside `src/`, extensions other than `.js` and `.mjs`,
 CommonJS, path-casing mistakes, and `import()` with a non-literal specifier.
 
+`cloudflare-config.jsonc` is not a module and is never uploaded. Before
+packaging, the CLI parses it and writes the whole source config to
+`src/cloudflare-config.generated.js` as `export default { ... };`.
+`cloudflare-server.js` imports that module and passes it to `readConfig`. The
+generated module is gitignored and must never be edited by hand; change
+`cloudflare-config.jsonc` instead.
+
 ## Adding a new setting
 
 1. Decide per-deploy vs. per-environment using the question at the top of
    this document.
 2. Per-environment: add the key under the relevant environment section(s) of
-   `node-config.js` and, if it applies to Cloudflare too, `cloudflare-config.js`.
+   `node-config.jsonc` and, if it applies to Cloudflare too, `cloudflare-config.jsonc`.
    Read it from `config.env` in application code.
 3. Per-deploy, non-secret: add the key to `example.env` with an explanatory
    comment, and to each `.env.<environment>` file that needs a non-default

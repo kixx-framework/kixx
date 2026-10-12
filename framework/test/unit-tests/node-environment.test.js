@@ -9,6 +9,7 @@ import {
     resolveDotenvFilepath,
     readEnvironment,
     readOptionalDotEnvFile,
+    readSourceConfigFile,
     createResolveFilepath,
 } from '../../src/node-environment.js';
 
@@ -47,6 +48,39 @@ describe('node-environment', ({ describe }) => {
             });
 
             assertEqual(path.resolve('custom/path.env'), filepath);
+        });
+    });
+
+    describe('readSourceConfigFile', ({ it }) => {
+        it('parses a JSONC config file', () => {
+            const dir = makeTempDirectory();
+            const filepath = path.join(dir, 'config.jsonc');
+            fs.writeFileSync(filepath, '{\n    // comment\n    "name": "app",\n}\n');
+
+            const result = readSourceConfigFile(filepath);
+
+            assertEqual('app', result.name);
+        });
+
+        it('throws an OperationalError when the file does not exist', () => {
+            const dir = makeTempDirectory();
+            const error = catchError(() => readSourceConfigFile(path.join(dir, 'missing.jsonc')));
+
+            assert(error, 'expected an error');
+            assertEqual('OperationalError', error.name);
+            assertMatches('Unable to read config file', error.message);
+        });
+
+        it('throws an OperationalError when the file cannot be parsed', () => {
+            const dir = makeTempDirectory();
+            const filepath = path.join(dir, 'invalid.jsonc');
+            fs.writeFileSync(filepath, '{ name: "app" }');
+
+            const error = catchError(() => readSourceConfigFile(filepath));
+
+            assert(error, 'expected an error');
+            assertEqual('OperationalError', error.name);
+            assertMatches('Unable to parse config file', error.message);
         });
     });
 
