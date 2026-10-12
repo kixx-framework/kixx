@@ -5,10 +5,10 @@ __A web development framework for you and your clankers to build anything from a
 
 Build web applications with AI agents without generating piles of shit code you’ll need to rewrite later. Kixx is optimized for solo developers and small teams with an emphasis on productivity, craftsmanship, portability, and durability.
 
-- JavaScript backend.
+- Server-side JavaScript to run on Cloudflare Workers, AWS Lambda, Node.js and Deno.
 - Supports hypermedia-driven applications with server-side HTML template rendering.
-- Or you can use it to build a JSON API or single-page client application.
-- Component based design so you can choose what you like and leave the rest behind.
+- But, of course you can also use it to build a JSON API or single-page client application.
+- Component based design so you can choose only what you like and leave the rest behind.
 - Provides common paths for most use cases, but also includes escape hatches so you can go your own way.
 - Kixx applications are fun and easy to hack on.
 - Designed for token efficiency so you can keep your costs under control when using agents.
