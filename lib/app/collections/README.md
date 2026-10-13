@@ -1,106 +1,78 @@
 # Collections
 
-This application keeps data persistence behind a small Data Source Layer, using Collections and Records, separate from presentation and domain logic.
+The Data Source Layer. It keeps persistence separate from presentation and domain logic.
 
-- **Collections** - Table and Type data source gateway
-- **Records** - Row and Document data source gateway
+- **Collections** — Table Data Gateway / Table Module, scoped to one type.
+- **Records** — Row Data Gateway / DTO (mutable data object) for one stored item.
 
-For application feature code, agents should always work through registered Collections instead of talking directly to storage infrastructure.
-
-## Backing Stores
-
-This application primarily uses:
-
-- **Document Store** - A JSON Document persistence engine with scan, query, and concurrency control capabilities.
-- **Key Value Store** - A simple key/value persistence engine which can store JSON, text blobs, and ArrayBuffers. The key/value store is eventually consistent and has no concurrency control.
-- **Object Store** - A bucket/key blob store for large binary content such as uploaded files. There are no base classes for the Object Store; it is accessed through a custom gateway (see [Custom Gateways](#custom-gateways)).
-
-An application may also implement custom storage engines with custom Collection and Record gateways.
-
-In any case, application code should access stored data through the Gateway pattern; using registered Collections from the RequestContext:
+Feature code must go through registered Collections, never directly to storage:
 
 ```js
 const users = context.getCollection('User');
 const user = await users.get(context, userId);
 ```
 
-## Gateways
+## Backing Stores
 
-By default, there are two Gateway patterns used in Kixx applications:
+| Store | Collection base | Record base | Notes |
+|---|---|---|---|
+| Document Store | `base-document-store-collection.js` | `base-document-store-record.js` | JSON documents. Scan, secondary-index query, optimistic concurrency. |
+| Key/Value Store | `base-key-value-store-collection.js` | `base-key-value-store-record.js` | JSON at `${type}_${id}`. Eventually consistent. No concurrency control, indexes, or ordering. |
+| Object Store | none | none | Blobs (uploaded files). Use a [custom gateway](#custom-gateways). |
 
-### Record
+Subclass the base classes for each domain type. Other storage systems get custom gateways.
 
-- **Document Store Record** - app/collections/base-document-store-record.js - Implements the Row Data Gateway and Data Transfer Object (DTO) patterns for the Document Store
-- **Key/Value Store Record** - app/collections/base-key-value-store-record.js - Implements the Data Transfer Object (DTO) patterns for the Key/Value Store
+## Defining a Collection
 
-### Collection
+Put each Collection and its paired Record in `app/collections/`. Every application type gets one Collection.
 
-- **Document Store Collection** - app/collections/base-document-store-collection.js - Implements the Table Data Gateway and Table Module patterns for the Document Store.
-- **Key/Value Store Collection** - app/collections/base-key-value-store-collection.js - Implements the Table Data Gateway and Table Module patterns for the Key Value Store.
+- `static TYPE` is required. Use PascalCase (`"User"`). Document Store types must match `/^[A-Za-z][A-Za-z0-9_]*$/`. The constructor throws `AssertionError` if `TYPE` is not overridden.
+- `static Record` pairs the Collection with its Record subclass. All results are wrapped in it.
+- Ids are non-empty strings. The Document Store also rejects control characters.
+- The Collection sets `type` on every write. Callers never pass it.
 
-The base collection and record classes are intended to be subclassed for specific application domains.
-
-An application may also implement custom Collection and Record gateways for custom storage engines which do not subclass these base classes.
-
-### Document Store and Key Value Store Types
-
-Objects in the document store must have a `type`. By convention, types use PascalCase like `"Cat"`, `"User"`, or `"Account"`. The Document Store requires a type to start with a letter and contain only letters, digits, and underscores. Each Collection subclass must be bound to one application-defined type, and every application-defined type should have an associated Collection subclass.
-
-Every Collection subclass must override `static TYPE`. The base class constructor throws an `AssertionError` when `TYPE` is missing or left at the base class placeholder.
-
-The Collection API scopes all operations to its `TYPE`. When a document is created or put through a Collection, the Collection sets `type` automatically.
-
-Document ids must be non-empty strings. The Document Store also rejects ids containing control characters.
-
-### Defining a Collection
-
-All application Collections should be registered from the app's `register(context)` lifecycle function in app/app.js, after their backing store service has been created. Collections and their paired Record subclasses should be defined in `app/collections/`.
-
-Each Collection subclass should be paired with a Record subclass. The Record subclass holds the document schema (`static schema`), implements `validate()` to enforce invariants before writes, and exposes domain-specific attribute getters. A minimal pair for the Document Store looks like this:
-
-In app/collections/user-record.js:
+`app/collections/user-record.js`:
 
 ```js
 import Record from './base-document-store-record.js';
 import { isNonEmptyString } from '../../kixx/assertions/mod.js';
 import { ValidationError } from '../../kixx/errors/mod.js';
 
-class UserRecord extends Record {
+export default class UserRecord extends Record {
+    // Documentation only; not enforced. List nullable fields in `required` too
+    // ("present but possibly null") and enforce null rules in validate().
     static schema = {
         type: 'object',
         properties: {
-            username: {
-                type: 'string',
-                description: 'Unique username used as the document id',
-            },
-            email_address: {
-                type: 'string',
-                format: 'email',
-                description: 'Email address used to contact the user',
-            },
+            username: { type: 'string', description: 'Unique username; the document id' },
+            email_address: { type: 'string', format: 'email' },
         },
         required: [ 'username', 'email_address' ],
     };
 
+    // Domain getters delegate to this.get().
+    get emailAddress() {
+        return this.get('email_address');
+    }
+
     validate() {
         const error = new ValidationError('Invalid user record');
+
         if (!isNonEmptyString(this.get('username'))) {
             error.push('Username is required', 'username');
         }
         if (!isNonEmptyString(this.get('email_address'))) {
             error.push('Email address is required', 'email_address');
         }
+
         if (error.length) {
             throw error;
         }
     }
-
 }
-
-export default UserRecord;
 ```
 
-In app/collections/user-collection.js:
+`app/collections/user-collection.js`:
 
 ```js
 import Collection from './base-document-store-collection.js';
@@ -112,8 +84,6 @@ export default class UserCollection extends Collection {
     static TYPE = 'User';
     static Record = UserRecord;
 
-    // Secondary index definitions owned by this collection (see "Document Store
-    // Secondary Indexes" below). app/app.js collects these for registration.
     static INDEXES = [
         { name: USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.email_address', unique: true },
     ];
@@ -122,22 +92,18 @@ export default class UserCollection extends Collection {
         return attributes.username;
     }
 
-    generateSortKey(doc) {
-        return doc?.email_address;
-    }
-
     async findByEmailAddress(context, emailAddress) {
-        const result = await this.query(context, {
+        const { items } = await this.query(context, {
             index: USER_EMAIL_ADDRESS_INDEX,
             equalTo: emailAddress,
             limit: 1,
         });
-        return result.items[0] || null;
+        return items[0] ?? null;
     }
 }
 ```
 
-Then, in app/app.js:
+`app/app.js`:
 
 ```js
 const DOCUMENT_STORE_INDEXES = [
@@ -155,9 +121,7 @@ export function register(context) {
 }
 
 export function initialize(context) {
-    const documentStore = context.getService('DocumentStore');
-
-    documentStore.initialize({
+    context.getService('DocumentStore').initialize({
         engine: context.getService('DocumentStoreEngine'),
         indexes: DOCUMENT_STORE_INDEXES,
         cursorSigningSecret: context.getEnvString('DOCUMENT_STORE_CURSOR_SIGNING_SECRET', { required: true }),
@@ -165,301 +129,129 @@ export function initialize(context) {
 }
 ```
 
-The `DocumentStore` is created in `register()` so Collections can be constructed with it, but it is not usable until `initialize()` connects it to the storage engine, its secondary indexes, and its cursor signing secret.
+Collections are built in `register()`. The `DocumentStore` is unusable until `initialize()` connects its engine, indexes, and cursor secret.
 
-### Custom Collection Helpers
+### Custom Helpers
 
-Add application-specific read and write helpers to Collection subclasses when a workflow needs a named lookup or mutation. This keeps index names, query bounds, pagination defaults, key formats, and result normalization inside the data source layer instead of spreading those details through domain or presentation code.
+Add named helpers (like `findByEmailAddress`) to the Collection for each lookup or mutation a workflow needs. Index names, query bounds, key formats, and pagination defaults stay inside the Collection. Callers use the helper, not `query()`.
 
-Callers then depend on the business-shaped helper instead of the storage-shaped index contract:
+## Document Store Collections
+
+### Writing
+
+| Method | Concurrency | Throws (besides `ValidationError`) |
+|---|---|---|
+| `create(context, input)` | Must not exist | `DocumentAlreadyExistsError`, `DocumentUniqueIndexViolationError` |
+| `put(context, input)` | None; overwrites | `DocumentUniqueIndexViolationError` |
+| `update(context, record)` | `record.version` must match | `DocumentNotFoundError`, `VersionConflictError`, `DocumentUniqueIndexViolationError` |
+| `updateWithRetry(context, record, callback, options)` | Retries on conflict | `RetryLimitExceededError`, `DocumentNotFoundError`, `DocumentUniqueIndexViolationError` |
+
+- Use `create()` when a duplicate is an error, `put()` for seeding or imports, and `update()` for user edits.
+- Every write calls `record.validate()` first. A `ValidationError` never reaches the store.
+- `create()` and `put()` accept a plain object or a Record. A plain object is normalized: `type` dropped, a non-empty `id` kept (else `generateUniqueId(attributes)`), `sortKey` moved to Record metadata, then wrapped via `Record.forWrite()`.
+- `update()`, `updateWithRetry()`, and `deleteStrict()` require an instance of `this.Record` with a matching type. Otherwise they throw `AssertionError`.
+
+`updateWithRetry()` is for safely recomputable server-owned changes (nonces, counters, timestamps). Do not use it for user edits whose conflicts the user must resolve. On `VersionConflictError` it refetches, calls `callback(latest, { attempt, conflict })`, and retries the returned record (or `latest` when the callback returns `undefined`). `options.retryLimit` defaults to `3`; `0` disables retries. `RetryLimitExceededError` has `type`, `id`, `retryLimit`, and the last conflict as `cause`. Unique index violations are not retried.
 
 ```js
-const users = context.getCollection('User');
-const user = await users.findByEmailAddress(context, emailAddress);
+await users.updateWithRetry(context, user, (latest) => {
+    latest.set('nonce', crypto.randomUUID());
+});
 ```
 
-### Document Store Collections: Writing
+### Reading
 
-Document Store Collections expose four ways to write a document. Choose based on your concurrency requirements:
+- **`get(context, id)`** — One document, or `null`.
+- **`scan(context, options)`** — Page ordered by the primary `sortKey`.
+- **`query(context, options)`** — Page ordered by the secondary index named in `options.index`.
 
-- **`create(context, input)`** — Inserts a new document. Throws `DocumentAlreadyExistsError` if a document already exists for the same `id`, or `DocumentUniqueIndexViolationError` if the write conflicts with a configured unique secondary index. Use this when the document must not already exist (e.g. a sign-up flow where a duplicate email means an error).
-- **`put(context, input)`** — Creates or overwrites a document without optimistic concurrency control. Throws `DocumentUniqueIndexViolationError` if the write conflicts with a configured unique secondary index. Use this for seeding, importing, or any case where you hold the canonical state and don't need to guard against concurrent writes.
-- **`update(context, dto)`** — Replaces an existing document only when the stored version matches `dto.version`. Throws `DocumentNotFoundError` when the document is absent, `VersionConflictError` when the version doesn't match, or `DocumentUniqueIndexViolationError` if the write conflicts with a configured unique secondary index. Use this for all user-initiated edits where a concurrent write could corrupt data.
-- **`updateWithRetry(context, dto, callback, options)`** — Tries `update()` once, then handles `VersionConflictError` by refetching the latest record, passing it to `callback(latest, { attempt, conflict })`, and retrying the returned or mutated record. Use this for recomputable mutations where automatic merge semantics are safe, such as nonce rotation, counters, timestamps, or similar server-owned values. Do not use it when the caller needs to see and resolve a conflicting user edit. Because `updateWithRetry()` absorbs `VersionConflictError` internally, callers do not catch it. Instead it throws `RetryLimitExceededError` when conflicts continue past `retryLimit`, and `DocumentNotFoundError` if the document is deleted between a conflict and the refetch. It does not retry `DocumentUniqueIndexViolationError`; that error propagates immediately. `RetryLimitExceededError` carries `name`/`code` of `'RetryLimitExceededError'` plus `type`, `id`, and `retryLimit` properties.
+`scan()` and `query()` return `{ items, cursor }`. Options:
 
-All write methods call `dto.validate()` before persisting. A `ValidationError` thrown from `validate()` propagates to the caller without touching the store.
+- `limit` — Positive integer, default `100`.
+- `descending` — Defaults to `false`.
+- `cursor` — Opaque token from the previous page. `null` or omitted starts at page one. The returned `cursor` is `null` on the last page.
+- `equalTo`, or range bounds `greaterThan`, `greaterThanOrEqualTo`, `lessThan`, `lessThanOrEqualTo`. `equalTo` cannot be combined with range bounds.
 
-`create()` and `put()` accept either a plain attributes object or a Record instance. When given a plain object, the Collection normalizes it: strips `type` from stored attributes, preserves a non-empty `input.id` when provided, otherwise calls `generateUniqueId(attributes)` to create the document id, strips `id` from stored attributes, moves `input.sortKey` into Record metadata when supplied, and wraps the result in the configured Record class via `Record.forWrite()`.
+Cursors are HMAC-signed by the `DocumentStore` and bound to the method, type, index, direction, and range options that produced them. A tampered, foreign, or replayed cursor throws `InvalidCursorError`. `limit` is not bound and may change between pages.
 
-`update()` and `updateWithRetry()` require a Record instance — they use the instance's `version` for optimistic concurrency and run the subclass `validate()`. Passing a plain object to `update()` throws an `AssertionError`.
-
-`updateWithRetry()` defaults to three retry attempts after the first conflict; pass `{ retryLimit: 0 }` to disable refetch retries. `retryLimit` must be an integer greater than or equal to zero, otherwise an `AssertionError` is thrown. If the callback returns `undefined`, the mutated `latest` record is used for the next attempt.
-
-### Document Store Collections: Reading and Listing
-
-- **`get(context, id)`** — Retrieves one document by id. Returns `null` when absent.
-- **`scan(context, options)`** — Returns a keyset-paginated page of documents ordered by their primary sort key. Returns `{ items, cursor }`. Pass `cursor` back on subsequent calls to page through results; `cursor` is `null` on the last page. Options: `descending`, `limit` (positive integer, default 100), `cursor`, `equalTo`, `greaterThan`, `greaterThanOrEqualTo`, `lessThan`, `lessThanOrEqualTo`. `equalTo` is mutually exclusive with range bounds and throws when combined with them. A `null` or omitted `cursor` starts from the first page.
-- **`query(context, options)`** — Returns a keyset-paginated page of documents ordered by a named secondary index. Requires `options.index`. Returns `{ items, cursor }`. Accepts the same filter and pagination options as `scan()`. The index must be configured in `DOCUMENT_STORE_INDEXES` in `app/app.js` before calling.
-
-`scan()` uses the primary `sortKey` field on the document. `query()` uses a separate index keyed by a JSON path into the document's fields. Use `scan()` to list all documents of a type in sort-key order. Use `query()` to look up documents by a non-primary field.
-
-To list every document whose sort key or indexed value starts with a prefix, spread `sortKeyPrefixRange(prefix)` from `kixx/document-store/document-store.js` into the `scan()` or `query()` options. It returns `{ greaterThanOrEqualTo: prefix, lessThan: prefix + MAX_SORT_KEY_CHAR }`. The upper bound is only exhaustive when key content is limited to Basic Multilingual Plane characters (ASCII identifiers, ISO timestamps, etc.), and the range excludes documents whose key is missing.
+For prefix matches, spread `sortKeyPrefixRange(prefix)` from `kixx/document-store/document-store.js`. It only covers every match when keys are BMP-only (ASCII, ISO timestamps, etc.). Documents without a key are excluded.
 
 ```js
-import { sortKeyPrefixRange } from '../../kixx/document-store/document-store.js';
-
 const { items } = await this.query(context, {
     index: ACTIVATION_BUILD_INDEX,
     ...sortKeyPrefixRange(`${ buildId }:`),
 });
 ```
 
-Pagination cursors are opaque, **signed public tokens** — not raw storage cursors. The `DocumentStore` facade issues and verifies them, so a cursor that fails verification raises `InvalidCursorError` rather than reaching the engine. A cursor fails verification when it is:
+### Deleting
 
-- **Unsigned, tampered with, or signed by a foreign secret** — the HMAC signature does not verify.
-- **Replayed against a different query** — the facade binds each cursor to the method (`scan` vs. `query`), document type, index, sort direction, and range options that produced it. A cursor is a position in one specific ordering, so resuming from it under different bounds would start from a meaningless offset.
+- **`delete(context, id)`** — No concurrency check. Returns `true` if deleted, `false` if absent.
+- **`deleteStrict(context, record)`** — Requires matching `record.version`. Throws `DocumentNotFoundError` or `VersionConflictError`.
 
-`limit` is deliberately **not** bound into the cursor: page size does not move a key position, so a caller may vary it while paging.
+### IDs and Sort Keys
 
-### Document Store Collections: ID Generation and Sort Keys
+- **`generateUniqueId(attributes)`** — Defaults to `crypto.randomUUID()`. Override it for derived ids (usernames, slugs, hashes), counters, or id services.
+- **`generateSortKey(doc)`** — Defaults to `doc.sortKey` (from Record metadata) or `undefined`. Override it to compute one. It must return a string, `null`, or `undefined`; anything else throws `AssertionError`. Sort keys compare as strings, so format them to sort correctly as text (zero-padded numbers, ISO dates). Range scans only make sense when every document has a sort key.
 
-`BaseDocumentStoreCollection#generateUniqueId(attributes)` is the canonical hook for creating document ids, including derived IDs such as usernames, slugs, or content hashes. Override `generateUniqueId` on the Collection subclass when a document type needs a stable id derived from attributes, a counter-backed id, an injected id service, or any other non-default id strategy. The default `generateUniqueId` returns `crypto.randomUUID()`.
+### Secondary Indexes
 
-Override `generateSortKey(doc)` when the Collection needs a computed sort key. The sort key is store metadata, not a user-defined attribute. Plain-object writes may still supply `sortKey`; the Collection moves it into the Record's metadata slot, and `Record#toDocument()` makes a non-null value available to the default `generateSortKey(doc)` hook as `doc.sortKey`. The default passes that value through when present, or returns `undefined` to omit one. The sort key controls the ordering returned by `scan()` and must be a string that sorts lexicographically in the desired order. `generateSortKey()` must return a string, `null`, or `undefined`; returning any other type throws an `AssertionError` during a write. Range queries in `scan()` are only meaningful when all documents have sort keys.
+An index definition is `{ name, jsonPath, unique? }`:
 
-### Document Store Collections: Deleting
+- `name` — Lowercase letters, digits, and underscores, starting with a letter. Unique across the store.
+- `jsonPath` — Starts with `$.` (e.g. `$.email_address`, `$.profile.role`).
+- `unique` — Boolean, default `false`. Enforced per `(type, value)`. A violating write throws `DocumentUniqueIndexViolationError` (`indexName` says which index).
 
-- **`delete(context, id)`** — Deletes one document by id without concurrency control. Returns `true` when a document was deleted, `false` when no document existed.
-- **`deleteStrict(context, dto)`** — Deletes a document only when the stored version matches `dto.version`. Requires a Record instance — passing a plain object throws an `AssertionError`. Throws `DocumentNotFoundError` when absent and `VersionConflictError` on a version mismatch.
+The Collection that queries an index owns it. Declare it in `static INDEXES` and export its name as a constant. When adding a new Collection, spread its `INDEXES` into `DOCUMENT_STORE_INDEXES` in `app/app.js`. After that, new entries register automatically. `DocumentStore#initialize()` throws `AssertionError` on an invalid definition. The Administrative Data API also checks `INDEXES` at boot and fails if one of its sorts names an index the Collection does not declare.
 
 ## Document Store Records
 
-Document Store Collection methods which return document data return one or more `Record` instances. A Record is a mutable DTO wrapping the raw store record. User-defined document fields are held in a private `#attributes` slot — they are **not** accessible as direct properties on the Record instance. Always read and write document fields through the accessor methods.
+Fields live in a private slot. `record.email` is always `undefined`. Read and write through:
 
-### Properties
+```js
+record.get('email');
+record.set('email', 'a@b.com');  // chainable
+record.merge({ email, name });   // shallow; AssertionError on non-plain-object
+record.deepMerge({ address });   // deep; TypeError on non-plain-object
+```
 
-Store metadata properties are enumerable and read-only:
+Read-only metadata:
 
-| Property | Type | Description |
+| Property | Type | |
 |---|---|---|
-| `type` | `string` | Document type (e.g. `"User"`) |
-| `id` | `string` | Document identifier within the type |
-| `sortKey` | `string` or `null` | Built-in ordering key, or `null` when absent |
-| `version` | `number` | Optimistic concurrency version assigned by the store |
-| `createdAt` | `Date` | Creation timestamp |
-| `updatedAt` | `Date` | Last-write timestamp |
+| `type` | `string` | Document type |
+| `id` | `string` | Id within the type |
+| `sortKey` | `string` or `null` | Ordering key |
+| `version` | `number` | Optimistic concurrency version |
+| `createdAt` | `Date` | |
+| `updatedAt` | `Date` | |
 
-### Attribute Accessors
-
-```js
-record.get('email')             // read one attribute
-record.set('email', 'a@b.com') // write one attribute, returns record for chaining
-record.merge({ email, name })   // shallow Object.assign into attributes
-record.deepMerge({ address })   // deep merge into attributes
-```
-
-Both `merge()` and `deepMerge()` require a plain-object patch. Passing `null`,
-`undefined`, an array, or another non-plain value is a programmer error: `merge()`
-throws an `AssertionError` and `deepMerge()` throws a `TypeError`.
-
-Do not read or write document fields directly off the Record instance — always use `get()`, `set()`, `merge()`, or `deepMerge()`. Document fields are not top-level properties; `record.email` will always be `undefined`.
-
-### Subclassing Record
-
-Override `static Record` on the Collection subclass to pair it with a custom Record subclass. The Collection will then wrap all returned documents in the custom class. Expose domain-specific getters on the Record subclass by delegating to `this.get()`:
-
-```js
-class UserRecord extends Record {
-    get fullName() {
-        return `${ this.get('firstName') } ${ this.get('lastName') }`;
-    }
-}
-
-class UserCollection extends Collection {
-    static TYPE = 'User';
-    static Record = UserRecord;
-}
-```
-
-Build a Record outside a Collection with the static factory `Record.forWrite({ type, id, sortKey, attributes })`. `sortKey` is optional and defaults to `null`. Collections call the factory internally on the write path, but it is also the way to construct a Record for a domain workflow that needs to `validate()` or `toDocument()` before handing off to the Collection, and the way to exercise `validate()` in unit tests. It sets placeholder store metadata that never escapes the gateway.
-
-### Schema
-
-Put a `static schema` property on the Record subclass to document what attributes the records in the collection will have. The schema is not automatically enforced — enforcement happens in `validate()` — but it provides a reference for readers and agents working on the collection.
-
-```js
-class UserRecord extends Record {
-    static schema = {
-        type: 'object',
-        properties: {
-            username: {
-                type: 'string',
-                description: 'Unique username used as the document id',
-            },
-            email_address: {
-                type: 'string',
-                format: 'email',
-                description: 'Email address used to contact the user',
-            },
-        },
-        required: [ 'username', 'email_address' ],
-    };
-}
-```
-
-### Validation
-
-Override `validate()` on a Record subclass to enforce invariants before a write. The Collection calls `validate()` automatically during `create()`, `put()`, `update()`, and each attempt of `updateWithRetry()` — before the document store call — so a `ValidationError` from `validate()` propagates to the caller without touching the store.
-
-Accumulate every violation into one `ValidationError` and throw it once, instead of failing on the first. Push each field error with its source field name — `error.push(message, source)` — so callers can map errors back to individual fields. A successful `validate()` returns `undefined`.
-
-```js
-validate() {
-    const error = new ValidationError('Invalid user record');
-    if (!isNonEmptyString(this.get('username'))) {
-        error.push('Username is required', 'username');
-    }
-    if (error.length) {
-        throw error;
-    }
-}
-```
-
-The base `validate()` is a no-op. Subclasses throw `ValidationError` from `kixx/errors/mod.js`. A thrown `ValidationError` has `name === 'ValidationError'` and an `errors` array whose entries carry a `source` field name.
-
-For records with cross-field lifecycle rules (a status that dictates which fields must be present or null), split `validate()` into two passes: a per-field shape/type check and a cross-field invariant check. Both push into the same accumulated error so a single call reports every problem:
-
-```js
-validate() {
-    const error = new ValidationError('Invalid migration ledger record');
-    validateFieldShapes(this, error); // types and per-field bounds
-    validateLifecycle(this, error);   // cross-field invariants by status
-    if (error.length) {
-        throw error;
-    }
-}
-```
-
-List every field in the schema `required` array even when it is nullable — the invariant is "present but possibly `null`", and `validate()` enforces the null/non-null rules per field.
-
-### Serialization
-
-`record.toDocument()` returns a plain object combining attributes with `type`, `id`, and `sortKey` when the sort key is non-null. This is the write shape sent to the store; the store persists `type`, `id`, and `sortKey` as row metadata rather than inside the JSON payload. `record.toObject()` returns the attributes with `type` and `id`, and places store metadata under a `meta` key (`sortKey`, `version`, `createdAt`, `updatedAt`), useful for JSON responses.
-
-### Optimistic Concurrency
-
-The `version` field is an integer incremented by the store on every write. Pass a Record returned by a previous `get()`, `scan()`, or `query()` call directly to `update()` or `deleteStrict()` to guard against concurrent writes. If another writer has modified the document in the meantime, `version` will not match and the store throws `VersionConflictError`. Callers must decide whether to retry, merge, or surface the conflict to the user.
-
-Use `updateWithRetry()` only when the merge can be expressed by reapplying a deterministic mutation to the latest stored record:
-
-```js
-await users.updateWithRetry(context, user, (latestUser) => {
-    latestUser.set('nonce', crypto.randomUUID());
-    latestUser.set('nextnonce', crypto.randomUUID());
-});
-```
-
-## Document Store Secondary Indexes
-
-A secondary index lets `query()` look up documents by a non-primary field. Each index definition requires `name` and `jsonPath`, and accepts an optional `unique` flag:
-
-- **`name`** — A lowercase identifier (letters, digits, and underscores only, starting with a letter). Used as the `options.index` value in `query()`.
-- **`jsonPath`** — A JSON path beginning with `$.` that points to the field in the stored document to index (e.g. `$.email_address`, `$.profile.role`).
-- **`unique`** — Optional boolean, defaulting to `false`. When `true`, the document store enforces uniqueness on `(document type, indexed value)`. A conflicting `create()`, `put()`, or `update()` throws `DocumentUniqueIndexViolationError`, whose `indexName` property identifies the violated index.
-
-### A Collection Owns Its Index Definitions
-
-The Collection that queries an index also owns that index's definition. Declare a `static INDEXES` array on the Collection subclass, holding the full `{ name, jsonPath }` definition for every index the Collection queries. Export the index name as a named constant so the Collection's own query helpers and any tests can reference it by name.
-
-```js
-export const USER_EMAIL_ADDRESS_INDEX = 'user_email_address';
-
-export default class UserCollection extends Collection {
-    static TYPE = 'User';
-    static Record = UserRecord;
-
-    static INDEXES = [
-        { name: USER_EMAIL_ADDRESS_INDEX, jsonPath: '$.email_address', unique: true },
-    ];
-
-    async findByEmailAddress(context, emailAddress) {
-        const { items } = await this.query(context, {
-            index: USER_EMAIL_ADDRESS_INDEX,
-            equalTo: emailAddress,
-            limit: 1,
-        });
-        return items[0] ?? null;
-    }
-}
-```
-
-Co-locating the definition keeps the index name, the `jsonPath` field it indexes, its uniqueness policy, and the query helper that uses it together. When a record's field is renamed or its uniqueness invariant changes, the definition is updated in the same file as the query, not in a separate registration list.
-
-### Registering Indexes
-
-Indexes are registered in `DOCUMENT_STORE_INDEXES` in `app/app.js` and passed to `documentStore.initialize()`. `app/app.js` collects each Collection's `static INDEXES` rather than hand-maintaining a parallel list of definitions, so adding an index to a Collection automatically registers it.
-
-```js
-import UserCollection from './collections/user-collection.js';
-
-const DOCUMENT_STORE_INDEXES = [
-    ...UserCollection.INDEXES,
-];
-```
-
-An index must be registered before `collection.query()` is called with that `options.index` value. Because a Collection declares `static INDEXES` and `app/app.js` spreads it into `DOCUMENT_STORE_INDEXES`, registration follows automatically. A Collection's `INDEXES` must still be spread into `DOCUMENT_STORE_INDEXES` by hand when the Collection is first added.
-
-`DocumentStore#initialize()` throws an `AssertionError` when an index name is invalid or duplicated, when a `jsonPath` does not start with `$.`, or when `unique` is not a boolean.
-
-The Administrative Data API also reads each Collection's `static INDEXES` at boot, and fails boot when one of its list sorts names an index the Collection does not declare.
-
-### Prefer Helpers Over Raw Index Names
-
-Wrap queries in custom Collection helpers so callers do not need to know index names or equality-query range patterns. Callers depend on the business-shaped helper:
-
-```js
-const users = context.getCollection('User');
-const user = await users.findByEmailAddress(context, emailAddress);
-```
+- **`validate()`** — A no-op by default. Push every violation into one `ValidationError` with `error.push(message, sourceField)`, then throw once. For lifecycle rules (a status that decides which fields must be set), check field shapes first, then cross-field rules, using the same error.
+- **`toDocument()`** — The write shape: attributes plus `type`, `id`, and non-null `sortKey`.
+- **`toObject()`** — Attributes plus `type`, `id`, and `meta: { sortKey, version, createdAt, updatedAt }`. Use it for JSON responses.
+- **`Record.forWrite({ type, id, sortKey?, attributes })`** — Builds a Record with placeholder metadata, outside a Collection. Useful for running `validate()` early and in unit tests.
 
 ## Key/Value Store Collections
 
-The Key/Value Store base classes (`base-key-value-store-collection.js` and `base-key-value-store-record.js`) wrap the eventually-consistent Key/Value Store. They are subclassed the same way as the Document Store base classes — set `static TYPE` and optionally `static Record` — but the API is smaller because the Key/Value Store is a flat keyspace with no concurrency control, no secondary indexes, and no sort-key ordering.
+Same subclassing pattern (`TYPE`, `Record`, `generateUniqueId`). Only three methods:
 
-The Key/Value Store Collection owns the typed key format and stores each record as a JSON value at the key `${type}_${id}`. Callers never construct keys themselves.
+- **`get(context, id)`** — Returns a Record, or `null` when absent or expired.
+- **`put(context, input, options)`** — Creates or overwrites. Input is normalized like the Document Store (no `sortKey`), and `validate()` runs first. `options` is `{ ttlSeconds }` (integer ≥ 60) or `{ expiresAt }` (future Unix seconds), not both. Returns the pre-write Record. Nothing is refetched.
+- **`delete(context, id)`** — Resolves to `undefined`.
 
-### Key/Value Store Collections: Methods
-
-There are only three methods. There is no `create`, `update`, `updateWithRetry`, `scan`, `query`, or `deleteStrict` — those depend on document-store capabilities the Key/Value Store does not provide.
-
-- **`get(context, id)`** — Retrieves one JSON record by id. Returns `null` when the key is absent or expired. Throws `AssertionError` when `id` is not a non-empty string.
-- **`put(context, input, options)`** — Creates or overwrites one JSON record. Accepts a plain attributes object or a Record instance, normalized the same way as the Document Store (`type` and `id` stripped from stored attributes, `input.id` preserved when non-empty, otherwise `generateUniqueId(attributes)`). Calls `validate()` before persisting. `options` carries expiration settings for the underlying store (`ttlSeconds`, a positive integer of at least 60, or `expiresAt`, a future Unix timestamp in seconds; the two are mutually exclusive); the stored `type` is always forced to `'json'`. Returns the Record DTO that was written — this is the pre-persistence DTO, **not** a refetched record, because the Key/Value Store assigns no version or timestamps.
-- **`delete(context, id)`** — Deletes one JSON record by id. Resolves to `undefined`. Throws `AssertionError` when `id` is not a non-empty string.
+`get` and `delete` throw `AssertionError` on an empty id.
 
 ```js
 const sessions = context.getCollection('UserSession');
-
-const session = await sessions.put(context, { id: sessionId, userId }, { ttlSeconds: 86400 });
-const loaded = await sessions.get(context, sessionId);
-await sessions.delete(context, sessionId);
+await sessions.put(context, { id: sessionId, userId }, { ttlSeconds: 86400 });
 ```
 
-### Key/Value Store Records
-
-A Key/Value Store Record is a mutable DTO with the same attribute accessors as a Document Store Record — `get()`, `set()`, `merge()`, `deepMerge()` — and the same `validate()`, `toDocument()`, and `toObject()` methods. It differs in its metadata:
-
-- The only read-only metadata properties are `type` and `id`. There is **no** `version`, `createdAt`, or `updatedAt`, because the Key/Value Store provides no optimistic concurrency control or store-assigned timestamps.
-- `toObject()` returns attributes plus `type` and `id` with no `meta` key.
-
-Subclass the Key/Value Store Record to add a `static schema`, a `validate()` implementation, and domain getters that delegate to `this.get()`, exactly as with the Document Store Record.
+Key/Value Records have the same accessors, `validate()`, `toDocument()`, and `toObject()`. Their only metadata is `type` and `id`. There is no `version`, timestamps, or `meta` key.
 
 ## Custom Gateways
 
-The Document Store Record and Document Store Collection base classes are designed specifically for the Document Store. For most Document Store use cases, subclassing them (as described above) is the right approach — add domain methods to a `Record` subclass and add query or mutation helpers to a `Collection` subclass.
+For a storage system other than the Document Store or Key/Value Store, write a gateway class from scratch with whatever constructor and methods fit. Register it as a Collection, hide storage details, and return DTOs when results are record-like.
 
-When the application needs to interact with a completely different storage system (not the Document Store or Key/Value Store), write a new gateway class from scratch rather than subclassing `Collection`. A custom gateway can use whatever constructor shape and method signatures fit the storage system, following the same general pattern: register the gateway as an application Collection, hide storage-specific details from callers, and wrap raw results in a DTO before returning them when that storage system has record-like results.
-
-`app/collections/file-content-collection.js` is an example. `FileContentCollection` is a gateway over the Object Store which owns the bucket selection, the upload size limit, and the object key format (`<file id>/<generation UUID>`). It is registered like any other Collection, but with its own constructor options:
+Example: `FileContentCollection` (`file-content-collection.js`) wraps the Object Store. It owns the bucket, the upload size limit, and the `<fileId>/<generation UUID>` key format.
 
 ```js
 context.registerCollection('FileContent', new FileContentCollection({
