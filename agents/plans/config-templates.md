@@ -234,7 +234,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T3: Document the config template contract
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1, T2
 **Documentation:** `lib/docs/configuration.md`; `lib/kixx/templating/docs/README.md`
 
@@ -270,10 +270,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `lib/docs/configuration.md` has a "Config templates" section covering files, rendering, the `json` contract, context rules, both context tables, and output notes.
-- [ ] Every key in both context tables matches what the templates actually read (verify by reading the templates; every `json` argument path and every `#if`/`^` path appears in a table, and nothing in a table is unused).
-- [ ] "Adding a new setting" includes the template and example-context step.
-- [ ] Both template headers point to the new section.
+- [x] `lib/docs/configuration.md` has a "Config templates" section covering files, rendering, the `json` contract, context rules, both context tables, and output notes.
+- [x] Every key in both context tables matches what the templates actually read (verify by reading the templates; every `json` argument path and every `#if`/`^` path appears in a table, and nothing in a table is unused).
+- [x] "Adding a new setting" includes the template and example-context step.
+- [x] Both template headers point to the new section.
 
 **Validation**
 
@@ -283,10 +283,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `## Config templates` section (files, rendering, `json` helper, context rules, Node.js and Cloudflare context tables, output notes) placed after "Configuration modules" and before "Environment variables"; "Adding a new setting" step 2 now requires updating the matching template, example context, and tables.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: Template headers already pointed to `"Config templates" in docs/configuration.md`; no header edits needed. Cross-check: every `json`, `#if`, `^`, and `#each` path in both templates appears in a table and every table entry is read. Pre-existing doc inconsistency outside scope: "Worker and resource configuration" says the `send_email` binding is named `SEND_EMAIL`, while `cloudflare-config.jsonc` uses `bindingName: "EMAIL"`.
+- Actual files changed: `lib/docs/configuration.md`.
+- Validation run: config-templates tests 12/12 pass; full suite 1789 passing; manual table cross-check done.
 - Blockers: None.
