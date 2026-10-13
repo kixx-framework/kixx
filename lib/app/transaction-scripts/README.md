@@ -1,104 +1,51 @@
 # Transaction Scripts
 
-To organize domain logic for this application we use the Transaction Script pattern from Fowler's *Patterns of Enterprise Application Architecture*.
+Domain logic uses Fowler's Transaction Script pattern: one async function per user action. It takes input from the presentation layer, validates it, applies business rules, reads and writes Collections, calls external services, and returns data for the caller to render. Scripts live in `app/transaction-scripts/`.
 
-A Transaction Script is a single procedure, one for each action that a user might want to do. It is expressed as a function that takes the input from the presentation, processes it with validations, makes computations, stores data in the database, and invokes any operations from other systems. It replies with more data to the presentation, perhaps doing more calculation to help organize and format the reply.
+## When Not to Write One
 
-You can think of Transaction Scripts as remote procedure calls.
+A script must add something: cross-field validation, business rules, orchestration across Collections or services, or a decision about what an error means to the application. A script that only calls one service method and returns its result is an extra hop.
 
-Transaction scripts are application-specific domain logic and live in `app/transaction-scripts/`.
+Presentation code may call a framework service directly via `context.getService(name)` when the service owns the complete operation and no business policy applies. Example: `objects.js` in `app/presentation/request-handlers/publishing-api/` calls `ContentAddressableStore` directly, while `releases.js` and `builds.js` go through `app/transaction-scripts/publishing/` because they coordinate it with the `Release` and `Activation` Collections.
 
-## When Not to Write a Transaction Script
+This exception is narrow. Anything that touches a Collection, enforces a business rule, or must classify errors belongs in a script.
 
-A Transaction Script earns its place by adding something: cross-field validation, business rules, orchestration across more than one Collection or gateway, or a decision about what an operational error means to the application. If a Transaction Script's only content is calling one framework service method and returning its result unchanged, it is not organizing domain logic — it is an extra hop between the presentation layer and a framework service that already owns the complete operation.
+## Files and Signatures
 
-Presentation code (request handlers, middleware) may call a framework service directly through `context.getService(name)` when that service already owns the complete operation and no application business policy sits between the request and the call. Example: `getObjectStatus()` and `putObject()` in `app/presentation/request-handlers/publishing-api/objects.js` call `ContentAddressableStore` (`kixx/content-addressable-store/`) directly. Beyond validating the request, they apply no business rule and touch no Collection. Compare `releases.js` and `builds.js` in the same directory, which go through `app/transaction-scripts/publishing/`: those operations coordinate `ContentAddressableStore` with the `Release` and `Activation` Collections and decide what a storage failure means to the application.
-
-This is narrower than it may first appear. Most application writes still belong in a Transaction Script: anything that touches a Collection, enforces a business rule, or needs the error-classification discretion described below is domain logic, not a pass-through, and calling a framework service directly does not apply there.
-
-## File and Naming Conventions
-
-Each Transaction Script lives in its own file. Files are named after the action they perform, in kebab-case:
+One script per file, named for the action in kebab-case, grouped by domain concept. Each file exports one async function named in camelCase to match. Helpers shared within a group go in `lib.js` (e.g. `files/lib.js`).
 
 ```
 app/transaction-scripts/
-├── admin-users/
-│   ├── authenticate-admin-session.js
-│   ├── create-admin-user.js
-│   └── verify-admin-credentials.js
 └── publishing-api-tokens/
-    ├── authenticate-publishing-token.js
-    ├── create-publishing-api-token.js
-    └── list-publishing-api-tokens.js
+    ├── create-publishing-api-token.js   → createPublishingApiToken(context, form, grantingUserId)
+    ├── list-publishing-api-tokens.js    → listPublishingApiTokens(context, params)
+    └── revoke-publishing-api-token.js   → revokePublishingApiToken(context, tokenId)
 ```
 
-Each file exports one named async function whose name matches the file in camelCase:
+The first argument is always the `RequestContext`. Scripts never receive HTTP request or response objects, so they stay testable and callable from jobs and CLI tools.
 
-```js
-export async function createBugTicket(context, form) { ... }
-export async function getBugTicket(context, id) { ... }
-export async function listBugTickets(context, params) { ... }
-```
-
-Group Transaction Scripts into subdirectories by domain concept when there are multiple actions for the same entity.
-
-## Function Signatures
-
-Transaction Scripts are plain async functions. They are not middleware — they do not receive the HTTP request or response objects.
-
-**Write scripts** receive a `RequestContext` and a validated Form:
-
-```js
-async function createBugTicket(context, form)
-```
-
-**Read scripts** receive a `RequestContext` and individual query values extracted by the calling middleware:
-
-```js
-async function getBugTicket(context, id)
-async function listBugTickets(context, { limit, cursor })
-```
-
-Keeping Transaction Scripts decoupled from HTTP objects makes them independently testable and reusable from non-HTTP entry points (CLI commands, scheduled jobs, etc.).
+- **Writes** take a validated Form (see Forms in `app/presentation/README.md`), plus any route values like an id. Use Forms for FormData, JSON:API, and data from external sources alike. Forms own parsing, normalization, and field-level validation. Scripts enforce cross-field and state-dependent rules.
+- **Reads** take plain values (ids, `{ limit, cursor }`) extracted by the caller.
+- **Internal callers** (other handlers, jobs) may pass a plain `args` object, e.g. `createRelease(context, { manifest, createdBy })`.
 
 ## Return Values
 
-A Transaction Script returns a plain JavaScript object. The calling middleware decides how to use the returned data — typically by merging it into the response props so the template can render it:
+Return plain objects:
 
 ```js
-// Write or read script returns one record:
 return record.toObject();
-
-// List script returns a paginated result:
 return { items: result.items.map((record) => record.toObject()), cursor: result.cursor };
 ```
 
-For transaction scripts that fetch a single resource, like fetching a product by ID, return the document or `null` and document it explicitly in the JSDoc (`@returns {Promise<Object|null>}`) so every caller is obligated to handle it. A pure read reports the *fact* that a resource is absent; deciding how to represent that to the user (a 404, an empty state, a default) is presentation policy and belongs to the caller, not the domain script.
+- A single-resource read returns the object or `null`, documented as `@returns {Promise<Object|null>}`. Deciding what absence means to the user (404, empty state, default) is the caller's job.
+- Return nothing only when the caller needs no data (e.g. delete).
+- Throw instead of returning `null` when:
+  - A mutation requires the target to exist (revoke, update, strict delete): throw `NotFoundError`, or `AssertionError` if absence is an unexpected code path.
+  - Absence has domain meaning: e.g. `authenticateAdminSession` throws `UnauthenticatedError` for a missing session rather than revealing whether the id existed.
 
-Otherwise, return `null` or `undefined` only from scripts where the caller needs no data back (e.g. a delete operation).
+## Data and External Services
 
-Do throw instead of returning `null` in two cases:
-
-- **Mutations whose precondition is that the target exists** — revoke, update, delete-strict — where absence means the requested action cannot be performed. Throw `NotFoundError` if that is an operational error or an `AssertionError` if it is an unexpected code path.
-- **Reads where absence carries a specific domain meaning** — for example, a missing or orphaned session is an authentication failure, so `authenticateAdminSession` throws `UnauthenticatedError` rather than leaking whether the id ever existed.
-
-For everything else, return a plain object.
-
-## Input to Transaction Scripts
-
-Transaction scripts get their input from the Presentation Layer through the use of Forms. Forms should be used for both FormData and JSON:API write requests. See Forms in `app/presentation/README.md`.
-
-Even when Transaction Scripts get their data from other external sources — external APIs, remote service calls, web scraping, etc. — the Forms pattern should be used to format and validate the incoming data.
-
-Forms own payload parsing, normalization, and field-level validation. Transaction Scripts receive already-validated Forms and enforce cross-field or state-dependent business rules. For read operations, middleware passes URL parameters and query values directly as plain arguments (no Form needed).
-
-## Data Access
-
-Transaction Scripts access stored data through registered Collections via `context.getCollection(name)`. See `app/collections/README.md` for the Collection API.
-
-## Calling External Services
-
-When a Transaction Script needs to call an external service — a Cloudflare binding such as the email service, R2 object store, or any other platform API — it does so through a registered gateway. Retrieve gateways via `context.getService()`:
+Get Collections with `context.getCollection(name)` (API: `app/collections/README.md`). Get gateways and framework services with `context.getService(name)`:
 
 ```js
 const store = context.getService('ContentAddressableStore');
@@ -111,48 +58,39 @@ const { messageId } = await mailer.send(context, '/password-reset', {
 });
 ```
 
-**Do not put business rules inside a gateway.** A gateway's sole responsibility is to hide the shape of one external resource: its binding API, key formats, error codes, and wire protocol. Business rules, cross-field validation, and conditional branching based on domain state belong in the Transaction Script.
+**Do not put business rules inside a gateway.** A gateway only hides the shape of one external resource: its binding API, key formats, error codes, and wire protocol. Business rules, validation, and branching on domain state belong in the script.
 
 ## Error Handling
 
-Every error a transaction script encounters must be classified into one of two buckets:
+Classify every caught error:
 
-- **Expected errors** - also known as "operational errors" - are errors the Transaction Script logic is prepared for and will handle internally.
-- **Unexpected errors** - also known as "programmer errors" - are errors which come from code paths the Transaction Script logic assumes should be unreachable, or should not be present in a healthy system.
+- **Expected (operational)**: the script is prepared to handle it.
+- **Unexpected (programmer)**: from a path the script assumes is unreachable or impossible in a healthy system.
 
-A Transaction Script should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Transaction Script may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging. A TransactionScript MUST wrap the unexpected error and rethrow it as an AssertionError if the cause.expected flag is truthy.
+Never handle unexpected errors beyond logging and rethrowing; they should crash the system. You may wrap one in an `AssertionError` to add debugging context. You **must** wrap it in an `AssertionError` if `cause.expected` is truthy.
 
-A Transaction Script should act with discretion when expected operational errors occur. Depending on the context:
+For expected errors, choose one:
 
-- **Wrap the cause and rethrow with a new error.name or error.code** - when the caught error does not have a name or code which is meaningful to the caller, or to standardize the error signature from the Transaction Script.
-- **Wrap the cause and rethrow as an AssertionError** - when the operational error is coming from a code path the Transaction Script is not accounting for.
-- **Pass the error through or rethrow without wrapping** - when the error is documented by the Transaction Script so callers know to expect it.
+- **Wrap with a new `name` or `code`** when the original is not meaningful to the caller, or to standardize the script's error signature.
+- **Wrap as `AssertionError`** when it comes from a path the script does not account for.
+- **Rethrow unchanged** when the script documents it with `@throws`.
 
-Use error properties like `error.name`, `error.code`, and `error.expected` instead of `instanceof` to drive logical code branches:
+Branch on `error.name`, `error.code`, and `error.expected`, never `instanceof`:
 
 ```js
-import {
-    AssertionError,
-    ConflictError,
-    NotFoundError,
-} from '../../../kixx/errors/mod.js';
-
-// Update a record we expect to exist:
+import { AssertionError, ConflictError, NotFoundError } from '../../../kixx/errors/mod.js';
 
 try {
     record = await tickets.update(context, record);
 } catch (cause) {
     if (cause.name === 'DocumentNotFoundError') {
-        throw new NotFoundError(
-            `Bug ticket "${ record.id }" was not found`,
-            { cause, code: 'BugTicketNotFound' },
-        );
+        throw new NotFoundError(`Bug ticket "${ record.id }" was not found`, { cause, code: 'BugTicketNotFound' });
     }
     if (cause.name === 'VersionConflictError') {
-        throw new ConflictError(
-            'This ticket was modified by someone else. Reload and try again.',
-            { cause, code: 'BugTicketConcurrencyError' },
-        );
+        throw new ConflictError('This ticket was modified by someone else. Reload and try again.', {
+            cause,
+            code: 'BugTicketConcurrencyError',
+        });
     }
     throw new AssertionError('Unexpected error while updating bug ticket', { cause });
 }
