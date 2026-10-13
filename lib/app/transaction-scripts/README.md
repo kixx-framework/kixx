@@ -6,13 +6,13 @@ A Transaction Script is a single procedure, one for each action that a user migh
 
 You can think of Transaction Scripts as remote procedure calls.
 
-Transaction scripts are application-specific domain logic and live in the app/transaction-scripts/ directory.
+Transaction scripts are application-specific domain logic and live in `app/transaction-scripts/`.
 
 ## When Not to Write a Transaction Script
 
 A Transaction Script earns its place by adding something: cross-field validation, business rules, orchestration across more than one Collection or gateway, or a decision about what an operational error means to the application. If a Transaction Script's only content is calling one framework service method and returning its result unchanged, it is not organizing domain logic — it is an extra hop between the presentation layer and a framework service that already owns the complete operation.
 
-Presentation code (request handlers, middleware) may call a framework service directly through `context.getService(name)` when that service already owns the complete operation — validation, storage, and error semantics — and no application business policy sits between the request and the call. `src/app/presentation/request-handlers/publishing-api/objects.js` is the concrete example: `getObjectStatus()` and `putObject()` call `ContentAddressableStore` directly, because that service (a framework service under `src/kixx/content-addressable-store/`, not a platform adapter) already owns the complete operation for a content-addressed object — hashing, existence checks, and storage — and the Publishing API applies no business rule beyond mapping the HTTP request onto the matching service method. Compare this with `src/app/presentation/request-handlers/publishing-api/releases.js` and `builds.js`, which route Release creation and build-pointer assignment through `app/transaction-scripts/publishing/*.js` instead: those operations coordinate `ContentAddressableStore` with the `Release` and `Activation` Collections and decide what a storage failure means to the application, which is exactly the orchestration a Transaction Script exists for.
+Presentation code (request handlers, middleware) may call a framework service directly through `context.getService(name)` when that service already owns the complete operation and no application business policy sits between the request and the call. Example: `getObjectStatus()` and `putObject()` in `app/presentation/request-handlers/publishing-api/objects.js` call `ContentAddressableStore` (`kixx/content-addressable-store/`) directly. Beyond validating the request, they apply no business rule and touch no Collection. Compare `releases.js` and `builds.js` in the same directory, which go through `app/transaction-scripts/publishing/`: those operations coordinate `ContentAddressableStore` with the `Release` and `Activation` Collections and decide what a storage failure means to the application.
 
 This is narrower than it may first appear. Most application writes still belong in a Transaction Script: anything that touches a Collection, enforces a business rule, or needs the error-classification discretion described below is domain logic, not a pass-through, and calling a framework service directly does not apply there.
 
@@ -25,7 +25,7 @@ app/transaction-scripts/
 ├── admin-users/
 │   ├── authenticate-admin-session.js
 │   ├── create-admin-user.js
-│   └── verify-amdin-credentials.js
+│   └── verify-admin-credentials.js
 └── publishing-api-tokens/
     ├── authenticate-publishing-token.js
     ├── create-publishing-api-token.js
@@ -66,17 +66,14 @@ Keeping Transaction Scripts decoupled from HTTP objects makes them independently
 A Transaction Script returns a plain JavaScript object. The calling middleware decides how to use the returned data — typically by merging it into the response props so the template can render it:
 
 ```js
-// Write script returns the created document:
-return record.toDocument();
-
-// Read script returns one document:
-return record.toDocument();
+// Write or read script returns one record:
+return record.toObject();
 
 // List script returns a paginated result:
-return { items: records.map((r) => r.toDocument()), cursor };
+return { items: result.items.map((record) => record.toObject()), cursor: result.cursor };
 ```
 
-For transaction scripts that fetch a single resource, like fetching a product by ID, return the document or `null` and document it explicitly in the JSDoc (`@returns {Promise<Object|null>}`) so every caller is obligated to handle it. A pure read reports the *fact* that a resource is absent; deciding how to represent that to the user (a 404, an empty state, a default) is presentation policy and belongs to the caller, not the domain script
+For transaction scripts that fetch a single resource, like fetching a product by ID, return the document or `null` and document it explicitly in the JSDoc (`@returns {Promise<Object|null>}`) so every caller is obligated to handle it. A pure read reports the *fact* that a resource is absent; deciding how to represent that to the user (a 404, an empty state, a default) is presentation policy and belongs to the caller, not the domain script.
 
 Otherwise, return `null` or `undefined` only from scripts where the caller needs no data back (e.g. a delete operation).
 
@@ -89,7 +86,7 @@ For everything else, return a plain object.
 
 ## Input to Transaction Scripts
 
-Transaction scripts get their input from the Presentation Layer through the use of Forms. Forms should be used for both FormData and JSON:API write requests. See the @application/docs/presentation-layer.md document for more information.
+Transaction scripts get their input from the Presentation Layer through the use of Forms. Forms should be used for both FormData and JSON:API write requests. See Forms in `app/presentation/README.md`.
 
 Even when Transaction Scripts get their data from other external sources — external APIs, remote service calls, web scraping, etc. — the Forms pattern should be used to format and validate the incoming data.
 
@@ -97,15 +94,15 @@ Forms own payload parsing, normalization, and field-level validation. Transactio
 
 ## Data Access
 
-Transaction Scripts access stored data through registered Collections on the `RequestContext`. See @application/docs/data-source-layer.md for the full Collection API.
+Transaction Scripts access stored data through registered Collections via `context.getCollection(name)`. See `app/collections/README.md` for the Collection API.
 
 ## Calling External Services
 
 When a Transaction Script needs to call an external service — a Cloudflare binding such as the email service, R2 object store, or any other platform API — it does so through a registered gateway. Retrieve gateways via `context.getService()`:
 
 ```js
-const objectStore = context.getService('ObjectStore');
-const { tempKey, contentHash } = await objectStore.streamToTemp(context, body, { contentType });
+const store = context.getService('ContentAddressableStore');
+const release = await store.createRelease(context, manifest);
 
 const mailer = context.getService('Mailer');
 const { messageId } = await mailer.send(context, '/password-reset', {
