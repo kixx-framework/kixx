@@ -11,7 +11,7 @@ await queue.enqueue(context, 'send-admin-invite-email', { inviteId }, {
 });
 ```
 
-The port contract is `src/kixx/jobs/job-queue-interface.js`.
+The port contract is `kixx/jobs/job-queue-interface.js`.
 
 ## Registering a job
 
@@ -28,7 +28,7 @@ Add an entry to the static `Map` in `mod.js`. Import the handler statically (no 
 } ]
 ```
 
-The shipped registry is empty. `concurrency` and `schedule.timezone` are rejected.
+The shipped registry is empty. Unknown fields are rejected, including `concurrency` and `schedule.timezone`.
 
 ## Handlers
 
@@ -59,11 +59,10 @@ export async function handler(context, job) {}
 - Missed occurrences run **once** (the most recent missed time), then resume.
 - At most one active occurrence per schedule. An occurrence due while the previous is still active is skipped and logged.
 - Schedules are reconciled from the registry at boot. Removing an entry removes its schedule. There is no runtime schedule API.
-- Local-time schedules, timezones, and per-name concurrency are not supported.
 
 ## Errors and retries
 
-See `src/docs/server-error-handling.md`.
+See `docs/server-error-handling.md`.
 
 - Expected error (`error.expected === true`): recorded, then retried with backoff unless `error.retryable === false`. `retryable` defaults to `true` for `OperationalError` and `false` for other expected classes. It is a plain property, not a constructor option: `Object.assign(error, { retryable: false })`.
 - Unexpected error: the job fails immediately (no retry) and is logged at error. Node then shuts down gracefully with exit code 1. The Durable Object stops claiming for that invocation and logs the error.
@@ -72,7 +71,7 @@ See `src/docs/server-error-handling.md`.
 
 ## Operating
 
-Retention is by age: completed jobs after 7 days, failed after 30 (`JOB_QUEUE.retention`). Active jobs are never purged.
+Retention is by age: completed jobs after 7 days, failed after 30 (`JOB_QUEUE.retention`). Active jobs are never purged. `JOB_QUEUE.enabled: false` records jobs without running them, on both platforms. `JOB_QUEUE.concurrency` caps jobs running at once.
 
 Admin API v1 (Basic auth, resource `urn:kixx:admin:jobs`, developer role):
 
@@ -85,12 +84,12 @@ Admin API v1 (Basic auth, resource `urn:kixx:admin:jobs`, developer role):
 
 Platform notes:
 
-- **Node:** a single loop fills free slots while work is due and polls every `pollIntervalSeconds` (default 1) when idle. There is no enqueue nudge, so an idle queue can take up to one interval to start a new job. Set `JOB_QUEUE.enabled: false` to record jobs without running them.
-- **Cloudflare:** jobs run in the `JobQueueStore` Durable Object. Each alarm stops claiming after `softDeadlineSeconds` and re-arms. Raise `WORKER_VERSION.limits.cpu_ms` for CPU-heavy jobs.
+- **Node:** a single loop fills free slots while work is due and polls every `JOB_QUEUE.pollIntervalSeconds` (1 in shipped config) when idle. There is no enqueue nudge, so an idle queue can take up to one interval to start a new job.
+- **Cloudflare:** jobs run in the `JobQueueStore` Durable Object. Each alarm stops claiming after `JOB_QUEUE.softDeadlineSeconds` and re-arms. Raise `WORKER_VERSION.limits.cpu_ms` in `cloudflare-config.jsonc` (default 30 s CPU) for CPU-heavy jobs.
 
 ## Testing
 
-Register the handler in a test-only registry and drive the runner directly; normal boot ships no recurring example.
+Register the handler in a test-only registry and drive the runner directly:
 
 ```js
 await queue.processDueJobs({ now: new Date('2026-03-10T00:16:00Z') });
