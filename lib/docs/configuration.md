@@ -92,7 +92,7 @@ real filesystem paths — see `DATA_DIRECTORY` below.
 configuration, because it is what decides which section of the config module
 is even read.
 
-- The Node.js server (`node-server.js`) resolves it as `--environment`,
+- The Node.js server (`node-server.js`) resolves it as `--environment` (`-e`),
   else `NODE_ENV`, defaulting to `development` if neither is set.
 - The Cloudflare Worker reads its `ENVIRONMENT` binding, defaulting to
   `development` if it is unset.
@@ -249,9 +249,9 @@ Node.js server, in this order:
 2. `.env.<environment>.secrets` (the same path with `.secrets` appended)
 3. `process.env`
 
-Each file is optional, so dotenv files, `process.env`, or both work. Only
-keys the dotenv files declare participate from `process.env`, so unrelated
-process environment entries never collide.
+Each file is optional, so dotenv files, `process.env`, or both work. All of
+`process.env` is merged; a collision only happens when a dotenv file also
+defines the same key.
 
 **A key defined by more than one source aborts startup**, naming the key and
 every source that defined it. There is deliberately no precedence rule: a key
@@ -260,6 +260,15 @@ resolving it silently is how a secret ends up bound as plain text.
 
 `--dotenv <path>` names the plain file directly; the secrets file is always
 derived by appending `.secrets`, so one flag selects the pair.
+
+### Node.js server port
+
+`node-server.js` listens on `--port` (`-p`), else `PORT`, else `2026`. The
+value must be a whole number from 0 to 65535, or startup fails.
+
+```bash
+node node-server.js -e production -p 8080
+```
 
 ### The secrets manifest
 
@@ -416,7 +425,7 @@ CommonJS, path-casing mistakes, and `import()` with a non-literal specifier.
 packaging, the CLI parses it and writes the whole source config to
 `cloudflare-config.generated.js` as `export default { ... };`.
 `cloudflare-server.js` imports that module and passes it to `readConfig`. The
-generated module is not committed and must never be edited by hand; change
+generated module is gitignored and must never be edited by hand; change
 `cloudflare-config.jsonc` instead.
 
 ## Adding a new setting

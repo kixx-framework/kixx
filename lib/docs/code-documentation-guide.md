@@ -5,7 +5,7 @@ JSDoc block comments are the formal API contract: types, parameters, return valu
 
 ## Supported JSDoc Tags
 
-`@async` (returns a Promise without the `async` keyword), `@readonly`, `@module` (top-level file comment), `@see`, `@callback`, `@property`, `@typedef`, `@param`, `@emits`, `@returns`, `@throws`, `@enum`, `@extends`, `@implements`, `@name`, `@public` (only where the surrounding class or module already uses explicit visibility tags), `@type`, `@default`.
+`@async` (returns a Promise without the `async` keyword), `@readonly`, `@module` (top-level file comment), `@see`, `@callback`, `@property`, `@typedef`, `@param`, `@emits`, `@returns`, `@throws`, `@enum`, `@extends`, `@implements`, `@name`, `@public` (only where the surrounding class or module already uses explicit visibility tags), `@type`, `@default`, `@static` (static class members), `@example`, `@template` (generic type parameters), and inline `{@link Symbol}` (usually inside `@see`).
 
 ## Document the Contract
 
