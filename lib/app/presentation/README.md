@@ -1,6 +1,6 @@
 # Presentation Layer
 
-This is a Hypermedia Driven Application: the presentation layer serves server-rendered HTML following REST and HATEOAS. Pages are rendered by the Kixx Hyperview Service from page content and Kixx templates (mustache style, defined in `kixx/templating/`; syntax, partials, and helpers in `templates/README.md`).
+This is a Hypermedia Driven Application: the presentation layer serves server-rendered HTML following REST and HATEOAS. Pages are rendered by the Kixx Hyperview Service from page content and Kixx templates (mustache style, defined in `kixx/vendor/templating/`; syntax, partials, and helpers in `templates/README.md`).
 
 Paths below are relative to `lib/`.
 

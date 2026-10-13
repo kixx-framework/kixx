@@ -1198,7 +1198,7 @@ Use raw output only for trusted content:
 Helper return values are not escaped automatically, even when called with double mustaches. Custom helpers that emit untrusted content must escape it explicitly.
 
 ```javascript
-import { escapeHTMLChars } from '../templating/mod.js';
+import { escapeHTMLChars } from '../../../kixx/vendor/templating/mod.js';
 
 export default function strongText(_context, _options, userInput) {
     return `<strong>${ escapeHTMLChars(userInput) }</strong>`;
@@ -1371,7 +1371,7 @@ function helperName(context, options, ...positionals) {
 Inline helper:
 
 ```javascript
-import { escapeHTMLChars } from '../templating/mod.js';
+import { escapeHTMLChars } from '../../../kixx/vendor/templating/mod.js';
 
 export default function initials(_context, _options, firstName, lastName) {
     const first = String(firstName || '').trim().charAt(0);

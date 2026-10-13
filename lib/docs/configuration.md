@@ -119,7 +119,7 @@ The context supplies every app or environment choice.
 ### Rendering
 
 ```javascript
-import * as templating from './kixx/templating/mod.js';
+import * as templating from './kixx/vendor/templating/mod.js';
 
 const helpers = new Map(templating.helpers);
 helpers.set('json', json);

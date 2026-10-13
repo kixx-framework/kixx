@@ -1,3 +1,5 @@
+**Scope:** this entire guide does not apply to `kixx/vendor/`, `kixx/assertions/`, or `kixx/errors/`.
+
 Code Quality Guidelines
 -----------------------
 
@@ -106,7 +108,7 @@ export async function getObjectListing(baseUrl) {
 
 ### Type Detection
 
-In files linted as server code (the Cloudflare Worker and Node.js `files` block in `eslint.config.js`; `kixx/vendor/` is ignored), use the Kixx assertion helpers from `kixx/assertions/mod.js` (relative path from the file you are editing) instead of raw `typeof`. Add a new helper only if the module lacks the needed predicate.
+In files linted as server code (the Cloudflare Worker and Node.js `files` block in `eslint.config.js`), use the Kixx assertion helpers from `kixx/assertions/mod.js` (relative path from the file you are editing) instead of raw `typeof`. Add a new helper only if the module lacks the needed predicate.
 
 ```javascript
 import { isUndefined, isString } from '../../kixx/assertions/mod.js';
