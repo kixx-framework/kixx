@@ -1,0 +1,178 @@
+{{!--
+Renders cloudflare-config.jsonc from a context object. Callers must register
+a `json` helper that returns JSON.stringify(value) and throws on undefined.
+Context shape: "Config templates" in docs/configuration.md. Example context:
+cloudflare-config.template-context.example.json.
+--}}
+{
+    "name": {{ json name }},
+
+    "environments": {
+        {{#each environments as |env envName|}}
+        {{ json envName }}: {
+            "WORKER": {
+                "name": {{ json env.WORKER.name }},
+                {{#if env.WORKER.tags}}
+                "tags": {{ json env.WORKER.tags }},
+                {{/if}}
+                {{^env.WORKER.tags}}
+                // "tags": [],
+                {{/env.WORKER.tags}}
+                "logpush": {{ json env.WORKER.logpush }},
+                {{#if env.WORKER.tail_consumers}}
+                "tail_consumers": {{ json env.WORKER.tail_consumers }},
+                {{/if}}
+                {{^env.WORKER.tail_consumers}}
+                // "tail_consumers": [],
+                {{/env.WORKER.tail_consumers}}
+                "observability": {
+                    "enabled": {{ json env.WORKER.observability.enabled }},
+                    "head_sampling_rate": {{ json env.WORKER.observability.head_sampling_rate }},
+                    "redact_query_string": {{ json env.WORKER.observability.redact_query_string }},
+                    "logs": {
+                        "enabled": {{ json env.WORKER.observability.logs.enabled }},
+                        "invocation_logs": {{ json env.WORKER.observability.logs.invocation_logs }},
+                        "persist": {{ json env.WORKER.observability.logs.persist }},
+                        "head_sampling_rate": {{ json env.WORKER.observability.logs.head_sampling_rate }},
+                    },
+                    "traces": {
+                        "enabled": {{ json env.WORKER.observability.traces.enabled }},
+                        "persist": {{ json env.WORKER.observability.traces.persist }},
+                        "head_sampling_rate": {{ json env.WORKER.observability.traces.head_sampling_rate }},
+                    },
+                },
+                "subdomain": {
+                    "enabled": {{ json env.WORKER.subdomain.enabled }},
+                    "previews_enabled": {{ json env.WORKER.subdomain.previews_enabled }},
+                },
+            },
+            "WORKER_VERSION": {
+                "compatibility_date": {{ json env.WORKER_VERSION.compatibility_date }},
+                "compatibility_flags": {{ json env.WORKER_VERSION.compatibility_flags }},
+                "cache_options": {
+                    "enabled": {{ json env.WORKER_VERSION.cache_options.enabled }},
+                    "cross_version_cache": {{ json env.WORKER_VERSION.cache_options.cross_version_cache }},
+                },
+                // A job must finish inside one Durable Object alarm invocation.
+                // Jobs that need more than the default CPU budget (30 s) must
+                // raise cpu_ms (maximum 300000); otherwise split them into chained jobs.
+                {{#if env.WORKER_VERSION.limits}}
+                "limits": {{ json env.WORKER_VERSION.limits }},
+                {{/if}}
+                {{^env.WORKER_VERSION.limits}}
+                // "limits": {
+                //     "cpu_ms": 0,
+                //     "subrequests": 0,
+                // },
+                {{/env.WORKER_VERSION.limits}}
+                {{#if env.WORKER_VERSION.placement}}
+                "placement": {{ json env.WORKER_VERSION.placement }},
+                {{/if}}
+            },
+            {{#if env.DURABLE_OBJECT_MIGRATIONS}}
+            "DURABLE_OBJECT_MIGRATIONS": {{ json env.DURABLE_OBJECT_MIGRATIONS }},
+            {{/if}}
+            "LOGGER": {
+                "level": {{ json env.LOGGER.level }},
+            },
+            "SEND_EMAIL": {
+                "bindingName": "EMAIL",
+                // Must be an address on an onboarded, verified sender domain.
+                "from": {{ json env.SEND_EMAIL.from }},
+            },
+            "HYPERVIEW": {
+                "useTemplateCache": {{ json env.HYPERVIEW.useTemplateCache }},
+                "usePageCache": {{ json env.HYPERVIEW.usePageCache }},
+                "allowJsonResponse": {{ json env.HYPERVIEW.allowJsonResponse }},
+                "pageCacheReadTtlSeconds": {{ json env.HYPERVIEW.pageCacheReadTtlSeconds }},
+                "pageCacheExpirationSeconds": {{ json env.HYPERVIEW.pageCacheExpirationSeconds }},
+            },
+            "SECRET_ENCRYPTION": {
+                "PBKDF2_ITERATIONS": {{ json env.SECRET_ENCRYPTION.PBKDF2_ITERATIONS }},
+            },
+            "RATE_LIMIT": {
+                "ADMIN_LOGIN": {
+                    "maxFailures": {{ json env.RATE_LIMIT.ADMIN_LOGIN.maxFailures }},
+                    "windowSeconds": {{ json env.RATE_LIMIT.ADMIN_LOGIN.windowSeconds }},
+                    "cooldownSeconds": {{ json env.RATE_LIMIT.ADMIN_LOGIN.cooldownSeconds }},
+                },
+                "ADMIN_SIGNUP": {
+                    "maxFailures": {{ json env.RATE_LIMIT.ADMIN_SIGNUP.maxFailures }},
+                    "windowSeconds": {{ json env.RATE_LIMIT.ADMIN_SIGNUP.windowSeconds }},
+                    "cooldownSeconds": {{ json env.RATE_LIMIT.ADMIN_SIGNUP.cooldownSeconds }},
+                },
+                "ADMIN_INVITE": {
+                    "maxFailures": {{ json env.RATE_LIMIT.ADMIN_INVITE.maxFailures }},
+                    "windowSeconds": {{ json env.RATE_LIMIT.ADMIN_INVITE.windowSeconds }},
+                    "cooldownSeconds": {{ json env.RATE_LIMIT.ADMIN_INVITE.cooldownSeconds }},
+                },
+            },
+            "DOCUMENT_STORE": {
+                "type": "d1",
+                "bindingName": "DOCUMENT_STORE",
+                "databaseName": {{ json env.DOCUMENT_STORE.databaseName }},
+                {{#if env.DOCUMENT_STORE.databaseId}}
+                "databaseId": {{ json env.DOCUMENT_STORE.databaseId }},
+                {{/if}}
+                {{^env.DOCUMENT_STORE.databaseId}}
+                // "databaseId": The deployment CLI resolves or creates the database by name and prints the ID to add here.
+                {{/env.DOCUMENT_STORE.databaseId}}
+            },
+            "KEY_VALUE_STORE": {
+                "type": "kv_namespace",
+                "bindingName": "KEY_VALUE_STORE",
+                "namespaceName": {{ json env.KEY_VALUE_STORE.namespaceName }},
+                {{#if env.KEY_VALUE_STORE.namespaceId}}
+                "namespaceId": {{ json env.KEY_VALUE_STORE.namespaceId }},
+                {{/if}}
+                {{^env.KEY_VALUE_STORE.namespaceId}}
+                // "namespaceId": The deployment CLI resolves or creates the namespace by name and prints the ID to add here.
+                {{/env.KEY_VALUE_STORE.namespaceId}}
+            },
+            "OBJECT_STORE": {
+                "type": "r2_bucket",
+                "buckets": {
+                    {{#each env.OBJECT_STORE.buckets as |bucket bucketKey|}}
+                    {{ json bucketKey }}: {
+                        "bucketName": {{ json bucket.bucketName }},
+                        "bindingName": {{ json bucket.bindingName }},
+                    },
+                    {{/each}}
+                },
+            },
+            "FILES": {
+                "maxUploadBytes": {{ json env.FILES.maxUploadBytes }},
+                "bucket": {{ json env.FILES.bucket }},
+            },
+            // Background jobs run inside one SQLite-backed Durable Object via alarm().
+            // softDeadlineSeconds: stop claiming new jobs after this long in one
+            // invocation, then re-arm the alarm for a fresh CPU budget.
+            "JOB_QUEUE": {
+                "enabled": {{ json env.JOB_QUEUE.enabled }},
+                "durableObjectBindingName": "JOB_QUEUE_DURABLE_OBJECT",
+                "durableObjectClassName": "JobQueueStore",
+                "concurrency": {{ json env.JOB_QUEUE.concurrency }},
+                "softDeadlineSeconds": {{ json env.JOB_QUEUE.softDeadlineSeconds }},
+                "retention": {
+                    "completedMaxAgeDays": {{ json env.JOB_QUEUE.retention.completedMaxAgeDays }},
+                    "failedMaxAgeDays": {{ json env.JOB_QUEUE.retention.failedMaxAgeDays }},
+                },
+            },
+            "CONTENT_STORE": {
+                "blobReadCacheTtlSeconds": {{ json env.CONTENT_STORE.blobReadCacheTtlSeconds }},
+                "indexCacheTtlSeconds": {{ json env.CONTENT_STORE.indexCacheTtlSeconds }},
+                "kvBindingName": "CA_STORE_KV_STORE",
+                "kvNamespaceName": {{ json env.CONTENT_STORE.kvNamespaceName }},
+                {{#if env.CONTENT_STORE.kvNamespaceId}}
+                "kvNamespaceId": {{ json env.CONTENT_STORE.kvNamespaceId }},
+                {{/if}}
+                {{^env.CONTENT_STORE.kvNamespaceId}}
+                // "kvNamespaceId": The deployment CLI resolves or creates the namespace by name and prints the ID to add here.
+                {{/env.CONTENT_STORE.kvNamespaceId}}
+                "durableObjectBindingName": "CA_STORE_DURABLE_OBJECT",
+                "durableObjectClassName": "ContentAddressableIndexStore",
+            },
+        },
+        {{/each}}
+    },
+}

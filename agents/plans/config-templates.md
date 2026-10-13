@@ -169,7 +169,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T2: Cloudflare config template reproduces cloudflare-config.jsonc
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `lib/kixx/templating/docs/README.md`; `lib/docs/configuration.md` "Cloudflare specifics" (especially "Worker and resource configuration"); this plan's "Context shape reference" (Cloudflare table)
 
@@ -207,14 +207,14 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Rendering the Cloudflare template with the example context yields text that `parseJsonc` accepts and that equals the parsed `lib/cloudflare-config.jsonc`, using T1's comparison helper.
-- [ ] A test proves optional IDs: with `databaseId`, `namespaceId`, and `kvNamespaceId` deleted from a cloned context, the output parses and those three keys are absent while every other key is unchanged.
-- [ ] A test proves optional present values: with `tags`, `tail_consumers`, `limits`, `placement`, and `DURABLE_OBJECT_MIGRATIONS` set on a cloned context, the parsed output contains each at its path with an equal value (compare by `JSON.stringify`).
-- [ ] A test proves non-empty `compatibility_flags` render as an array (for example `["nodejs_compat"]`).
-- [ ] A test proves `SEND_EMAIL.from` containing `& < > "` round-trips unchanged.
-- [ ] A test proves a missing required value (for example `WORKER.name`) fails with an error chain naming the `json` helper.
-- [ ] The example context contains no framework-owned keys.
-- [ ] `lib/cloudflare-config.jsonc` is unchanged.
+- [x] Rendering the Cloudflare template with the example context yields text that `parseJsonc` accepts and that equals the parsed `lib/cloudflare-config.jsonc`, using T1's comparison helper.
+- [x] A test proves optional IDs: with `databaseId`, `namespaceId`, and `kvNamespaceId` deleted from a cloned context, the output parses and those three keys are absent while every other key is unchanged.
+- [x] A test proves optional present values: with `tags`, `tail_consumers`, `limits`, `placement`, and `DURABLE_OBJECT_MIGRATIONS` set on a cloned context, the parsed output contains each at its path with an equal value (compare by `JSON.stringify`).
+- [x] A test proves non-empty `compatibility_flags` render as an array (for example `["nodejs_compat"]`).
+- [x] A test proves `SEND_EMAIL.from` containing `& < > "` round-trips unchanged.
+- [x] A test proves a missing required value (for example `WORKER.name`) fails with an error chain naming the `json` helper.
+- [x] The example context contains no framework-owned keys.
+- [x] `lib/cloudflare-config.jsonc` is unchanged.
 
 **Validation**
 
@@ -224,12 +224,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Template, example context, and seven Cloudflare tests in the shared test file.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: Example context was generated from the parsed `cloudflare-config.jsonc` with framework-owned keys removed. A text diff of the rendered output against `cloudflare-config.jsonc` differs only in the intended comment changes (SEND_EMAIL comment, dropped duration comments). ID hint wording: `// "<key>": The deployment CLI resolves or creates the <database|namespace> by name and prints the ID to add here.` `{{^x}}` renders for absent values and empty arrays, as the plan expected.
+- Actual files changed: `lib/cloudflare-config.jsonc.template`, `lib/cloudflare-config.template-context.example.json`, `lib/test/unit-tests/config-templates.test.js`.
+- Validation run: config-templates tests 12/12 pass; linter clean on the test file; full suite 1789 passing.
 - Blockers: None.
 
 ### Task T3: Document the config template contract
