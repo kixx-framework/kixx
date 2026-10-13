@@ -1,36 +1,36 @@
 # Presentation Layer
 
-This project is a Hypermedia Driven Application, which means the presentation layer is a web presentation, primarily following the Representational State Transfer (REST) and Hypermedia As The Engine Of Application State (HATEOAS) patterns.
+This is a Hypermedia Driven Application: the presentation layer serves server-rendered HTML following REST and HATEOAS. Pages are rendered by the Kixx Hyperview Service from page content and Kixx templates (mustache style, defined in `kixx/templating/`; syntax, partials, and helpers in `templates/README.md`).
 
-**Templates**
+Paths below are relative to `lib/`.
 
-The primary view layer for the presentation is provided by mustache style templates called "Kixx templates" as defined in `kixx/templating/`. For information about the template syntax, partials, and helpers see the template guide at `templates/README.md`.
+| Path | Contains |
+|---|---|
+| `virtual-hosts.js` | Virtual hosts, their hostnames, and the route subtrees mounted under each |
+| `routes/` | Route subtrees, one module per API or UI surface |
+| `app/presentation/request-handlers/` | Request handlers |
+| `app/presentation/middleware/` | Inbound and outbound middleware |
+| `app/presentation/error-handlers/` | Error handlers |
+| `app/presentation/forms/` | Form classes, one subdirectory per feature |
+| `app/presentation/lib/` | Presentation helpers shared by more than one handler or middleware (CSRF, JSON:API, Hyperview response) |
+| `pages/` | Page metadata, page templates, page-local partials, and include files |
+| `templates/base/`, `templates/partials/` | Shared document frames and shared fragments |
+| `static-assets/` | Static assets; `stylesheets/` and `javascript/` are served at `/stylesheets/**` and `/javascript/**` |
+| `emails/` | Email templates |
 
-**Template context data and rendering**
-
-The Kixx Hyperview Service assembles page context and rendered hypertext from page metadata and text based content in `pages/` with templates in `templates/`. The presentation facade commits that result to the HTTP response.
-
-**HTTP Routing**
-
-HTTP routes are defined in `virtual-hosts.js` with sub-trees defined in `routes/` and imported by `virtual-hosts.js`.
+Add a route to the `routes/` module that owns its surface. Edit `virtual-hosts.js` only to mount a new subtree, add a virtual host, or change subtree-level middleware and error handlers.
 
 ## Routing
 
-Routes are defined in `virtual-hosts.js` as an array of virtual host specification objects. The HTTP router resolves every request through a four-level hierarchy: **HttpRouter → VirtualHost → HttpRoute → HttpTarget**.
+Requests resolve through **HttpRouter → VirtualHost → HttpRoute → HttpTarget**:
 
-`virtual-hosts.js` Declares the virtual hosts, their hostnames, and the route subtrees mounted under each one. The route subtrees themselves live in `routes/`, one module per API or UI surface. Add a route to the module that owns the surface it belongs to, and reserve edits to `virtual-hosts.js` for mounting a new subtree, adding a virtual host, or changing subtree-level middleware and error handlers.
+- **VirtualHost** matches the hostname. If none matches, the first configured virtual host is used.
+- **HttpRoute** matches `request.url.pathname` against a `pattern`. Captured params are on `request.pathnameParams`.
+- **HttpTarget** declares its `methods` and runs its handler chain. If the route matches but no target accepts the method, the router responds `405` with an `Allow` header.
 
-- **VirtualHost** matches the request by hostname. If no hostname match is found, the first configured virtual host will be used.
-- **HttpRoute** matches the URL pathname using `path-to-regexp` pattern syntax (e.g. `/users/:id`). Named segments are captured and available as `request.pathnameParams`.
-- **HttpTarget** declares which HTTP methods it handles and runs a chain of middleware functions to produce the response. When a route matches but no target handles the request method, the router responds `405 Method Not Allowed`.
+A route with `routes` is a branch that shares configuration with its children; a route with `targets` is a leaf. Nested routes concatenate patterns and names, and compose middleware (parent inbound first, parent outbound last).
 
-Routes may be nested. Nested routes compose their patterns (parent + child), and their middleware chains (parent inbound runs first; parent outbound runs last). A route with a `routes` array is a branch node that shares configuration with its children; a route with a `targets` array is a leaf endpoint.
-
-### Route Matching Order
-
-Route matching is ordered, not specificity-ranked. The router checks the virtual host's flattened route list from top to bottom and uses the first route whose composed `pattern` matches the request pathname. It does not keep looking for a more specific route after a match.
-
-Nested routes are flattened in depth-first order, preserving the order in each `routes` array. Put more specific sibling routes before broader dynamic or wildcard routes:
+**Matching is ordered, not ranked by specificity.** Nested routes are flattened depth-first in array order, and the first matching route wins. Put specific routes before dynamic ones, and keep catch-alls (`*`, `/:slug`, `/*splat`) last in their route set:
 
 ```js
 routes: [
@@ -40,751 +40,404 @@ routes: [
 ]
 ```
 
-Catch-all routes must stay last within the route set they belong to. A route such as `*`, `/:slug`, or `/*splat` can shadow later routes if it appears first.
+### Route Patterns
 
-### Route Pattern Matching
+Patterns use the vendored `path-to-regexp`. They match the pathname only: no query strings, fragments, or regexp syntax. Escape or avoid the reserved characters `( ) [ ] ? + !`. Matched params are decoded.
 
-Route `pattern` values use the vendored `path-to-regexp` matcher. Static text must match exactly, and named matches are decoded and exposed on `request.pathnameParams` before request handlers run.
+| Pattern | Matches | `request.pathnameParams` |
+|---|---|---|
+| `/users/:userId/posts/:"post-id"` | `/users/42/posts/intro` | `{ userId: '42', 'post-id': 'intro' }` (quote names that are not JS identifiers) |
+| `/files/*path` | `/files/a/b.pdf` (one or more segments) | `{ path: [ 'a', 'b.pdf' ] }` |
+| `/files{/*path}` | `/files`, `/files/a/b` (zero or more segments) | `path` present only when matched |
+| `/files/:file{.:ext}` | `/files/report`, `/files/report.pdf` | `ext` present only when matched |
+| `/{index.json}`, `/users{.json}` | `/` and `/index.json`; `/users` and `/users.json` | `{}` |
+| `/users/invite{/}` | With or without trailing slash | `{}` |
+| `*` | Everything | `{}` |
 
-The matcher is for ordered path-like strings. Route patterns match `request.url.pathname` only; do not put query strings, URL fragments, JSON, or any arbitrarily ordered data in the pattern.
+- Parameter and wildcard names are required (`/users/:` is invalid). Do not use the old modifier syntax (`?`, `*`, `+` after a param).
+- `{/}` makes a trailing slash optional without a redirect; use it on API endpoints. A nested route with pattern `'{/}'` means "the parent pattern itself".
+- `*` is a project-level shortcut for an unnamed catch-all. Nested, it composes differently: a child `*` under `/admin` becomes `/admin{/*path}` (capturing `path`), and a parent `*` adds nothing to its children's patterns.
 
-Use a colon-prefixed parameter to capture arbitrary text within one pathname segment. Parameter names can be any valid JavaScript identifier. Double-quote the name when it contains other characters:
+### Handlers and Execution Order
 
-```js
-{
-    pattern: '/users/:userId/posts/:"post-id"',
-    targets: [ ... ],
-}
-```
+| Kind | Declared on | Use for |
+|---|---|---|
+| `inboundMiddleware`, `outboundMiddleware` | Routes; applies to every target in the subtree | Authentication, session loading, request normalization, shared response headers |
+| `requestHandlers` | One target | Resource authorization, loading page data, form handling, calling Transaction Scripts, render props, redirects |
+| `errorHandlers` | Routes and targets | Converting errors into responses |
 
-A request for `/users/42/posts/intro` produces:
+For a matched target:
 
-```js
-request.pathnameParams.userId; // '42'
-request.pathnameParams['post-id']; // 'intro'
-```
+1. **Request phase:** route inbound middleware (parent first), then the target's `requestHandlers` in order.
+2. **Outbound phase:** route outbound middleware (child first). Always runs, even after `skip()`.
 
-Parameter names are required after `:`. A pattern such as `/users/:` is invalid; use a named parameter such as `/users/:id`.
-
-The pattern string is not a JavaScript `RegExp`. Raw regexp groups and character classes are not supported in route patterns. Characters reserved by `path-to-regexp`, including `(`, `)`, `[`, `]`, `?`, `+`, and `!`, must be avoided or escaped when they need to match literally.
-
-Use an asterisk-prefixed wildcard parameter to capture one or more characters across multiple pathname segments. Wildcard parameters must be named, and their values are arrays of decoded segment strings:
-
-```js
-{
-    pattern: '/files/*path',
-    targets: [ ... ],
-}
-```
-
-A request for `/files/releases/2026/report.pdf` produces:
+Each function's return value becomes the `response` passed to the next; a nullish return keeps the current one.
 
 ```js
-request.pathnameParams.path; // [ 'releases', '2026', 'report.pdf' ]
-```
+// Middleware and request handlers receive skip(); outbound middleware does not.
+// See app/presentation/middleware/authenticate-admin-user.js.
+async function authenticateAdminUser(context, request, response, skip) {
+    const sessionId = request.getCookie(ADMIN_SESSION_COOKIE_NAME);
 
-Use braces to mark part of a pattern as optional. Optional groups can contain static text and parameters. Optional parameters are omitted from `request.pathnameParams` when that part of the path is not present:
-
-```js
-{
-    pattern: '/{index.json}',
-    targets: [ ... ],
-},
-{
-    pattern: '/users{.json}',
-    targets: [ ... ],
-},
-{
-    pattern: '/files/:file{.:ext}',
-    targets: [ ... ],
-},
-{
-    pattern: '/users/invite{/}',
-    targets: [ ... ],
-}
-```
-
-Both `/` and `/index.json` match the first route, while `/users` and `/users.json` match the second route. The third route matches both `/files/report` and `/files/report.pdf`; the `ext` parameter is present only when the extension is present.
-
-The fourth route uses the optional group to make a trailing slash optional: `/users/invite` and `/users/invite/` both match one route, without a redirect or a duplicate route entry. Use `{/}` on API endpoints where clients may or may not send the trailing slash. A nested route can also use the bare pattern `'{/}'` to mean "the parent pattern itself, with or without a trailing slash".
-
-Do not use older `path-to-regexp` modifier syntax in new routes:
-
-- For optional path parts, use braces: `/file{.:ext}`.
-- For one or more path segments, use a named wildcard: `/*path`.
-- For zero or more path segments, put the wildcard in an optional group: `/files{/*path}`.
-
-Use the special app pattern `*` only for unnamed catch-all routes. This is a project-level shortcut; regular `path-to-regexp` wildcards must have names. The app pattern `*` matches every pathname and returns an empty `request.pathnameParams` object. If the handler needs the captured path segments, use a named wildcard pattern such as `/*splat` instead. Nested `*` patterns compose differently: a child `*` under `/admin` becomes `/admin{/*path}`, which captures `path`, and a parent `*` adds nothing to its children's patterns.
-
-### Middleware vs. Request Handlers vs. Error Handlers
-
-- **Route middleware** (`inboundMiddleware`, `outboundMiddleware`) applies to every target in a route subtree. Use it for capabilities like authentication, session loading, request normalization, and shared response headers.
-- **Target `requestHandlers`** applies to one endpoint. Use them for resource authorization, loading data for a page, handling a form submission, calling a Transaction Script, setting render props, or returning a redirect response
-- **Error handlers** (`errorHandlers`) Error handlers can be defined for routes and targets. When an error is encountered in a middleware or request handler it is handed off to the closest target or route error handler. When both a target and ancestor route have error handlers, the target error handlers run first, before the route error handlers. If the closest error handler does not handle the error it propagates up the routes tree, eventually getting handled by the global router handler if no other error handlers handle it.
-
-The signature for middleware and request handler functions is:
-
-```js
-/**
- * @param {Object} context - Active request context
- * @param {Object} request - Incoming HTTP request
- * @param {Object} response - Response threaded through the middleware chain
- * @param {Function} skip - Stops the remaining request-phase middleware; outbound middleware still runs
- * @returns {Promise<Object>} Response for the next middleware
- */
-async function requireAuthenticatedUser(context, request, response, skip) {
-    const user = await context.getCurrentUser(request);
-
-    if (!user) {
-        response.respondWithJSON(401, { errors: [ { title: 'Sign in required' } ] });
-        skip();
+    if (!isNonEmptyString(sessionId)) {
+        throw new UnauthenticatedError('Admin authentication is required.');
     }
+
+    context.setUser(await authenticateAdminSession(context, sessionId));
     return response;
 }
-```
 
-The signature for an error handler is:
-
-```js
-/**
- * Converts an authentication failure into a JSON response.
- * @param {Object} context - Active request context
- * @param {Object} request - Incoming HTTP request
- * @param {Object} response - Response threaded through the middleware chain
- * @param {Error} error - Error raised while handling the request
- * @returns {Object|false} A response when handled, or false to continue the error-handler cascade
- */
+// Error handlers may be async. Return the response if handled, false to pass.
 function handleAuthenticationError(context, request, response, error) {
     if (error.code !== 'UNAUTHENTICATED_ERROR') {
         return false;
     }
-
-    return response.respondWithJSON(401, {
-        errors: [
-            {
-                title: 'Authentication required',
-                detail: 'Sign in before continuing.',
-            },
-        ],
-    });
+    return response.respondWithJSON(401, { errors: [ { title: 'Authentication required' } ] });
 }
 ```
 
-An error handler may also be async; in that case, it returns `Promise<ServerResponse|false>`. If the error handler handles the error, return the `response` object. Otherwise, return `false` to signal the error handler chain to try the next handler.
+**`skip()`** ends the request phase: no further inbound middleware or request handlers run. Call it after committing a terminal response (a redirect or JSON document) when a later handler, such as `HyperviewPageHandler`, would otherwise run. If no later handler needs bypassing, just return the response.
 
-### Route handling execution order
+**Errors.** When middleware or a handler throws:
 
-Execution order for a matched target runs in two phases — a **request phase** followed by an **outbound (response) phase**:
+1. The router emits an `error` event (the servers log it and, for unexpected errors, begin graceful shutdown). It fires for every failure regardless of what the cascade below produces, so a handler may render a normal-looking page for an unexpected error without preventing shutdown.
+2. The error cascade runs: target error handlers, then route error handlers (child before parent), then the router fallback, which serializes expected/HTTP errors as JSON:API `errors` documents. The first handler to return a response wins.
+3. If every level returns `false`, the error escapes to the platform server's last-resort handler.
 
-1. Route inbound middleware (parent-first) — request phase
-2. Target `requestHandlers` (in order) — request phase
-3. Route outbound middleware (child-first) — outbound phase
-
-When middleware or a request handler throws, the router emits an `error` event; for logging and, for unexpected errors, to trigger the platform server's graceful shutdown. Separately, the router runs the error-handler cascade: target, then route, then the router's built-in fallback, stopping at the first one that returns a response. The router error event fires for every failure regardless of what the cascade produces, so a target or route handler is free to render a normal-looking response even for an unexpected error without delaying or preventing the shutdown. Only when every cascade level returns `false` does the error propagate out of the router for the platform server's last-resort fallback.
-
-When the error handling chain is triggered, the outbound phase is skipped for that request.
+The outbound phase is skipped for a request that enters the error cascade.
 
 ### Response Cache Policy
 
-Caching is opt-in per route. Shared caches such as the Cloudflare Workers Cache store responses which carry no `Cache-Control` using heuristic freshness, and serve them without running the Worker or its authentication middleware. So on the way out, `HttpRouter` enforces:
+Shared caches such as the Cloudflare Workers Cache store responses without `Cache-Control` heuristically and serve them without running the Worker or its authentication. So caching is opt-in per route, and `HttpRouter` enforces on the way out:
 
 | Response | `Cache-Control` |
 |---|---|
 | No `Cache-Control` declared | `no-store` |
-| Produced by the error cascade | `no-store`; any `ETag` is removed |
+| Produced by the error cascade | `no-store`; any `ETag` removed |
 | `context.user` is set | `private, no-store` |
 
-Enforcement replaces only the storage and freshness directives, so a declared `no-transform` survives. A response a shared cache may still store also gets `Vary: host`, because a shared cache key (like the Workers Cache) may omit the hostname while an origin server may intend different content for different hosts.
+Enforcement replaces only storage and freshness directives (a declared `no-transform` survives). A response a shared cache may still store also gets `Vary: host`, because the shared cache key may omit the hostname.
 
-To make a response cacheable, declare the policy on the normal (non-error) path: `cacheControl` for `StaticAssetRequestHandler`, `responseOptions.cacheControl` for `HyperviewPageHandler`, or a `cache-control` header from a custom handler. Never do this for a response built from request-specific state such as a session, cookie, or CSRF token.
+To make a response cacheable, declare the policy on the success path: `cacheControl` for `StaticAssetRequestHandler`, `responseOptions.cacheControl` for `HyperviewPageHandler`, or a `cache-control` header from a custom handler. **Never do this for a response built from request-specific state** such as a session, cookie, or CSRF token.
 
-Publishing a content Release does not purge shared caches, so a public page's policy sets how long visitors may see the previous Release:
+Publishing a content Release does not purge shared caches:
 
 | Policy | After a Release | Origin requests |
 |---|---|---|
-| `public, no-cache` | Visible on the next request | Every request; an unchanged page gets a `304` |
-| `public, max-age=<seconds>` | Visible once the cached copy expires | Only after the cached copy expires |
+| `public, no-cache` (default choice) | Visible on the next request | Every request; unchanged pages get `304` |
+| `public, max-age=<seconds>` | Visible once the cached copy expires | Only after expiry |
 
-`public, no-cache` is the default choice. A short `max-age`, such as a minute, suits high-traffic pages where a brief delay after publishing is worth fewer origin requests. Browsers keep the copy for the same window, and a shared cache serves it without running the application, so keep `max-age` short for pages that change with a Release.
-
-### Skipping Middleware and Request Handlers
-
-**The `skip()` callback** ends the **request phase** early: when called, no further inbound middleware or request handlers run. The **outbound phase still runs to completion**, so response post-processing such as formatting, shared headers, and logging is never bypassed by `skip()`. Use `skip()` when a request handler has committed a terminal response (a redirect or JSON document) and you want to stop a later request handler — such as a Hyperview render handler — from running. Do not reach for `skip()` merely because you committed a response; if no later request handler needs to be bypassed, just return the response. Outbound middleware is not passed `skip()` and cannot short-circuit the chain.
-
-```js
-export async function redirectAfterSuccess(context, request, response, skip) {
-    // Stops a later Hyperview render handler in this target from running, while
-    // still letting route outbound middleware post-process the redirect response.
-    skip();
-    return response.respondWithRedirect(303, '/account');
-}
-```
+Use a short `max-age` (about a minute) only for high-traffic pages where a brief delay after publishing is worth fewer origin requests.
 
 ## Reverse Routing
 
-The routing layer is also a source of truth for URLs. Instead of hardcoding pathname strings look up the `HttpTarget` that owns an endpoint from the request context and compile its pathname from parameters. This keeps every internal link, redirect `Location`, and form `action` correct when a route `pattern` changes — you edit the pattern in `virtual-hosts.js` and every caller that compiles through the target follows automatically.
+Never hardcode internal URLs. Look up the `HttpTarget` that owns the endpoint and compile its pathname, so links, redirects, and form actions follow when a pattern changes.
 
-The `RequestContext` exposes three lookup methods, and each `HttpTarget` can reverse-compile its own pathname.
+**Target names** are fully qualified as `routeName/targetName`, with nested route names joined parent first: target `render-style-guide-page` under routes `admin-panel` → `style-guide` is `admin-panel/style-guide/render-style-guide-page`. A route without a `name` uses its `pattern`. Give every referenced target a stable name; renaming breaks lookups.
 
-### Target Names
+| Method | Returns |
+|---|---|
+| `context.getHttpTarget(name)` | First target with that name. Throws `AssertionError` if none matches. |
+| `context.getAllHttpTargets()` | Every target of the current virtual host, in route order |
+| `context.getHttpTargetsByTag(tag)` | Targets declaring `tag` in their `tags` array, in route order; `[]` if none |
 
-Targets are addressed by a **fully-qualified name** of the form `routeName/targetName`. Nested routes compose their names parent-first, so a target named `render-form` under a route named `admin-login-form` is addressed as `admin-login-form/render-form`, and a target `render-style-guide-page` under the nested `admin-panel` → `style-guide` routes is `admin-panel/style-guide/render-style-guide-page`. A route with no explicit `name` falls back to its `pattern`.
+These resolve against the virtual host that matched the request, so call them inside handlers, not at module load.
 
-Give every target you intend to reference a stable `name`. Renaming a route or target changes its fully-qualified name and breaks lookups, so target names are part of your application's internal contract.
+`target.compilePathname(params)` returns `{ method, pathname }`:
 
-### Looking Up Targets
-
-| Method | Returns | Behavior |
-|---|---|---|
-| `context.getHttpTarget(name)` | `HttpTarget` | Returns the first target whose fully-qualified name matches `name`. Throws `AssertionError` when `name` is not a non-empty string or no target matches. Returns the first match if names collide. |
-| `context.getAllHttpTargets()` | `Array<HttpTarget>` | Every target in the matched virtual host's flattened route set, in route iteration order. |
-| `context.getHttpTargetsByTag(tag)` | `Array<HttpTarget>` | Only targets that declare `tag`, in route order. Returns an empty array when none match. Throws `AssertionError` when `tag` is not a non-empty string. |
-
-All three resolve against the route set of the virtual host that matched the current request, which the router injects before handlers run. They are request-scoped accessors: call them inside a middleware or request handler, not at module load time.
-
-Tags are declared per target in `virtual-hosts.js` and are useful for grouping endpoints that a single piece of UI needs to enumerate — a primary navigation menu, a sitemap, an admin tool index:
+- Pass a string per `:name` param and an array per `*name` wildcard. Extra keys are ignored. Values are URL-encoded.
+- `method` is the preferred method: `GET > POST > PUT > PATCH > DELETE > HEAD`, else the first declared.
+- Throws for a target whose pattern is `*`.
+- Append query strings yourself.
 
 ```js
-{
-    name: 'dashboard',
-    methods: [ 'GET', 'HEAD' ],
-    tags: [ 'admin-nav' ],
-    requestHandlers: [ getDashboard, HyperviewPageHandler() ],
-}
+// Redirect after a write
+const { pathname } = context.getHttpTarget('bugs/show').compilePathname({ id: ticket.id });
+skip();
+return response.respondWithRedirect(303, pathname);
+
+// Tag-driven navigation (target declares tags: [ 'admin-nav' ])
+const nav = context.getHttpTargetsByTag('admin-nav').map((target) => {
+    return { name: target.name, href: target.compilePathname().pathname };
+});
+return response.updateProps({ nav });
 ```
 
-### Compiling Pathnames
-
-`HttpTarget#compilePathname(params)` reverse-compiles the target's route pattern into a concrete URL.
-
-```js
-const target = context.getHttpTarget('bugs/show');
-const { method, pathname } = target.compilePathname({ id: 'BUG-123' });
-// For pattern '/bugs/:id' -> method: 'GET', pathname: '/bugs/BUG-123'
-```
-
-- Returns `{ method, pathname }`. The `pathname` is the compiled path; the `method` is the target's **preferred** HTTP method, chosen by the priority order `GET > POST > PUT > PATCH > DELETE > HEAD` (falling back to the target's first declared method). Use `method` to fill a form's `method` attribute or to decide between a link and a form.
-- Provide a string for each `:name` parameter and an array of segments for each `*name` wildcard parameter. See [Route Pattern Matching](#route-pattern-matching) for the parameter syntax. Passing an object that already carries the needed keys is fine — extra keys are ignored — which is why forms pass `this` (see [Forms](#forms)).
-- Values are URL-encoded for safe output, so non-ASCII text and reserved characters are escaped.
-- Throws when the target's pattern is the catch-all `*`, because a wildcard pattern carries no information to rebuild a concrete pathname. Compile against a named target instead.
-
-Query strings and fragments are not part of route patterns, so append them yourself after compiling:
-
-```js
-const loginTarget = context.getHttpTarget('admin-login-form/render-form');
-const { pathname } = loginTarget.compilePathname();
-const location = `${ pathname }?notice=session_create_failed`;
-```
-
-### Use Cases for Reverse Routing
-
-- **Form action URLs.** `BaseForm#getFormContext()` resolves `static target` through `getHttpTarget()` and compiles the form's `action` pathname, so a form never hardcodes where it posts. See [Forms](#forms).
-- **Redirect targets after a write.** After a successful form submission, compile the destination target's pathname for the `303` `Location` rather than writing a literal string:
-
-  ```js
-  const ticketTarget = context.getHttpTarget('bugs/show');
-  skip();
-  return response.respondWithRedirect(303, ticketTarget.compilePathname({ id: ticket.id }).pathname);
-  ```
-
-- **Cross-links between pages.** A handler that renders a page can compile links to related endpoints and pass them as render props, keeping URL construction out of templates:
-
-  ```js
-  const newUserTarget = context.getHttpTarget('new-admin-user-form/render-form');
-  return response.updateProps({
-      links: { newUserForm: newUserTarget.compilePathname().pathname },
-  });
-  ```
-
-- **Tag-driven navigation and sitemaps.** Enumerate targets by tag to build a menu or index without listing routes by hand. Compile each target and pass the list to the template:
-
-  ```js
-  const navTargets = context.getHttpTargetsByTag('admin-nav');
-  const nav = navTargets.map((target) => {
-      return { name: target.name, href: target.compilePathname().pathname };
-  });
-  return response.updateProps({ nav });
-  ```
-
-- **Introspection and debugging.** `getAllHttpTargets()` returns the full target set for the current virtual host, useful for building a route index page or asserting routing expectations in development.
+`BaseForm` uses the same mechanism to compile form actions (see [Forms](#forms)).
 
 ## Request Handlers
 
-A request handler's job is to interpret the incoming HTTP request and coordinate a response, but it should not contain domain logic. See `app/transaction-scripts/README.md` for how to write the Transaction Scripts which contain the domain logic that request handlers call.
+A request handler interprets the request and coordinates the response. Domain logic belongs in Transaction Scripts (`app/transaction-scripts/README.md`).
 
-Request handlers may:
+Handlers may read params, query, headers, cookies, and body; parse payloads into forms; validate; call Transaction Scripts; set render props; and return redirects, JSON:API responses, or Hyperview pages. They must not:
 
-- Read `request.pathnameParams`, query string values, headers, cookies, and request body data.
-- Parse `FormData` or JSON:API payloads into form classes.
-- Validate forms and translate validation errors into response props, setting the response status on inline error re-renders (see [Response Status on Re-rendered Errors](#response-status-on-re-rendered-errors)).
-- Call Transaction Scripts in `app/transaction-scripts/` to load or mutate data.
-- Call `response.updateProps({ ... })` to pass render data to `HyperviewPageHandler`.
-- Return redirects, JSON:API responses, or rendered HTML responses through Hyperview or error handlers.
+- Contain business rules or domain mutations.
+- Use native Node.js modules, the filesystem, or native Cloudflare bindings.
+- Build HTML strings that Hyperview templates should render.
+- Own browser state that links, forms, redirects, and server-rendered HTML should represent.
 
-Request handlers should not:
-
-- Put business rules or domain mutations directly in the handler.
-- Use native Node.js modules, filesystem access, or native Cloudflare bindings.
-- Build HTML strings when the response should be rendered by Hyperview templates.
-- Own browser application state that should instead be represented by links, forms, redirects, and server-rendered HTML.
-
-For write requests from HTML forms, parse and validate the form, call the Transaction Script, then redirect on success or re-render on validation failure:
+A browser form submission: validate CSRF, parse and validate the form, call the Transaction Script, then redirect on success or re-render on failure:
 
 ```js
-import CreateBugTicketForm from '../forms/create-bug-ticket-form.js';
-import { createBugTicket } from '../../transaction-scripts/bugs/create-bug-ticket.js';
+import CreateBugTicketForm from '../../forms/bugs/create-bug-ticket-form.js';
+import { createBugTicket } from '../../../transaction-scripts/bugs/create-bug-ticket.js';
+import { getCsrfFormContext, validateCsrfFormData } from '../../lib/csrf.js';
 
-export async function handleCreateBugTicket(context, request, response, skip) {
-    const form = CreateBugTicketForm.fromFormData(await request.formData());
+export async function postCreateBugTicket(context, request, response, skip) {
+    const formData = await validateCsrfFormData(context, request);
+    const form = CreateBugTicketForm.fromFormData(formData);
 
     try {
         form.validate();
-    } catch (err) {
-        if (err.name === 'ValidationError') {
-            response.status = err.httpStatusCode;
-            return response.updateProps({ form: form.getFormContext(context, err) });
+    } catch (error) {
+        if (error.name === 'ValidationError') {
+            response.status = error.httpStatusCode;
+            return response.updateProps({
+                form: await getCsrfFormContext(context, request, response, form, error),
+            });
         }
-        throw err;
+        throw error;
     }
 
     const ticket = await createBugTicket(context, form);
-    const ticketTarget = context.getHttpTarget('bugs/show');
+    const { pathname } = context.getHttpTarget('bugs/show').compilePathname({ id: ticket.id });
 
     skip();
-    return response.respondWithRedirect(303, ticketTarget.compilePathname({ id: ticket.id }).pathname);
+    return response.respondWithRedirect(303, pathname);
 }
 ```
 
-When validation failure should re-render a page, `HyperviewPageHandler(...)` after this handler in the target chain will run automatically (since `skip()` was not called). When success returns a redirect, `skip()` prevents the Hyperview handler from running and needlessly rendering a page.
+On failure, the target's trailing `HyperviewPageHandler` re-renders the page; on success, `skip()` prevents a needless render.
 
-### Rendering a Page with HyperviewPageHandler
+### Error Handling
 
-`HyperviewPageHandler()` (`app/presentation/request-handlers/hyperview/hyperview-page-handler.js`) is the route adapter which renders a Hyperview page as the response. Place it **last** in a target's `requestHandlers` chain: earlier handlers read the request, add template data with `response.updateProps()`, add rendering controls with `response.setRenderingOptions()`, and this handler delegates rendering to the shared presentation facade.
+Classify every error:
+
+- **Expected (operational)** errors are ones the handler is prepared for. `error.expected` is truthy when the thrower considered it operational.
+- **Unexpected (programmer)** errors come from paths assumed unreachable. Never handle them beyond logging and rethrowing; they should crash the system. You may wrap one in an `AssertionError` (with `cause`) to add debugging context.
+
+For expected errors:
+
+- If `error.httpError` is falsy, wrap it in an HTTP error class from `kixx/errors/mod.js`, or set `error.httpStatusCode`.
+- If an expected error arrives from a path whose occurrence violates the handler's own invariant, wrap it in an `AssertionError` (with `cause`) and rethrow. The resulting 500 and crash are intended.
+- Branch on `error.name`, `error.code`, and `error.expected`, not `instanceof`.
+- Use a custom `code` when callers or templates need to distinguish a domain outcome under a generic HTTP status.
+
+HTTP error messages are serialized to clients by the router fallback. Never put secrets, raw upstream payloads, stack details, KV keys, or internal identifiers in them.
+
+**Status on inline re-renders.** A handler that catches an error and re-renders the page owns the status; `updateProps()` alone sends `200`. Set `response.status` from the original caught `error.httpStatusCode` (falling back to `500`), even if the error was reclassified for display, so a name conflict stays `409` when shown as a field message.
+
+Exception: enumeration-sensitive re-renders (throttled, invalid invite or verification, invalid credentials) stay `200` on purpose. These flows collapse valid, unknown, expired, and throttled outcomes into one identical response; a distinct `403`/`404`/`429` would leak the signal the identical bodies hide.
+
+### Rendering with HyperviewPageHandler
+
+`HyperviewPageHandler(options)` (`request-handlers/hyperview/hyperview-page-handler.js`) renders a Hyperview page. Place it **last** in `requestHandlers`; earlier handlers add data with `response.updateProps()` and controls with `response.setRenderingOptions()`. The status is whatever earlier handlers set.
 
 ```js
 {
     name: 'show',
-    pattern: '/bugs/:id',
     methods: [ 'GET', 'HEAD' ],
-    requestHandlers: [ getBug, HyperviewPageHandler({ pathname: '/bugs/detail' }) ],
+    requestHandlers: [ getBug, HyperviewPageHandler({ baseTemplateId: 'default.html', pathname: '/bugs/detail' }) ],
 }
 ```
 
-Pass `pathname` whenever the route pattern contains dynamic segments. Without it the page is looked up by the request pathname, so `/bugs/BUG-123` would need its own `pages/` directory. A stable `pathname` points every request at one published page.
+Without `pathname`, the page is looked up by request pathname, so pass a stable `pathname` whenever the route pattern has dynamic segments.
 
-The response status is whatever an earlier handler set, so a re-rendered validation error keeps its 4xx.
+The client picks a render mode by request header:
 
-**Render modes.** The same page serves three granularities, and the client selects one by request header:
-
-| Request header | Rendered output | Used for |
+| Request header | Renders | Used for |
 |---|---|---|
-| `kixx-partial: <partial-id>` | That page partial alone | Replacing a fragment of the current document in place |
-| `kixx-boosted` | The page template, without its base template | Swapping the body during a page transition |
-| Neither | The page template wrapped in the base template | A cold request for a complete document |
+| `kixx-partial: <partial-id>` | That page partial alone | Replacing a fragment in place |
+| `kixx-boosted` | Page template without the base template | Body swap on page transition |
+| Neither | Page template inside the base template | A complete document; requires `baseTemplateId` |
 
-A full-page render requires `baseTemplateId`; the other two modes ignore it.
+A bare `HyperviewPageHandler()` fails an assertion on a full-page request. Every render adds `Vary: kixx-partial, kixx-boosted`.
 
-**Where the options come from.** Three sources are merged by `respondWithHyperviewPage()`, later sources winning over earlier ones:
-
-1. The options passed to `HyperviewPageHandler(...)` — the route's own configuration, fixed at startup.
-2. `response.renderingOptions` — per-request overrides set by an earlier handler through `response.setRenderingOptions()`, merged key by key over the route options. Use it when the render mode depends on what the request handler found, not on the route.
-3. The `kixx-partial` and `kixx-boosted` request headers, which win over both.
-
-```js
-// Re-render only the results table when the request handler knows the
-// client is asking for a filtered list.
-response.setRenderingOptions({ partial: 'results-table' });
-response.updateProps({ results });
-```
-
-`respondWithHyperviewPage(context, request, response, defaultOptions)` is also available from `app/presentation/lib/respond-with-hyperview-page.js` for terminal presentation code such as error handlers. It uses the same option precedence and service lookup as `HyperviewPageHandler`; call it directly only when the normal request-handler phase cannot continue. It passes `request.url` and `response.props` to `HyperviewService#renderPage()`, then owns JSON serialization and HTTP status, headers, content type, and body commitment.
-
-**Options.** All are optional.
+Options merge in this order, later winning: handler options, then `response.renderingOptions` (merged key by key), then the render-mode headers. For example, `response.setRenderingOptions({ partial: 'results-table' })` renders only the results table when the handler knows the client wants a filtered list.
 
 | Option | Effect |
 |---|---|
-| `pathname` | Canonical page identifier; defaults to the normalized request pathname |
-| `baseTemplateId` | Canonical base template identifier; required for full-page rendering |
-| `partial` | Canonical page-partial identifier to render instead of the page and base templates |
-| `skipBaseRender` | Render the page template without its base template |
-| `usePageCache` | Enable rendered-page cache reads and writes; defaults to the configured value |
-| `cacheKey` | Cache identity component; defaults to request origin, pathname, and query string |
-| `includePropsInCacheKey` | Include response props in the cache identity; defaults to true whenever page caching is on |
-| `propsHashFunction` | Custom response-props hash, used only with page caching and props-sensitive keys |
-| `pageCacheReadTtlSeconds`, `pageCacheExpirationSeconds` | Page-cache read TTL and write expiration; default to the configured values |
-| `allowJsonResponse` | Serve assembled page context for `.json` requests; defaults to the configured value |
-| `responseOptions` | `{ contentType, headers, cacheControl }` used only by the facade when it commits the response |
+| `pathname` | Page identifier; defaults to the normalized request pathname |
+| `baseTemplateId` | Base template; required for full-page renders |
+| `partial` | Render this page partial instead of the page and base templates |
+| `skipBaseRender` | Render the page template without its base |
+| `usePageCache` | Enable the rendered-page cache; defaults to config |
+| `cacheKey` | Cache identity; defaults to request origin, pathname, and query |
+| `includePropsInCacheKey` | Include response props in cache identity; defaults to `true` when page caching is on |
+| `propsHashFunction` | Custom props hash for props-sensitive cache keys |
+| `pageCacheReadTtlSeconds`, `pageCacheExpirationSeconds` | Page-cache TTLs; default to config |
+| `allowJsonResponse` | Serve assembled page context for `.json` requests; defaults to config |
+| `responseOptions` | `{ contentType, headers, cacheControl }` applied when committing the response |
 
-Every render adds `Vary: kixx-partial, kixx-boosted`, so caches keep each render mode separately.
+`responseOptions.cacheControl` opts a public page into shared caching: a `200` to `GET`/`HEAD` gets that header plus a strong `ETag`, and a matching `If-None-Match` gets `304`. See [Response Cache Policy](#response-cache-policy).
 
-`responseOptions.cacheControl` opts a public page into shared caching. A `200` response to `GET` or `HEAD` then carries that `Cache-Control` and a strong `ETag` hashed from the body, and a matching `If-None-Match` gets a `304` with no body. Without it the router's `no-store` default applies. See [Response Cache Policy](#response-cache-policy).
+Leave `includePropsInCacheKey` alone unless the page renders identically for every viewer; its default keeps a page rendered for one signed-in user from being served to the next. Responses with status `400` or above never touch the page cache.
 
-```js
-HyperviewPageHandler({
-    baseTemplateId: 'default.html',
-    responseOptions: { cacheControl: 'public, no-cache' },
-})
-```
+For terminal code such as error handlers, call `respondWithHyperviewPage(context, request, response, defaultOptions)` from `app/presentation/lib/respond-with-hyperview-page.js` directly. It uses the same option precedence.
 
-Leave `includePropsInCacheKey` alone unless you are certain the page renders identically for every viewer. It defaults to `true` with page caching on precisely so a page rendered for one signed-in user is never served to the next. A response with status `400` or above never reads or writes the page cache, whatever the options say.
+## RequestContext, Request, and Response
 
-### Error Handling
-
-Every error a request handler or middleware encounters must be classified into one of two buckets:
-
-- **Expected errors** - also known as "operational errors" - are errors the Request Handler logic is prepared for and will handle internally.
-- **Unexpected errors** - also known as "programmer errors" - are errors which come from code paths the Request Handler logic assumes should be unreachable, or should not be present in a healthy system.
-
-A Request Handler should never attempt to handle unexpected errors, other than by logging and rethrowing. Generally speaking, an unexpected error should crash the system. A Request Handler may decide to wrap an unexpected error and rethrow it as an AssertionError if it can provide more useful context for debugging.
-
-A truthy `error.expected` flag means the error was considered operational from where it was thrown. Wrap a caught expected error as an `AssertionError` (with `cause`) and rethrow only when it arrives from a code path whose occurrence violates the handler's own invariant — one the handler assumed could not produce that error. This is what results in an HTTP 500 and a server crash, which is the intended outcome once an assumed-unreachable path turns out to be reachable.
-
-A Request Handler should act with discretion when expected operational errors occur. Depending on the context:
-
-- **When the caught error is not a defined HTTP error** - When the `error.httpError` flag is falsy - Wrap the error in an HTTP error class from `kixx/errors/mod.js` or set the `error.httpStatusCode` property so that the status code is properly returned to the client
-- **When the error comes from a code path that is not accounted for** - Wrap the cause in an AssertionError and rethrow.
-
-Use error properties like `error.name`, `error.code`, and `error.expected` instead of `instanceof` to drive logical code branches.
-
-Messages on HTTP errors are serialized by the router fallback, so they must be safe to show to clients. Do not put secrets, raw upstream payloads, stack details, KV keys, or internal identifiers in an HTTP error message.
-
-Use a custom `code` when callers or templates need to distinguish a domain-specific outcome while keeping the HTTP status generic.
-
-### Response Status on Re-rendered Errors
-
-A request handler that catches an expected error and re-renders the page inline — rather than letting the error reach the route error handler — owns the response status for that outcome. A caught `ValidationError` or `ConflictError` that only calls `updateProps()` goes out as the default `200` even though the page reports an error.
-
-Be sure to set the status yourself in each inline error re-render branch in a request handler. Set `response.status` from `error.httpStatusCode`, falling back to `500` only when a more appropriate error code cannot be determined. Pass the original caught error even when it has been reclassified for display, so the status describes the error that actually occurred (a name conflict stays `409` even when shown as a field message).
-
-Enumeration-sensitive re-renders — throttled, invalid-invite/verification, and invalid-credentials states — should stay `200` on purpose so the status line does not become an identity or rate-limit oracle. These flows collapse valid, unknown, expired, and throttled outcomes into one indistinguishable response; a distinct `403`/`404`/`429` status would leak exactly the signal the identical HTML bodies work to hide.
-
-## RequestContext, Request and Response Objects
-
-Every middleware function and request handler receives `(context, request, response)`. All three objects are described below.
+Every middleware and handler receives `(context, request, response)`.
 
 ### RequestContext
 
-`context` is a `RequestContext` instance. It is created once per request and carries the request environment, logger, authenticated principal, and registered services and collections.
+Created once per request.
 
-**Properties:**
+| Property | Notes |
+|---|---|
+| `config` | Resolved application configuration |
+| `env` | Platform environment bindings |
+| `logger` | Root application logger |
+| `requestId` | Matches `request.id`; use for log correlation |
+| `runtime` | `AppRuntime`: whether serving HTTP or running a CLI command |
+| `user` | Authenticated principal, or `null`. Auth middleware sets it with `context.setUser(principal)`; it may be a user, API token, service account, or webhook sender. |
 
-| Property | Type | Notes |
-|---|---|---|
-| `config` | `Object` | Resolved application configuration |
-| `env` | `Object` | Platform specific environment bindings |
-| `logger` | `Logger` | Root application logger; use for structured log output |
-| `requestId` | `string\|undefined` | Matches `request.id`; use for log correlation |
-| `runtime` | `AppRuntime` | Metadata indicating whether the app is serving HTTP or running a CLI command |
-| `user` | `Object\|null` | Authenticated user set by auth middleware; `null` when not authenticated |
+`getCollection(name)` and `getService(name)` (e.g. `'EmailService'`) throw if the name is not registered. Target lookups are under [Reverse Routing](#reverse-routing).
 
-**Authenticated Principals:**
+| Env helper | Returns |
+|---|---|
+| `getEnvString(key, { required })` | Non-empty string, else `undefined` |
+| `getEnvInteger(key, { required })` | `Number.parseInt()` of a string, or a number binding |
+| `getEnvFloat(key, { required })` | `Number.parseFloat()` of a string, or a number binding |
+| `getEnvBoolean(key)` | `true` only for `true`, `1`, `"true"`, `"1"`; otherwise `false` |
 
-Authentication middleware should store the current authenticated principal on `context.user` with `context.setUser(principal)`. The principal is often a human user, but it may also represent an API token, service account, webhook sender, or another non-user credential.
-
-**Methods:**
-
-Service and collection access:
-
-| Method | Returns | Notes |
-|---|---|---|
-| `getCollection(name)` | Collection instance | Preferred way to access durable document data; throws if not registered |
-| `getService(name)` | Service instance | Access registered application services (e.g. `'ObjectStorageService'`, `'EmailService'`); throws if not registered |
-| `getHttpTarget(name)` | HttpTarget instance | Looks up a registered route target by name for reverse pathname compilation; throws if not found |
-| `getAllHttpTargets()` | Array<HttpTarget> | Returns every target in the current virtual host's route set |
-| `getHttpTargetsByTag(tag)` | Array<HttpTarget> | Returns targets that declare the given tag, in route order |
-
-See [Reverse Routing](#reverse-routing) for how to use these target lookups with `HttpTarget#compilePathname()` to build form actions, redirect locations, and navigation links without hardcoding URLs.
-
-Accessing environment vars:
-
-```js
-const siteName = context.getEnvString('SITE_NAME', { required: true });
-const cacheTtl = context.getEnvInteger('CACHE_TTL_SECONDS');
-const sampleRate = context.getEnvFloat('LOG_SAMPLE_RATE');
-const debugEnabled = context.getEnvBoolean('DEBUG_ENABLED');
-```
-
-Use the helper that matches the type your code expects:
-
-- `getEnvString(key, options)` returns a non-empty string, or `undefined` when the env var is missing.
-- `getEnvInteger(key, options)` returns an integer number from a numeric value or base-10 string, or `undefined` when the env var is missing.
-- `getEnvFloat(key, options)` returns a number from a numeric value or float string, or `undefined` when the env var is missing.
-- `getEnvBoolean(key)` returns `true` only for `true`, `1`, `"true"`, or `"1"`. Missing and unrecognized values return `false`.
-
-`getEnvInteger()` and `getEnvFloat()` parse a string value with `Number.parseInt()`/`Number.parseFloat()`, which only consume a leading numeric prefix — they do not require the whole string to be numeric. `getEnvInteger()` returns `1` for `"1.5"` and `12` for `"12px"`; `getEnvFloat()` returns `1.5` for `"1.5px"`. Only a value with no parseable leading number (e.g. `"abc"`) throws. Set the env var to a strictly numeric string if you need the value validated as such.
-
-Pass `{ required: true }` to the string, integer, or float helpers when the application cannot run without that value. Required helpers throw an `AssertionError` when the env var is missing or empty. Numeric helpers also throw an `AssertionError` when a present value has no parseable leading number of the expected type, and `getEnvInteger()` throws when a binding is already a non-integer number.
+- `{ required: true }` throws `AssertionError` when the value is missing or empty.
+- Numeric helpers parse only a leading number: `"12px"` → `12`, `"1.5"` → `1` for integers. They throw only when no leading number parses (`"abc"`), or, for `getEnvInteger()`, when the binding is a non-integer number.
 
 ### ServerRequest
 
-`request` satisfies the `ServerRequestInterface` contract: `kixx/http-router/server-request-interface.js`
+`request` satisfies `kixx/http-router/server-request-interface.js`.
 
 ### ServerResponse
 
-`response` is a `ServerResponse` instance defined in `kixx/http-router/server-response.js`. Middleware builds the response by mutating it; the final state is sent to the client.
+`response` is a `ServerResponse` (`kixx/http-router/server-response.js`). Handlers build it by mutation.
 
-**Mutable properties** — set directly when needed:
+- `status` (default `200`), `body`, and `headers` (a `Headers`; use `setHeader()`, `appendHeader()`, `addVary()`).
+- `updateProps(obj)` deep-merges template data via `structuredClone`. Pass plain objects only; functions and class instances throw. Read the result from `response.props`.
+- `setRenderingOptions(obj)` replaces all rendering options with a shallow copy (pass `{}` to clear). Values need not be cloneable, and they never become template data.
+- `setCookie(name, value, options)` defaults to `Secure; HttpOnly; SameSite=Lax`; pass `secure: false` for local HTTP and `httpOnly: false` for client-readable cookies. `clearCookie(name, options)` removes one.
+- All mutators and `respond*` methods return `this`.
 
-- `response.status` — HTTP status code (default `200`)
-- `response.body` — response body: string, Buffer, ReadableStream, or `null`
-- `response.headers` — Web API `Headers` instance; use `setHeader()`/`appendHeader()` instead of mutating directly
-
-**Passing template data between middleware** — use `updateProps()` to accumulate render context without committing a response body. The rendering handler (usually `HyperviewPageHandler`) reads these props to render the page template. Earlier middleware's props are readable via `response.props` if a later handler needs them.
-
-```js
-response.updateProps({ page: { title: 'My Page' }, ticket });
-```
-
-`updateProps()` deep-merges using `structuredClone`. Pass plain objects only — functions, class instances, and other non-cloneable values will cause it to throw. Nested objects merge rather than replace.
-
-**Passing rendering controls** — use `setRenderingOptions()` for rendering behavior that must not become template context or page-context JSON data. It replaces every prior rendering option with a shallow copy, so use `{}` to clear state before rendering another representation. Functions and other non-cloneable option values are allowed.
-
-```js
-response.setRenderingOptions({ partial: 'results-table' });
-```
-
-**Committing a response** — use the `respond*` methods to set status, headers, and body together:
-
-| Method | Use case |
+| Method | Use |
 |---|---|
-| `respond(status, headers, body)` | Generic — full control over all three |
-| `respondWithRedirect(status, location, options)` | Sets `Location` header; status is typically `301`, `302`, or `303` |
-| `respondWithJSON(status, obj, options)` | Serializes to JSON; sets `Content-Type` and `Content-Length` |
-| `respondWithHTML(status, html, options)` | Sets `text/html; charset=utf-8`; calculates byte-accurate `Content-Length` |
-| `respondWithUtf8(status, text, options)` | General UTF-8 text; defaults to `text/plain` |
-| `respondWithStream(status, stream, options)` | Streams a `ReadableStream`; pass `null` for `stream` on HEAD responses |
-
-**Cookie helpers:**
-
-```js
-response.setCookie('session', token, { maxAge: 86400, path: '/' });
-response.clearCookie('session', { path: '/' });
-```
-
-`setCookie` defaults to `Secure; HttpOnly; SameSite=Lax`. Pass `secure: false` for local development. Pass `httpOnly: false` for client-readable cookies.
-
-**Chaining** — all `respond*`, `setHeader`, `appendHeader`, `addVary`, `setCookie`, `clearCookie`, `updateProps`, and `setRenderingOptions` methods return `this`, so they can be chained or returned directly:
-
-```js
-return response.updateProps({ page: { title: ticket.title }, ticket });
-```
+| `respond(status, headers, body)` | Full control |
+| `respondWithRedirect(status, location, options)` | `301`, `302`, or `303` |
+| `respondWithJSON(status, obj, options)` | Sets `Content-Type` and `Content-Length` |
+| `respondWithHTML(status, html, options)` | `text/html; charset=utf-8` |
+| `respondWithUtf8(status, text, options)` | Other text; defaults to `text/plain` |
+| `respondWithStream(status, stream, options)` | `ReadableStream`; `null` for HEAD |
 
 ## Forms
 
-Forms are the primary organizing logic for getting data into the application. Any data input into the system — HTML form submissions, JSON:API requests, webhooks, external APIs — should go through a form. A form owns one responsibility: turn an untrusted payload into a normalized, validated value object that a Transaction Script can consume. Keep domain logic, storage access, and CSRF handling out of the form.
+All input (HTML forms, JSON:API, webhooks, external APIs) goes through a form. A form turns an untrusted payload into a normalized, validated value for a Transaction Script. Keep domain logic, storage, and CSRF out of forms.
 
-Form files live in `app/presentation/forms/`, grouped into a subdirectory per feature (`admin-users/`, `publishing-api-tokens/`, `migrations/`). A single file may export more than one form when the forms belong to the same UI — for example a create form as the `default` export and a companion revoke form as a named export.
+Every form has:
 
-### Anatomy of a Form
+- **`static schema`**: JSON Schema for accepted fields. It is the source of truth: `validate()` reads its bounds (`minLength`, `maxLength`, `enum`) rather than repeating literals, and HTML forms render from it.
+- **A normalizing `constructor(attributes)`**: destructures `attributes ?? {}` and normalizes each field (trim, lowercase, absent to `null`), but **preserves invalid input** so `validate()` can report it.
+- **`validate()`**: pushes every field error onto one `ValidationError` with `error.push(message, field)` and throws only if `error.length` is non-zero, so the re-rendered form shows every problem.
+- **`from*()` static constructors**: `fromFormData(formData)` (from `BaseForm`) and/or `fromJsonApi(resource)`.
+- **`toJSON()`**: the plain value object for the Transaction Script, mapping UI fields onto the domain shape when they differ. Required for API forms and when shapes differ; otherwise pass the validated form itself.
 
-Every form, HTML-backed or API-only, is built from the same parts:
+One file may export a primary form (`default`) and a companion (named), such as a per-row revoke form with its own `static target` and a single hidden id field. A form with no user-entered fields still exists to carry CSRF and its action URL, with `properties: {}`.
 
-- **`static schema`** — JSON Schema describing the accepted fields. *ALL forms SHOULD include a schema definition as best practice.* The schema is the single source of truth: `validate()` reads its bounds (`minLength`, `maxLength`, `enum`) rather than duplicating literals, and HTML forms render controls from its metadata.
-- **A normalizing `constructor(attributes)`** — destructures the raw payload (guarding with `?? {}`) and assigns one normalized value per field. Normalization and validation are deliberately separate: the constructor cleans up shape (trim, lowercase, coerce absent-to-null) but **preserves invalid input** so `validate()` can still report a field error instead of silently coercing bad data away.
-- **`validate()`** — accumulates field errors on a single `ValidationError` via `error.push(message, source)` and throws only when `error.length` is non-zero. Never throw on the first bad field; collect them all so the re-rendered form can show every problem at once.
-- **`from*()` static constructor(s)** — `fromFormData(formData)` for browser submissions (provided by `BaseForm`), `fromJsonApi(resource)` for JSON:API payloads, or both when one form backs two entry points.
-- **`toJSON()`** — returns the plain, server-consumable value object handed to the Transaction Script. This is also where a form maps its UI-facing fields onto the domain shape (for example, injecting a default permission grant the UI does not expose). `toJSON()` is required for API forms and for any form whose UI-facing field names differ from the domain shape; otherwise the validated form instance is passed to the Transaction Script directly, and adding a pass-through `toJSON()` is unnecessary ceremony.
+### HTML Forms
 
-### HTML Forms Extend `BaseForm`
+HTML forms extend `BaseForm` (`app/presentation/forms/base-form.js`) and declare `static target` (the `HttpTarget` name the form posts to), `static method` (usually `'POST'`), and `static schema`.
 
-Forms that back HTML pages extend `BaseForm` (`app/presentation/forms/base-form.js`) and add three static properties:
+`getFormContext(context, error)` builds the template context: it compiles the action URL from `target` (passing the form so route params hydrate) and maps each schema property to a field with its value, metadata, and error. Pass the caught `ValidationError` for field errors, or a code string for a form-level message.
 
-- **`static target`** — the registered `HttpTarget` name used to compile the browser form action URL through reverse routing (see [Reverse Routing](#reverse-routing)). A form never hardcodes where it posts.
-- **`static method`** — the HTTP method for the submission, almost always `'POST'`.
-- **`static schema`** — JSON Schema extended with HTML render metadata per property.
+**Never override `getFormContext()`.** It owns action compilation, error projection, and `writeOnly` omission; patching its output can echo a submitted password back into the page. The only extension points are:
 
-`BaseForm` provides the pieces every HTML form would otherwise duplicate:
-
-- **`getFormContext(context, error)`** builds the template render context: it resolves `static target` to an `HttpTarget`, compiles the action `url` (passing the form instance so any route params are hydrated), and projects each schema property into a `fields` map carrying the current value, render metadata, and any per-field error message. Pass it the `ValidationError` caught in the request handler to re-render with inline field errors, or a domain error code string for a form-level message.
-- **`getDynamicFieldMetadata(context)`** is the hook for render metadata that cannot be declared statically in the schema. It returns partial field metadata keyed by field name, which `getFormContext()` merges over the schema metadata.
-- **`static fromFormData(formData)`** hydrates the subclass from submitted `FormData`, treating each field as a scalar (last value wins on duplicates).
-
-**Never override `getFormContext()`.** It owns the action-URL compilation, the per-field error projection, and the `writeOnly` value omission, and a subclass that rebuilds or patches the context it returns can break any of them — including echoing a submitted password back into a re-rendered form. There are exactly two extension points:
-
-- **`getDynamicFieldMetadata(context)`** — when a field's render metadata is sourced at request time rather than declared statically in the schema. The canonical case is a `select` whose `options` come from a registry (`AdminInviteCreateForm` fills `role_id` from the role registry) so the rendered choices cannot drift from what the Transaction Script accepts.
-- **`static fromFormData(formData)`** — when the form has multi-value controls, file inputs, or array-typed fields that need `formData.getAll()`.
+- **`getDynamicFieldMetadata(context)`**: returns metadata keyed by field name, merged over the schema, for values known only at request time (e.g. `AdminInviteCreateForm` fills `role_id` options from the role registry). It is synchronous; load any I/O in the handler and store it on the form. `name`, `value`, and `error` are applied after it, so it cannot defeat `writeOnly` or forge errors. Keys for undeclared fields throw.
+- **`static fromFormData(formData)`**: override for multi-value, file, or array fields that need `formData.getAll()`. The default takes the last value of each field.
 
 ```js
 getDynamicFieldMetadata() {
     const options = listAttachableRoles('admin').map((role) => ({ value: role.id, label: role.name }));
-
-    return {
-        role_id: {
-            label: 'Role',
-            options,
-        },
-    };
+    return { role_id: { label: 'Role', options } };
 }
 ```
 
-The merge is deliberately narrow. Dynamic metadata overrides static schema keys, but `getFormContext()` applies the field `name`, `value`, and `error` afterward, so a subclass can neither defeat the `writeOnly` omission nor forge a field error.
+Schema properties carry render metadata that templates read:
 
-The hook is synchronous, matching `getFormContext()`. When the metadata needs I/O, load it in the request handler, assign it to the form instance, and read it from `this` in the hook. Do not push the I/O into the render path.
+| Key | Meaning |
+|---|---|
+| `label`, `hint` | Control label and help text |
+| `fieldType` | Control kind: `text`, `textarea`, `select`, `hidden` |
+| `inputType` | HTML `<input type>`, e.g. `email`, `password` |
+| `autocomplete` | Autofill hint, e.g. `new-password` |
+| `options` | `{ value, label }` pairs for selects |
+| `writeOnly: true` | **Security:** the value is never echoed into the render context, so a password is not re-rendered after a validation error |
 
-### Schema HTML Metadata
+### API-Only Forms
 
-`getFormContext()` copies each property's schema keys onto the rendered field, so templates read whatever metadata you declare. Conventions used across the codebase:
-
-- **`label`** — human label for the control.
-- **`fieldType`** — the control kind the template should render (`'text'`, `'textarea'`, `'select'`, `'hidden'`).
-- **`inputType`** — the HTML `<input type>` (`'email'`, `'password'`), kept distinct from `fieldType` so a template can choose the control independently of the input type.
-- **`autocomplete`** — the browser autofill hint (`'email'`, `'new-password'`, `'current-password'`).
-- **`hint`** — help text shown near the field.
-- **`options`** — value/label pairs for `select` controls.
-- **`writeOnly: true`** — a security convention, not decoration: `getFormContext()` omits the field's `value` from the render context so a submitted secret (a password) is never echoed back into a re-rendered form after a validation error.
-
-### Normalization Helpers
-
-Constructors normalize with the shared helpers in `app/presentation/forms/utils.js` rather than re-implementing it. Each helper returns the original value unchanged when it is not usable, which is what keeps invalid input intact for `validate()`:
-
-- **`normalizeStringAttribute(value)`** — trims a required string.
-- **`normalizeLowerCaseStringAttribute(value)`** — trims and lowercases; use for email addresses so lookups are case-insensitive.
-- **`normalizeSecretStringAttribute(value)`** — coerces to a primitive string but does **not** trim, preserving a password exactly as entered.
-- **`normalizeOptionalStringAttribute(value)`** — trims and collapses absent or blank input to `null`.
-- **`normalizeIntegerStringAttribute(value, defaultValue)`** — parses an all-digit string to an integer; absent or blank input takes `defaultValue`, and any other string is returned trimmed for `validate()` to reject.
-- **`validateEmailAddressField(error, value, name)`** — pushes a field error when an email value is missing or malformed; call it from `validate()`.
-
-Prefer these to hand-written normalization so behavior stays consistent, and add a new shared helper here when a normalization pattern appears in more than one form.
-
-### Companion Forms in One File
-
-When a feature UI needs a paired action — such as a create form and a per-row revoke form — co-locate them in one file: the primary form as the `default` export, the companion as a named export. A revoke form typically declares its own `static target` (the revoke route shares one action URL across rows) and a single hidden id field, so each rendered row submits exactly one record id:
+JSON:API-only forms do not extend `BaseForm` and have no `target`, `method`, or `getFormContext()`. `fromJsonApi(resource)` is their entry point and reads `resource.attributes` itself. A form serving both HTML and JSON:API extends `BaseForm` and adds `fromJsonApi()`.
 
 ```js
-static schema = {
-    type: 'object',
-    properties: {
-        token_id: { type: 'string', fieldType: 'hidden' },
-    },
-    required: [ 'token_id' ],
-};
-```
-
-A form that mints a record from server-derived data only — no operator-entered fields — still exists to carry the CSRF token and compile its reverse-routed action URL, and declares an empty `properties: {}` schema.
-
-## API-Only Forms
-
-Forms used only by JSON:API endpoints do **not** extend `BaseForm` and do not declare `method`, `target`, or `getFormContext()`, because they are never rendered as HTML and never compile a browser form action. They keep the rest of the anatomy: a `schema`, a normalizing constructor (reuse the `utils.js` helpers), a `validate()` that accumulates field errors on a `ValidationError`, a `fromJsonApi(resource)` static constructor that reads `resource.attributes`, and a `toJSON()` that returns server-consumable data. Because these forms have no `BaseForm` to inherit `fromFormData()` from, `fromJsonApi()` is their only entry point.
-
-A form can serve both entry points when the same fields arrive over HTML and JSON:API — extend `BaseForm` for the HTML side and add a `fromJsonApi()` that maps the API attribute names onto the constructor's field names.
-
-```js
-import { isString } from '../../../../kixx/assertions/mod.js';
-import { ValidationError } from '../../../../kixx/errors/mod.js';
-import { normalizeOptionalStringAttribute } from '../utils.js';
-
 export default class CreateApiTokenForm {
 
-    /**
-     * JSON Schema for accepted token-creation attributes.
-     * @type {Object}
-     * @static
-     * @readonly
-     */
     static schema = {
         type: 'object',
         properties: {
-            description: {
-                type: [ 'string', 'null' ],
-                description: 'Optional operator-facing token description',
-            },
+            description: { type: [ 'string', 'null' ] },
         },
     };
 
-    /**
-     * @param {Object} [attributes] - JSON:API token-creation attributes.
-     * @param {*} [attributes.description] - Operator-facing token description.
-     */
     constructor(attributes) {
         const { description } = attributes ?? {};
         this.description = normalizeOptionalStringAttribute(description);
     }
 
-    /**
-     * Validates the normalized token-creation fields.
-     * @returns {void}
-     * @throws {ValidationError} When a field is invalid.
-     */
     validate() {
         const error = new ValidationError('The API token form contains invalid fields');
 
         if (this.description !== null && !isString(this.description)) {
             error.push('Description must be a string or null', 'description');
         }
-
         if (error.length) {
             throw error;
         }
     }
 
-    /**
-     * Returns the normalized fields consumed by the Transaction Script.
-     * @returns {{ description: string|null }} Plain JSON form values.
-     */
     toJSON() {
-        return {
-            description: this.description,
-        };
+        return { description: this.description };
     }
 
-    /**
-     * Creates the form from a parsed JSON:API resource.
-     * @param {{ attributes: Object }} resource - Parsed resource from parseJsonApiResource().
-     * @returns {CreateApiTokenForm} Hydrated token-creation form.
-     */
     static fromJsonApi(resource) {
-        const { attributes } = resource ?? {};
-        return new CreateApiTokenForm(attributes);
+        return new CreateApiTokenForm(resource?.attributes);
     }
 }
 ```
 
-## CSRF-Protected HTML Forms
+### Normalization Helpers
 
-Use `app/presentation/lib/csrf.js` for browser HTML forms that mutate state or establish authentication. CSRF validation belongs in request handlers before constructing a Form and before calling any Transaction Script.
+Use `app/presentation/forms/utils.js` instead of hand-written normalization. Each returns unusable input unchanged so `validate()` can report it. Add a helper here when a pattern appears in a second form.
 
-CSRF tokens are stateless: `app/presentation/lib/csrf-token-signer.js` signs and verifies an HMAC envelope binding a browser-side `sid` cookie value and an expiration, so validating a submission touches no storage. Renders set the `sid` on every response since the value is not sensitive on its own.
+| Helper | Behavior |
+|---|---|
+| `normalizeStringAttribute(value)` | Trims |
+| `normalizeLowerCaseStringAttribute(value)` | Trims and lowercases; use for emails |
+| `normalizeSecretStringAttribute(value)` | Coerces to string **without trimming**; use for passwords |
+| `normalizeOptionalStringAttribute(value)` | Trims; absent or blank becomes `null` |
+| `normalizeIntegerStringAttribute(value, defaultValue)` | All-digit string to integer; absent or blank becomes `defaultValue`; other strings returned trimmed |
+| `validateEmailAddressField(error, value, name)` | Call from `validate()`; pushes an error for a missing or malformed email |
 
-On GET handlers, render the form through `getCsrfFormContext()`. The helper calls `form.getFormContext(context, error)`, mints a fresh CSRF token, sets the browser CSRF cookie, and returns the usual form context with `form.csrf.fieldName` and `form.csrf.token` added:
+## CSRF Protection
 
-```js
-import { getCsrfFormContext } from '../lib/csrf.js';
+Browser forms that mutate state or establish authentication must use `app/presentation/lib/csrf.js`. Validate CSRF in the request handler before constructing the form or calling a Transaction Script.
 
-export async function getCreateBugForm(context, request, response) {
-    const form = new CreateBugForm();
+| Helper | Use |
+|---|---|
+| `getCsrfFormContext(context, request, response, form, error)` | GET renders and every re-render. Returns `form.getFormContext()` plus `csrf.fieldName` and `csrf.token`, and sets the CSRF cookie. |
+| `validateCsrfFormData(context, request)` | POST handlers. Reads and returns `request.formData()` after validating. |
+| `validateCsrfHeader(context, request)` | Raw upload bodies; checks the `x-kixx-csrf-token` header without reading the body |
+| `renderWithFreshCsrf(context, request, response, { form, props, error, status })` | Re-render with status, props, and a fresh token in one call |
+| `clearCsrfToken(request, response)` | After login or signup, once the real session cookie is set |
 
-    return response.updateProps({
-        form: await getCsrfFormContext(context, request, response, form),
-    });
-}
-```
+Request bodies are one-shot: after `validateCsrfFormData()`, never call `request.formData()`, `json()`, `text()`, or `arrayBuffer()`.
 
-On POST handlers, call `validateCsrfFormData()` before constructing the Form. That helper owns `request.formData()` because request bodies are one-shot; do not call `request.formData()` again after it returns, and do not reach for `request.json()`, `request.text()`, or `request.arrayBuffer()` either — any of them reads the same consumed body. Missing, expired, or mismatched CSRF data throws an expected HTTP error before domain logic runs.
-
-```js
-import { validateCsrfFormData } from '../lib/csrf.js';
-
-export async function postCreateBugForm(context, request, response, skip) {
-    const formData = await validateCsrfFormData(context, request);
-    const form = CreateBugForm.fromFormData(formData);
-
-    form.validate();
-    await createBug(context, form);
-
-    skip();
-    return response.respondWithRedirect(303, '/bugs');
-}
-```
-
-On validation or domain errors that re-render the form, call `getCsrfFormContext(context, request, response, form, error)` again so the response carries a fresh token. After successful signup, login, or another flow that should end the CSRF cookie's usefulness, call `clearCsrfToken(request, response)` after setting the real session cookie.
-
-The CSRF cookie is browser-wide, so a render does not replace its `sid`: each render mints a fresh token bound to the existing `sid`, and a submission remains valid for as long as the token's expiration allows — it is not spent on use. Opening a second tab, reloading, or rendering several forms on one page therefore leaves every other open form submittable, and a resubmission (e.g. a back-button retry) is accepted rather than rejected. Rotating the signing secret invalidates every form currently open.
-
-A token can still be rejected: the cookie is missing, the submitted field is missing, the token is forged, it is expired, or it was minted for a different `sid` (for example after the cookie was cleared or replaced). Left uncaught, that `ForbiddenError` reaches the route error handler and replaces the whole page with a generic error page, costing the operator their place. Where the surface can recover, catch `error.code === 'InvalidCsrfTokenError'` and hand back a usable page instead: re-render inline with a fresh token when the route owns a page (`renderWithFreshCsrf(context, request, response, { form, props, error, status })` sets the status and form context in one call), or redirect to the page that does and carry a notice code.
-
-For one-shot raw upload bodies that are not `FormData`, use `validateCsrfHeader(context, request)`, which checks the `x-kixx-csrf-token` header without reading the body.
-
-Templates should render the hidden field directly inside the protected `<form>`:
+Render the field inside the protected `<form>`:
 
 ```html
 {{#if form.csrf}}
@@ -792,281 +445,110 @@ Templates should render the hidden field directly inside the protected `<form>`:
 {{/if}}
 ```
 
-## Common Task Recipes
+Tokens are stateless HMAC envelopes (`csrf-token-signer.js`) binding the browser's `sid` cookie and an expiry, so validation touches no storage. Each render mints a new token for the existing `sid`, and tokens are not spent on use: other tabs and forms stay valid, and a back-button resubmission is accepted. Rotating the signing secret invalidates every open form.
 
-### Content-Only Page
+A token is rejected when the cookie or field is missing, or the token is forged, expired, or minted for a different `sid`. The resulting `ForbiddenError` (`code: 'InvalidCsrfTokenError'`) would otherwise replace the page with a generic error page. Where the surface can recover, catch it and either re-render with a fresh token or redirect to the owning page with a notice code.
 
-For a page whose content is assembled from page metadata, includes, and templates rather than request-specific data:
+## Common Recipes
 
-1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`, matching the page's exact pathname. End the target's `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html', responseOptions: { cacheControl: 'public, no-cache' } })`, or use a short `max-age` for a high-traffic page. See [Routing](#routing) and [Response Cache Policy](#response-cache-policy).
-2. Add or update `pages/<pathname>/page.json` for metadata and page context, setting its `template` directive to `page.html`.
-3. Add or update `page.html` beside `page.json` for route-specific markup.
-4. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-5. Put page-local partial sources beside `page.json` and reference them from `partials` in `page.json`.
-6. Add shared layout changes to `templates/base/` or `templates/partials/` only when the change should affect multiple pages.
+### Page
 
-`baseTemplateId` is required for a full-page render (see [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler)); a bare `HyperviewPageHandler()` fails an assertion on a normal request. Because the route pattern matches the page's pathname exactly, no `pathname` option is needed — the page is looked up by the request pathname.
+1. Add the route to its `routes/` module. End `requestHandlers` with `HyperviewPageHandler({ baseTemplateId: 'default.html', responseOptions: { cacheControl: 'public, no-cache' } })`. Omit `cacheControl` for pages built from request-specific data.
+2. Add `pages/<pathname>/page.json` with `"template": "page.html"`, and `page.html` beside it.
+3. Put page-local includes and partials beside `page.json` and list them in its `includes` and `partials`.
+4. Change `templates/base/` or `templates/partials/` only for changes that should affect multiple pages.
 
-### Dynamic Page
+For a dynamic page, add a request handler before `HyperviewPageHandler` (in the matching barrel file under `request-handlers/`) that reads the request, calls Transaction Scripts, and calls `response.updateProps()`. Pass a stable `pathname` when the pattern has dynamic segments.
 
-For a page that needs route parameters, records loaded through Transaction Scripts, session state, or other request-specific data:
+### Form Workflow
 
-1. Add or update the route in the `routes/` module that owns the surface, mounted from `virtual-hosts.js`. Reserve edits to `virtual-hosts.js` itself for mounting a new subtree, adding a virtual host, or changing subtree-level configuration. See [Routing](#routing).
-2. Add a request handler in the appropriate barrel file in `app/presentation/request-handlers/` to read route parameters, query strings, cookies, headers, or body data.
-3. Have the request handler call a Transaction Script when domain data is needed, prepare render data, and call `response.updateProps({ ... })`.
-4. When rendering markup, end the target's `requestHandlers` chain with `HyperviewPageHandler(...)`. See [Rendering a Page with HyperviewPageHandler](#rendering-a-page-with-hyperviewpagehandler).
-5. If the route pattern contains dynamic segments such as `/:id`, pass a stable `pathname` option to `HyperviewPageHandler` so the handler can locate the appropriate `pages/**` directory.
-6. Add or update `pages/<pathname>/page.json` for metadata and page context, setting its `template` directive to `page.html`.
-7. Add or update `page.html` beside `page.json` for route-specific markup.
-8. Put page-local supporting content next to the page and reference it from `includes` in `page.json`.
-9. Put page-local partial sources beside `page.json` and reference them from `partials` in `page.json`.
-10. Add shared layout changes to `templates/base/` or `templates/partials/` only when the change should affect multiple pages.
-
-### Form-Backed HTML Workflow
-
-For a workflow that accepts user input:
-
-1. Define a form class in `app/presentation/forms/` with `method`, `target`, `schema`, a `from*()` constructor, and `validate()`. See [Forms](#forms) above.
-2. In the request handler, parse the payload into the form, validate it, and then call the appropriate Transaction Script.
-3. On success, prefer an HTTP redirect for browser form submissions.
-4. On validation failure, update response props with the form context and render the page with the validation error state.
+Define the form ([Forms](#forms)), render it with `getCsrfFormContext()` on GET, and handle POST as in the [Request Handlers](#request-handlers) example.
 
 ### JSON:API Endpoint
 
-For an application API endpoint that accepts or returns JSON:API documents:
+Helpers are in `app/presentation/lib/json-api.js`.
 
-1. Add a route subtree or leaf route in `virtual-hosts.js`. Expected errors not handled by a route or target error handler reach the router fallback, which serializes them as JSON:API `errors` documents. Unexpected errors continue to propagate to the platform server's fatal-error policy.
-2. In the request handler, call `assertJsonApiContentType(request)` before parsing a JSON:API request body. JSON:API requests must use `Content-Type: application/vnd.api+json`; optional media-type parameters are ignored by the helper.
-3. Parse resource documents with `parseJsonApiResource(request, expectedType)`, then pass the whole returned resource into an API form (`fromJsonApi`, `validate`, `toJSON`) before calling a Transaction Script. `fromJsonApi(resource)` always takes the resource and reads `resource.attributes` itself — the form owns the mapping from wire shape to domain shape. If destructuring the JSON API payload is trivial, it can be done in the request handler, otherwise use an API form.
-4. On success, respond with `jsonApiResource(...)` and `response.respondWithJSON(status, document, { contentType: JSON_API_CONTENT_TYPE })`.
+1. Call `assertJsonApiContentType(request)` before parsing a body. It requires `Content-Type: application/vnd.api+json` and ignores media-type parameters.
+2. Parse with `parseJsonApiResource(request, expectedType)` and pass the whole resource to an API form (`fromJsonApi`, `validate`, `toJSON`). Trivial payloads may be destructured in the handler.
+3. Respond with `response.respondWithJSON(status, jsonApiResource(...), { contentType: JSON_API_CONTENT_TYPE })`.
 
-`app/presentation/lib/json-api.js` also has stricter JSON:API 1.1 helpers, used by the Administrative Data API (`request-handlers/admin-data-api/`): `assertStrictJsonApiContentType()` (rejects every media type parameter except `profile`), `assertAcceptsJsonApi()` (406 negotiation), `withErrorSource()` and `toJsonApiErrorObjects()` (structured `source` pointers, parameters, and headers), and `respondWithJsonApi()` (sends the Content-Type without the `charset` parameter JSON:API forbids). Those protocol errors need a route error handler such as `error-handlers/admin-data-api-error-handler.js`, because the router fallback does not add `WWW-Authenticate` on 401.
+Unhandled expected errors become JSON:API `errors` documents from the router fallback.
 
-### Serving Static Assets
+The Administrative Data API (`request-handlers/admin-data-api/`) uses stricter JSON:API 1.1 helpers:
+- `assertStrictJsonApiContentType()` rejects every media-type parameter except `profile`.
+- `assertAcceptsJsonApi()` returns 406 when the client doesn't accept JSON:API.
+- `withErrorSource()` and `toJsonApiErrorObjects()` build structured error `source` fields.
+- `respondWithJsonApi()` sends the Content-Type without `charset`.
 
-`StaticAssetRequestHandler` serves content-addressable blobs from the registered `ContentAddressableStore`. Wire it twice: a fingerprinted `/assets/:hash/*pathname` route before the catch-all, then pathname mode ahead of `HyperviewPageHandler` for fixed URLs such as `/favicon.ico` (see root files below).
+These errors need a route error handler such as `error-handlers/admin-data-api-error-handler.js`, because the router fallback does not add `WWW-Authenticate` on 401.
 
-```js
-import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
+### Static Assets
 
-{
-    pattern: '/assets/:hash/*pathname',
-    name: 'fingerprinted-assets',
-    targets: [
-        {
-            name: 'serve-asset',
-            methods: [ 'GET', 'HEAD' ],
-            requestHandlers: [
-                StaticAssetRequestHandler({ fingerprinted: true }),
-            ],
-        },
-    ],
-}
-```
+`StaticAssetRequestHandler` (`kixx/static-assets/static-asset-request-handler.js`) serves blobs from the `ContentAddressableStore`. `virtual-hosts.js` wires it twice, both before the catch-all:
 
-Fingerprint URLs carry an immutable content hash, use an immutable cache policy, and can return `304` for a matching `If-None-Match` without reading storage. Pathname URLs resolve through the current snapshot and revalidate by default.
+- **`/assets/:hash/*pathname`** with `{ fingerprinted: true }`: immutable caching; a matching `If-None-Match` gets `304` without a storage read.
+- **`/:filename.:extension`** for fixed root files like `/favicon.ico`, with `{ cacheControl: 'public, max-age=86400, stale-while-revalidate=604800', throwNotFound: false, skipWhenFound: true }` followed by `HyperviewPageHandler`. The pattern also matches page URLs like `/index.json`, so a miss must fall through. Never mark root files `immutable`; their URLs never change.
 
-Root files like `/favicon.ico` and `/robots.txt` are requested by fixed name, so they cannot be fingerprinted. A `/:filename.:extension` route before the catch-all serves them with a modest `cacheControl` instead of revalidating on every page view. The pattern also matches root page context URLs such as `/index.json`, so a missing asset must fall through to `HyperviewPageHandler`:
+Pathname-mode assets resolve through the current snapshot and revalidate by default. Details: `kixx/static-assets/README.md`.
 
-```js
-{
-    pattern: '/:filename.:extension',
-    name: 'root-files',
-    targets: [
-        {
-            name: 'serve-root-file',
-            methods: [ 'GET', 'HEAD' ],
-            requestHandlers: [
-                StaticAssetRequestHandler({
-                    cacheControl: 'public, max-age=86400, stale-while-revalidate=604800',
-                    throwNotFound: false,
-                    skipWhenFound: true,
-                }),
-                HyperviewPageHandler({
-                    baseTemplateId: 'default.html',
-                    responseOptions: { cacheControl: 'public, no-cache' },
-                }),
-            ],
-        },
-    ],
-}
-```
+## Hyperview Content
 
-Do not mark root files `immutable`: their URLs never change, so a published update is only seen after `max-age` expires.
+Source files map to the immutable storage layout read by `ContentSnapshot`:
 
-For lookup and caching details, see `kixx/static-assets/README.md`.
-
-## Where Presentation Changes Belong
-
-- `pages/` contains route-specific page metadata, page templates, page-local partials, and included content files.
-- `templates/base/` contains shared HTML document frames.
-- `templates/partials/` contains shared template fragments such as styles, metadata, and reusable markup.
-- `virtual-hosts.js` declares the virtual hosts and mounts the route subtrees under each one.
-- `routes/` contains the route subtrees themselves — one module per API or UI surface — connecting patterns and HTTP methods to middleware and request handlers.
-- `app/presentation/request-handlers/` contains application request handlers.
-- `app/presentation/middleware/` contains application inbound and outbound middleware.
-- `app/presentation/error-handlers/` contains application error handlers.
-- `app/presentation/forms/` contains form classes used to parse and validate inbound payloads.
-- `app/presentation/lib/` contains cross-cutting presentation helpers that are neither handlers, middleware, error handlers, nor forms. Put a module here when more than one handler or middleware needs it and it belongs to the presentation layer rather than to a Transaction Script.
-
-### Hyperview File Layout
-
-Developer-mode Hyperview content is authored under `lib/`. The source layout is
-translated into the immutable storage layout used by `ContentSnapshot`:
-
-| Storage namespace | Developer source | Behavior |
-| --- | --- | --- |
+| Storage path | Source | Treatment |
+|---|---|---|
 | `/pages/<pathname>/page.json` | `pages/<pathname>/page.json` | Direct file |
-| `/pages/<pathname>/<template basename>` | `pages/<pathname>/<template>` | Compiled as the page template at render time |
-| `/pages/<pathname>/__page-includes-bundle` | Files named by leaf `page.json` `includes` | Loaded verbatim as strings in the page context |
-| `/pages/<pathname>/__page-partials-bundle` | Files named by leaf `page.json` `partials` | Compiled as page-local templates at render time |
-| `/templates/__template-partials-bundle` | `templates/partials/**` | Assembled JSON bundle |
-| `/templates/__base-templates-bundle` | `templates/base/**` | Assembled JSON bundle |
+| `/pages/<pathname>/<template>` | File named by `template` | Compiled as the page template |
+| `/pages/<pathname>/__page-includes-bundle` | Files named by `includes` | Verbatim strings |
+| `/pages/<pathname>/__page-partials-bundle` | Files named by `partials` | Compiled page-local partials |
+| `/templates/__template-partials-bundle` | `templates/partials/**` | JSON bundle |
+| `/templates/__base-templates-bundle` | `templates/base/**` | JSON bundle |
 | `/assets/**` | `static-assets/**` | Direct file |
-| `/emails/<pathname>/__email-assets` | `emails/<pathname>/email.json` and named files | Assembled JSON bundle |
+| `/emails/<pathname>/__email-assets` | `emails/<pathname>/email.json` and named files | JSON bundle |
 
-For example:
+Keep page directories flat: files named by `template`, `partials`, and `includes` sit beside `page.json`, and a child directory is another page, so never create a `partials/` directory inside a page.
 
-```text
-lib/
-├── pages/
-│   ├── page.json
-│   ├── page.html
-│   ├── intro.md
-│   └── blog/
-│       └── hello-world/
-│           ├── page.json
-│           └── page.html
-├── static-assets/
-│   ├── images/
-│   │   └── logo.svg
-│   ├── javascript/
-│   │   └── site.js
-│   └── stylesheets/
-│       ├── stylesheet.css
-│       └── lib/
-├── emails/
-│   └── welcome/
-│       ├── email.json
-│       ├── message.html
-│       └── message.txt
-└── templates/
-    ├── base/
-    │   └── website.html
-    └── partials/
-        └── website-header.html
-```
+### Page Context
 
-Use `pages/` for route-specific metadata, page templates, page-local partials, and included text content. The files named by `page.json` `template`, `partials`, and `includes` directives live beside that `page.json`. Keep page directories flat: a child directory represents another page pathname, so do not create a `partials/` directory inside a page. Use `templates/base/` and `templates/partials/` only for templates shared across pages. Static assets belong under `static-assets/`. Browser stylesheet and JavaScript sources belong under its `stylesheets/` and `javascript/` directories respectively; their browser URLs remain `/stylesheets/**` and `/javascript/**`.
+For `/blog/reviews/music`, Hyperview merges `pages/page.json`, `pages/blog/page.json`, `pages/blog/reviews/page.json`, and `pages/blog/reviews/music/page.json`, more specific last. Ancestors are optional; a missing leaf is a 404. Response props merge last and override all page data.
 
-An email directory contains `email.json` and the files it names. The HTML and text representations are independent; either may be omitted. `partials` lists template ids and filenames in the same email directory. `contextData` supplies static render data:
+`page.json` build directives are removed from the template context:
+
+- `template`: the page template filename (`page.html`).
+- `partials`: `[ { id, filename } ]` page-local partials.
+- `includes`: `{ name: { filename } }` text files, exposed verbatim under `includes.<name>`. They are never compiled, whatever their extension; use `template` or `partials` for template syntax.
+
+Response props named `template` or `partials` survive, since props merge after directives are removed.
+
+Defaults Hyperview fills when absent:
+
+| Key | Default |
+|---|---|
+| `pathname` | Canonical content pathname |
+| `url_pathname` | Raw request pathname |
+| `page.canonical_url` | Protocol, host, and raw pathname (no query or hash; case, slashes, and `.json` pass through) |
+| `page.href` | Full request URL |
+| `page.open_graph` | `url` from `canonical_url`, `type: 'website'`, `title`/`description`/`locale` from `page` |
+
+`page.title` and `page.description` may be `{ "template": "{{ page.author }} — kixx.dev" }`; Hyperview renders it against the assembled context before the page template runs.
+
+**JSON page context.** With `allowJsonResponse`, a pathname ending in `.json` (case-insensitive) returns the assembled context as JSON; `/blog/index.json` serves `/blog`. It is for development and debugging, not an API contract. It includes merged runtime props, so keep it disabled on routes serving authenticated pages.
+
+### Emails
+
+An email directory holds `email.json` and the files it names. HTML and text templates are each optional; `partials` name files in the same directory; `contextData` is static render data.
 
 ```json
 {
-    "contextData": {
-        "subject": "Welcome",
-        "product": "Kixx"
-    },
-    "htmlTemplate": {
-        "id": "welcome.html",
-        "filename": "message.html"
-    },
-    "textTemplate": {
-        "id": "welcome.txt",
-        "filename": "message.txt"
-    },
-    "partials": [
-        {
-            "id": "signature.html",
-            "filename": "signature.html"
-        }
-    ]
+    "contextData": { "subject": "Welcome" },
+    "htmlTemplate": { "id": "welcome.html", "filename": "message.html" },
+    "textTemplate": { "id": "welcome.txt", "filename": "message.txt" },
+    "partials": [ { "id": "signature.html", "filename": "signature.html" } ]
 }
 ```
 
-### Page Context Data
+### Admin Sidebar
 
-When Hyperview renders a page, it loads page metadata for the requested pathname's ancestor directories, and leaf page metadata for the requested pathname. For a request to `/blog/reviews/music/led-zeppelin`, Hyperview attempts to load and merge:
+`templates/base/admin.html` renders `admin-nav.html` as the first child of `.admin-layout.with-sidebar`, so an admin page template must render exactly one element after it (normally `<main class="admin-main">`). The login page uses `admin-login.html`, without a sidebar.
 
-- `pages/page.json`
-- `pages/blog/page.json`
-- `pages/blog/reviews/page.json`
-- `pages/blog/reviews/music/page.json`
-- `pages/blog/reviews/music/led-zeppelin/page.json`
-
-Root and ancestor files are optional, but the final leaf `page.json` must exist or the request is treated as not found. More specific page data overrides earlier page data. Runtime response props, when present, are merged last and override all static page data.
-
-Top-level build directives include:
-
-- `template`: Names the page template relative to the current page directory; use `page.html` for the primary page template.
-- `partials`: Lists page-local partial ids and template filenames relative to the current page directory.
-- `includes`: Maps context names to text files in the current page directory.
-
-Include files are loaded verbatim as strings in the template context. Their contents are not compiled, so interpolation, comments, helpers, and partial tags are not processed. Use `template` or `partials` for content that requires template syntax. A file's extension does not determine how it is processed; the directive that names it does.
-
-Build directives direct source assembly and are not exposed in the assembled template context. Runtime response props named `template` or `partials` remain available because response props are merged after the published directives are removed. The `includes` directive is replaced by the resolved content under `includes`.
-
-```json
-{
-    "template": "page.html",
-    "partials": [
-        {
-            "id": "widget-list-item.html",
-            "filename": "widget-list-item.html"
-        },
-        {
-            "id": "feed-item.xml",
-            "filename": "feed-item.xml"
-        }
-    ],
-    "includes": {
-        "intro": { "filename": "intro.md" },
-        "sidebar": { "filename": "sidebar.html" }
-    }
-}
-```
-
-Hyperview creates a `page` object and fills several metadata defaults:
-
-- `pathname` (top-level, not under `page`) defaults to the canonical content pathname used to look up the page.
-- `url_pathname` (top-level, not under `page`) defaults to the raw request URL pathname.
-- `page.canonical_url` defaults to the request protocol, host, and raw pathname, without query string or hash. It is not lower-cased and does not use the canonical content pathname, so case, duplicate slashes, and a `.json` suffix pass through unchanged.
-- `page.href` defaults to the full request URL exactly as requested.
-- `page.open_graph.url` defaults to `page.canonical_url`.
-- `page.open_graph.type` defaults to `website`.
-- `page.open_graph.title`, `description`, and `locale` default to the corresponding `page` values.
-
-`page.title` and `page.description` each accept either a plain string or a template object. When the template object form is used, Hyperview renders the `template` string against the assembled page data and replaces the object with the resulting string before the page template runs:
-
-```json
-{
-    "page": {
-        "title": { "template": "{{ page.author }} — kixx.dev" },
-        "description": "A static description string."
-    }
-}
-```
-
-### Admin Sidebar Navigation
-
-`templates/base/admin.html` renders the `admin-nav.html` partial as the first child of `.admin-layout.with-sidebar`, so every admin page gets the sidebar and the page template must render exactly one element (normally `<main class="admin-main">`) after it. The login page uses `admin-login.html` and has no sidebar.
-
-The sidebar highlights the current section from `subpage.section`, declared once in the section's `page.json`:
-
-```json
-{
-    "template": "page.html",
-    "subpage": {
-        "title": "Files",
-        "section": "files"
-    }
-}
-```
-
-Nested pages inherit the key through ancestor `page.json` merging, so `/admin/files/new` highlights Files without declaring anything. Do not put `subpage.section` in `pages/admin/page.json`; it is the ancestor of every admin page. When adding an admin section, declare its key in the section's `page.json` and add a matching link to `templates/partials/admin-nav.html`. Pages with `section` set to `style-guide` get the style guide section list instead of the admin sections.
-
-### Hyperview Page-Data JSON Response
-
-Hyperview can return the assembled page metadata as JSON when JSON responses are enabled for the route. A request is considered a JSON request only when the pathname ends in `.json` (matched case-insensitively). A trailing `/index.json` resolves to the directory page, so `/blog/index.json` serves `/blog`.
-
-This response exposes the same page data object that would otherwise be rendered through the page and base templates. It is useful for inspecting assembled page data for development and debugging, but it is not the contract for application API endpoints. It includes merged runtime props, so leave it disabled on routes that serve authenticated pages.
+The sidebar highlights the section named by `subpage.section` in the section's `page.json`; nested pages inherit it. Never set it in `pages/admin/page.json`, which is the ancestor of every admin page. A new section needs its key in its `page.json` and a link in `templates/partials/admin-nav.html`. `section: "style-guide"` shows the style guide list instead.
