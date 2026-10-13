@@ -1,27 +1,17 @@
 # Data Migrations
 
-Data migrations are statically registered application modules advanced remotely through the authenticated Admin API. Each request executes exactly one bounded batch. The durable `Migration` ledger records only successfully committed real-run progress; dry-run progress belongs to the caller. Endpoints and the run lifecycle (resume, `force`, conflicts) are in `docs/admin-api.md`.
+Migrations are statically registered modules that an operator advances through the Admin API, one bounded batch per request. The `Migration` ledger records committed real-run progress; dry-run progress belongs to the caller. Endpoints and the run lifecycle (resume, `force`, conflicts) are in `docs/admin-api.md`.
 
-## Migration ids and registration
+## Registration
 
-Choose a permanent, globally unique id in this form:
+Ids are permanent and unique: `YYYY-MM-DD-short-kebab-description` (e.g. `2026-07-17-backfill-user-roles`). Never rename or reuse an id after deployment, even after retiring its entry.
 
-```text
-YYYY-MM-DD-short-kebab-description
-```
+1. Add `<id>.js` in this directory exporting `async migrate(context, params)`. `2026-07-17-example-noop.js` is a minimal template.
+2. Import it statically in `mod.js` and add a `Map` entry: `[ id, { id, description, migrate } ]`. The key must equal `id`; `description` is operator-facing.
 
-For example, `2026-07-17-backfill-user-roles`. Never rename or reuse an id after deployment, even if its registry entry is later retired.
+No runtime file discovery or I/O while building the registry. Registry order is the order the status API lists. Keep deployed entries so their ledger history stays visible.
 
-To register a migration:
-
-1. Add a module named after its id in this directory. `2026-07-17-example-noop.js` is a minimal template.
-2. Export its asynchronous `migrate(context, params)` function.
-3. Explicitly import that function in `mod.js`.
-4. Add a `Map` entry whose key exactly equals its `entry.id`, with a non-empty operator-facing `description` and the imported `migrate` function.
-
-Do not discover migration files at runtime or perform I/O while constructing the registry. Registry iteration order controls the order shown by the status API. Retain deployed entries whenever possible so historical ledger state remains visible.
-
-## Module contract
+## Module Contract
 
 ```js
 export async function migrate(context, params) {
@@ -31,57 +21,40 @@ export async function migrate(context, params) {
 
     return {
         done: false,
-        cursor: nextCursor,
-        stats: { scanned: 100, updated: 12 },
+        cursor: nextCursor,                    // null exactly when done
+        stats: { scanned: 100, updated: 12 },  // finite numbers only
     };
 }
 ```
 
-`context` is the active RequestContext. Access application data only through its registered Collections or gateways. `params.cursor` is `null` for the first batch, otherwise the cursor returned by the previous batch (from the ledger for real runs, from the caller for dry runs). `params.dryRun` forbids all mutations.
+- **Input.** `context` is the RequestContext; access data only through its Collections or gateways. `params.cursor` is `null` on the first batch, otherwise the previous batch's cursor (from the ledger for real runs, from the caller for dry runs).
+- **Output.** `done` is a boolean. `cursor` is `null` exactly when `done`, otherwise a non-empty string different from the input. `stats` holds finite numeric counters; keep names stable so real runs can sum them.
+- **Cursors are opaque.** Pass Collection cursors through unchanged; never parse, alter, combine, or synthesize them. Rebuild the identical scan/query (type, index, order, bounds) on every batch.
+- **One bounded batch per call**, with comfortable headroom under every runtime limit. The caller drives the next batch.
+- **Idempotent writes.** Check current state and skip writes already applied. Application writes and the ledger commit are not atomic, so a batch may replay after an interruption or ledger race.
+- **Dry runs** (`params.dryRun`) do the same reads, selection, skips, and counting as a real run, but no application-data writes or external mutations.
+- **Errors.** Handle expected record-level concurrency and domain failures deliberately. On a real run any throw marks the ledger `failed` (best effort), and the next run resumes from the last committed cursor. Expected errors (`error.expected === true`) reach the operator unchanged; others are wrapped in `AssertionError`. `InvalidCursorError` becomes a `409` requiring `force`.
 
-The returned plain object must contain:
+## Expand/Contract Deployment
 
-- `done`: a boolean.
-- `cursor`: `null` exactly when `done` is `true`; otherwise a non-empty string different from the input cursor.
-- `stats`: a plain object containing finite numeric counters for this batch.
-
-Treat cursors as opaque. Do not parse, alter, combine, or synthesize them. Rebuild the same scan/query operation on every cursored batch, including type, index, ordering, and bounds. Keep stat names stable so real-run batches can be accumulated.
-
-One invocation must process only one bounded batch with comfortable headroom under every supported runtime limit. The remote caller drives subsequent batches.
-
-Every record mutation must be idempotent: inspect current state and skip a write when the intended result is already present. Application writes and the ledger commit are not atomic, so a batch may be replayed after interruption or a ledger race.
-
-Handle expected record-level concurrency and domain failures deliberately. On a real run, any throw marks the ledger `failed` (best effort); the next run resumes from the last committed cursor. Expected errors (`error.expected === true`) reach the operator unchanged; anything else is wrapped in an `AssertionError`. An `InvalidCursorError` becomes a `409` that requires `force`.
-
-A dry run must perform the same reads, selection, skip logic, and counting as a real run, but it must omit every application-data write and external mutation.
-
-## Expand/contract deployment
-
-Deploy migrations as a compatibility sequence:
-
-1. Deploy application code that accepts both old and new data shapes.
-2. Register and deploy the migration with that compatible code.
-3. Dry-run or run the migration in each required environment, staging first.
-4. Confirm the ledger reports `applied` and review accumulated statistics.
+1. Deploy code that accepts both old and new data shapes.
+2. Deploy the migration with that compatible code.
+3. Dry-run or run it in each environment, staging first.
+4. Confirm the ledger reports `applied` and review the stats.
 5. Remove support for the old shape only in a later deployment.
 
-A migration must never depend on application code absent from the same deployed
-build.
+A migration must never depend on code absent from its deployed build.
 
-## Authoring checklist
+## Authoring Checklist
 
-When authoring a migration script, confirm every item on this punchlist has been addressed before claiming the migration is ready for deployment:
+Confirm every item before calling a migration ready to deploy:
 
-- [ ] The id is permanent, unique, date-prefixed, and explicitly registered.
-- [ ] The application build tolerates both old and new data shapes.
-- [ ] One invocation processes one bounded batch.
-- [ ] All data access uses registered Collections or gateways.
-- [ ] Scan/query options remain identical across cursored batches.
-- [ ] The Collection cursor is returned unchanged and is null exactly at completion.
-- [ ] Every non-terminal cursor differs from the input cursor.
-- [ ] Every record mutation has a current-state idempotency check.
-- [ ] Dry-run and real-run selection logic are identical.
-- [ ] Dry-run execution performs no writes or external mutations.
-- [ ] Stats are plain, finite numeric counters with stable meanings.
-- [ ] Expected record-level concurrency and domain errors are handled deliberately.
-- [ ] The batch size fits every target runtime limit with headroom.
+- [ ] Id is permanent, unique, date-prefixed, and registered in `mod.js`.
+- [ ] The deployed build tolerates both old and new data shapes.
+- [ ] One call processes one bounded batch that fits every runtime limit with headroom.
+- [ ] Data access goes only through Collections or gateways, with identical scan/query options on every batch.
+- [ ] The Collection cursor is returned unchanged, differs from the input, and is `null` exactly at completion.
+- [ ] Every write has a current-state idempotency check.
+- [ ] Dry runs share real-run selection logic and perform no writes or external mutations.
+- [ ] Stats are finite numeric counters with stable names.
+- [ ] Expected concurrency and domain errors are handled deliberately.
