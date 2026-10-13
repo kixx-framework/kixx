@@ -276,7 +276,7 @@ declares a required secret (the value is a placeholder and is discarded), and
 a `# @optional` comment line immediately above an entry marks that one name
 optional.
 
-When starting the devserver, or any Node.js server, `readEnvironment` checks
+When starting a Node.js server, `readEnvironment` checks
 the merged environment against this manifest: every required name must resolve
 to a non-empty string, or startup fails before any store is opened, naming
 every missing secret at once. Optional names are not checked either way.
@@ -303,9 +303,8 @@ of `lib/`. `createResolveFilepath` in `node-environment.js` builds the
 POSIX-style segments against `DATA_DIRECTORY` when set, or against `lib/`
 otherwise.
 
-This exists for [local target instances](../README.md#local-target-instances),
-where every instance's stores must live inside that instance's own directory
-rather than the shared development data. Leave it unset for every other
+The `local` environment uses it so a local instance keeps its own stores
+instead of sharing the development data. Leave it unset for every other
 deployment.
 
 ## Job queue settings

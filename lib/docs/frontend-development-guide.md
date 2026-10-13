@@ -350,6 +350,6 @@ The JavaScript conventions in `docs/code-style-guide.md` and `docs/code-document
 
 ## Verifying Frontend Work
 
-- Run the development server with `node tools/devserver.js --port 2026`. Template, page-data, and `static-assets/` changes are picked up without a restart.
+- Run the development server with `node node-server.js` (port 2026 by default). Template, page-data, and `static-assets/` changes are picked up without a restart.
 - Append `.json` to any page URL to inspect the template context object, including resolved includes: `http://localhost:2026/index.json`.
 - Run `node run-linter.js static-assets/javascript` after changing browser JavaScript. CSS and HTML are not linted.

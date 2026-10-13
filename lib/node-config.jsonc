@@ -105,8 +105,8 @@
                 },
             },
             // Every store path is instance-relative. resolveFilepath resolves
-            // these against DATA_DIRECTORY, so each local target instance keeps
-            // its own copy of every store instead of sharing the development data.
+            // these against DATA_DIRECTORY, so the local instance keeps its own
+            // copy of every store instead of sharing the development data.
             "DOCUMENT_STORE": {
                 "path": "./document_store.sqlite",
             },

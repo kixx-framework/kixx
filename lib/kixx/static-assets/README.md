@@ -58,7 +58,7 @@ dependency request.
 
 These pathname-mode dependencies resolve from the current snapshot and
 revalidate independently. Editing an asset changes its developer content
-hash on the next scan without an asset build or devserver restart.
+hash on the next scan without an asset build or server restart.
 
 ## Production publishing
 

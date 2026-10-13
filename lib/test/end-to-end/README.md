@@ -8,7 +8,7 @@ do not start a server themselves — point them at one with a target flag or
 ## Quick start
 
 ```bash
-# Against the local dev server (node tools/devserver.js --port 2026)
+# Against the local Node.js server (node node-server.js)
 node run-tests.js --e2e --development
 
 # Against a deployed target
@@ -56,26 +56,6 @@ may be used in a run — combining two is a usage error.
 The final base URL must be an absolute `http:` or `https:` URL with no
 leading or trailing whitespace, whether it came from a flag or from
 `E2E_TESTS_BASE_URL` directly.
-
-### Against a local target instance
-
-A [local target instance](../../README.md#local-target-instances)
-(`node tools/local-target.js`) is a writable local deployment, unlike
-`--development`, so it exercises the Publishing API write tests instead of
-skipping them. Copy the values out of the instance's `credentials.json` by
-hand into `--base-url`, `--username`, and `--password` — this is not
-automated:
-
-```bash
-node tools/local-target.js create alpha
-node tools/local-target.js seed alpha
-node tools/local-target.js serve alpha &
-
-node run-tests.js --e2e \
-  --base-url http://localhost:<port>/ \
-  --username root@alpha.local \
-  --password '<password from credentials.json>'
-```
 
 ## Running a subset
 
@@ -158,10 +138,9 @@ and delete that the uploaded bytes are unchanged. Cleanup deletes the API
 records first and then the uploaded files, because deleting an uploaded file in
 the admin panel removes the bytes the API records point at.
 
-Run it against a writable target such as a local target instance; it has
-not been verified under `--development`. Each run leaves behind its revoked
-tokens and the Admin and Developer accounts it invites to check who may
-manage tokens.
+Run it against a writable target; it has not been verified under
+`--development`. Each run leaves behind its revoked tokens and the Admin
+and Developer accounts it invites to check who may manage tokens.
 
 ### Publishing API: `--development` disables writes
 
