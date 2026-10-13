@@ -204,7 +204,7 @@ Paths are below `environments.<envName>` unless marked root.
 | `WORKER_VERSION.placement` | optional | Rendered whole. |
 | `DURABLE_OBJECT_MIGRATIONS` | optional | Rendered whole; shape owned by the deployment CLI. |
 | `LOGGER.level` | yes | |
-| `SEND_EMAIL.from` | yes | `bindingName` `"EMAIL"` is framework-owned. |
+| `SEND_EMAIL.from` | yes | `bindingName` `"SEND_EMAIL"` is framework-owned. |
 | `HYPERVIEW.*`, `SECRET_ENCRYPTION.*`, `RATE_LIMIT.*` | yes | Same as Node.js. |
 | `DOCUMENT_STORE.databaseName` | yes | `type` `"d1"` and `bindingName` `"DOCUMENT_STORE"` are framework-owned. |
 | `DOCUMENT_STORE.databaseId` | optional | When absent, renders a hint that the deployment CLI supplies the ID (see [Worker and resource configuration](#worker-and-resource-configuration)). |
@@ -406,9 +406,9 @@ buckets are neither verified nor created and must exist before deployment.
 Cloudflare email sending reads `SEND_EMAIL.from` from the selected environment
 in `cloudflare-config.jsonc`. The configured value is a placeholder; replace it
 with a verified sender address before enabling a workflow that sends email.
-The Worker also needs a `send_email` binding named `SEND_EMAIL` (the adapter's
-default binding name), plus an onboarded sender domain and verified sender
-address.
+The Worker also needs a `send_email` binding named by `SEND_EMAIL.bindingName`
+(the adapter defaults to `SEND_EMAIL` when it is unset), plus an onboarded
+sender domain and verified sender address.
 
 ### Worker packaging
 

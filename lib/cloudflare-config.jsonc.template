@@ -76,7 +76,7 @@ cloudflare-config.template-context.example.json.
                 "level": {{ json env.LOGGER.level }},
             },
             "SEND_EMAIL": {
-                "bindingName": "EMAIL",
+                "bindingName": "SEND_EMAIL",
                 // Must be an address on an onboarded, verified sender domain.
                 "from": {{ json env.SEND_EMAIL.from }},
             },
