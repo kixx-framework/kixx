@@ -114,7 +114,7 @@ edits are easier to review.
 1. Add an entry to today's journal in `agents/journal/`, as `CLAUDE.md`
    requires.
 2. Commit your changes as you work, including any journal entries.
-4. Report to the user, briefly:
+3. Report to the user, briefly:
    - Fixes, grouped by file, each with the code evidence behind it.
    - Cuts and other significant rewrites.
    - Framework doc edits (`src/kixx/`) listed separately, since they can
