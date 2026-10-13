@@ -23,11 +23,11 @@ Implementation Approach
 - **Out of scope:** deployment tooling. Do not modify `lib/`. If a lib change seems necessary, stop and record it as a blocker.
 - **ESM:** node >= 24. `tools/package.json` sets `"type": "module"`, because the repo root has no package.json and `tools/*.js` would otherwise load as CommonJS.
 - **Paths:** resolve every path from the script's location (`path.dirname(fileURLToPath(import.meta.url))`, so the repo root is its parent), never from `process.cwd()`. Manual validation depends on this: it runs a copy of the tool in `tmp/btac/`, where it must act on `tmp/btac/lib` and `tmp/btac/test-app`.
-- **CLI style:** mirror `lib/run-tests.js`. Use a `USAGE` constant, `util.parseArgs` with `strict: true` (only `-h`/`--help`, no positionals), a `CommandLineError` with `showUsage`, `write`/`writeError` wrappers, and `main().catch(...)` setting the exit code (0 on success, 1 on failure).
+- **CLI style:** the tool takes no arguments. If any argument is given, print a one-line `USAGE` to stderr and exit 1. That way a mistyped flag such as `--dry-run` can never fall through to a wipe. Use `main().catch(...)` to set the exit code (0 on success, 1 on failure). Do not copy `lib/run-tests.js`'s `util.parseArgs`, `CommandLineError`, or `--help` machinery; with no options it has nothing to parse.
 - **Code style:** follow `lib/docs/code-style-guide.md` and `lib/docs/code-documentation-guide.md`. Use blank lines between logical blocks and short comments that explain why.
 - **Reuse lib modules through relative imports from `tools/`. Do not reimplement them:**
   - `../lib/kixx/vendor/templating/mod.js`
-  - `../lib/kixx/config/secrets-manifest.js` (`parseSecretsManifest`, and optionally `compareSecretNames`)
+  - `../lib/kixx/config/secrets-manifest.js` (`parseSecretsManifest`)
   - `../lib/kixx/config/parse-jsonc.js` (`parseJsonc`)
 - **Templating:** never mutate `templating.helpers`. Build a per-run `new Map(templating.helpers)` and add the `json` helper there.
 - **Built-ins only:** `node:fs/promises` (`cp` with `filter`, `rm`, `readdir`, `readFile`, `writeFile`), `node:util`, `node:path`, `node:url`. No new dependencies.
@@ -43,7 +43,7 @@ Implementation Approach
 
 **Objective**
 
-`node tools/build-test-app.js` rebuilds test-app/ from lib/ exactly as described in Decisions 1 to 7. It either writes nothing and exits 1 with a complete problem list, or performs a full wipe, copy, and write and exits 0 with a short summary. This task owns all of the tool's behavior, so it can be verified on its own in a sandbox.
+`node tools/build-test-app.js` rebuilds test-app/ from lib/ exactly as described in Decisions 1 to 7. It either writes nothing and exits 1 with a complete problem list, or performs a full wipe, copy, and write and exits 0 with a one-line success message. This task owns all of the tool's behavior, so it can be verified on its own in a sandbox.
 
 **Scope**
 
@@ -62,18 +62,17 @@ Implementation Approach
   If phase 1 finds any problem, print them all and exit 1. Skip rendering in that case, because rendering needs valid contexts. If phase 2 fails, report the failures for both templates and exit 1.
 - **Validation problems** are plain strings grouped by file. A suggested stderr format is a header line followed by one indented line per problem, e.g. `test-app/.env.production: missing key TRUST_PROXY`. Paths in messages are relative to the repo root.
 - **Env files** (`test-app/.env.development`, `test-app/.env.production`):
-  - Required keys are `Object.keys(util.parseEnv(<lib/example.env text>))`. `util.parseEnv` skips comment lines, so commented `# KEY=` lines are optional automatically. Today this gives `ENVIRONMENT` and `TRUST_PROXY`.
-  - If optional keys must be listed separately (e.g. for a message), detect them with `/^#\s*[A-Za-z_][A-Za-z0-9_]*=/` so header prose like `# .env.<environment>` is ignored. This is not required for validation.
+  - Required keys are `Object.keys(util.parseEnv(<lib/example.env text>))`. `util.parseEnv` skips comment lines, so commented `# KEY=` lines are optional automatically. Today this gives `ENVIRONMENT` and `TRUST_PROXY`. Do not add a separate regex for optional keys; nothing uses them.
   - Parse each test-app file with `util.parseEnv`, the same parser the runtime uses in `lib/node-environment.js` `readOptionalDotEnvFile`. A missing file is one problem; do not also list its keys as missing.
 - **Secrets files** (`test-app/.env.development.secrets`, `test-app/.env.production.secrets`):
   - Required names come from `parseSecretsManifest(<lib/example.env.secrets text>).required`.
-  - Parse each test-app file with `util.parseEnv` and report each missing required name. `compareSecretNames({ manifest, liveNames })` returns `missing`, which may be used. Ignore `extra`.
-  - If `parseSecretsManifest` throws, report its message as a problem against `lib/example.env.secrets`.
+  - Parse each test-app file with `util.parseEnv` and report each required name not in `Object.keys(...)`. Do not use `compareSecretNames`; its `extra` result is ignored here, so a one-line filter is simpler.
+  - Do not catch errors from `parseSecretsManifest`. `lib/example.env.secrets` is checked into the repo, so a parse failure is a programmer error. It reaches the unexpected-error path and exits 1 before anything is written.
   - Never print secret values.
 - **`.kixx/` files:**
   - `test-app/.kixx/config.json` must contain every leaf path of `lib/.kixx/example.config.json`, and `test-app/.kixx/secrets.json` every leaf path of `lib/.kixx/example.secrets.json`.
-  - A leaf is any value that is not a non-null, non-array plain object. An empty object also counts as a leaf. Arrays are leaves, and their contents are not inspected.
-  - A path is present when every intermediate value is a non-null, non-array object and the final key exists (`Object.hasOwn`). Its value is not checked.
+  - Collect leaf paths with one small recursive walk: descend into non-null, non-array objects; anything else is a leaf. The examples hold only nested objects with string leaves, so add no special cases for arrays or empty objects.
+  - A path is present when every intermediate value is a non-null object and the final key exists (`Object.hasOwn`). Its value is not checked.
   - Report missing paths dotted, e.g. `app.environments.production.origin`.
   - A missing file and invalid JSON are each one problem for that file.
 - **Context files** (`test-app/node-config-test-context.json`, `test-app/cloudflare-config-test-context.json`): each must exist and parse as JSON. A missing context's problem includes the hint, e.g. `missing; copy lib/node-config-test-context.json as a starting point`. Invalid JSON is a problem.
@@ -90,7 +89,7 @@ Implementation Approach
   - `cloudflare-config-test-context.json`
   - `.kixx`
 
-  Before wiping, assert that the target is exactly `<repo root>/test-app` and that it exists. Never remove test-app/ itself.
+  Never remove test-app/ itself. Do not add a target-path guard: the path is a constant derived from the script's location, and validation has already read files inside test-app/, so it exists.
 - **Copy:** use `fs.cp(libDir, testAppDir, { recursive: true, filter })`. The filter excludes a source path only when its path relative to lib/ is a single top-level segment matching the Decision 2 list. Patterns:
   - `.env.*`: name starts with `.env.`
   - `*-test-context.json`: name ends with `-test-context.json`
@@ -99,10 +98,10 @@ Implementation Approach
 
   The root itself (relative path `''`) must pass the filter. Nested files with the same names, e.g. some `test/` deep in `app/`, are copied.
 - **Write:** after the copy, write the rendered text verbatim to `test-app/node-config.jsonc` and `test-app/cloudflare-config.jsonc`.
-- **Success summary** (stdout, a few lines): the number of top-level entries copied (or files, whichever is simpler) and the two config files written. Exit 0.
+- **Success output:** one short stdout line saying test-app/ was rebuilt and the two configs written. Do not count files. Exit 0.
 - **Interruption:** phases 3 to 5 are not atomic. If the tool fails mid-copy, test-app/ is left partial, and rerunning repairs it. Note this in a code comment and do not build rollback. Preserved files are never written, so an interrupted run cannot damage config or secrets.
 - **Idempotent:** a second run over an already-built test-app/ succeeds with identical results.
-- **CLI:** `--help` prints `USAGE` to stdout and exits 0. Any unknown flag or positional argument raises `CommandLineError` (with usage) and exits 1. Unexpected errors print the stack to stderr and exit 1.
+- **CLI:** any argument prints `USAGE` to stderr and exits 1 (see Cross-cutting constraints). Unexpected errors print the stack to stderr and exit 1.
 
 **Expected touch points**
 
@@ -124,9 +123,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
   - Every Decision 2 exclusion is absent.
   - Everything else from lib/ is present with identical content.
   - Both hydrated configs parse with `parseJsonc`.
-  - Exit is 0 and a summary is printed.
+  - Exit is 0 and a success line is printed.
 - [ ] A second successful run is idempotent.
-- [ ] `--help` exits 0 with usage. An unknown flag exits 1 with usage.
+- [ ] Any argument exits 1 with usage and writes nothing.
 - [ ] No files in `lib/` are modified (`git status --short lib` is empty, apart from anything already dirty before the task started).
 
 **Validation**
@@ -135,9 +134,8 @@ No automated tests or lint (Decision 9). Run these manual checks from the repo r
 
 1. Sandbox setup. This copies the real lib/, including its `node_modules/`, `.env.development`, `node-config.jsonc`, and the rest, so the exclusions are exercised:
    - `rm -rf tmp/btac && mkdir -p tmp/btac && cp -R tools tmp/btac/tools && cp -R lib tmp/btac/lib && cp -R test-app tmp/btac/test-app`
-2. CLI checks:
-   - `node tmp/btac/tools/build-test-app.js --help; echo "exit=$?"` should print usage and `exit=0`.
-   - `node tmp/btac/tools/build-test-app.js --bogus; echo "exit=$?"` should print an error, usage, and `exit=1`.
+2. CLI check:
+   - `node tmp/btac/tools/build-test-app.js --dry-run; echo "exit=$?"` should print usage and `exit=1`.
 3. Abort when contexts and `.kixx/` are missing:
    - `find tmp/btac/test-app -type f | sort | xargs shasum > tmp/btac/before.txt`
    - `node tmp/btac/tools/build-test-app.js; echo "exit=$?"` should exit 1, list both context files with the copy hint, and list both `.kixx/*.json` files.
@@ -156,7 +154,7 @@ No automated tests or lint (Decision 9). Run these manual checks from the repo r
    - Take a snapshot and run. It should exit 1, report invalid JSON for that file, and print `UNCHANGED`.
 8. Success, with optional keys removed and extra keys added (reset first):
    - `sed -i '' '/^ADMIN_BOOTSTRAP_TOKEN=/d' tmp/btac/test-app/.env.development.secrets tmp/btac/test-app/.env.production.secrets && echo 'EXTRA_KEY=1' >> tmp/btac/test-app/.env.development && node -e "const fs=require('fs');const f='tmp/btac/test-app/.kixx/secrets.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.extra={nested:true};fs.writeFileSync(f,JSON.stringify(c))" && rm -rf tmp/btac/pre-run && cp -R tmp/btac/test-app tmp/btac/pre-run`
-   - `node tmp/btac/tools/build-test-app.js; echo "exit=$?"` should print a summary and `exit=0`.
+   - `node tmp/btac/tools/build-test-app.js; echo "exit=$?"` should print the success line and `exit=0`.
    - `ls tmp/btac/test-app/stale.txt tmp/btac/test-app/routes/deleted-in-lib.js` should fail for both (stale files removed).
    - `for f in .env.development .env.development.secrets .env.production .env.production.secrets README.md node-config-test-context.json cloudflare-config-test-context.json .kixx/config.json .kixx/secrets.json; do cmp tmp/btac/pre-run/$f tmp/btac/test-app/$f || echo "CHANGED $f"; done` should print nothing (preserved files untouched).
    - `ls -A tmp/btac/test-app` should show exactly these entries (as of plan writing; if lib/'s top level has changed, derive the expected list from Decision 2):
@@ -190,12 +188,12 @@ No automated tests or lint (Decision 9). Run these manual checks from the repo r
 ### Task T2: test-app/.gitignore and README build instructions
 
 **Status:** Not started
-**Depends on:** T1
+**Depends on:** None
 **Documentation:** `test-app/README.md`
 
 **Objective**
 
-Git tracks only test-app's hand-authored, non-secret config (Decision 8), and test-app's README briefly explains how to run the build tool. This depends on T1 so the README describes the tool as built, and so the gitignore can be checked against a fully built test-app/.
+Git tracks only test-app's hand-authored, non-secret config (Decision 8), and test-app's README briefly explains how to run the build tool. This task does not need T1: `git check-ignore` evaluates paths that do not exist yet, and the README describes the behavior T1's design already fixes. Landing it first also protects the untracked secrets in test-app/ from an accidental `git add`.
 
 **Scope**
 
@@ -248,7 +246,7 @@ All read-only git queries from the repo root:
 - `git check-ignore -v test-app/.env.development.secrets test-app/.env.production.secrets test-app/.kixx/secrets.json test-app/node-server.js test-app/node-config.jsonc test-app/app/` should report a matching `test-app/.gitignore` rule for every path. `check-ignore` evaluates patterns even when a path does not exist.
 - `git check-ignore test-app/.env.development test-app/.env.production test-app/README.md test-app/.gitignore test-app/node-config-test-context.json test-app/cloudflare-config-test-context.json test-app/.kixx/config.json; echo "exit=$?"` should print no paths and `exit=1` (none ignored).
 - `git diff --quiet .gitignore && echo ROOT_UNCHANGED` should print `ROOT_UNCHANGED`.
-- Read `test-app/README.md` and confirm the command, prerequisites, and abort behavior match T1's handoff notes.
+- Read `test-app/README.md` and confirm the command, prerequisites, and abort behavior match T1's **Design and invariants** (and T1's handoff notes, if T1 is done).
 
 **Progress and handoff**
 
