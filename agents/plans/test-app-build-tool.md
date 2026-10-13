@@ -37,7 +37,7 @@ Implementation Approach
 
 ### Task T1: Build tool with validation, in-memory render, wipe, and copy
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `agents/plans/config-templates.md` (template, `json` helper, and context-shape contract; its `lib/kixx/templating/` path is stale, and the module now lives at `lib/kixx/vendor/templating/`); `lib/docs/code-style-guide.md`; `lib/docs/code-documentation-guide.md`
 
@@ -112,21 +112,21 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `tools/package.json` exists with `"type": "module"`. `tools/build-test-app.js` runs with `node tools/build-test-app.js` from any cwd.
-- [ ] With missing context files and `.kixx/` files, the tool exits 1 and lists every missing file. The context messages include the copy hint. test-app/ is byte-for-byte unchanged.
-- [ ] With several simultaneous problems (a missing env key, a missing required secret, a missing `.kixx` leaf, a missing env file), all are reported in one run, exit 1, and nothing changes.
-- [ ] Missing optional keys (`ADMIN_BOOTSTRAP_TOKEN`, commented env keys) and extra keys in any file do not cause failure.
-- [ ] A context that makes a template render fail (missing required value) or is invalid JSON gives exit 1, and nothing changes.
-- [ ] On success:
+- [x] `tools/package.json` exists with `"type": "module"`. `tools/build-test-app.js` runs with `node tools/build-test-app.js` from any cwd.
+- [x] With missing context files and `.kixx/` files, the tool exits 1 and lists every missing file. The context messages include the copy hint. test-app/ is byte-for-byte unchanged.
+- [x] With several simultaneous problems (a missing env key, a missing required secret, a missing `.kixx` leaf, a missing env file), all are reported in one run, exit 1, and nothing changes.
+- [x] Missing optional keys (`ADMIN_BOOTSTRAP_TOKEN`, commented env keys) and extra keys in any file do not cause failure.
+- [x] A context that makes a template render fail (missing required value) or is invalid JSON gives exit 1, and nothing changes.
+- [x] On success:
   - Stale files are gone.
   - Every preserved file is byte-identical to before the run.
   - Every Decision 2 exclusion is absent.
   - Everything else from lib/ is present with identical content.
   - Both hydrated configs parse with `parseJsonc`.
   - Exit is 0 and a success line is printed.
-- [ ] A second successful run is idempotent.
-- [ ] Any argument exits 1 with usage and writes nothing.
-- [ ] No files in `lib/` are modified (`git status --short lib` is empty, apart from anything already dirty before the task started).
+- [x] A second successful run is idempotent.
+- [x] Any argument exits 1 with usage and writes nothing.
+- [x] No files in `lib/` are modified (`git status --short lib` is empty, apart from anything already dirty before the task started).
 
 **Validation**
 
@@ -175,12 +175,28 @@ No automated tests or lint (Decision 9). Run these manual checks from the repo r
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `tools/build-test-app.js` implements all five phases per Design and invariants.
+- Current state: Complete.
+- Remaining: None. Operator runbook below.
+- Decisions and discoveries:
+  - Invalid-JSON problems print only `invalid JSON`, without the parser message: V8's `JSON.parse` errors quote a snippet of the input, which would leak `.kixx/secrets.json` values.
+  - Problem output: header `Cannot build test-app/; nothing was written:` then one indented line per problem. Missing secrets read `missing secret NAME`; missing env keys `missing key NAME`; missing `.kixx` leaves `missing a.b.c`.
+  - Render errors join the full cause chain (short in practice), e.g. `cloudflare-config.jsonc.template: Error in helper "each" ... Error in helper "json" ... The json helper requires a defined value`.
+  - Check 8 listing also shows `.gitignore`: test-app's own from T2, preserved by the wipe (cmp-verified). lib's `.gitignore` is not copied.
+- Actual files changed: `tools/package.json` (new), `tools/build-test-app.js` (new).
+- Validation run (sandbox `tmp/btac/`):
+  1. Setup: ok.
+  2. `--dry-run`: usage line, `exit=1`.
+  3. Missing contexts/.kixx: 4 problems listed (both `.kixx/*.json`, both contexts with copy hint), `exit=1`, `UNCHANGED`.
+  4. Fixture built.
+  5. All four problems reported in one run (`TRUST_PROXY`, missing `.env.production`, `CSRF_TOKEN_SIGNING_SECRET`, `app.environments.production.origin`), no secret values, `exit=1`, `UNCHANGED`.
+  6. Render failure names `cloudflare-config.jsonc.template`, `exit=1`, `UNCHANGED`.
+  7. `test-app/node-config-test-context.json: invalid JSON`, `exit=1`, `UNCHANGED`.
+  8. Success line, `exit=0`; stale files gone; no preserved file changed; listing matches expected (plus T2 `.gitignore`); `.kixx/` holds only `config.json`, `secrets.json`; no `diff -r`/`cmp` differences for every copied entry; `node ok`, `cloudflare ok`.
+  9. Run from `lib/` cwd: `exit=0`, same results; full-tree shasum identical to run 1 (idempotent).
+  10. Real repo: abort path, `exit=1`, both contexts and both `.kixx` files listed, `UNCHANGED`. The real test-app/ was not rebuilt.
+  11. `git status --short lib`: empty.
+  - No lint/tests per Decision 9.
 - Blockers: None.
 
 ---
