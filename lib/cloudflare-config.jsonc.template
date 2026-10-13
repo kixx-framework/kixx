@@ -2,7 +2,7 @@
 Renders cloudflare-config.jsonc from a context object. Callers must register
 a `json` helper that returns JSON.stringify(value) and throws on undefined.
 Context shape: "Config templates" in docs/configuration.md. Example context:
-cloudflare-config.template-context.example.json.
+cloudflare-config-test-context.json.
 --}}
 {
     "name": {{ json name }},

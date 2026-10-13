@@ -2,7 +2,7 @@
 Renders node-config.jsonc from a context object. Callers must register a
 `json` helper that returns JSON.stringify(value) and throws on undefined.
 Context shape: "Config templates" in docs/configuration.md. Example context:
-node-config.template-context.example.json.
+node-config-test-context.json.
 --}}
 {
     "name": {{ json name }},

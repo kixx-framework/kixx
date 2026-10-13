@@ -108,9 +108,9 @@ new apps from Kixx templates in `lib/`:
 | File | Purpose |
 | --- | --- |
 | `node-config.jsonc.template` | Renders `node-config.jsonc`. |
-| `node-config.template-context.example.json` | Context that reproduces today's `node-config.jsonc`. |
+| `node-config-test-context.json` | Context that reproduces today's `node-config.jsonc`. |
 | `cloudflare-config.jsonc.template` | Renders `cloudflare-config.jsonc`. |
-| `cloudflare-config.template-context.example.json` | Context that reproduces today's `cloudflare-config.jsonc`. |
+| `cloudflare-config-test-context.json` | Context that reproduces today's `cloudflare-config.jsonc`. |
 
 `test/unit-tests/config-templates.test.js` renders each template with its
 example context and asserts the parsed output equals the live `.jsonc` file.
