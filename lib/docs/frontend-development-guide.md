@@ -1,7 +1,5 @@
 # Frontend Development Guide
 
-This guide covers frontend development conventions for this project: where frontend source lives, the live style guide, the public/admin boundary, stylesheet organization, class naming, theming, CSS formatting and comments, the page-local stylesheet pattern, and browser JavaScript.
-
 Related documents:
 
 - `kixx/static-assets/README.md` — Static asset serving, fingerprinting, and the content-addressable store.
@@ -40,8 +38,6 @@ The three directories differ in how the publishing tool (outside the scope of th
 | `public/` | `/**` (site root) | No | Published verbatim |
 | `pages/**/page.css` | None — inlined into the HTML | N/A | Included verbatim in page content |
 
-See `kixx/static-assets/README.md` for more information about how fingerprinting and the content-addressable store work.
-
 Templates link entrypoints through `assetUrl`, which rewrites the logical pathname to a content-addressed URL when a Release is published and falls back to the bare pathname in development:
 
 ```html
@@ -49,9 +45,7 @@ Templates link entrypoints through `assetUrl`, which rewrites the logical pathna
 <script type="module" src="{{ assetUrl assets "/javascript/site.js" }}"></script>
 ```
 
-There is no CSS or browser-JavaScript bundling in development. Production publishing recursively inlines local, unconditioned CSS imports, so splitting a stylesheet does not add a production request. Browser JavaScript is not bundled in either environment; each imported module remains a request.
-
-See `kixx/static-assets/README.md` for more information about how assets are served in development and how `assetUrl` works with the content-addressable store.
+There is no bundling in development. Production publishing recursively inlines local, unconditioned CSS imports, so splitting a stylesheet adds a request only in development. Browser JavaScript is never bundled; each imported module is a request.
 
 ## Public Pages Are the Default
 
@@ -79,21 +73,19 @@ Before writing or reviewing any frontend markup or CSS, check the live style gui
 - Layout: `layout/`.
 - Components: `buttons/`, `cards/`, `forms/`, `text-fields/`, `copy-fields/`, `multi-line-text-areas/`, `callouts/`.
 
-Treat the style guide as the source of truth for the project's current design: color use, type roles, spacing rhythm, component anatomy, and state treatment. It documents choices you can revise when establishing a new aesthetic. Its shell and navigation examples are admin examples; copy those only for admin pages. Public pages should borrow the shared tokens, typography roles, layout primitives, and reusable components without inheriting admin-panel chrome by default.
-
-The style guide ships as a working starter reference. Evolve it into your project's guide as the design changes — a component added to `components.css` without a style-guide example is a component the next agent will not find.
+- **It is the source of truth for the current design** — color use, type roles, spacing rhythm, component anatomy, state treatment — and its choices are revisable when establishing a new aesthetic.
+- **Its shell and navigation examples are admin-only.** Public pages borrow the shared tokens, type roles, layout primitives, and components, not admin chrome.
+- **Keep it current.** A component added to `components.css` without a style-guide example is a component the next agent will not find.
 
 ## Never Use Inline Styles
 
-Do not use inline `style="..."` attributes in HTML templates. Inline styles bypass the design system, cannot be reused, and scatter presentation decisions across templates instead of keeping them in stylesheets. There are currently zero of them in `pages/` and `templates/`; keep it that way.
+Do not use inline `style="..."` attributes in HTML templates, including for custom-property overrides; they bypass the design system. There are currently zero in `pages/` and `templates/`; keep it that way.
 
 When you need styling, resolve it in this order:
 
 1. **Reuse an existing component, utility, or layout primitive.** Most page structure is a composition of the primitives described below.
 2. **Extend an existing shared stylesheet.** If nothing fits and the rule is reusable, add a well-named class to the appropriate file in `static-assets/stylesheets/lib/`.
-3. **Use a page-local `page_stylesheet` include for genuinely localized styles.** When a style truly belongs to one page and is not reusable, supply it through the `page_stylesheet` include instead of an inline `style` attribute. See `app/presentation/README.md` for how page includes work.
-
-This rule also applies to CSS custom properties. Do not tune a component with an inline `style` attribute. Put the custom-property override in a modifier class, a reusable class, or the page's local stylesheet.
+3. **Use the page's `page_stylesheet` include** for styles that truly belong to one page (see [Page-Local Styles](#page-local-styles-via-page_stylesheet)).
 
 ## Stylesheet Organization
 
@@ -112,7 +104,7 @@ Templates link public logical URLs such as `/stylesheets/stylesheet.css`; source
 
 Publishing fails on a local `@import` that does not name an existing lowercase `.css` pathname inside `static-assets/`, has a query string or fragment, or forms a cycle. An `@import` with a media, `supports()`, or `layer` condition, or an external URL, is not inlined: it remains a production request and must precede all bundled content, including rules inlined by an earlier import.
 
-Before adding a new file to `lib/`, prefer extending one of the existing files. The project favors a handful of well-documented stylesheets over many small files, so related rules stay close to the examples and comments that explain them. A new import is another request during development; local, unconditioned imports are inlined into their production entrypoint.
+Before adding a new file to `lib/`, prefer extending an existing one. A handful of well-documented stylesheets keeps related rules close to the comments that explain them.
 
 Do not add admin-only rules to a shared file. If a rule exists only to serve the admin panel, it belongs in one of the admin-specific library files.
 
@@ -147,7 +139,7 @@ There is no CSS linter or formatter in this project; `node run-linter.js` checks
 
 The stylesheets are also developer documentation. Verbose comments are acceptable in `static-assets/stylesheets/` because the bundling tool (outside the scope of this project) strips `.css` and `.js` comments when it scans static assets into a Release — production readers never download them.
 
-**That stripping does not apply to page-local CSS.** A `page_stylesheet` include is page content, not a static asset: it is inlined verbatim into a `<style>` element on every HTML response for that page, comments and all. Keep comments in `pages/**/page.css` purposeful and short.
+**That stripping does not apply to page-local CSS** (`pages/**/page.css`), which is page content, not a static asset. Keep its comments short.
 
 Use a section block for every major file section or public component:
 
@@ -327,7 +319,7 @@ To supply page-local CSS, add a `page_stylesheet` entry to the page's `includes`
 
 `pages/admin/style-guide/colors/` is a working example of this pattern, keeping one-page swatch layout rules out of the shared stylesheets.
 
-Remember that this CSS is inlined into every HTML response for the page and is not comment-stripped or fingerprinted. Keep it small. Reach for `page_stylesheet` only when the styling is specific to one page and is not worth generalizing into `static-assets/stylesheets/lib/`.
+This CSS is inlined into every HTML response for the page, comments and all, and is not fingerprinted. Keep it small.
 
 ## Browser JavaScript
 

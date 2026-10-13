@@ -8,28 +8,11 @@ and therefore use a different security model.
 
 ## The threat
 
-Cross-site request forgery (CSRF) exploits the browser's automatic handling of
-ambient credentials, especially cookies. An attacker first gets a signed-in user
-to visit an attacker-controlled page, email, or embedded resource. That content
-then causes the user's browser to send a request to the target site. A plain HTML
-form can submit across origins, and the browser may attach the target site's
-cookies even though the request was initiated elsewhere.
-
-The attacker usually cannot read the response because of the same-origin policy.
-Reading it is unnecessary if merely sending the request changes state. Depending
-on the available endpoints, a forged request could create or revoke an invite,
-mint or revoke an API token, or establish an authentication session chosen by
-the attacker. The latter is called login CSRF: subsequent actions may then be
-associated with the attacker's account rather than the victim's intended
-account.
-
-A CSRF attack requires all of the following:
-
-- The browser supplies a credential without the attacking page knowing it.
-- The target accepts a state-changing request the attacker can cause the browser
-  to construct.
-- The target cannot distinguish the attacker's request from one initiated by its
-  own UI.
+A page the attacker controls makes a signed-in user's browser send a request to
+this site, and the browser attaches this site's cookies. The attacker cannot read
+the response, but does not need to if sending the request changes state: creating
+or revoking an invite, minting or revoking an API token, or logging the victim
+into an attacker-chosen account (login CSRF).
 
 CSRF protection is not a substitute for preventing cross-site scripting (XSS).
 A script executing in this site's origin can read form tokens from the DOM and
@@ -79,9 +62,9 @@ The CSRF cookie is set with these attributes:
 
 The admin session cookie also defaults to `HttpOnly; SameSite=Lax`, uses the same
 request-dependent `Secure` decision, and is host-only. `SameSite=Lax` therefore
-usually prevents both the admin session and CSRF cookie from accompanying an
-attacker's cross-site `POST`. The signed form token remains the decisive check
-rather than assuming every client implements or preserves `SameSite` correctly.
+usually keeps both cookies off an attacker's cross-site `POST`, but the signed
+form token remains the decisive check rather than trusting every client's
+`SameSite` handling.
 
 ### Form submission
 
@@ -106,80 +89,56 @@ that can recover catch that code and re-render with a fresh token
 (`renderWithFreshCsrf()`) or redirect with a notice; uncaught, it becomes a
 generic 403.
 
-This blocks a conventional attacker because they can cause a cross-site form
-submission but cannot read a valid hidden token from this site's HTML. Guessing a
-token or combining a token from one browser with another browser's cookie fails
-the signature or `sid` binding.
+An attacker can cause a cross-site submission but cannot read a valid token from
+this site's HTML. A guessed token, or one paired with another browser's cookie,
+fails the signature or `sid` binding.
 
-### Request Handlers
+### Enforcement is per handler
 
-Protection is explicit in each request handler, not automatically applied by
-router middleware. A handler that omits the CSRF render helper will fail safely
-because its corresponding validator rejects the missing token. However, a new
-mutating HTML handler must adopt the helper and validator convention
-deliberately.
+Protection is explicit in each request handler, not router middleware. A handler
+that omits the render helper fails safely, because the validator rejects the
+missing token.
 
-Non-browser API endpoints do not use the HTML CSRF mechanism because an
-ordinary cross-site HTML form cannot meet their combined method,
-authorization-header, and content-type requirements. This assumption would
-need review if an API begins accepting cookie authentication or
-simple form requests.
+- **Every new cookie-authenticated, state-changing HTML route must** render a
+  token, validate it before all domain work, and mint a fresh token when
+  re-rendering an error.
+- **Why not global:** `validateCsrfFormData()` parses the one-shot body once and
+  returns the same `FormData` used by application validation, and non-browser
+  APIs keep their own authorization model. The cost is review discipline.
+- **APIs are exempt** because an ordinary cross-site HTML form cannot meet their
+  combined method, authorization-header, and content-type requirements. Revisit
+  this if an API starts accepting cookie authentication or simple form requests.
 
 ### Token lifecycle
 
-Each form render mints a fresh token with a 30-minute lifetime and refreshes the
-cookie's 30-minute lifetime. Rendering does not replace an existing `sid`, so
-forms open in different tabs remain valid independently. Tokens are reusable
-until they expire; validation does not consume them. Reuse avoids breaking a
-back-button retry or a repeated submission, while normal form handlers remain
-responsible for the business-level idempotency of the requested operation.
+- Each form render mints a fresh 30-minute token and refreshes the cookie's
+  30-minute lifetime, but does not extend an older token's embedded expiration.
+- Rendering never replaces an existing `sid`, so forms in different tabs stay
+  valid independently.
+- Validation does not consume tokens; they are reusable until they expire. Form
+  handlers remain responsible for business-level idempotency.
+- A successful login or signup clears the CSRF cookie after setting the admin
+  session cookie. This closes the pre-authentication boundary and invalidates
+  tokens bound to the former `sid`.
+- Rotating `CSRF_TOKEN_SIGNING_SECRET` invalidates every outstanding form
+  immediately.
 
-A successful login or signup clears the CSRF cookie after setting the real admin
-session cookie. This closes the pre-authentication boundary and invalidates other
-tokens bound to that former `sid`. Rotating `CSRF_TOKEN_SIGNING_SECRET` also
-invalidates every outstanding form immediately.
+## Tradeoffs
 
-## Security and user-experience tradeoffs
-
-### Reusable, browser-wide tokens
-
-Reusing one browser-wide `sid` and accepting tokens more than once makes multiple
-tabs, reloads, and back-button retries work. A per-form identifier or one-time
-token would narrow the replay window but would require server-side state and
-would make common navigation patterns fail. The chosen design accepts replay
-within 30 minutes; the HMAC, expiration, and `sid` binding prevent replay with a
-different or absent CSRF cookie. Copying both the cookie value and token would
-defeat that binding, so their transport and exposure protections still matter.
-
-### Thirty-minute expiration
-
-The lifetime limits how long an exposed form token remains useful and bounds the
-effect of an abandoned form. It also means a user can spend time editing and have
-the submission rejected after 30 minutes. Rendering another protected form
-refreshes the cookie but does not extend an older token's embedded expiration.
-
-### Stateless verification
-
-Stateless HMAC verification avoids a persistence lookup on every render and
-submission, works on both Node.js and Cloudflare, and needs no
-cleanup job. The cost is coarse revocation: an individual token cannot be
-invalidated without changing its browser's `sid`; rotating the signing secret
-revokes every user's open form at once.
-
-### Cookie compatibility
-
-`SameSite=Lax`, `HttpOnly`, host-only scope, and HTTPS-only `Secure` cookies
-provide defense in depth without requiring client-side JavaScript. Making
-`Secure` conditional keeps login functional on `http://localhost`, but any
-non-local deployment served over HTTP loses transport protection for both CSRF
-and session cookies. Deployment must therefore terminate requests as HTTPS and
-preserve the correct request protocol.
-
-### Explicit rather than global enforcement
-
-Handler-level validation keeps body ownership clear: `validateCsrfFormData()`
-parses the one-shot body once and returns the same `FormData` used by application
-validation. It also lets non-browser APIs retain their authorization model. The
-tradeoff is review discipline. Each new cookie-authenticated state-changing HTML
-route must render a token, validate it before all domain work, and mint a fresh
-token when re-rendering an error.
+- **Reusable, browser-wide tokens.** Multiple tabs, reloads, and back-button
+  retries work. A per-form or one-time token would narrow the replay window but
+  needs server-side state and breaks those navigation patterns. Replay is
+  accepted within 30 minutes; the HMAC, expiration, and `sid` binding prevent
+  replay with a different or absent CSRF cookie. Copying both the cookie value
+  and the token defeats that binding, so their transport and exposure
+  protections still matter.
+- **Thirty-minute expiration.** Bounds how long an exposed token is useful, at
+  the cost of rejecting a submission after 30 minutes of editing.
+- **Stateless verification.** No persistence lookup per render or submission and
+  no cleanup job, on both Node.js and Cloudflare. The cost is coarse revocation:
+  an individual token cannot be invalidated without changing its browser's
+  `sid`; rotating the signing secret revokes every user's open form at once.
+- **Conditional `Secure`.** Keeps login working on `http://localhost`, but any
+  non-local deployment served over HTTP loses transport protection for both CSRF
+  and session cookies. **Deployments must terminate requests as HTTPS and
+  preserve the correct request protocol.**

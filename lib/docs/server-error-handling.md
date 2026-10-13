@@ -23,7 +23,6 @@ Use the error classes in `kixx/errors/mod.js` to represent expected errors:
 - Use `OperationalError` for an expected infrastructure, integration, or storage failure which does not need a more specific class.
 - Extend `WrappedError` when you need to define a custom error class.
 
-
 Use a custom `code` when callers or templates need to distinguish a domain-specific outcome while keeping the HTTP status generic:
 
 ```js
@@ -32,17 +31,7 @@ throw new ConflictError('This username is already registered.', {
 });
 ```
 
-Every Error class accepts `cause` in its options object. **Always pass the original error as `cause`** when wrapping or translating an error, so the context chain is preserved:
-
-```js
-import { OperationalError } from '../../kixx/errors/mod.js';
-
-try {
-    return await fetch(upstreamUrl);
-} catch (cause) {
-    throw new OperationalError(`Failed to fetch upstream URL ${ upstreamUrl }`, { cause });
-}
-```
+Every Error class accepts `cause` in its options object; see [Wrapping and Rethrowing](#wrapping-and-rethrowing).
 
 ### 2. Unexpected Errors (Programmer Errors / Bugs)
 
@@ -111,23 +100,8 @@ function registerHandler(args) {
 }
 ```
 
-The message prefix is important. It should name the function and the parameter so that when the assertion fires in production logs, a maintainer can find the call site immediately.
-
-### Prefer `assert*` Helpers Over Hand-Written Checks
-
-Do not write:
-
-```js
-if (typeof name !== 'string' || name.length === 0) {
-    throw new Error('name is required');
-}
-```
-
-Write:
-
-```js
-assertNonEmptyString(name, 'context: name');
-```
+- **Prefix the message with the function and parameter name** so a maintainer can find the call site from production logs.
+- **Prefer `assert*` helpers over hand-written checks** like `if (typeof name !== 'string') throw new Error(...)`.
 
 ## Wrapping and Rethrowing
 

@@ -1,9 +1,5 @@
 # Configuration
 
-This document covers every source of runtime configuration for this project:
-what belongs where, how the pieces are merged and validated, and how to add
-or change a setting.
-
 ## The one question that decides where a value goes
 
 > Does the value change **per deploy**, or only **per environment**?
@@ -49,9 +45,9 @@ the syntax above, not JSON5 extensions like unquoted keys or single-quoted
 strings.
 
 Top-level settings like `name` are rare. Everything else lives under
-`environments`, keyed by environment name. Each environment section holds every
-store, cache, logger, and rate-limit setting that environments deploys will
-share — for example `LOGGER.level`, `HYPERVIEW.useTemplateCache`, and
+`environments`, keyed by environment name: every store, cache, logger, and
+rate-limit setting that environment's deploys share — for example
+`LOGGER.level`, `HYPERVIEW.useTemplateCache`, and
 `DOCUMENT_STORE`.
 
 The two platform specific configuration files are independent: an environment
@@ -236,10 +232,8 @@ Per-deploy values are environment variables, split by secrecy:
 The secrecy split follows the git boundary. There is no per-key annotation to
 keep in sync, and no way for a value to be classified two ways at once.
 
-`example.env` and `example.env.secrets` are the committed templates
-for each half — `example.env` documents every plain key inline, and
-`example.env.secrets` doubles as the manifest of required secret names (see
-below). Bootstrap a fresh clone with:
+`example.env` documents every plain key inline; `example.env.secrets` is the
+[secrets manifest](#the-secrets-manifest). Bootstrap a fresh clone with:
 
 ```bash
 cp example.env.secrets .env.development.secrets
@@ -255,9 +249,8 @@ Node.js server, in this order:
 2. `.env.<environment>.secrets` (the same path with `.secrets` appended)
 3. `process.env`
 
-Each file is independently optional, so deploying with dotenv files and
-deploying by setting `process.env` both work, and they can be combined. Only
-keys the dotenv files declare participate from `process.env` — unrelated
+Each file is optional, so dotenv files, `process.env`, or both work. Only
+keys the dotenv files declare participate from `process.env`, so unrelated
 process environment entries never collide.
 
 **A key defined by more than one source aborts startup**, naming the key and
@@ -270,9 +263,8 @@ derived by appending `.secrets`, so one flag selects the pair.
 
 ### The secrets manifest
 
-`example.env.secrets` is not just a copy-from template — its committed text
-*is* the manifest of secret names a deployment must provide.
-`kixx/config/secrets-manifest.js` parses it: each `NAME=value` line
+`example.env.secrets` is the manifest of secret names a deployment must
+provide. `kixx/config/secrets-manifest.js` parses it: each `NAME=value` line
 declares a required secret (the value is a placeholder and is discarded), and
 a `# @optional` comment line immediately above an entry marks that one name
 optional.
@@ -282,8 +274,7 @@ the merged environment against this manifest: every required name must resolve
 to a non-empty string, or startup fails before any store is opened, naming
 every missing secret at once. Optional names are not checked either way.
 
-Keeping code and manifest in sync is a two-step, ordered process in both
-directions:
+Keep code and manifest in sync in this order:
 
 - **Adding a secret:** add the name to `example.env.secrets`, then deploy the
   code that reads it.
@@ -443,6 +434,7 @@ generated module is not committed and must never be edited by hand; change
    value. Do not author `ENVIRONMENT` or `BUILD_ID` for Cloudflare; the
    deployment CLI owns them.
 4. Per-deploy, secret: add the key to `example.env.secrets` (mark it
-   `# @optional` if a Node.js deployment may legitimately omit it). On
-   Cloudflare, `set-secret` the value before building. Then deploy the code
-   that reads it before removing any old fallback.
+   `# @optional` if a Node.js deployment may legitimately omit it), then follow
+   the ordered steps in [the secrets manifest](#the-secrets-manifest) and, for
+   Cloudflare, [Worker secrets](#worker-secrets). Deploy the code that reads it
+   before removing any old fallback.
