@@ -10,6 +10,9 @@
 !/cloudflare-config-test-context.json
 !/.kixx/
 
+# Don't track configs
+/.kixx/config.json
+
 # Never track secrets. Listed last so no negation above re-includes them.
 /.kixx/secrets.json
 .env.*.secrets
