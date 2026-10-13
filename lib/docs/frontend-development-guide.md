@@ -11,7 +11,7 @@ Related documents:
 ## Where Frontend Source Lives
 
 ```text
-src/
+lib/
 ├── pages/                        # Route-specific page data, templates, partials, and includes
 ├── templates/
 │   ├── base/                     # Full HTML documents: default.html, admin.html, admin-login.html
@@ -90,17 +90,17 @@ Do not use inline `style="..."` attributes in HTML templates. Inline styles bypa
 When you need styling, resolve it in this order:
 
 1. **Reuse an existing component, utility, or layout primitive.** Most page structure is a composition of the primitives described below.
-2. **Extend an existing shared stylesheet.** If nothing fits and the rule is reusable, add a well-named class to the appropriate file in `src/static-assets/stylesheets/lib/`.
+2. **Extend an existing shared stylesheet.** If nothing fits and the rule is reusable, add a well-named class to the appropriate file in `static-assets/stylesheets/lib/`.
 3. **Use a page-local `page_stylesheet` include for genuinely localized styles.** When a style truly belongs to one page and is not reusable, supply it through the `page_stylesheet` include instead of an inline `style` attribute. See `app/presentation/README.md` for how page includes work.
 
 This rule also applies to CSS custom properties. Do not tune a component with an inline `style` attribute. Put the custom-property override in a modifier class, a reusable class, or the page's local stylesheet.
 
 ## Stylesheet Organization
 
-CSS source lives under `src/static-assets/stylesheets/`. There are two bundles, each with its own entrypoint:
+CSS source lives under `static-assets/stylesheets/`. There are two bundles, each with its own entrypoint:
 
 ```text
-src/static-assets/stylesheets/
+static-assets/stylesheets/
 ├── stylesheet.css          # Public entrypoint — imports the shared foundation
 ├── admin.css               # Admin entrypoint — imports stylesheet.css, then admin-only files
 └── lib/                    # Shared and admin-only library files.
@@ -263,7 +263,7 @@ System fonts, the current scale, and zero tracking are starter choices. A projec
 
 Type sizing uses two separate ladders, and the separation is a rule rather than a starter choice. `--text-*` is the fixed `rem` scale every surface depends on; never add a viewport-coupled step to it. `--display-*` is the bounded fluid register for oversized public type, and every one of its steps keeps a `rem` floor, a `rem` ceiling, and a `rem` term in the preferred value so browser zoom still scales the text (WCAG 1.4.4). Admin screens stay on the fixed roles.
 
-Which file a display rule lands in is not part of that rule — it is the ordinary reuse question the resolution order above answers. A treatment that recurs across public pages is reusable and belongs in `typography.css`; one that belongs to a single page belongs in that page's `page_stylesheet`. `src/pages/page.css` shows the second case.
+Which file a display rule lands in is not part of that rule — it is the ordinary reuse question the resolution order above answers. A treatment that recurs across public pages is reusable and belongs in `typography.css`; one that belongs to a single page belongs in that page's `page_stylesheet`. `pages/page.css` shows the second case.
 
 The starter has no `--tracking-*` family because its system sans does not need one. Tracking can serve legibility: a condensed gothic set in capitals may need more space between letters. Add a small family when the chosen typefaces and roles justify it; four values are reasonable if four distinct uses exist, not a required count. Document each use and apply it in the owning typography or component rules. Check the explicit `letter-spacing: 0` declarations on headings and buttons in `reset.css`; adding tokens alone does not change those rules. Test the actual font, fallback font, enlarged text, and wrapping.
 
@@ -296,7 +296,7 @@ Page structure is layout primitives → blocks → elements, in that order of re
 | Styling that belongs to exactly one page | The page's `page_stylesheet` include |
 | A new color or size is needed | Check existing tokens first (`design-tokens.css`); add a token only if nothing fits |
 | Behavior that needs the DOM | A `data-js-behavior` block in `static-assets/javascript/site.js` |
-| A file the browser must fetch at a fixed root URL (favicon, manifest) | `src/public/` |
+| A file the browser must fetch at a fixed root URL (favicon, manifest) | `public/` |
 
 ## Components and Forms
 
@@ -327,11 +327,11 @@ To supply page-local CSS, add a `page_stylesheet` entry to the page's `includes`
 
 `pages/admin/style-guide/colors/` is a working example of this pattern, keeping one-page swatch layout rules out of the shared stylesheets.
 
-Remember that this CSS is inlined into every HTML response for the page and is not comment-stripped or fingerprinted. Keep it small. Reach for `page_stylesheet` only when the styling is specific to one page and is not worth generalizing into `src/static-assets/stylesheets/lib/`.
+Remember that this CSS is inlined into every HTML response for the page and is not comment-stripped or fingerprinted. Keep it small. Reach for `page_stylesheet` only when the styling is specific to one page and is not worth generalizing into `static-assets/stylesheets/lib/`.
 
 ## Browser JavaScript
 
-Browser JavaScript lives in `src/static-assets/javascript/`:
+Browser JavaScript lives in `static-assets/javascript/`:
 
 - `site.js` — the single entrypoint, loaded as `<script type="module">` at the end of `<body>` by every base template.
 
@@ -344,7 +344,7 @@ Conventions:
 - **Imports are root-relative logical URLs**, e.g. `import formatDate from '/javascript/lib/format-date.js'`. Do not use bare package specifiers; there is no module resolution step for browser code.
 - **Progressive enhancement is the contract.** Pages render and forms submit without JavaScript. A behavior that fails — a missing target, a denied clipboard write — must degrade to something usable and, where the failure is a markup bug, `console.warn` and skip that one control instead of throwing and taking every other control down with it.
 
-Browser JavaScript is linted with the rest of the project. `eslint.config.js` treats `src/pages/`, `src/public/`, `src/static-assets/`, and `src/templates/` as browser code: ES modules, `ecmaVersion: 2017`, and an explicit globals allowlist. A global that is not on that list is a lint error, so using a new browser API means adding it to the allowlist in `eslint.config.js` in the same change.
+Browser JavaScript is linted with the rest of the project. `eslint.config.js` treats `pages/`, `public/`, `static-assets/`, and `templates/` as browser code: ES modules, `ecmaVersion: 2017`, and an explicit globals allowlist. A global that is not on that list is a lint error, so using a new browser API means adding it to the allowlist in `eslint.config.js` in the same change.
 
 The JavaScript conventions in `docs/code-style-guide.md` and `docs/code-documentation-guide.md` are for server side JavaScript and *do not* apply to JavaScript in the browser.
 
@@ -352,4 +352,4 @@ The JavaScript conventions in `docs/code-style-guide.md` and `docs/code-document
 
 - Run the development server with `node tools/devserver.js --port 2026`. Template, page-data, and `static-assets/` changes are picked up without a restart.
 - Append `.json` to any page URL to inspect the template context object, including resolved includes: `http://localhost:2026/index.json`.
-- Run `node run-linter.js src/static-assets/javascript` after changing browser JavaScript. CSS and HTML are not linted.
+- Run `node run-linter.js static-assets/javascript` after changing browser JavaScript. CSS and HTML are not linted.

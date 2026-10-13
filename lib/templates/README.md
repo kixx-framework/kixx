@@ -784,7 +784,7 @@ const context = {
 {{/each}}
 ```
 
-Partial `src/templates/partials/cards/city.html`:
+Partial `templates/partials/cards/city.html`:
 
 ```html
 <article>
@@ -1211,15 +1211,15 @@ The `escapeHTMLChars()` utility converts `null` and `undefined` to an empty stri
 
 Partials are reusable templates registered separately from the template that includes them. Include one with `{{> name }}`.
 
-In Hyperview, shared partials live under `src/templates/partials/`. A tag like `{{> website/styles.css }}` resolves to:
+In Hyperview, shared partials live under `templates/partials/`. A tag like `{{> website/styles.css }}` resolves to:
 
 ```text
-src/templates/partials/website/styles.css
+templates/partials/website/styles.css
 ```
 
 Partial name resolution is case-insensitive, so `{{> Website/Styles.css }}` resolves the same file.
 
-Base templates live under `src/templates/base/`. A page template lives beside its `src/pages/**/page.json` file and is named by that file's `template` directive.
+Base templates live under `templates/base/`. A page template lives beside its `pages/**/page.json` file and is named by that file's `template` directive.
 
 Partials used by only one page also live as flat siblings of that page's `page.json`. Register them with the `partials` directive:
 
@@ -1235,7 +1235,7 @@ Partials used by only one page also live as flat siblings of that page's `page.j
 }
 ```
 
-Do not create a `partials/` directory inside a page directory; child directories represent child page pathnames. Move a partial to `src/templates/partials/` when multiple pages use it. Page-local partials take precedence over shared partials with the same id.
+Do not create a `partials/` directory inside a page directory; child directories represent child page pathnames. Move a partial to `templates/partials/` when multiple pages use it. Page-local partials take precedence over shared partials with the same id.
 
 Base template:
 
@@ -1285,7 +1285,7 @@ Page template:
 </article>
 ```
 
-Partial `src/templates/partials/cards/album.html`:
+Partial `templates/partials/cards/album.html`:
 
 ```html
 <li>
@@ -1330,7 +1330,7 @@ Additional partial rules:
 
 ## Custom Helpers
 
-Application helpers live under `src/app/presentation/template-helpers/`. Import them explicitly in `src/app/app.js` and register them on the application’s `HyperviewService` during startup:
+Application helpers live under `app/presentation/template-helpers/`. Import them explicitly in `app/app.js` and register them on the application’s `HyperviewService` during startup:
 
 ```javascript
 import formatMoney from './presentation/template-helpers/format-money.js';

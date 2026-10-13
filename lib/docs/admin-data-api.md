@@ -16,7 +16,7 @@ The API is mounted at:
 ## Exposure model
 
 Nothing is exposed by default. A Collection is reachable only when the
-application registers it in `src/app/admin-data-api/mod.js`, and only through
+application registers it in `app/admin-data-api/mod.js`, and only through
 the operations that registration declares. There is no automatic Collection
 enumeration and no wildcard grant to future Collections.
 
@@ -376,8 +376,8 @@ prove that no API request reaches the file object store.
 ## Adding a resource
 
 Register a Collection by adding a registration object to
-`src/app/admin-data-api/resources/` and listing it in
-`src/app/admin-data-api/mod.js`. The registry validates and freezes every
+`app/admin-data-api/resources/` and listing it in
+`app/admin-data-api/mod.js`. The registry validates and freezes every
 registration at import, and `app.initialize()` checks each against its
 Collection; any mismatch is a programmer error that fails boot.
 

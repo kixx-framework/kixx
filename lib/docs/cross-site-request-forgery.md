@@ -43,7 +43,7 @@ The HTML presentation layer uses a stateless synchronizer-token pattern, with
 
 ### Form rendering
 
-`src/app/presentation/lib/csrf.js` prepares each protected form through
+`app/presentation/lib/csrf.js` prepares each protected form through
 `getCsrfFormContext()`:
 
 1. It reuses the browser's `kixx_csrf_session` cookie value, or generates a

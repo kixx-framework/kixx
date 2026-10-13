@@ -43,9 +43,9 @@ and the pathname is not access control.
 
 ## Development browser assets
 
-Developer mode scans `src/static-assets/` into the current content
-snapshot. Browser sources live in `src/static-assets/stylesheets/` and
-`src/static-assets/javascript/`, while their public logical pathnames
+Developer mode scans `static-assets/` into the current content
+snapshot. Browser sources live in `static-assets/stylesheets/` and
+`static-assets/javascript/`, while their public logical pathnames
 remain `/stylesheets/**` and `/javascript/**`.
 
 `assetUrl` gives template-linked entrypoints their own fingerprinted URL

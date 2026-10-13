@@ -26,4 +26,4 @@ package-lock.json
 
 # Secrets
 .env.*.secrets
-src/.kixx/secrets.json
+.kixx/secrets.json

@@ -153,7 +153,7 @@ A Node adapter *could* return that boolean. It must not, because the moment appl
 
 ## Adding a New Port
 
-1. Write the contract as `src/kixx/<component>/<name>-interface.js`, beside the framework code that consumes it. Document the logical model, invariants, the context pass-through rule, construction requirements, and — critically — *why* each capability is or is not in the contract. Include `@see` links to the adapters once they exist.
+1. Write the contract as `kixx/<component>/<name>-interface.js`, beside the framework code that consumes it. Document the logical model, invariants, the context pass-through rule, construction requirements, and — critically — *why* each capability is or is not in the contract. Include `@see` links to the adapters once they exist.
 2. Implement one adapter package per platform: `plugins/<platform>-<name>/lib/<name>.js`, tagged `@implements` with the port's typedef.
 3. Add a `plugins/<platform>-<name>/plugin.js` exporting `register()` — and `initialize()` only if it consumes other services.
 4. Register the package in each platform registry (`plugins/node.js`, `plugins/cloudflare.js`) under a descriptive key.
@@ -171,11 +171,11 @@ The matrix above is the checklist. A new target — Deno, Deno Deploy, AWS Lambd
 3. A `<platform>-config.js` source config.
 4. A `<platform>-server.js` entry point that reads config, merges `generalPlugins` with the platform registry, calls `bootApplication({ env, config, LoggerWriter, plugins, app })` to get back `{ appContext, logger }`, constructs the `HttpRouter`, and translates between native requests/responses and `ServerRequest`/`ServerResponse`.
 
-Nothing in `src/app/`, `src/kixx/`, `src/templates/`, or `src/pages/` should need to change. If a new platform forces a change in `app/`, that is the signal that a port is missing or that a contract promised more than the portable floor.
+Nothing in `app/`, `kixx/`, `templates/`, or `pages/` should need to change. If a new platform forces a change in `app/`, that is the signal that a port is missing or that a contract promised more than the portable floor.
 
 ## Rules for Application Code
 
 - Reach for platform capabilities through `context.getService(name)` and `context.getCollection(name)` — never by importing from `plugins/`.
-- Never import a native platform module (`node:fs`, `cloudflare:workers`) anywhere under `src/app/`. Those imports belong only in adapter `lib/` modules and entry points.
+- Never import a native platform module (`node:fs`, `cloudflare:workers`) anywhere under `app/`. Those imports belong only in adapter `lib/` modules and entry points.
 - Depend on what the *port* promises, not on what your current adapter happens to do. If the contract says `delete()` resolves `undefined`, do not branch on a truthy result because SQLite could tell you more.
 - When you need a capability no port covers, add the port — do not reach around the abstraction for the one runtime you are testing on today.

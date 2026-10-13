@@ -13,8 +13,8 @@ deploy that shares behavior. A **deploy** is one specific running instance —
 one Node.js process, one Cloudflare Worker version. Two deploys of the same
 environment share configuration but not environment variables.
 
-- Per-environment values are **configuration**: `src/node-config.jsonc` or
-  `src/cloudflare-config.jsonc`, under the `environments` map.
+- Per-environment values are **configuration**: `node-config.jsonc` or
+  `cloudflare-config.jsonc`, under the `environments` map.
 - Per-deploy values are **environment variables**: dotenv files (Node.js) or
   Cloudflare bindings, split again by secrecy (see below).
 
@@ -24,7 +24,7 @@ duplicate it.
 
 ## Configuration modules
 
-`src/node-config.jsonc` and `src/cloudflare-config.jsonc` are JSONC files:
+`node-config.jsonc` and `cloudflare-config.jsonc` are JSONC files:
 JSON plus `//` and `/* */` comments and trailing commas. Keeping them as data
 rather than JavaScript lets build tooling read and rewrite them without
 executing code.
@@ -43,7 +43,7 @@ Values must be literals, so durations are written out in seconds with a
 comment (`"pageCacheReadTtlSeconds": 3600, // 1 hour`) instead of as
 arithmetic.
 
-`src/kixx/config/parse-jsonc.js` (`parseJsonc`) is the framework's own JSONC
+`kixx/config/parse-jsonc.js` (`parseJsonc`) is the framework's own JSONC
 parser. It has no dependencies and runs on every platform. It supports only
 the syntax above, not JSON5 extensions like unquoted keys or single-quoted
 strings.
@@ -60,7 +60,7 @@ name in the other.
 
 ### Loading a config: `readConfig`
 
-`src/kixx/config/read-config.js` turns a source config module and a selected
+`kixx/config/read-config.js` turns a source config module and a selected
 environment name into the frozen runtime config the application actually
 uses:
 
@@ -96,7 +96,7 @@ real filesystem paths — see `DATA_DIRECTORY` below.
 configuration, because it is what decides which section of the config module
 is even read.
 
-- The Node.js server (`src/node-server.js`) resolves it as `--environment`,
+- The Node.js server (`node-server.js`) resolves it as `--environment`,
   else `NODE_ENV`, defaulting to `development` if neither is set.
 - The Cloudflare Worker reads its `ENVIRONMENT` binding directly.
 
@@ -106,25 +106,25 @@ Per-deploy values are environment variables, split by secrecy:
 
 | File | Committed | Holds | Cloudflare deployment use |
 | --- | --- | --- | --- |
-| `src/.env.<environment>` | yes | `ENVIRONMENT`, `TRUST_PROXY`, `BUILD_ID`, `PORT`, `DATA_DIRECTORY` | Required build input; every value becomes a plain-text binding |
-| `src/.env.<environment>.secrets` | no | signing secrets and tokens | Not read by builds; optional input to build tooling |
+| `.env.<environment>` | yes | `ENVIRONMENT`, `TRUST_PROXY`, `BUILD_ID`, `PORT`, `DATA_DIRECTORY` | Required build input; every value becomes a plain-text binding |
+| `.env.<environment>.secrets` | no | signing secrets and tokens | Not read by builds; optional input to build tooling |
 
 The secrecy split follows the git boundary. There is no per-key annotation to
 keep in sync, and no way for a value to be classified two ways at once.
 
-`src/example.env` and `src/example.env.secrets` are the committed templates
+`example.env` and `example.env.secrets` are the committed templates
 for each half — `example.env` documents every plain key inline, and
 `example.env.secrets` doubles as the manifest of required secret names (see
 below). Bootstrap a fresh clone with:
 
 ```bash
-cp src/example.env.secrets src/.env.development.secrets
+cp example.env.secrets .env.development.secrets
 ```
 
 ### Node.js - Merging environment variables
 
-`src/node-environment.js` (`readEnvironment`, backed by
-`src/kixx/config/merge-environment-sources.js`) merges three sources for the
+`node-environment.js` (`readEnvironment`, backed by
+`kixx/config/merge-environment-sources.js`) merges three sources for the
 Node.js server, in this order:
 
 1. `.env.<environment>` (or the file named by `--dotenv`)
@@ -148,7 +148,7 @@ derived by appending `.secrets`, so one flag selects the pair.
 
 `example.env.secrets` is not just a copy-from template — its committed text
 *is* the manifest of secret names a deployment must provide.
-`src/kixx/config/secrets-manifest.js` parses it: each `NAME=value` line
+`kixx/config/secrets-manifest.js` parses it: each `NAME=value` line
 declares a required secret (the value is a placeholder and is discarded), and
 a `# @optional` comment line immediately above an entry marks that one name
 optional.
@@ -175,9 +175,9 @@ On Cloudflare the manifest is also a deployment input; see
 `DATA_DIRECTORY` is an optional, Node.js-only per-deploy value. When set, it
 overrides the directory that config-relative store paths (`DOCUMENT_STORE`,
 `KEY_VALUE_STORE`, `OBJECT_STORE`, `CONTENT_STORE`, `JOB_QUEUE`) resolve against, in place
-of `src/`. `createResolveFilepath` in `src/node-environment.js` builds the
+of `lib/`. `createResolveFilepath` in `node-environment.js` builds the
 `resolveFilepath` function passed into `readConfig`; it joins a config path's
-POSIX-style segments against `DATA_DIRECTORY` when set, or against `src/`
+POSIX-style segments against `DATA_DIRECTORY` when set, or against `lib/`
 otherwise.
 
 This exists for [local target instances](../README.md#local-target-instances),
@@ -188,7 +188,7 @@ deployment.
 ## Job queue settings
 
 `JOB_QUEUE` is a per-environment block in both config modules.
-See `src/app/jobs/README.md` for behavior.
+See `app/jobs/README.md` for behavior.
 
 | Key | Platform | Meaning |
 | --- | --- | --- |
@@ -207,7 +207,7 @@ For CPU-heavy jobs raise `WORKER_VERSION.limits.cpu_ms`.
 ## Cloudflare specifics
 
 The Cloudflare Worker does not read dotenv files. The separate Kixx deployment
-CLI, run from `src/`, builds Worker versions from these inputs:
+CLI, run from `lib/`, builds Worker versions from these inputs:
 
 ```text
 cloudflare-config.jsonc
@@ -292,12 +292,12 @@ address.
 `cloudflare-server.js` is the entry module. The CLI uploads every statically
 reachable module as a separate ES module with comments removed; there is no
 transpiling, tree shaking, or minification. The build rejects bare package
-imports, modules outside `src/`, extensions other than `.js` and `.mjs`,
+imports, modules outside `lib/`, extensions other than `.js` and `.mjs`,
 CommonJS, path-casing mistakes, and `import()` with a non-literal specifier.
 
 `cloudflare-config.jsonc` is not a module and is never uploaded. Before
 packaging, the CLI parses it and writes the whole source config to
-`src/cloudflare-config.generated.js` as `export default { ... };`.
+`cloudflare-config.generated.js` as `export default { ... };`.
 `cloudflare-server.js` imports that module and passes it to `readConfig`. The
 generated module is gitignored and must never be edited by hand; change
 `cloudflare-config.jsonc` instead.
