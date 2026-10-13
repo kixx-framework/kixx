@@ -27,3 +27,6 @@ package-lock.json
 # Secrets
 .env.*.secrets
 .kixx/secrets.json
+
+# Generated from cloudflare-config.jsonc by the deployment CLI
+cloudflare-config.generated.js
