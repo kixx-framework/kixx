@@ -99,7 +99,7 @@ Each table lists context paths below `environments.<envName>`, except the root `
 
 ### Task T1: Node.js config template reproduces node-config.jsonc
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `lib/kixx/templating/docs/README.md`; `lib/docs/configuration.md` "Configuration modules" and "`DATA_DIRECTORY` and config-relative paths"; this plan's "Context shape reference" (Node.js table)
 
@@ -143,13 +143,13 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Rendering the Node.js template with the example context yields text that `parseJsonc` accepts and that equals the parsed `lib/node-config.jsonc` (root `name`, environment order, and every environment by `JSON.stringify`).
-- [ ] The rendered text contains no HTML entities (`&amp;`, `&quot;`, `&lt;`, `&gt;`).
-- [ ] A test proves values containing `& < > "` round-trip: set such a string on a cloned context (for example `FILES.bucket` or an `OBJECT_STORE.path`), render, parse, and assert the parsed value equals the input.
-- [ ] A test proves a missing required value fails: delete `LOGGER.level` from one environment of a cloned context; rendering throws, and the error or one of its `cause`s has a message naming the `json` helper.
-- [ ] A test proves developer mode without directory keys renders only `"developerMode": true` in CONTENT_STORE (parsed CONTENT_STORE equals `{ developerMode: true }`).
-- [ ] The example context contains no framework-owned keys and only the keys in the Node.js table.
-- [ ] `lib/node-config.jsonc` is unchanged.
+- [x] Rendering the Node.js template with the example context yields text that `parseJsonc` accepts and that equals the parsed `lib/node-config.jsonc` (root `name`, environment order, and every environment by `JSON.stringify`).
+- [x] The rendered text contains no HTML entities (`&amp;`, `&quot;`, `&lt;`, `&gt;`).
+- [x] A test proves values containing `& < > "` round-trip: set such a string on a cloned context (for example `FILES.bucket` or an `OBJECT_STORE.path`), render, parse, and assert the parsed value equals the input.
+- [x] A test proves a missing required value fails: delete `LOGGER.level` from one environment of a cloned context; rendering throws, and the error or one of its `cause`s has a message naming the `json` helper.
+- [x] A test proves developer mode without directory keys renders only `"developerMode": true` in CONTENT_STORE (parsed CONTENT_STORE equals `{ developerMode: true }`).
+- [x] The example context contains no framework-owned keys and only the keys in the Node.js table.
+- [x] `lib/node-config.jsonc` is unchanged.
 
 **Validation**
 
@@ -159,12 +159,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Template, example context, and test file with helpers (`json`, `renderTemplate`, `readText`, `readJson`, `assertSameConfig`, `errorChainMessages`, `catchError`) and five Node.js tests.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: Example context was generated from the parsed `node-config.jsonc` (it has no framework-owned keys to strip; RATE_LIMIT key names are nesting paths). A missing value produces a chain `each` LineSyntaxError -> `json` LineSyntaxError (`Error in helper "json" in "<file>" on line N`) -> helper Error; the test matches `helper "json"` across the chain.
+- Actual files changed: `lib/node-config.jsonc.template`, `lib/node-config.template-context.example.json`, `lib/test/unit-tests/config-templates.test.js`.
+- Validation run: config-templates tests 5/5 pass; linter clean on the test file; full suite 1782 passing.
 - Blockers: None.
 
 ### Task T2: Cloudflare config template reproduces cloudflare-config.jsonc

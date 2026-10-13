@@ -1,0 +1,102 @@
+{{!--
+Renders node-config.jsonc from a context object. Callers must register a
+`json` helper that returns JSON.stringify(value) and throws on undefined.
+Context shape: "Config templates" in docs/configuration.md. Example context:
+node-config.template-context.example.json.
+--}}
+{
+    "name": {{ json name }},
+
+    "environments": {
+        {{#each environments as |env envName|}}
+        {{ json envName }}: {
+            "LOGGER": {
+                "level": {{ json env.LOGGER.level }},
+            },
+            "HYPERVIEW": {
+                "useTemplateCache": {{ json env.HYPERVIEW.useTemplateCache }},
+                "usePageCache": {{ json env.HYPERVIEW.usePageCache }},
+                "allowJsonResponse": {{ json env.HYPERVIEW.allowJsonResponse }},
+                "pageCacheReadTtlSeconds": {{ json env.HYPERVIEW.pageCacheReadTtlSeconds }},
+                "pageCacheExpirationSeconds": {{ json env.HYPERVIEW.pageCacheExpirationSeconds }},
+            },
+            "SECRET_ENCRYPTION": {
+                "PBKDF2_ITERATIONS": {{ json env.SECRET_ENCRYPTION.PBKDF2_ITERATIONS }},
+            },
+            "RATE_LIMIT": {
+                "ADMIN_LOGIN": {
+                    "maxFailures": {{ json env.RATE_LIMIT.ADMIN_LOGIN.maxFailures }},
+                    "windowSeconds": {{ json env.RATE_LIMIT.ADMIN_LOGIN.windowSeconds }},
+                    "cooldownSeconds": {{ json env.RATE_LIMIT.ADMIN_LOGIN.cooldownSeconds }},
+                },
+                "ADMIN_SIGNUP": {
+                    "maxFailures": {{ json env.RATE_LIMIT.ADMIN_SIGNUP.maxFailures }},
+                    "windowSeconds": {{ json env.RATE_LIMIT.ADMIN_SIGNUP.windowSeconds }},
+                    "cooldownSeconds": {{ json env.RATE_LIMIT.ADMIN_SIGNUP.cooldownSeconds }},
+                },
+                "ADMIN_INVITE": {
+                    "maxFailures": {{ json env.RATE_LIMIT.ADMIN_INVITE.maxFailures }},
+                    "windowSeconds": {{ json env.RATE_LIMIT.ADMIN_INVITE.windowSeconds }},
+                    "cooldownSeconds": {{ json env.RATE_LIMIT.ADMIN_INVITE.cooldownSeconds }},
+                },
+            },
+            // Relative store paths resolve against DATA_DIRECTORY when it is
+            // set, otherwise against lib/.
+            "DOCUMENT_STORE": {
+                "path": {{ json env.DOCUMENT_STORE.path }},
+            },
+            "KEY_VALUE_STORE": {
+                "path": {{ json env.KEY_VALUE_STORE.path }},
+            },
+            // Background jobs run in-process. drainTimeoutSeconds must stay below
+            // SHUTDOWN_TIMEOUT_MS in node-server.js.
+            "JOB_QUEUE": {
+                "enabled": {{ json env.JOB_QUEUE.enabled }},
+                "path": {{ json env.JOB_QUEUE.path }},
+                "pollIntervalSeconds": {{ json env.JOB_QUEUE.pollIntervalSeconds }},
+                "concurrency": {{ json env.JOB_QUEUE.concurrency }},
+                "drainTimeoutSeconds": {{ json env.JOB_QUEUE.drainTimeoutSeconds }},
+                "retention": {
+                    "completedMaxAgeDays": {{ json env.JOB_QUEUE.retention.completedMaxAgeDays }},
+                    "failedMaxAgeDays": {{ json env.JOB_QUEUE.retention.failedMaxAgeDays }},
+                },
+            },
+            "OBJECT_STORE": {
+                "path": {{ json env.OBJECT_STORE.path }},
+                "buckets": {
+                    {{#each env.OBJECT_STORE.buckets as |bucket bucketName|}}
+                    {{ json bucketName }}: {{ json bucket }},
+                    {{/each}}
+                },
+            },
+            "FILES": {
+                "maxUploadBytes": {{ json env.FILES.maxUploadBytes }},
+                "bucket": {{ json env.FILES.bucket }},
+            },
+            // Developer mode reads source directories directly and is allowed
+            // only in the development environment. Other environments use
+            // rootDirectory.
+            "CONTENT_STORE": {
+                {{#if env.CONTENT_STORE.developerMode}}
+                "developerMode": true,
+                {{#if env.CONTENT_STORE.pagesDirectory}}
+                "pagesDirectory": {{ json env.CONTENT_STORE.pagesDirectory }},
+                {{/if}}
+                {{#if env.CONTENT_STORE.templatesDirectory}}
+                "templatesDirectory": {{ json env.CONTENT_STORE.templatesDirectory }},
+                {{/if}}
+                {{#if env.CONTENT_STORE.staticAssetsDirectory}}
+                "staticAssetsDirectory": {{ json env.CONTENT_STORE.staticAssetsDirectory }},
+                {{/if}}
+                {{#if env.CONTENT_STORE.emailsDirectory}}
+                "emailsDirectory": {{ json env.CONTENT_STORE.emailsDirectory }},
+                {{/if}}
+                {{/if}}
+                {{^env.CONTENT_STORE.developerMode}}
+                "rootDirectory": {{ json env.CONTENT_STORE.rootDirectory }},
+                {{/env.CONTENT_STORE.developerMode}}
+            },
+        },
+        {{/each}}
+    },
+}
