@@ -4,7 +4,8 @@ Read the @README.md for the project overview, including what this project is and
 
 This project is a mono-repo containing the components and packages which make up the Kixx web development framework.
 
-The framework source code is in `framework/`. It is not deployable, but should run on a devserver locally in a Node.js or Deno runtime. (Note: The devserver has not been built yet).
+- `lib/` - This is where the Kixx application library lives. The `lib/` folder is not deployable, but should run on a devserver locally in a Node.js or Deno runtime. (Note: The devserver has not been built yet.) In the future the `lib/` folder will be published as stand-alone NPM and JSR packages for developers who just need to use the Kixx library without all the extras.
+- `test-app/` - A deployable copy of the Kixx application library and default application which can be deployed to all the deployment targets (Node.js, Cloudflare, Deno, AWS Lambda) for end-to-end testing. The test app is built by `node tools/build-test-app.js`.
 
 Commit Messages
 ---------------
