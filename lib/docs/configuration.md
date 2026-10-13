@@ -98,7 +98,8 @@ is even read.
 
 - The Node.js server (`node-server.js`) resolves it as `--environment`,
   else `NODE_ENV`, defaulting to `development` if neither is set.
-- The Cloudflare Worker reads its `ENVIRONMENT` binding directly.
+- The Cloudflare Worker reads its `ENVIRONMENT` binding, defaulting to
+  `development` if it is unset.
 
 ## Config templates
 
@@ -229,7 +230,7 @@ Per-deploy values are environment variables, split by secrecy:
 
 | File | Committed | Holds | Cloudflare deployment use |
 | --- | --- | --- | --- |
-| `.env.<environment>` | yes | `ENVIRONMENT`, `TRUST_PROXY`, `BUILD_ID`, `PORT`, `DATA_DIRECTORY` | Required build input; every value becomes a plain-text binding |
+| `.env.<environment>` | yes | Plain per-deploy keys, such as `TRUST_PROXY`, `PORT`, `DATA_DIRECTORY` | Required build input; every value becomes a plain-text binding |
 | `.env.<environment>.secrets` | no | signing secrets and tokens | Not read by builds; optional input to build tooling |
 
 The secrecy split follows the git boundary. There is no per-key annotation to
@@ -316,12 +317,15 @@ See `app/jobs/README.md` for behavior.
 | --- | --- | --- |
 | `enabled` | both | `false` records jobs but never runs them. |
 | `path` | Node | SQLite file: `../data/nodejs_app/job_queue.sqlite` (development, production), `./job_queue.sqlite` (`local`, instance-relative). |
-| `pollIntervalSeconds` | Node | Idle wait between passes (default 1). |
-| `concurrency` | both | Maximum jobs running at once (default 4). |
-| `drainTimeoutSeconds` | Node | Longest shutdown waits for in-flight jobs (default 8). Keep below `SHUTDOWN_TIMEOUT_MS` in `node-server.js`. |
-| `softDeadlineSeconds` | Cloudflare | Stop claiming new jobs after this long in one alarm invocation (default 20). |
+| `pollIntervalSeconds` | Node | Idle wait between passes (1 in shipped config). |
+| `concurrency` | both | Maximum jobs running at once (4). |
+| `drainTimeoutSeconds` | Node | Longest shutdown waits for in-flight jobs (8). Keep below `SHUTDOWN_TIMEOUT_MS` in `node-server.js`. |
+| `softDeadlineSeconds` | Cloudflare | Stop claiming new jobs after this long in one alarm invocation (20). |
 | `durableObjectBindingName`, `durableObjectClassName` | Cloudflare | Required by the deployment CLI to bind and export the `JobQueueStore` class. |
 | `retention.completedMaxAgeDays`, `retention.failedMaxAgeDays` | both | Age-based purge (7 and 30). |
+
+Values in parentheses are the shipped config, not code defaults: every key
+is required and the job queue plugins assert it at startup.
 
 On Cloudflare, a job must complete within one Durable Object alarm invocation.
 For CPU-heavy jobs raise `WORKER_VERSION.limits.cpu_ms`.
@@ -421,7 +425,7 @@ CommonJS, path-casing mistakes, and `import()` with a non-literal specifier.
 packaging, the CLI parses it and writes the whole source config to
 `cloudflare-config.generated.js` as `export default { ... };`.
 `cloudflare-server.js` imports that module and passes it to `readConfig`. The
-generated module is gitignored and must never be edited by hand; change
+generated module is not committed and must never be edited by hand; change
 `cloudflare-config.jsonc` instead.
 
 ## Adding a new setting

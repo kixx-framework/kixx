@@ -86,11 +86,12 @@ rather than assuming every client implements or preserves `SameSite` correctly.
 ### Form submission
 
 Every current mutating HTML request handler calls `validateCsrfFormData()` before
-constructing its application form or invoking a Transaction Script. Validation
-requires:
+constructing its application form or invoking a Transaction Script. Raw-body
+file uploads instead call `validateCsrfHeader()`, which reads the token from the
+`x-kixx-csrf-token` header without consuming the body. Validation requires:
 
 - A non-empty `kixx_csrf_session` cookie.
-- A non-empty submitted `csrf_token` field.
+- A non-empty submitted `csrf_token` field (or header).
 - A well-formed two-segment token.
 - A valid HMAC-SHA-256 signature.
 - A payload containing a non-empty `sid` and integer expiration.
@@ -99,8 +100,11 @@ requires:
 
 Malformed, forged, expired, missing, and cookie-mismatched values all fail
 closed. The signer returns only `false`, without exposing which cryptographic
-check failed. The request handler then throws a `ForbiddenError` with code
-`InvalidCsrfTokenError`, before submitted data can reach domain logic.
+check failed. The validator then throws a `ForbiddenError` with code
+`InvalidCsrfTokenError`, before submitted data can reach domain logic. Handlers
+that can recover catch that code and re-render with a fresh token
+(`renderWithFreshCsrf()`) or redirect with a notice; uncaught, it becomes a
+generic 403.
 
 This blocks a conventional attacker because they can cause a cross-site form
 submission but cannot read a valid hidden token from this site's HTML. Guessing a
@@ -157,7 +161,7 @@ refreshes the cookie but does not extend an older token's embedded expiration.
 ### Stateless verification
 
 Stateless HMAC verification avoids a persistence lookup on every render and
-submission, works across the Node.js, Deno and Cloudflare targets, and needs no
+submission, works on both Node.js and Cloudflare, and needs no
 cleanup job. The cost is coarse revocation: an individual token cannot be
 invalidated without changing its browser's `sid`; rotating the signing secret
 revokes every user's open form at once.

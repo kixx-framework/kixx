@@ -55,7 +55,7 @@ Cases the author did not think about or from unexpected code paths, or code path
 
 **Rule:** *Crash the process, not just the response.* Do not try to recover, retry, or let the application keep accepting *new* work as though the bug did not happen. A restarter, Worker isolate restart, or platform-level fatal-error policy must run. Continuing to serve requests from a broken state risks corrupting shared state and returning wrong answers.
 
-Do not catch-and-swallow. Do not convert a programmer error into an operational error. Let it propagate out of your code so the router can log it and trigger the platform's fatal-error policy.
+Do not catch-and-swallow. Do not convert a programmer error into an operational error. Let it propagate out of your code. The router emits it as an `error` event, and the entry point's listener logs it and applies the platform's fatal-error policy.
 
 This does **not** mean the one in-flight request that hit the bug must receive a bare or unstyled response. The fatal-error/shutdown decision is driven by an `error` event the router emits for every failure, independently of whatever response is eventually produced for that request.
 
@@ -65,7 +65,7 @@ The rule is about reaching the platform's fatal-error policy, not about the `thr
 
 `node-server.js` shuts the process down. A Node.js process owns long-lived mutable state — open store connections, in-memory caches — which a bug may have corrupted, and a supervisor restarts it clean.
 
-`cloudflare-server.js` does not rethrow out of `fetch()`. A throw there does not restart the isolate the way `process.exit()` restarts a process; it only replaces the response with Cloudflare's generic error page and risks truncating the log tail. The entry point returns a JSON:API 500 and reports the error to the runtime with `waitUntil(Promise.reject(error))`, which still produces the platform `exception` event and still counts against the Worker's error rate.
+`cloudflare-server.js` does not rethrow out of `fetch()`. A throw there does not restart the isolate the way `process.exit()` restarts a process; it only replaces the response with Cloudflare's generic error page and risks truncating the log tail. The entry point returns a JSON:API 500 and reports the error to the runtime by passing `waitUntil()` a promise that rejects with it, which still produces the platform `exception` event and still counts against the Worker's error rate.
 
 ## Assumptions To Assertions
 

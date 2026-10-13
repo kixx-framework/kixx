@@ -159,9 +159,7 @@ button.addEventListener('click', (_event) => {
 });
 ```
 
-The `_` prefix works for variables, function arguments, and destructured array elements. It does **not** work for caught error bindings or unused object destructuring keys. Remove unused object keys entirely.
-
-For `catch` blocks where the error object is not needed, omit the binding entirely:
+The linter ignores any `_`-prefixed variable, argument, destructured element, or catch binding. Still, remove unused object destructuring keys, and omit an unneeded `catch` binding entirely:
 
 ```javascript
 try {

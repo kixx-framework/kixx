@@ -81,11 +81,11 @@ Show the relative JSDoc import path to external type definitions when they exist
 
 ```javascript
 /**
- * @typedef {import('../config/config.js').default} Config
+ * @typedef {import('../logger/logger.js').default} Logger
  */
 ```
 
-Only include an import path like `import('../config/config.js').default` when the file path can be positively located. If the file path cannot be verified, use only the type name, such as `Config`.
+Only include an import path like `import('../logger/logger.js').default` when the file path can be positively located. If the file path cannot be verified, use only the type name, such as `Logger`.
 
 Use dotted `@param` notation for function and method arguments/options. Do not introduce a `@typedef` just to describe an `options` argument shape; document it inline with dotted params instead:
 
@@ -96,7 +96,7 @@ Use dotted `@param` notation for function and method arguments/options. Do not i
  * @param {Config} options.config - Application configuration manager instance
  * @param {Logger} options.logger - Logger instance for application logging
  */
-createContext({ runtime, config, logger }) {}
+createContext(options) {}
 ```
 
 **Do Not Use JSDoc for Module-Private Functions**

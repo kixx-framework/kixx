@@ -217,19 +217,19 @@ any other method there with `405` before authenticating.
 
 | Status | When |
 | --- | --- |
-| `400` | Malformed JSON or document (`JsonApiInvalidDocument`), missing/invalid version (`AdminDataInvalidVersion`), invalid query parameter, sort, fieldset, or page size (`JsonApiInvalidQueryParameter`), or cursor (`AdminDataInvalidCursor`) |
+| `400` | Malformed JSON (`BAD_REQUEST_ERROR`) or document (`JsonApiInvalidDocument`), missing/invalid version (`AdminDataInvalidVersion`), invalid query parameter, sort, fieldset, or page size (`JsonApiInvalidQueryParameter`), or cursor (`AdminDataInvalidCursor`) |
 | `401` | Missing or invalid bearer token. `WWW-Authenticate: Bearer realm="admin-data-api"`, plus `error="invalid_token"` when a token was presented |
 | `403` | Token lacks the action on that Collection (`AdminDataActionNotGranted`), or a client-supplied id on create (`JsonApiClientIdNotSupported`) |
 | `404` | Unknown resource type (`AdminDataResourceTypeNotFound`) or record (`AdminDataRecordNotFound`) |
-| `405` | Method selects no enabled operation, including `HEAD` and `PUT` (`Allow` lists the methods the current registration enables) |
+| `405` | Method selects no enabled operation, including `HEAD` and `PUT` (`AdminDataOperationNotEnabled`; `Allow` lists the methods the current registration enables) |
 | `406` | Unacceptable `Accept` header |
-| `409` | Type or id mismatch between URL and body (`JsonApiResourceTypeMismatch`, `JsonApiResourceIdMismatch`), or a stale version (`AdminDataVersionConflict`) |
+| `409` | Type or id mismatch between URL and body (`JsonApiResourceTypeMismatch`, `JsonApiResourceIdMismatch`), a stale version (`AdminDataVersionConflict`), or a unique index rejecting the write (`AdminDataUniqueConflict`) |
 | `415` | Unsupported request `Content-Type` |
 | `422` | Undeclared, read-only, or invalid attribute values |
 
 ### Audit logging
 
-Every attempted mutation is logged with the token id (`principal`), resource
+Every `POST`, `PATCH`, or `DELETE` to a resource-type URL is logged with the token id (`principal`), resource
 type and id, action, request id, and outcome: `admin data mutation succeeded`
 at info, or `admin data mutation failed` at warn with the HTTP status and
 error code. Failures include rejected authentication, denied grants, invalid
@@ -422,7 +422,9 @@ Rules the registry enforces:
   operation needs its Collection method, and every sort index must be declared
   in the Collection's `INDEXES`.
 - Write attribute lists name declared attributes only; server-owned values
-  belong in a `persist` hook or the Collection.
+  belong in a `persist` hook (create only) or the Collection.
+- `attributes` and `list.sorts` are non-empty; every sort needs a
+  `description` and a boolean `descending`; operations are objects (`{}`).
 
 Exposing a Collection is a security decision: any token granted on it can read
 every declared attribute of every record.

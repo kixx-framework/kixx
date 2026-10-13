@@ -4,7 +4,7 @@ This guide covers frontend development conventions for this project: where front
 
 Related documents:
 
-- `static-assets/README.md` — Static asset serving, fingerprinting, and the content-addressable store.
+- `kixx/static-assets/README.md` — Static asset serving, fingerprinting, and the content-addressable store.
 - `templates/README.md` — Kixx template syntax (interpolation, sections, helpers, partials).
 - `app/presentation/README.md` — routing, request handlers, forms, page includes, and the Hyperview file layout.
 
@@ -40,7 +40,7 @@ The three directories differ in how the publishing tool (outside the scope of th
 | `public/` | `/**` (site root) | No | Published verbatim |
 | `pages/**/page.css` | None — inlined into the HTML | N/A | Included verbatim in page content |
 
-See `static-assets/README.md` for more information about how fingerprinting and the content-addressable store work.
+See `kixx/static-assets/README.md` for more information about how fingerprinting and the content-addressable store work.
 
 Templates link entrypoints through `assetUrl`, which rewrites the logical pathname to a content-addressed URL when a Release is published and falls back to the bare pathname in development:
 
@@ -51,7 +51,7 @@ Templates link entrypoints through `assetUrl`, which rewrites the logical pathna
 
 There is no CSS or browser-JavaScript bundling in development. Production publishing recursively inlines local, unconditioned CSS imports, so splitting a stylesheet does not add a production request. Browser JavaScript is not bundled in either environment; each imported module remains a request.
 
-See `static-assets/README.md` for more information about how assets are served in development and how `assetUrl` works with the content-addressable store.
+See `kixx/static-assets/README.md` for more information about how assets are served in development and how `assetUrl` works with the content-addressable store.
 
 ## Public Pages Are the Default
 
@@ -66,7 +66,7 @@ Admin pages are an extension of the public foundation, not the baseline every pa
 
 ### The Home Page Is a Demo, Not a Pattern
 
-`pages/page.{json,html,css}` renders a CSS Zen Garden document. Its markup is fixed by that exercise, so `pages/page.css` styles it with structural element selectors and bespoke grid/flex rules instead of the project's layout primitives, and its masthead uses a bare-`vw` `clamp()`. Read it as a demonstration that the token system can carry an arbitrary design — **not** as a model for new pages. It is meant to be replaced when a fork establishes its own home page.
+`pages/page.{json,html,css}` renders a CSS Zen Garden document. Its markup is fixed by that exercise, so `pages/page.css` styles it with structural element selectors and bespoke grid/flex rules instead of the project's layout primitives. Read it as a demonstration that the token system can carry an arbitrary design — **not** as a model for new pages. It is meant to be replaced when a fork establishes its own home page.
 
 For the conventions a real page follows, read the style guide pages under `pages/admin/style-guide/` and the shared stylesheets in `static-assets/stylesheets/lib/`.
 
@@ -214,7 +214,7 @@ Prefer a scoped CSS custom property over a new modifier class when only a value 
 
 ## Design Tokens
 
-Shared design tokens are defined in `static-assets/stylesheets/lib/design-tokens.css`; component-local custom properties live with their components. That file's header comment indexes the shipped token families. Read it before adding a token. Reuse a suitable token, revise values when the design changes, and add a family when the project needs a new reusable design decision. The starter's vocabulary is not a closed set.
+Shared design tokens are defined in `static-assets/stylesheets/lib/design-tokens.css`; component-local custom properties live with their components. That file's header comment indexes the token families; `--display-*` is documented with the type scale further down. Read it before adding a token. Reuse a suitable token, revise values when the design changes, and add a family when the project needs a new reusable design decision. The starter's vocabulary is not a closed set.
 
 Two rules govern every other stylesheet:
 
@@ -344,7 +344,7 @@ Conventions:
 - **Imports are root-relative logical URLs**, e.g. `import formatDate from '/javascript/lib/format-date.js'`. Do not use bare package specifiers; there is no module resolution step for browser code.
 - **Progressive enhancement is the contract.** Pages render and forms submit without JavaScript. A behavior that fails — a missing target, a denied clipboard write — must degrade to something usable and, where the failure is a markup bug, `console.warn` and skip that one control instead of throwing and taking every other control down with it.
 
-Browser JavaScript is linted with the rest of the project. `eslint.config.js` treats `pages/`, `public/`, `static-assets/`, and `templates/` as browser code: ES modules, `ecmaVersion: 2017`, and an explicit globals allowlist. A global that is not on that list is a lint error, so using a new browser API means adding it to the allowlist in `eslint.config.js` in the same change.
+Browser JavaScript is linted with the rest of the project. `eslint.config.js` treats `pages/`, `static-assets/`, and `templates/` as browser code (`public/` is not linted): ES modules, `ecmaVersion: 2017`, and an explicit globals allowlist. A global that is not on that list is a lint error, so using a new browser API means adding it to the allowlist in `eslint.config.js` in the same change.
 
 The JavaScript conventions in `docs/code-style-guide.md` and `docs/code-documentation-guide.md` are for server side JavaScript and *do not* apply to JavaScript in the browser.
 
