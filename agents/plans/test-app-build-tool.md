@@ -187,7 +187,7 @@ No automated tests or lint (Decision 9). Run these manual checks from the repo r
 
 ### Task T2: test-app/.gitignore and README build instructions
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `test-app/README.md`
 
@@ -233,10 +233,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `git ls-files --others --exclude-standard test-app` lists only allowed files: `README.md`, `.gitignore`, `.env.development`, `.env.production`, and, if present, the two context files and `.kixx/` files other than `secrets.json`.
-- [ ] `test-app/.env.development.secrets`, `test-app/.env.production.secrets`, and `test-app/.kixx/secrets.json` are ignored. Build outputs such as `test-app/node-server.js` and `test-app/node-config.jsonc` are ignored.
-- [ ] The README has a short Building section matching T1's actual behavior.
-- [ ] The root `.gitignore` is unchanged.
+- [x] `git ls-files --others --exclude-standard test-app` lists only allowed files: `README.md`, `.gitignore`, `.env.development`, `.env.production`, and, if present, the two context files and `.kixx/` files other than `secrets.json`.
+- [x] `test-app/.env.development.secrets`, `test-app/.env.production.secrets`, and `test-app/.kixx/secrets.json` are ignored. Build outputs such as `test-app/node-server.js` and `test-app/node-config.jsonc` are ignored.
+- [x] The README has a short Building section matching T1's actual behavior.
+- [x] The root `.gitignore` is unchanged.
 
 **Validation**
 
@@ -250,12 +250,17 @@ All read-only git queries from the repo root:
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `test-app/.gitignore` written per design; Building section appended to `test-app/README.md`.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: `.env.development`/`.env.production` left unstaged (operator runbook commits them).
+- Actual files changed: `test-app/.gitignore` (new), `test-app/README.md`.
+- Validation run:
+  - `git ls-files --others --exclude-standard test-app`: `.env.development`, `.env.production`, `.gitignore`, `README.md`.
+  - `git check-ignore -v ...`: every path matched a `test-app/.gitignore` rule (`.env.*.secrets` line 15, `/.kixx/secrets.json` line 14, `/*` line 2 for build outputs).
+  - `git check-ignore` on tracked config: no paths, `exit=1`.
+  - `ROOT_UNCHANGED` printed.
+  - README matches T1 design (command, prerequisites, abort-writes-nothing).
 - Blockers: None.
 
 ---
