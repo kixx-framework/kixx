@@ -42,7 +42,7 @@ Agent-facing:
 
 Developer and operator guides:
 
-- `README.md`, `lib/docs/*.md`
+- `README.md`, `docs/*.md`, `lib/docs/*.md`
 - `lib/app/*/README.md`, `lib/plugins/README.md`, `lib/templates/README.md`,
   `lib/test/*/README.md`
 - `lib/pages/admin/style-guide/` (the live design system)
@@ -86,7 +86,8 @@ voice stays consistent and you can resolve conflicts between findings.
 ## 3. Check cross-document consistency
 
 - `CLAUDE.md` and `README.md` do not contradict each other. Each fact lives in
-  one place, and the other points to it.
+  one place, and the other points to it. Exception: docs under `lib/` may
+  repeat facts from `docs/`, because `lib/` is published separately.
 - Each skill's `description` matches what the skill does and names the
   requests that should trigger it. Each agent's tool list and instructions
   still fit its job.

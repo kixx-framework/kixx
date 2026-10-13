@@ -347,6 +347,9 @@ curl --user 'admin@example.com:password' \
 Inspect and recover background jobs. Job behavior (retries, backoff,
 retention) is described in `lib/app/jobs/README.md`.
 
+`lib/` is published separately, so that README keeps its own copy of these
+endpoints. Update both when either changes.
+
 ### List jobs
 
 ```http
