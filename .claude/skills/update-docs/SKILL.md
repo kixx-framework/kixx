@@ -36,15 +36,16 @@ paths, audit only those, plus any index entries that describe them. If it says
 
 Agent-facing:
 
-- `CLAUDE.md`, `agents/docs/doc-index.md`, `agents/docs/file-structure.md`
+- `CLAUDE.md`
 - `.claude/agents/*.md`, `.claude/skills/*/SKILL.md` (and files they reference),
   `.claude/output-styles/`
 
 Developer and operator guides:
 
-- `README.md`, `docs/*.md`, `lib/docs/*.md`
-- `lib/app/*/README.md`, `lib/plugins/README.md`, `lib/templates/README.md`
-- `app/pages/admin/style-guide/` (the live design system)
+- `README.md`, `lib/docs/*.md`
+- `lib/app/*/README.md`, `lib/plugins/README.md`, `lib/templates/README.md`,
+  `lib/test/*/README.md`
+- `lib/pages/admin/style-guide/` (the live design system)
 
 Kixx framework: `lib/kixx/**/*.md`, except `lib/kixx/vendor/`.
 
@@ -54,14 +55,14 @@ Find where to focus before reading everything:
 
 ```bash
 git log -1 --format=%H -- <doc>            # last commit that touched a doc
-git log --oneline <that-commit>..HEAD -- src tools test package.json
+git log --oneline <that-commit>..HEAD -- lib ':!*.md'
 ```
 
 Code that changed after a doc was last edited is where it most likely went
 stale. Also look for things that have no doc yet: new routes in `lib/routes/`,
 transaction scripts, collections, plugins, framework modules in `lib/kixx/`,
-npm scripts, env vars in `src/example.env*`,
-and new top-level entries in `src/`.
+npm scripts, env vars in `lib/example.env*`,
+and new top-level entries in `lib/`.
 
 ## 2. Verify claims
 
@@ -71,7 +72,7 @@ Check every concrete, testable claim in each doc:
 - Commands, flags, and npm scripts exist (`package.json`, `--help` output).
 - Class, function, export, route, binding, and config key names match the code.
 - Env vars match `lib/example.env`, `lib/example.env.secrets`,
-  `lib/node-config.js`, and `lib/cloudflare-config.js`.
+  `lib/node-config.jsonc`, and `lib/cloudflare-config.jsonc`.
 - Described behavior (defaults, limits, error codes, ordering) matches the
   implementation.
 - Code examples would still run against the current API.
@@ -84,10 +85,6 @@ voice stays consistent and you can resolve conflicts between findings.
 
 ## 3. Check cross-document consistency
 
-- `agents/docs/doc-index.md` has one accurate summary per indexed doc. Add
-  entries for new docs and remove entries for deleted ones. Summaries say what
-  a doc covers, so an agent can decide whether to read it.
-- `agents/docs/file-structure.md` matches `ls -A` at the root and in `src/`.
 - `CLAUDE.md` and `README.md` do not contradict each other. Each fact lives in
   one place, and the other points to it.
 - Each skill's `description` matches what the skill does and names the
@@ -98,16 +95,34 @@ voice stays consistent and you can resolve conflicts between findings.
 
 ## 4. Trim
 
-Agents load these files into context, so every line costs something. Cut:
+Agents load these files into context, so every line costs something. After
+committing the accuracy fixes, re-read each doc in full and compact it as a
+separate commit, so reviewers can tell corrections from compression.
+
+Cut:
 
 - Restatements of what the code or another doc already says. Link to it
   instead.
 - History ("previously…", "we changed…"). That belongs in git and the journal.
-- Generic advice an agent already follows without being told.
+- Background and generic advice an agent already follows without being told.
 - Filler, hedging, and repeated examples.
 
-Do not restructure a doc that is accurate and already concise; small, focused
-edits are easier to review.
+Compact:
+
+- Turn rule-bearing paragraphs into a labeled list (`- **Cursors are
+  opaque.** …`) so an agent can find one rule without reading the section.
+- Move each rule to the section where a reader would look for it, and state it
+  once.
+- Fold small rules into example code as comments (`// never both`).
+- Merge checklist items that overlap; keep the checklist itself when it is a
+  deliberate gate.
+
+**Re-verify every reworded sentence against the code.** Compression is where
+new claims slip in: an invented reason, a "never" the code does not enforce, or
+a rule silently dropped. If a sentence cannot be traced to the code, cut it.
+
+Restructuring is fine in the trim commit. If a doc is already a dense list of
+rules, make small edits and say so rather than forcing a rewrite.
 
 ## 5. Finish
 
@@ -116,8 +131,8 @@ edits are easier to review.
 2. Commit your changes as you work, including any journal entries.
 3. Report to the user, briefly:
    - Fixes, grouped by file, each with the code evidence behind it.
-   - Cuts and other significant rewrites.
-   - Framework doc edits (`src/kixx/`) listed separately, since they can
+   - Cuts and other significant rewrites, with word counts before and after.
+   - Framework doc edits (`lib/kixx/`) listed separately, since they can
      conflict with upstream pull requests adopted later.
    - Items you did not change: suspected code bugs, missing docs that need a
      decision about where they belong, and claims you could not verify.
