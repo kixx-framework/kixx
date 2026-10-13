@@ -1,7 +1,7 @@
 # Admin API v1
 
-The Admin API provides operator-only JSON endpoints for data migrations and
-publishing-token creation, plus a token-authenticated endpoint for redeeming a
+The Admin API provides operator-only JSON endpoints for data migrations, job
+queue inspection, and publishing-token creation, plus a token-authenticated endpoint for redeeming a
 one-time admin invite.
 
 The API is mounted at:
@@ -19,6 +19,10 @@ server origin.
 | --- | --- | --- | --- | --- |
 | `GET` | `/admin-api/v1/migrations` | Admin HTTP Basic | `urn:kixx:list` on `urn:kixx:admin:migrations` | List registered migrations and their durable status |
 | `POST` | `/admin-api/v1/migrations/:id/run` | Admin HTTP Basic | `urn:kixx:run` on `urn:kixx:admin:migrations` | Run one migration batch |
+| `GET` | `/admin-api/v1/jobs` | Admin HTTP Basic | `urn:kixx:list` on `urn:kixx:admin:jobs` | List queued, running, and finished jobs |
+| `GET` | `/admin-api/v1/jobs/:id` | Admin HTTP Basic | `urn:kixx:get` on `urn:kixx:admin:jobs` | Get one job |
+| `POST` | `/admin-api/v1/jobs/:id/retry` | Admin HTTP Basic | `urn:kixx:update` on `urn:kixx:admin:jobs` | Re-queue a failed job |
+| `GET` | `/admin-api/v1/job-schedules` | Admin HTTP Basic | `urn:kixx:list` on `urn:kixx:admin:jobs` | List recurring job schedules |
 | `POST` | `/admin-api/v1/users/invite` | Invite bearer token | None | Redeem an invite and create an admin account |
 | `POST` | `/admin-api/v1/publishing-api-tokens` | Admin HTTP Basic | `urn:kixx:create` on `urn:kixx:admin:api-tokens:publishing` | Mint a publishing API bearer token |
 
@@ -97,11 +101,11 @@ Common failures are:
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `400` | `BAD_REQUEST_ERROR` | Invalid JSON, malformed JSON:API envelope, or invalid dry-run cursor |
+| `400` | `BAD_REQUEST_ERROR` | Invalid JSON, malformed JSON:API envelope, invalid query parameter, or invalid cursor |
 | `401` | `UNAUTHENTICATED_ERROR` | Required credentials are absent or malformed |
 | `401` | `InvalidCredentials` | Admin email or password was rejected |
 | `403` | `FORBIDDEN_ERROR` | Authenticated admin lacks the required permission |
-| `404` | `NOT_FOUND_ERROR` | A requested migration ID is not registered |
+| `404` | `NOT_FOUND_ERROR` | A requested migration or job ID does not exist |
 | `405` | `METHOD_NOT_ALLOWED_ERROR` | Method is not allowed on the recognized path |
 | `409` | `JsonApiResourceTypeMismatch` | Request resource type is wrong |
 | `415` | `UNSUPPORTED_MEDIA_TYPE_ERROR` | Request `Content-Type` is not JSON:API |
@@ -113,7 +117,7 @@ are reported as server failures without exposing internal details.
 
 ## Admin authentication and authorization
 
-The migration and publishing-token endpoints authenticate every request using
+The migration, job, and publishing-token endpoints authenticate every request using
 HTTP Basic credentials. The username is an admin email address and the password
 is the admin account password:
 
@@ -130,7 +134,7 @@ same `InvalidCredentials` response to avoid account enumeration.
 After authentication, permissions are derived from the account's stored role
 IDs for the current request:
 
-| Role | List/run migrations | Create publishing tokens |
+| Role | Migrations and jobs | Create publishing tokens |
 | --- | --- | --- |
 | `root-admin` | Yes | Yes |
 | `developer` | Yes | Yes |
@@ -245,7 +249,7 @@ All attributes are optional:
 | `force` | boolean | `false` | Restart an applied or failed real run from the beginning |
 | `cursor` | non-empty string or `null` | `null` | Opaque caller-owned cursor for a dry run |
 
-`dryRun` and `force` cannot both be `true`. The cursor is ignored for a real
+`dryRun` and `force` cannot both be `true`; that returns `422` on `force`. The cursor is ignored for a real
 run because real progress is loaded from the durable ledger. Do not parse or
 modify a dry-run cursor; return it unchanged in the next dry-run request.
 
@@ -306,6 +310,7 @@ Content-Type: application/vnd.api+json; charset=utf-8
   preserved.
 - `force: true` resets an `applied` or `failed` migration to a fresh run. Its
   cursor, stats, batch count, start identity, and timestamps are reset.
+  `force` is ignored for a `running` migration, which resumes.
 - Running an already-applied migration without force returns `409` with code
   `MigrationAlreadyAppliedError`.
 
@@ -350,6 +355,107 @@ curl --user 'admin@example.com:password' \
     http://localhost:2026/admin-api/v1/migrations/2026-07-17-example-noop/run
 ```
 
+## Jobs
+
+Inspect and recover background jobs. Job behavior (retries, backoff,
+retention) is described in `lib/app/jobs/README.md`.
+
+### List jobs
+
+```http
+GET /admin-api/v1/jobs?status=failed&name=send-email&limit=50&cursor=<cursor>
+```
+
+Returns jobs newest first. All query parameters are optional; an empty value
+is treated as absent, and a repeated parameter returns `400`.
+
+| Parameter | Meaning |
+| --- | --- |
+| `status` | `pending`, `running`, `completed`, or `failed` |
+| `name` | Registered job name |
+| `limit` | Integer from 1 through 200; default 50 |
+| `cursor` | Opaque cursor from the previous page's `meta.cursor` |
+
+```json
+{
+    "data": [
+        {
+            "type": "Job",
+            "id": "<uuid>",
+            "attributes": {
+                "name": "send-email",
+                "key": null,
+                "scheduleName": null,
+                "payload": {},
+                "status": "failed",
+                "attempt": 3,
+                "maxAttempts": 3,
+                "runAt": "2026-10-13T12:00:00.000Z",
+                "scheduledFor": null,
+                "createdAt": "2026-10-13T11:59:00.000Z",
+                "updatedAt": "2026-10-13T12:00:05.000Z",
+                "finishedAt": "2026-10-13T12:00:05.000Z",
+                "lastError": {
+                    "name": "OperationalError",
+                    "message": "Upstream timed out",
+                    "expected": true
+                }
+            }
+        }
+    ],
+    "meta": {
+        "cursor": null
+    }
+}
+```
+
+`meta.cursor` is `null` on the last page. An invalid cursor returns `400`.
+
+### Get a job
+
+```http
+GET /admin-api/v1/jobs/:id
+```
+
+Returns one `Job` resource. An unknown or purged ID returns `404`.
+
+### Retry a job
+
+```http
+POST /admin-api/v1/jobs/:id/retry
+```
+
+No request body is needed. Resets a `failed` job to attempt 0, due now, and
+returns the re-queued `Job` resource. An unknown ID returns `404`. A job that
+is not `failed`, or whose dedupe key or schedule is held by an active job,
+returns `409` with code `CONFLICT_ERROR` and is left unchanged.
+
+### List job schedules
+
+```http
+GET /admin-api/v1/job-schedules
+```
+
+```json
+{
+    "data": [
+        {
+            "type": "JobSchedule",
+            "id": "<job-name>",
+            "attributes": {
+                "cron": "*/15 * * * *",
+                "nextRunAt": "2026-10-13T12:15:00.000Z",
+                "lastEnqueuedAt": "2026-10-13T12:00:00.000Z",
+                "lastJobId": "<uuid>"
+            }
+        }
+    ]
+}
+```
+
+`cron` is a UTC 5-field expression. `lastEnqueuedAt` and `lastJobId` are
+`null` before the first occurrence.
+
 ## Accept an admin invite
 
 ```http
@@ -371,7 +477,7 @@ The required resource type is `AdminUser`.
         "type": "AdminUser",
         "attributes": {
             "emailAddress": "new-admin@example.com",
-            "password": "at-least-16-characters"
+            "password": "at-least-12-chars"
         }
     }
 }
@@ -436,7 +542,7 @@ assigned roles.
 curl \
     --header 'Authorization: Bearer invite-secret' \
     --header 'Content-Type: application/vnd.api+json' \
-    --data '{"data":{"type":"AdminUser","attributes":{"emailAddress":"new-admin@example.com","password":"at-least-16-characters"}}}' \
+    --data '{"data":{"type":"AdminUser","attributes":{"emailAddress":"new-admin@example.com","password":"at-least-12-chars"}}}' \
     http://localhost:2026/admin-api/v1/users/invite
 ```
 

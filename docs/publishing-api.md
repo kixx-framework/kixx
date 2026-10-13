@@ -83,7 +83,9 @@ returns `405 Method Not Allowed` with an `Allow` header.
 
 ## Authentication and authorization
 
-Every request, including discovery, requires a Publishing API bearer token:
+Every request to a routed endpoint, including discovery, requires a Publishing
+API bearer token (unknown paths return `404` and disallowed methods `405` before
+authentication):
 
 ```http
 Authorization: Bearer <publishing-token>
@@ -146,8 +148,7 @@ non-empty string. A malformed document returns `400 Bad Request`; an
 incorrect resource type returns `409 Conflict` with code
 `JsonApiResourceTypeMismatch`.
 
-`PUT /objects/:objectId` is the one exception: its body is raw, non-empty
-bytes with no envelope and no required media type, exactly like
+`PUT /objects/:objectId` is the one exception: its body is raw bytes with no envelope and no required media type, exactly like
 static-asset uploads elsewhere in this project.
 
 ### Error documents
@@ -174,7 +175,7 @@ Error codes used by this API:
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `400` | `BAD_REQUEST_ERROR` | Malformed JSON:API request or bad pagination |
+| `400` | `BAD_REQUEST_ERROR` | Malformed JSON:API request, missing `attributes.manifest`, a limit exceeded (object ids, manifest entries), or bad pagination |
 | `401` | `UNAUTHENTICATED_ERROR` | Bearer credentials are absent, malformed, or unknown |
 | `403` | `FORBIDDEN_ERROR` | The token lacks the endpoint permission |
 | `403` | `PublishingApiTokenInactive` | The token is expired or revoked |
@@ -188,9 +189,9 @@ Error codes used by this API:
 | `413` | `PAYLOAD_TOO_LARGE_ERROR` | An object upload's declared `Content-Length` exceeds `maxObjectBytes` |
 | `415` | `UNSUPPORTED_MEDIA_TYPE_ERROR` | The request media type is not accepted |
 | `422` | `ObjectIdMismatch` | Uploaded bytes do not match the object id in the URL |
-| `422` | `ObjectIdInvalid` | An object id is not a valid content address |
+| `422` | `ObjectIdInvalid` | An object id (in the URL or `attributes.objectIds`) is not a valid content address |
 | `422` | `MissingContentObjects` | The manifest names objects the store does not hold |
-| `422` | `InvalidReleaseManifest` | The manifest structure or content is invalid |
+| `422` | `InvalidReleaseManifest` | The manifest structure or content, or the provenance, is invalid |
 | `422` | `InvalidBuildAssignment` | `data.id`, `attributes.releaseId`, `attributes.expectedAssignmentId`, or `attributes.reason` fails validation |
 | `428` | `PreconditionRequired` | A build pointer write omitted JSON `attributes.expectedAssignmentId` |
 
@@ -255,8 +256,9 @@ Content-Type: application/vnd.api+json
 }
 ```
 
-`attributes.objectIds` is deduplicated by the server and capped at
-`maxObjectStatusIds` (100) unique ids. The response lists only the ids that
+`attributes.objectIds` must be an array; it is deduplicated by the server and
+capped at `maxObjectStatusIds` (100) unique ids. A non-array or too many ids
+returns `400`; an invalid id returns `422 ObjectIdInvalid`. The response lists only the ids that
 are actually stored, as a set with no promised order — an id absent from the
 response is not stored:
 
@@ -281,7 +283,7 @@ objects the store does not already have.
 PUT /publishing-api/v1/objects/:objectId
 ```
 
-Send raw, non-empty bytes as the body, with no JSON:API envelope. The server
+Send raw bytes as the body, with no JSON:API envelope. The server
 recomputes the content address from the received bytes and compares it with
 `:objectId` in the URL:
 
@@ -329,12 +331,12 @@ Content-Type: application/vnd.api+json
         "attributes": {
             "manifest": {
                 "staticAssets": {
-                    "css/site.css": { "objectId": "<object-id>", "size": 1234 }
+                    "/css/site.css": { "objectId": "<object-id>", "size": 1234 }
                 },
                 "globalTemplatePartials": { "objectId": "<object-id>", "size": 98 },
                 "baseTemplates": { "objectId": "<object-id>", "size": 210 },
                 "pages": {
-                    "about": {
+                    "/about": {
                         "metadata": { "objectId": "<object-id>", "size": 41 },
                         "partials": { "objectId": "<object-id>", "size": 62 },
                         "includes": { "objectId": "<object-id>", "size": 19 },
@@ -344,7 +346,7 @@ Content-Type: application/vnd.api+json
                     }
                 },
                 "emails": {
-                    "welcome": { "objectId": "<object-id>", "size": 300 }
+                    "/welcome": { "objectId": "<object-id>", "size": 300 }
                 }
             },
             "provenance": {
@@ -359,33 +361,38 @@ Content-Type: application/vnd.api+json
 
 The manifest is a **complete replacement**: an omitted facet is absent from
 the Release, and never inherits from whatever is currently live.
-`staticAssets`, `pages`, and `emails` are keyed by canonical logical
-pathnames — lowercase-insensitive is not applied; a non-canonical pathname is
-rejected outright rather than normalized. Each reference is
+`attributes.manifest` is required (`400` when absent). `staticAssets`, `pages`,
+and `emails` are keyed by canonical pathnames: lowercase, one leading `/`, no
+trailing slash. A non-canonical pathname is rejected, not normalized. Only
+`pages` may use the root `/`. Unknown fields are rejected at every level. Each reference is
 `{ objectId, size }`; static-asset references may add an optional
 `mediaType`. `pages.<path>.templates` is a filename-to-reference map, letting
 one page publish more than one template.
 
-`attributes.provenance` is optional, immutable, non-binding metadata:
-`sourceRevision`, `message`, `client`, and `intendedForBuildId` (the build id
+`attributes.provenance` is optional, immutable, non-binding metadata. Its only
+fields are `sourceRevision`, `message`, `client`, and `intendedForBuildId`, each
+a non-empty string (`intendedForBuildId` is the build id
 this Release was authored for — a hint for pre-staging audits, not a binding
 constraint; nothing prevents assigning a Release to a different build id).
 
-Creation runs, and fails before persisting anything if any step fails:
+Creation persists nothing if any check fails:
 
-1. manifest schema validation;
-2. object existence and size verification against every referenced object id;
-3. JSON parsing and schema validation for structured payloads (template
-   bundles, page metadata, email bundles, includes).
+1. manifest schema validation, then the `maxManifestEntries` (10000) limit
+   (`400`);
+2. object existence and size verification against every referenced object id,
+   together with JSON parsing and schema validation for structured payloads
+   (template bundles, page metadata, email bundles, includes). Errors from
+   both are reported together.
 
 Template source is not compiled and partial references are not resolved during
 release validation or creation. Successful release validation does not
 guarantee successful rendering.
 
-A manifest naming an object the store does not hold fails with
-`422 MissingContentObjects`, listing every missing reference — not just the
-first — up to a documented cap. A claimed size that disagrees with the
-stored size fails with `409 ObjectSizeMismatch`. Malformed JSON or a structured
+A claimed size that disagrees with the stored size fails with
+`409 ObjectSizeMismatch`, which takes precedence over any other error. Otherwise,
+a manifest naming an object the store does not hold fails with
+`422 MissingContentObjects`, listing every missing reference (up to 1000) —
+not just the first. Malformed JSON or a structured
 payload that violates its schema fails with
 `422 InvalidReleaseManifest`. Metadata and email context data must be JSON
 objects; their nested values are not recursively validated.
@@ -414,7 +421,7 @@ The response is `201 Created`:
 ```
 
 `id` is the Release's closure root hash, so re-creating byte-identical
-content returns the **original** Release record unchanged — creation is
+content returns `201` with the **original** Release record unchanged — creation is
 content-idempotent, and there are no idempotency keys anywhere in this API.
 Creating a Release never assigns it to any build; see
 [Assign a Release to a build](#assign-a-release-to-a-build) below.
@@ -426,7 +433,8 @@ POST /publishing-api/v1/releases/validation
 Content-Type: application/vnd.api+json
 ```
 
-Same request body as `POST /releases`, same verification pipeline, but nothing
+Same request body as `POST /releases` (`provenance` is ignored), same
+verification pipeline, but nothing
 is persisted on success or failure — no
 objects, no closure, no Release record. Use this to gate a CI build without
 creating an unreferenced closure for every candidate commit.
@@ -437,6 +445,7 @@ creating an unreferenced closure for every candidate commit.
         "type": "ReleaseValidation",
         "id": "<release-id>",
         "attributes": {
+            "releaseId": "<release-id>",
             "objectCount": 6,
             "totalBytes": 1972,
             "contractVersion": 1
@@ -452,7 +461,8 @@ GET /publishing-api/v1/releases?limit=25&cursor=<cursor>
 ```
 
 Lists Releases newest first with stable cursor pagination. `limit` is
-optional (1 through 100); `cursor` continues a prior page.
+optional (1 through 100, default 100); `cursor` continues a prior page.
+`meta.cursor` is `null` on the last page.
 
 ```json
 {
@@ -489,6 +499,16 @@ Gets the complete manifest stored inside the Release's immutable closure —
 every reference it names, exactly as validated. Use this for whole-site
 diffing against a local content tree, without walking per-pathname
 endpoints. Returns `404 ReleaseNotFound` when the Release closure is absent.
+
+```json
+{
+    "data": {
+        "type": "ReleaseManifest",
+        "id": "<release-id>",
+        "attributes": { "manifest": {} }
+    }
+}
+```
 
 ## Build pointers
 
@@ -609,7 +629,8 @@ There is no unconditional retry or request-idempotency mechanism.
 GET /publishing-api/v1/builds/:buildId/activations?limit=25&cursor=<cursor>
 ```
 
-Lists every changed assignment to one build, newest first. A successful
+Lists every changed assignment to one build, newest first, paginated like
+`GET /releases`. A successful
 same-target no-op creates no entry. Returns
 `404 BuildNotFound` when the build has never been assigned.
 
