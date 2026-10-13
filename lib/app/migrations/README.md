@@ -1,6 +1,6 @@
 # Data Migrations
 
-Data migrations are statically registered application modules advanced remotely through the authenticated Admin API. Each request executes exactly one bounded batch. The durable `Migration` ledger records only successfully committed real-run progress; dry-run progress belongs to the caller.
+Data migrations are statically registered application modules advanced remotely through the authenticated Admin API. Each request executes exactly one bounded batch. The durable `Migration` ledger records only successfully committed real-run progress; dry-run progress belongs to the caller. Endpoints and the run lifecycle (resume, `force`, conflicts) are in `docs/admin-api.md`.
 
 ## Migration ids and registration
 
@@ -14,7 +14,7 @@ For example, `2026-07-17-backfill-user-roles`. Never rename or reuse an id after
 
 To register a migration:
 
-1. Add a module named after its id in this directory.
+1. Add a module named after its id in this directory. `2026-07-17-example-noop.js` is a minimal template.
 2. Export its asynchronous `migrate(context, params)` function.
 3. Explicitly import that function in `mod.js`.
 4. Add a `Map` entry whose key exactly equals its `entry.id`, with a non-empty operator-facing `description` and the imported `migrate` function.
@@ -37,19 +37,21 @@ export async function migrate(context, params) {
 }
 ```
 
-`context` is the active RequestContext. Access application data only through its registered Collections or gateways. `params.cursor` is `null` for the first batch and otherwise is the opaque cursor returned by the previous committed batch. `params.dryRun` forbids all mutations.
+`context` is the active RequestContext. Access application data only through its registered Collections or gateways. `params.cursor` is `null` for the first batch, otherwise the cursor returned by the previous batch (from the ledger for real runs, from the caller for dry runs). `params.dryRun` forbids all mutations.
 
 The returned plain object must contain:
 
 - `done`: a boolean.
-- `cursor`: `null` exactly when `done` is `true`; otherwise a non-empty cursor different from the input cursor.
+- `cursor`: `null` exactly when `done` is `true`; otherwise a non-empty string different from the input cursor.
 - `stats`: a plain object containing finite numeric counters for this batch.
 
 Treat cursors as opaque. Do not parse, alter, combine, or synthesize them. Rebuild the same scan/query operation on every cursored batch, including type, index, ordering, and bounds. Keep stat names stable so real-run batches can be accumulated.
 
 One invocation must process only one bounded batch with comfortable headroom under every supported runtime limit. The remote caller drives subsequent batches.
 
-Every record mutation must be idempotent: inspect current state and skip a write when the intended result is already present. Application writes and the ledger commit are not atomic, so a batch may be replayed after interruption or a ledger race. Handle expected record-level concurrency and domain failures deliberately.
+Every record mutation must be idempotent: inspect current state and skip a write when the intended result is already present. Application writes and the ledger commit are not atomic, so a batch may be replayed after interruption or a ledger race.
+
+Handle expected record-level concurrency and domain failures deliberately. On a real run, any throw marks the ledger `failed` (best effort); the next run resumes from the last committed cursor. Expected errors (`error.expected === true`) reach the operator unchanged; anything else is wrapped in an `AssertionError`. An `InvalidCursorError` becomes a `409` that requires `force`.
 
 A dry run must perform the same reads, selection, skip logic, and counting as a real run, but it must omit every application-data write and external mutation.
 
