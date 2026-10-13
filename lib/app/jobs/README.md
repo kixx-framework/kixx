@@ -1,21 +1,19 @@
 # Background Jobs
 
-A durable job queue. Enqueue a job by name; it runs as soon as possible, at a later time, or on a recurring UTC cron schedule declared in code. Node runs jobs in-process from a SQLite file. Cloudflare runs them in a Durable Object `alarm()`.
+A durable job queue. Enqueue a job by name to run now, later, or on a UTC cron schedule declared in code. Port contract: `kixx/jobs/job-queue-interface.js`.
 
 ```js
 const queue = context.getService('JobQueue');
 
 await queue.enqueue(context, 'send-admin-invite-email', { inviteId }, {
-    runAt: '2026-10-01T09:00:00Z', // or delaySeconds: 300; omit for "as soon as possible"
+    runAt: '2026-10-01T09:00:00Z', // or delaySeconds: 300, never both; omit both for "now"
     key: `invite-email:${ inviteId }`, // optional dedupe key
 });
 ```
 
-The port contract is `kixx/jobs/job-queue-interface.js`.
-
 ## Registering a job
 
-Add an entry to the static `Map` in `mod.js`. Import the handler statically (no `import()`). The service validates the registry at boot, and enqueuing an unregistered name fails.
+Add an entry to the `Map` in `mod.js`, importing the handler statically (no `import()`). The registry is validated at boot. It ships empty.
 
 ```js
 [ 'send-admin-invite-email', {
@@ -28,7 +26,7 @@ Add an entry to the static `Map` in `mod.js`. Import the handler statically (no 
 } ]
 ```
 
-The shipped registry is empty. Unknown fields are rejected, including `concurrency` and `schedule.timezone`.
+Unknown fields, including `concurrency` and `schedule.timezone`, are rejected.
 
 ## Handlers
 
@@ -39,17 +37,16 @@ export async function handler(context, job) {}
 `job` is `{ id, name, payload, attempt, maxAttempts, scheduledFor, signal }`. `context` has shared services and collections, a logger stamped with `jobId`/`jobName`, and no request or user.
 
 - Handlers sit at the presentation layer. Put business rules in Transaction Scripts. A handler may call a framework service directly when it owns the whole operation.
-- **Delivery is at-least-once. Handlers MUST be idempotent.** Use `job.id` (stable across attempts) and `job.attempt` to guard side effects. Claim tokens protect queue state from stale outcomes but cannot prevent duplicate external effects.
-- There is no `cancel`. Re-check current state and no-op when the job is obsolete. For recurring jobs `scheduledFor` is the occurrence time, so a stale run can detect it is late.
+- **Delivery is at-least-once. Handlers MUST be idempotent.** Guard side effects with `job.id` (stable across attempts) and `job.attempt`. The queue cannot prevent duplicate external effects.
+- There is no `cancel`. Re-check current state and no-op when the job is obsolete. A recurring run can compare `scheduledFor` (its occurrence time) to now to detect it is late.
 - `signal` aborts at `timeoutSeconds`. Abort is cooperative; honor it in long calls.
 - **A job must fit inside one Cloudflare invocation.** Split long work into chained jobs (enqueue the next from the handler).
-- Payload must be JSON-serializable, at most 128 KB serialized (`PayloadTooLargeError`).
 
 ## Enqueueing
 
 - Enqueue *after* the domain write. There is no transaction across the DocumentStore and the queue. For critical work, record the intent on the domain record and have a recurring sweep job re-enqueue anything unprocessed.
 - `key` dedupes among *active* jobs: enqueueing the key of a pending or running job returns that job with `created: false`. The key is reusable once the job finishes.
-- `runAt` and `delaySeconds` are mutually exclusive.
+- Payload must be JSON-serializable and at most 128 KB serialized (`PayloadTooLargeError`). An unregistered name is an assertion failure.
 - No ordering guarantee between an enqueue and a read from another process.
 
 ## Schedules
@@ -65,9 +62,9 @@ export async function handler(context, job) {}
 See `docs/server-error-handling.md`.
 
 - Expected error (`error.expected === true`): recorded, then retried with backoff unless `error.retryable === false`. `retryable` defaults to `true` for `OperationalError` and `false` for other expected classes. It is a plain property, not a constructor option: `Object.assign(error, { retryable: false })`.
-- Unexpected error: the job fails immediately (no retry) and is logged at error. Node then shuts down gracefully with exit code 1. The Durable Object stops claiming for that invocation and logs the error.
+- Unexpected error: the job fails without retry and is logged. Node then shuts down gracefully with exit code 1; the Durable Object stops claiming for that invocation.
 - Backoff: exponential with full jitter from 10 s, capped at 1 h. A run that outlives its lease (`timeoutSeconds` + 30 s) counts as a failed attempt.
-- A job whose name is no longer registered (deploy drift) is failed with an `UnknownJob` error.
+- A stored job whose name is no longer registered fails with `UnknownJob`.
 
 ## Operating
 
@@ -84,12 +81,12 @@ Admin API v1 (Basic auth, resource `urn:kixx:admin:jobs`, developer role):
 
 Platform notes:
 
-- **Node:** a single loop fills free slots while work is due and polls every `JOB_QUEUE.pollIntervalSeconds` (1 in shipped config) when idle. There is no enqueue nudge, so an idle queue can take up to one interval to start a new job.
-- **Cloudflare:** jobs run in the `JobQueueStore` Durable Object. Each alarm stops claiming after `JOB_QUEUE.softDeadlineSeconds` and re-arms. Raise `WORKER_VERSION.limits.cpu_ms` in `cloudflare-config.jsonc` (default 30 s CPU) for CPU-heavy jobs.
+- **Node:** runs in-process from SQLite. When idle it polls every `JOB_QUEUE.pollIntervalSeconds` (1 in shipped config), so a new job can wait up to one interval to start.
+- **Cloudflare:** runs in the `JobQueueStore` Durable Object `alarm()`. Each alarm stops claiming after `JOB_QUEUE.softDeadlineSeconds` and re-arms. Raise `WORKER_VERSION.limits.cpu_ms` in `cloudflare-config.jsonc` (default 30 s CPU) for CPU-heavy jobs.
 
 ## Testing
 
-Register the handler in a test-only registry and drive the runner directly:
+Use a test-only registry and drive the runner directly:
 
 ```js
 await queue.processDueJobs({ now: new Date('2026-03-10T00:16:00Z') });
