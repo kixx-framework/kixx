@@ -49,16 +49,17 @@ Seeded during planning, with citations. There is no separate audit task: before 
 | --- | --- | --- | --- | --- | --- |
 | A1 | Invite password length | 12–256 (`lib/app/presentation/forms/admin-users/new-admin-user-form.js:55-56`) | 12–256 (`docs/admin-api.md:479`) | 16–256 (`commands/admin/accept-invite.js:9`) | Confirmed by T3. Validated 12–256 locally (`devkit/commands/admin/accept-invite.js`) |
 | A2 | `NewUserConflictError` (409, invite not consumed) and `InviteSpentInEmailRace` (409, invite consumed) | present (`lib/app/transaction-scripts/admin-users/create-admin-user-account.js:43-46,79-82`; `ConflictError` is 409, `lib/kixx/errors/lib/conflict-error.js:25`) | documented (`docs/admin-api.md:514-522`) | unmapped | Confirmed by T3. Mapped to `NewUserConflictError` / `InviteSpentInEmailRaceError` and distinct operator messages |
-| A3 | `PublishingApiTokenInactive` (403, expired/revoked token) | present (`authenticate-publishing-token.js:44`) | documented | unmapped | Map to an operator message naming `admin create-publishing-token` (T4) |
-| A4 | Discovery: `contentContractVersion: 1`, `addressingFormat: 4`, `buildAssignmentProtocolVersion: 2`, `limits.{maxObjectBytes,maxObjectStatusIds,maxManifestEntries}` | `request-handlers/publishing-api/discovery.js`, `constants.js`, `kixx/content-addressable-store/addressing.js:53` | matches | negotiates the same | Keep the negotiation; refuse older servers (T4) |
-| A5 | Blob addressing: lib `hashBlob` is async WebCrypto; old devkit is sync `node:crypto` | `lib/kixx/content-addressable-store/addressing.js` | — | `lib/publishing/addressing.js` | Conformance test proves identical digests (T4) |
-| A6 | JSON writes require `Content-Type: application/vnd.api+json`; object `PUT` is raw bytes and needs `Content-Length` (411 without) | `request-handlers/publishing-api/objects.js:59` | matches | sends bytes | Verify the upload body is a byte buffer so `fetch` sets `Content-Length` (T4) |
-| A7 | Build `PUT` precondition goes in JSON `attributes.expectedAssignmentId`; `If-Match`/`If-None-Match` is rejected with 400 | `builds.js:90-111` | matches | protocol 2 body precondition | Keep (T4) |
+| A3 | `PublishingApiTokenInactive` (403, expired/revoked token) | present (`lib/app/transaction-scripts/publishing-api-tokens/authenticate-publishing-token.js:42-45`) | documented (`docs/publishing-api.md:83,162`) | unmapped | Confirmed by T4. `createPublishingApiError` returns `PublishingApiTokenInactiveError` (a `UsageError`) naming `kixx admin create-publishing-token` |
+| A4 | Discovery: `contentContractVersion: 1`, `addressingFormat: 4`, `buildAssignmentProtocolVersion: 2`, `limits.{maxObjectBytes,maxObjectStatusIds,maxManifestEntries}` | `lib/app/presentation/request-handlers/publishing-api/discovery.js:20-35`, `constants.js:1-4`, `lib/kixx/content-addressable-store/addressing.js:53` | matches (`docs/publishing-api.md:181-218`) | negotiates the same | Confirmed by T4. Negotiation kept; refuses older servers, listing every mismatch |
+| A5 | Blob addressing: lib `hashBlob` is async WebCrypto; old devkit is sync `node:crypto` | `lib/kixx/content-addressable-store/addressing.js:235-243` | — | `lib/publishing/addressing.js` | Confirmed by T4. `devkit/test/conformance/addressing.test.js` proves identical digests, canonical JSON, and string order |
+| A6 | JSON writes require `Content-Type: application/vnd.api+json`; object `PUT` is raw bytes and needs `Content-Length` (411 without) | `lib/app/presentation/request-handlers/publishing-api/objects.js:55-60` | matches (`docs/publishing-api.md:107,168,274-275`) | sends bytes | Confirmed by T4. `uploadObject` converts the body to a `Uint8Array` (never a stream) |
+| A7 | Build `PUT` precondition goes in JSON `attributes.expectedAssignmentId`; `If-Match`/`If-None-Match` is rejected with 400 | `lib/app/presentation/request-handlers/publishing-api/builds.js:86-96`; 412 `BuildPointerConflict` at `:108-112` | matches (`docs/publishing-api.md:563-570`) | protocol 2 body precondition | Confirmed by T4. Kept; build `PUT` is attempted once |
 | A8 | Migration codes `MigrationAlreadyAppliedError`, `MigrationConcurrencyError`, `MigrationCursorConflictError` (409) | `transaction-scripts/migrations/run-migration.js:172,219,245` | matches (`docs/admin-api.md:303-310`) | mapped | Confirmed by T3. Mappings kept; `--force` confirmation and `--yes` removed |
 | A9 | `InvalidInvite` (403), `InvalidCredentials` (401) | `lib/app/presentation/request-handlers/admin-api/accept-invite.js:15,49`, `lib/app/transaction-scripts/admin-invites/consume-admin-invite.js:10,32`; `lib/app/transaction-scripts/admin-users/verify-admin-credentials.js:12,73` | matches (`docs/admin-api.md:105,481-483`) | mapped | Confirmed by T3. Kept |
 | A10 | Content directories: `pages/`, `templates/{base,partials}/`, `static-assets/`, `public/`, `emails/` | lib layout matches | — | scans the same | Conformance test scans repo `lib/` and validates with lib's manifest validator (T5). `lib/templates/README.md` must be reported as unmatched, not fail publishing (T5 verifies by reading the old scanner). |
 | A11 | Old devkit docs say `deploy-version` updates state; the old code never wrote state | — | — | `lib/cloudflare/deploy-worker-version.js` | Implement the state update (T6) |
-| A12 | `POST /releases/validation` expects resource type `Release` | `releases.js:136` | "same body as POST /releases" | sends `Release` | Keep |
+| A12 | `POST /releases/validation` expects resource type `Release` | `releases.js:136` | "same body as POST /releases" | sends `Release` | Moot after T4: devkit no longer calls this endpoint (`validateRelease` was only used by out-of-scope commands and was not ported) |
+| A13 | Endpoints devkit calls: `GET /publishing-api/v1/` (discovery), `POST /objects/status`, `PUT /objects/:objectId`, `POST /releases`, `GET /builds/:buildId`, `PUT /builds/:buildId`; build `reason` ∈ `publish`, `rollback`, `carry-forward`, `restore` | `lib/routes/publishing-api-v1.js:27-44`; reasons `lib/app/collections/activation-record.js:8-13` | matches (`docs/publishing-api.md:50-68,558`) | — | Added by T4. `assign-build --reason` validated locally against the four reasons |
 
 ---
 
@@ -218,7 +219,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T4: Publishing API client, capability negotiation, and `app assign-build`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `tmp/kixx-devkit/docs/app.md` (`assign-build`, Pointer conflicts, Server requirement), `docs/publishing-api.md`, plan audit rows A3 to A7, A12
 
@@ -250,11 +251,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Client tests cover every endpoint devkit calls: URL, method, Bearer header, media type, envelope, `status`-string error parsing, read-only retries, and token redaction.
-- [ ] Negotiation tests: each single mismatch and a multi-mismatch report. No write is attempted after a refusal.
-- [ ] `assign-build` tests: first assignment (`null` precondition), conditional reassignment, and a 412 conflict that is reported and not retried.
-- [ ] Conformance tests pass against repo `lib/`.
-- [ ] Audit rows A3 to A7 and A12 are confirmed or corrected with citations, plus a row for any called endpoint not yet listed; disagreements are listed under Blockers, or "None found".
+- [x] Client tests cover every endpoint devkit calls: URL, method, Bearer header, media type, envelope, `status`-string error parsing, read-only retries, and token redaction.
+- [x] Negotiation tests: each single mismatch and a multi-mismatch report. No write is attempted after a refusal.
+- [x] `assign-build` tests: first assignment (`null` precondition), conditional reassignment, and a 412 conflict that is reported and not retried.
+- [x] Conformance tests pass against repo `lib/`.
+- [x] Audit rows A3 to A7 and A12 are confirmed or corrected with citations, plus a row for any called endpoint not yet listed; disagreements are listed under Blockers, or "None found".
 
 **Validation**
 
@@ -264,13 +265,23 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Publishing API client, typed errors, negotiation, addressing, content layout, `assign-release`, environment resolver, and `app assign-build`, with unit and conformance tests. Audit rows A3 to A7 and A12 checked; A13 added.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - Client keeps only the methods devkit calls: `discover`, `getObjectStatus`, `uploadObject`, `createRelease`, `getBuild`, `assignBuild`. Dropped `validateRelease`, `listReleases`, `getRelease`, `getReleaseManifest`, `listBuilds`, `getBuildActivations` (only out-of-scope `create-release`/`rollback`/`release` used them). Dropped `assignReleaseToNewBuild` (only `lib/release/` used it).
+  - Retries: the client retries 429/5xx/network failures on every idempotent request (GETs, `objects/status`, content-addressed object `PUT`, content-addressed `POST /releases`), as the old client did. The build `PUT` is never retried. Interpreted the plan's "read-only retries" this way; T5 relies on idempotent upload retries.
+  - `PublishingApiTokenInactiveError extends UsageError` (in `publishing-api-error.js`) so `kixx.js` prints it as operator guidance. Its message uses `<environment>` placeholders because the client does not know the environment name.
+  - `uploadObject` accepts `string | ArrayBuffer` (hashing contract unchanged) and sends a `Uint8Array`.
+  - `assign-build` validates `--build-id`, `--release-id`, and `--reason` before resolving the environment or making any request.
+  - `devkit/lib/publishing/addressing.js` and `content-layout.js` doc comments now point at repo `lib/` instead of the old `tmp/sample-app/` path.
+  - For T5: `publish` should reuse `negotiateCapabilities(client)` and `assignRelease({ client, buildId, releaseId, reason })`; `resolvePublishingEnvironment` returns `{ environment, origin, client }`.
+- Actual files changed: `devkit/lib/publishing/{publishing-api-client,publishing-api-error,negotiate-capabilities,addressing,content-layout,assign-release,resolve-publishing-environment}.js`, `devkit/commands/app/{index,assign-build}.js`; tests `devkit/test/lib/publishing/{publishing-api-client,negotiate-capabilities,addressing,content-layout,assign-release,resolve-publishing-environment}.test.js`, `devkit/test/commands/app/assign-build.test.js`, `devkit/test/conformance/{addressing,content-layout}.test.js`.
+- Validation run (2026-10-14):
+  - `node devkit/run-tests.js devkit/test/lib/publishing devkit/test/commands/app devkit/test/conformance`: 79 tests pass.
+  - `node devkit/run-tests.js`: 219 tests pass. `deno run -A devkit/run-tests.js`: 219 pass.
+  - `node devkit/run-linter.js devkit`: exit 0.
+- Blockers: None. Server/docs disagreements for A3 to A7, A12, A13: None found.
 
 ---
 
