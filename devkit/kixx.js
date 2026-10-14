@@ -8,6 +8,7 @@ import UsageError from './lib/usage-error.js';
 import { CONSOLE_LINE_WIDTH, wrapText, wrapWords } from './lib/text-wrap.js';
 import { loadCloudflareConfig } from './lib/cloudflare-config-loader.js';
 import { findMissingKeys, loadConfiguration } from './lib/config-loader.js';
+import { toCloudflareAuthUsageError } from './lib/cloudflare/cloudflare-auth-guidance.js';
 import manifest from './deno.json' with { type: 'json' };
 
 
@@ -336,7 +337,12 @@ async function main() {
         secrets: configuration.secrets,
     });
 
-    return await command.run(commandArgs.values, ...commandArgs.positionals);
+    try {
+        return await command.run(commandArgs.values, ...commandArgs.positionals);
+    } catch (error) {
+        // An authentication failure is a configuration problem, not a crash.
+        throw toCloudflareAuthUsageError(error, configuration.secretsFilepaths);
+    }
 }
 
 main()

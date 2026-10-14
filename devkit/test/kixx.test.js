@@ -81,6 +81,23 @@ describe('kixx.js entry point', ({ it }) => {
         assertMatches('kixx admin run-migration --help', stderr);
     }, { timeout: TIMEOUT });
 
+    it('lists the cloudflare sub-commands in declaration order', async () => {
+        const { code, stdout } = await runEntryPoint([ 'cloudflare', '--help' ]);
+
+        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
+
+        assertEqual(0, code);
+        assertEqual('create-worker,update-worker,deploy-version', names.join(','));
+    }, { timeout: TIMEOUT });
+
+    it('rejects deploy-version --force as an unknown option', async () => {
+        const { code, stderr } = await runEntryPoint([ 'cloudflare', 'deploy-version', '-e', 'production', '--force' ]);
+
+        assertEqual(1, code);
+        assertMatches('--force', stderr);
+        assertMatches('kixx cloudflare deploy-version --help', stderr);
+    }, { timeout: TIMEOUT });
+
     it('names the admin credential variable when stdin is not a terminal', async () => {
         const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-devkit-entry-'));
 

@@ -343,7 +343,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T6: Cloudflare API client, state file, and `create-worker` / `update-worker` / `deploy-version`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `tmp/kixx-devkit/docs/cloudflare.md` (`create-worker`, `update-worker`, `deploy-version`), `tmp/kixx-devkit/docs/configuration.md` (Cloudflare settings)
 
@@ -382,9 +382,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Client tests cover each kept method's URL, method, query, headers, envelope unwrapping, error envelope parsing, token verification on 401/403, and token redaction.
-- [ ] `deploy-version` tests: explicit id; state id; no id and no state is a usage error; 404 version; no Publishing API calls; `--force` rejected as unknown; state `deployed` true for the recorded version and false for another; no state file created when absent; state untouched when the deployment fails.
-- [ ] Auth-failure guidance prints as a usage message naming the secrets files.
+- [x] Client tests cover each kept method's URL, method, query, headers, envelope unwrapping, error envelope parsing, token verification on 401/403, and token redaction.
+- [x] `deploy-version` tests: explicit id; state id; no id and no state is a usage error; 404 version; no Publishing API calls; `--force` rejected as unknown; state `deployed` true for the recorded version and false for another; no state file created when absent; state untouched when the deployment fails.
+- [x] Auth-failure guidance prints as a usage message naming the secrets files.
 
 **Validation**
 
@@ -394,12 +394,22 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Cloudflare client (kept methods only), `CloudflareApiError`, auth guidance with runner hook, state module, `deployWorkerVersion`, and `create-worker`, `update-worker`, `deploy-version`, with tests.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - Client takes injectable `fetch` (defaults to `globalThis.fetch`) and always redacts `apiToken` from error messages and error arrays. `getWorkerVersion` dropped the old `include: 'modules'` option (only `recover-secret-version` used it). `createDeployment(workerName, deployment)` takes no options, so `force` cannot be sent (Decision 16).
+  - New `lib/cloudflare/read-worker-config.js` (`readWorkerConfig(cloudflareConfig, environment)`): requires `--environment`, `environments.<env>.WORKER`, and a non-empty `WORKER.name`; shared by the three commands. T9 may reuse it or T8's `worker-version-config.js`.
+  - `cloudflare-auth-guidance.js` adds `toCloudflareAuthUsageError(error, secretsFilepaths)`; `kixx.js` wraps `command.run` with it. The hook is unit-tested; no end-to-end runner test because it would need live Cloudflare or a runtime-specific fetch preload.
+  - `deployWorkerVersion` returns `{ environment, workerName, versionId, buildId|null, stateFilepath|null, deployment }`. It reads state before any request, so a corrupt state file fails without moving traffic. If the state write fails after a deployment, it throws a plain `Error` saying traffic moved, naming the path and the `deployed` value to set.
+  - Commands take `createClient` (Cloudflare client factory) and `output`; `deploy-version` also `fileSystem`.
+  - `worker-version-state.js` and `cloudflare-api-error.js` ported verbatim.
+  - `test/commands/cloudflare/create-worker.test.js` also covers `update-worker` (same shape).
+- Actual files changed: `devkit/kixx.js`; `devkit/lib/cloudflare/{cloudflare-api-client,cloudflare-api-error,cloudflare-auth-guidance,worker-version-state,deploy-worker-version,read-worker-config}.js`; `devkit/commands/cloudflare/{index,create-worker,update-worker,deploy-version}.js`; tests `devkit/test/lib/cloudflare/{cloudflare-api-client,cloudflare-auth-guidance,worker-version-state,deploy-worker-version}.test.js`, `devkit/test/commands/cloudflare/{create-worker,deploy-version}.test.js`, `devkit/test/kixx.test.js` (cloudflare help order, `deploy-version --force` rejected).
+- Validation run (2026-10-14):
+  - `node devkit/run-tests.js devkit/test/lib/cloudflare devkit/test/commands/cloudflare`: 52 tests pass.
+  - `node devkit/run-tests.js`: 273 tests pass. `deno run -A devkit/run-tests.js`: 273 pass.
+  - `node devkit/run-linter.js devkit`: exit 0.
 - Blockers: None.
 
 ---
