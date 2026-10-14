@@ -13,7 +13,7 @@ const ENTRY_POINT = fileURLToPath(new URL('../kixx.js', import.meta.url));
 
 // The permission set an installed `kixx` gets on Deno, so these tests also
 // fail if the entry point needs more than users grant it.
-const DENO_RUN_ARGS = [ 'run', '-RWNE', '--allow-sys=homedir', '--no-prompt' ];
+const DENO_RUN_ARGS = [ 'run', '-RWNE', '--allow-sys=homedir', '--allow-run', '--no-prompt' ];
 
 // Each case spawns a runtime, which can exceed the 1000ms default on a busy
 // machine.

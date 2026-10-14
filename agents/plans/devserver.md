@@ -392,7 +392,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task D5: Documentation and Deno permissions
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D4
 **Documentation:** Decision 12; `devkit/README.md`; `devkit/docs/configuration.md`; `devkit/deno.json`; `devkit/test/kixx.test.js` (`DENO_RUN_ARGS`)
 
@@ -433,10 +433,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `grep -rn --include='*.md' --exclude-dir=node_modules -e "never executes project code" -e "No subprocess" devkit` finds no unqualified claim.
-- [ ] Every `deno install`/`deno run` permission string for `kixx` in `devkit/` includes `--allow-run`.
-- [ ] `devkit/docs/dev.md` exists, documents every flag and default, and matches the implemented trigger filter and status code.
-- [ ] `devkit/test/manifests.test.js` and `devkit/test/kixx.test.js` pass.
+- [x] `grep -rn --include='*.md' --exclude-dir=node_modules -e "never executes project code" -e "No subprocess" devkit` finds no unqualified claim.
+- [x] Every `deno install`/`deno run` permission string for `kixx` in `devkit/` includes `--allow-run`.
+- [x] `devkit/docs/dev.md` exists, documents every flag and default, and matches the implemented trigger filter and status code.
+- [x] `devkit/test/manifests.test.js` and `devkit/test/kixx.test.js` pass.
 
 **Validation**
 
@@ -447,12 +447,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: README, `docs/dev.md`, `docs/configuration.md`, Deno task permissions, and `DENO_RUN_ARGS`.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: The acceptance grep now matches only the qualified sentence in `devkit/docs/configuration.md:100` ("Apart from `kixx dev start` ... devkit never executes project code."). `docs/dev.md` uses `#`-style headings like `app.md`.
+- Actual files changed: `devkit/README.md`, `devkit/docs/dev.md` (new), `devkit/docs/configuration.md`, `devkit/deno.json`, `devkit/test/kixx.test.js`.
+- Validation run: `node devkit/run-tests.js devkit/test/manifests.test.js devkit/test/kixx.test.js` 22 pass; `deno run -A devkit/run-tests.js devkit/test/kixx.test.js` 18 pass; `node devkit/run-linter.js devkit` clean; full suite 620 tests pass on Node.
 - Blockers: None.
 
 ---

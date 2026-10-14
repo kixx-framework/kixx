@@ -1,7 +1,8 @@
 Kixx Devkit
 ===========
 
-The `kixx` command: build and deployment tools for Kixx applications. It
+The `kixx` command: local development, build, and deployment tools for Kixx
+applications. It runs the app locally with restarts after code changes,
 creates the first admin account, mints publishing tokens, runs data
 migrations, publishes application content, and builds and deploys Cloudflare
 Worker versions.
@@ -18,7 +19,7 @@ npm install -g kixx-devkit
 Or with Deno 2.8 or later:
 
 ```
-deno install -g -RWNE --allow-sys=homedir jsr:@kixx/devkit/kixx
+deno install -g -RWNE --allow-sys=homedir --allow-run jsr:@kixx/devkit/kixx
 ```
 
 The Deno permissions:
@@ -29,15 +30,17 @@ The Deno permissions:
   APIs.
 - `-E` env: the `KIXX_ADMIN_*` prompt variables.
 - `--allow-sys=homedir`: find the `~/.kixx` settings layer.
+- `--allow-run`: `kixx dev start` runs your app's `node-server.js` in a child
+  Deno process with `-A`, so this grants it full access.
 
-No subprocess (`--allow-run`) or FFI access is needed. The CLI reads project
-configuration as data and never executes project code.
+No FFI access is needed. Only `kixx dev start` runs project code; every other
+command reads project configuration as data.
 
 Upgrade:
 
 ```
 npm install -g kixx-devkit@latest
-deno install -g -f -RWNE --allow-sys=homedir jsr:@kixx/devkit/kixx
+deno install -g -f -RWNE --allow-sys=homedir --allow-run jsr:@kixx/devkit/kixx
 ```
 
 Check the install with `kixx --version`. Every command has `--help`.
@@ -56,6 +59,7 @@ Commands
 - `kixx cloudflare update-worker` — replace a Worker's settings.
 - `kixx cloudflare create-worker-version` — bundle and upload a Worker version.
 - `kixx cloudflare deploy-version` — route all traffic to a Worker version.
+- `kixx dev start` — run the app locally, restarting after code changes.
 
 Documentation:
 
@@ -65,6 +69,7 @@ Documentation:
 - [app.md][app-doc]: publishing content.
 - [cloudflare.md][cloudflare-doc]: Workers, versions, deployment, and
   workflows.
+- [dev.md][dev-doc]: the local devserver.
 
 `app` commands require an application serving Publishing API build assignment
 protocol 2 and addressing format 4; see [app.md][app-doc-server-requirement].
@@ -78,6 +83,7 @@ Use the Cloudflare dashboard or Wrangler for those.
 [app-doc]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/app.md
 [app-doc-server-requirement]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/app.md#server-requirement
 [cloudflare-doc]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/cloudflare.md
+[dev-doc]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/dev.md
 
 Development
 -----------

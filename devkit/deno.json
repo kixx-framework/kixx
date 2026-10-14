@@ -22,6 +22,6 @@
     "tasks": {
         "test": "deno run -A run-tests.js",
         "lint": "deno run -A run-linter.js",
-        "kixx": "deno run -RWNE --allow-sys=homedir kixx.js"
+        "kixx": "deno run -RWNE --allow-sys=homedir --allow-run kixx.js"
     }
 }
