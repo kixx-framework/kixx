@@ -459,7 +459,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task D6: Real-process integration tests
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D4
 **Documentation:** Decisions 2–6, 8, 11; `devkit/test/kixx.test.js` (subprocess and timeout pattern)
 
@@ -498,10 +498,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] All six cases pass on Node.
-- [ ] All six cases pass on Deno, or a Deno-specific failure is recorded as a blocker with the exact error, not skipped silently.
-- [ ] Ten consecutive Node runs of the file pass (flakiness check), recorded in the handoff.
-- [ ] No orphaned fixture processes remain after the suite (`pgrep -f <tmpdir>` finds nothing).
+- [x] All six cases pass on Node.
+- [x] All six cases pass on Deno, or a Deno-specific failure is recorded as a blocker with the exact error, not skipped silently.
+- [x] Ten consecutive Node runs of the file pass (flakiness check), recorded in the handoff.
+- [x] No orphaned fixture processes remain after the suite (`pgrep -f <tmpdir>` finds nothing).
 
 **Validation**
 
@@ -513,12 +513,17 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All six integration cases, on Node and Deno.
+- Current state: Complete.
+- Remaining: Nothing. The Operator Runbook below is next.
+- Decisions and discoveries:
+  - macOS FSEvents replays changes made a few milliseconds before a watch starts (both runtimes). Freshly written fixture files therefore caused one spurious restart at an unpredictable time, which failed cases 3 and 5. The test waits 200 ms after writing fixtures and before `start()` (setup only, documented in the test). In real use this means at most one extra restart if files change just before `kixx dev start`; harmless, so no product change.
+  - In that replay, Deno reports the project directory itself with an empty filename, which `isRestartTrigger('')` treats as a trigger (by design). Node reports the directory's basename, which is not a trigger. Normal edits after startup did not produce empty filenames in a probe.
+  - Deno's error output for the broken `message.js` contains `SyntaxError`, so case 3 asserts the same text on both runtimes.
+  - `process.kill(pid, 0)` works on Deno for the liveness check.
+  - No helper file was needed; `get()`/`waitForResponse()` live in the test file.
+- Actual files changed: `devkit/test/lib/devserver/dev-server-integration.test.js`.
+- Validation run: Node 6/6 pass; Deno 6/6 pass (5 consecutive Deno runs also pass); 10 consecutive Node runs pass; `pgrep -fl kixx-devserver-` finds nothing afterwards; `node devkit/run-linter.js devkit` clean; full suite 626 tests pass on Node and on Deno.
 - Blockers: None.
 
 ---
