@@ -416,7 +416,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T7: Worker module bundler, generated config file, and hashing
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `tmp/kixx-devkit/docs/cloudflare.md` (§5 Package the module graph, §6 hashes), `lib/kixx/config/read-config.js`, `lib/cloudflare-server.js`
 
@@ -456,9 +456,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Each bundler rejection has a test with a clear error naming the importing file.
-- [ ] Generated-config tests: only the selected environment is present, top-level fields are preserved, and output is byte-stable across runs. A conformance assertion runs the generated object through lib's `readConfig` (`lib/kixx/config/read-config.js`); do not reimplement `readConfig`'s preconditions in devkit tests.
-- [ ] The conformance bundle of repo `lib/` passes, and `git status lib/` shows no changes afterward.
+- [x] Each bundler rejection has a test with a clear error naming the importing file.
+- [x] Generated-config tests: only the selected environment is present, top-level fields are preserved, and output is byte-stable across runs. A conformance assertion runs the generated object through lib's `readConfig` (`lib/kixx/config/read-config.js`); do not reimplement `readConfig`'s preconditions in devkit tests.
+- [x] The conformance bundle of repo `lib/` passes, and `git status lib/` shows no changes afterward.
 
 **Validation**
 
@@ -468,12 +468,21 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Bundler (`bundle-modules`, `resolve-specifier`, `strip-comments`, `bundle-error`), `canonical-hash`, `build-id`, `worker-modules`, and `generated-config`, with unit tests and a conformance test that bundles repo `lib/`.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - Bundler, `canonical-hash.js`, `build-id.js`, and `toWorkerModules`/`hashWorkerModules` ported verbatim with their old tests (import paths adjusted). Added a `bundle-modules` test that drives every rejection through `bundleModules` and asserts the message names `./importer.js:<line>`.
+  - For T9: `worker-modules.js` adds `packageWorkerModules({ projectDirectory, fileSystem, bundleModules })` → `{ mainModule, modules, modulesHash }`, with entry `cloudflare-server.js` (`WORKER_ENTRY_FILE_NAME`) and externals `node:`/`cloudflare:`. Use it instead of re-wiring the bundler.
+  - `generated-config.js` exports `GENERATED_CONFIG_FILE_NAME`, `renderGeneratedConfig({ environment, cloudflareConfig })`, and `writeGeneratedConfig({ projectDirectory, environment, cloudflareConfig, fileSystem })` (returns the path). A missing or non-object environment (own property only) is a `UsageError` naming `environments.<env>`.
+  - The bundler strips the generated file's header comment (line kept), so the packaged module text is the rendered text minus line 1's content.
+  - `crypto.js` `generateShortId()` is the intended `formatBuildId` suffix.
+  - Conformance (`test/conformance/bundle-lib.test.js`) imports the rendered module through a `data:` URL and passes it to lib's `readConfig`; the bundle uses an overlay file system whose `writeFile` records instead of writing. `git status lib/` is clean afterward.
+- Actual files changed: `devkit/lib/bundler/{bundle-error,bundle-modules,resolve-specifier,strip-comments}.js`, `devkit/lib/cloudflare/{worker-modules,build-id,generated-config}.js`, `devkit/lib/canonical-hash.js`; tests `devkit/test/lib/bundler/{bundle-error,bundle-modules,resolve-specifier,strip-comments}.test.js`, `devkit/test/lib/cloudflare/{worker-modules,build-id,generated-config}.test.js`, `devkit/test/lib/canonical-hash.test.js`, `devkit/test/conformance/bundle-lib.test.js`.
+- Validation run (2026-10-14):
+  - `node devkit/run-tests.js devkit/test/lib/bundler devkit/test/lib/cloudflare devkit/test/conformance`: 107 tests pass.
+  - `node devkit/run-tests.js`: 332 pass. `deno run -A devkit/run-tests.js`: 332 pass.
+  - `node devkit/run-linter.js devkit`: exit 0. `git status --short lib`: empty.
 - Blockers: None.
 
 ---
