@@ -64,7 +64,7 @@ Seeded during planning, with citations. There is no separate audit task: before 
 
 ### Task T1: Package scaffold, CLI runner, config loading, test and lint runners
 
-**Status:** Not started
+**Status:** In progress
 **Depends on:** None (validation needs Runbook R1)
 **Documentation:** `tmp/kixx-devkit/README.md`, `tmp/kixx-devkit/commands/README.md`, `tmp/kixx-devkit/test/README.md`, `tmp/kixx-devkit/docs/configuration.md`; `lib/run-tests.js`, `lib/run-linter.js`, `lib/eslint.config.js`, `lib/package.json`, `lib/deno.json`
 
@@ -121,13 +121,27 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: All T1 code and tests are written. CLI checks that need no dev dependencies pass (see Validation run). Test and lint runs have not happened.
+- Current state: In progress, blocked on Runbook R1 (`devkit/node_modules/` absent). Code is committed unvalidated.
+- Remaining: After R1, run `node devkit/run-tests.js` and `node devkit/run-linter.js devkit`, fix any failures (first run of every test file; lint never run), check off acceptance criteria, mark Complete. Untested-by-runner areas to watch: `test/kixx.test.js` and `test/run-tests.test.js` spawn subprocesses with `{ timeout: 10000 }` passed as the third `it` argument; `test/lib/config-loader.test.js` mocks `fsp` methods globally (ported pattern); the new "stops the project search at the home directory" config-loader case.
+- Decisions and discoveries:
+  - `kixx.js` converts `parseArgs` failures (unknown/malformed sub-command flags) into a `UsageError` ending `Run "kixx <cmd> <sub> --help" for usage.` The old runner printed a crash. T3's "`--yes` rejected as unknown" relies on this path.
+  - Dropped `findMissingNonEmptyStringKeys` from `config-loader.js` (only `requiredCloudflareConfig` used it). `findMissingKeys` stays.
+  - `parse-jsonc.js` throws `TypeError` for non-string input and `SyntaxError` for bad JSONC (lib throws `OperationalError`).
+  - `loadCloudflareConfig(projectDirectory, { fileSystem })` reads via `fileSystem.readFile`; `ENOENT` → "Missing required Cloudflare configuration file: <path>", other read errors → "Unable to read <path>".
+  - Added `test/helpers/memory-file-system.js` (text `readFile`/`writeFile`/`isFile`, ENOENT on miss) for later tasks.
+  - `deno.json` tasks: `test` (`deno run -A run-tests.js`), `lint`, `kixx` (`-RWNE --allow-sys=homedir`).
+  - `eslint.config.js` is lib's rule set (with `no-invalid-this`) applied to all files; ignores `node_modules/`, `lib/vendor/`, `test/fixtures/`.
+  - `crypto.js` keeps `generateShortId` (candidate `BUILD_ID` suffix for T9).
+- Actual files changed: `devkit/{package.json,deno.json,LICENSE,.gitignore,eslint.config.js,run-tests.js,run-linter.js,kixx.js}`; `devkit/commands/{README.md,index.js}`, `devkit/commands/{admin,app,cloudflare}/index.js`, `devkit/commands/admin/gen-secure-token.js`; `devkit/lib/{command-registry,usage-error,text-wrap,config-loader,cloudflare-config-loader,parse-jsonc,file-system,crypto}.js`; `devkit/lib/vendor/{acorn,kixx-assert}/` (verbatim copies); `devkit/test/{README.md,manifests.test.js,kixx.test.js,run-tests.test.js}`, `devkit/test/commands/index.test.js`, `devkit/test/commands/admin/gen-secure-token.test.js`, `devkit/test/lib/{cloudflare-config-loader,command-registry,config-loader,crypto,file-system,parse-jsonc,text-wrap}.test.js`, `devkit/test/conformance/parse-jsonc.test.js`, `devkit/test/helpers/{capture-output,memory-file-system}.js`.
+- Validation run (2026-10-14, without dev dependencies):
+  - `node devkit/kixx.js` lists admin, app, cloudflare (exit 1, "command name is required"); `--help` exit 0.
+  - `node devkit/kixx.js admin --help` lists `gen-secure-token`.
+  - `node devkit/kixx.js admin gen-secure-token --prefix x_` prints `x_` + 64 hex.
+  - `node devkit/kixx.js --version` and `deno run -RWNE --allow-sys=homedir devkit/kixx.js --version` print `0.2.0`; Deno `admin gen-secure-token` with `--no-prompt` runs.
+  - `node --check` passes on every non-vendor `.js` file. devkit's parser reads `lib/cloudflare-config.jsonc` and `lib/node-config.jsonc`.
+  - NOT RUN: `node devkit/run-tests.js`, `node devkit/run-linter.js devkit` (need `kixx-test` / `kixx-linting`).
+- Blockers: Runbook R1. The operator must run `cd devkit && npm install` (kixx-test 3.0.0, kixx-linting 1.1.2). Then resume with the Remaining step.
 
 ---
 
