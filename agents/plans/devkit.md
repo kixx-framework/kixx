@@ -47,15 +47,15 @@ Seeded during planning, with citations. There is no separate audit task: before 
 
 | ID | Finding | Server | Docs | Old devkit | Devkit action |
 | --- | --- | --- | --- | --- | --- |
-| A1 | Invite password length | 12–256 (`lib/app/presentation/forms/admin-users/new-admin-user-form.js:55-56`) | 12–256 | 16–256 (`commands/admin/accept-invite.js:9`) | Validate 12–256 locally (T3) |
-| A2 | `NewUserConflictError` (409, invite not consumed) and `InviteSpentInEmailRace` (409, invite consumed) | present (`lib/app/transaction-scripts/admin-users/create-admin-user-account.js`) | documented | unmapped | Map both to distinct operator messages (T3) |
+| A1 | Invite password length | 12–256 (`lib/app/presentation/forms/admin-users/new-admin-user-form.js:55-56`) | 12–256 (`docs/admin-api.md:479`) | 16–256 (`commands/admin/accept-invite.js:9`) | Confirmed by T3. Validated 12–256 locally (`devkit/commands/admin/accept-invite.js`) |
+| A2 | `NewUserConflictError` (409, invite not consumed) and `InviteSpentInEmailRace` (409, invite consumed) | present (`lib/app/transaction-scripts/admin-users/create-admin-user-account.js:43-46,79-82`; `ConflictError` is 409, `lib/kixx/errors/lib/conflict-error.js:25`) | documented (`docs/admin-api.md:514-522`) | unmapped | Confirmed by T3. Mapped to `NewUserConflictError` / `InviteSpentInEmailRaceError` and distinct operator messages |
 | A3 | `PublishingApiTokenInactive` (403, expired/revoked token) | present (`authenticate-publishing-token.js:44`) | documented | unmapped | Map to an operator message naming `admin create-publishing-token` (T4) |
 | A4 | Discovery: `contentContractVersion: 1`, `addressingFormat: 4`, `buildAssignmentProtocolVersion: 2`, `limits.{maxObjectBytes,maxObjectStatusIds,maxManifestEntries}` | `request-handlers/publishing-api/discovery.js`, `constants.js`, `kixx/content-addressable-store/addressing.js:53` | matches | negotiates the same | Keep the negotiation; refuse older servers (T4) |
 | A5 | Blob addressing: lib `hashBlob` is async WebCrypto; old devkit is sync `node:crypto` | `lib/kixx/content-addressable-store/addressing.js` | — | `lib/publishing/addressing.js` | Conformance test proves identical digests (T4) |
 | A6 | JSON writes require `Content-Type: application/vnd.api+json`; object `PUT` is raw bytes and needs `Content-Length` (411 without) | `request-handlers/publishing-api/objects.js:59` | matches | sends bytes | Verify the upload body is a byte buffer so `fetch` sets `Content-Length` (T4) |
 | A7 | Build `PUT` precondition goes in JSON `attributes.expectedAssignmentId`; `If-Match`/`If-None-Match` is rejected with 400 | `builds.js:90-111` | matches | protocol 2 body precondition | Keep (T4) |
-| A8 | Migration codes `MigrationAlreadyAppliedError`, `MigrationConcurrencyError`, `MigrationCursorConflictError` (409) | `transaction-scripts/migrations/run-migration.js:172,219,245` | matches | mapped | Keep mappings; remove the `--force` confirmation (T3) |
-| A9 | `InvalidInvite` (403), `InvalidCredentials` (401) | present | matches | mapped | Keep (T3) |
+| A8 | Migration codes `MigrationAlreadyAppliedError`, `MigrationConcurrencyError`, `MigrationCursorConflictError` (409) | `transaction-scripts/migrations/run-migration.js:172,219,245` | matches (`docs/admin-api.md:303-310`) | mapped | Confirmed by T3. Mappings kept; `--force` confirmation and `--yes` removed |
+| A9 | `InvalidInvite` (403), `InvalidCredentials` (401) | `lib/app/presentation/request-handlers/admin-api/accept-invite.js:15,49`, `lib/app/transaction-scripts/admin-invites/consume-admin-invite.js:10,32`; `lib/app/transaction-scripts/admin-users/verify-admin-credentials.js:12,73` | matches (`docs/admin-api.md:105,481-483`) | mapped | Confirmed by T3. Kept |
 | A10 | Content directories: `pages/`, `templates/{base,partials}/`, `static-assets/`, `public/`, `emails/` | lib layout matches | — | scans the same | Conformance test scans repo `lib/` and validates with lib's manifest validator (T5). `lib/templates/README.md` must be reported as unmatched, not fail publishing (T5 verifies by reading the old scanner). |
 | A11 | Old devkit docs say `deploy-version` updates state; the old code never wrote state | — | — | `lib/cloudflare/deploy-worker-version.js` | Implement the state update (T6) |
 | A12 | `POST /releases/validation` expects resource type `Release` | `releases.js:136` | "same body as POST /releases" | sends `Release` | Keep |
@@ -146,7 +146,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T3: Admin API client and admin commands
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `tmp/kixx-devkit/docs/admin.md`, `docs/admin-api.md`, plan audit rows A1, A2, A8, A9
 
@@ -180,11 +180,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Client tests (mocked `fetch`) assert URLs, methods, auth headers, media types, request bodies, error-code-to-class mapping, and that the password and tokens never appear in error messages.
-- [ ] `run-migration --force` sends `force: true` with no prompt call. `--yes` is rejected by `parseArgs` as an unknown option.
-- [ ] `accept-invite` rejects 11-character and 257-character passwords locally, accepts 12, and maps all three invite/conflict codes to distinct messages.
-- [ ] `node devkit/kixx.js admin --help` lists the five admin sub-commands in declaration order.
-- [ ] Audit rows A1, A2, A8, A9 are confirmed or corrected with server and docs `file:line` citations; disagreements are listed under Blockers, or "None found".
+- [x] Client tests (mocked `fetch`) assert URLs, methods, auth headers, media types, request bodies, error-code-to-class mapping, and that the password and tokens never appear in error messages.
+- [x] `run-migration --force` sends `force: true` with no prompt call. `--yes` is rejected by `parseArgs` as an unknown option.
+- [x] `accept-invite` rejects 11-character and 257-character passwords locally, accepts 12, and maps all three invite/conflict codes to distinct messages.
+- [x] `node devkit/kixx.js admin --help` lists the five admin sub-commands in declaration order.
+- [x] Audit rows A1, A2, A8, A9 are confirmed or corrected with server and docs `file:line` citations; disagreements are listed under Blockers, or "None found".
 
 **Validation**
 
@@ -194,13 +194,25 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Admin API client with typed errors (adds `NewUserConflictError`, `InviteSpentInEmailRaceError`), environment resolver, prompts, and the four admin commands, with tests. Audit rows A1, A2, A8, A9 confirmed with citations.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - `resolveAdminEnvironment({ environment, config, origin, createClient })` returns `{ environment, origin, connect({ email, password }) }`. All four commands resolve the environment before prompting (the plan required it only for `accept-invite`), so a bad `-e` never asks for secrets.
+  - Shared `lib/admin/prompt-admin-credentials.js` reads `KIXX_ADMIN_EMAIL` / `KIXX_ADMIN_PASSWORD` (password masked).
+  - `prompt.js` exports only `promptForValue` and `promptForValueTwice`, each taking an injectable `env` (default `process.env`). Dropped `promptForConfirmation` and `readSecretValue` (secrets commands are out of scope). `promptForValueTwice` returns an env value once instead of reading it twice.
+  - The client builds Basic auth with `btoa` over UTF-8 bytes (no `node:buffer`) and also redacts the base64 credential string.
+  - `create-publishing-token --ttl` must be a positive whole number (usage error before prompting). The old command sent `NaN`.
+  - `run-migration` prints its `Next:` command unwrapped so it stays copyable; the rest of the output is wrapped.
+  - `list-migrations` prints "No migrations are registered." for an empty list.
+  - For T10: command help lists long flags only (`--environment`, not `-e`); that is T1 runner behavior.
+- Actual files changed: `devkit/lib/admin/{admin-api-client,admin-api-error,resolve-admin-environment,prompt-admin-credentials}.js`, `devkit/lib/{prompt,resolve-environment-origin}.js`, `devkit/commands/admin/{index,accept-invite,create-publishing-token,list-migrations,run-migration}.js`; tests `devkit/test/lib/admin/{admin-api-client,admin-api-error,resolve-admin-environment,prompt-admin-credentials}.test.js`, `devkit/test/lib/{prompt,resolve-environment-origin}.test.js`, `devkit/test/commands/admin/{accept-invite,create-publishing-token,list-migrations,run-migration}.test.js`, `devkit/test/kixx.test.js` (admin help order, `--yes` rejection, non-TTY credential message).
+- Validation run (2026-10-14):
+  - `node devkit/run-tests.js devkit/test/lib/admin devkit/test/commands/admin devkit/test/lib/prompt.test.js`: 61 tests pass.
+  - `node devkit/run-tests.js`: 143 tests pass. `deno run -A devkit/run-tests.js`: 143 pass.
+  - `node devkit/run-linter.js devkit`: exit 0.
+  - `node devkit/kixx.js admin --help` lists gen-secure-token, accept-invite, create-publishing-token, list-migrations, run-migration in that order.
+- Blockers: None. Server/docs disagreements for A1, A2, A8, A9: None found.
 
 ---
 

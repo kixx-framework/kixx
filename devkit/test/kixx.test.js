@@ -62,6 +62,52 @@ describe('kixx.js entry point', ({ it }) => {
         assertMatches(/^ {2}gen-secure-token {2}/m, stdout);
     }, { timeout: TIMEOUT });
 
+    it('lists the five admin sub-commands in declaration order', async () => {
+        const { stdout } = await runEntryPoint([ 'admin', '--help' ]);
+
+        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
+
+        assertEqual(
+            'gen-secure-token,accept-invite,create-publishing-token,list-migrations,run-migration',
+            names.join(','),
+        );
+    }, { timeout: TIMEOUT });
+
+    it('rejects run-migration --yes as an unknown option', async () => {
+        const { code, stderr } = await runEntryPoint([ 'admin', 'run-migration', 'x', '-e', 'production', '--force', '--yes' ]);
+
+        assertEqual(1, code);
+        assertMatches('--yes', stderr);
+        assertMatches('kixx admin run-migration --help', stderr);
+    }, { timeout: TIMEOUT });
+
+    it('names the admin credential variable when stdin is not a terminal', async () => {
+        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-devkit-entry-'));
+
+        try {
+            await fsp.mkdir(path.join(directory, '.kixx'));
+            await fsp.writeFile(
+                path.join(directory, '.kixx', 'config.json'),
+                JSON.stringify({ app: { environments: { production: { origin: 'https://admin.example.test' } } } }),
+            );
+
+            const env = { ...process.env };
+            delete env.KIXX_ADMIN_EMAIL;
+            delete env.KIXX_ADMIN_PASSWORD;
+
+            const { code, stderr } = await runEntryPoint(
+                [ 'admin', 'list-migrations', '-e', 'production' ],
+                { cwd: directory, env },
+            );
+
+            assertEqual(1, code);
+            assertMatches('KIXX_ADMIN_EMAIL', stderr);
+            assert(!stderr.includes('Failed to run command'), 'printed as a crash');
+        } finally {
+            await fsp.rm(directory, { recursive: true, force: true });
+        }
+    }, { timeout: TIMEOUT });
+
     it('runs admin gen-secure-token with a prefix', async () => {
         const { code, stdout } = await runEntryPoint([ 'admin', 'gen-secure-token', '--prefix', 'x_' ]);
 
