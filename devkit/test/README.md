@@ -267,6 +267,16 @@ assertMatches('Release: release-id', output.chunks[0]);
 Helpers live in `devkit/test/helpers/`. The runner imports only `*.test.js`
 files, so a helper module is never collected as a suite.
 
+- `capture-output.js`: an `output` stream that records writes.
+- `memory-file-system.js`: an in-memory text file system.
+- `fake-cloudflare-client.js`: a recording Cloudflare client for
+  `create-worker-version`; any endpoint outside its allowed set throws, and
+  `forbiddenCalls()` reports it.
+
+Fixtures: `lib-cloudflare-config.jsonc` (a copy of repo `lib/`'s config) and
+`worker-project/` (a minimal project; copy it to a temp directory before
+writing into it).
+
 Useful mock APIs:
 
 - `tracker.fn(original?, implementation?, options?)` creates a mock function.

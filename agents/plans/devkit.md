@@ -670,7 +670,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T10: Documentation and cross-runtime validation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T3, T4, T5, T6, T9
 **Documentation:** `tmp/kixx-devkit/README.md`, `tmp/kixx-devkit/docs/{configuration,cloudflare,app,admin}.md`; this plan's Decisions and audit table
 
@@ -718,9 +718,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] No doc mentions `cloudflare-config.js` (executable), `bootstrap`, `release`, `set-secret(s)`, `delete-secret`, `recover-secret-version`, `--yes`, or a `deploy-version --force`, except the README's explicit out-of-scope note.
-- [ ] Every one of the 11 commands is documented with its options, and matches `--help`.
-- [ ] The full suite passes on Node.js and Deno. The CLI starts under the documented Deno permissions.
+- [x] No doc mentions `cloudflare-config.js` (executable), `bootstrap`, `release`, `set-secret(s)`, `delete-secret`, `recover-secret-version`, `--yes`, or a `deploy-version --force`, except the README's explicit out-of-scope note.
+- [x] Every one of the 11 commands is documented with its options, and matches `--help`.
+- [x] The full suite passes on Node.js and Deno. The CLI starts under the documented Deno permissions.
 
 **Validation**
 
@@ -732,13 +732,21 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: `devkit/README.md` and `devkit/docs/{configuration,admin,app,cloudflare}.md`, written for the new behavior (not copied from the old docs). Helper and fixture list added to `devkit/test/README.md`.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - Docs show `-e` in examples; `--help` lists long flags only (T1 runner behavior). `configuration.md` states `--environment` (`-e`). Not changed: the runner is outside T10's scope.
+  - README links to `commands/README.md` and `test/README.md` are absolute GitHub links, since both files are excluded from the published packages.
+  - "bootstrap token" remains in `admin.md` and the `accept-invite` help: it means `ADMIN_BOOTSTRAP_TOKEN`, not the removed `bootstrap` command. `deploy-version` docs say it has "no `--force`" (describing its absence). The routine workflow heading is "Routine deploy" to avoid confusion with the removed `release` command.
+  - No help-text edits were needed; descriptions and options were read against the docs.
+- Actual files changed: `devkit/README.md`, `devkit/docs/{configuration,admin,app,cloudflare}.md` (new), `devkit/test/README.md`.
+- Validation run (2026-10-14):
+  - `node devkit/run-tests.js`: 583 pass. `deno run -A devkit/run-tests.js`: 583 pass.
+  - `node devkit/run-linter.js devkit`: exit 0.
+  - `deno run -RWNE --allow-sys=homedir devkit/kixx.js cloudflare create-worker-version --help`: prints help.
+  - Manual: each command's `--help` read against the docs. Forbidden-term grep over `README.md`, `docs/`, `commands/README.md`, `test/README.md` finds only the allowed uses above.
+- Blockers: None. Operator: Runbook R3 and R4.
 
 ---
 
