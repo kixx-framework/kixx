@@ -63,7 +63,7 @@ describe('cloudflare create-worker and update-worker', ({ it }) => {
 
             assertEqual('UsageError', noEnvironment.name);
             assertEqual('The --environment option is required', noEnvironment.message);
-            assertMatches('environments.staging.WORKER', noBlock.message);
+            assertEqual('Missing required configuration in cloudflare-config.jsonc: environments.staging', noBlock.message);
             assertMatches('environments.production.WORKER.name', noName.message);
             assertEqual(0, client.calls.length);
         }

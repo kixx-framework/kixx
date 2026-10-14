@@ -489,7 +489,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T8: Worker bindings, secrets manifest, Durable Object exports, and version payload
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** `tmp/kixx-devkit/docs/cloudflare.md` (§Environment files, §4 bindings and exports, resource binding table, `SEND_EMAIL`, `IMAGES`, `OBJECT_STORE`), `lib/kixx/config/secrets-manifest.js`, `lib/example.env.secrets`, `lib/example.env`
 
@@ -524,11 +524,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `compareDeclaredSecrets` tests: exact match; missing required; undeclared remote; optional present (inherited); optional absent (not inherited, no error); `plain_text` with a declared name does not count.
-- [ ] Bindings built from `lib/cloudflare-config.jsonc` `production` (test fixture copy) contain d1, two kv, two DO namespaces, r2 `OBJECT_STORE_FILES`, `send_email`, `ENVIRONMENT`, and the inherit bindings, sorted by name.
-- [ ] DO exports for that config contain `ContentAddressableIndexStore` and `JobQueueStore` as live classes.
-- [ ] Unknown `WORKER_VERSION` keys and `annotations` are rejected with the config path.
-- [ ] The secrets-manifest conformance test passes.
+- [x] `compareDeclaredSecrets` tests: exact match; missing required; undeclared remote; optional present (inherited); optional absent (not inherited, no error); `plain_text` with a declared name does not count.
+- [x] Bindings built from `lib/cloudflare-config.jsonc` `production` (test fixture copy) contain d1, two kv, two DO namespaces, r2 `OBJECT_STORE_FILES`, `send_email`, `ENVIRONMENT`, and the inherit bindings, sorted by name.
+- [x] DO exports for that config contain `ContentAddressableIndexStore` and `JobQueueStore` as live classes.
+- [x] Unknown `WORKER_VERSION` keys and `annotations` are rejected with the config path.
+- [x] The secrets-manifest conformance test passes.
 
 **Validation**
 
@@ -538,12 +538,24 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `secrets-manifest`, `worker-secret-names` (`compareDeclaredSecrets`), `env-file`, `worker-bindings`, `object-store-buckets`, `durable-object-exports`, `cloudflare-worker-version`, and `worker-version-config`, with unit tests and a secrets-manifest conformance test.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - **`readWorkerConfig` overlap: folded, not duplicated.** `read-worker-config.js` now also exports `readEnvironmentConfig(cloudflareConfig, environment)` (requires `--environment` and an own-property plain-object `environments.<env>`); `readWorkerConfig` calls it first. `worker-version-config.js` exports `readWorkerVersionConfig(cloudflareConfig, environment)` → `{ environmentConfig, workerConfig, workerVersionConfig }` (`{}` when absent) and adds only the `WORKER_VERSION` checks. Side effect: `create-worker`/`update-worker`/`deploy-version` now report a missing environment as `environments.<env>` instead of `environments.<env>.WORKER` (T6 test expectation updated).
+  - `readWorkerVersionConfig` also runs `new CloudflareWorkerVersion(WORKER_VERSION)` and converts its `AssertionError` into a `UsageError` naming the config path, so bad values (e.g. `limits.cpu_ms: 0`) fail as configuration, not at upload. Exports `WORKER_VERSION_KEYS`.
+  - All config errors read `Invalid cloudflare-config.jsonc: environments.<env>.<path> ...` (full paths, not the old block-relative paths). `readObjectStoreBuckets({ environmentConfig, environment })` and `buildDurableObjectExports({ environmentConfig, environment })` take the environment for that reason; bucket `configPath` is the full path (T9 `verify-resources` can use it directly). Buckets no longer return `locationHint`/`storageClass` (validated, then ignored).
+  - `secrets-manifest.js` exports `SECRETS_MANIFEST_FILE_NAME`, `parseSecretsManifest(text, { filepath })`, and `readSecretsManifest({ projectDirectory, fileSystem })` (missing file is a `UsageError`). Errors read `Invalid <path> on line N: ...`; unlike lib, a malformed line is not echoed (it may hold a pasted value). `BUILD_ID`/`ENVIRONMENT` are rejected with their line.
+  - `compareDeclaredSecrets({ manifest, remoteNames })` → `{ missingRequired, undeclared, inheritedNames }`, all sorted and unique. T9 feeds it `readSecretBindingNames(version)` (accepts `version.bindings` or `version.resources.bindings`).
+  - `readEnvFile({ projectDirectory, environment, fileSystem })` reads only `.env.<env>` (required), drops `ENVIRONMENT`, and rejects `BUILD_ID` with its line. Returns a null-prototype object.
+  - `buildWorkerBindings({ environmentConfig, environment, envars, inheritedSecretNames, secretVersionId })`. `secretVersionId` is required only when `inheritedSecretNames` is non-empty (zero-versions case passes neither). Missing/empty resource IDs throw `UsageError` with the config path (T9 verifies first). The binding-name pattern and the reserved-name check (`RESERVED_NAMES` = `BUILD_ID`, `ENVIRONMENT`, exported here) now apply to every config binding name, not only `SEND_EMAIL`/`IMAGES`. Reserved names in `envars` are rejected.
+  - `cloudflare-worker-version.js` and its tests are verbatim ports.
+  - Fixture `devkit/test/fixtures/lib-cloudflare-config.jsonc` is a verbatim copy of `lib/cloudflare-config.jsonc`, used by the bindings and DO-exports tests. T9 may reuse it.
+- Actual files changed: `devkit/lib/cloudflare/{secrets-manifest,worker-secret-names,worker-bindings,object-store-buckets,durable-object-exports,cloudflare-worker-version,worker-version-config,read-worker-config}.js`, `devkit/lib/env-file.js`; tests `devkit/test/lib/cloudflare/{secrets-manifest,worker-secret-names,worker-bindings,object-store-buckets,durable-object-exports,cloudflare-worker-version,worker-version-config}.test.js`, `devkit/test/lib/env-file.test.js`, `devkit/test/conformance/secrets-manifest.test.js`, `devkit/test/commands/cloudflare/create-worker.test.js` (message expectation); fixture `devkit/test/fixtures/lib-cloudflare-config.jsonc`.
+- Validation run (2026-10-14):
+  - `node devkit/run-tests.js devkit/test/lib/cloudflare devkit/test/lib/env-file.test.js devkit/test/conformance`: 212 tests pass.
+  - `node devkit/run-tests.js`: 463 pass. `deno run -A devkit/run-tests.js`: 463 pass.
+  - `node devkit/run-linter.js devkit`: exit 0.
 - Blockers: None.
 
 ---
