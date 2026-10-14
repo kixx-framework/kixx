@@ -217,14 +217,14 @@ Treat this list as orientation, not permission to ignore other necessary files. 
   - `getFreePort` and `spawn` throwing synchronously are recorded as a failure ("app server could not be spawned: ...") rather than rejecting.
   - Stdout/stderr use `setEncoding('utf8')`, so the 64 KiB limit counts characters, not bytes.
 - Actual files changed: `devkit/lib/devserver/app-process.js`, `devkit/test/lib/devserver/app-process.test.js`.
-- Validation run: process manager tests 12/12 pass; `node devkit/run-linter.js devkit` clean; full suite 603 tests pass on Node; `deno run -A devkit/run-tests.js devkit/test/lib/devserver` 18 pass.
+- Validation run: process manager tests 15/15 pass; `node devkit/run-linter.js devkit` clean; full suite 603 tests pass on Node; `deno run -A devkit/run-tests.js devkit/test/lib/devserver` 18 pass.
 - Blockers: None.
 
 ---
 
 ### Task D3: Reverse proxy, error page, and the `DevServer` composition
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D1, D2
 **Documentation:** Decisions 2, 5, 6, 11; R-a, R-d, R-e; `tmp/legacy-devserver/devserver.js` (`proxyRequest`)
 
@@ -281,12 +281,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] With a fake `appProcess` returning `{ failure }` whose reason and output contain `<script>` and `&`: the response is 502, `text/html; charset=utf-8`, `no-store`, escaped, and has no body for `HEAD`. Empty output shows "(no output captured)".
-- [ ] With a fake `appProcess` returning the port of an in-process upstream on `127.0.0.1:0`, the proxy preserves method, path and query, request body, a custom `Host` (`Host: blog.example.test`), response status, response headers (including multiple `set-cookie`), and response body.
-- [ ] An upstream connection refusal gives the error page containing the connection error and `appProcess.output`.
-- [ ] A fake `watch` emitting a trigger path calls `markChanged()` and logs once until `ensureReady()` next resolves. Emitting a non-trigger path (`pages/x.js`) calls nothing. A watcher `error` logs a warning and does not throw.
-- [ ] `start()` with the port already taken rejects with a `UsageError` mentioning the port and `--port`, and `ensureReady()` was never called.
-- [ ] `stop()` closes the server (a new connection is refused), closes the watcher, awaits `appProcess.stop()`, and is idempotent.
+- [x] With a fake `appProcess` returning `{ failure }` whose reason and output contain `<script>` and `&`: the response is 502, `text/html; charset=utf-8`, `no-store`, escaped, and has no body for `HEAD`. Empty output shows "(no output captured)".
+- [x] With a fake `appProcess` returning the port of an in-process upstream on `127.0.0.1:0`, the proxy preserves method, path and query, request body, a custom `Host` (`Host: blog.example.test`), response status, response headers (including multiple `set-cookie`), and response body.
+- [x] An upstream connection refusal gives the error page containing the connection error and `appProcess.output`.
+- [x] A fake `watch` emitting a trigger path calls `markChanged()` and logs once until `ensureReady()` next resolves. Emitting a non-trigger path (`pages/x.js`) calls nothing. A watcher `error` logs a warning and does not throw.
+- [x] `start()` with the port already taken rejects with a `UsageError` mentioning the port and `--port`, and `ensureReady()` was never called.
+- [x] `stop()` closes the server (a new connection is refused), closes the watcher, awaits `appProcess.stop()`, and is idempotent.
 
 **Validation**
 
@@ -296,12 +296,18 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `DevServer` with private proxy, error page, and watch wiring; unit tests with a fake `appProcess`, a fake `watch`, and loopback upstream servers.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - `UsageError` messages: "Port N is already in use. Stop the other server or choose another port with --port." and "Port N is not allowed (permission denied). Choose another port with --port."
+  - If `watch()` throws synchronously, the same "file watching stopped" warning is logged and the server keeps serving.
+  - A missing watcher filename logs as "change detected: (unknown file)".
+  - The upstream response also gets an `error` listener that destroys the client response, so an upstream that dies mid-body does not hang the client.
+  - The error page sets `content-length`. A server `error` after listening is logged rather than thrown.
+  - `closeAllConnections()` works on Deno 2.8.1 (the D3 tests pass there).
+- Actual files changed: `devkit/lib/devserver/dev-server.js`, `devkit/test/lib/devserver/dev-server.test.js`.
+- Validation run: `node devkit/run-tests.js devkit/test/lib/devserver` 26 pass; `node devkit/run-linter.js devkit` clean; full suite 611 tests pass on Node; `deno run -A devkit/run-tests.js devkit/test/lib/devserver` 26 pass.
 - Blockers: None.
 
 ---
