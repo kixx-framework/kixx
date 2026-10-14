@@ -22,6 +22,22 @@ Deploy on:
 
 Created by [Kris Walker](https://www.kriswalker.me) 2017 - 2026.
 
+---
+
+Repository Layout
+-----------------
+
+This mono-repo holds every part of the Kixx framework.
+
+- `lib/` - The Kixx library (`lib/kixx/`) plus a default application built on it (`app/`, `routes/`, `pages/`, `templates/`, etc.). Not deployable on its own; it will run locally on a devserver (not built yet) under Node.js or Deno. Will later be published to NPM and JSR as a standalone library.
+- `devkit/` - Source for the `kixx-devkit` package (NPM and JSR): the `kixx` command line tool for building and deploying Kixx applications.
+- `test-app/` - A deployable copy of `lib/` used for end-to-end testing on each deployment target. Copied code is ignored by git; only its config is tracked. See `test-app/README.md`.
+- `tools/` - Scripts for working on this repo, such as the test app builder.
+- `docs/` - API reference docs (Admin API, Publishing API).
+- `agents/` - Working notes for AI agents: implementation plans and a daily activity journal.
+
+---
+
 Copyright and License
 ---------------------
 Copyright: (c) 2017 - 2026 by Kris Walker (www.kriswalker.me)
