@@ -40,6 +40,27 @@ function appendWrappedDescription(lines, description, initialPrefix) {
     }
 }
 
+// Pads every label to the longest one so descriptions share a column.
+function appendAlignedEntries(lines, entries) {
+    const labelWidth = Math.max(0, ...entries.map(([ label ]) => label.length));
+
+    for (const [ label, description ] of entries) {
+        appendWrappedDescription(lines, description || '', `  ${ label.padEnd(labelWidth) }  `);
+    }
+}
+
+// Long flags line up whether or not an option has a short alias.
+function formatOptionLabel(flagName, opt) {
+    const shortLabel = opt.short ? `-${ opt.short }, ` : '    ';
+    let label = `${ shortLabel }--${ flagName }`;
+
+    if (opt.type === 'string') {
+        label += opt.multiple ? ' <string>...' : ' <string>';
+    }
+
+    return label;
+}
+
 function renderHelp(sections) {
     const {
         message,
@@ -72,36 +93,32 @@ function renderHelp(sections) {
 
     if (positionals && positionals.length > 0) {
         lines.push('Arguments:');
-        for (const positional of positionals) {
-            appendWrappedDescription(lines, positional.description, `  ${ positional.name }  `);
-        }
+        appendAlignedEntries(lines, positionals.map((positional) => [ positional.name, positional.description ]));
         lines.push('');
     }
 
     if (commands && commands.length > 0) {
         lines.push('');
         lines.push('Commands:');
-        for (const cmd of commands) {
-            appendWrappedDescription(lines, cmd.description, `  ${ cmd.name }  `);
-        }
+        appendAlignedEntries(lines, commands.map((cmd) => [ cmd.name, cmd.description ]));
     }
 
     if (subCommands && subCommands.length > 0) {
         lines.push('');
         lines.push('Sub-commands:');
-        for (const cmd of subCommands) {
-            appendWrappedDescription(lines, cmd.description, `  ${ cmd.name }  `);
-        }
+        appendAlignedEntries(lines, subCommands.map((cmd) => [ cmd.name, cmd.description ]));
     }
 
     if (options) {
         const globalOptions = {
             help: {
                 type: 'boolean',
+                short: 'h',
                 description: 'Show this help',
             },
             version: {
                 type: 'boolean',
+                short: 'v',
                 description: 'Print the kixx version',
             },
         };
@@ -111,9 +128,9 @@ function renderHelp(sections) {
         lines.push('');
         lines.push('Options:');
 
-        for (const [ flagName, opt ] of Object.entries(opts)) {
-            appendWrappedDescription(lines, opt.description || '', `  --${ flagName }  ${ opt.type }  `);
-        }
+        appendAlignedEntries(lines, Object.entries(opts).map(([ flagName, opt ]) => {
+            return [ formatOptionLabel(flagName, opt), opt.description || '' ];
+        }));
     }
 
     appendRequiredSettings(lines, 'Required .kixx/config.json settings:', requiredConfig);

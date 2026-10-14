@@ -206,7 +206,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
   - `create-publishing-token --ttl` must be a positive whole number (usage error before prompting). The old command sent `NaN`.
   - `run-migration` prints its `Next:` command unwrapped so it stays copyable; the rest of the output is wrapped.
   - `list-migrations` prints "No migrations are registered." for an empty list.
-  - For T10: command help lists long flags only (`--environment`, not `-e`); that is T1 runner behavior.
+  - For T10: command help lists long flags only (`--environment`, not `-e`); that is T1 runner behavior. Superseded by the 2026-10-14 T10 follow-up: help now shows short flags.
 - Actual files changed: `devkit/lib/admin/{admin-api-client,admin-api-error,resolve-admin-environment,prompt-admin-credentials}.js`, `devkit/lib/{prompt,resolve-environment-origin}.js`, `devkit/commands/admin/{index,accept-invite,create-publishing-token,list-migrations,run-migration}.js`; tests `devkit/test/lib/admin/{admin-api-client,admin-api-error,resolve-admin-environment,prompt-admin-credentials}.test.js`, `devkit/test/lib/{prompt,resolve-environment-origin}.test.js`, `devkit/test/commands/admin/{accept-invite,create-publishing-token,list-migrations,run-migration}.test.js`, `devkit/test/kixx.test.js` (admin help order, `--yes` rejection, non-TTY credential message).
 - Validation run (2026-10-14):
   - `node devkit/run-tests.js devkit/test/lib/admin devkit/test/commands/admin devkit/test/lib/prompt.test.js`: 61 tests pass.
@@ -736,7 +736,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 - Current state: Complete.
 - Remaining: None.
 - Decisions and discoveries:
-  - Docs show `-e` in examples; `--help` lists long flags only (T1 runner behavior). `configuration.md` states `--environment` (`-e`). Not changed: the runner is outside T10's scope.
+  - Docs show `-e` in examples. `configuration.md` states `--environment` (`-e`). `--help` originally listed long flags only; fixed in the follow-up below.
   - README links to `commands/README.md` and `test/README.md` are absolute GitHub links, since both files are excluded from the published packages.
   - "bootstrap token" remains in `admin.md` and the `accept-invite` help: it means `ADMIN_BOOTSTRAP_TOKEN`, not the removed `bootstrap` command. `deploy-version` docs say it has "no `--force`" (describing its absence). The routine workflow heading is "Routine deploy" to avoid confusion with the removed `release` command.
   - No help-text edits were needed; descriptions and options were read against the docs.
@@ -746,6 +746,13 @@ Treat this list as orientation, not permission to ignore other necessary files. 
   - `node devkit/run-linter.js devkit`: exit 0.
   - `deno run -RWNE --allow-sys=homedir devkit/kixx.js cloudflare create-worker-version --help`: prints help.
   - Manual: each command's `--help` read against the docs. Forbidden-term grep over `README.md`, `docs/`, `commands/README.md`, `test/README.md` finds only the allowed uses above.
+- Follow-up (2026-10-14, after orchestrator review): `--help` did not show short flags and option descriptions did not share a column, so it did not fully match the docs' `-e` usage.
+  - `renderHelp` in `devkit/kixx.js` now labels options `-e, --environment <string>` (booleans have no type; `multiple` strings show `<string>...`; options without a short flag are indented so long flags line up). Global options show `-h`/`-v`; verified both work after a sub-command name (`kixx cloudflare create-worker-version -h` prints help, `-v` prints the version).
+  - Descriptions in Options, Arguments, Commands, and Sub-commands are padded to one column per section; wrapping still uses the 80-column helper.
+  - Tests added in `devkit/test/kixx.test.js`: short flags in `-h` output, aligned option descriptions within 80 columns.
+  - No docs quote help verbatim, so no doc edits.
+  - Files changed: `devkit/kixx.js`, `devkit/test/kixx.test.js`.
+  - Validation: `node devkit/run-tests.js` 585 pass; `deno run -A devkit/run-tests.js` 585 pass; `node devkit/run-linter.js devkit` exit 0; `--help` eyeballed for `admin run-migration`, `app publish` (under `deno run -RWNE --allow-sys=homedir`), `cloudflare create-worker-version`, and top level.
 - Blockers: None. Operator: Runbook R3 and R4.
 
 ---

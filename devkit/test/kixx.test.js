@@ -141,6 +141,45 @@ describe('kixx.js entry point', ({ it }) => {
         assertMatches(/^x_[0-9a-f]{64}\n$/, stdout);
     }, { timeout: TIMEOUT });
 
+    it('shows short flags in command help for -h', async () => {
+        const { code, stdout } = await runEntryPoint([ 'cloudflare', 'create-worker-version', '-h' ]);
+
+        assertEqual(0, code);
+        assertMatches(/^ {2}-h, --help {2}/m, stdout);
+        assertMatches(/^ {2}-v, --version {2}/m, stdout);
+        assertMatches(/^ {2}-e, --environment <string> {2}/m, stdout);
+        assertMatches(/^ {6}--force {2}/m, stdout);
+    }, { timeout: TIMEOUT });
+
+    it('aligns option descriptions in one column', async () => {
+        const { stdout } = await runEntryPoint([ 'admin', 'create-publishing-token', '--help' ]);
+
+        const optionsSection = stdout.slice(stdout.indexOf('Options:\n')).split('\n\n')[0];
+        const optionLines = optionsSection.split('\n').slice(1);
+        const descriptions = [
+            'Show this help',
+            'Print the kixx version',
+            'Required application environment',
+            'Publishing role ids, defaults to editor',
+        ];
+
+        const columns = descriptions.map((text) => {
+            const line = optionLines.find((optionLine) => optionLine.includes(text));
+            assert(line, `has option line for "${ text }"`);
+            return line.indexOf(text);
+        });
+
+        for (const column of columns) {
+            assertEqual(columns[0], column);
+        }
+
+        for (const line of optionLines) {
+            assert(line.length <= 80, `line fits in 80 columns: ${ line }`);
+        }
+
+        assertMatches(/--roles <string>\.\.\./, stdout);
+    }, { timeout: TIMEOUT });
+
     it('reports an unknown option as a usage message without a stack', async () => {
         const { code, stderr } = await runEntryPoint([ 'admin', 'gen-secure-token', '--nope' ]);
 
