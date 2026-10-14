@@ -1,0 +1,26 @@
+// Minimal project for `create-worker-version` tests.
+{
+    "name": "fixture-app",
+    "environments": {
+        "production": {
+            "WORKER": { "name": "fixture-worker" },
+            "WORKER_VERSION": { "compatibility_date": "2026-01-01" },
+            "DOCUMENT_STORE": { "bindingName": "DOCUMENT_STORE", "databaseId": "d1-id" },
+            "KEY_VALUE_STORE": { "bindingName": "KEY_VALUE_STORE", "namespaceId": "kv-id" },
+            "CONTENT_STORE": {
+                "kvBindingName": "CA_STORE_KV_STORE",
+                "kvNamespaceId": "content-kv-id",
+                "durableObjectBindingName": "CA_STORE_DURABLE_OBJECT",
+                "durableObjectClassName": "ContentAddressableIndexStore",
+            },
+            "OBJECT_STORE": {
+                "buckets": {
+                    "files": { "bindingName": "OBJECT_STORE_FILES", "bucketName": "fixture-files", "jurisdiction": "eu" },
+                },
+            },
+        },
+        "staging": {
+            "WORKER": { "name": "fixture-worker-staging" },
+        },
+    },
+}

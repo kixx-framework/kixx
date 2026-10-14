@@ -87,7 +87,7 @@ describe('kixx.js entry point', ({ it }) => {
         const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
 
         assertEqual(0, code);
-        assertEqual('create-worker,update-worker,deploy-version', names.join(','));
+        assertEqual('create-worker,update-worker,create-worker-version,deploy-version', names.join(','));
     }, { timeout: TIMEOUT });
 
     it('lists the app sub-commands in declaration order', async () => {

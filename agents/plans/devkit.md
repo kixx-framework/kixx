@@ -572,7 +572,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T9: `cloudflare create-worker-version` pipeline and command
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T6, T7, T8
 **Documentation:** `tmp/kixx-devkit/lib/cloudflare/create-worker-version.js`, `tmp/kixx-devkit/commands/cloudflare/create-worker-version.js`, `tmp/kixx-devkit/docs/cloudflare.md` (§Processing pipeline, §Durable Object deployment policy); Decisions 4 to 8, 12, 15, 17
 
@@ -627,15 +627,15 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Tests use a fake API client recording calls, and assert **no** call to any create-resource or secret endpoint in every scenario.
-- [ ] Secret source: state fresh; state stale (Decision 15 message); state version 404; state names a different Worker; no state + zero versions + required secrets (fail); no state + zero versions + no required (proceed, no inherit bindings); no state + latest matching (adopted, pinned after upload); no state + latest mismatching (fail).
-- [ ] Secrets: missing required fails; undeclared remote fails; optional absent passes.
-- [ ] Resources: missing ID, empty ID, 404 D1/KV, 404 R2 with jurisdiction; all are reported together. Non-404 errors propagate.
-- [ ] Combined report: a secret mismatch, a missing resource, and a missing `--deploy` are all listed in one error, and no upload is attempted.
-- [ ] `--deploy`: required when a class is unprovisioned (fails without); refused when none is; when used, it uploads with `deploy=true` and state records `deployed: true`.
-- [ ] Skip when unchanged. `--force` uploads. An unprovisioned class forces an upload even when the hashes match (with `--deploy`).
-- [ ] A run that skips or uploads writes `cloudflare-config.generated.js` in the project directory (use a temp copy of the fixture project). A run that fails preflight does not write it.
-- [ ] A state write failure prints recoverable state JSON.
+- [x] Tests use a fake API client recording calls, and assert **no** call to any create-resource or secret endpoint in every scenario.
+- [x] Secret source: state fresh; state stale (Decision 15 message); state version 404; state names a different Worker; no state + zero versions + required secrets (fail); no state + zero versions + no required (proceed, no inherit bindings); no state + latest matching (adopted, pinned after upload); no state + latest mismatching (fail).
+- [x] Secrets: missing required fails; undeclared remote fails; optional absent passes.
+- [x] Resources: missing ID, empty ID, 404 D1/KV, 404 R2 with jurisdiction; all are reported together. Non-404 errors propagate.
+- [x] Combined report: a secret mismatch, a missing resource, and a missing `--deploy` are all listed in one error, and no upload is attempted.
+- [x] `--deploy`: required when a class is unprovisioned (fails without); refused when none is; when used, it uploads with `deploy=true` and state records `deployed: true`.
+- [x] Skip when unchanged. `--force` uploads. An unprovisioned class forces an upload even when the hashes match (with `--deploy`).
+- [x] A run that skips or uploads writes `cloudflare-config.generated.js` in the project directory (use a temp copy of the fixture project). A run that fails preflight does not write it.
+- [x] A state write failure prints recoverable state JSON.
 
 **Validation**
 
@@ -645,13 +645,26 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: `worker-record` (verbatim port), `verify-resources`, `resolve-secret-source`, `create-worker-version` (orchestration), and the `cloudflare create-worker-version` command with output rendering, plus unit and command tests and a fixture project.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - **Combined report needs Durable Object bindings without resource IDs.** `buildWorkerBindings` throws on a missing ID, so `worker-bindings.js` now also exports `buildDurableObjectBindings({ environmentConfig, environment })` (the CONTENT_STORE DO part was split out of `contentStoreBindings`; full output unchanged). The DO policy uses it; full bindings are built only after all problems are clear.
+  - Phase 1 also builds the DO exports and DO bindings, so their config errors fail before any remote call. R2 bucket config errors (including a missing `bucketName`, which is the bucket's ID) surface from `readObjectStoreBuckets` inside `verifyResources` as config `UsageError`s, not as "no ID configured" problems.
+  - `resolveSecretSource({ apiClient, workerName, environment, state, manifest })` → `{ versionId|null, adopted, comparison }`. Adoption reads the latest version with `getWorkerVersion` (the list endpoint carries no bindings). Stale, 404, and wrong-Worker messages name `.kixx/cloudflare-state.<env>.json` and the Decision 15 recovery paths.
+  - `verifyResources` returns `{ configPath, resource, cause }` problems, checks sequentially in config order, never looks up an empty ID, and lets non-404 errors propagate. Problems render as `<configPath>: <resource>, <cause>`.
+  - Preflight problems render as one `UsageError` headed `Cannot create a Worker version for environment "<env>". Nothing was uploaded.` with `Secrets (source version <id>[, adopted as the latest version]):`, `Resources:`, and `Durable Objects:` sections, each with an operator hint.
+  - `createWorkerVersion` result: `{ outcome: 'skipped'|'created', environment, workerName, stateFilepath, generatedConfigFilepath, adoptedVersionId, previousState, state, changes, moduleCount, buildId, versionId, deployed, provisionedClasses, reconciliation }`. `BUILD_ID` suffix is `generateShortId()`.
+  - Command output: wrapped report, then next-step commands written unwrapped (`kixx app publish -e <env> --build-id <id>`, and `kixx cloudflare deploy-version -e <env>` when undeployed). With `--deploy` the content-gap warning is wrapped but the publish command is not. Help lists `create-worker-version` between `update-worker` and `deploy-version`.
+  - Test helper `test/helpers/fake-cloudflare-client.js` is a Proxy: any method outside the allowed read/upload set throws and is recorded, and `forbiddenCalls()` lets every scenario assert no create-resource or secret endpoint was called.
+  - For T10 docs: "adopted" output line is `Adopted latest version <id> as the secret source`; skip line is `Nothing changed since version X (build Y).`; the old devkit's `RETARGETED` output is gone (a state file naming another Worker is an error telling the operator to delete it).
+- Actual files changed: `devkit/lib/cloudflare/{create-worker-version,verify-resources,worker-record,resolve-secret-source}.js` (new), `devkit/lib/cloudflare/worker-bindings.js` (`buildDurableObjectBindings`), `devkit/commands/cloudflare/{create-worker-version,index}.js`; tests `devkit/test/lib/cloudflare/{create-worker-version,verify-resources,worker-record,resolve-secret-source}.test.js`, `devkit/test/lib/cloudflare/worker-bindings.test.js`, `devkit/test/commands/cloudflare/create-worker-version.test.js`, `devkit/test/kixx.test.js` (cloudflare help order); helper `devkit/test/helpers/fake-cloudflare-client.js`; fixture `devkit/test/fixtures/worker-project/` (`cloudflare-config.jsonc`, `cloudflare-server.js`, `lib/greet.js`, `.env.production`, `example.env.secrets`).
+- Validation run (2026-10-14):
+  - `node devkit/run-tests.js devkit/test/lib/cloudflare devkit/test/commands/cloudflare`: 237 tests pass.
+  - `node devkit/run-tests.js`: 583 pass. `deno run -A devkit/run-tests.js`: 583 pass.
+  - `node devkit/run-linter.js devkit`: exit 0. `git status --short lib`: empty.
+  - `node devkit/kixx.js cloudflare create-worker-version --help` lists `--environment`, `--force`, `--deploy`.
+- Blockers: None. Operator: Runbook R3 (live smoke test) is now unblocked.
 
 ---
 

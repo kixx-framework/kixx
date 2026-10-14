@@ -47,7 +47,8 @@ export function buildWorkerBindings(args) {
     const entries = [
         ...documentStoreBindings(environmentConfig, prefix),
         ...keyValueStoreBindings(environmentConfig, prefix),
-        ...contentStoreBindings(environmentConfig, prefix),
+        ...contentStoreKeyValueBindings(environmentConfig, prefix),
+        ...contentStoreDurableObjectBindings(environmentConfig, prefix),
         ...jobQueueBindings(environmentConfig, prefix),
         ...objectStoreBindings(environmentConfig, environment),
         ...nameOnlyBindings(environmentConfig, prefix, 'SEND_EMAIL', 'send_email'),
@@ -62,6 +63,26 @@ export function buildWorkerBindings(args) {
     return entries
         .map((entry) => entry.binding)
         .sort((a, b) => (a.name < b.name ? -1 : 1));
+}
+
+/**
+ * The Durable Object namespace bindings alone. They need no resource IDs, so
+ * the Durable Object deployment policy can be checked even when a D1, KV, or
+ * R2 ID is missing, and all problems reported together.
+ * @param {Object} args
+ * @param {Object} args.environmentConfig - `environments.<env>` from `cloudflare-config.jsonc`
+ * @param {string} args.environment - Environment name, used in config paths
+ * @returns {Array<Object>} `durable_object_namespace` bindings, in config order
+ * @throws {UsageError} When a binding name or class name is missing or invalid
+ */
+export function buildDurableObjectBindings(args) {
+    const { environmentConfig, environment } = args ?? {};
+    const prefix = `environments.${ environment }`;
+
+    return [
+        ...contentStoreDurableObjectBindings(environmentConfig, prefix),
+        ...jobQueueBindings(environmentConfig, prefix),
+    ].map((entry) => entry.binding);
 }
 
 function documentStoreBindings(environmentConfig, prefix) {
@@ -98,7 +119,7 @@ function keyValueStoreBindings(environmentConfig, prefix) {
     } ];
 }
 
-function contentStoreBindings(environmentConfig, prefix) {
+function contentStoreKeyValueBindings(environmentConfig, prefix) {
     const block = readBlock(environmentConfig, prefix, 'CONTENT_STORE');
 
     if (!block) {
@@ -107,24 +128,33 @@ function contentStoreBindings(environmentConfig, prefix) {
 
     const path = `${ prefix }.CONTENT_STORE`;
 
-    return [
-        {
-            source: path,
-            binding: {
-                type: 'kv_namespace',
-                name: requireBindingName(block.kvBindingName, `${ path }.kvBindingName`),
-                namespace_id: requireString(block.kvNamespaceId, `${ path }.kvNamespaceId`),
-            },
+    return [ {
+        source: path,
+        binding: {
+            type: 'kv_namespace',
+            name: requireBindingName(block.kvBindingName, `${ path }.kvBindingName`),
+            namespace_id: requireString(block.kvNamespaceId, `${ path }.kvNamespaceId`),
         },
-        {
-            source: path,
-            binding: {
-                type: 'durable_object_namespace',
-                name: requireBindingName(block.durableObjectBindingName, `${ path }.durableObjectBindingName`),
-                class_name: requireString(block.durableObjectClassName, `${ path }.durableObjectClassName`),
-            },
+    } ];
+}
+
+function contentStoreDurableObjectBindings(environmentConfig, prefix) {
+    const block = readBlock(environmentConfig, prefix, 'CONTENT_STORE');
+
+    if (!block) {
+        return [];
+    }
+
+    const path = `${ prefix }.CONTENT_STORE`;
+
+    return [ {
+        source: path,
+        binding: {
+            type: 'durable_object_namespace',
+            name: requireBindingName(block.durableObjectBindingName, `${ path }.durableObjectBindingName`),
+            class_name: requireString(block.durableObjectClassName, `${ path }.durableObjectClassName`),
         },
-    ];
+    } ];
 }
 
 // Only the Durable Object namespace is a binding. Every other JOB_QUEUE key

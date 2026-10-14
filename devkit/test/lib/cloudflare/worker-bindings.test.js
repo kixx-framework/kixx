@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises';
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from '../../../lib/vendor/kixx-assert/mod.js';
-import { buildWorkerBindings } from '../../../lib/cloudflare/worker-bindings.js';
+import { buildDurableObjectBindings, buildWorkerBindings } from '../../../lib/cloudflare/worker-bindings.js';
 import CloudflareWorkerVersion from '../../../lib/cloudflare/cloudflare-worker-version.js';
 import { parseJsonc } from '../../../lib/parse-jsonc.js';
 
@@ -449,6 +449,23 @@ describe('cloudflare/worker-bindings with the lib production config', ({ it }) =
         assertEqual('kixx-test-app-production-files', byName.OBJECT_STORE_FILES.bucket_name);
         assertEqual('production', byName.ENVIRONMENT.text);
         assertEqual('source-version-id', byName.CSRF_TOKEN_SIGNING_SECRET.version_id);
+    });
+
+    it('builds the Durable Object bindings alone, without any resource ID', async () => {
+        const environmentConfig = await readLibProductionConfig();
+        const withoutIds = {
+            ...environmentConfig,
+            DOCUMENT_STORE: { ...environmentConfig.DOCUMENT_STORE, databaseId: null },
+            CONTENT_STORE: { ...environmentConfig.CONTENT_STORE, kvNamespaceId: '' },
+        };
+
+        const bindings = buildDurableObjectBindings({ environmentConfig: withoutIds, environment: 'production' });
+        const summary = bindings.map((binding) => `${ binding.name }:${ binding.class_name }`);
+
+        assertEqual([
+            'CA_STORE_DURABLE_OBJECT:ContentAddressableIndexStore',
+            'JOB_QUEUE_DURABLE_OBJECT:JobQueueStore',
+        ].join(','), summary.join(','));
     });
 });
 
