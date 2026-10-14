@@ -1,6 +1,7 @@
 import * as admin from './admin/index.js';
 import * as app from './app/index.js';
 import * as cloudflare from './cloudflare/index.js';
+import * as dev from './dev/index.js';
 
 
 // Command name to command index module. Static imports, rather than reading
@@ -10,4 +11,5 @@ export default {
     admin,
     app,
     cloudflare,
+    dev,
 };

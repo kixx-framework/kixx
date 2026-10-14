@@ -45,6 +45,7 @@ describe('kixx.js entry point', ({ it }) => {
         assertMatches(/^ {2}admin {2}/m, stdout);
         assertMatches(/^ {2}app {2}/m, stdout);
         assertMatches(/^ {2}cloudflare {2}/m, stdout);
+        assertMatches(/^ {2}dev {2}/m, stdout);
     }, { timeout: TIMEOUT });
 
     it('lists the families and fails when no command is given', async () => {
@@ -97,6 +98,24 @@ describe('kixx.js entry point', ({ it }) => {
 
         assertEqual(0, code);
         assertEqual('publish,assign-build', names.join(','));
+    }, { timeout: TIMEOUT });
+
+    it('lists the dev sub-commands', async () => {
+        const { code, stdout } = await runEntryPoint([ 'dev', '--help' ]);
+
+        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
+
+        assertEqual(0, code);
+        assertEqual('start', names.join(','));
+    }, { timeout: TIMEOUT });
+
+    it('shows the dev start flags', async () => {
+        const { code, stdout } = await runEntryPoint([ 'dev', 'start', '--help' ]);
+
+        assertEqual(0, code);
+        assertMatches(/^ {2}-p, --port <string> {2}/m, stdout);
+        assertMatches(/^ {2}-e, --environment <string> {2}/m, stdout);
+        assertMatches(/^ {6}--dotenv <string> {2}/m, stdout);
     }, { timeout: TIMEOUT });
 
     it('rejects deploy-version --force as an unknown option', async () => {

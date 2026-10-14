@@ -314,7 +314,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task D4: `kixx dev start` command and registration
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D3
 **Documentation:** `devkit/commands/README.md` (command contract); Decisions 1, 9, 10, 11, 14, 17
 
@@ -356,13 +356,13 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `node devkit/kixx.js --help` lists `dev`. `node devkit/kixx.js dev --help` lists `start`. `node devkit/kixx.js dev start --help` shows `-p, --port`, `-e, --environment`, and `--dotenv`.
-- [ ] `devkit/test/commands/index.test.js` passes unchanged with the new family registered.
-- [ ] `--port abc`, `--port 70000`, and `--port -1` throw `UsageError`. No `--port` gives 2026, and `--port 0` is accepted.
-- [ ] A missing `node-server.js` throws a `UsageError` naming `<projectDirectory>/node-server.js`, and `createDevServer` is never called.
-- [ ] `--dotenv ./x.env` reaches `createDevServer` as `path.resolve('./x.env')`. The environment defaults to `development`, and `-e local` is forwarded.
-- [ ] After `start()`, emitting `SIGINT` on the fake signals calls `stop()` once (a second signal does not call it again), and `run()` resolves to `0` with no listeners left on `signals`.
-- [ ] A `UsageError` from `devServer.start()` propagates and installs no signal listeners.
+- [x] `node devkit/kixx.js --help` lists `dev`. `node devkit/kixx.js dev --help` lists `start`. `node devkit/kixx.js dev start --help` shows `-p, --port`, `-e, --environment`, and `--dotenv`.
+- [x] `devkit/test/commands/index.test.js` passes unchanged with the new family registered.
+- [x] `--port abc`, `--port 70000`, and `--port -1` throw `UsageError`. No `--port` gives 2026, and `--port 0` is accepted.
+- [x] A missing `node-server.js` throws a `UsageError` naming `<projectDirectory>/node-server.js`, and `createDevServer` is never called.
+- [x] `--dotenv ./x.env` reaches `createDevServer` as `path.resolve('./x.env')`. The environment defaults to `development`, and `-e local` is forwarded.
+- [x] After `start()`, emitting `SIGINT` on the fake signals calls `stop()` once (a second signal does not call it again), and `run()` resolves to `0` with no listeners left on `signals`.
+- [x] A `UsageError` from `devServer.start()` propagates and installs no signal listeners.
 
 **Validation**
 
@@ -373,12 +373,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `dev` family, `DevStartCommand`, registration, command unit tests, and entry-point help tests.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - The `--port` error appends the raw value: `The --port value must be an integer from 0 to 65535 (got "abc")`.
+  - The missing-server message: `No app server found at <projectDirectory>/node-server.js. Run kixx dev start inside a Kixx application directory.`
+  - `--environment` help text: "Application environment (default development)".
+  - The listening line uses `devServer.port` (the bound port), so `--port 0` prints the real port. It wraps at 80 columns via `wrapText()`.
+  - `createDevServer(options)` receives `{ projectDirectory (real path), port, environment, dotenv, log, stdout, stderr }`. D6 should build its `DevServer` the same way (`new AppProcess({ projectDirectory, environment, dotenv, stdout, stderr, log })` then `new DevServer({ projectDirectory, port, appProcess, log })`).
+  - Signal listeners stay installed while stopping, so further signals are absorbed; they are removed once `stop()` settles.
+  - Manual smoke test (temp app, `node devkit/kixx.js dev start -p 0`): served with the client Host preserved, restarted after writing `a.js`, and exited cleanly on SIGINT.
+- Actual files changed: `devkit/commands/index.js`, `devkit/commands/dev/index.js`, `devkit/commands/dev/start.js`, `devkit/test/commands/dev/start.test.js`, `devkit/test/kixx.test.js`.
+- Validation run: `node devkit/run-tests.js devkit/test/commands devkit/test/kixx.test.js` 81 pass (includes unchanged `index.test.js`); `node devkit/run-linter.js devkit` clean; full suite 620 tests pass on Node; `node devkit/kixx.js dev start --help` shows `-p, --port`, `-e, --environment`, `--dotenv`.
 - Blockers: None.
 
 ---
