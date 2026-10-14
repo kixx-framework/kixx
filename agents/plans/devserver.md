@@ -114,7 +114,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task D2: App server process manager
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** Decisions 4, 5, 6, 8, 9; this plan's timing constants; `tmp/legacy-devserver/devserver/app-server-process.js`; `lib/node-server.js` (flags, SIGTERM drain, `SHUTDOWN_TIMEOUT_MS`)
 
@@ -182,19 +182,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The fake `spawn` receives the exact Node and Deno argument lists, with and without `--dotenv`, and `cwd = projectDirectory`.
-- [ ] Captured output keeps only the most recent 64 KiB and is reset at each spawn.
-- [ ] `canConnect` resolves true against a listening loopback server and false against a closed port, and `getFreePort` returns a usable port. Loopback sockets are allowed in this test.
-- [ ] With fakes: the first `ensureReady()` spawns and resolves `{ port }` once `canConnect` returns true. A second call without a change does not spawn again.
-- [ ] Ten concurrent `ensureReady()` calls after `markChanged()` produce exactly one SIGTERM to the old child and one new spawn, and the new spawn happens only after the old child's `exit`.
-- [ ] Exit before ready gives `{ failure }` whose reason includes the exit code and whose output holds the captured output. Later calls return the same failure without spawning until `markChanged()`, after which the next call spawns again.
-- [ ] Readiness timeout (a fake `delay` and a `canConnect` that always returns false) gives a timeout failure, and the child receives SIGTERM.
-- [ ] A spawn `error` event gives a failure naming the error, with no uncaught `error` event.
-- [ ] A child that ignores SIGTERM gets SIGKILL, and the restart still completes.
-- [ ] A crash after a successful start logs one line. The next `ensureReady()` spawns a new child even though nothing changed.
-- [ ] A restart or shutdown stop is never logged as a crash.
-- [ ] `stop()` during an in-flight start kills the new child, resolves, and makes later `ensureReady()` calls return the shutdown failure. `stop()` is idempotent.
-- [ ] A `markChanged()` during an in-flight restart causes one more restart on the next `ensureReady()` after it completes.
+- [x] The fake `spawn` receives the exact Node and Deno argument lists, with and without `--dotenv`, and `cwd = projectDirectory`.
+- [x] Captured output keeps only the most recent 64 KiB and is reset at each spawn.
+- [x] `canConnect` resolves true against a listening loopback server and false against a closed port, and `getFreePort` returns a usable port. Loopback sockets are allowed in this test.
+- [x] With fakes: the first `ensureReady()` spawns and resolves `{ port }` once `canConnect` returns true. A second call without a change does not spawn again.
+- [x] Ten concurrent `ensureReady()` calls after `markChanged()` produce exactly one SIGTERM to the old child and one new spawn, and the new spawn happens only after the old child's `exit`.
+- [x] Exit before ready gives `{ failure }` whose reason includes the exit code and whose output holds the captured output. Later calls return the same failure without spawning until `markChanged()`, after which the next call spawns again.
+- [x] Readiness timeout (a fake `delay` and a `canConnect` that always returns false) gives a timeout failure, and the child receives SIGTERM.
+- [x] A spawn `error` event gives a failure naming the error, with no uncaught `error` event.
+- [x] A child that ignores SIGTERM gets SIGKILL, and the restart still completes.
+- [x] A crash after a successful start logs one line. The next `ensureReady()` spawns a new child even though nothing changed.
+- [x] A restart or shutdown stop is never logged as a crash.
+- [x] `stop()` during an in-flight start kills the new child, resolves, and makes later `ensureReady()` calls return the shutdown failure. `stop()` is idempotent.
+- [x] A `markChanged()` during an in-flight restart causes one more restart on the next `ensureReady()` after it completes.
 
 **Validation**
 
@@ -204,12 +204,20 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `AppProcess`, `getFreePort()`, `canConnect()`, and unit tests (fake child inline in the test file).
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries:
+  - The injected `delay(ms, signal)` takes an optional `AbortSignal`. The stop timeout aborts it once the child exits, so the 11 s timer never outlives a prompt shutdown (no lingering handles). Fakes may ignore the signal.
+  - Intentional stops are marked in a `WeakSet` before signalling (a child can exit synchronously inside `kill()`), and stop promises are memoized per child in a `WeakMap` so `stop()` and a restart never double-signal.
+  - After the stop race, SIGKILL is sent only if the child has not exited (`exitCode`/`signalCode` still null). This keeps a child that exits in the same tick as the timeout from being killed, and lets tests use a `delay` that resolves at once.
+  - `#stopped` is checked again after each `canConnect()` resolves, so `stop()` during an in-flight probe still kills the new child.
+  - `stop()` awaits any in-flight restart, then stops the current child.
+  - Output from a child is captured only while it is the latest spawned child (`#outputChild`), so a crashed child's trailing stderr (pipes can drain after `exit`) is still captured, but an old child's output never leaks into a new attempt.
+  - `getFreePort` and `spawn` throwing synchronously are recorded as a failure ("app server could not be spawned: ...") rather than rejecting.
+  - Stdout/stderr use `setEncoding('utf8')`, so the 64 KiB limit counts characters, not bytes.
+- Actual files changed: `devkit/lib/devserver/app-process.js`, `devkit/test/lib/devserver/app-process.test.js`.
+- Validation run: process manager tests 12/12 pass; `node devkit/run-linter.js devkit` clean; full suite 603 tests pass on Node; `deno run -A devkit/run-tests.js devkit/test/lib/devserver` 18 pass.
 - Blockers: None.
 
 ---
