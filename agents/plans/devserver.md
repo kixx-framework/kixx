@@ -63,7 +63,7 @@ These choices were made by the planner from project conventions and accepted by 
 
 ### Task D1: Restart-trigger filter
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** This plan's "Restart-trigger filter" constraint; Decisions 3, 13, 15; R-c
 
@@ -90,9 +90,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Triggers: `node-server.js`, `virtual-hosts.js`, `node-environment.js`, `app/foo.js`, `routes/x.mjs`, `plugins/a/lib/b.js`, `kixx/static-assets/static-asset-request-handler.js`, `app/presentation/forms/pages/put-page-metadata-form.js`, `node-config.jsonc`, `.env`, `.env.development`, `.env.development.secrets`, `example.env.secrets`, `null`, `''`.
-- [ ] Not triggers: `pages/index.js`, `templates/base/x.js`, `static-assets/site.js`, `public/a.js`, `emails/x.js`, `test/unit.test.js`, `node_modules/x/index.js`, `plugins/a/node_modules/b.js`, `.git/hooks/x.js`, `.kixx/config.json`, `app/.cache/x.js`, `app/readme.md`, `templates/base/page.html`, `cloudflare-config.jsonc`, `example.env`, `package.json`, `deno.json`.
-- [ ] Windows-style separators (`app\\foo.js`, `pages\\x.js`) give the same answers as `/`.
+- [x] Triggers: `node-server.js`, `virtual-hosts.js`, `node-environment.js`, `app/foo.js`, `routes/x.mjs`, `plugins/a/lib/b.js`, `kixx/static-assets/static-asset-request-handler.js`, `app/presentation/forms/pages/put-page-metadata-form.js`, `node-config.jsonc`, `.env`, `.env.development`, `.env.development.secrets`, `example.env.secrets`, `null`, `''`.
+- [x] Not triggers: `pages/index.js`, `templates/base/x.js`, `static-assets/site.js`, `public/a.js`, `emails/x.js`, `test/unit.test.js`, `node_modules/x/index.js`, `plugins/a/node_modules/b.js`, `.git/hooks/x.js`, `.kixx/config.json`, `app/.cache/x.js`, `app/readme.md`, `templates/base/page.html`, `cloudflare-config.jsonc`, `example.env`, `package.json`, `deno.json`.
+- [x] Windows-style separators (`app\\foo.js`, `pages\\x.js`) give the same answers as `/`.
 
 **Validation**
 
@@ -102,12 +102,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `isRestartTrigger()` and its unit tests.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: `undefined` is also treated as a trigger (tested alongside `null` and `''`).
+- Actual files changed: `devkit/lib/devserver/restart-trigger.js`, `devkit/test/lib/devserver/restart-trigger.test.js`.
+- Validation run: filter tests 3/3 pass; `node devkit/run-linter.js devkit` clean; full suite 588 tests pass on Node.
 - Blockers: None.
 
 ---
