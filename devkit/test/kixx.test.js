@@ -90,6 +90,15 @@ describe('kixx.js entry point', ({ it }) => {
         assertEqual('create-worker,update-worker,deploy-version', names.join(','));
     }, { timeout: TIMEOUT });
 
+    it('lists the app sub-commands in declaration order', async () => {
+        const { code, stdout } = await runEntryPoint([ 'app', '--help' ]);
+
+        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
+
+        assertEqual(0, code);
+        assertEqual('publish,assign-build', names.join(','));
+    }, { timeout: TIMEOUT });
+
     it('rejects deploy-version --force as an unknown option', async () => {
         const { code, stderr } = await runEntryPoint([ 'cloudflare', 'deploy-version', '-e', 'production', '--force' ]);
 

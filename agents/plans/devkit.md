@@ -56,7 +56,7 @@ Seeded during planning, with citations. There is no separate audit task: before 
 | A7 | Build `PUT` precondition goes in JSON `attributes.expectedAssignmentId`; `If-Match`/`If-None-Match` is rejected with 400 | `lib/app/presentation/request-handlers/publishing-api/builds.js:86-96`; 412 `BuildPointerConflict` at `:108-112` | matches (`docs/publishing-api.md:563-570`) | protocol 2 body precondition | Confirmed by T4. Kept; build `PUT` is attempted once |
 | A8 | Migration codes `MigrationAlreadyAppliedError`, `MigrationConcurrencyError`, `MigrationCursorConflictError` (409) | `transaction-scripts/migrations/run-migration.js:172,219,245` | matches (`docs/admin-api.md:303-310`) | mapped | Confirmed by T3. Mappings kept; `--force` confirmation and `--yes` removed |
 | A9 | `InvalidInvite` (403), `InvalidCredentials` (401) | `lib/app/presentation/request-handlers/admin-api/accept-invite.js:15,49`, `lib/app/transaction-scripts/admin-invites/consume-admin-invite.js:10,32`; `lib/app/transaction-scripts/admin-users/verify-admin-credentials.js:12,73` | matches (`docs/admin-api.md:105,481-483`) | mapped | Confirmed by T3. Kept |
-| A10 | Content directories: `pages/`, `templates/{base,partials}/`, `static-assets/`, `public/`, `emails/` | lib layout matches | — | scans the same | Conformance test scans repo `lib/` and validates with lib's manifest validator (T5). `lib/templates/README.md` must be reported as unmatched, not fail publishing (T5 verifies by reading the old scanner). |
+| A10 | Content directories: `pages/`, `templates/{base,partials}/`, `static-assets/`, `public/`, `emails/` | lib's tree has exactly these (`lib/pages/`, `lib/templates/{base,partials}/`, `lib/static-assets/`, `lib/public/`, `lib/emails/`); manifest facets `lib/kixx/content-addressable-store/release-manifest.js:33-39` | — | scans the same (`lib/publishing/scan-content-sources.js:64-68`) | Confirmed by T5. `devkit/test/conformance/scan-lib-content.test.js` scans repo `lib/` with no problems, validates every structured payload with lib's `validateStructuredContent`, and the manifest with `validateReleaseManifest`. `templates/README.md` is reported unmatched, not a problem |
 | A11 | Old devkit docs say `deploy-version` updates state; the old code never wrote state | — | — | `lib/cloudflare/deploy-worker-version.js` | Implement the state update (T6) |
 | A12 | `POST /releases/validation` expects resource type `Release` | `releases.js:136` | "same body as POST /releases" | sends `Release` | Moot after T4: devkit no longer calls this endpoint (`validateRelease` was only used by out-of-scope commands and was not ported) |
 | A13 | Endpoints devkit calls: `GET /publishing-api/v1/` (discovery), `POST /objects/status`, `PUT /objects/:objectId`, `POST /releases`, `GET /builds/:buildId`, `PUT /builds/:buildId`; build `reason` ∈ `publish`, `rollback`, `carry-forward`, `restore` | `lib/routes/publishing-api-v1.js:27-44`; reasons `lib/app/collections/activation-record.js:8-13` | matches (`docs/publishing-api.md:50-68,558`) | — | Added by T4. `assign-build --reason` validated locally against the four reasons |
@@ -287,7 +287,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T5: Content scanning, stylesheet bundling, and `app publish`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T4
 **Documentation:** `tmp/kixx-devkit/docs/app.md` (`publish`, Stylesheet bundling), `docs/publishing-api.md` (Create a Release, Workflows), plan audit row A10
 
@@ -317,11 +317,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Scanner and stylesheet tests cover each documented problem code, import inlining, `url()` rewriting, cycles, and charset handling.
-- [ ] `publish` tests: the happy path uploads only missing objects. Dry-run performs no writes. Missing running build is a usage error. Assignment failure yields the recovery command.
-- [ ] The conformance scan of repo `lib/` passes.
-- [ ] Audit row A10 is confirmed or corrected with citations.
-- [ ] `node devkit/kixx.js app --help` lists `publish` and `assign-build`.
+- [x] Scanner and stylesheet tests cover each documented problem code, import inlining, `url()` rewriting, cycles, and charset handling.
+- [x] `publish` tests: the happy path uploads only missing objects. Dry-run performs no writes. Missing running build is a usage error. Assignment failure yields the recovery command.
+- [x] The conformance scan of repo `lib/` passes.
+- [x] Audit row A10 is confirmed or corrected with citations.
+- [x] `node devkit/kixx.js app --help` lists `publish` and `assign-build`.
 
 **Validation**
 
@@ -331,13 +331,23 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
+- Completed: Scanner, stylesheet parser and bundler, asset comment stripping, content-source report, `publish-content`, and `app publish`, with unit tests and a conformance scan of repo `lib/`. Audit row A10 confirmed.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - `scan-content-sources`, `bundle-stylesheet`, `parse-stylesheet`, `strip-asset-comments`, `content-source-report`, and `publish-content` are verbatim ports with their old tests (import paths adjusted). The old tests already cover every documented problem code (scanner and `css-*`), import inlining, `url()` rewriting, cycles, and charset handling.
+  - `publish-content.js` now exports `makeReleaseManifest(resources)` (was private `makeManifest`) so the conformance test validates exactly the manifest `publish` sends.
+  - `commands/app/publish.js`: build resolution is an inline `resolveBuildId` (explicit `--build-id` wins; empty is a usage error; otherwise discovery's `runningBuildId`, else a usage error naming `--build-id`). Order kept from the old command: resolve environment, resolve build, scan, publish, assign. Dropped the old `resolveRunningBuild` injection and merged `renderReleaseResult` into `renderPublishResult` (`create-release` is out of scope).
+  - `ReleaseAssignmentError` stays a plain `Error` (not `UsageError`) so the runner prints the recovery command unwrapped: `kixx app assign-build -e <env> --build-id <id> --release-id <id>`. `UnsupportedServerError` from assignment passes through.
+  - Publishing makes two discovery calls when `--build-id` is absent (build resolution, then negotiation inside `publishContent`). Harmless; left as in the old devkit.
+  - No `devkit/test/fixtures/content/` tree was needed; scanner tests build temp trees.
+- Actual files changed: `devkit/lib/publishing/{scan-content-sources,bundle-stylesheet,parse-stylesheet,strip-asset-comments,content-source-report,publish-content}.js`, `devkit/commands/app/{index,publish}.js`; tests `devkit/test/lib/publishing/{scan-content-sources,bundle-stylesheet,parse-stylesheet,strip-asset-comments,content-source-report,publish-content}.test.js`, `devkit/test/commands/app/publish.test.js`, `devkit/test/conformance/scan-lib-content.test.js`, `devkit/test/kixx.test.js` (app help order).
+- Validation run (2026-10-14):
+  - `node devkit/run-tests.js devkit/test/lib/publishing devkit/test/commands/app devkit/test/conformance`: 155 tests pass.
+  - `node devkit/run-tests.js`: 535 pass. `deno run -A devkit/run-tests.js`: 535 pass.
+  - `node devkit/run-linter.js devkit`: exit 0. `git status --short lib`: empty.
+  - `node devkit/kixx.js app --help` lists `publish`, `assign-build`.
+- Blockers: None. Server/docs disagreements for A10: None found.
 
 ---
 
