@@ -6,15 +6,15 @@
         </header>
 
         {{!--
-            form_expired means a submission was rejected because its CSRF token was
-            no longer live — typically a page left open too long, or a back-button
-            resubmit.
+            form_expired means a submission's CSRF token failed verification: the page
+            was left open too long, the user logged in again in another tab, or a
+            form was resubmitted with the back button.
         --}}
         {{#ifEqual form.errorCode "form_expired"}}
         <div class="callout callout--error" role="alert">
             <span class="callout__icon" aria-hidden="true">[x]</span>
             <div class="callout__body flow">
-                <p class="callout__title">That form had expired</p>
+                <p class="callout__title">That form couldn&rsquo;t be verified</p>
                 <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
             </div>
         </div>
