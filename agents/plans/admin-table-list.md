@@ -281,7 +281,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T4: Convert the invites and both API token listings to table lists
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T2
 **Documentation:** Table Lists style-guide page and `components.css` headers from T2
 
@@ -315,10 +315,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] All three pages render `.table-list` tables with the columns above, captioned focusable regions, and tone-mapped status badges whose text is the raw status.
-- [ ] Revoke forms render only for pending invites and active tokens, with unchanged action, CSRF, and hidden id fields.
-- [ ] Data-token grant lines render exactly as before, including the retired-collection branch; `Revoked`/`Expires` logic is unchanged.
-- [ ] Create forms, secret callouts, empty states, and pagination are unchanged.
+- [x] All three pages render `.table-list` tables with the columns above, captioned focusable regions, and tone-mapped status badges whose text is the raw status.
+- [x] Revoke forms render only for pending invites and active tokens, with unchanged action, CSRF, and hidden id fields.
+- [x] Data-token grant lines render exactly as before, including the retired-collection branch; `Revoked`/`Expires` logic is unchanged.
+- [x] Create forms, secret callouts, empty states, and pagination are unchanged.
 
 **Validation**
 
@@ -331,12 +331,21 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `/admin/invites`, `/admin/publishing-api-tokens`, and `/admin/admin-data-api-tokens` render `.table-list` tables with tone-mapped status badges whose text is the raw status. Columns and captions as specified (`invites-caption` "Invites"; `tokens-caption` "Tokens" on each token page).
+- Current state: Complete. Live check behind admin sign-in left to the Operator Runbook.
+- Remaining: Nothing for T4. Only the Operator Runbook remains for the plan.
+- Decisions and discoveries:
+  - Revoke forms keep `class="cluster"` and sit directly in the `table-list__actions` cell (no extra wrapper); `.table-list__actions > .cluster` keeps them on one line. Non-revocable rows get an empty actions cell.
+  - Invites Grants cell renders `{{ invite.roles }}` as plain text (was `<strong>` after "Grants:"; the column header now carries the label). The bootstrap-invite comment moved into that cell and was reworded for the cell; the revoke-form comments moved with their forms.
+  - Badge text has no surrounding whitespace, so status words appear as `>revoked<` etc.
+  - Offline render (`tmp/render-check.mjs` with the vendored engine and `formatDate`, sample rows in every status) confirmed badge tones, form placement, grant lines, and the Revoked/Expires branch.
+- e2e contract check (final templates):
+  - Hidden `invite_id` / `token_id`: one occurrence per template, inside `{{#ifEqual invite.status "pending"}}` / `{{#ifEqual token.status "active"}}`; render with pending/consumed/expired/revoked invites emitted only `i1` (pending); render with active/revoked/expired tokens emitted only `t1` (active) on both token pages. Action, `form.csrf` hidden input, and button classes unchanged.
+  - Contiguous grant text: `{{ grant.type }}: {{ grant.actions }}` is one line (admin-data-api-tokens/page.html:158); the render contains `files: list, get`. The retired branch renders `pages (no longer exposed): get`.
+  - `revoked` appears in the data-token page HTML for a revoked token (badge text and `Revoked {date}`).
+  - Pagination: each page's comment and `{{#if showPagination}}` block are unchanged and after the list's closing `{{/if}}`; "Previous page" / "Next page" text unchanged. Create forms, `#new-token`, `#new-invite-url`, form-expired callouts, and empty states are untouched (diff hunks are confined to the list section).
+- Actual files changed: `lib/pages/admin/invites/page.html`, `lib/pages/admin/publishing-api-tokens/page.html`, `lib/pages/admin/admin-data-api-tokens/page.html`.
+- Validation run: the three handler test files pass (15 tests); full suite passes (1833 tests); `name="invite_id"` / `name="token_id"` counts print 1, 1, 1; grant-line grep prints one line (158); diff stat shows only the three templates, hunks confined to the list sections; `style="` grep prints nothing.
 - Blockers: None.
 
 ---

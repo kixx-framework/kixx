@@ -82,37 +82,51 @@
         </form>
 
         {{#if invites}}
-        <ul class="flow">
-        {{#each invites as |invite| }}
-            <li class="card flow">
-                <p class="type-caption">{{ invite.status }}</p>
-                {{!-- Bootstrap markers carry no roles, so the line is omitted rather than
-                      rendered empty. --}}
-                {{#if invite.roles}}
-                <p class="type-body-sm">
-                    Grants: <strong>{{ invite.roles }}</strong>
-                </p>
-                {{/if}}
-                <p class="type-body-sm">
-                    Created {{ formatDate invite.createdAt format="DATETIME_MED" }} by {{ invite.createdBy }}
-                </p>
-                <p class="type-body-sm">
-                    Expires {{ formatDate invite.expiresAt format="DATETIME_MED" }}
-                </p>
-                {{#ifEqual invite.status "pending"}}
-                {{!-- Revoke posts to its own route with the invite id as a hidden field;
-                      the CSRF token is shared across every form on this page. --}}
-                <form class="cluster" method="POST" action="{{ links.revokeInvite }}">
-                    {{#if form.csrf}}
-                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
-                    {{/if}}
-                    <input type="hidden" name="invite_id" value="{{ invite.id }}">
-                    <button class="button button--secondary" type="submit">Revoke</button>
-                </form>
-                {{/ifEqual}}
-            </li>
-        {{/each}}
-        </ul>
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="invites-caption">
+            <table class="table-list__table">
+                <caption id="invites-caption" class="table-list__caption">Invites</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Created</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Grants</th>
+                        <th scope="col">Created by</th>
+                        <th scope="col">Expires</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each invites as |invite| }}
+                    <tr>
+                        <th scope="row">{{ formatDate invite.createdAt format="DATETIME_MED" }}</th>
+                        <td><span class="status-badge{{#ifEqual invite.status "pending"}} status-badge--info{{/ifEqual}}{{#ifEqual invite.status "expired"}} status-badge--warning{{/ifEqual}}{{#ifEqual invite.status "revoked"}} status-badge--danger{{/ifEqual}}">{{ invite.status }}</span></td>
+                        <td>
+                            {{!-- Bootstrap markers carry no roles, so the cell is left empty
+                                  rather than rendering a blank grant. --}}
+                            {{#if invite.roles}}
+                            {{ invite.roles }}
+                            {{/if}}
+                        </td>
+                        <td>{{ invite.createdBy }}</td>
+                        <td>{{ formatDate invite.expiresAt format="DATETIME_MED" }}</td>
+                        <td class="table-list__actions">
+                            {{#ifEqual invite.status "pending"}}
+                            {{!-- Revoke posts to its own route with the invite id as a hidden field;
+                                  the CSRF token is shared across every form on this page. --}}
+                            <form class="cluster" method="POST" action="{{ links.revokeInvite }}">
+                                {{#if form.csrf}}
+                                <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                                {{/if}}
+                                <input type="hidden" name="invite_id" value="{{ invite.id }}">
+                                <button class="button button--secondary" type="submit">Revoke</button>
+                            </form>
+                            {{/ifEqual}}
+                        </td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
         {{else}}
         <p class="type-body-sm">No invites yet. Create one to invite a new administrator.</p>
         {{/if}}

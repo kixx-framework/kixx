@@ -89,35 +89,51 @@
         </form>
 
         {{#if tokens}}
-        <ul class="flow">
-        {{#each tokens as |token| }}
-            <li class="card flow">
-                <p class="type-caption">{{ token.status }}</p>
-                {{#if token.description}}
-                <p class="type-body-sm">{{ token.description }}</p>
-                {{else}}
-                <p class="type-body-sm">No description provided.</p>
-                {{/if}}
-                <p class="type-body-sm">
-                    Created {{ formatDate token.createdAt format="DATETIME_MED" }} by {{ token.createdBy }}
-                </p>
-                <p class="type-body-sm">
-                    Expires {{ formatDate token.expiresAt format="DATETIME_MED" }}
-                </p>
-                {{#ifEqual token.status "active"}}
-                {{!-- Revoke posts to its own route with the token id as a hidden field;
-                      the CSRF token is shared across every form on this page. --}}
-                <form class="cluster" method="POST" action="{{ links.revokeToken }}">
-                    {{#if form.csrf}}
-                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
-                    {{/if}}
-                    <input type="hidden" name="token_id" value="{{ token.id }}">
-                    <button class="button button--secondary" type="submit">Revoke</button>
-                </form>
-                {{/ifEqual}}
-            </li>
-        {{/each}}
-        </ul>
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="tokens-caption">
+            <table class="table-list__table">
+                <caption id="tokens-caption" class="table-list__caption">Tokens</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Description</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Created by</th>
+                        <th scope="col">Expires</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each tokens as |token| }}
+                    <tr>
+                        <th scope="row">
+                            {{#if token.description}}
+                            {{ token.description }}
+                            {{else}}
+                            No description provided.
+                            {{/if}}
+                        </th>
+                        <td><span class="status-badge{{#ifEqual token.status "active"}} status-badge--success{{/ifEqual}}{{#ifEqual token.status "expired"}} status-badge--warning{{/ifEqual}}{{#ifEqual token.status "revoked"}} status-badge--danger{{/ifEqual}}">{{ token.status }}</span></td>
+                        <td>{{ formatDate token.createdAt format="DATETIME_MED" }}</td>
+                        <td>{{ token.createdBy }}</td>
+                        <td>{{ formatDate token.expiresAt format="DATETIME_MED" }}</td>
+                        <td class="table-list__actions">
+                            {{#ifEqual token.status "active"}}
+                            {{!-- Revoke posts to its own route with the token id as a hidden field;
+                                  the CSRF token is shared across every form on this page. --}}
+                            <form class="cluster" method="POST" action="{{ links.revokeToken }}">
+                                {{#if form.csrf}}
+                                <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                                {{/if}}
+                                <input type="hidden" name="token_id" value="{{ token.id }}">
+                                <button class="button button--secondary" type="submit">Revoke</button>
+                            </form>
+                            {{/ifEqual}}
+                        </td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
         {{else}}
         <p class="type-body-sm">No tokens yet. Create one to authorize an external tool.</p>
         {{/if}}

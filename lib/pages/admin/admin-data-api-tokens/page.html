@@ -123,52 +123,71 @@
         </form>
 
         {{#if tokens}}
-        <ul class="flow list-unstyled">
-        {{#each tokens as |token| }}
-            <li class="card flow">
-                <p class="type-caption">{{ token.status }}</p>
-                {{#if token.description}}
-                <p class="type-body-sm">{{ token.description }}</p>
-                {{else}}
-                <p class="type-body-sm">No description provided.</p>
-                {{/if}}
-                <ul class="flow">
-                {{#each token.grants as |grant| }}
-                    <li class="type-body-sm">
-                        {{#if grant.isRetired}}
-                        {{ grant.collection }} (no longer exposed): {{ grant.actions }}
-                        {{else}}
-                        {{ grant.type }}: {{ grant.actions }}
-                        {{/if}}
-                    </li>
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="tokens-caption">
+            <table class="table-list__table">
+                <caption id="tokens-caption" class="table-list__caption">Tokens</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Description</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Grants</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Created by</th>
+                        <th scope="col">Expiry</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each tokens as |token| }}
+                    <tr>
+                        <th scope="row">
+                            {{#if token.description}}
+                            {{ token.description }}
+                            {{else}}
+                            No description provided.
+                            {{/if}}
+                        </th>
+                        <td><span class="status-badge{{#ifEqual token.status "active"}} status-badge--success{{/ifEqual}}{{#ifEqual token.status "expired"}} status-badge--warning{{/ifEqual}}{{#ifEqual token.status "revoked"}} status-badge--danger{{/ifEqual}}">{{ token.status }}</span></td>
+                        <td>
+                            <ul class="flow list-unstyled">
+                            {{#each token.grants as |grant| }}
+                                <li>
+                                    {{#if grant.isRetired}}
+                                    {{ grant.collection }} (no longer exposed): {{ grant.actions }}
+                                    {{else}}
+                                    {{ grant.type }}: {{ grant.actions }}
+                                    {{/if}}
+                                </li>
+                            {{/each}}
+                            </ul>
+                        </td>
+                        <td>{{ formatDate token.createdAt format="DATETIME_MED" }}</td>
+                        <td>{{ token.createdBy }}</td>
+                        <td>
+                            {{#if token.revokedAt}}
+                            Revoked {{ formatDate token.revokedAt format="DATETIME_MED" }}
+                            {{else}}
+                            Expires {{ formatDate token.expiresAt format="DATETIME_MED" }}
+                            {{/if}}
+                        </td>
+                        <td class="table-list__actions">
+                            {{#ifEqual token.status "active"}}
+                            {{!-- Revoke posts to its own route with the token id as a hidden field;
+                                  the CSRF token is shared across every form on this page. --}}
+                            <form class="cluster" method="POST" action="{{ links.revokeToken }}">
+                                {{#if form.csrf}}
+                                <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                                {{/if}}
+                                <input type="hidden" name="token_id" value="{{ token.id }}">
+                                <button class="button button--secondary" type="submit">Revoke</button>
+                            </form>
+                            {{/ifEqual}}
+                        </td>
+                    </tr>
                 {{/each}}
-                </ul>
-                <p class="type-body-sm">
-                    Created {{ formatDate token.createdAt format="DATETIME_MED" }} by {{ token.createdBy }}
-                </p>
-                {{#if token.revokedAt}}
-                <p class="type-body-sm">
-                    Revoked {{ formatDate token.revokedAt format="DATETIME_MED" }}
-                </p>
-                {{else}}
-                <p class="type-body-sm">
-                    Expires {{ formatDate token.expiresAt format="DATETIME_MED" }}
-                </p>
-                {{/if}}
-                {{#ifEqual token.status "active"}}
-                {{!-- Revoke posts to its own route with the token id as a hidden field;
-                      the CSRF token is shared across every form on this page. --}}
-                <form class="cluster" method="POST" action="{{ links.revokeToken }}">
-                    {{#if form.csrf}}
-                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
-                    {{/if}}
-                    <input type="hidden" name="token_id" value="{{ token.id }}">
-                    <button class="button button--secondary" type="submit">Revoke</button>
-                </form>
-                {{/ifEqual}}
-            </li>
-        {{/each}}
-        </ul>
+                </tbody>
+            </table>
+        </div>
         {{else}}
         <p class="type-body-sm">No tokens yet. Create one to authorize an external tool.</p>
         {{/if}}
