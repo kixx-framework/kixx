@@ -36,6 +36,13 @@ This mono-repo holds every part of the Kixx framework.
 - `docs/` - API reference docs (Admin API, Publishing API).
 - `agents/` - Working notes for AI agents: implementation plans and a daily activity journal.
 
+Kixx Library
+------------
+
+Source code for the Kixx Library lives in `lib/`. Typically we just call it "Kixx", and when we say "Kixx", we are referring to the library in `lib/` (not `devkit/` or `test-app/`).
+
+Kixx provides a full-featured web development environment for building rich web sites and web applications. It not only provides the low level libraries for HTTP request handling, logical domain layers, and utilities, but also a starter app and admin panel to go along with it.
+
 ---
 
 Copyright and License

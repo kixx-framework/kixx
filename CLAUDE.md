@@ -2,6 +2,13 @@
 
 ---
 
+Kixx Library
+------------
+
+Notes for agents when working on the Kixx Library (usually referred to as just "Kixx"):
+
+Refer to the documentation in `lib/docs/`.
+
 Commit Messages
 ---------------
 
