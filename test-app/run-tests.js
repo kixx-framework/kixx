@@ -16,6 +16,7 @@ import path from 'node:path';
 import { EOL } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runTests } from 'kixx-test';
+import { isNonEmptyString } from 'kixx-assert';
 
 
 const USAGE = 'Usage: node run-tests.js [--skip <path>] ' +
@@ -502,12 +503,6 @@ function dropDuplicateFilepaths(testFiles) {
     return testFiles.filter(({ filepath }, index) => {
         return index === 0 || filepath !== testFiles[index - 1].filepath;
     });
-}
-
-// Defined here rather than imported from ./kixx/ so the runner works before
-// the first build and does not depend on lib internals.
-function isNonEmptyString(value) {
-    return typeof value === 'string' && value.length > 0;
 }
 
 function write(msg, callback) {

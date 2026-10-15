@@ -25,7 +25,7 @@ Accepted by the orchestrator as following from repo facts and conventions. Imple
 - **R1. `docs/admin-files.md` does not exist.** It was deleted on purpose in commit `5460b1cc` ("Remove the unused admin files doc"), so it does not exist after a build either. Default: drop the link in `test-app/test/README.md` and the "See docs/admin-files.md" sentence in `large-upload-checks.js`. Keep the README's own description of the large-upload checks.
 - **R2. `070-admin-assignment.test.js` never existed.** `git log --all` has no file by that name. Default: remove every README reference to it: the `--development` disabled list, its own section, and the "What a run leaves behind" paragraph.
 - **R3. package.json extras.** Default: add `"name": "kixx-test-app"` (it gives a stable lockfile name) and `"engines": { "node": ">=24" }` (matching lib). Pin exact versions as lib does: `parse-html-dom` `1.0.0`. That is the only published version: author Kris Walker, repo `kixxauth/html-dom`, ESM, no dependencies (checked with `npm view` while planning).
-- **R4. The runner is self-contained.** `test-app/run-tests.js` defines its own small `isNonEmptyString` and does not import `./kixx/assertions/mod.js`. Usage errors then work before the first build, and the runner does not depend on lib internals.
+- **R4. The runner does not import lib internals.** `test-app/run-tests.js` does not import `./kixx/`, so usage errors work before the first build. *Operator correction (after T3):* `isNonEmptyString` comes from the `kixx-assert` package; tools outside the kixx source must import it from there, never define their own.
 
 ### Cross-cutting constraints
 
@@ -230,7 +230,7 @@ From the repo root:
   - Keep the target URLs exactly: development `http://localhost:2026/`, cloudflare `https://kixx-test-app.kixx.workers.dev/`, nodejs `https://nodejs.kixx-testing.dev/`.
   - Path containment applies to positionals and `--skip` against `TEST_ROOT`. Update the comments that justify containment by the `--e2e` mode flag; the reason now is to reject paths outside the suite, such as lib's unit tests. The error message may say "outside the test root".
   - Keep `process.chdir(ROOT_DIRECTORY)` after resolving paths, with the comment updated to say test-app/.
-  - Per R4, define `isNonEmptyString` locally (equivalent to lib's `Boolean(value && isString(value))` in `lib/kixx/assertions/`). Do not import from `./kixx/`.
+  - Per R4, import `isNonEmptyString` from `kixx-assert`. Do not import from `./kixx/` or define it locally.
   - New USAGE: `Usage: node run-tests.js [--skip <path>] [--base-url <url> | --development | --cloudflare | --nodejs] [--username <username>] [--password <password>] [pathname ...]`.
   - Add a header doc comment: e2e-only runner for test-app; requires `npm install` in test-app/ and a built and deployed target; points to `test/README.md`.
 - Node only. Keep the code-unit sort comment, which also mentions Deno.
