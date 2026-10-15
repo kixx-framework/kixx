@@ -292,7 +292,7 @@ From the repo root. `CLEAN` stands for `env -u E2E_TESTS_BASE_URL -u E2E_TESTS_R
 
 ### Task T4: Make lib/run-tests.js unit-tests only
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T3
 **Documentation:** `lib/test/unit-tests/README.md` (updated in T5)
 
@@ -321,11 +321,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `grep -n "e2e\|end-to-end\|E2E_\|base-url\|cloudflare\|nodejs\|development" lib/run-tests.js` prints nothing (except the pointer to test-app, if worded with "e2e"; keep it to one line).
-- [ ] The full unit suite passes from the repo root and from `lib/`.
-- [ ] `--e2e`, `--development`, and other unknown flags exit 1 with USAGE.
-- [ ] Paths outside `lib/test/unit-tests/` exit 1. `--skip` still works.
-- [ ] The lib linter passes.
+- [x] `grep -n "e2e\|end-to-end\|E2E_\|base-url\|cloudflare\|nodejs\|development" lib/run-tests.js` prints nothing (except the pointer to test-app, if worded with "e2e"; keep it to one line).
+- [x] The full unit suite passes from the repo root and from `lib/`.
+- [x] `--e2e`, `--development`, and other unknown flags exit 1 with USAGE.
+- [x] Paths outside `lib/test/unit-tests/` exit 1. `--skip` still works.
+- [x] The lib linter passes.
 
 **Validation**
 
@@ -340,12 +340,12 @@ From the repo root:
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of T4.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: The one-line pointer sits above `TEST_ROOT`: "Unit tests only. The e2e suite lives in test-app/ with its own runner." It is the only grep hit. Strict-parse comment now cites a `--skp` typo.
+- Actual files changed: `lib/run-tests.js`.
+- Validation run: full suite 1846 passed, `exit=0` (also 1846 from `lib/`); `(cd lib && node run-tests.js test/unit-tests/kixx/logger)` 52 passed, `exit=0`; skip-all `Ran 0 tests`, `exit=0`; `--e2e` and `--development` unknown option + USAGE, `exit=1`; `test-app/test` and `lib/test/fixtures` outside the test root, `exit=1`; `node lib/run-linter.js lib` `exit=0`.
 - Blockers: None.
 
 ---
