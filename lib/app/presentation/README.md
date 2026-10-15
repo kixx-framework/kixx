@@ -114,7 +114,7 @@ Shared caches such as the Cloudflare Workers Cache store responses without `Cach
 |---|---|
 | No `Cache-Control` declared | `no-store` |
 | Produced by the error cascade | `no-store`; any `ETag` removed |
-| `context.user` is set | `private, no-store` |
+| `context.user` is set, or the response sets a cookie | `private, no-store` |
 
 Enforcement replaces only storage and freshness directives (a declared `no-transform` survives). A response a shared cache may still store also gets `Vary: host`, because the shared cache key may omit the hostname.
 
