@@ -217,7 +217,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T3: Convert the files listing to a table list with Type and Uploaded columns
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T2
 **Documentation:** Table Lists style-guide page and `components.css` headers from T2
 
@@ -248,9 +248,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Listing rows include `contentType` and `originalUploadedAt`; the unit test asserts both.
-- [ ] `/admin/files` renders a `.table-list` table with the six columns above, a captioned focusable region, and status badges.
-- [ ] Exactly one publish or unpublish form per row with unchanged actions and CSRF input; pagination markup and placement are unchanged; the empty state is unchanged.
+- [x] Listing rows include `contentType` and `originalUploadedAt`; the unit test asserts both.
+- [x] `/admin/files` renders a `.table-list` table with the six columns above, a captioned focusable region, and status badges.
+- [x] Exactly one publish or unpublish form per row with unchanged actions and CSRF input; pagination markup and placement are unchanged; the empty state is unchanged.
 
 **Validation**
 
@@ -263,12 +263,18 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `decorateFileRow` adds `contentType` and `originalUploadedAt` (comment updated); the listing unit test asserts both; `/admin/files` list markup is a `.table-list` table (caption "Uploaded files", `id="files-caption"`) with Title, Status, Type, Size, Uploaded, Actions.
+- Current state: Complete. Live check behind admin sign-in left to the Operator Runbook.
+- Remaining: Nothing for T3.
+- Decisions and discoveries:
+  - The row `<h2>` and the card `<ul>` are gone; the row header carries the title link and a `.type-caption` filename line.
+  - Rendered the template offline with the vendored engine and `formatDate` (`tmp/render-check.mjs`, two sample rows): dates render as `DATETIME_MED` in the server's local zone; badges and forms render as expected.
+- e2e contract check (final template):
+  - One publish/unpublish form per row: the only `<form>`s are the two `{{#if file.isPublished}}` branches inside the row's actions cell, so exactly one renders per row; actions unchanged (`file.links.unpublish` / `file.links.publish`) with the same top-level `csrf` hidden input. Offline render produced exactly `/admin/files/a/unpublish` and `/admin/files/b/publish`. No other form on the page.
+  - Pagination: the comment and `{{#if showPagination}}` block are byte-for-byte unchanged (diff touches only the list section) and sit after the list's closing `{{/if}}`; "Previous page" / "Next page" text unchanged.
+  - Empty state unchanged.
+- Actual files changed: `lib/app/presentation/request-handlers/admin-panel/admin-files.js`, `lib/test/unit-tests/app/presentation/request-handlers/admin-panel/admin-files.test.js`, `lib/pages/admin/files/page.html`.
+- Validation run: admin-files test file passes (6 tests); full suite passes (1833 tests); linter on both JS files exits 0 with no output; `grep -c 'method="POST"'` prints 2; pagination grep shows lines 80-89 after the list `{{/if}}` at line 72; `style="` grep prints nothing.
 - Blockers: None.
 
 ---

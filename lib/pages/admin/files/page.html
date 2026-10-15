@@ -11,37 +11,62 @@
         </p>
 
         {{#if files}}
-        <ul class="grid-auto list-unstyled">
-        {{#each files as |file| }}
-            <li>
-                <article class="card flow">
-                    <p class="type-caption">{{#if file.isPublished}}Published{{else}}Unpublished{{/if}}</p>
-                    <h2><a href="{{ file.links.detail }}">{{ file.displayTitle }}</a></h2>
-                    <p class="type-body-sm">{{ file.filename }} &middot; {{ file.sizeLabel }}</p>
-
-                    <div class="cluster">
-                        <a class="button button--secondary" href="{{ file.links.detail }}">Manage</a>
-
-                        {{#if file.isPublished}}
-                        <form method="POST" action="{{ file.links.unpublish }}">
-                            {{#if csrf}}
-                            <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="files-caption">
+            <table class="table-list__table">
+                <caption id="files-caption" class="table-list__caption">Uploaded files</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Title</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Size</th>
+                        <th scope="col">Uploaded</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each files as |file| }}
+                    <tr>
+                        <th scope="row">
+                            <a href="{{ file.links.detail }}">{{ file.displayTitle }}</a>
+                            <div class="type-caption">{{ file.filename }}</div>
+                        </th>
+                        <td>
+                            {{#if file.isPublished}}
+                            <span class="status-badge status-badge--success">Published</span>
+                            {{else}}
+                            <span class="status-badge">Unpublished</span>
                             {{/if}}
-                            <button class="button" type="submit">Unpublish</button>
-                        </form>
-                        {{else}}
-                        <form method="POST" action="{{ file.links.publish }}">
-                            {{#if csrf}}
-                            <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
-                            {{/if}}
-                            <button class="button" type="submit">Publish</button>
-                        </form>
-                        {{/if}}
-                    </div>
-                </article>
-            </li>
-        {{/each}}
-        </ul>
+                        </td>
+                        <td>{{ file.contentType }}</td>
+                        <td>{{ file.sizeLabel }}</td>
+                        <td>{{ formatDate file.originalUploadedAt format="DATETIME_MED" }}</td>
+                        <td class="table-list__actions">
+                            <div class="cluster">
+                                <a class="button button--secondary" href="{{ file.links.detail }}">Manage</a>
+
+                                {{#if file.isPublished}}
+                                <form method="POST" action="{{ file.links.unpublish }}">
+                                    {{#if csrf}}
+                                    <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                                    {{/if}}
+                                    <button class="button" type="submit">Unpublish</button>
+                                </form>
+                                {{else}}
+                                <form method="POST" action="{{ file.links.publish }}">
+                                    {{#if csrf}}
+                                    <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                                    {{/if}}
+                                    <button class="button" type="submit">Publish</button>
+                                </form>
+                                {{/if}}
+                            </div>
+                        </td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
         {{else}}
         <p class="type-body-sm">No files yet. Upload one to get started.</p>
         {{/if}}
