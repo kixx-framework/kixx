@@ -25,7 +25,7 @@
 </div>
 
 <h3 class="type-h3 doc-section-heading">Variants</h3>
-<p class="doc-lede">Three shipped variants. Extend them when the project needs another role. The optional theme toggle in the header composes <code>.button</code> at a smaller size; remove its specimen if the project removes switching.</p>
+<p class="doc-lede">Four shipped variants. Extend them when the project needs another role. The optional theme toggle in the header composes <code>.button</code> at a smaller size; remove its specimen if the project removes switching.</p>
 <div class="example-grid grid-auto">
     <div class="card card--flush example">
         <div class="example__preview"><button class="button" type="button">Cancel</button></div>
@@ -38,6 +38,10 @@
     <div class="card card--flush example">
         <div class="example__preview"><button class="button button--danger" type="button">Delete</button></div>
         <div class="example__label"><code>.button--danger</code><span class="example__note">Destructive &mdash; color as signal</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview"><button class="button button--secondary" type="button">Manage</button></div>
+        <div class="example__label"><code>.button--secondary</code><span class="example__note">Lower emphasis &mdash; muted outline, ink label</span></div>
     </div>
     <div class="card card--flush example">
         <div class="example__preview">
@@ -55,13 +59,14 @@
     <div class="demo-stage">
         <button class="button button--primary" type="button">Primary</button>
         <button class="button" type="button">Default</button>
+        <button class="button button--secondary" type="button">Secondary</button>
         <button class="button button--danger" type="button">Delete</button>
         <button class="button button--primary" type="button" disabled>Disabled</button>
         <p class="demo-stage__hint">These are real controls &mdash; hover, tab to them, and press.</p>
     </div>
     <dl class="state-list">
-        <div><dt>Default</dt><dd>Resting. The default button sits on the page surface with an ink box; primary carries the solid ink fill.</dd></div>
-        <div><dt>Hover</dt><dd>Inversion. The default button fills with ink; the primary flips to an outline; danger fills red, with a short 150ms color transition.</dd></div>
+        <div><dt>Default</dt><dd>Resting. The default button sits on the page surface with an ink box; secondary softens the box to <code>--color-ink-muted</code> but keeps an ink label; primary carries the solid ink fill.</dd></div>
+        <div><dt>Hover</dt><dd>Inversion. The default and secondary buttons fill with ink; the primary flips to an outline; danger fills red, with a short 150ms color transition.</dd></div>
         <div><dt>Focus</dt><dd>A 2px <code>--color-focus-outline</code> ring, offset 2px. Shows for keyboard focus (<code>:focus-visible</code>), not mouse clicks.</dd></div>
         <div><dt>Disabled</dt><dd>Box and label go to <code>--color-ink-muted</code> on the page surface, so a disabled button reads as inactive. Hover is suppressed.</dd></div>
     </dl>
@@ -74,6 +79,9 @@
 
 &lt;!-- Default / neutral action --&gt;
 &lt;button class="button" type="button"&gt;Cancel&lt;/button&gt;
+
+&lt;!-- Lower-emphasis action: row actions, pagination --&gt;
+&lt;a class="button button--secondary" href="/admin/files?page=2"&gt;Next page&lt;/a&gt;
 
 &lt;!-- Destructive action --&gt;
 &lt;button class="button button--danger" type="button"&gt;Delete&lt;/button&gt;
@@ -105,12 +113,14 @@
             <li>Lead the label with a verb &mdash; &ldquo;Save changes,&rdquo; &ldquo;Delete,&rdquo; &ldquo;Invite.&rdquo;</li>
             <li>Keep emphasis and sizing consistent across the project's button roles.</li>
             <li>Reserve <code>.button--danger</code> for actions that destroy something.</li>
+            <li>Use <code>.button--secondary</code> for repeated per-row actions and pagination, so they recede behind the view&rsquo;s primary action.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont flow">
         <p class="guideline__label">Don&rsquo;t</p>
         <ul>
             <li>Stack several primary buttons competing for the same attention.</li>
+            <li>Use <code>.button--secondary</code> as a stand-in for a disabled button &mdash; it is a live control.</li>
             <li>Use a button to navigate &mdash; that&rsquo;s a link&rsquo;s job.</li>
             <li>Remove the focus ring or drop below the <code>2.5rem</code> target.</li>
             <li>Introduce motion without respecting reduced-motion preferences or checking that labels and targets remain usable.</li>

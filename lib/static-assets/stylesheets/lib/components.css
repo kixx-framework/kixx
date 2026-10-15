@@ -58,6 +58,8 @@
       .button            outline box — the neutral default
       .button--primary   solid ink fill — the one emphasized action
       .button--danger    red outline — a destructive action (color as signal)
+      .button--secondary muted outline — a lower-emphasis action such as a row
+                         action or pagination
 
     Composition: the theme toggle is a .button — see Theme toggle below.
 ----------------------------------------------------------------------------- */
@@ -117,6 +119,12 @@
     background: var(--color-status-danger);
     border-color: var(--color-status-danger);
     color: var(--color-ink-on-accent);
+}
+
+/* Secondary — lower emphasis through a muted border; the label stays ink so it
+   reads as active, unlike a disabled button. Hover and focus are shared. */
+.button--secondary {
+    border-color: var(--color-ink-muted);
 }
 
 .button:disabled {

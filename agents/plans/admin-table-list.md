@@ -49,7 +49,7 @@ These are not operator decisions; a later agent may revise them with a recorded 
 
 ### Task T1: Define and document `.button--secondary`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `lib/docs/frontend-development-guide.md` (Components and Forms; CSS Formatting; color rules); Buttons section header in `components.css`
 
@@ -79,10 +79,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `.button--secondary` is defined in the Buttons section and listed in its header comment.
-- [ ] Hover inverts to the ink fill like every button; focus-visible shows the shared ring; disabled secondary buttons render as disabled.
-- [ ] The Buttons style-guide page shows the variant in Variants, States, Usage, and Guidelines, with escaped markup in the code block.
-- [ ] No `--palette-*` reference or color literal in the new rule.
+- [x] `.button--secondary` is defined in the Buttons section and listed in its header comment.
+- [x] Hover inverts to the ink fill like every button; focus-visible shows the shared ring; disabled secondary buttons render as disabled.
+- [x] The Buttons style-guide page shows the variant in Variants, States, Usage, and Guidelines, with escaped markup in the code block.
+- [x] No `--palette-*` reference or color literal in the new rule.
 
 **Validation**
 
@@ -93,12 +93,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `.button--secondary` rule and header entry; Buttons style-guide Variants tile, States demo and state text, Usage snippet, Do/Don't bullets.
+- Current state: Complete.
+- Remaining: Manual light/dark, focus, and hover check on `/admin/style-guide/buttons` (Operator Runbook; no admin session available to the agent).
+- Decisions and discoveries: The rule sets only `border-color: var(--color-ink-muted)`; ink text and `--color-bg` come from `.button`. It sits after the danger rule and before `.button:disabled`, so disabled (equal specificity, later) wins; the shared hover (`.button:not(:disabled):hover`, higher specificity) still inverts. Variants lede now says "Four shipped variants."
+- Actual files changed: `lib/static-assets/stylesheets/lib/components.css`, `lib/pages/admin/style-guide/buttons/body.html`.
+- Validation run: `grep -n "button--secondary" ...` shows rule (components.css:126), header (:61), and six style-guide lines; palette/literal-color grep prints nothing; `style="` grep prints nothing.
 - Blockers: None.
 
 ---
