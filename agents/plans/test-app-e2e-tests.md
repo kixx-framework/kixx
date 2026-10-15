@@ -207,7 +207,7 @@ From the repo root:
 
 ### Task T3: E2E-only runner at test-app/run-tests.js
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1, T2
 **Documentation:** `test-app/test/README.md` (moved in T2; it describes the runner behavior to preserve)
 
@@ -243,13 +243,13 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `--e2e` and other unknown flags exit 1 with the parse message and USAGE on stderr.
-- [ ] Conflicting base-URL flags, repeated options, empty string options, invalid or whitespace-padded URLs (from a flag or the env), and missing env vars each exit 1 with the existing messages and without importing test files.
-- [ ] Positional and `--skip` paths outside `test-app/test/` exit 1. A nonexistent path inside it exits 1.
-- [ ] Target flags set `E2E_TESTS_BASE_URL` and `E2E_TESTS_TARGET`. `--base-url` clears an inherited `E2E_TESTS_TARGET`. cwd during the run is `test-app/` (or the runner's own directory).
-- [ ] The 10 s ceiling applies even when a `describe` block asks for more.
-- [ ] Runner and test files share the `kixx-test` instance (a probe test registered by a test file runs).
-- [ ] The test-app lint command passes.
+- [x] `--e2e` and other unknown flags exit 1 with the parse message and USAGE on stderr.
+- [x] Conflicting base-URL flags, repeated options, empty string options, invalid or whitespace-padded URLs (from a flag or the env), and missing env vars each exit 1 with the existing messages and without importing test files.
+- [x] Positional and `--skip` paths outside `test-app/test/` exit 1. A nonexistent path inside it exits 1.
+- [x] Target flags set `E2E_TESTS_BASE_URL` and `E2E_TESTS_TARGET`. `--base-url` clears an inherited `E2E_TESTS_TARGET`. cwd during the run is `test-app/` (or the runner's own directory).
+- [x] The 10 s ceiling applies even when a `describe` block asks for more.
+- [x] Runner and test files share the `kixx-test` instance (a probe test registered by a test file runs).
+- [x] The test-app lint command passes.
 
 **Validation**
 
@@ -280,12 +280,12 @@ From the repo root. `CLEAN` stands for `env -u E2E_TESTS_BASE_URL -u E2E_TESTS_R
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of T3.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: Built from `lib/run-tests.js` with the listed changes. Local `isNonEmptyString` uses `typeof value === 'string' && value.length > 0`; inputs are env vars and URL hostnames (primitives), so it matches lib's helper. Strict-parse comment now cites a `--devlopment` typo instead of `--e2ee`. Validation commands must run under bash: the `CLEAN` prefix held in a variable does not word-split in zsh.
+- Actual files changed: `test-app/run-tests.js` (new).
+- Validation run: (1) every usage case exit 1 with the expected stderr line and USAGE (the nonexistent-path case prints no USAGE, as in lib); `--e2e` gives "Unknown option '--e2e'"; outside-root cases say "outside the test root"; missing-env lists all three, then only username/password with `--development`. (2) `Ran 0 tests`, `exit=0`. (3) Probe: `PROBE http://localhost:2026/ development .../tmp/e2e-runner`, `Ran 1 tests`, `exit=0`; `--base-url` with inherited target gives `undefined`; `--cloudflare` gives `https://kixx-test-app.kixx.workers.dev/ cloudflare`; timeout probe failed with "timed out in 10000ms", `exit=1`. (4) `lint exit=0`.
 - Blockers: None.
 
 ---
