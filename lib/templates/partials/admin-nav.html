@@ -39,16 +39,16 @@
             <li><a class="admin-nav__link"{{#ifEqual subpage.section "files"}} aria-current="page"{{/ifEqual}} href="/admin/files">Files</a></li>
         </ul>
 
+        <p class="admin-nav__title">Reference</p>
+        <ul class="admin-nav__list">
+            <li><a class="admin-nav__link" href="/admin/style-guide">Style Guide</a></li>
+        </ul>
+
         <p class="admin-nav__title">Access</p>
         <ul class="admin-nav__list">
             <li><a class="admin-nav__link"{{#ifEqual subpage.section "invites"}} aria-current="page"{{/ifEqual}} href="/admin/invites">User Invites</a></li>
             <li><a class="admin-nav__link"{{#ifEqual subpage.section "publishing-api-tokens"}} aria-current="page"{{/ifEqual}} href="/admin/publishing-api-tokens">Publishing API Tokens</a></li>
             <li><a class="admin-nav__link"{{#ifEqual subpage.section "admin-data-api-tokens"}} aria-current="page"{{/ifEqual}} href="/admin/admin-data-api-tokens">Admin Data API Tokens</a></li>
-        </ul>
-
-        <p class="admin-nav__title">Reference</p>
-        <ul class="admin-nav__list">
-            <li><a class="admin-nav__link" href="/admin/style-guide">Style Guide</a></li>
         </ul>
         {{/ifEqual}}
     </div>
