@@ -7,7 +7,7 @@ Kixx Library
 
 Notes for agents when working on the Kixx Library (usually referred to as just "Kixx"):
 
-Refer to the documentation in `lib/docs/`.
+Before working on source code in `lib/`, read the documentation index at `lib/docs/doc-index.md`. It lists every guide and reference for the Kixx Library with a summary of each. Use it to find and read the docs relevant to your task.
 
 Commit Messages
 ---------------
