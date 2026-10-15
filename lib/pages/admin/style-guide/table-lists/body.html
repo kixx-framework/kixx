@@ -1,0 +1,166 @@
+<header class="admin-content-section__header">
+    <h2>Table Lists</h2>
+    <p>A dense, scannable table of records with a status badge and per-row actions.</p>
+</header>
+
+<div class="doc-prose">
+    <p class="type-body-lg">A table list lays out records in rows so their fields line up for comparison. The starter draws a hairline-ruled table inside a bordered wrapper that scrolls sideways on narrow screens, and pairs it with the status badge, a compact label for each record&rsquo;s state.</p>
+
+    <p><strong>When to use:</strong> a list of records that share several comparable fields &mdash; status, dates, sizes, owners &mdash; and carry per-row actions, such as files, invites, and API tokens. <strong>When not to:</strong> a few items with free-form content read better as <a href="/admin/style-guide/cards">Cards</a>; a single record&rsquo;s details belong in a definition list or form.</p>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Anatomy</h3>
+<p class="doc-lede">Eight parts. The table and its badges are static; links and buttons inside the rows carry their own states.</p>
+<div class="anatomy flow">
+    <div class="demo-stage">
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="anatomy-files-caption">
+            <table class="table-list__table">
+                <caption id="anatomy-files-caption" class="table-list__caption">Uploaded files</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Title</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Size</th>
+                        <th scope="col">Uploaded</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row"><a href="#anatomy-files-caption">Quarterly report</a><div class="type-caption">q3-report.pdf</div></th>
+                        <td><span class="status-badge status-badge--success">Published</span></td>
+                        <td>application/pdf</td>
+                        <td>1.2 MB</td>
+                        <td>Oct 3, 2026, 9:14 AM</td>
+                        <td class="table-list__actions">
+                            <div class="cluster">
+                                <a class="button button--secondary" href="#anatomy-files-caption">Manage</a>
+                                <button class="button" type="button">Unpublish</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><a href="#anatomy-files-caption">Team photo</a><div class="type-caption">offsite-2026.jpg</div></th>
+                        <td><span class="status-badge">Unpublished</span></td>
+                        <td>image/jpeg</td>
+                        <td>3.8 MB</td>
+                        <td>Oct 11, 2026, 4:02 PM</td>
+                        <td class="table-list__actions">
+                            <div class="cluster">
+                                <a class="button button--secondary" href="#anatomy-files-caption">Manage</a>
+                                <button class="button" type="button">Publish</button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <ol class="parts-list flow">
+        <li><strong>Wrapper</strong> &mdash; <code>.table-list</code>, a hairline-bordered surface that scrolls sideways when the table is wider than the page. It is a focusable region (<code>role="region"</code>, <code>tabindex="0"</code>) with a focus ring.</li>
+        <li><strong>Caption</strong> &mdash; <code>.table-list__caption</code> names the list and is the region&rsquo;s accessible name through <code>aria-labelledby</code>.</li>
+        <li><strong>Header row</strong> &mdash; <code>&lt;th scope="col"&gt;</code> cells in caption type, muted, over a strong rule.</li>
+        <li><strong>Row header</strong> &mdash; the <code>&lt;th scope="row"&gt;</code> that best identifies the record, usually a link to its detail page.</li>
+        <li><strong>Cells</strong> &mdash; dense <code>--text-body-sm</code> type with a hairline rule between rows. Text wraps, but cells keep a minimum width so the table scrolls rather than crushing text.</li>
+        <li><strong>Secondary line</strong> &mdash; a <code>&lt;div class="type-caption"&gt;</code> under the main value, such as the filename beneath a title.</li>
+        <li><strong>Status badge</strong> &mdash; <code>.status-badge</code>, the record&rsquo;s state as a word with a tone marker.</li>
+        <li><strong>Actions cell</strong> &mdash; <code>.table-list__actions</code> holds a <code>.cluster</code> of buttons and inline forms that never wraps.</li>
+    </ol>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Variants</h3>
+<p class="doc-lede">The table has no modifiers. The status badge has a neutral default and four tone modifiers; each sets only the marker color from a semantic token.</p>
+<div class="example-grid grid-auto">
+    <div class="card card--flush example">
+        <div class="example__preview"><span class="status-badge">consumed</span></div>
+        <div class="example__label"><code>.status-badge</code><span class="example__note">Neutral &mdash; consumed, unpublished</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview"><span class="status-badge status-badge--success">active</span></div>
+        <div class="example__label"><code>.status-badge--success</code><span class="example__note">Green &mdash; active, published</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview"><span class="status-badge status-badge--info">pending</span></div>
+        <div class="example__label"><code>.status-badge--info</code><span class="example__note">Link blue &mdash; pending</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview"><span class="status-badge status-badge--warning">expired</span></div>
+        <div class="example__label"><code>.status-badge--warning</code><span class="example__note">Amber &mdash; expired</span></div>
+    </div>
+    <div class="card card--flush example">
+        <div class="example__preview"><span class="status-badge status-badge--danger">revoked</span></div>
+        <div class="example__label"><code>.status-badge--danger</code><span class="example__note">Red &mdash; revoked</span></div>
+    </div>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Usage</h3>
+<p class="doc-lede">Copy the wrapper, caption, and header pattern. Give each caption an <code>id</code> that is unique on the page and point the wrapper&rsquo;s <code>aria-labelledby</code> at it.</p>
+<pre class="code-block"><code>&lt;div class="table-list" role="region" tabindex="0" aria-labelledby="files-caption"&gt;
+    &lt;table class="table-list__table"&gt;
+        &lt;caption id="files-caption" class="table-list__caption"&gt;Files&lt;/caption&gt;
+        &lt;thead&gt;
+            &lt;tr&gt;
+                &lt;th scope="col"&gt;Title&lt;/th&gt;
+                &lt;th scope="col"&gt;Status&lt;/th&gt;
+                &lt;th scope="col"&gt;Size&lt;/th&gt;
+                &lt;th scope="col"&gt;Actions&lt;/th&gt;
+            &lt;/tr&gt;
+        &lt;/thead&gt;
+        &lt;tbody&gt;
+            &lt;tr&gt;
+                &lt;th scope="row"&gt;
+                    &lt;a href="/admin/files/…"&gt;Quarterly report&lt;/a&gt;
+                    &lt;div class="type-caption"&gt;q3-report.pdf&lt;/div&gt;
+                &lt;/th&gt;
+                &lt;td&gt;&lt;span class="status-badge status-badge--success"&gt;Published&lt;/span&gt;&lt;/td&gt;
+                &lt;td&gt;1.2 MB&lt;/td&gt;
+                &lt;td class="table-list__actions"&gt;
+                    &lt;div class="cluster"&gt;
+                        &lt;a class="button button--secondary" href="/admin/files/…"&gt;Manage&lt;/a&gt;
+                        &lt;form method="POST" action="/admin/files/…/unpublish"&gt;
+                            &lt;button class="button" type="submit"&gt;Unpublish&lt;/button&gt;
+                        &lt;/form&gt;
+                    &lt;/div&gt;
+                &lt;/td&gt;
+            &lt;/tr&gt;
+        &lt;/tbody&gt;
+    &lt;/table&gt;
+&lt;/div&gt;
+
+&lt;!-- Status badge: the text is the status; the modifier sets the tone --&gt;
+&lt;span class="status-badge status-badge--danger"&gt;revoked&lt;/span&gt;
+&lt;span class="status-badge"&gt;consumed&lt;/span&gt;</code></pre>
+
+<h3 class="type-h3 doc-section-heading">Accessibility</h3>
+<div class="doc-prose">
+    <ul>
+        <li>The wrapper is a scroll container, so keyboard users must be able to reach it: keep <code>role="region"</code>, <code>tabindex="0"</code>, and <code>aria-labelledby</code> pointing at the caption. The region and the table share the caption as their name.</li>
+        <li>Every table has a visible <code>&lt;caption&gt;</code> that names the list.</li>
+        <li>Put <code>scope="col"</code> on column headers and <code>scope="row"</code> on the cell that identifies the record, so screen readers announce each cell with its column and row.</li>
+        <li>The badge text carries the status; the marker color only reinforces it. Never show a badge without a word.</li>
+        <li>Repeated action labels (&ldquo;Manage&rdquo;, &ldquo;Revoke&rdquo;) take their row context from the row header. Keep labels short and make the row header meaningful.</li>
+    </ul>
+</div>
+
+<h3 class="type-h3 doc-section-heading">Guidelines</h3>
+<div class="guidelines grid-auto">
+    <div class="card card--accent-secondary guideline guideline--do flow">
+        <p class="guideline__label">Do</p>
+        <ul>
+            <li>Use a table list when rows share fields worth comparing down a column.</li>
+            <li>Lead each row with the field people scan for, as a row header.</li>
+            <li>Show status with a badge whose text is the status word.</li>
+            <li>Use <code>.button--secondary</code> for repeated row actions so they recede.</li>
+        </ul>
+    </div>
+    <div class="card card--accent-primary guideline guideline--dont flow">
+        <p class="guideline__label">Don&rsquo;t</p>
+        <ul>
+            <li>Drop the caption, the region role, or <code>tabindex</code> from the wrapper.</li>
+            <li>Add row hover, zebra stripes, or a stacked mobile layout &mdash; the wrapper scrolls instead.</li>
+            <li>Color the badge text or the row; tone belongs to the marker.</li>
+            <li>Use a table for a handful of free-form items; reach for cards.</li>
+        </ul>
+    </div>
+</div>

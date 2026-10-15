@@ -71,7 +71,7 @@ Before writing or reviewing any frontend markup or CSS, check the live style gui
 - Start with `pages/admin/style-guide/aesthetic/body.html` — the tone and design philosophy behind every other section, and specifically what is a *structural rule you keep* versus a *default you are expected to change*.
 - Foundations: `typography/`, `colors/`.
 - Layout: `layout/`.
-- Components: `buttons/`, `cards/`, `forms/`, `text-fields/`, `copy-fields/`, `multi-line-text-areas/`, `callouts/`.
+- Components: `buttons/`, `cards/`, `forms/`, `text-fields/`, `copy-fields/`, `multi-line-text-areas/`, `callouts/`, `table-lists/`.
 
 - **It is the source of truth for the current design** — color use, type roles, spacing rhythm, component anatomy, state treatment — and its choices are revisable when establishing a new aesthetic.
 - **Its shell and navigation examples are admin-only.** Public pages borrow the shared tokens, type roles, layout primitives, and components, not admin chrome.

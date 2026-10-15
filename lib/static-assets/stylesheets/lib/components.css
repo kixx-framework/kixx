@@ -273,3 +273,181 @@
 .callout--success {
     --callout-accent: var(--color-status-success);
 }
+
+/* -----------------------------------------------------------------------------
+    Table list
+
+    A dense, hairline-ruled data table for a list of records with several
+    comparable fields and per-row actions (files, invites, tokens). For a few
+    items with free-form content, use Cards instead. Static, like Cards — no
+    row hover or zebra striping; interactive states belong to the links and
+    buttons inside it.
+
+    Narrow screens scroll the table sideways INSIDE the wrapper; the page itself
+    never scrolls horizontally. No breakpoint, no stacked-row layout.
+
+    Markup:
+      <div class="table-list" role="region" tabindex="0" aria-labelledby="files-caption">
+          <table class="table-list__table">
+              <caption id="files-caption" class="table-list__caption">Files</caption>
+              <thead><tr><th scope="col">Title</th> … </tr></thead>
+              <tbody>
+                  <tr>
+                      <th scope="row"><a href="…">Report</a><div class="type-caption">report.pdf</div></th>
+                      <td><span class="status-badge status-badge--success">Published</span></td>
+                      <td class="table-list__actions"><div class="cluster">…</div></td>
+                  </tr>
+              </tbody>
+          </table>
+      </div>
+
+    Elements:
+      .table-list           the scroll wrapper and bordered surface (block)
+      .table-list__table    the <table>
+      .table-list__caption  required; names the list, and is the region's
+                            accessible name via aria-labelledby
+      .table-list__actions  the cell holding a .cluster of row actions; never
+                            wraps, so actions stay on one line
+
+    A secondary line in a cell is a <div class="type-caption"> — no element
+    of its own here.
+
+    Accessibility:
+      - The wrapper is a focusable region (role="region", tabindex="0",
+        aria-labelledby the caption) so keyboard users can scroll it. The
+        caption id must be unique on the page.
+      - Column headers use <th scope="col">; the cell that best identifies the
+        row is a <th scope="row">, which gives repeated action labels
+        ("Manage", "Revoke") their row context.
+      - Status is read from text (.status-badge), never from color alone.
+----------------------------------------------------------------------------- */
+
+.table-list {
+    overflow-x: auto;
+    border: var(--hairline-width) solid var(--color-rule);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+}
+
+.table-list:focus-visible {
+    outline: 2px solid var(--color-focus-outline);
+    outline-offset: 2px;
+}
+
+.table-list__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-body-sm);
+    line-height: var(--leading-normal);
+}
+
+.table-list__caption {
+    caption-side: top;
+    padding-block: var(--space-xs) var(--space-2xs);
+    padding-inline: var(--space-xs);
+    /* Caption role, but ink (not muted) so it reads above the muted column
+       headers as the list's name. */
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-normal);
+    color: var(--color-ink);
+    text-align: start;
+}
+
+.table-list__table th,
+.table-list__table td {
+    /* Free-text cells may wrap, but not below this width — past it the
+       wrapper scrolls instead of crushing text to a word per line. */
+    min-inline-size: 6rem;
+    padding-block: var(--space-2xs);
+    padding-inline: var(--space-xs);
+    border-bottom: var(--hairline-width) solid var(--color-rule);
+    text-align: start;
+    vertical-align: top;
+}
+
+.table-list__table thead th {
+    border-bottom-color: var(--color-rule-strong);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+}
+
+/* The row header identifies the record: body type, a modest weight lift. */
+.table-list__table tbody th {
+    min-inline-size: 12rem;
+    font-weight: var(--weight-medium);
+}
+
+/* The wrapper draws the bottom edge. */
+.table-list__table tbody tr:last-child > * {
+    border-bottom: 0;
+}
+
+.table-list__actions {
+    white-space: nowrap;
+}
+
+/* The actions .cluster keeps its gap but never wraps to a second line. */
+.table-list__actions > .cluster {
+    flex-wrap: nowrap;
+}
+
+/* -----------------------------------------------------------------------------
+    Status badge
+
+    A compact inline label for a record's state (active, pending, revoked, …).
+    Usable inside a .table-list cell or anywhere inline. Follows the Callouts
+    accent pattern: a hairline box with a heavier left marker in the tone
+    color; the label stays --color-ink. Static — no interactive states.
+
+    Markup:
+      <span class="status-badge status-badge--success">active</span>
+
+    Modifiers (set only --status-badge-accent):
+      .status-badge            neutral — muted marker (consumed, unpublished)
+      .status-badge--success   green — active, published
+      .status-badge--info      link blue — pending
+      .status-badge--warning   amber — expired
+      .status-badge--danger    red — revoked
+
+    Custom properties:
+      --status-badge-accent    the marker color
+
+    Accessibility: the visible text IS the status, so it reads without color.
+    Tone rides the marker only (a graphical mark, 3:1 non-text contrast), never
+    the text. No icon or glyph.
+----------------------------------------------------------------------------- */
+
+.status-badge {
+    --status-badge-accent: var(--color-ink-muted);
+    display: inline-block;
+    padding-block: 0.125rem;
+    padding-inline: var(--space-2xs);
+    border: var(--hairline-width) solid var(--color-rule);
+    border-left: 3px solid var(--status-badge-accent);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    background: var(--color-surface-sunken);
+    white-space: nowrap;
+}
+
+.status-badge--success {
+    --status-badge-accent: var(--color-status-success);
+}
+
+.status-badge--info {
+    --status-badge-accent: var(--color-ink-link);
+}
+
+.status-badge--warning {
+    --status-badge-accent: var(--color-status-warning);
+}
+
+.status-badge--danger {
+    --status-badge-accent: var(--color-status-danger);
+}

@@ -1,0 +1,7 @@
+/* Page-local styles for the Table Lists style-guide page. */
+
+/* Anatomy demo: the stage is a centered flex row; let the live table take the
+   full stage width so it scrolls inside its wrapper like it does on a page. */
+.demo-stage .table-list {
+    inline-size: 100%;
+}

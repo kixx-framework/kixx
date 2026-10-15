@@ -88,7 +88,7 @@ HTML, CSS, and browser JavaScript conventions: where frontend source lives (`pag
 
 pages/admin/style-guide/
 
-The live design system, served at `/admin/style-guide` (admin sign-in required); each subdirectory is one page whose content is in `body.html`. Start with `aesthetic/`. Foundation pages (`typography/`, `colors/`, `layout/`) and component pages (`buttons/`, `callouts/`, `cards/`, `forms/`, `text-fields/`, `multi-line-text-areas/`, `copy-fields/`) document markup, variants, and usage rules. Read the relevant pages before writing or reviewing markup or CSS, and add a page (plus a link in `templates/partials/admin-nav.html`) when creating a shared component.
+The live design system, served at `/admin/style-guide` (admin sign-in required); each subdirectory is one page whose content is in `body.html`. Start with `aesthetic/`. Foundation pages (`typography/`, `colors/`, `layout/`) and component pages (`buttons/`, `callouts/`, `cards/`, `forms/`, `text-fields/`, `multi-line-text-areas/`, `copy-fields/`, `table-lists/`) document markup, variants, and usage rules. Read the relevant pages before writing or reviewing markup or CSS, and add a page (plus a link in `templates/partials/admin-nav.html`) when creating a shared component.
 
 ### Static Assets
 

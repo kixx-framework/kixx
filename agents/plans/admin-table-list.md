@@ -105,7 +105,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T2: Add the table list and status badge components with their style-guide page
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `lib/docs/frontend-development-guide.md` (Follow the Style Guide; When to Add What; Composition; BEM; CSS Comments); per-component documentation template comment in `lib/static-assets/stylesheets/lib/admin-style-guide.css` (~lines 210-220)
 
@@ -179,11 +179,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `.table-list` (with its elements) and `.status-badge` (with four tone modifiers) are defined in `components.css` with standard documentation headers, semantic tokens only, and no outer margins.
-- [ ] A table wider than its container scrolls inside the wrapper; the page itself never scrolls horizontally; the wrapper is reachable by Tab and shows a focus ring.
-- [ ] `/admin/style-guide/table-lists` renders with the canonical section order and shows live examples of the table and every badge tone.
-- [ ] The nav link shows `aria-current="page"` on that page; the introduction page and frontend guide mention the component.
-- [ ] Usage markup in `body.html` is escaped and contains no template syntax.
+- [x] `.table-list` (with its elements) and `.status-badge` (with four tone modifiers) are defined in `components.css` with standard documentation headers, semantic tokens only, and no outer margins.
+- [x] A table wider than its container scrolls inside the wrapper; the page itself never scrolls horizontally; the wrapper is reachable by Tab and shows a focus ring.
+- [x] `/admin/style-guide/table-lists` renders with the canonical section order and shows live examples of the table and every badge tone.
+- [x] The nav link shows `aria-current="page"` on that page; the introduction page and frontend guide mention the component.
+- [x] Usage markup in `body.html` is escaped and contains no template syntax.
 
 **Validation**
 
@@ -197,12 +197,20 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `.table-list` (wrapper, `__table`, `__caption`, `__actions`) and `.status-badge` (neutral plus `--success`, `--info`, `--warning`, `--danger`) appended after Callouts in `components.css`, each with a standard header; "Table Lists" style-guide page (intro, Anatomy, Variants, Usage, Accessibility, Guidelines); nav link; introduction mention; frontend guide and doc index lists.
+- Current state: Complete. Rendered-page checks behind admin sign-in (nav `aria-current`, `.json` include, dark theme, keyboard focus ring) are left to the Operator Runbook; no admin session was available.
+- Remaining: Nothing for T2. T3 and T4 can copy the Usage markup on the page.
+- Decisions and discoveries:
+  - Wrapper draws a card-like box: hairline `--color-rule` border, `--radius-md`, `--color-bg` fill (so it lifts off the sunken demo stage). Last body row drops its bottom rule since the wrapper draws the edge.
+  - Caption uses the caption size, semibold, in `--color-ink` (not muted) so it reads as the list's name above the muted column headers.
+  - Cells: `--space-2xs` block / `--space-xs` inline padding, `vertical-align: top`, `min-inline-size: 6rem`; body row headers `min-inline-size: 12rem` and medium weight. Header cells are `nowrap`. Long unbroken tokens widen the table and the wrapper scrolls.
+  - `.table-list__actions > .cluster` sets `flex-wrap: nowrap` in addition to `white-space: nowrap` on the cell, since `.cluster` wraps by default.
+  - Badge: `--color-surface-sunken` fill, `--radius-sm`, 3px left marker in `--status-badge-accent`, `0.125rem` block padding (no smaller space token exists).
+  - Added `page.css` to stretch the live table to the full `.demo-stage` width (the stage is a centered flex row).
+  - Also updated `lib/docs/doc-index.md`, which lists style-guide component pages.
+  - Scratch render check (`tmp/table-list-check.html`, real stylesheets inlined, no admin shell): at 360px the document `scrollWidth` equals the viewport (360) while the wrapper scrolls (client 276, scroll 869). The admin shell's content track sets an explicit `min-inline-size`, so table width cannot widen it.
+- Actual files changed: `lib/static-assets/stylesheets/lib/components.css`; `lib/pages/admin/style-guide/table-lists/page.json`, `page.html`, `page.css`, `body.html` (new); `lib/templates/partials/admin-nav.html`; `lib/pages/admin/style-guide/body.html`; `lib/docs/frontend-development-guide.md`; `lib/docs/doc-index.md`.
+- Validation run: block/header grep finds both sections (components.css:278, :398) and all elements and modifiers; palette/literal-color grep, `style="` grep, and `{{` grep on body.html print nothing; `table-lists` found in nav, intro, and frontend guide; page.json parses; `node lib/run-tests.js` passes 1833 tests.
 - Blockers: None.
 
 ---
