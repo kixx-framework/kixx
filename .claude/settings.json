@@ -1,12 +1,13 @@
 {
-  "includeGitInstructions": false,
-  "respectGitignore": false,
   "autoMemoryEnabled": false,
-  "showThinkingSummaries": true,
   "attribution": {
-      "commit": "",
-      "pr": "",
-      "sessionUrl": false
-  }
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "includeGitInstructions": false,
+  "outputStyle": "Programmer",
+  "respectGitignore": false,
+  "showThinkingSummaries": true
 }
 

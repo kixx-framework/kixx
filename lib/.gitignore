@@ -1,0 +1,32 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons (http://nodejs.org/api/addons.html)
+build/Release
+
+# Dependency directories
+node_modules/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# There are no dependencies, so we ignore package-lock
+package-lock.json
+
+# Secrets
+.env.*.secrets
+.kixx/secrets.json
+
+# Generated from cloudflare-config.jsonc by the deployment CLI
+cloudflare-config.generated.js

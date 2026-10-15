@@ -1,0 +1,42 @@
+{
+    "name": "kixx-devkit",
+    "version": "0.2.0",
+    "description": "Build and deployment tools for Kixx applications",
+    "type": "module",
+    "bin": {
+        "kixx": "./kixx.js"
+    },
+    "files": [
+        "kixx.js",
+        "commands/",
+        "!commands/README.md",
+        "lib/",
+        "deno.json",
+        "README.md",
+        "docs/",
+        "LICENSE"
+    ],
+    "engines": {
+        "node": ">=24"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kixx-framework/kixx.git",
+        "directory": "devkit"
+    },
+    "keywords": [
+        "kixx",
+        "devkit",
+        "cli"
+    ],
+    "author": "Kris Walker (www.kriswalker.me)",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/kixx-framework/kixx/issues"
+    },
+    "homepage": "https://www.kixx.dev",
+    "devDependencies": {
+        "kixx-linting": "1.1.2",
+        "kixx-test": "3.0.0"
+    }
+}

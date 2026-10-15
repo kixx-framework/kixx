@@ -1,0 +1,18 @@
+# Ignore everything: code here is copied from lib/ by tools/build-test-app.js.
+/*
+
+# Track only hand-authored, non-secret config.
+!/README.md
+!/.gitignore
+!/.env.development
+!/.env.production
+!/node-config-test-context.json
+!/cloudflare-config-test-context.json
+!/.kixx/
+
+# Don't track configs
+/.kixx/config.json
+
+# Never track secrets. Listed last so no negation above re-includes them.
+/.kixx/secrets.json
+.env.*.secrets

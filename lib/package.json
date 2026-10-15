@@ -1,0 +1,36 @@
+{
+    "name": "kixx",
+    "version": "6.0.0",
+    "description": "A web development framework for humans and their clankers.",
+    "type": "module",
+    "main": "lib/mod.js",
+    "exports": {
+        ".": "./lib/mod.js"
+    },
+    "engines": {
+        "node": ">=24"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kixx-framework/kixx.git"
+    },
+    "files": [
+        "lib/"
+    ],
+    "keywords": [
+        "kixx",
+        "web",
+        "hypermedia"
+    ],
+    "author": "Kris Walker (www.kriswalker.me)",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/kixx-framework/kixx/issues"
+    },
+    "homepage": "https://www.kixx.dev",
+    "devDependencies": {
+        "kixx-assert": "2.1.1",
+        "kixx-linting": "1.1.1",
+        "kixx-test": "3.0.0"
+    }
+}

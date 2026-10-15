@@ -14,27 +14,18 @@ server origin.
 
 ## The atomic release model
 
-Read this section before using any endpoint below. Misunderstanding it leads
-to misusing every endpoint that follows.
+Read this first. **Server code and website content ship as one atomic unit**,
+so code never runs against content authored for another site version. Every
+endpoint below serves that guarantee.
 
-**A release of server-side code and a release of website content ship as one
-atomic unit.** This is the guarantee the entire API is built to uphold, and
-every endpoint below exists in service of it. A build's code and the content
-it renders are never allowed to drift apart: you cannot end up running code
-authored for one site version against content authored for another.
-
-The mechanism is the `BUILD_ID` environment variable. `BUILD_ID` identifies
-one build of the server source (Node.js process or Cloudflare Worker), and a
-**build pointer** records which content **Release** that build serves.
-Deploying code and switching content are therefore **the same act**: setting
-`BUILD_ID` to a value already pointed at the Release you intend to serve.
-**There is no separate "activate" step and no atomic switch to engineer** —
-a Worker deploy and a process restart are already atomic, so setting (or
-reverting) `BUILD_ID` reverts the code and the content it was authored
-against as a single, indivisible coordinate. The
-[Code-plus-content release (pre-staging)](#2-code-plus-content-release-pre-staging)
-workflow below is how a publishing client puts this to use for an atomic
-deploy.
+`BUILD_ID` (an environment variable) identifies one build of the server
+(Node.js process or Cloudflare Worker), and a **build pointer** records which
+content **Release** that build serves. Deploying code and switching content
+are **the same act**: set `BUILD_ID` to a value already pointed at the
+intended Release. **There is no separate "activate" step**: a Worker deploy or
+process restart is already atomic, so setting or reverting `BUILD_ID` moves
+code and content together. See
+[pre-staging](#2-code-plus-content-release-pre-staging).
 
 Three objects make this work:
 
@@ -44,21 +35,16 @@ Three objects make this work:
 | Release | closure root hash | no | One complete, fully verified website version — every object it names is guaranteed to exist and be servable. |
 | Build pointer | operator-chosen `buildId` | yes | Which Release a given server build serves. |
 
-Because a Release carries no build association, publishing forward,
-rolling back, and carrying code-only content forward are all the **same
-operation** — assigning an existing Release to a build id — differing only
-in which build id and which Release:
+A Release carries no build association, so every change is the **same
+operation**, assigning an existing Release to a build id:
 
 - **Content-only publish**: create a Release, assign it to the build that is
   already running.
-- **Code-plus-content release**: create a Release, assign it to the build id
-  that CI will deploy *next* — before that build exists — then deploy the
-  code. This is pre-staging: a publishing client chooses the `BUILD_ID` a
-  future deploy will use, uploads and verifies content against it first, and
-  only then triggers the deploy. The deploy is the activation.
-- **Code-only deploy**: assign the *same* Release the running build already
-  serves to the next build id. No manifest, no re-upload — just a pointer
-  write.
+- **Code-plus-content release** (pre-staging): create a Release, assign it to
+  the build id CI will deploy *next*, before that build exists, then deploy.
+  The deploy is the activation.
+- **Code-only deploy**: assign the Release the running build already serves
+  to the next build id. Just a pointer write.
 - **Rollback**: assign an earlier Release back to a build id.
 
 ## Endpoint summary
@@ -83,7 +69,9 @@ returns `405 Method Not Allowed` with an `Allow` header.
 
 ## Authentication and authorization
 
-Every request, including discovery, requires a Publishing API bearer token:
+Every request to a routed endpoint, including discovery, requires a Publishing
+API bearer token (unknown paths return `404` and disallowed methods `405` before
+authentication):
 
 ```http
 Authorization: Bearer <publishing-token>
@@ -94,21 +82,16 @@ Missing, malformed, or unknown bearer credentials return `401` with code
 `UNAUTHENTICATED_ERROR`. Expired and revoked tokens return `403` with code
 `PublishingApiTokenInactive`.
 
-Permissions are derived from the token's stored roles for every request. The
+Permissions come from the token's stored roles on every request. The
 `editor` role (and `root-admin`, `developer`, `admin`) can `get` and `create`
-across every publishing resource, and can additionally `update`
-`urn:kixx:publishing:builds` — the one resource a publishing-capable role may
-mutate rather than only create, because assigning a build pointer moves an
-existing, already-published Release and can never create new content. An
-authenticated token without the required grant receives `403 FORBIDDEN_ERROR`.
+every publishing resource, and can also `update` `urn:kixx:publishing:builds`.
+That is the only update grant, because moving a build pointer can never
+create new content. A token without the required grant gets
+`403 FORBIDDEN_ERROR`. Authentication and authorization run before the body
+is read.
 
-Authentication and authorization occur before an endpoint reads or validates
-a request body.
-
-Creating an object consumes storage nothing can currently reclaim — the
-content store has no delete operation — so object upload permission is worth
-granting deliberately. Object uploads check the declared `Content-Length`
-against 25 MiB; status requests are capped at 100 ids.
+The content store has no delete operation, so uploaded objects can't be
+reclaimed. Grant upload permission deliberately.
 
 ## Protocol conventions
 
@@ -146,9 +129,8 @@ non-empty string. A malformed document returns `400 Bad Request`; an
 incorrect resource type returns `409 Conflict` with code
 `JsonApiResourceTypeMismatch`.
 
-`PUT /objects/:objectId` is the one exception: its body is raw, non-empty
-bytes with no envelope and no required media type, exactly like
-static-asset uploads elsewhere in this project.
+`PUT /objects/:objectId` is the one exception: its body is raw bytes with no
+envelope and no required media type.
 
 ### Error documents
 
@@ -174,7 +156,7 @@ Error codes used by this API:
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `400` | `BAD_REQUEST_ERROR` | Malformed JSON:API request or bad pagination |
+| `400` | `BAD_REQUEST_ERROR` | Malformed JSON:API request, missing `attributes.manifest`, a limit exceeded (object ids, manifest entries), or bad pagination |
 | `401` | `UNAUTHENTICATED_ERROR` | Bearer credentials are absent, malformed, or unknown |
 | `403` | `FORBIDDEN_ERROR` | The token lacks the endpoint permission |
 | `403` | `PublishingApiTokenInactive` | The token is expired or revoked |
@@ -188,14 +170,13 @@ Error codes used by this API:
 | `413` | `PAYLOAD_TOO_LARGE_ERROR` | An object upload's declared `Content-Length` exceeds `maxObjectBytes` |
 | `415` | `UNSUPPORTED_MEDIA_TYPE_ERROR` | The request media type is not accepted |
 | `422` | `ObjectIdMismatch` | Uploaded bytes do not match the object id in the URL |
-| `422` | `ObjectIdInvalid` | An object id is not a valid content address |
+| `422` | `ObjectIdInvalid` | An object id (in the URL or `attributes.objectIds`) is not a valid content address |
 | `422` | `MissingContentObjects` | The manifest names objects the store does not hold |
-| `422` | `InvalidReleaseManifest` | The manifest structure or content is invalid |
+| `422` | `InvalidReleaseManifest` | The manifest structure or content, or the provenance, is invalid |
 | `422` | `InvalidBuildAssignment` | `data.id`, `attributes.releaseId`, `attributes.expectedAssignmentId`, or `attributes.reason` fails validation |
 | `428` | `PreconditionRequired` | A build pointer write omitted JSON `attributes.expectedAssignmentId` |
 
-Unexpected storage failures are not part of the public contract and are
-reported as server failures without exposing internal details.
+Unexpected failures return a generic server error without internal details.
 
 ## Discovery
 
@@ -203,10 +184,9 @@ reported as server failures without exposing internal details.
 GET /publishing-api/v1/
 ```
 
-Requires a valid bearer token but no specific permission grant. Reports the running deploy's own build id,
-the content contract version this code supports, the object-addressing
-format, and every enforced limit, so a client can adapt before making a
-mistake a later request would reject.
+Requires a valid token but no permission grant. Reports the running build id,
+supported content contract version, object-addressing format, and enforced
+limits.
 
 ```json
 {
@@ -228,14 +208,14 @@ mistake a later request would reject.
 }
 ```
 
-`runningBuildId` is `null` when the deploy has no runtime build id
-configured at all — a configuration state distinct from a build id that has
-never been assigned a Release, which `GET /builds/:buildId` reports as `404`.
+`runningBuildId` is `null` when no build id is configured. (A configured
+build id with no Release assigned instead shows as `404` from
+`GET /builds/:buildId`.)
 
-`buildAssignmentProtocolVersion: 2` requires JSON assignment tokens. Its absence
-identifies the legacy protocol; clients must negotiate before writing. This
-version is separate from `contentContractVersion`, which describes Release
-compatibility. Protocol 2 has no hash or conditional-header write fallback.
+`buildAssignmentProtocolVersion: 2` means build writes use JSON
+`expectedAssignmentId` preconditions, with no conditional-header fallback. Its
+absence means the legacy protocol; check it before writing. It is separate
+from `contentContractVersion`, which describes Release compatibility.
 
 ## Check which objects are already stored
 
@@ -255,10 +235,10 @@ Content-Type: application/vnd.api+json
 }
 ```
 
-`attributes.objectIds` is deduplicated by the server and capped at
-`maxObjectStatusIds` (100) unique ids. The response lists only the ids that
-are actually stored, as a set with no promised order — an id absent from the
-response is not stored:
+`attributes.objectIds` must be an array; it is deduplicated by the server and
+capped at `maxObjectStatusIds` (100) unique ids. A non-array or too many ids
+returns `400`; an invalid id returns `422 ObjectIdInvalid`. The response lists only the ids that
+are stored, in no promised order:
 
 ```json
 {
@@ -272,8 +252,7 @@ response is not stored:
 }
 ```
 
-Use this before uploading a local content tree, to send bytes only for
-objects the store does not already have.
+Use it to upload only the objects the store lacks.
 
 ## Upload an object
 
@@ -281,7 +260,7 @@ objects the store does not already have.
 PUT /publishing-api/v1/objects/:objectId
 ```
 
-Send raw, non-empty bytes as the body, with no JSON:API envelope. The server
+Send raw bytes as the body, with no JSON:API envelope. The server
 recomputes the content address from the received bytes and compares it with
 `:objectId` in the URL:
 
@@ -292,14 +271,12 @@ curl --request PUT \
     http://localhost:2026/publishing-api/v1/objects/<object-id>
 ```
 
-A declared `Content-Length` over `maxObjectBytes` (25 MiB) returns
-`413 PAYLOAD_TOO_LARGE_ERROR` before the body is read. The server trusts this
-header and does not count incoming bytes against the limit. A missing header
-returns `411 LengthRequired` before the body is read.
-A content-address mismatch returns `422 ObjectIdMismatch` and
-stores nothing. On success the response distinguishes a newly stored object
-(`201 Created`) from one that was already present (`200 OK`), so a client
-can report how many bytes it actually transferred:
+Before the body is read, a missing `Content-Length` returns
+`411 LengthRequired` and one over `maxObjectBytes` (25 MiB) returns
+`413 PAYLOAD_TOO_LARGE_ERROR`. The server trusts the header and does not
+count incoming bytes. A content-address mismatch returns
+`422 ObjectIdMismatch` and stores nothing. A new object returns `201`; one
+already stored returns `200`:
 
 ```json
 {
@@ -311,9 +288,8 @@ can report how many bytes it actually transferred:
 }
 ```
 
-Uploading works even when no build anywhere has ever been assigned a
-Release — the object endpoints never resolve a build pointer, which is what
-makes bootstrapping a brand-new site possible.
+Object endpoints never resolve a build pointer, so they work before any
+build has a Release (see [Bootstrap](#bootstrap-publishing-to-a-store-with-nothing-assigned-anywhere)).
 
 ## Create a Release
 
@@ -329,12 +305,12 @@ Content-Type: application/vnd.api+json
         "attributes": {
             "manifest": {
                 "staticAssets": {
-                    "css/site.css": { "objectId": "<object-id>", "size": 1234 }
+                    "/css/site.css": { "objectId": "<object-id>", "size": 1234 }
                 },
                 "globalTemplatePartials": { "objectId": "<object-id>", "size": 98 },
                 "baseTemplates": { "objectId": "<object-id>", "size": 210 },
                 "pages": {
-                    "about": {
+                    "/about": {
                         "metadata": { "objectId": "<object-id>", "size": 41 },
                         "partials": { "objectId": "<object-id>", "size": 62 },
                         "includes": { "objectId": "<object-id>", "size": 19 },
@@ -344,7 +320,7 @@ Content-Type: application/vnd.api+json
                     }
                 },
                 "emails": {
-                    "welcome": { "objectId": "<object-id>", "size": 300 }
+                    "/welcome": { "objectId": "<object-id>", "size": 300 }
                 }
             },
             "provenance": {
@@ -358,34 +334,37 @@ Content-Type: application/vnd.api+json
 ```
 
 The manifest is a **complete replacement**: an omitted facet is absent from
-the Release, and never inherits from whatever is currently live.
-`staticAssets`, `pages`, and `emails` are keyed by canonical logical
-pathnames — lowercase-insensitive is not applied; a non-canonical pathname is
-rejected outright rather than normalized. Each reference is
+the Release, never inherited from what is live.
+`attributes.manifest` is required (`400` when absent). `staticAssets`, `pages`,
+and `emails` are keyed by canonical pathnames: lowercase, one leading `/`, no
+trailing slash. A non-canonical pathname is rejected, not normalized. Only
+`pages` may use the root `/`. Unknown fields are rejected at every level. Each reference is
 `{ objectId, size }`; static-asset references may add an optional
 `mediaType`. `pages.<path>.templates` is a filename-to-reference map, letting
 one page publish more than one template.
 
-`attributes.provenance` is optional, immutable, non-binding metadata:
-`sourceRevision`, `message`, `client`, and `intendedForBuildId` (the build id
-this Release was authored for — a hint for pre-staging audits, not a binding
-constraint; nothing prevents assigning a Release to a different build id).
+`attributes.provenance` is optional, immutable, non-binding metadata. Its only
+fields are `sourceRevision`, `message`, `client`, and `intendedForBuildId`, each
+a non-empty string. `intendedForBuildId` is a hint for audits; nothing stops
+assigning the Release to a different build.
 
-Creation runs, and fails before persisting anything if any step fails:
+Creation persists nothing if any check fails:
 
-1. manifest schema validation;
-2. object existence and size verification against every referenced object id;
-3. JSON parsing and schema validation for structured payloads (template
-   bundles, page metadata, email bundles, includes).
+1. manifest schema validation, then the `maxManifestEntries` (10000) limit
+   (`400`);
+2. object existence and size verification against every referenced object id,
+   together with JSON parsing and schema validation for structured payloads
+   (template bundles, page metadata, email bundles, includes). Errors from
+   both are reported together.
 
-Template source is not compiled and partial references are not resolved during
-release validation or creation. Successful release validation does not
-guarantee successful rendering.
+Templates are not compiled and partial references are not resolved, so a
+valid Release can still fail to render.
 
-A manifest naming an object the store does not hold fails with
-`422 MissingContentObjects`, listing every missing reference — not just the
-first — up to a documented cap. A claimed size that disagrees with the
-stored size fails with `409 ObjectSizeMismatch`. Malformed JSON or a structured
+A claimed size that disagrees with the stored size fails with
+`409 ObjectSizeMismatch`, which takes precedence over any other error. Otherwise,
+a manifest naming an object the store does not hold fails with
+`422 MissingContentObjects`, listing every missing reference (up to 1000) —
+not just the first. Malformed JSON or a structured
 payload that violates its schema fails with
 `422 InvalidReleaseManifest`. Metadata and email context data must be JSON
 objects; their nested values are not recursively validated.
@@ -413,11 +392,10 @@ The response is `201 Created`:
 }
 ```
 
-`id` is the Release's closure root hash, so re-creating byte-identical
-content returns the **original** Release record unchanged — creation is
-content-idempotent, and there are no idempotency keys anywhere in this API.
-Creating a Release never assigns it to any build; see
-[Assign a Release to a build](#assign-a-release-to-a-build) below.
+`id` is the Release's closure root hash, so re-creating identical content
+returns `201` with the **original** record unchanged. There are no
+idempotency keys in this API. Creating a Release never assigns it to a build;
+see [Assign a Release to a build](#assign-a-release-to-a-build).
 
 ## Verify a Release without publishing it
 
@@ -426,10 +404,10 @@ POST /publishing-api/v1/releases/validation
 Content-Type: application/vnd.api+json
 ```
 
-Same request body as `POST /releases`, same verification pipeline, but nothing
-is persisted on success or failure — no
-objects, no closure, no Release record. Use this to gate a CI build without
-creating an unreferenced closure for every candidate commit.
+Same request body as `POST /releases` (`provenance` is ignored), same
+verification pipeline, but nothing is
+persisted. Use it to gate CI without creating a closure per candidate commit.
+Returns `200`:
 
 ```json
 {
@@ -437,6 +415,7 @@ creating an unreferenced closure for every candidate commit.
         "type": "ReleaseValidation",
         "id": "<release-id>",
         "attributes": {
+            "releaseId": "<release-id>",
             "objectCount": 6,
             "totalBytes": 1972,
             "contractVersion": 1
@@ -452,7 +431,8 @@ GET /publishing-api/v1/releases?limit=25&cursor=<cursor>
 ```
 
 Lists Releases newest first with stable cursor pagination. `limit` is
-optional (1 through 100); `cursor` continues a prior page.
+optional (1 through 100, default 100); `cursor` continues a prior page.
+`meta.cursor` is `null` on the last page.
 
 ```json
 {
@@ -485,10 +465,18 @@ Release was ever created.
 GET /publishing-api/v1/releases/:releaseId/manifest
 ```
 
-Gets the complete manifest stored inside the Release's immutable closure —
-every reference it names, exactly as validated. Use this for whole-site
-diffing against a local content tree, without walking per-pathname
-endpoints. Returns `404 ReleaseNotFound` when the Release closure is absent.
+Gets the complete manifest exactly as validated, for diffing against a local
+content tree. Returns `404 ReleaseNotFound` when the Release closure is absent.
+
+```json
+{
+    "data": {
+        "type": "ReleaseManifest",
+        "id": "<release-id>",
+        "attributes": { "manifest": {} }
+    }
+}
+```
 
 ## Build pointers
 
@@ -514,19 +502,16 @@ Lists every registered build pointer, newest assignment first:
 }
 ```
 
-This is what surfaces a phantom or orphaned build id — it appears here even
-though nothing is running it yet.
+This includes build ids nothing is running yet.
 
 ```http
 GET /publishing-api/v1/builds/:buildId
 ```
 
-Gets one build's authoritative pointer, whether or not that build is
-currently running. Returns `404 BuildNotFound` when the build has never been
-assigned. Copy `attributes.assignmentId` verbatim into the next write's JSON
-precondition. Every changed assignment gets a new UUID, even when returning to
-a previously assigned Release. The assignment identity appears only in the
-response body; Build responses carry no `ETag` and no validator of any kind:
+Gets one build's pointer, running or not. Returns `404 BuildNotFound` when
+the build has never been assigned. Copy `attributes.assignmentId` verbatim
+into the next write's precondition. Every changed assignment gets a new UUID,
+even when returning to an earlier Release. Build responses carry no `ETag`:
 
 ```json
 {
@@ -542,9 +527,7 @@ response body; Build responses carry no `ETag` and no validator of any kind:
 }
 ```
 
-This is the endpoint that makes pre-staging verifiable: read back what was
-just staged for a build id nothing is running yet, before triggering the
-deploy that will run it.
+Use it to verify a pre-staged build before deploying it.
 
 ### Assign a Release to a build
 
@@ -593,15 +576,12 @@ Assigning the current Release is a success no-op only after its precondition
 passes. It preserves `assignedAt` and `assignmentId` and adds no Activation.
 A→B→A creates three distinct identities, so the first A token remains stale.
 
-The response is `200 OK` with the resulting Build resource, carrying the
-assignment identity the next write must quote. Build JSON contains only
-`releaseId`, `assignedAt`, and `assignmentId` attributes. Every Publishing API
-response is authenticated, so all of them are `private, no-store`.
+The response is `200 OK` with the resulting Build resource. Authenticated
+responses are `Cache-Control: private, no-store`.
 
-If a client loses a response after a successful assignment, it must read and
-reconcile the current Build before deciding what to do. Retrying the same
-conditional request may return `412` because the identity has already changed.
-There is no unconditional retry or request-idempotency mechanism.
+If a response is lost after a successful assignment, read the current Build
+and reconcile before acting. Retrying the same request may return `412`
+because the identity already changed. There is no unconditional retry.
 
 ## Build activation history
 
@@ -609,7 +589,8 @@ There is no unconditional retry or request-idempotency mechanism.
 GET /publishing-api/v1/builds/:buildId/activations?limit=25&cursor=<cursor>
 ```
 
-Lists every changed assignment to one build, newest first. A successful
+Lists every changed assignment to one build, newest first, paginated like
+`GET /releases`. A successful
 same-target no-op creates no entry. Returns
 `404 BuildNotFound` when the build has never been assigned.
 
@@ -634,24 +615,14 @@ same-target no-op creates no entry. Returns
 }
 ```
 
-Together with `GET /releases`, this is enough to plan and execute a rollback
-using no root hash the client happened to keep from an earlier publish.
+Entry `id` is `<buildId>:<assignmentId>`, so one assignment has at most one
+entry; appending it twice rewrites that entry.
 
-Each entry carries the `assignmentId` of the assignment it records, and its
-`id` is derived from `<buildId>:<assignmentId>`. One committed assignment
-therefore has exactly one history entry: appending the same assignment twice
-rewrites that one entry rather than adding a duplicate.
-
-Activation history is best-effort. The build pointer commits first, then the
-server makes one attempt to append the Activation. A crash, timeout, or storage
-failure between those two steps can leave an assignment with no history entry,
-and that gap is permanent today: nothing retries the append and no repair
-command exists. Treat the history as an informational record, not an audit
-guarantee. The append is idempotent, so a retry or repair path may be added
-later without risking duplicate entries.
-
-The pointer, not the history, is authoritative. A missing entry never blocks
-the next publish: read `GET /builds/:buildId` and use its `assignmentId`.
+**History is best-effort, not an audit guarantee.** The pointer commits
+first, then the server makes one attempt to append the Activation. A crash,
+timeout, or storage failure between the two leaves a permanent gap: nothing
+retries the append. The pointer is authoritative; a missing entry never
+blocks the next publish.
 
 ## Workflows
 
@@ -672,20 +643,16 @@ Publish a change to the site the running build already serves.
 Ship server code and content as one atomic unit.
 
 1. Choose the `BUILD_ID` the next CI deploy will use — call it `next`.
-2. Upload objects and `POST /releases` as above, against the running build's
-   code (or a scratch client that only needs the object and Release
-   endpoints — neither touches any build pointer).
-3. `PUT /builds/next` with `expectedAssignmentId: null` in JSON — `next` has never been
-   assigned, so this is safe even under concurrent publishers racing to
-   stage the same future build.
+2. Upload objects and `POST /releases` as above. Neither touches a build
+   pointer.
+3. `PUT /builds/next` with `expectedAssignmentId: null`. `next` has never been
+   assigned, so concurrent publishers can't both stage it.
 4. `GET /builds/next` to verify what was staged, before triggering anything.
-5. Deploy the code with `BUILD_ID=next`. The deploy is the activation; no
-   further request against this API is needed.
+5. Deploy the code with `BUILD_ID=next`. The deploy is the activation.
 
 ### 3. Code-only deploy
 
-Ship new server code with no content change: two small requests, no
-manifest.
+Ship new server code with no content change.
 
 1. `GET /builds/:runningBuildId` to read the currently served `releaseId`.
 2. `PUT /builds/next` with that same `releaseId` and `expectedAssignmentId: null` in JSON.
@@ -694,24 +661,21 @@ manifest.
 ### 4. Rollback
 
 1. `GET /releases` or `GET /builds/:buildId/activations` to find the Release
-   to restore — no client-retained root hash is required.
+   to restore.
 2. `GET /builds/:buildId` for its current JSON `assignmentId`.
 3. `PUT /builds/:buildId` with the earlier `releaseId` and JSON
    `expectedAssignmentId: "<observed-assignment-id>"`.
 
-Stop and investigate on `412 BuildPointerConflict` rather than retrying
-blindly — it means something else moved the pointer in the meantime, and a
-blind retry would silently overwrite that concurrent change.
+On `412 BuildPointerConflict`, stop and investigate: something else moved the
+pointer, and a blind retry would overwrite that change.
 
 ### Bootstrap: publishing to a store with nothing assigned anywhere
 
-No special-cased endpoint exists for first boot, because none is needed:
+No special endpoint is needed:
 
-1. `PUT /objects/:objectId` works before any build pointer exists anywhere —
-   object endpoints never resolve one.
-2. `POST /releases` works the same way.
-3. `PUT /builds/:buildId` with `expectedAssignmentId: null` in JSON makes the very first
-   assignment for that build id, exactly like pre-staging a future build.
+1. Upload objects and `POST /releases`; neither needs a build pointer.
+2. `PUT /builds/:buildId` with `expectedAssignmentId: null` makes the first
+   assignment.
 
-A build whose code is already running but has no Release assigned serves
-`503` naming the build id, rather than crashing, until step 3 completes.
+A running build with no Release assigned serves `503` naming the build id
+until step 2 completes.

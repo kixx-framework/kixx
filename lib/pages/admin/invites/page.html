@@ -1,0 +1,137 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <h1>Admin invites</h1>
+            <p>Create single-use invite links which can be used to add new administrator accounts to your site.
+               These invite links can be sent by you to another person you want to have admin access to your site.</p>
+        </header>
+
+        {{!--
+            form_expired means a submission's CSRF token failed verification: the page
+            was left open too long, the user logged in again in another tab, or a
+            form was resubmitted with the back button.
+        --}}
+        {{#ifEqual form.errorCode "form_expired"}}
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body flow">
+                <p class="callout__title">That form couldn&rsquo;t be verified</p>
+                <p class="type-body-sm">Nothing was changed. This page has been reloaded &mdash; please try again.</p>
+            </div>
+        </div>
+        {{/ifEqual}}
+
+        {{!--
+            newInviteUrl is present only on the response that just minted an invite.
+            The raw token lives only in this URL and is never stored, so it is shown
+            once here and cannot be retrieved again.
+        --}}
+        {{#if newInviteUrl}}
+        <div class="callout callout--info" role="status">
+            <span class="callout__icon" aria-hidden="true">[i]</span>
+            <div class="callout__body flow">
+                <p class="type-body-sm">New invite link created. Copy it now — it is shown only once and cannot be retrieved later.</p>
+                <div class="copy-field">
+                    <label class="copy-field__label" for="new-invite-url">Invite link</label>
+                    <div class="copy-field__row">
+                        <input class="field__input copy-field__value" id="new-invite-url" type="text" value="{{ newInviteUrl }}" readonly>
+                        <button class="copy-field__button" type="button" data-js-behavior="copy-field" data-copy-target="new-invite-url" aria-label="Copy invite link">
+                            <span class="copy-field__icon" aria-hidden="true">copy</span>
+                        </button>
+                    </div>
+                    <p class="copy-field__status" role="status" aria-live="polite"></p>
+                </div>
+            </div>
+        </div>
+        {{/if}}
+
+        <form class="flow field-stack" method="{{ form.method }}" action="{{ form.url }}">
+            {{#if form.csrf}}
+            <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+            {{/if}}
+
+            <div class="field{{#if form.fields.role_id.error}} field--error{{/if}}">
+                <label class="field__label" for="role-id">{{ form.fields.role_id.label }}</label>
+                <select
+                    class="field__select"
+                    id="role-id"
+                    name="role_id"
+                    required
+                    {{#if form.fields.role_id.error}}aria-describedby="role-id-error" aria-invalid="true"{{/if}}
+                >
+                {{!--
+                    The placeholder must lead the list. Without it the browser
+                    preselects the first real option, so an untouched submit would
+                    silently mint the most capable role. An empty submission
+                    instead hits the form's required-field error. It yields its
+                    `selected` state when the form re-renders with a prior choice.
+                --}}
+                    <option value="" disabled {{#unless form.fields.role_id.value}}selected{{/unless}}>Choose a role</option>
+                {{#each form.fields.role_id.options as |option| }}
+                    <option value="{{ option.value }}" {{#ifEqual option.value form.fields.role_id.value}}selected{{/ifEqual}}>{{ option.label }}</option>
+                {{/each}}
+                </select>
+                {{#if form.fields.role_id.error}}
+                <p class="field__error" id="role-id-error" role="alert">{{ form.fields.role_id.error }}</p>
+                {{/if}}
+            </div>
+
+            <div class="cluster">
+                <button class="button button--primary" type="submit">Create invite link</button>
+            </div>
+        </form>
+
+        {{#if invites}}
+        <ul class="flow">
+        {{#each invites as |invite| }}
+            <li class="card flow">
+                <p class="type-caption">{{ invite.status }}</p>
+                {{!-- Bootstrap markers carry no roles, so the line is omitted rather than
+                      rendered empty. --}}
+                {{#if invite.roles}}
+                <p class="type-body-sm">
+                    Grants: <strong>{{ invite.roles }}</strong>
+                </p>
+                {{/if}}
+                <p class="type-body-sm">
+                    Created {{ formatDate invite.createdAt format="DATETIME_MED" }} by {{ invite.createdBy }}
+                </p>
+                <p class="type-body-sm">
+                    Expires {{ formatDate invite.expiresAt format="DATETIME_MED" }}
+                </p>
+                {{#ifEqual invite.status "pending"}}
+                {{!-- Revoke posts to its own route with the invite id as a hidden field;
+                      the CSRF token is shared across every form on this page. --}}
+                <form class="cluster" method="POST" action="{{ links.revokeInvite }}">
+                    {{#if form.csrf}}
+                    <input type="hidden" name="{{ form.csrf.fieldName }}" value="{{ form.csrf.token }}">
+                    {{/if}}
+                    <input type="hidden" name="invite_id" value="{{ invite.id }}">
+                    <button class="button button--secondary" type="submit">Revoke</button>
+                </form>
+                {{/ifEqual}}
+            </li>
+        {{/each}}
+        </ul>
+        {{else}}
+        <p class="type-body-sm">No invites yet. Create one to invite a new administrator.</p>
+        {{/if}}
+
+        {{!--
+            Pagination sits outside the list conditional on purpose. A later page
+            whose rows were all removed concurrently renders the empty state, and
+            nesting this inside would strip the "Previous page" link along with the
+            rows — stranding the operator on an empty page with no way back.
+        --}}
+        {{#if showPagination}}
+        <p class="cluster">
+            {{#if links.previousPage}}
+            <a class="button button--secondary" href="{{ links.previousPage }}">Previous page</a>
+            {{/if}}
+            {{#if links.nextPage}}
+            <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
+            {{/if}}
+        </p>
+        {{/if}}
+    </article>
+</main>

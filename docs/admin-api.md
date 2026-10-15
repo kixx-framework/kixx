@@ -1,7 +1,7 @@
 # Admin API v1
 
-The Admin API provides operator-only JSON endpoints for data migrations and
-publishing-token creation, plus a token-authenticated endpoint for redeeming a
+The Admin API provides operator-only JSON endpoints for data migrations, job
+queue inspection, and publishing-token creation, plus a token-authenticated endpoint for redeeming a
 one-time admin invite.
 
 The API is mounted at:
@@ -19,6 +19,10 @@ server origin.
 | --- | --- | --- | --- | --- |
 | `GET` | `/admin-api/v1/migrations` | Admin HTTP Basic | `urn:kixx:list` on `urn:kixx:admin:migrations` | List registered migrations and their durable status |
 | `POST` | `/admin-api/v1/migrations/:id/run` | Admin HTTP Basic | `urn:kixx:run` on `urn:kixx:admin:migrations` | Run one migration batch |
+| `GET` | `/admin-api/v1/jobs` | Admin HTTP Basic | `urn:kixx:list` on `urn:kixx:admin:jobs` | List queued, running, and finished jobs |
+| `GET` | `/admin-api/v1/jobs/:id` | Admin HTTP Basic | `urn:kixx:get` on `urn:kixx:admin:jobs` | Get one job |
+| `POST` | `/admin-api/v1/jobs/:id/retry` | Admin HTTP Basic | `urn:kixx:update` on `urn:kixx:admin:jobs` | Re-queue a failed job |
+| `GET` | `/admin-api/v1/job-schedules` | Admin HTTP Basic | `urn:kixx:list` on `urn:kixx:admin:jobs` | List recurring job schedules |
 | `POST` | `/admin-api/v1/users/invite` | Invite bearer token | None | Redeem an invite and create an admin account |
 | `POST` | `/admin-api/v1/publishing-api-tokens` | Admin HTTP Basic | `urn:kixx:create` on `urn:kixx:admin:api-tokens:publishing` | Mint a publishing API bearer token |
 
@@ -71,7 +75,8 @@ are ignored.
 
 ### Error documents
 
-Expected errors use a JSON:API error document:
+Expected errors use a JSON:API error document. A validation failure can
+return more than one error object:
 
 ```json
 {
@@ -87,63 +92,56 @@ Expected errors use a JSON:API error document:
 }
 ```
 
-`status` is a string. `source` is the form's field identifier for
-field-validation errors and may be omitted for other errors. Most identifiers
-match the JSON attribute; admin email validation uses `email_address` for the
-submitted `emailAddress` attribute. A validation failure can return more than
-one error object.
+`source` names the invalid field and may be omitted for other errors. It
+usually matches the JSON attribute, except admin email validation uses
+`email_address` for `emailAddress`.
 
-Common failures are:
+Common failures:
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `400` | `BAD_REQUEST_ERROR` | Invalid JSON, malformed JSON:API envelope, or invalid dry-run cursor |
+| `400` | `BAD_REQUEST_ERROR` | Invalid JSON, malformed JSON:API envelope, invalid query parameter, or invalid cursor |
 | `401` | `UNAUTHENTICATED_ERROR` | Required credentials are absent or malformed |
 | `401` | `InvalidCredentials` | Admin email or password was rejected |
 | `403` | `FORBIDDEN_ERROR` | Authenticated admin lacks the required permission |
-| `404` | `NOT_FOUND_ERROR` | A requested migration ID is not registered |
+| `404` | `NOT_FOUND_ERROR` | A requested migration or job ID does not exist |
 | `405` | `METHOD_NOT_ALLOWED_ERROR` | Method is not allowed on the recognized path |
 | `409` | `JsonApiResourceTypeMismatch` | Request resource type is wrong |
 | `415` | `UNSUPPORTED_MEDIA_TYPE_ERROR` | Request `Content-Type` is not JSON:API |
 | `422` | `VALIDATION_ERROR` | One or more attributes are invalid |
 
-Endpoint-specific errors are documented with their endpoints. Unexpected
-application or persistence failures are not part of the public contract; they
-are reported as server failures without exposing internal details.
+Endpoint-specific errors are listed with their endpoints. Unexpected failures
+return a generic server error without internal details.
 
 ## Admin authentication and authorization
 
-The migration and publishing-token endpoints authenticate every request using
-HTTP Basic credentials. The username is an admin email address and the password
-is the admin account password:
+Every endpoint except the invite endpoint uses HTTP Basic credentials: an admin
+email address and password.
 
 ```http
 Authorization: Basic <base64(email:password)>
 ```
 
-The email lookup is case-insensitive after trimming. Passwords are preserved
-exactly and may contain colons; the first decoded colon separates the username
-from the password. Missing, malformed, empty-username, and empty-password Basic
+The email is trimmed and case-insensitive. The first colon separates the
+email from the password, so passwords may contain colons. Missing, malformed, empty-username, and empty-password Basic
 credentials return `401`. An unknown email and an incorrect password return the
 same `InvalidCredentials` response to avoid account enumeration.
 
-After authentication, permissions are derived from the account's stored role
-IDs for the current request:
+Permissions come from the account's stored role IDs on every request:
 
-| Role | List/run migrations | Create publishing tokens |
+| Role | Migrations and jobs | Create publishing tokens |
 | --- | --- | --- |
 | `root-admin` | Yes | Yes |
 | `developer` | Yes | Yes |
 | `admin` | No | No |
 | `editor` | No | No |
 
-The role registry is the authority for these capabilities. Unknown stored role
-IDs grant no permissions.
+The role registry (`lib/app/permissions/roles.js`) is the authority. Unknown
+role IDs grant nothing.
 
-For protected write endpoints, authentication and authorization run before the
-body's media type, JSON shape, and attributes are checked. The invite endpoint
-checks the media type first, then the Bearer credential, JSON shape, invite
-state, and account attributes, in that order.
+Basic-auth endpoints authenticate and authorize before checking the body. The
+invite endpoint checks, in order: media type, Bearer credential, JSON shape,
+invite state, account attributes.
 
 ## List migrations
 
@@ -152,8 +150,7 @@ GET /admin-api/v1/migrations
 ```
 
 Returns every migration registered in the deployed build, in registry order.
-The registry controls visibility: retired or malformed ledger records that are
-not in the current registry are not returned.
+Ledger records for migrations not in the registry are not returned.
 
 ### Response
 
@@ -196,9 +193,8 @@ Migration attributes are:
 | `completedAt` | ISO date-time string or `null` | Time the run applied or failed |
 | `error` | string or `null` | Client-safe failure message for a failed run |
 
-`pending` is synthesized when a registered migration has no ledger record. Its
-nullable fields are all `null`. Dry runs never create or update ledger records,
-so they never change this endpoint's output.
+A migration with no ledger record is `pending` with all nullable fields
+`null`. Dry runs never write the ledger, so they never change this output.
 
 ### Example
 
@@ -214,11 +210,8 @@ POST /admin-api/v1/migrations/:id/run
 Content-Type: application/vnd.api+json
 ```
 
-One request runs exactly one bounded batch. A client must issue subsequent
-requests until the response has `done: true`.
-
-The `:id` path segment is the permanent migration ID from the list endpoint.
-An unregistered ID returns `404 Not Found`.
+One request runs one bounded batch. Repeat until the response has
+`done: true`. An unregistered `:id` returns `404`.
 
 ### Request
 
@@ -245,9 +238,9 @@ All attributes are optional:
 | `force` | boolean | `false` | Restart an applied or failed real run from the beginning |
 | `cursor` | non-empty string or `null` | `null` | Opaque caller-owned cursor for a dry run |
 
-`dryRun` and `force` cannot both be `true`. The cursor is ignored for a real
-run because real progress is loaded from the durable ledger. Do not parse or
-modify a dry-run cursor; return it unchanged in the next dry-run request.
+`dryRun` and `force` cannot both be `true` (`422` on `force`). Real runs
+ignore `cursor` and load progress from the ledger. Return a dry-run cursor
+unchanged; do not parse it.
 
 An empty attributes object starts or resumes a real run:
 
@@ -306,12 +299,13 @@ Content-Type: application/vnd.api+json; charset=utf-8
   preserved.
 - `force: true` resets an `applied` or `failed` migration to a fresh run. Its
   cursor, stats, batch count, start identity, and timestamps are reset.
+  `force` is ignored for a `running` migration, which resumes.
 - Running an already-applied migration without force returns `409` with code
   `MigrationAlreadyAppliedError`.
 
-Real batches use optimistic concurrency. When another operator advances the
-same migration first, the request returns `409` with code
-`MigrationConcurrencyError`; reload status and retry. If a real run's stored
+Real batches use optimistic concurrency (each write checks that nobody else
+changed the record first). If another operator advanced the migration, the
+request returns `409` with code `MigrationConcurrencyError`; reload and retry. If a real run's stored
 cursor is invalid, the ledger becomes failed and the request returns `409` with
 code `MigrationCursorConflictError`; restart it with `force: true`.
 
@@ -322,13 +316,11 @@ so migration implementations must be idempotent in case a batch is replayed.
 
 ### Dry-run lifecycle
 
-A dry run performs the migration's normal reads, selection, skip logic, and
-counting, but performs no application-data writes, external mutations, or
-ledger writes. Its response always has `status: "dry-run"`.
-
-Dry-run progress belongs entirely to the caller. Begin with `cursor: null`; if
-`done` is false, submit the returned cursor to the next dry-run request. An
-invalid dry-run cursor returns `400 Bad Request`.
+A dry run does the migration's normal reads and counting but no
+application-data, external, or ledger writes. Its `status` is always
+`dry-run`. The caller owns progress: start with `cursor: null` and pass each
+returned cursor to the next request until `done`. An invalid cursor returns
+`400`.
 
 ### Examples
 
@@ -350,6 +342,110 @@ curl --user 'admin@example.com:password' \
     http://localhost:2026/admin-api/v1/migrations/2026-07-17-example-noop/run
 ```
 
+## Jobs
+
+Inspect and recover background jobs. Job behavior (retries, backoff,
+retention) is described in `lib/app/jobs/README.md`.
+
+`lib/` is published separately, so that README keeps its own copy of these
+endpoints. Update both when either changes.
+
+### List jobs
+
+```http
+GET /admin-api/v1/jobs?status=failed&name=send-email&limit=50&cursor=<cursor>
+```
+
+Returns jobs newest first. All query parameters are optional; an empty value
+is treated as absent, and a repeated parameter returns `400`.
+
+| Parameter | Meaning |
+| --- | --- |
+| `status` | `pending`, `running`, `completed`, or `failed` |
+| `name` | Registered job name |
+| `limit` | Integer from 1 through 200; default 50 |
+| `cursor` | Opaque cursor from the previous page's `meta.cursor` |
+
+```json
+{
+    "data": [
+        {
+            "type": "Job",
+            "id": "<uuid>",
+            "attributes": {
+                "name": "send-email",
+                "key": null,
+                "scheduleName": null,
+                "payload": {},
+                "status": "failed",
+                "attempt": 3,
+                "maxAttempts": 3,
+                "runAt": "2026-10-13T12:00:00.000Z",
+                "scheduledFor": null,
+                "createdAt": "2026-10-13T11:59:00.000Z",
+                "updatedAt": "2026-10-13T12:00:05.000Z",
+                "finishedAt": "2026-10-13T12:00:05.000Z",
+                "lastError": {
+                    "name": "OperationalError",
+                    "message": "Upstream timed out",
+                    "expected": true
+                }
+            }
+        }
+    ],
+    "meta": {
+        "cursor": null
+    }
+}
+```
+
+`meta.cursor` is `null` on the last page. An invalid cursor returns `400`.
+
+### Get a job
+
+```http
+GET /admin-api/v1/jobs/:id
+```
+
+Returns one `Job` resource. An unknown or purged ID returns `404`.
+
+### Retry a job
+
+```http
+POST /admin-api/v1/jobs/:id/retry
+```
+
+No request body is needed. Resets a `failed` job to attempt 0, due now, and
+returns the re-queued `Job` resource. An unknown ID returns `404`. A job that
+is not `failed`, or whose dedupe key or schedule is held by an active job,
+returns `409` with code `CONFLICT_ERROR` and is left unchanged.
+
+### List job schedules
+
+```http
+GET /admin-api/v1/job-schedules
+```
+
+```json
+{
+    "data": [
+        {
+            "type": "JobSchedule",
+            "id": "<job-name>",
+            "attributes": {
+                "cron": "*/15 * * * *",
+                "nextRunAt": "2026-10-13T12:15:00.000Z",
+                "lastEnqueuedAt": "2026-10-13T12:00:00.000Z",
+                "lastJobId": "<uuid>"
+            }
+        }
+    ]
+}
+```
+
+`cron` is a UTC 5-field expression. `lastEnqueuedAt` and `lastJobId` are
+`null` before the first occurrence.
+
 ## Accept an admin invite
 
 ```http
@@ -358,8 +454,8 @@ Authorization: Bearer <invite-token>
 Content-Type: application/vnd.api+json
 ```
 
-This endpoint does not accept admin Basic credentials. The one-time invite
-bearer token is the credential.
+The one-time invite token is the credential; Basic credentials are not
+accepted.
 
 ### Request
 
@@ -371,7 +467,7 @@ The required resource type is `AdminUser`.
         "type": "AdminUser",
         "attributes": {
             "emailAddress": "new-admin@example.com",
-            "password": "at-least-16-characters"
+            "password": "at-least-12-chars"
         }
     }
 }
@@ -382,15 +478,13 @@ The required resource type is `AdminUser`.
 | `emailAddress` | Required string in a basic email-address shape; trimmed and lowercased before storage |
 | `password` | Required string, 12 to 256 characters; preserved exactly as submitted |
 
-The invite is resolved before account-field validation. An absent or malformed
-Bearer header returns `401`. An unknown, expired, revoked, already-used, or
-concurrently redeemed token returns the same `403` response with code
-`InvalidInvite`, preventing clients from probing invite state.
+An absent or malformed Bearer header returns `401`. An unknown, expired,
+revoked, used, or concurrently redeemed token returns the same `403` with code
+`InvalidInvite`, so clients can't probe invite state.
 
-Stored invites grant their configured roles. The deployment's
-`ADMIN_BOOTSTRAP_TOKEN`, when configured and unused, grants `root-admin`. The
-bootstrap token is also single-use: its consumption is recorded even while the
-environment value remains configured.
+Stored invites grant their configured roles. `ADMIN_BOOTSTRAP_TOKEN`, when
+configured and unused, grants `root-admin`. It is single-use: consumption is
+recorded even while the environment value stays configured.
 
 ### Response
 
@@ -421,14 +515,13 @@ assigned roles.
 
 - If the email already exists when checked, the response is `409` with code
   `NewUserConflictError`; the invite is not consumed.
-- The invite is consumed before the new user record is written. This guarantees
-  that one token cannot create two admins under concurrent redemption.
+- The invite is consumed before the user is written, so one token can't
+  create two admins under concurrent redemption.
 - If another signup claims the email between the initial check and user write,
   the response is `409` with code `InviteSpentInEmailRace`; the invite has been
   consumed and a new invite is required.
-- If the account write fails after invite consumption, the invite remains
-  consumed. The system intentionally does not reopen it because rollback could
-  allow one token to create multiple accounts.
+- If the account write fails after consumption, the invite stays consumed.
+  Reopening it could let one token create multiple accounts.
 
 ### Example
 
@@ -436,7 +529,7 @@ assigned roles.
 curl \
     --header 'Authorization: Bearer invite-secret' \
     --header 'Content-Type: application/vnd.api+json' \
-    --data '{"data":{"type":"AdminUser","attributes":{"emailAddress":"new-admin@example.com","password":"at-least-16-characters"}}}' \
+    --data '{"data":{"type":"AdminUser","attributes":{"emailAddress":"new-admin@example.com","password":"at-least-12-chars"}}}' \
     http://localhost:2026/admin-api/v1/users/invite
 ```
 
@@ -447,8 +540,8 @@ POST /admin-api/v1/publishing-api-tokens
 Content-Type: application/vnd.api+json
 ```
 
-Mints a bearer token for the separate Publishing API. The required resource
-type is `PublishingApiToken`.
+Mints a bearer token for the [Publishing API](publishing-api.md). The required
+resource type is `PublishingApiToken`.
 
 ### Request
 
@@ -473,9 +566,8 @@ All attributes are optional:
 | `timeToLiveSeconds` | integer | `2592000` (30 days) | From 1 through `31536000` (365 days), inclusive |
 | `description` | string or `null` | `null` | Trimmed; a blank string becomes `null` |
 
-An omitted, null, empty, or non-array `roles` value is normalized to
-`["editor"]`. An array containing any other value fails validation. An omitted
-or null TTL uses the default.
+An omitted, null, empty, or non-array `roles` becomes `["editor"]`; any other
+role fails validation. A null TTL uses the default.
 
 ### Response
 
@@ -501,10 +593,9 @@ Content-Type: application/vnd.api+json; charset=utf-8
 }
 ```
 
-The plaintext `token` appears only in this response and cannot be retrieved
-later. Store it before discarding the response. The persisted record ID and
-response `id` are the token's SHA-256 hex digest; plaintext is never persisted.
-If the plaintext is lost, mint a replacement.
+**The plaintext `token` appears only in this response.** It is never stored;
+the `id` is its SHA-256 hex digest. If it is lost, mint a replacement. Use the
+shortest practical TTL.
 
 ### Example
 
@@ -529,8 +620,7 @@ curl --user 'admin@example.com:password' \
    stats.
 
 Use `force` only to restart a failed migration from the beginning or to
-deliberately rerun an applied migration. A migration's data writes must be
-idempotent because forced runs and replay after interruption are supported.
+deliberately rerun an applied one.
 
 ### Bootstrap the first admin
 
@@ -538,10 +628,3 @@ idempotent because forced runs and replay after interruption are supported.
 2. Redeem it once through the invite endpoint.
 3. Remove the environment value after the root admin is created. The consumed
    marker prevents reuse even before removal.
-
-### Mint a publishing credential
-
-1. Authenticate as a `root-admin` or `developer`.
-2. Choose the shortest practical TTL and an operator-facing description.
-3. Create the token and capture its one-time plaintext value.
-4. Use that bearer token against the separate `/publishing-api/v1` API.
