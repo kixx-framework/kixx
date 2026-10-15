@@ -1,7 +1,7 @@
 import process from 'node:process';
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
-import { hashBlob } from '../../../kixx/content-addressable-store/addressing.js';
+import { hashBlob } from '../../kixx/content-addressable-store/addressing.js';
 import {
     createPublishingApiToken,
     getObjectStatus,

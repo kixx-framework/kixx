@@ -2,15 +2,15 @@
 //
 // These exercise the configured per-file limit with real bytes, which the e2e
 // runner's 10 second test ceiling cannot hold, so this is a standalone script
-// rather than a *.test.js file. It targets whatever the e2e suite targets:
+// rather than a *.test.js file. It targets whatever the e2e suite targets. Run
+// from test-app/:
 //
 //   E2E_TESTS_BASE_URL=... E2E_TESTS_ROOT_USERNAME=... E2E_TESTS_ROOT_PASSWORD=... \
-//     node test/end-to-end/100-admin-files/large-upload-checks.js
+//     node test/100-admin-files/large-upload-checks.js
 //
 // Fixture bytes are random and written to a temporary directory, then sent as
 // file-backed Blobs so neither this script nor the target has to hold a whole
 // upload in memory. Every file the script creates is deleted before it exits.
-// See docs/admin-files.md for what each check proves and how to record it.
 import process from 'node:process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';

@@ -20,7 +20,7 @@ const RUN_PREFIX = createRunPrefix();
 // assigned before this file executed and none needs restoring afterward —
 // unlike the running build in 060-running-build.test.js, retained history
 // for a synthetic build id is harmless (see the "What a run leaves behind"
-// section of test/end-to-end/README.md).
+// section of test/README.md).
 
 let releaseA;
 let releaseB;

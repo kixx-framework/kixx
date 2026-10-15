@@ -134,7 +134,7 @@ All commands run from the repo root.
 
 ### Task T2: Move the e2e suite into test-app/test
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1
 **Documentation:** None
 
@@ -172,12 +172,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `lib/test/end-to-end` does not exist. `test-app/test/` has all 34 files in the same layout, recorded by git as renames.
-- [ ] No moved file contains `../../../`. The rewritten imports resolve against a built copy.
-- [ ] No moved `.js` file mentions `test/end-to-end` or `docs/admin-files.md`.
-- [ ] All moved test files import without errors in a sandbox (no tests are executed).
-- [ ] The test-app lint command passes.
-- [ ] `git diff -M --stat` shows only the expected content edits. Assertions are untouched.
+- [x] `lib/test/end-to-end` does not exist. `test-app/test/` has all 34 files in the same layout, recorded by git as renames.
+- [x] No moved file contains `../../../`. The rewritten imports resolve against a built copy.
+- [x] No moved `.js` file mentions `test/end-to-end` or `docs/admin-files.md`.
+- [x] All moved test files import without errors in a sandbox (no tests are executed).
+- [x] The test-app lint command passes.
+- [x] `git diff -M --stat` shows only the expected content edits. Assertions are untouched.
 
 **Validation**
 
@@ -195,12 +195,12 @@ From the repo root:
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of T2.
+- Current state: Complete.
+- Remaining: Nothing.
+- Decisions and discoveries: No other stale path comments found in moved `.js` files. `large-upload-checks.js` header now says "Run from test-app/:" before the usage example.
+- Actual files changed: `lib/test/end-to-end/**` renamed to `test-app/test/**` (34 renames); content edits in `010-csrf/helpers.js`, `010-csrf/010-form-lifecycle.test.js`, `200-publishing-api/020-objects.test.js`, `200-publishing-api/030-releases.test.js`, `200-publishing-api/050-build-pointers.test.js`, `test-helpers/publishing-workflows.js`, `100-admin-files/large-upload-checks.js`.
+- Validation run: (1) `34`. (2) both greps empty. (3) staged stat: 34 renames (27 R100), 11 insertions/11 deletions across the 7 files above. (4) `loaded 22`, `exit=0`; `node --check` passed. (5) `lint exit=0`. (6) `node lib/run-tests.js`: 1846 tests passed.
 - Blockers: None.
 
 ---

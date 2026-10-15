@@ -1,7 +1,7 @@
 import process from 'node:process';
 import { URLSearchParams } from 'node:url';
 import { assertNonEmptyString } from 'kixx-assert';
-import { hashBlob } from '../../../kixx/content-addressable-store/addressing.js';
+import { hashBlob } from '../../kixx/content-addressable-store/addressing.js';
 import { loginRootAdmin } from './admin-workflows.js';
 import { assertHtmlCsrfToken } from './html.js';
 import { getBaseUrl } from './target-url.js';

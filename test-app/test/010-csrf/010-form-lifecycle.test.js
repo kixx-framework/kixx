@@ -1,7 +1,7 @@
 import { parseHTML } from 'parse-html-dom';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertNotEqual } from 'kixx-assert';
-import { CSRF_TOKEN_TTL_SECONDS } from '../../../app/presentation/lib/csrf.js';
+import { CSRF_TOKEN_TTL_SECONDS } from '../../app/presentation/lib/csrf.js';
 import { loginRootAdmin } from '../test-helpers/admin-workflows.js';
 import {
     assertCsrfCookie,
