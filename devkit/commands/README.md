@@ -121,11 +121,9 @@ config, so `type` (`'string'` or `'boolean'`), `short`, `multiple`, and
 only for help rendering. `--help` is added automatically; do not declare it.
 Negated boolean flags (`--no-foo`) are enabled for command options.
 
-**`positionals`** — Array of `{ name, description, required }` used to build
-the usage line and the `Arguments:` section of help. `required: false` renders
-the name in square brackets. This is documentation only: the runner does not
-enforce arity, so validate positionals inside `run()` and throw a `UsageError`
-when they are wrong.
+**No `positionals`.** The runner owns the only positional argument, the
+optional app directory, and uses it to find the project. Take every other
+value as an option. A unit test rejects a `positionals` declaration.
 
 **`requiredConfig`** — Dotted key paths which must be present in the merged
 `.kixx/config.json` layers.
@@ -151,8 +149,8 @@ constructor(args) {
 ```
 
 - `projectDirectory` — Directory owning the `.kixx` directory, discovered by
-  walking up from the working directory. Falls back to the working directory
-  when no project is found.
+  walking up from the directory argument (default: the working directory).
+  Falls back to that starting directory when no project is found.
 - `config` — Deeply frozen merge of `~/.kixx/config.json` and
   `<project>/.kixx/config.json`, project layer last.
 - `secrets` — Same merge for `secrets.json`.
@@ -169,12 +167,12 @@ omit the constructor entirely.
 ### run()
 
 ```js
-async run(options, ...positionals) {}
+async run(options) {}
 ```
 
-`options` is the parsed flag values; the rest are positional arguments. Return
-an integer to set the process exit code — `0` for success. A non-integer return
-leaves the exit code alone, which also means success.
+`options` is the parsed flag values. Return an integer to set the process exit
+code — `0` for success. A non-integer return leaves the exit code alone, which
+also means success.
 
 Write results to the injected `output` stream rather than to `process.stdout`
 directly, so a test can read what was written without replacing a global.

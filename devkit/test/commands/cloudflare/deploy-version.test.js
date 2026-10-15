@@ -16,11 +16,9 @@ const CLOUDFLARE_CONFIG = {
 
 describe('cloudflare deploy-version', ({ it }) => {
 
-    it('declares only --environment and an optional version id', () => {
-        assertEqual('environment', Object.keys(CloudflareDeployVersionCommand.options).join(','));
+    it('declares only --environment and --version-id', () => {
+        assertEqual('environment,version-id', Object.keys(CloudflareDeployVersionCommand.options).join(','));
         assertEqual('e', CloudflareDeployVersionCommand.options.environment.short);
-        assertEqual(1, CloudflareDeployVersionCommand.positionals.length);
-        assertEqual(false, CloudflareDeployVersionCommand.positionals[0].required);
         assertEqual('cloudflare.accountId,cloudflare.apiToken', CloudflareDeployVersionCommand.requiredSecrets.join(','));
         assertEqual(undefined, CloudflareDeployVersionCommand.requiredConfig);
     });
@@ -56,7 +54,7 @@ describe('cloudflare deploy-version', ({ it }) => {
         const fetchMock = makeCloudflareFetch({ bindings: [] });
         const output = captureOutput();
 
-        await makeCommand({ fetchMock, output }).run({ environment: 'production' }, 'v1');
+        await makeCommand({ fetchMock, output }).run({ environment: 'production', 'version-id': 'v1' });
 
         const text = output.chunks.join('');
         assertMatches('BUILD_ID:    (none)', text);

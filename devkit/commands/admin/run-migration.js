@@ -17,11 +17,8 @@ export default class AdminRunMigrationCommand {
         Run one bounded batch of a migration, in dry-run or real mode
     `;
 
-    static positionals = [
-        { name: 'id', description: 'Permanent migration id from list-migrations', required: true },
-    ];
-
     static options = {
+        migration: { type: 'string', short: 'm', description: 'Required permanent migration id from list-migrations' },
         environment: { type: 'string', short: 'e', description: 'Required application environment' },
         origin: { type: 'string', description: 'Override the configured Admin API origin' },
         'dry-run': { type: 'boolean', description: 'Preview one batch without mutating anything' },
@@ -35,9 +32,11 @@ export default class AdminRunMigrationCommand {
         this.#args = args ?? {};
     }
 
-    async run(options, id) {
+    async run(options) {
+        const id = options?.migration;
+
         if (!isNonEmptyString(id)) {
-            throw new UsageError('A migration id argument is required');
+            throw new UsageError('The --migration option is required');
         }
 
         const dryRun = options?.['dry-run'] ?? false;
@@ -116,8 +115,8 @@ function renderResult(migrationId, environment, result) {
 
     if (!done) {
         const next = dryRun
-            ? `kixx admin run-migration -e ${ environment } ${ migrationId } --dry-run --cursor ${ cursor }`
-            : `kixx admin run-migration -e ${ environment } ${ migrationId }`;
+            ? `kixx admin run-migration -e ${ environment } -m ${ migrationId } --dry-run --cursor ${ cursor }`
+            : `kixx admin run-migration -e ${ environment } -m ${ migrationId }`;
         text += `\nNext: ${ next }\n`;
     }
 

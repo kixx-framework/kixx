@@ -75,7 +75,7 @@ describe('kixx.js entry point', ({ it }) => {
     }, { timeout: TIMEOUT });
 
     it('rejects run-migration --yes as an unknown option', async () => {
-        const { code, stderr } = await runEntryPoint([ 'admin', 'run-migration', 'x', '-e', 'production', '--force', '--yes' ]);
+        const { code, stderr } = await runEntryPoint([ 'admin', 'run-migration', '-m', 'x', '-e', 'production', '--force', '--yes' ]);
 
         assertEqual(1, code);
         assertMatches('--yes', stderr);
@@ -151,6 +151,58 @@ describe('kixx.js entry point', ({ it }) => {
         } finally {
             await fsp.rm(directory, { recursive: true, force: true });
         }
+    }, { timeout: TIMEOUT });
+
+    it('shows the directory argument in command help', async () => {
+        const { code, stdout } = await runEntryPoint([ 'dev', 'start', '--help' ]);
+
+        assertEqual(0, code);
+        assertMatches('Usage: kixx dev start [options] [directory]', stdout);
+        assertMatches(/^ {2}directory {2}Application directory/m, stdout);
+    }, { timeout: TIMEOUT });
+
+    it('loads project config from the directory argument', async () => {
+        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-devkit-entry-'));
+
+        try {
+            await fsp.mkdir(path.join(directory, '.kixx'));
+            await fsp.writeFile(
+                path.join(directory, '.kixx', 'config.json'),
+                JSON.stringify({ app: { environments: { production: { origin: 'https://admin.example.test' } } } }),
+            );
+
+            const env = { ...process.env };
+            delete env.KIXX_ADMIN_EMAIL;
+            delete env.KIXX_ADMIN_PASSWORD;
+
+            // Reaching the credential prompt proves the origin came from the
+            // directory argument, since the cwd has no project config.
+            const { code, stderr } = await runEntryPoint(
+                [ 'admin', 'list-migrations', '-e', 'production', directory ],
+                { cwd: os.tmpdir(), env },
+            );
+
+            assertEqual(1, code);
+            assertMatches('KIXX_ADMIN_EMAIL', stderr);
+        } finally {
+            await fsp.rm(directory, { recursive: true, force: true });
+        }
+    }, { timeout: TIMEOUT });
+
+    it('rejects a directory argument which does not exist', async () => {
+        const { code, stderr } = await runEntryPoint([ 'admin', 'gen-secure-token', 'no-such-directory-here' ]);
+
+        assertEqual(1, code);
+        assertMatches('no-such-directory-here', stderr);
+        assertMatches('does not exist', stderr);
+        assert(!stderr.includes('Failed to run command'), 'printed as a crash');
+    }, { timeout: TIMEOUT });
+
+    it('rejects more than one positional argument', async () => {
+        const { code, stderr } = await runEntryPoint([ 'admin', 'gen-secure-token', '.', 'extra' ]);
+
+        assertEqual(1, code);
+        assertMatches('Unexpected argument "extra"', stderr);
     }, { timeout: TIMEOUT });
 
     it('runs admin gen-secure-token with a prefix', async () => {

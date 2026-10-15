@@ -228,10 +228,10 @@ safe to delete from the config.
 Routes 100% of traffic to an existing Worker version.
 
 ```sh
-kixx cloudflare deploy-version -e <env> [version-id]
+kixx cloudflare deploy-version -e <env> [--version-id <id>]
 ```
 
-The version defaults to the one recorded in
+`--version-id` defaults to the version recorded in
 `.kixx/cloudflare-state.<env>.json`. There is no content check and no
 `--force`; you decide what to deploy. If Cloudflare refuses the deployment
 (for example a rollback to a version created before a secret change), its

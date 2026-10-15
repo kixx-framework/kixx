@@ -8,7 +8,7 @@ child process on a free port. The app server restarts on the next request
 after a server-side file changes.
 
 ```sh
-kixx dev start [-p <port>] [-e <env>] [--dotenv <file>]
+kixx dev start [-p <port>] [-e <env>] [--dotenv <file>] [directory]
 ```
 
 | Option | Description |
@@ -18,8 +18,8 @@ kixx dev start [-p <port>] [-e <env>] [--dotenv <file>]
 | `--dotenv` | Dotenv file passed to `node-server.js`. Relative paths resolve against the current directory. |
 
 The app server is `node-server.js` in the project directory: the nearest
-ancestor with a `.kixx/` directory, or the working directory when there is
-none. It runs with the project directory as its working directory. A missing
+ancestor of `directory` (default: the working directory) with a `.kixx/`
+directory, or `directory` itself when there is none. It runs with the project directory as its working directory. A missing
 `node-server.js` is a usage error. So is a devserver port that is already in
 use; choose another with `--port`.
 

@@ -77,7 +77,7 @@ export default class DevStartCommand {
         if (!await this.#fileSystem.isFile(serverScript)) {
             throw new UsageError(
                 `No app server found at ${ serverScript }. ` +
-                'Run kixx dev start inside a Kixx application directory.',
+                'Pass a Kixx application directory, or run kixx dev start inside one.',
             );
         }
 

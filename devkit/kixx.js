@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import fsp from 'node:fs/promises';
+import path from 'node:path';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
 import commandModules from './commands/index.js';
@@ -10,6 +12,14 @@ import { loadCloudflareConfig } from './lib/cloudflare-config-loader.js';
 import { findMissingKeys, loadConfiguration } from './lib/config-loader.js';
 import { toCloudflareAuthUsageError } from './lib/cloudflare/cloudflare-auth-guidance.js';
 import manifest from './deno.json' with { type: 'json' };
+
+
+// Every command takes the same single positional, so the runner owns it
+// instead of each command declaring its own.
+const DIRECTORY_ARGUMENT = {
+    name: 'directory',
+    description: 'Application directory; defaults to the current directory',
+};
 
 
 function appendWrappedDescription(lines, description, initialPrefix) {
@@ -152,17 +162,39 @@ function appendRequiredSettings(lines, heading, keyPaths) {
     }
 }
 
-function createCommandUsage(commandName, subCommandName, positionals = []) {
-    const usageParts = [ commandName, subCommandName, '[options]' ];
+function createCommandUsage(commandName, subCommandName) {
+    return `${ commandName } ${ subCommandName } [options] [${ DIRECTORY_ARGUMENT.name }]`;
+}
 
-    for (const positional of positionals) {
-        const label = positional.required === false
-            ? `[${ positional.name }]`
-            : `<${ positional.name }>`;
-        usageParts.push(label);
+async function resolveStartDirectory(positionals) {
+    const [ directory, ...extraArguments ] = positionals;
+
+    if (extraArguments.length > 0) {
+        throw new UsageError(
+            `Unexpected argument "${ extraArguments[0] }". ` +
+            `Only one positional argument, the ${ DIRECTORY_ARGUMENT.name }, is accepted.`,
+        );
     }
 
-    return usageParts.join(' ');
+    if (directory === undefined) {
+        return undefined;
+    }
+
+    const startDirectory = path.resolve(directory);
+
+    let stats;
+
+    try {
+        stats = await fsp.stat(startDirectory);
+    } catch {
+        stats = null;
+    }
+
+    if (!stats?.isDirectory()) {
+        throw new UsageError(`The application directory ${ startDirectory } does not exist or is not a directory.`);
+    }
+
+    return startDirectory;
 }
 
 // Fails before the command is constructed so a command never runs partially
@@ -259,9 +291,9 @@ async function main() {
     if (args.values.help) {
         if (Command) {
             renderHelp({
-                usage: createCommandUsage(commandName, subCommandName, Command.positionals),
+                usage: createCommandUsage(commandName, subCommandName),
                 description: Command.description,
-                positionals: Command.positionals ?? [],
+                positionals: [ DIRECTORY_ARGUMENT ],
                 options: Command.options ?? {},
                 requiredConfig: Command.requiredConfig,
                 requiredSecrets: Command.requiredSecrets,
@@ -322,9 +354,11 @@ async function main() {
         throw new UsageError(`${ cause.message }\nRun "kixx ${ commandName } ${ subCommandName } --help" for usage.`, { cause });
     }
 
+    const startDirectory = await resolveStartDirectory(commandArgs.positionals);
+
     // Loaded here rather than at startup so help output and unresolved command
     // names still work in a directory holding a malformed config file.
-    const configuration = await loadConfiguration();
+    const configuration = await loadConfiguration({ startDirectory });
     let cloudflareConfig;
 
     if (commandName === 'cloudflare') {
@@ -355,7 +389,7 @@ async function main() {
     });
 
     try {
-        return await command.run(commandArgs.values, ...commandArgs.positionals);
+        return await command.run(commandArgs.values);
     } catch (error) {
         // An authentication failure is a configuration problem, not a crash.
         throw toCloudflareAuthUsageError(error, configuration.secretsFilepaths);

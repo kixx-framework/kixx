@@ -163,7 +163,7 @@ describe('dev start', ({ it }) => {
 
             assert(error instanceof UsageError, 'expected a UsageError');
             assertMatches(path.join(directory, 'node-server.js'), error.message);
-            assertMatches('inside a Kixx application directory', error.message);
+            assertMatches('Pass a Kixx application directory', error.message);
             assertEqual(0, created.length);
             assertEqual(0, signals.listenerCount('SIGINT'));
         }, { hasServer: false });

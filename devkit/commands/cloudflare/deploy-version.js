@@ -14,15 +14,11 @@ export default class CloudflareDeployVersionCommand {
             short: 'e',
             description: 'Required environment whose Worker version will be deployed',
         },
-    };
-
-    static positionals = [
-        {
-            name: 'version-id',
+        'version-id': {
+            type: 'string',
             description: 'Version to deploy; defaults to the version recorded in .kixx/cloudflare-state.<env>.json',
-            required: false,
         },
-    ];
+    };
 
     static requiredSecrets = [
         'cloudflare.accountId',
@@ -54,13 +50,13 @@ export default class CloudflareDeployVersionCommand {
         this.#createClient = createClient;
     }
 
-    async run(options, versionId) {
+    async run(options) {
         const result = await deployWorkerVersion({
             projectDirectory: this.#projectDirectory,
             environment: options?.environment,
             cloudflareConfig: this.#cloudflareConfig,
             apiClient: this.#createClient(this.#secrets.cloudflare),
-            versionId,
+            versionId: options?.['version-id'],
             fileSystem: this.#fileSystem,
         });
 

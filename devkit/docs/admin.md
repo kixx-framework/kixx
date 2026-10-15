@@ -117,11 +117,12 @@ Runs **one** bounded batch of a migration. Repeat the command until it prints
 line.
 
 ```sh
-kixx admin run-migration -e <env> <id> [--dry-run] [--cursor <cursor>] [--force] [--origin <url>]
+kixx admin run-migration -e <env> -m <id> [--dry-run] [--cursor <cursor>] [--force] [--origin <url>]
 ```
 
 | Option | Description |
 | --- | --- |
+| `-m`, `--migration` | Required migration id from `list-migrations` |
 | `--dry-run` | Preview one batch without changing anything |
 | `--cursor` | Dry-run cursor from a prior batch; only with `--dry-run` |
 | `--force` | Restart an applied or failed real run from the beginning |

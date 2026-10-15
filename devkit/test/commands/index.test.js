@@ -87,7 +87,9 @@ describe('commands/index.js registry', ({ it }) => {
                 assert(isNonEmptyString(Command.description?.trim()), `${ label } description`);
 
                 assertOptions(label, Command.options);
-                assertPositionals(label, Command.positionals);
+                // The runner owns the only positional (the app directory),
+                // so a declaration would silently do nothing.
+                assertEqual(undefined, Command.positionals, `${ label } positionals`);
 
                 for (const key of REQUIRED_SETTINGS_KEYS) {
                     assertKeyPaths(`${ label } ${ key }`, Command[key]);
@@ -116,18 +118,6 @@ function assertOptions(label, options) {
         );
         assert(!RESERVED_FLAG_NAMES.includes(flagName), `${ label } --${ flagName } is reserved`);
         assert(!RESERVED_SHORT_FLAGS.includes(option.short), `${ label } -${ option.short } is reserved`);
-    }
-}
-
-function assertPositionals(label, positionals) {
-    if (positionals === undefined) {
-        return;
-    }
-
-    assert(Array.isArray(positionals), `${ label } positionals is an array`);
-
-    for (const positional of positionals) {
-        assert(isNonEmptyString(positional.name), `${ label } positional name`);
     }
 }
 

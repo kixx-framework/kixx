@@ -6,7 +6,8 @@ Settings shared by the `app`, `cloudflare`, and `admin` commands.
 
 Settings live in a `.kixx` directory at two scopes: your home directory and
 the project directory. The project is the nearest directory containing
-`.kixx/`, found by walking up from the working directory (stopping at home).
+`.kixx/`, found by walking up from the directory argument, or the working
+directory when none is given (stopping at home).
 The project layer is merged over the home layer, so shared credentials can be
 written once in `~/.kixx` and each project records only what differs.
 

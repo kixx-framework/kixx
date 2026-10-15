@@ -29,7 +29,7 @@ describe('admin run-migration', ({ it }) => {
             },
         });
 
-        const code = await command.run({ environment: 'production' }, 'example-noop');
+        const code = await command.run({ environment: 'production', migration: 'example-noop' });
         const text = output.chunks.at(-1);
 
         assertEqual(0, code);
@@ -54,7 +54,7 @@ describe('admin run-migration', ({ it }) => {
             },
         });
 
-        const code = await command.run({ environment: 'production', force: true }, 'example-noop');
+        const code = await command.run({ environment: 'production', force: true, migration: 'example-noop' });
 
         assertEqual(0, code);
         assertEqual(true, received.force);
@@ -66,7 +66,7 @@ describe('admin run-migration', ({ it }) => {
         assertEqual(false, Object.hasOwn(AdminRunMigrationCommand.options, 'yes'));
 
         const caught = catchError(() => parseArgs({
-            args: [ 'example-noop', '--force', '--yes' ],
+            args: [ '-m', 'example-noop', '--force', '--yes' ],
             allowPositionals: true,
             allowNegative: true,
             options: AdminRunMigrationCommand.options,
@@ -83,7 +83,7 @@ describe('admin run-migration', ({ it }) => {
             client: { runMigration: async () => APPLIED },
         });
 
-        await command.run({ environment: 'production' }, 'example-noop');
+        await command.run({ environment: 'production', migration: 'example-noop' });
 
         assertMatches('Running on production (https://admin.example.test)', output.chunks[0]);
     });
@@ -101,7 +101,7 @@ describe('admin run-migration', ({ it }) => {
             },
         });
 
-        await command.run({ environment: 'production', 'dry-run': true, cursor: 'c-1' }, 'example-noop');
+        await command.run({ environment: 'production', 'dry-run': true, cursor: 'c-1', migration: 'example-noop' });
 
         assertEqual(true, received.dryRun);
         assertEqual('c-1', received.cursor);
@@ -112,7 +112,7 @@ describe('admin run-migration', ({ it }) => {
         const command = makeCommand({ client: {} });
 
         const caught = await catchAsyncError(() => {
-            return command.run({ environment: 'production', 'dry-run': true, force: true }, 'example-noop');
+            return command.run({ environment: 'production', 'dry-run': true, force: true, migration: 'example-noop' });
         });
 
         assertEqual('UsageError', caught?.name);
@@ -122,7 +122,7 @@ describe('admin run-migration', ({ it }) => {
         const command = makeCommand({ client: {} });
 
         const caught = await catchAsyncError(() => {
-            return command.run({ environment: 'production', cursor: 'abc' }, 'example-noop');
+            return command.run({ environment: 'production', cursor: 'abc', migration: 'example-noop' });
         });
 
         assertEqual('UsageError', caught?.name);
@@ -139,10 +139,10 @@ describe('admin run-migration', ({ it }) => {
             },
         });
 
-        await dryCommand.run({ environment: 'production', 'dry-run': true }, 'example-noop');
+        await dryCommand.run({ environment: 'production', 'dry-run': true, migration: 'example-noop' });
 
         assertMatches(
-            'Next: kixx admin run-migration -e production example-noop --dry-run --cursor cursor-2',
+            'Next: kixx admin run-migration -e production -m example-noop --dry-run --cursor cursor-2',
             dryOutput.chunks.at(-1),
         );
 
@@ -156,9 +156,9 @@ describe('admin run-migration', ({ it }) => {
             },
         });
 
-        await realCommand.run({ environment: 'production' }, 'example-noop');
+        await realCommand.run({ environment: 'production', migration: 'example-noop' });
 
-        assertMatches('Next: kixx admin run-migration -e production example-noop\n', realOutput.chunks.at(-1));
+        assertMatches('Next: kixx admin run-migration -e production -m example-noop\n', realOutput.chunks.at(-1));
     });
 
     it('renders distinct guidance for each migration conflict error', async () => {
@@ -180,7 +180,7 @@ describe('admin run-migration', ({ it }) => {
             });
 
             // eslint-disable-next-line no-await-in-loop
-            const caught = await catchAsyncError(() => command.run({ environment: 'production' }, 'example-noop'));
+            const caught = await catchAsyncError(() => command.run({ environment: 'production', migration: 'example-noop' }));
 
             assert(caught, `expected an error to be thrown for ${ ErrorClass.name }`);
             assertEqual('UsageError', caught.name);
@@ -188,12 +188,13 @@ describe('admin run-migration', ({ it }) => {
         }
     });
 
-    it('fails with a UsageError when the migration id argument is missing', async () => {
+    it('fails with a UsageError when --migration is missing', async () => {
         const command = makeCommand({ client: {} });
 
         const caught = await catchAsyncError(() => command.run({ environment: 'production' }));
 
         assertEqual('UsageError', caught?.name);
+        assertMatches('--migration', caught.message);
     });
 });
 

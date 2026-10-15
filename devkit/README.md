@@ -45,6 +45,9 @@ deno install -g -f -RWNE --allow-sys=homedir --allow-run jsr:@kixx/devkit/kixx
 
 Check the install with `kixx --version`. Every command has `--help`.
 
+Every command takes the app directory as an optional last argument, defaulting
+to the current directory: `kixx dev start ../my-app`.
+
 Commands
 --------
 
