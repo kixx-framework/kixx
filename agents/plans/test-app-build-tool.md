@@ -18,6 +18,8 @@ Implementation Approach
 8. **Git tracking.** `test-app/.gitignore` ignores everything except `README.md`, `.gitignore`, `.env.development`, `.env.production`, the two context files, and `.kixx/`. `.kixx/secrets.json` and `.env.*.secrets` are always ignored. Reason: commit config but never secrets.
 9. **No automated tests or linting for `tools/`** (operator's choice). Validation is manual: run the tool against a disposable sandbox copy of the repo with valid and deliberately broken fixtures. Do not add `tools/` to any test or lint runner.
 
+Note: `agents/plans/test-app-e2e-tests.md` supersedes the package.json part of Decision 3 (lib's package.json is no longer copied; test-app has its own) and extends the keep list in Decision 1 with `package.json`, `package-lock.json`, `node_modules/`, `run-tests.js`, and `test/`.
+
 ### Cross-cutting constraints
 
 - **Out of scope:** deployment tooling. Do not modify `lib/`. If a lib change seems necessary, stop and record it as a blocker.

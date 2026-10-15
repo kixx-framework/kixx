@@ -4,7 +4,8 @@
  * Validates test-app's env, secrets, .kixx/, and config context files against
  * lib's manifests and examples, then renders both config templates in memory.
  * Only when every check and render passes does it wipe test-app/ (keeping its
- * config and secrets), copy lib/ into it, and write the hydrated configs.
+ * config, secrets, and e2e test harness), copy lib/ into it, and write the
+ * hydrated configs.
  *
  * Usage: node tools/build-test-app.js
  */
@@ -48,20 +49,28 @@ const CONFIGS = [
     },
 ];
 
-// Top-level test-app/ entries that survive the wipe: hand-authored config and secrets.
+// Top-level test-app/ entries that survive the wipe: hand-authored config,
+// secrets, and the e2e test harness with its installed dependencies.
 const KEEP_NAMES = new Set([
     'README.md',
     '.gitignore',
     'node-config-test-context.json',
     'cloudflare-config-test-context.json',
     '.kixx',
+    'package.json',
+    'package-lock.json',
+    'node_modules',
+    'run-tests.js',
+    'test',
 ]);
 
 // Top-level lib/ entries never copied. Contexts and .gitignore would clobber
 // test-app's own; templates and checked-in configs are replaced by the
-// hydrated output; the rest are dev-only or deploy-tool artifacts.
+// hydrated output; package.json is test-app's own (it still sets ESM); the
+// rest are dev-only or deploy-tool artifacts.
 const EXCLUDED_NAMES = new Set([
     '.kixx',
+    'package.json',
     'test',
     '.gitignore',
     'cloudflare-config.jsonc',

@@ -1,7 +1,8 @@
 # Ignore everything: code here is copied from lib/ by tools/build-test-app.js.
 /*
 
-# Track only hand-authored, non-secret config.
+# Track only hand-authored, non-secret config and the e2e test harness.
+# node_modules/ stays ignored by the rule above.
 !/README.md
 !/.gitignore
 !/.env.development
@@ -9,6 +10,10 @@
 !/node-config-test-context.json
 !/cloudflare-config-test-context.json
 !/.kixx/
+!/package.json
+!/package-lock.json
+!/run-tests.js
+!/test/
 
 # Don't track configs
 /.kixx/config.json
