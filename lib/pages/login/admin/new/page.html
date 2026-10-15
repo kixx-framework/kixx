@@ -1,4 +1,20 @@
 <div class="center center--form flow">
+{{#if signedInAs}}
+    <header class="admin-content-section__header">
+        <h2>Already logged in</h2>
+        <p>You&rsquo;re logged in as <strong>{{ signedInAs.emailAddress }}</strong>.</p>
+    </header>
+
+    {{!--
+        Switching accounts posts to the logout route, which ends this session
+        before returning here with an empty login form.
+    --}}
+    <form class="cluster" method="post" action="{{ logoutForm.url }}">
+        <input type="hidden" name="{{ logoutForm.csrf.fieldName }}" value="{{ logoutForm.csrf.token }}">
+        <a class="button button--primary" href="{{ adminPanelLink }}">Go to the admin panel</a>
+        <button class="button button--secondary" type="submit">Log in as a different account</button>
+    </form>
+{{else}}
     <header class="admin-content-section__header">
         <h2>Log in</h2>
         <p>Sign in to the admin panel.</p>
@@ -103,4 +119,5 @@
     <p class="type-body-sm">
         Don&rsquo;t have an admin account? Contact your site administrator to get one.
     </p>
+{{/if}}
 </div>
