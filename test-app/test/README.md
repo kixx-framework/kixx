@@ -5,18 +5,27 @@ End-to-end tests drive a running instance of the application over HTTP. They
 do not start a server themselves — point them at one with a target flag or
 `--base-url`.
 
+## Prerequisites
+
+- A built `test-app/`: `node tools/build-test-app.js` from the repo root.
+- Test dependencies: `npm install` in `test-app/`.
+- A running or deployed target. For `--development`, start the local server
+  with `node node-server.js` from `test-app/`.
+
 ## Quick start
+
+Run from `test-app/`:
 
 ```bash
 # Against the local Node.js server (node node-server.js)
-node run-tests.js --e2e --development
+node run-tests.js --development
 
 # Against a deployed target
-node run-tests.js --e2e --cloudflare
-node run-tests.js --e2e --nodejs
+node run-tests.js --cloudflare
+node run-tests.js --nodejs
 
 # Against an arbitrary target
-node run-tests.js --e2e --base-url https://example.test/ --username example-user --password 'example-password'
+node run-tests.js --base-url https://example.test/ --username example-user --password 'example-password'
 ```
 
 ## Required configuration
@@ -38,8 +47,7 @@ Missing any of the three at run time is a startup error, not a per-test
 failure. CLI overrides are independent: any value not given on the command
 line continues to come from the existing environment.
 
-These options are only valid with `--e2e`; using them without it is a usage
-error. Each option may appear only once per run.
+Each option may appear only once per run.
 
 ## Selecting a target
 
@@ -49,7 +57,7 @@ may be used in a run — combining two is a usage error.
 | Flag | Sets `E2E_TESTS_BASE_URL` to | Implications |
 | --- | --- | --- |
 | `--development` | `http://localhost:2026/` | The developer content store is read-only. Every Publishing API test that would upload an object or create a Release is disabled instead of failing (see below). |
-| `--cloudflare` | `https://cloudflare.kixx-testing.dev/` | A real deployed target: writes persist, and `060-running-build.test.js` touches its actual running build. |
+| `--cloudflare` | `https://kixx-test-app.kixx.workers.dev/` | A real deployed target: writes persist, and `060-running-build.test.js` touches its actual running build. |
 | `--nodejs` | `https://nodejs.kixx-testing.dev/` | Same as `--cloudflare`. |
 | `--base-url <url>` | The given URL | Treated as a live target, not developer mode, even when the URL points at localhost. Only `--development` enables the read-only skips. |
 
@@ -61,21 +69,20 @@ leading or trailing whitespace, whether it came from a flag or from
 
 ```bash
 # Run everything in the end-to-end suite
-node run-tests.js --e2e --development
+node run-tests.js --development
 
 # Run specific files or directories
-node run-tests.js --e2e --development test/end-to-end/010-csrf
-node run-tests.js --e2e --development test/end-to-end/010-csrf/010-form-lifecycle.test.js
+node run-tests.js --development test/010-csrf
+node run-tests.js --development test/010-csrf/010-form-lifecycle.test.js
 
 # Exclude a file or directory from the run
-node run-tests.js --e2e --development --skip test/end-to-end/200-publishing-api/060-running-build.test.js
+node run-tests.js --development --skip test/200-publishing-api/060-running-build.test.js
 ```
 
 A directory argument is walked recursively; only `*.test.js` files run, other
 extensions are ignored. Every positional and `--skip` pathname must resolve
-inside `test/end-to-end/` — a pathname from the unit-test tree, or outside
-either suite, is a usage error rather than a silent no-op. This is what stops
-a forgotten or misspelled `--e2e` from quietly running the wrong suite.
+inside `test/` (`test-app/test/`) — a pathname outside it, such as lib's unit
+tests, is a usage error rather than a silent no-op.
 
 Test files are loaded in ascending order of their absolute pathname, compared
 by UTF-16 code unit rather than locale-aware collation, so load order does
@@ -102,7 +109,7 @@ it. See each directory for what it covers.
 | `010-csrf/` | Fetch-based checks of server responses and cookie attributes — not a browser's `SameSite=Lax` enforcement. Normal runs do not wait 30 minutes, rotate the signing secret, or restart the app without that secret. |
 | `050-admin-panel/` | Admin-panel HTML workflows. No target-specific caveats. |
 | `100-admin-files/` | Admin file library over HTTP. Writes to the target's document and object stores and deletes what it creates; see below. |
-| `200-publishing-api/` | See below — this directory changes behavior with `--development` and has two files that mutate the running build. |
+| `200-publishing-api/` | See below — this directory changes behavior with `--development` and has a file that mutates the running build. |
 | `300-admin-data-api/` | Admin Data API tokens and File CRUD. Needs a writable target; see below. |
 
 ### Admin files: fixtures and large uploads
@@ -116,17 +123,17 @@ the upload page, so routine boundary checks send small bodies with declared
 sizes rather than real 50 MiB files.
 
 Real-size uploads do not fit the 10 second test timeout, so they live in a
-standalone script that uses the same environment variables:
+standalone script that uses the same environment variables. Run it from
+`test-app/`:
 
 ```bash
-node test/end-to-end/100-admin-files/large-upload-checks.js
+node test/100-admin-files/large-upload-checks.js
 ```
 
 It uploads a zero-byte file, a file at exactly the configured limit (read
 back and hash-checked), three limit-size files at once, two limit + 1
 uploads, and a connection that drops after half its declared bytes. It
-deletes what it created. [`docs/admin-files.md`](../../docs/admin-files.md)
-lists the expected results.
+deletes what it created.
 
 ### Admin Data API: fixtures and leftovers
 
@@ -147,7 +154,7 @@ and Developer accounts it invites to check who may manage tokens.
 Because the developer content store is read-only, every `200-publishing-api/`
 test that would upload an object or create a Release is disabled under
 `--development`: `020-objects.test.js`, `050-build-pointers.test.js`, and
-`060-running-build.test.js`, and `070-admin-assignment.test.js` in full, plus both Release `describe` blocks in
+`060-running-build.test.js` in full, plus both Release `describe` blocks in
 `030-releases.test.js`. Release verification requires persisted-object metadata
 even when the expected result is a missing-object error. The exceptions which
 run unconditionally are `010-authentication.test.js` and
@@ -181,19 +188,6 @@ compare-and-swap safety net, not a distributed lock. Avoid running this file
 concurrently with itself against the same target, or overlapping it with a
 real deploy, when a deterministic result matters.
 
-### Publishing API: `070-admin-assignment.test.js` verifies stale HTML forms
-
-This file also mutates the running build and requires an already seeded target
-with the admin templates available. It captures the overview and Release-detail
-forms, assigns A→B→A using JSON tokens, and verifies both old forms redirect to
-the conflict notice without changing the restored pointer. B is a temporary
-content Release; admin pages can be unavailable until A is restored.
-
-If setup fails while B is assigned, its `after` hook restores A using only the
-identity from this test's successful B assignment. A concurrent writer causes
-cleanup to fail rather than overwrite newer state. Do not run this file
-concurrently with a deploy or another running-build test against the same target.
-
 ### What a run leaves behind
 
 A successful run against a deployed target does not delete anything it
@@ -203,7 +197,7 @@ Release and Activation metadata accumulate without limit, build pointers
 created under a run-generated build id are never cleaned up, and minted
 Publishing API tokens keep their normal expiry rather than being revoked by
 the test. The running build's pointer is touched by
-`060-running-build.test.js` and `070-admin-assignment.test.js`, which restore
-its original Release conditionally as described above. Routine cleanup between runs is unnecessary — UUID-namespaced run
+`060-running-build.test.js`, which restores its original Release
+conditionally as described above. Routine cleanup between runs is unnecessary — UUID-namespaced run
 prefixes keep each run's fixture pathnames and build ids from colliding with
 real content or with each other.

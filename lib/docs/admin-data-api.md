@@ -365,8 +365,8 @@ This resource edits File **records** only:
 
 ### Verification
 
-`test/end-to-end/300-admin-data-api/` exercises this contract against a
-running target: tokens created and revoked through the admin panel, scoped
+The e2e suite in `test-app/test/300-admin-data-api/` (from the repo root)
+exercises this contract against a running target: tokens created and revoked through the admin panel, scoped
 grants, every File operation, stale versions and two concurrent writers, and
 byte checks after every repoint and delete. The deterministic race in which a
 write lands between load and persist is covered by the unit tests in

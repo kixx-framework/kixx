@@ -352,7 +352,7 @@ From the repo root:
 
 ### Task T5: Update docs for the test-app e2e workflow
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1, T2, T3, T4
 **Documentation:** All files listed below
 
@@ -389,10 +389,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The stale-reference grep below prints only the expected devkit line.
-- [ ] `test-app/README.md` documents the four-step release workflow and the tracked and kept files.
-- [ ] `test-app/test/README.md` commands are runnable as written from `test-app/` (review only; do not run them).
-- [ ] Docs only; no code changes.
+- [x] The stale-reference grep below prints only the expected devkit line.
+- [x] `test-app/README.md` documents the four-step release workflow and the tracked and kept files.
+- [x] `test-app/test/README.md` commands are runnable as written from `test-app/` (review only; do not run them).
+- [x] Docs only; no code changes.
 
 **Validation**
 
@@ -405,12 +405,12 @@ From the repo root:
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of T5.
+- Current state: Complete.
+- Remaining: Operator runbook below.
+- Decisions and discoveries: `devkit/commands/README.md` names no test-app deploy commands, so step 2 of the release workflow says "deploy" generically. Per R2, also changed the suites table's "has two files that mutate the running build" to one file (the second was `070-admin-assignment.test.js`), and fixed a doubled "and" left by the removal.
+- Actual files changed: `test-app/test/README.md`, `test-app/README.md`, `lib/test/unit-tests/README.md`, `lib/docs/admin-data-api.md`, `README.md`.
+- Validation run: stale-reference grep printed only `devkit/test/run-tests.test.js:33` and `:36`; `kixx-test-app.kixx.workers.dev` matched in both files; `node lib/run-tests.js` 1846 passed `exit=0`; `node lib/run-linter.js lib` `exit=0`; each edited doc reviewed against T1–T4.
 - Blockers: None.
 
 ---
