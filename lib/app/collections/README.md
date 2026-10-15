@@ -162,19 +162,20 @@ await users.updateWithRetry(context, user, (latest) => {
 ### Reading
 
 - **`get(context, id)`** — One document, or `null`.
-- **`scan(context, options)`** — Page ordered by the primary `sortKey`.
+- **`scan(context, options)`** — Page ordered by the primary `sortKey`, or by the store-assigned `createdAt` with `orderBy: 'createdAt'`.
 - **`query(context, options)`** — Page ordered by the secondary index named in `options.index`.
 
 `scan()` and `query()` return `{ items, cursor }`. Options:
 
+- `orderBy` — Scan only. `'sortKey'` (default) or `'createdAt'`. Ties are ordered by id.
 - `limit` — Positive integer, default `100`.
 - `descending` — Defaults to `false`.
 - `cursor` — Opaque token from the previous page. `null` or omitted starts at page one. The returned `cursor` is `null` on the last page.
-- `equalTo`, or range bounds `greaterThan`, `greaterThanOrEqualTo`, `lessThan`, `lessThanOrEqualTo`. `equalTo` cannot be combined with range bounds.
+- `equalTo`, or range bounds `greaterThan`, `greaterThanOrEqualTo`, `lessThan`, `lessThanOrEqualTo`. `equalTo` cannot be combined with range bounds. They apply to the ordering column or index. Under `orderBy: 'createdAt'` they must be exact `Date#toISOString()` strings; anything else throws `AssertionError`, so validate user input first.
 
-Cursors are HMAC-signed by the `DocumentStore` and bound to the method, type, index, direction, and range options that produced them. A tampered, foreign, or replayed cursor throws `InvalidCursorError`. `limit` is not bound and may change between pages.
+Cursors are HMAC-signed by the `DocumentStore` and bound to the method, type, index, ordering column, direction, and range options that produced them. A tampered, foreign, or replayed cursor throws `InvalidCursorError`. `limit` is not bound and may change between pages.
 
-For prefix matches, spread `sortKeyPrefixRange(prefix)` from `kixx/document-store/document-store.js`. It only covers every match when keys are BMP-only (ASCII, ISO timestamps, etc.). Documents without a key are excluded.
+For prefix matches on a sort key or index, spread `sortKeyPrefixRange(prefix)` from `kixx/document-store/document-store.js`. It only covers every match when keys are BMP-only (ASCII, ISO timestamps, etc.). Documents without a key are excluded.
 
 ```js
 const { items } = await this.query(context, {
@@ -191,7 +192,7 @@ const { items } = await this.query(context, {
 ### IDs and Sort Keys
 
 - **`generateUniqueId(attributes)`** — Defaults to `crypto.randomUUID()`. Override it for derived ids (usernames, slugs, hashes), counters, or id services.
-- **`generateSortKey(doc)`** — Defaults to `doc.sortKey` (from Record metadata) or `undefined`. Override it to compute one. It must return a string, `null`, or `undefined`; anything else throws `AssertionError`. Sort keys compare as strings, so format them to sort correctly as text (zero-padded numbers, ISO dates). Range scans only make sense when every document has a sort key.
+- **`generateSortKey(doc)`** — Defaults to `doc.sortKey` (from Record metadata) or `undefined`. Override it to compute one. It must return a string, `null`, or `undefined`; anything else throws `AssertionError`. Sort keys compare as strings, so format them to sort correctly as text (zero-padded numbers, ISO dates). Range scans by sort key only make sense when every document has one. `orderBy: 'createdAt'` needs no sort key.
 
 ### Secondary Indexes
 
