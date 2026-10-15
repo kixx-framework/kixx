@@ -2,6 +2,18 @@
             <div class="admin-header__inner cluster">
                 <a class="admin-header__title" href="/admin">Site Admin</a>
                 <div class="admin-header__controls cluster">
+                    {{!--
+                        adminAccount is set by the provideAdminLogoutForm middleware
+                        on admin panel routes. Logout is a CSRF-protected POST so
+                        another site cannot log the admin out with a plain link.
+                    --}}
+                    {{#if adminAccount}}
+                    <span class="type-body-sm">{{ adminAccount.emailAddress }}</span>
+                    <form method="post" action="{{ adminAccount.logoutForm.url }}">
+                        <input type="hidden" name="{{ adminAccount.logoutForm.csrf.fieldName }}" value="{{ adminAccount.logoutForm.csrf.token }}">
+                        <button class="button" type="submit">Log out</button>
+                    </form>
+                    {{/if}}
                     <button class="button theme-toggle" type="button" data-js-behavior="theme-toggle" aria-label="Switch color theme">
                         <span class="theme-toggle__label">dark</span>
                     </button>

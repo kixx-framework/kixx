@@ -1,16 +1,22 @@
 <div class="center center--form flow">
-{{#if alreadyLoggedIn}}
+{{#if signedInAs}}
     <header class="admin-content-section__header">
         <h2>Already logged in</h2>
+        <p>You&rsquo;re logged in as <strong>{{ signedInAs.emailAddress }}</strong>. Log out to create a new account with this invite.</p>
     </header>
 
-    <div class="callout callout--warning" role="alert">
-        <span class="callout__icon" aria-hidden="true">[!]</span>
-        <div class="callout__body flow">
-            <p class="callout__title">Admin session active</p>
-            <p class="type-body-sm">You are already logged in as an admin user. Delete your cookies for this site and try again.</p>
-        </div>
-    </div>
+    {{!--
+        logoutForm.returnTo carries this invite URL, so logging out lands back
+        here with the signup form instead of on the login page.
+    --}}
+    <form class="cluster" method="post" action="{{ logoutForm.url }}">
+        <input type="hidden" name="{{ logoutForm.csrf.fieldName }}" value="{{ logoutForm.csrf.token }}">
+        {{#if logoutForm.returnTo}}
+        <input type="hidden" name="{{ logoutForm.returnTo.fieldName }}" value="{{ logoutForm.returnTo.value }}">
+        {{/if}}
+        <a class="button button--primary" href="{{ adminPanelLink }}">Go to the admin panel</a>
+        <button class="button button--secondary" type="submit">Log out</button>
+    </form>
 {{else}}
 {{#if inviteValid}}
     <header class="admin-content-section__header">
