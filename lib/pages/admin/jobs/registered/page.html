@@ -41,7 +41,7 @@
             <h2 id="run-{{ job.name }}-heading">Run {{ job.name }} now</h2>
             <p class="type-body-sm">Queues one run due now, outside any schedule (the handler sees <code>scheduledFor: null</code>). Only one manual run of a job can be pending or running at a time.</p>
 
-            <form method="post" action="{{ job.form.url }}">
+            <form class="flow field-stack" method="post" action="{{ job.form.url }}">
                 <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
                 <input type="hidden" name="name" value="{{ job.form.fields.name.value }}">
 
