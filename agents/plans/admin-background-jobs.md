@@ -30,7 +30,7 @@ These are not operator decisions. A later agent may revise one, but must record 
 
 - **Read and Retry handlers call `context.getService('JobQueue')` directly**, as the Admin API handlers do (`lib/app/presentation/request-handlers/admin-api/{list-jobs,get-job,retry-job,list-job-schedules}.js`). `lib/app/transaction-scripts/README.md` ("When Not to Write One") allows this when the service owns the whole operation and no business policy applies, and that is true of list, get, retry, and listSchedules.
 - **Registry projection and Run now are Transaction Scripts** in a new `lib/app/transaction-scripts/jobs/` group. Run now adds business rules: it rejects a name that is not registered, owns the `admin-run:<name>` dedupe-key policy, and decides which enqueue errors are expected. Without a check first, an unregistered name is an `AssertionError` inside `enqueue()`, which would crash the request. The scripts README puts anything that enforces a rule or classifies errors in a script. The registry projection lives beside it so that one group owns "what is registered".
-  - `jobs/lib.js` exports `getResolvedJobRegistry()`, which returns `validateJobRegistry(jobs)`. `validateJobRegistry` comes from `lib/kixx/jobs/job-registry.js`, which is framework code and allowed in `app/`; `jobs` comes from `lib/app/jobs/mod.js`. Resolving defaults through `validateJobRegistry` keeps the shown `maxAttempts`/`timeoutSeconds` identical to what the queue uses, with no duplicated constants. The panel never reads the registry back from the queue, and no getter is added to the port (Decision 7).
+  - `listRegisteredJobs` calls `validateJobRegistry(jobs)` itself. `validateJobRegistry` comes from `lib/kixx/jobs/job-registry.js`, which is framework code and allowed in `app/`; `jobs` comes from `lib/app/jobs/mod.js`. Resolving defaults through `validateJobRegistry` keeps the shown `maxAttempts`/`timeoutSeconds` identical to what the queue uses, with no duplicated constants. `runJobNow` needs only `jobs.has(name)`: the registry was already validated at boot (`lib/app/app.js`), and its keys are the names. So there is no shared `lib.js` helper. The panel never reads the registry back from the queue, and no getter is added to the port (Decision 7).
   - `listRegisteredJobs(context)` and `runJobNow(context, { name, payload })` are the scripts. Like `createAdminInvite(context, { createdBy, roleId: form.role_id })`, the handler passes plain values from a validated Form.
 - **Tests register fixture jobs by temporarily adding entries to the exported `jobs` Map**, always removing them in `finally`. The shipped registry is empty, and `lib/test/app/jobs/mod.test.js` asserts that it stays empty. Each test file that needs a registered job defines a local `withRegisteredJobs(entries, fn)` helper that sets the raw entries, awaits `fn()`, and deletes them in `finally`. Tests run sequentially in one process, so this leaks nothing as long as the `finally` is never skipped. Rejected alternatives: an optional `registry` argument on the scripts, and an app-level `JobRegistry` service. Both add production surface only for tests.
 - **URL layout nests every page under `/admin/jobs`.** The routes, in order, all before `{/}` and `*`:
@@ -54,8 +54,8 @@ These are not operator decisions. A later agent may revise one, but must record 
   - The name is not checked in the form. `runJobNow` owns that rule (see the handler flow in T6).
 - **The 128 KB limit is not pre-checked.** The queue's `PayloadTooLargeError` is the only source of the limit (`MAX_PAYLOAD_BYTES` in `job-state-store.js`). It works on both platforms: the Cloudflare adapter restores the class by name over RPC (`plugins/cloudflare-job-queue/lib/job-queue.js`). The handler turns it into a field error on `payload` and responds with status 413. A size check on the submitted text would also be wrong, because whitespace in pretty-printed input is not in the serialized size.
 - **The Run now payload may be any JSON value**, including `null`, arrays, and scalars, because `enqueue()` accepts `*`. The handler for a scheduled job receives `scheduledFor: null` on a Run now. The help text says so.
-- **Notice text lives in one presentation module**, `lib/app/presentation/lib/job-notices.js`. It follows `migration-run-outcomes.js`: frozen `{ code, tone, role, title, message }` objects, a per-page allow-list, and a getter that discards unknown or disallowed codes. Its few lines of setup (`ROLE_FOR_TONE`, `defineNotice`) are duplicated rather than shared, so the completed migrations module is not touched.
-- **Jobs-list filter validation follows the pagination and Admin API conventions.** An unknown `status`, or a repeated `status` or `name` parameter, throws `BadRequestError`, which renders the standard 400 admin error page with its message. That is what `getCursorPaginationQueryParams` does for a bad cursor, and what `list-jobs.js` does for the API. A rejected cursor is also mapped to `BadRequestError`: the queue throws `ValidationError('cursor is invalid')`, not `InvalidCursorError`, so `rethrowInvalidCursorAsBadRequest` does not apply. Branch on `error.name === 'ValidationError'`, never `instanceof`. Status and limit are validated before the call, so any `ValidationError` from `list()` can only be the cursor. An empty value means no filter, and `name` is trimmed. The status filter is a `<select>` (Any, pending, running, completed, failed). The name filter is a text input with a `<datalist>` of registered names, because stored jobs may carry names that are no longer registered.
+- **Notice text lives privately in the handler module**, `admin-jobs.js`, not in a separate presentation module. The other admin handlers with notices keep a private allow-list `Set` too (`ALLOWED_FILE_NOTICES` in `admin-files.js`, `ALLOWED_TOKEN_NOTICES` in `admin-data-api-tokens.js`). Migrations has a separate module only because its HTML and JSON paths share it; jobs has one consumer. The module holds a frozen `NOTICES` table of `{ code, tone, role, title, message }` objects (the shape the shared `admin/notice.html` partial renders), one allow-list `Set` per page, and a private `getNotice(raw, allowed)` that returns `null` unless `allowed.has(raw)`. Do not add `lib/app/presentation/lib/job-notices.js`, and do not touch `migration-run-outcomes.js`.
+- **Jobs-list filter validation is left to the queue**, as in the Admin API's `list-jobs.js`. The handler only rejects a repeated `status` or `name` parameter (an array) with `BadRequestError`, treats a blank value as no filter, and trims `name`. Every `ValidationError` from `queue.list()` (bad status or bad cursor; `job-state-store.js` `list()`) becomes `BadRequestError(cause.message, { cause })`, which renders the standard 400 admin error page. Branch on `error.name === 'ValidationError'`, never `instanceof`. Do not duplicate the status list in the panel; the `<select>` offers only valid values, so a bad status comes only from a crafted URL. `rethrowInvalidCursorAsBadRequest` does not apply, because the queue throws `ValidationError`, not `InvalidCursorError`. The status filter is a `<select>` (Any, pending, running, completed, failed). The name filter is a plain text input.
 - **Filters survive paging** because the handler passes a base URL that already carries them as `pathname` to `createCursorPaginationLinks`, for example `/admin/jobs?status=failed&name=send-email`, built with `URLSearchParams` over the compiled list pathname. The helper parses it with `new URL()` and only sets `cursor` and appends `history`, so the filters carry through. Submitting the filter form drops the cursor and goes back to page one. The page size is the queue's default, 50, passed as an explicit `PAGE_SIZE` constant.
 - **Notices per page.** Every redirect is `${ pathname }?notice=<code>`, with the URL compiled through `getHttpTarget`.
 
@@ -76,10 +76,10 @@ These are not operator decisions. A later agent may revise one, but must record 
 - **Shared partials.**
   - Rename `lib/templates/partials/admin/migration-notice.html` to `lib/templates/partials/admin/notice.html`. It already renders any `{ tone, role, title, message }` notice. Update its four references in `lib/pages/admin/migrations/` and its header comment, so that comment no longer names the migrations module.
   - Add `lib/templates/partials/admin/job-status-badge.html`, which reads `status` from the current context. `pending` uses `--info`, `running` uses `--warning`, `completed` uses `--success`, and `failed` uses `--danger`.
-  - Add `lib/templates/partials/admin/jobs-subnav.html`: a `<nav aria-label="Background jobs">` with a `cluster list-unstyled` list of Jobs, Schedules, and Registered jobs links, from `links.jobs`, `links.schedules`, and `links.registered`. It marks `aria-current="page"` with `{{#ifEqual jobsView "..."}}` (the values are `list`, `schedules`, and `registered`). The detail page passes `jobsView: "list"`.
+  - Add `lib/templates/partials/admin/jobs-subnav.html` (in T4, once all three targets exist): a `<nav aria-label="Background jobs">` with a `cluster list-unstyled` list of Jobs, Schedules, and Registered jobs links, from `links.jobs`, `links.schedules`, and `links.registered`. It marks `aria-current="page"` with `{{#ifEqual jobsView "..."}}` (the values are `list`, `schedules`, and `registered`). The detail page passes `jobsView: "list"`. Do not add it earlier with conditional links.
   - Add `lib/templates/partials/admin/job-queue-disabled.html`: `{{#if queueDisabled}}` a `callout callout--warning` (`[!]`) saying the queue is disabled in this environment (`JOB_QUEUE.enabled` is `false`), so jobs are recorded but not run, and the actions still work.
   - **Gotcha:** partials inherit the context stack. Inside `{{#with}}`, a missing `notice` falls through to the root `notice`.
-- **A job waiting to retry** (`pending` with `attempt > 0`) shows the `pending` badge followed by the caption "waiting to retry". The handler computes `isWaitingToRetry`, so the template holds no lifecycle logic. It also computes `canRetry` (`status === 'failed'`).
+- **The handler computes `canRetry`** (`status === 'failed'`), so the template holds no lifecycle logic. There is no separate "waiting to retry" indicator: the Attempts column (`attempt / maxAttempts`) beside a `pending` badge already shows it.
 - **Detail rendering.**
   - The handler precomputes `payloadJson = JSON.stringify(job.payload, null, 2)`.
   - The template renders the payload and `lastError.stack` in `<pre class="code-block"><code>{{ ... }}</code></pre>`. Double-mustache escapes them. `.code-block` comes from `admin-style-guide.css`, which `admin.css` loads on every admin page; it scrolls horizontally inside its box.
@@ -93,7 +93,7 @@ These are not operator decisions. A later agent may revise one, but must record 
 
 - **Layering and platforms.** Code under `lib/app/` never imports from `lib/plugins/` or a native module (`node:*`, `cloudflare:*`). It may import `lib/kixx/`. Everything must work on Node.js and on Cloudflare, where `JobQueue` calls cross a Durable Object RPC and errors arrive with their class restored by name. Leave `lib/kixx/vendor/` and the copied code in `test-app/` alone. No devkit-ported module is touched.
 - **Do not change** `lib/kixx/jobs/` (the port, registry, state store, runner, or anything else there), `lib/plugins/node-job-queue/`, `lib/plugins/cloudflare-job-queue/`, `lib/app/jobs/mod.js` (it ships empty), `lib/routes/admin-api-v1.js`, the Admin API handlers, `lib/app/permissions/roles.js`, `lib/app/presentation/lib/migration-run-outcomes.js`, or anything in `devkit/`.
-- **Error handling** (`lib/docs/server-error-handling.md`, `lib/app/presentation/README.md` Error Handling). Branch on `error.name`, `error.code`, and `error.expected`. Handle only the codes in the notice table, plus `ValidationError` from the list cursor and from `RunJobNowForm`, and `PayloadTooLargeError` from Run now. Rethrow everything else.
+- **Error handling** (`lib/docs/server-error-handling.md`, `lib/app/presentation/README.md` Error Handling). Branch on `error.name`, `error.code`, and `error.expected`. Handle only the codes in the notice table, plus `ValidationError` from `queue.list()` and from `RunJobNowForm`, and `PayloadTooLargeError` from Run now. Rethrow everything else.
 - **CSRF** (`lib/docs/cross-site-request-forgery.md`). Every POST calls `validateCsrfFormData()` before any domain work, and catches only `INVALID_CSRF_TOKEN_CODE`. Never call `request.formData()` twice. Every page with a form mints a token with `getCsrfToken()` (one token shared by the page's forms) or `getCsrfFormContext()`.
 - **Never echo request data** into notices. Only allow-listed codes go in `?notice=`. Filter values are echoed only as escaped form field values. The not-found text is fixed.
 - **Reverse routing.** Compile every URL with `context.getHttpTarget('<name>').compilePathname(params).pathname`; never hand-build a pathname. Query strings are appended with `URLSearchParams`. Target names:
@@ -124,67 +124,6 @@ These are not operator decisions. A later agent may revise one, but must record 
 
 ---
 
-### Task T1: Define the job notice table and error classifiers
-
-**Status:** Not started
-**Depends on:** None
-**Documentation:** `lib/app/presentation/README.md` (Error Handling; CSRF Protection); `lib/app/presentation/lib/migration-run-outcomes.js` (pattern); `lib/kixx/jobs/job-queue-interface.js` (`retry` errors)
-
-**Objective**
-
-One pure presentation module owns every operator-facing message in the jobs section and the rules that turn a caught Retry or CSRF error into one of those messages. Handlers and templates in T3–T6 read from it, so wording and classification are defined and tested once.
-
-**Scope**
-
-- In: `lib/app/presentation/lib/job-notices.js` and its unit test.
-- Out: handlers and templates (T3–T6); Run now field errors, which belong to the form and handler (T2, T6).
-
-**Design and invariants**
-
-- Export `JOB_NOTICES`: a frozen object keyed by code. Each value is a frozen `{ code, tone, role, title, message }` for the seven codes in the Routine choices table. `tone` is `info`, `success`, `warning`, or `error`. `role` is `status` for info and success, and `alert` for warning and error. The text is static and never interpolated.
-- Export frozen allow-lists:
-  - `LIST_NOTICE_CODES`: `job_not_found`
-  - `DETAIL_NOTICE_CODES`: `retry_queued`, `retry_conflict`, `run_now_enqueued`, `run_now_already_queued`, `form_expired`
-  - `REGISTERED_NOTICE_CODES`: `job_not_registered`, `form_expired`
-- Export `getJobNotice(code, allowedCodes)`. It returns the notice for an allowed, known code, and `null` otherwise, including for non-strings and prototype keys. Check the allow-list first, then `Object.hasOwn`.
-- Export `classifyJobRetryError(error)`. It returns a code or `null`, in this order:
-  1. a falsy error → `null`
-  2. `error.code === INVALID_CSRF_TOKEN_CODE` (from `./csrf.js`) → `form_expired`
-  3. `error.name === 'NotFoundError'` → `job_not_found`
-  4. `error.name === 'ConflictError'` → `retry_conflict`
-  5. anything else → `null`, which the caller rethrows
-- JSDoc on every export.
-
-**Expected touch points**
-
-- `lib/app/presentation/lib/job-notices.js` — new.
-- `lib/test/app/presentation/lib/job-notices.test.js` — new.
-
-Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
-
-**Acceptance criteria**
-
-- [ ] Every notice has a valid tone, a role consistent with its tone, and a non-empty title and message.
-- [ ] `getJobNotice` returns the notice for allowed codes, and `null` for unknown codes, for known codes outside the allow-list (for example `retry_queued` against `LIST_NOTICE_CODES`), for `__proto__`, and for non-strings.
-- [ ] The classifier maps a CSRF error, a `NotFoundError`, and a `ConflictError` (real `kixx/errors` classes, and plain `{ name }` objects as Cloudflare RPC errors would arrive), and returns `null` for an `AssertionError`, a plain `Error`, a `ValidationError`, and `undefined`.
-
-**Validation**
-
-- `node lib/run-tests.js lib/test/app/presentation/lib/job-notices.test.js` — the mapping and allow-list tests pass.
-- `node lib/run-linter.js lib/app/presentation/lib/job-notices.js lib/test/app/presentation/lib/job-notices.test.js` — no lint errors.
-
-**Progress and handoff**
-
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
-- Blockers: None.
-
----
-
 ### Task T2: Add the job registry scripts and the Run now form
 
 **Status:** Not started
@@ -198,21 +137,19 @@ The domain side of the Registered jobs page and of Run now exists and is tested,
 **Scope**
 
 - In:
-  - `lib/app/transaction-scripts/jobs/lib.js`, `list-registered-jobs.js`, and `run-job-now.js`
+  - `lib/app/transaction-scripts/jobs/list-registered-jobs.js` and `run-job-now.js`
   - `lib/app/presentation/forms/jobs/run-job-now-form.js`
   - Unit tests for all of them
 - Out: handlers, routes, and templates (T4, T6); any change to `lib/app/jobs/mod.js` or `lib/kixx/jobs/`.
 
 **Design and invariants**
 
-- `lib.js`: `getResolvedJobRegistry()` returns `validateJobRegistry(jobs)`, called on each use. It is cheap, and it means test fixtures added to the `jobs` Map are seen. JSDoc it, because it is exported.
-- `listRegisteredJobs(context)`: returns, in registry order, `[{ name, description, maxAttempts, timeoutSeconds, cron }]`. `cron` is `entry.schedule ? entry.schedule.cron : null`. It never exposes `handler` or the parsed cron. With the shipped registry it returns `[]`. It is async for signature consistency and takes `context` first.
+- `listRegisteredJobs(context)`: calls `validateJobRegistry(jobs)` on each use (cheap, and test fixtures added to the `jobs` Map are seen) and returns, in registry order, `[{ name, description, maxAttempts, timeoutSeconds, cron }]`. `cron` is `entry.schedule ? entry.schedule.cron : null`. It never exposes `handler` or the parsed cron. With the shipped registry it returns `[]`. It is async for signature consistency and takes `context` first.
 - `runJobNow(context, { name, payload })`:
-  - When `name` is not a non-empty string, or is not in the resolved registry, it throws `NotFoundError('Job "<name>" is not registered', { code: 'JobNotRegistered' })` without calling the queue. The message never reaches a notice.
+  - When `!jobs.has(name)` (this also covers a missing or non-string name), it throws `NotFoundError('Job "<name>" is not registered', { code: 'JobNotRegistered' })` without calling the queue. The message never reaches a notice.
   - Otherwise it calls `context.getService('JobQueue').enqueue(context, name, payload, { key: \`admin-run:${ name }\` })`. There is no `runAt` or `delaySeconds`, so the job is due now.
   - On a caught error, it rethrows `PayloadTooLargeError` (by `error.name`) unchanged; document this with `@throws`. Every other error is wrapped in `AssertionError('Unexpected error while enqueueing job from admin panel', { cause })`, as the scripts README requires for paths the script does not account for.
   - It returns the `JobEnqueueResult` as a plain object: `{ id, name, key, status, runAt, created }`.
-  - Export the key prefix as a constant, `ADMIN_RUN_KEY_PREFIX = 'admin-run:'`, so docs and tests reference one value.
 - `RunJobNowForm`: implement the design in Routine choices. Also:
   - The constructor defaults `payload` to `'{}'` when it is `undefined`, so `new RunJobNowForm({ name })` renders the default.
   - `getFormContext` is inherited. With the route not yet registered in T2, test it only in T6, through the handler, or stub `context.getHttpTarget` in the form test.
@@ -224,7 +161,6 @@ The domain side of the Registered jobs page and of Run now exists and is tested,
 
 **Expected touch points**
 
-- `lib/app/transaction-scripts/jobs/lib.js` — new.
 - `lib/app/transaction-scripts/jobs/list-registered-jobs.js` — new.
 - `lib/app/transaction-scripts/jobs/run-job-now.js` — new.
 - `lib/app/presentation/forms/jobs/run-job-now-form.js` — new.
@@ -269,7 +205,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 ### Task T3: Add the jobs list and detail pages with the nav link and shared partials
 
 **Status:** Not started
-**Depends on:** T1, T2
+**Depends on:** None
 **Documentation:** `lib/app/presentation/README.md` (Route Patterns; Reverse Routing; Rendering with HyperviewPageHandler; Page recipe; Admin Sidebar); `lib/templates/README.md` (`#each`, `ifEqual`, `with`, `formatDate`, HTML Escaping, Partials); `lib/pages/admin/style-guide/table-lists/body.html` and `callouts/body.html`; `lib/pages/admin/files/page.html` (pagination); `lib/app/presentation/lib/pagination.js`
 
 **Objective**
@@ -282,7 +218,8 @@ An admin with the jobs grant can open Developers → Background Jobs. The list i
   - The routes `/jobs/:id` and `/jobs`, with `JOB_RESOURCE` and `jobDecision`.
   - `getAdminJobs` and `getAdminJob` in a new `admin-jobs.js` handler module, and its barrel export.
   - The page directories `pages/admin/jobs/` and `pages/admin/jobs/detail/`.
-  - The partials `admin/notice.html` (renamed from `admin/migration-notice.html`, with the migration templates updated), `admin/job-status-badge.html`, `admin/jobs-subnav.html`, and `admin/job-queue-disabled.html`.
+  - The partials `admin/notice.html` (renamed from `admin/migration-notice.html`, with the migration templates updated), `admin/job-status-badge.html`, and `admin/job-queue-disabled.html`.
+  - The private notice table and allow-lists (all seven codes).
   - The nav link and the directory card.
   - Route and handler tests.
 - Out: Schedules and Registered jobs pages (T4); Retry (T5); Run now (T6); docs (T7).
@@ -296,37 +233,37 @@ An admin with the jobs grant can open Developers → Background Jobs. The list i
   - `getPathname(context, target, params)`
   - `getNoticeLocation(context, target, params, code)`
   - `isQueueDisabled(context)`, which is `context.config.env.JOB_QUEUE.enabled === false`
-  - `getSectionLinks(context)`, which returns `{ jobs, schedules, registered }`. Until T4 adds the schedules and registered targets, it returns only `jobs`, and the subnav partial renders each link only when it is set (`{{#if links.schedules}}`). T4 adds the other two. Do not add T4's routes early.
+  - The private notice table, per-page allow-list `Set`s, and `getNotice(raw, allowed)` from Routine choices (Notice text). T3 defines all seven codes; T5 and T6 only use them.
 - **`getAdminJobs`:**
-  1. Parse the filters from `request.queryParams` with a private `parseJobFilters()`:
-     - `status`: absent or `''` means none. An array, or a value not in `['pending','running','completed','failed']`, throws `BadRequestError('The status filter must be one of: pending, running, completed, failed.')`.
+  1. Read the filters from `request.queryParams`:
+     - `status`: absent or `''` means none. An array throws `BadRequestError`. Any other value is passed to the queue, which validates it.
      - `name`: absent, or blank after trimming, means none. An array throws `BadRequestError`.
   2. `pagination = getCursorPaginationQueryParams(request.queryParams)`.
-  3. Call `queue.list(context, { status, name, limit: PAGE_SIZE, cursor })`, passing only the defined keys. A caught `error.name === 'ValidationError'` becomes `BadRequestError('The cursor query parameter is invalid.', { cause })`; anything else is rethrown.
-  4. `filterBase` = the compiled list pathname plus `URLSearchParams` of the active filters. `links = Object.assign({}, getSectionLinks(context), createCursorPaginationLinks({ pathname: filterBase, cursor, history, nextCursor }))`.
+  3. Call `queue.list(context, { status, name, limit: PAGE_SIZE, cursor })`, passing only the defined keys. A caught `error.name === 'ValidationError'` (bad status or cursor) becomes `BadRequestError(cause.message, { cause })`; anything else is rethrown.
+  4. `filterBase` = the compiled list pathname plus `URLSearchParams` of the active filters. `links = Object.assign({ jobs: <list pathname> }, createCursorPaginationLinks({ pathname: filterBase, cursor, history, nextCursor }))`.
   5. Props:
-     - `jobs`: rows of `{ id, name, status, attempt, maxAttempts, isWaitingToRetry, createdAt, runAt, finishedAt, links: { detail } }`
-     - `filters`: `{ name, statusOptions: [{ value, label, selected }], isFiltered, registeredNames }`. `registeredNames` is the names from `listRegisteredJobs(context)` (T2), for the `<datalist>`.
+     - `jobs`: rows of `{ id, name, status, attempt, maxAttempts, createdAt, runAt, finishedAt, links: { detail } }`
+     - `filters`: `{ name, statusOptions: [{ value, label, selected }], isFiltered }`
      - `showPagination`, `links`, `jobsView: 'list'`, `queueDisabled`
-     - `notice`: `getJobNotice(request.queryParams.notice, LIST_NOTICE_CODES)`
+     - `notice`: `getNotice(request.queryParams.notice, LIST_NOTICES)`
 - **`getAdminJob`:**
   - `job = await queue.get(context, request.pathnameParams.id)`.
-  - When it is `null`: `response.status = 404`, and props `{ missing: true, links: getSectionLinks(context), jobsView: 'list', queueDisabled }`. Do not parse the notice.
+  - When it is `null`: `response.status = 404`, and props `{ missing: true, links: { jobs }, jobsView: 'list', queueDisabled }`. Do not parse the notice.
   - Otherwise, the props come from a private `getJobDetailProps(context, request, response, job, notice)`. T5 makes it mint CSRF and add the retry link. They are:
-    - `job`: every `JobRecord` field, plus `payloadJson`, `isWaitingToRetry`, and `canRetry`
-    - `links`: the section links, plus `detail`, plus `schedules` when `job.scheduleName` is set
-    - `notice`: `getJobNotice(raw, DETAIL_NOTICE_CODES)`
+    - `job`: every `JobRecord` field, plus `payloadJson` and `canRetry`
+    - `links`: `jobs`, plus `detail`, plus `schedules` when `job.scheduleName` is set
+    - `notice`: `getNotice(raw, DETAIL_NOTICES)`
     - `jobsView: 'list'` and `queueDisabled`
 - **List template** (`pages/admin/jobs/page.json`: `{ "template": "page.html", "subpage": { "title": "Background Jobs", "section": "jobs" } }`; `page.html`):
   - A header with the h1 "Background Jobs" and a one-line lede: "Inspect queued, running, and finished jobs. Completed jobs are kept 7 days and failed jobs 30 in the shipped config."
-  - Then `{{> admin/jobs-subnav.html }}`, `{{> admin/job-queue-disabled.html }}`, and `{{> admin/notice.html }}`.
+  - Then `{{> admin/job-queue-disabled.html }}` and `{{> admin/notice.html }}`. T4 adds the subnav above them.
   - A filter form: `method="GET"` to `links.jobs`, in a `.cluster`.
     - A status `<select class="field__select" name="status">` built from `filters.statusOptions`, with "Any status" first (`value=""`).
-    - A name `<input class="field__input" name="name" list="job-names" value="{{ filters.name }}">` and a `<datalist id="job-names">` of `filters.registeredNames`.
+    - A name `<input class="field__input" name="name" value="{{ filters.name }}">`.
     - A "Filter" `button--secondary`, and, when `filters.isFiltered`, a "Clear filters" link to `links.jobs`.
     - Labels are visible `field__label`s.
   - A `.table-list` captioned "Jobs":
-    - Columns: Job (`<th scope="row"><a href="{{ job.links.detail }}">{{ job.name }}</a><div class="type-caption">{{ job.id }}</div></th>`), Status (badge plus the "waiting to retry" caption), Attempts (`attempt / maxAttempts`), Created, Run at, and Finished.
+    - Columns: Job (`<th scope="row"><a href="{{ job.links.detail }}">{{ job.name }}</a><div class="type-caption">{{ job.id }}</div></th>`), Status (badge), Attempts (`attempt / maxAttempts`), Created, Run at, and Finished.
     - Dates use `formatDate ... format="DATETIME_MED"` inside `{{#if}}`.
   - Empty states: "No jobs match these filters." when `filters.isFiltered`, and otherwise "No jobs have been recorded yet."
   - Pagination outside the `{{#if jobs}}` block, as in `pages/admin/files/page.html`.
@@ -337,9 +274,9 @@ An admin with the jobs grant can open Developers → Background Jobs. The list i
     - No id echo.
   - **Otherwise:**
     - A back link, the h1 `{{ job.name }}`, and the id as a `type-caption`.
-    - The subnav, the queue-disabled callout, and the notice.
+    - The queue-disabled callout and the notice (T4 adds the subnav).
     - A `.table-list` captioned "Job" (`job-caption`), with row headers:
-      - Status (badge, plus "waiting to retry")
+      - Status (badge)
       - Attempts (`attempt` of `maxAttempts`)
       - Dedupe key (or "None")
       - Schedule (linked to `links.schedules` when set, or "None")
@@ -354,14 +291,14 @@ An admin with the jobs grant can open Developers → Background Jobs. The list i
 - **Partials:**
   - Create `templates/partials/admin/notice.html` by `git mv` of `migration-notice.html`, generalizing its header comment.
   - Update the references in `pages/admin/migrations/page.html`, `detail/page.html` (two), and any others found by `grep -rn "migration-notice" lib`.
-  - Create `job-status-badge.html`, `jobs-subnav.html`, and `job-queue-disabled.html` per Routine choices.
+  - Create `job-status-badge.html` and `job-queue-disabled.html` per Routine choices. `jobs-subnav.html` is T4's.
 - **Nav** (`templates/partials/admin-nav.html`, Developers list): add `<li><a class="admin-nav__link"{{#ifEqual subpage.section "jobs"}} aria-current="page"{{/ifEqual}} href="/admin/jobs">Background Jobs</a></li>` after Data Migrations.
 - **Directory card** (`pages/admin/page.html`): after Data Migrations, add a "Background Jobs" card with the lede "Inspect, retry, and run the background jobs registered in this build." and the link "Manage Background Jobs".
 - **Tests** (`admin-jobs.test.js`): a stub `JobQueue` with `list`, `get`, `retry`, `listSchedules`, and `enqueue`, each recording its arguments and returning configurable results.
-  - List: the filters are passed through, blank values are omitted, a bad status or repeated params give `BadRequestError`, a queue `ValidationError` gives `BadRequestError`, `nextPage` keeps `status` and `name` and adds `cursor` and `history`, and `previousPage` on page two keeps the filters with no cursor.
-  - List notices: the allow-list is applied.
+  - List: the filters are passed through, blank values are omitted, repeated params give `BadRequestError`, a stub queue `ValidationError` gives `BadRequestError` with its message, `nextPage` keeps `status` and `name` and adds `cursor` and `history`, and `previousPage` on page two keeps the filters with no cursor.
+  - Notices: each page's allow-list is applied, and unknown, disallowed, and non-string codes give `null`. Every notice has a valid tone, a matching role, and non-empty text.
   - `queueDisabled` is true only for `enabled: false`.
-  - Detail: every field, `payloadJson` pretty-printed, `isWaitingToRetry` for pending with attempt 1, the null → 404 `missing` state, and the notice allow-list.
+  - Detail: every field, `payloadJson` pretty-printed, the null → 404 `missing` state, and the notice allow-list.
 
 **Expected touch points**
 
@@ -370,7 +307,7 @@ An admin with the jobs grant can open Developers → Background Jobs. The list i
 - `lib/app/presentation/request-handlers/admin-panel/mod.js` — `export * from './admin-jobs.js';`.
 - `lib/pages/admin/jobs/page.json`, `page.html` — new.
 - `lib/pages/admin/jobs/detail/page.json`, `page.html` — new.
-- `lib/templates/partials/admin/notice.html` (renamed), `job-status-badge.html`, `jobs-subnav.html`, `job-queue-disabled.html` — new.
+- `lib/templates/partials/admin/notice.html` (renamed), `job-status-badge.html`, `job-queue-disabled.html` — new.
 - `lib/pages/admin/migrations/page.html`, `lib/pages/admin/migrations/detail/page.html` — partial rename only.
 - `lib/templates/partials/admin-nav.html`, `lib/pages/admin/page.html`.
 - `lib/test/routes/admin-panel.test.js` — ordering and decisions.
@@ -382,7 +319,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 - [ ] Both routes precede `{/}` and `*`, and `/jobs/:id` precedes `/jobs`. The list target's first handler authorizes `urn:kixx:list` on `urn:kixx:admin:jobs`, and the detail target's authorizes `urn:kixx:get`. Both targets allow `GET, HEAD`.
 - [ ] The list handler implements every filter, validation, and paging behavior above. The paging links are relative URLs on `/admin/jobs` carrying the filters.
-- [ ] The detail handler returns all `JobRecord` fields plus `payloadJson`, `isWaitingToRetry`, and `canRetry`. An unknown id gives status 404 and `missing: true`.
+- [ ] The detail handler returns all `JobRecord` fields plus `payloadJson` and `canRetry`. An unknown id gives status 404 and `missing: true`.
 - [ ] The migration pages render exactly as before, now through `admin/notice.html`. The migration handler and route tests pass unchanged, and `grep -rn "migration-notice" lib` prints nothing.
 - [ ] The templates render the structure above. A payload or stack containing `<script>` renders escaped. There is no `style="`.
 - [ ] The sidebar shows Developers → Background Jobs for every admin and highlights it on the list and detail pages. The directory has the card.
@@ -395,7 +332,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 - `grep -rn "migration-notice" lib` — prints nothing.
 - `grep -n 'subpage.section "jobs"' lib/templates/partials/admin-nav.html` — prints one line.
 - `node -e "for (const f of ['lib/pages/admin/jobs/page.json','lib/pages/admin/jobs/detail/page.json']) JSON.parse(require('fs').readFileSync(f,'utf8'))"` — the page.json files parse.
-- Render the list (rows, filtered empty, unfiltered empty, paging), detail (failed with stack, pending waiting to retry, an escaped `<script>` payload), missing, queue-disabled, and a migrations page through the new partial from a scratch script in `tmp/` with the vendored templating engine and `formatDate`.
+- Render the list (rows, filtered empty, unfiltered empty, paging), detail (failed with stack, pending at attempt 1, an escaped `<script>` payload), missing, queue-disabled, and a migrations page through the new partial from a scratch script in `tmp/` with the vendored templating engine and `formatDate`.
 - `node lib/run-tests.js` — the full unit suite passes.
 
 **Progress and handoff**
@@ -426,7 +363,7 @@ An admin can see the declared recurring schedules (cron in UTC, next run, last e
   - The routes `/jobs/registered` (the GET/HEAD target only) and `/jobs/schedules`.
   - The handlers `getAdminJobSchedules` and `getAdminJobRegistry`.
   - The pages `pages/admin/jobs/schedules/` and `pages/admin/jobs/registered/`.
-  - `getSectionLinks` gains `schedules` and `registered`.
+  - The `jobs-subnav.html` partial and a private `getSectionLinks(context)` returning `{ jobs, schedules, registered }`, merged into the `links` of all four pages (the list, detail, and missing states from T3 included), with the subnav included on each.
   - Route and handler tests.
 - Out: the Run now POST target, the form, and the handler (T6).
 
@@ -443,7 +380,7 @@ An admin can see the declared recurring schedules (cron in UTC, next run, last e
   The props are `{ schedules, links, jobsView: 'schedules', queueDisabled }`.
 - **`getAdminJobRegistry`:** `listRegisteredJobs(context)` (T2) maps to rows of `{ name, description, maxAttempts, timeoutSeconds, cron, links: { runs } }`. The props are:
   - `{ jobs, links, jobsView: 'registered', queueDisabled }`
-  - `notice: getJobNotice(raw, REGISTERED_NOTICE_CODES)`
+  - `notice: getNotice(raw, REGISTERED_NOTICES)`
 
   Build the props in a private `getRegistryPageProps(context, request, response, { notice, runNowForm, runNowError })` helper that T6 extends with CSRF and per-job forms.
 - **Schedules template** (`page.json` `{ "template": "page.html", "subpage": { "title": "Job Schedules" } }`):
@@ -466,7 +403,9 @@ An admin can see the declared recurring schedules (cron in UTC, next run, last e
 **Expected touch points**
 
 - `lib/routes/admin-panel.js` — two routes.
-- `lib/app/presentation/request-handlers/admin-panel/admin-jobs.js` — two handlers; `getSectionLinks` completed.
+- `lib/app/presentation/request-handlers/admin-panel/admin-jobs.js` — two handlers; `getSectionLinks`.
+- `lib/templates/partials/admin/jobs-subnav.html` — new.
+- `lib/pages/admin/jobs/page.html`, `lib/pages/admin/jobs/detail/page.html` — include the subnav.
 - `lib/pages/admin/jobs/schedules/page.json`, `page.html` — new.
 - `lib/pages/admin/jobs/registered/page.json`, `page.html` — new.
 - `lib/test/routes/admin-panel.test.js`, `lib/test/app/presentation/request-handlers/admin-panel/admin-jobs.test.js`.
@@ -504,7 +443,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 ### Task T5: Retry a failed job from the detail page
 
 **Status:** Not started
-**Depends on:** T1, T3
+**Depends on:** T3
 **Documentation:** `lib/docs/cross-site-request-forgery.md`; `lib/app/presentation/README.md` (Request Handlers; Error Handling; CSRF Protection); `lib/kixx/jobs/job-queue-interface.js` (`retry`)
 
 **Objective**
@@ -522,7 +461,7 @@ On a failed job's detail page, an operator presses Retry and lands back on the s
 - **`postJobRetry`:**
   1. `id = request.pathnameParams.id`.
   2. Read the form data and verify CSRF with a private `readVerifiedFormData` (as in `admin-migrations.js`). It returns `null` for `INVALID_CSRF_TOKEN_CODE` and rethrows everything else. On `null`, redirect 303 to `<detail>?notice=form_expired`.
-  3. Wrap **only** `await queue.retry(context, id)` in `try`. In the `catch`, take `code = classifyJobRetryError(error)`. When it is `null`, rethrow. `job_not_found` redirects 303 to `<list>?notice=job_not_found`. `retry_conflict` redirects to `<detail>?notice=retry_conflict`.
+  3. Wrap **only** `await queue.retry(context, id)` in `try`. In the `catch`: `error.name === 'NotFoundError'` redirects 303 to `<list>?notice=job_not_found`; `error.name === 'ConflictError'` redirects to `<detail>?notice=retry_conflict`; anything else is rethrown. Branch inline; there is no classifier function.
   4. On success, redirect 303 to `<detail>?notice=retry_queued`.
 - **Detail props:** `getJobDetailProps` becomes async. It adds `csrf: await getCsrfToken(context, request, response)` and `links.retry`.
 - **Detail template (actions slot):** `{{#if job.canRetry}}` a `card flow` "Actions" card, containing:
@@ -571,7 +510,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 ### Task T6: Run a registered job now from the Registered jobs page
 
 **Status:** Not started
-**Depends on:** T1, T2, T4 (run it after T5, since both edit the same handler and test files)
+**Depends on:** T2, T4 (run it after T5, since both edit the same handler and test files)
 **Documentation:** `lib/docs/cross-site-request-forgery.md`; `lib/app/presentation/README.md` (Forms; Request Handlers; `skip()`; CSRF Protection); `lib/app/presentation/request-handlers/admin-panel/admin-invites.js` (`postCreateAdminInvite`, the re-render pattern); `lib/app/jobs/README.md` (Enqueueing)
 
 **Objective**
