@@ -46,6 +46,7 @@ describe('kixx.js entry point', ({ it }) => {
         assertMatches(/^ {2}app {2}/m, stdout);
         assertMatches(/^ {2}cloudflare {2}/m, stdout);
         assertMatches(/^ {2}dev {2}/m, stdout);
+        assertMatches(/^ {2}local {2}/m, stdout);
     }, { timeout: TIMEOUT });
 
     it('lists the families and fails when no command is given', async () => {
@@ -107,6 +108,33 @@ describe('kixx.js entry point', ({ it }) => {
 
         assertEqual(0, code);
         assertEqual('start', names.join(','));
+    }, { timeout: TIMEOUT });
+
+    it('lists the local sub-commands in declaration order', async () => {
+        const { code, stdout } = await runEntryPoint([ 'local', '--help' ]);
+
+        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
+
+        assertEqual(0, code);
+        assertEqual('create,list,destroy', names.join(','));
+    }, { timeout: TIMEOUT });
+
+    it('shows a declared positional in local create help', async () => {
+        const { code, stdout } = await runEntryPoint([ 'local', 'create', '--help' ]);
+
+        assertEqual(0, code);
+        assertMatches('Usage: kixx local create [options] <name> [directory]', stdout);
+        assertMatches(/^Arguments:\n {2}name {7}Instance name/m, stdout);
+        assertMatches(/^ {2}directory {2}Application directory/m, stdout);
+        assertMatches(/^ {2}-t, --target <string> {2}/m, stdout);
+    }, { timeout: TIMEOUT });
+
+    it('fails local create without a name, naming the argument', async () => {
+        const { code, stderr } = await runEntryPoint([ 'local', 'create' ]);
+
+        assertEqual(1, code);
+        assertMatches('Missing required argument <name>', stderr);
+        assert(!stderr.includes('Failed to run command'), 'printed as a crash');
     }, { timeout: TIMEOUT });
 
     it('shows the dev start flags', async () => {

@@ -335,7 +335,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task L5: `kixx local` family with `create`, `list`, and `destroy`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** L1, L4
 **Documentation:** `devkit/commands/README.md`; Decisions 1–3, 7; P6, P8
 
@@ -368,12 +368,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `node devkit/kixx.js local --help` lists `create`, `list`, `destroy` in that relative order.
-- [ ] `create` against a temp source fixture (with `node-server.js` and `example.env.secrets`) and a temp `--target` creates the instance; a second `create` fails with `UsageError`; an invalid name fails before touching disk.
-- [ ] Collision warning appears when the injected env has `ENVIRONMENT` set.
-- [ ] `list` shows seeded/running correctly with fake `canConnect` and a hand-written `credentials.json`.
-- [ ] `destroy` refuses while running and removes otherwise.
-- [ ] `devkit/test/commands/index.test.js` passes (registration, basenames, positional shape).
+- [x] `node devkit/kixx.js local --help` lists `create`, `list`, `destroy` in that relative order.
+- [x] `create` against a temp source fixture (with `node-server.js` and `example.env.secrets`) and a temp `--target` creates the instance; a second `create` fails with `UsageError`; an invalid name fails before touching disk.
+- [x] Collision warning appears when the injected env has `ENVIRONMENT` set.
+- [x] `list` shows seeded/running correctly with fake `canConnect` and a hand-written `credentials.json`.
+- [x] `destroy` refuses while running and removes otherwise.
+- [x] `devkit/test/commands/index.test.js` passes (registration, basenames, positional shape).
 
 **Validation**
 
@@ -384,12 +384,17 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of L5.
+- Current state: Complete.
+- Remaining: None. L6/L7 register `seed`, `start`, `publish` in `devkit/commands/local/index.js` so the order becomes `create, seed, start, publish, list, destroy`, and extend the `kixx.test.js` order assertion.
+- Decisions and discoveries:
+  - Shared command pieces live in `devkit/lib/local/command-support.js`: `TARGET_OPTION`, `NAME_POSITIONAL`, `createLocalLog(output)` (wrapped `[kixx local] ` lines), `formatLocalCommand({ command, projectDirectory, target })`, and `formatCollisionWarning(names, env)` (returns `null` when nothing collides). L6/L7 should reuse them.
+  - Small deviation, recorded: the `Next:` hint also includes the app directory, relative to the working directory, when it is not the working directory (for example `kixx local seed demo lib --target tmp/local-check`). Without it the hint fails when run from where `create` was run. `--target` is appended as given.
+  - `create` passes `now`/`getFreePort` through; it parses `--port` as digits and leaves the range check to `createInstance`. Its constructor does not take `canConnect` (unused).
+  - `list` output is an unwrapped table: `NAME  PORT  SEEDED  RUNNING`, with `-` for a null port.
+  - `devkit/docs/architecture.md`: `lib/local/` row added; `lib/devserver/` now also used by `local`.
+- Actual files changed: `devkit/commands/local/{index,create,list,destroy}.js` (new), `devkit/commands/index.js`, `devkit/lib/local/command-support.js` (new), `devkit/test/commands/local/{create,list,destroy}.test.js` (new), `devkit/test/kixx.test.js`, `devkit/docs/architecture.md`.
+- Validation run: `node devkit/run-tests.js devkit/test/commands devkit/test/kixx.test.js` 98 passed; Deno `devkit/test/commands/local devkit/test/kixx.test.js` 35 passed; linter clean on `devkit/commands devkit/test/commands devkit/test/kixx.test.js devkit/lib/local`; full Node.js suite 698 passed. Manual: `local create --help` shows `Usage: kixx local create [options] <name> [directory]` and lists `name`; `local create demo lib --target tmp/local-check` created the instance (`.env.secrets` mode 0600, no `PORT`); a second create failed; `local list` showed `demo <port> no no`; `local destroy` removed it; `local create Bad` failed without writing. `tmp/local-check` removed afterwards.
 - Blockers: None.
 
 ---
