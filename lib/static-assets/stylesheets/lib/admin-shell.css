@@ -191,3 +191,9 @@ body:has(> .admin-layout) {
     max-width: var(--measure-prose);
     color: var(--color-ink-muted);
 }
+
+/* Detail pages open the header with a back-link breadcrumb paragraph. The
+   reset zeroes heading margins, so the title needs its own gap below it. */
+.admin-content-section__header p + h1 {
+    margin-top: var(--space-sm);
+}
