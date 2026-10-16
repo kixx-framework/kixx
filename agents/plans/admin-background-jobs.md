@@ -766,45 +766,47 @@ Operator Runbook
 
 Run these after all tasks are complete. Agents do not perform these steps.
 
-- [ ] Run the full suites from the repo root: `node lib/run-tests.js`, `deno run -A lib/run-tests.js`, and `node lib/run-linter.js lib`.
-- [ ] Start the app from `lib/` with `node node-server.js` (port 2026). Sign in at `/login/admin/new` as a **Developer** or **Root Admin**. If no admin exists yet, create one with `kixx admin` (see `usage-docs/kixx-devkit/admin.md`).
-- [ ] Navigation:
+- [x] Run the full suites from the repo root: `node lib/run-tests.js`, `deno run -A lib/run-tests.js`, and `node lib/run-linter.js lib`.
+- [x] Start the app from `lib/` with `node node-server.js` (port 2026). Sign in at `/login/admin/new` as a **Developer** or **Root Admin**. If no admin exists yet, create one with `kixx admin` (see `usage-docs/kixx-devkit/admin.md`).
+- [x] Navigation:
   - Developers → Background Jobs appears below Data Migrations, and is highlighted on the list, a detail page, Schedules, and Registered jobs.
   - The subnav marks the current page.
   - The directory shows the Background Jobs card.
   - Sign in as an **Admin**-role account: the link shows, and following it returns the standard 403.
-- [ ] Empty states with the shipped registry:
+- [x] Empty states with the shipped registry:
   - The list says "No jobs have been recorded yet".
   - Schedules and Registered jobs show their empty states.
   - `/admin/jobs/does-not-exist` shows the in-section "Job not found" state with status 404.
   - `/admin/jobs?status=bogus` shows the 400 page with the status message.
-- [ ] Data migrations still show their notices (the partial was renamed). For example, run the no-op migration and see the "applied" notice.
-- [ ] Register a scratch job locally to exercise the actions. Add it to `lib/app/jobs/mod.js` and **do not commit it**. For example, define a handler inline:
+- [x] Data migrations still show their notices (the partial was renamed). For example, run the no-op migration and see the "applied" notice.
+- [x] Register a scratch job locally to exercise the actions. Add it to `lib/app/jobs/mod.js` and **do not commit it**. For example, define a handler inline:
   - It throws an expected error, `new ConflictError('Scratch failure')` (import it from `../../kixx/errors/mod.js`), when `job.payload?.fail === true`. Use an expected error: an unexpected one makes the Node server shut down by design.
   - Otherwise it logs `job.payload`.
   - It awaits a 20-second delay when `job.payload?.slow === true`, so the dedupe can be seen.
   - The registry entry is `[ 'scratch-job', { name: 'scratch-job', description: 'Scratch job for panel checks.', handler, maxAttempts: 1 } ]`.
   - Optionally add a second entry with `schedule: { cron: '*/2 * * * *' }`.
   - Restart the server.
-- [ ] Registered jobs shows `scratch-job` with max attempts 1, timeout 60s (the default), and no schedule. A scheduled entry shows its cron, and Schedules shows its next run.
-- [ ] Run now:
+- [x] Registered jobs shows `scratch-job` with max attempts 1, timeout 60s (the default), and no schedule. A scheduled entry shows its cron, and Schedules shows its next run.
+- [x] Run now:
   - With `{}` → the detail page with the "queued" notice. After a second or two, a reload shows `completed`.
   - With `{"slow":true}`, then Run now again quickly → the second lands on the same job with "already queued".
   - With `{not json` → the page re-renders with the error under that textarea and the text kept.
   - With a blank payload → the "Enter a JSON payload" error.
   - Paste a payload over 128 KB, for example from `node -e "console.log(JSON.stringify({x:'a'.repeat(140000)}))"` → the size error.
-- [ ] Retry:
+- [x] Retry:
   - Run now with `{"fail":true}`. With `maxAttempts: 1`, the job fails after one attempt. Its detail page shows `failed`, and `lastError` with name `ConflictError`, the message, "Expected", and the stack in a scrolling block.
   - Press Retry → "retry queued", and the job is pending at attempt 0, then fails again.
   - Re-submit the Retry form from history after the job is no longer failed → the "could not be retried" notice.
   - Delete the `kixx_csrf_session` cookie and press Retry → the "page expired" notice, and nothing is retried.
-- [ ] List filters and paging:
+- [x] List filters and paging:
   - Filter by status `failed` and name `scratch-job`. The Clear filters link works.
   - Paging is covered by unit tests. To see it in a browser, temporarily set `PAGE_SIZE` to 2 in `admin-jobs.js` (do not commit it), create at least three `scratch-job` runs with Run now (each finishes in about a second, which frees the dedupe key), filter by name, and check that Next and Previous keep the filter in the URL. Then restore `PAGE_SIZE`.
-- [ ] Queue disabled: set `JOB_QUEUE.enabled` to `false` in `lib/node-config.jsonc` for the local environment and restart.
+- [x] Queue disabled: set `JOB_QUEUE.enabled` to `false` in `lib/node-config.jsonc` for the local environment and restart.
   - Every jobs page shows the warning.
   - Run now records a `pending` job that never runs.
   - Restore the setting.
-- [ ] Check both themes and about a 360px width. Tables and code blocks scroll inside their wrappers, and the page does not scroll sideways.
-- [ ] Remove the scratch job from `lib/app/jobs/mod.js` and confirm `git diff lib/app/jobs/mod.js` is empty.
+- [x] Check both themes and about a 360px width. Tables and code blocks scroll inside their wrappers, and the page does not scroll sideways.
+- [x] Remove the scratch job from `lib/app/jobs/mod.js` and confirm `git diff lib/app/jobs/mod.js` is empty.
 - [ ] Optional: rebuild and run the e2e suites per `test-app/README.md`, and spot-check the panel on a Cloudflare deployment of the test app (Run now and Retry across the Durable Object RPC).
+
+Operator browser checks confirmed on 2026-10-16; scratch jobs removed from `lib/app/jobs/mod.js`. The optional e2e/Cloudflare spot check was not run. The plan is complete.
