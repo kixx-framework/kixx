@@ -476,7 +476,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task L7: `kixx local start` and `kixx local publish`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** L2, L3, L4, L5
 **Documentation:** Decision 2; P5, P8, P9
 
@@ -504,9 +504,9 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `start` passes the instance port, `local`, the absolute instance dotenv, and the source directory to `runDevServer`. It refuses a running or missing instance without calling it, and prints the unseeded hint when there are no credentials.
-- [ ] `publish` builds the client from `credentials.json` and targets its Build ID; `--dry-run` reaches `publishRelease`; it refuses unseeded and not-running instances before any client is created; output never contains the token.
-- [ ] `kixx local --help` lists all six verbs in order `create, seed, start, publish, list, destroy`.
+- [x] `start` passes the instance port, `local`, the absolute instance dotenv, and the source directory to `runDevServer`. It refuses a running or missing instance without calling it, and prints the unseeded hint when there are no credentials.
+- [x] `publish` builds the client from `credentials.json` and targets its Build ID; `--dry-run` reaches `publishRelease`; it refuses unseeded and not-running instances before any client is created; output never contains the token.
+- [x] `kixx local --help` lists all six verbs in order `create, seed, start, publish, list, destroy`.
 
 **Validation**
 
@@ -516,12 +516,16 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of L7.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - Both verbs build their hints with `formatLocalCommand` (app directory and `--target` included). Messages: start refuses with `Local instance "<name>" is already running on port <port>.`; unseeded hint `Local instance "<name>" is not seeded; run kixx local seed <name> ... for an admin login and published content.`; publish refuses with `... is not seeded; run kixx local seed <name> ... first.` and `... is not running on port <port>; start it with kixx local start <name> ....`; recovery `Recover with: kixx local publish <name> ...`.
+  - `start` order: read instance, collision warning, refuse if running, unseeded hint, `runDevServer`. The instance port is the devserver's port; the app child gets a free port behind it (same as `kixx dev start`).
+  - `publish` uses `credentials.baseUrl` as the origin and probes the `instance.json` port. Its constructor takes only what it uses (`output`, `canConnect`, `createPublishingClient`, `publishRelease`, `fileSystem`); no `stdout`/`stderr`/`signals`/`env`, since it neither runs a process nor reads the shell environment.
+  - `start` also passes `fileSystem`/`createDevServer` through to `runDevServer`.
+- Actual files changed: `devkit/commands/local/start.js` (new), `devkit/commands/local/publish.js` (new), `devkit/commands/local/index.js`, `devkit/test/commands/local/start.test.js` (new), `devkit/test/commands/local/publish.test.js` (new), `devkit/test/kixx.test.js` (order `create,seed,start,publish,list,destroy`).
+- Validation run: `node devkit/run-tests.js devkit/test/commands/local devkit/test/commands/index.test.js devkit/test/kixx.test.js` 52 passed; Deno `devkit/test/commands/local` 23 passed; linter clean on `devkit/commands/local devkit/test/commands/local devkit/test/kixx.test.js`; full Node.js suite 721 passed. `node devkit/kixx.js local --help` lists the six verbs in order.
 - Blockers: None.
 
 ---

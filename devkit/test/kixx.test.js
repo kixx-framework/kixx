@@ -116,7 +116,7 @@ describe('kixx.js entry point', ({ it }) => {
         const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
 
         assertEqual(0, code);
-        assertEqual('create,seed,list,destroy', names.join(','));
+        assertEqual('create,seed,start,publish,list,destroy', names.join(','));
     }, { timeout: TIMEOUT });
 
     it('shows a declared positional in local create help', async () => {
