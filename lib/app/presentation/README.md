@@ -222,6 +222,7 @@ For expected errors:
 - If an expected error arrives from a path whose occurrence violates the handler's own invariant, wrap it in an `AssertionError` (with `cause`) and rethrow. The resulting 500 and crash are intended.
 - Branch on `error.name`, `error.code`, and `error.expected`, not `instanceof`.
 - Use a custom `code` when callers or templates need to distinguish a domain outcome under a generic HTTP status.
+- An expected error with a non-negative integer `retryAfterSeconds` (see `ServiceUnavailableError`) gets a `Retry-After` header, like `allowedMethods` gets `Allow` on a `405`.
 
 HTTP error messages are serialized to clients by the router fallback. Never put secrets, raw upstream payloads, stack details, KV keys, or internal identifiers in them.
 

@@ -1,7 +1,7 @@
 Content Store Overload Handling
 ===============================
 
-**Status:** Not started
+**Status:** In progress
 
 When the Cloudflare content-store Durable Object reports that it is overloaded, the Publishing API answers `503 Service Unavailable` with a `Retry-After` header instead of a generic `500`. The devkit's Publishing API client honors `Retry-After` and backs off for several seconds on a `503`, and `publishContent()` drops to one upload at a time for the rest of the run once the server has reported an overload. Non-overload failures keep their current behavior on both sides. This fixes the downstream failure in kixxauth/nydynamo_com#37, where `release` gave up on an object upload after about one second of retries against an overloaded Durable Object (the overload hit the `statFiles` call that `putObject` makes, before build assignment, so traffic was unaffected).
 
@@ -73,7 +73,7 @@ No touched module is one of the devkit-ported `lib/` modules (`kixx/config/parse
 
 ### Task S1: Framework support for 503 errors with `Retry-After`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `lib/docs/server-error-handling.md`, `lib/app/presentation/README.md` (Error Handling), `lib/kixx/errors/README.md`
 
@@ -110,12 +110,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `new ServiceUnavailableError('busy', { retryAfterSeconds: 5 })` has `name` `ServiceUnavailableError`, `code` `SERVICE_UNAVAILABLE_ERROR`, `httpStatusCode` 503, `httpError` true, `expected` true, and `retryAfterSeconds` 5. A custom `code` and `cause` are kept. `expected: false` is honored.
-- [ ] `retryAfterSeconds` is `null` when it is omitted or invalid (`-1`, `1.5`, `'5'`, `NaN`). `0` is kept.
-- [ ] `router.handleError()` with that error returns a 503 JSON:API response with header `retry-after: 5` and `errors[0].status === '503'`. Without a hint there is no `retry-after` header. An unexpected error that carries `retryAfterSeconds` still returns `false`.
-- [ ] Existing 405/`Allow` behavior and tests are unchanged.
-- [ ] The HTML error page for that error has status 503, header `retry-after: 5`, and heading "Service unavailable".
-- [ ] The docs above are updated.
+- [x] `new ServiceUnavailableError('busy', { retryAfterSeconds: 5 })` has `name` `ServiceUnavailableError`, `code` `SERVICE_UNAVAILABLE_ERROR`, `httpStatusCode` 503, `httpError` true, `expected` true, and `retryAfterSeconds` 5. A custom `code` and `cause` are kept. `expected: false` is honored.
+- [x] `retryAfterSeconds` is `null` when it is omitted or invalid (`-1`, `1.5`, `'5'`, `NaN`). `0` is kept.
+- [x] `router.handleError()` with that error returns a 503 JSON:API response with header `retry-after: 5` and `errors[0].status === '503'`. Without a hint there is no `retry-after` header. An unexpected error that carries `retryAfterSeconds` still returns `false`.
+- [x] Existing 405/`Allow` behavior and tests are unchanged.
+- [x] The HTML error page for that error has status 503, header `retry-after: 5`, and heading "Service unavailable".
+- [x] The docs above are updated.
 
 **Validation**
 
@@ -126,12 +126,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `ServiceUnavailableError` (export, `retryAfterSeconds` null when invalid), `retry-after` header in `HttpRouter#handleError` and `setErrorHeaders`, 503 heading, tests, docs.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: `lib/kixx/errors/README.md` lists no error classes, so it needed no change.
+- Actual files changed: `lib/kixx/errors/lib/service-unavailable-error.js` (new), `lib/kixx/errors/mod.js`, `lib/kixx/http-router/http-router.js`, `lib/app/presentation/lib/html-error-page.js`, `lib/test/kixx/errors/service-unavailable-error.test.js` (new), `lib/test/kixx/http-router/http-router.test.js`, `lib/test/app/presentation/lib/html-error-page.test.js`, `lib/docs/server-error-handling.md`, `lib/app/presentation/README.md`.
+- Validation run: focused tests pass (173); `node lib/run-tests.js` 1843 pass; `deno run -A lib/run-tests.js` 1843 pass; `node lib/run-linter.js lib` clean.
 - Blockers: None.
 
 ---

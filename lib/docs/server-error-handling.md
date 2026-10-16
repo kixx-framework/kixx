@@ -21,6 +21,7 @@ Run-time problems that a correctly-written program will eventually encounter. Th
 Use the error classes in `kixx/errors/mod.js` to represent expected errors:
 
 - Use `OperationalError` for an expected infrastructure, integration, or storage failure which does not need a more specific class.
+- Use `ServiceUnavailableError` with `retryAfterSeconds` when a backing service reports a temporary overload. The router sends `503` with a `Retry-After` header.
 - Extend `WrappedError` when you need to define a custom error class.
 
 Use a custom `code` when callers or templates need to distinguish a domain-specific outcome while keeping the HTTP status generic:
