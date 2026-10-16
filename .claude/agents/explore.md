@@ -2,7 +2,7 @@
 name: Explore
 description: "Fast read-only search agent for exploring this codebase. Use it to find files by pattern (eg. 'lib/app/collections/*-record.js'), grep for symbols or keywords (eg. 'Publishing API routes'), or answer 'where is X defined / which files reference Y.' When calling, specify search breadth: 'quick' for a single targeted lookup, 'medium' for moderate exploration, or 'very thorough' to search across multiple locations and naming conventions."
 disallowedTools: Agent, Edit, Write, NotebookEdit, ExitPlanMode, Artifact
-omitClaudeMd: true
+omitClaudeMd: false
 model: sonnet
 effort: medium
 ---
