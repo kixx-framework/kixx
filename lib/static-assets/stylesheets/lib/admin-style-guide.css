@@ -240,9 +240,14 @@
 /* Numbered parts list, paired with an anatomy stage. Spacing between items is
    a .flow relationship, set in the markup as class="parts-list flow". */
 .parts-list {
-    --flow-space: var(--space-2xs);
     padding-left: 2.5ch;
     font-size: var(--text-body-sm);
+}
+
+/* Tighten the items, not the list: set on .parts-list itself, --flow-space
+   would also shrink the parent .flow's gap above the list. */
+.parts-list > * {
+    --flow-space: var(--space-2xs);
 }
 
 .parts-list li::marker {
