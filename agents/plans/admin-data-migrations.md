@@ -1,0 +1,796 @@
+Admin Data Migrations
+=====================
+
+Add a "Data Migrations" section to the starter app's admin panel (`lib/`) and a new "Developers" sidebar group that links to it. `/admin/migrations` lists every registered migration (id, description, status badge). `/admin/migrations/:id` shows one migration's ledger record (status, stats, batch count, started by and at, last batch at, completed at, error) and offers Run, Dry run, and Force re-run. Without JavaScript, each click runs exactly one batch. A real run uses post/redirect/get with an allow-listed notice. A dry run renders its result directly and carries the caller-owned cursor in a hidden field. Force goes through a confirmation page first. With JavaScript, a `migration-runner` behavior in `site.js` loops Run or Dry run batch by batch through the same endpoints, using a JSON response, until the migration is done, the operator presses Stop, or an error occurs. Conflicts, an unknown id, an invalid dry-run cursor, a failed batch, and an expired form each show a clear message on the panel. So does an unexpected failure inside `runMigration`: it is logged, not crashed on, under one narrow, documented exception to the error-handling rules. The panel calls the same `listMigrations` and `runMigration` Transaction Scripts as the Admin API, under the same permissions.
+
+Implementation Approach
+-----------------------
+
+### Decisions made with the operator
+
+1. **One batch per request. Without JS, one batch per click; with JS, the browser drives the loop.** Reason: each batch stays under the Cloudflare Worker CPU limit (30 s by default, `cloudflare-config.jsonc`). This keeps progressive enhancement and matches the CLI's batch model. A background job was rejected.
+2. **Dry run is included, and it also auto-continues with JS.** Reason: the operator wants to rehearse a full migration from the panel.
+3. **Force is included, behind a confirmation page.** The page explains that force resets the ledger record (cursor, stats, batch count) and does not undo data. The operator must submit a second form to proceed. No JS `confirm()`. Reason: force is destructive to the ledger. This deliberately differs from the CLI's `run-migration --force`, which has no confirmation (`agents/plans/devkit.md` decision 2).
+4. **A list page plus a detail page.** Reason: the list stays scannable, and each migration's details and actions live on one page.
+5. **The Developers nav group is shown to all admins, and roles without permission get the standard 403.** Reason: this matches the existing groups. Permission-aware navigation is out of scope.
+6. **Reuse `listMigrations` and `runMigration` from `lib/app/transaction-scripts/migrations/`, the `urn:kixx:admin:migrations` resource, and the `urn:kixx:list` / `urn:kixx:run` actions.** Reason: the panel and the Admin API then behave identically, and no role changes are needed (only Developer and Root Admin hold the grant, `lib/app/permissions/roles.js`). The panel never calls the Admin API over HTTP.
+7. **Specific outcomes render as messages on the panel, not as the generic error page.** These are the three conflict codes, an unknown migration id (404), an invalid dry-run cursor, a failed batch (using the ledger's safe error message), and an expired CSRF token (the `form_expired` pattern). A double-click or concurrent run degrades to the concurrency message.
+8. **Out of scope:** changes to the Admin API, the devkit, the ledger and `Migration` Collection, `runMigration`'s behavior, and roles. Also out of scope: rollback or undo, authoring migrations in the UI, background execution, permission-aware navigation, and other developer tools such as jobs.
+9. **Docs:** update `lib/docs/doc-index.md` and `lib/app/migrations/README.md`, mention the panel in `usage-docs/kixx-app/admin-api.md`, and cover the Admin Sidebar section of `lib/app/presentation/README.md`.
+10. **Unexpected `runMigration` failures in the panel become a friendly, logged notice, not a crash.** When the `runMigration` call in the panel's Run, Dry run, or Force handler throws an error that is not one of the expected outcomes (for example an `AssertionError` from a bug in a migration), the handler:
+    - catches it;
+    - logs it at error level with full detail, including `cause`;
+    - shows a fixed-text notice: `batch_failed_unexpected` for a real or forced run, `dry_run_failed_unexpected` for a dry run.
+
+    The error never reaches the router, so there is no generic 500 page, no router `error` event, and no Node.js graceful shutdown. Reason: an operator running migrations from the panel should get a clear message and stay on the page, not see a crashed page and a restarting server. **This is a deliberate, documented, narrow exception to `lib/docs/server-error-handling.md`.** It covers only that one call in those three panel handlers (boundary in Routine choices). Everything else still rethrows as today: CSRF validation, `getMigration` reads, the Admin API handlers, and all other code. Both error-handling docs record the exception (T4).
+
+### Routine choices made by the planner (from project conventions)
+
+These are not operator decisions. A later agent may revise them with a recorded reason.
+
+- **The detail page needs a new read-only Transaction Script, `getMigration(context, id)`** (`lib/app/transaction-scripts/migrations/get-migration.js`). `listMigrations` has no single-migration lookup and omits `lastBatchAt`. The new script returns one registry-plus-ledger projection, or `null` for an unregistered id, without reading the ledger in that case. The existing `presentMigration` moves to `lib/app/transaction-scripts/migrations/lib/present-migration.js` and gains `lastBatchAt`, so the list and the detail cannot drift. `listMigrations` therefore gains one additive field. The Admin API list handler destructures explicit attributes, so the API response does not change, and a new test locks that in. `runMigration` is not touched.
+- **JSON content negotiation uses the `kixx-partial` request header on the same routes.** JS sends `kixx-partial: migration-run`. This is the existing admin-panel convention for JS-enhanced POSTs (`admin-files.js` `respondAfterAction`, `renderMetadataValidationError`, and `file-action-error-handler.js`, with the matching `fetch` calls in `site.js`). It needs no new negotiation helper, and the no-JS and JS paths share one handler, one CSRF check, and one outcome mapping. A route that also has a trailing `HyperviewPageHandler` (dry-run) must call `skip()` before returning JSON, or Hyperview would try to render a partial named `migration-run`. The responses are `private, no-store` (the user is set), so `Vary` does not matter. `Accept: application/json` was the alternative; it was not chosen because the panel already standardizes on `kixx-partial`.
+- **One CSRF token can be reused across looped POSTs, but every JSON response also carries a fresh one.** Tokens are stateless HMAC envelopes bound to the `sid` cookie with a 30-minute TTL and are not spent on use (`lib/app/presentation/lib/csrf.js`, `CSRF_TOKEN_TTL_SECONDS`). Without a fresh token, a loop running more than 30 minutes after page load would fail mid-run. `getCsrfToken()` also refreshes the cookie's lifetime. JS always posts the latest token it has. The `form_expired` JSON response carries no token: JS stops and asks the operator to reload.
+- **A no-JS dry run renders the POST response directly** (the `postCreatePublishingApiToken` pattern) instead of redirecting. Dry-run stats and the next cursor are not in the ledger. Passing them through a redirect would put request data in the URL, and `?notice=` codes must never echo request data. A dry run writes nothing, so a browser refresh only re-runs the same batch. A no-JS dry run shows that one batch's stats; accumulated dry-run totals exist only with JS.
+- **The next dry-run cursor travels in a hidden `cursor` field** of a "Dry run next batch" form. It is parsed through the existing `RunMigrationForm` (`lib/app/presentation/forms/migrations/run-migration-form.js`), after `normalizeOptionalStringAttribute()` turns a blank value into `null`. The panel therefore validates exactly as the API does. A form validation failure and an `InvalidCursorError` both become `dry_run_cursor_invalid` (400). Real runs and force runs never read a cursor field and always pass `cursor: null`.
+- **Force entry is a GET link** ("Force re-run", `button button--secondary`) to `/admin/migrations/:id/force`. That page holds the only force form, a POST with a hidden `confirm_force=yes`. The server rechecks the field, as `postFileDelete` rechecks `confirm_delete`. A POST without it redirects (303) to the confirmation page and runs nothing. The page itself is the friction, so there is no extra checkbox.
+- **Force is offered only for `applied` and `failed` migrations.** `computeRunPreparation()` ignores `force` for `running` (it resumes), and for `pending` it is just a first run. So the "resets the ledger" text would be false for those states. Both the confirmation GET and the force POST read the current status first and redirect to the detail page with `?notice=force_unavailable` otherwise. This is a UI guard only: the script still owns the lifecycle rules, and a race that slips past it just resumes, which is harmless. **Run is hidden for `applied`.** A crafted POST still gets the `already_applied` notice. **Dry run is always available.**
+- **Force with JS is not looped.** The confirmation form posts normally: the ledger resets, one batch runs, and the browser redirects to the detail page with `force_started` (or `applied`). The operator then presses Run, which loops with JS and resumes the fresh run. This keeps the destructive step a single deliberate request.
+- **With JS, a real-run loop always ends by navigating to the server-supplied `location`.** This is exactly the URL the no-JS flow would redirect to (for example `/admin/migrations/<id>?notice=batch_complete`). The final ledger state and the message are therefore always server-rendered from the ledger, as with PRG. A dry-run loop stays on the page, because its results exist nowhere else, and shows its final message and totals in the page's live region.
+- **Boundary of the unexpected-error exception (Decision 10).**
+  - **Inside the boundary:** the exception wraps exactly one statement, the `await runMigration(context, {...})` call in `postMigrationRun`, `postMigrationDryRun`, and `postMigrationForce`. Any error that call throws, and that `classifyMigrationRunError` does not map to an expected code, is inside it.
+  - **Ledger-write `AssertionError`s from inside `runMigration` are inside the boundary.** These come from `throwLedgerWriteError`'s non-conflict branch, a failed ledger read in `prepareRealRun`, or registry validation. Reasons:
+    1. The handler can tell them apart from a migration bug only by parsing messages or walking `cause` chains, which is fragile.
+    2. To the operator, both mean "this batch failed unexpectedly; look at the logs".
+    3. The full error, with its `cause`, is logged at error level, so a storage fault stays visible.
+    4. Real storage trouble is still not hidden. The very next request's `getMigration` read is outside the boundary and rethrows normally.
+
+    The notice text therefore must not claim the ledger recorded the failure. It says the ledger was marked failed only "if it could be updated".
+  - **Handler-built input errors are also inside, but cannot occur.** `runMigration`'s own `assertRunInputs` would also be caught, but it cannot fail: the handlers build `dryRun`, `force`, `startedBy`, and `now` themselves, and the cursor has passed `RunMigrationForm`.
+  - **Outside the boundary**, rethrown unchanged:
+    - CSRF validation (except the `form_expired` code)
+    - every `getMigration` call, including T5's post-batch re-read
+    - `getCsrfToken`
+    - template rendering
+    - the GET handlers
+    - the Admin API handlers
+  - **How it is coded:** `classifyMigrationRunError` stays a pure classifier of expected outcomes and returns `null` otherwise. When it returns `null` for an error from that call, each of the three handlers calls `recoverUnexpectedRunError(context, error, { id, dryRun, force })`. The helper is exported from the T2 module so that both the dry-run and real-run variants are unit-tested; the registered no-op migration cannot fail a dry run. It logs and returns the unexpected code. Only these three call sites may use it.
+  - **Logging** follows the existing convention, `context.logger.error(message, info, error)` (see `create-admin-user.js`, `assign-release.js`). Use the message `'unexpected error while running migration batch from admin panel'`, the info `{ requestId: context.requestId, migrationId: id, dryRun, force }`, and the caught error as the third argument. The JSON log serializer records `error.cause` (`kixx/logger/json-log-entry-serializer.js`).
+  - **Effects:** because the error never reaches the router, Node.js does not shut down. On Cloudflare the runtime `exception` event and error-rate count do not fire for it. The log line is the only signal, which is accepted as the cost of Decision 10.
+  - **Notice text never echoes `error.message`** for these codes. For a real or forced run, the redirect lands on the detail page, which shows the ledger's own safe message ("The migration batch failed.") when bookkeeping succeeded.
+  - Expected errors thrown by a migration still become `batch_failed` (real run) or `dry_run_failed` (dry run), as before.
+- **Unknown id handling.** `GET /admin/migrations/:id` renders the detail template's "not found" state with status 404, and never reads the ledger. Every other migration route (the confirmation GET and the three POSTs) redirects (303) to `/admin/migrations?notice=migration_not_found`, or returns JSON 404 for `kixx-partial`. The not-found message is fixed text and never echoes the id.
+- **Notice text lives in one presentation module**, `lib/app/presentation/lib/migration-run-outcomes.js`. The module maps each code to `{ code, tone, role, title, message }` and classifies caught errors into codes. Templates render `notice.title` / `notice.message`, and JSON responses send the same object, so the no-JS and JS messages cannot drift. The text is static. Each page applies its own allow-list to `?notice=` (the list page accepts only `migration_not_found`), and an unknown code is discarded.
+- **Permissions per target:** list and detail GET use `urn:kixx:list`. The run, dry-run, and force POSTs and the force confirmation GET use `urn:kixx:run`. Every target, including HEAD, has an explicit `authorize`, so no page under `pages/admin/migrations/` is reachable through the unauthorized `*` fallback. Template-only paths such as `/admin/migrations/detail` and `/admin/migrations/force` are matched by `/migrations/:id` first and get the 404 state.
+- **Status badge tones:** `pending` uses `status-badge--info`, which matches the invite `pending`. `running` uses `--warning`: it is partially applied and needs attention. `applied` uses `--success`, and `failed` uses `--danger`. The badge text is the raw lowercase status, as on the token pages.
+- **No new CSS component.** The ledger fields and the stats render as `.table-list` tables with row headers (`<th scope="row">`), notices as `.callout`, and actions in a `.cluster`. The JS progress readout is plain markup that is `hidden` until JS reveals it. No inline styles.
+- **`startedBy` renders as the raw admin id**, as `createdBy` does on the token pages. Resolving it to an email is a possible follow-up.
+- **Stats render from a `statsList` array** of `{ name, value }`, built by the handler in object key order. The template can then show an empty state with `{{else}}`, and JS can rebuild the list the same way.
+
+### Cross-cutting constraints
+
+- **Layering and platforms.** Code under `lib/app/` never imports from `lib/plugins/` or a native module (`node:*`, `cloudflare:*`). All of this must work on Node.js and Cloudflare. Leave `lib/kixx/vendor/` and `test-app/` copied code alone. None of the devkit-ported modules are touched, so the devkit conformance suite is unaffected.
+- **Do not change** `run-migration.js`, `lib/migration-state.js`, `accumulate-stats.js`, `validate-batch-result.js`, the `Migration` Collection or Record, `routes/admin-api-v1.js`, the Admin API handlers' responses, `roles.js`, or anything in `devkit/`.
+- **Error handling** (`lib/app/presentation/README.md`, Error Handling). Branch on `error.name`, `error.code`, and `error.expected`, never `instanceof`. Rethrow every unclassified error, with one exception: an unclassified error thrown by the `runMigration` call inside the Run, Dry run, and Force handlers is logged and becomes `batch_failed_unexpected` or `dry_run_failed_unexpected` (Decision 10; boundary in Routine choices). Never widen that `try` to cover other statements. A handler that catches and re-renders owns the status: use the caught `error.httpStatusCode`, fall back to `500`, and use `400` for `dry_run_cursor_invalid`.
+- **CSRF** (`lib/docs/cross-site-request-forgery.md`). Every POST calls `validateCsrfFormData()` before any domain work, including the dry-run POST, because it executes migration code. Catch only `INVALID_CSRF_TOKEN_CODE`. Never call `request.formData()` twice. Every page render mints a token with `getCsrfToken()`.
+- **Never echo request data** into notices or messages. Only allow-listed codes go in `?notice=`. The not-found text is fixed.
+- **Reverse routing.** Compile every URL with `context.getHttpTarget('<name>').compilePathname({ id })`; never hand-build one. Target names:
+  - `admin-panel/migrations/render-list`
+  - `admin-panel/migration-detail/render-detail`
+  - `admin-panel/migration-run/run`
+  - `admin-panel/migration-dry-run/dry-run`
+  - `admin-panel/migration-force/render-confirm`
+  - `admin-panel/migration-force/force`
+- **Route order** in `lib/routes/admin-panel.js`. All migration routes come before `{/}` and `*`, and the `:id/*` action routes come before `/migrations/:id`. One route never hosts two POST targets.
+- **Server-side style.** `lib/docs/code-style-guide.md` and `lib/docs/code-documentation-guide.md` apply: JSDoc on exported handlers and scripts only, none on module-private functions. Leave blank lines between logical blocks.
+- **Browser JS** (`lib/docs/frontend-development-guide.md`, "Browser JavaScript"):
+  - Write it as one self-contained IIFE block in `lib/static-assets/javascript/site.js`, selected by `data-js-behavior="migration-runner"`, never by a styling class.
+  - The lint target is `ecmaVersion: 2017`: no object spread, optional chaining, or `??`. `async`/`await` is fine.
+  - Use only allowlisted globals. `fetch`, `FormData`, `URLSearchParams`, `Headers`, `window`, `document`, and `console` are already on the browser allowlist in `lib/eslint.config.js`, and no new global is needed. If one becomes necessary, add it to the allowlist in the same change.
+  - Write server data into the DOM with `textContent` only, never `innerHTML`.
+  - Missing markup gets a `console.warn` and that control is skipped; never throw.
+- **Templates.** Follow `lib/templates/README.md`. Page markup is `<main class="admin-main"><article class="admin-content-section flow">`. Copy the table-list markup from `lib/pages/admin/style-guide/table-lists/body.html`: a focusable region with `aria-labelledby` pointing at a visible caption, and a unique caption `id` per table. No `style="..."`.
+- **Commands run from the repo root** (`/Users/kris/Documents/kixx`):
+  - `node lib/run-tests.js <path>` for tests
+  - `node lib/run-linter.js <path>` for lint
+  - `node lib/run-tests.js` and `deno run -A lib/run-tests.js` for the full suites
+
+  No e2e suite in agent validation. Browser checks are in the Operator Runbook.
+- **Admin sessions.** Agents do not create accounts or enter credentials. The manual browser checks belong to the operator unless the implementing agent already has a local dev session.
+- **Related plans.** `agents/plans/admin-table-list.md` (complete) supplies `.table-list`, `.status-badge`, `.button--secondary`, and `.button--small`. `agents/plans/devkit.md` owns the CLI `run-migration`, which is unchanged. There are no conflicts.
+
+---
+
+### Task T1: Add a single-migration status read and share the migration projection
+
+**Status:** Complete
+**Depends on:** None
+**Documentation:** `lib/app/transaction-scripts/README.md` (Files and Signatures; Return Values; Error Handling); `lib/app/migrations/README.md`
+
+**Objective**
+
+The detail page can load one migration's full projection: the registry id and description merged with its ledger record, including `lastBatchAt`. `listMigrations` and the new `getMigration` share one presenter, so they always agree. The Admin API's list response is unchanged. This task owns the read-side data contract the panel renders. It touches no HTTP code.
+
+**Scope**
+
+- In: `lib/app/transaction-scripts/migrations/lib/present-migration.js` (new); `get-migration.js` (new); `list-migrations.js` switched to the shared presenter; unit tests for both scripts; a guard test for the Admin API list projection.
+- Out: any change to `run-migration.js` or its `lib/` helpers, the Collection, or the Admin API handlers (all out of scope); every panel handler (T3 onward).
+
+**Design and invariants**
+
+- `presentMigration(entry, record)` returns, for both scripts:
+
+  ```
+  { id, description, status, stats, batchCount, startedBy, startedAt, lastBatchAt, completedAt, error }
+  ```
+
+  With no record, `status` is `'pending'` and every other field except `id`/`description` is `null`. With a record, each field comes from `record.get(...)`. Never expose `cursor`.
+- `getMigration(context, id)`:
+  - Assert that `id` is a non-empty string.
+  - Look up the registry with `getMigration` from `../../migrations/mod.js`, imported under an alias such as `getRegisteredMigration` to avoid the name clash.
+  - Return `null` for an unregistered id **without touching the ledger**.
+  - Otherwise read `context.getCollection('Migration').getByMigrationId(context, id)`, wrapping a thrown read in `AssertionError('Unexpected error while loading migration status', { cause })` as `listMigrations` does, and return `presentMigration(entry, record)`.
+  - Document it with `@returns {Promise<Object|null>}`.
+- `listMigrations` keeps registry order and its error wrapping. Its only output change is the additive `lastBatchAt`.
+- The Admin API list handler (`request-handlers/admin-api/list-migrations.js`) destructures explicit attributes and must stay unedited. The guard test asserts that its `attributes` keys are exactly `description, status, stats, batchCount, startedBy, startedAt, completedAt, error`.
+- The module's `lib/` folder already holds group helpers (`accumulate-stats.js` and others), so the presenter goes there, one helper per file.
+
+**Expected touch points**
+
+- `lib/app/transaction-scripts/migrations/lib/present-migration.js` — new shared presenter.
+- `lib/app/transaction-scripts/migrations/get-migration.js` — new read script.
+- `lib/app/transaction-scripts/migrations/list-migrations.js` — use the shared presenter.
+- `lib/test/app/transaction-scripts/migrations/get-migration.test.js` — new.
+- `lib/test/app/transaction-scripts/migrations/list-migrations.test.js` — new.
+- `lib/test/app/presentation/request-handlers/admin-api/list-migrations.test.js` — new API projection guard.
+
+Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
+
+**Acceptance criteria**
+
+- [x] `getMigration(context, '2026-07-17-example-noop')` with no ledger record returns the pending projection, with `lastBatchAt: null`.
+- [x] With a stub record (status `applied`, `batchCount` 3, `lastBatchAt` set), it returns every field, including `lastBatchAt`, and no `cursor` key.
+- [x] For an unregistered id it returns `null`, and the stub Collection records zero reads.
+- [x] A rejected ledger read becomes an `AssertionError` with the original as `cause`.
+- [x] `listMigrations` returns registry order and includes `lastBatchAt`.
+- [x] The Admin API list handler's JSON attributes are unchanged (guard test).
+- [x] `run-migration.js` and the Admin API handlers have no diff.
+
+**Validation**
+
+- `node lib/run-tests.js lib/test/app/transaction-scripts/migrations lib/test/app/presentation/request-handlers/admin-api/list-migrations.test.js` — the new script tests and the API guard pass.
+- `node lib/run-linter.js lib/app/transaction-scripts/migrations lib/test/app/transaction-scripts/migrations lib/test/app/presentation/request-handlers/admin-api` — no lint errors.
+- `git diff --stat -- lib/app/transaction-scripts/migrations/run-migration.js lib/app/transaction-scripts/migrations/lib/migration-state.js lib/app/presentation/request-handlers/admin-api` — prints nothing.
+
+**Progress and handoff**
+
+- Completed: Shared presenter (adds `lastBatchAt`), `getMigration` read script, `listMigrations` switched to the presenter, tests, and the Admin API guard test.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: `kixx-assert`'s `assertEqual` is not deep for arrays or objects; tests compare joined strings or single fields. `getMigration` also asserts a non-empty id (tested). The test directory `lib/test/app/transaction-scripts/migrations/` is new; there were no prior migration script tests.
+- Actual files changed: `lib/app/transaction-scripts/migrations/lib/present-migration.js` (new), `lib/app/transaction-scripts/migrations/get-migration.js` (new), `lib/app/transaction-scripts/migrations/list-migrations.js`, `lib/test/app/transaction-scripts/migrations/get-migration.test.js` (new), `lib/test/app/transaction-scripts/migrations/list-migrations.test.js` (new), `lib/test/app/presentation/request-handlers/admin-api/list-migrations.test.js` (new).
+- Validation run: tests 9 passed; lint clean; protected-file `git diff --stat` printed nothing.
+- Blockers: None.
+
+---
+
+### Task T2: Define the migration run outcome table and error classifier
+
+**Status:** Not started
+**Depends on:** None
+**Documentation:** `lib/app/presentation/README.md` (Error Handling; CSRF Protection); `lib/app/migrations/README.md` (Module Contract, Errors); `usage-docs/kixx-app/admin-api.md` (Real-run and Dry-run lifecycle)
+
+**Objective**
+
+One presentation module owns every operator-facing migration message, the rules that turn a caught `runMigration` (or CSRF) error into one of those messages, and the single logged recovery path for unexpected `runMigration` failures (Decision 10). The detail page, the list page, the no-JS flows, and the JSON responses all read from it, so wording, classification, and the logging contract are defined and tested once. Everything but `recoverUnexpectedRunError` is pure. That helper only logs through `context.logger`. The module has no dependency on other tasks.
+
+**Scope**
+
+- In: `lib/app/presentation/lib/migration-run-outcomes.js` and its unit test.
+- Out: using it in handlers (T3–T5); templates (T3, T4).
+
+**Design and invariants**
+
+- Export `MIGRATION_NOTICES`: a frozen object keyed by code. Each value is a frozen `{ code, tone, role, title, message }`.
+  - `tone` is one of `info`, `success`, `warning`, `error`; these match the `.callout--*` modifiers.
+  - `role` is `status` for info and success, and `alert` for warning and error.
+
+  Codes and intent (wording may be polished, but keep it specific and never interpolate request data):
+
+  | Code | Tone | Meaning shown to the operator |
+  |---|---|---|
+  | `batch_complete` | info | One batch committed; run again to continue from the saved position. |
+  | `applied` | success | The final batch committed; the migration is applied. |
+  | `force_started` | info | The ledger record was reset and the first batch of a fresh run committed; run again to continue. |
+  | `force_unavailable` | info | Force re-run only applies to applied or failed migrations. |
+  | `already_applied` | warning | Already applied; use Force re-run to start again. |
+  | `concurrent_run` | warning | Another request changed this migration at the same time; review the status before running again. |
+  | `cursor_conflict` | error | The stored cursor was rejected and the migration is marked failed; use Force re-run to restart. |
+  | `batch_failed` | error | The batch did not commit; the ledger error is shown below; Run retries from the last committed batch. |
+  | `form_expired` | warning | Nothing ran; this page expired; reload and try again. |
+  | `migration_not_found` | error | No migration with that id is registered in this build. |
+  | `dry_run_batch` | info | Dry-run batch complete; nothing was written; dry run the next batch to continue. |
+  | `dry_run_done` | success | Dry run complete; nothing was written. |
+  | `dry_run_cursor_invalid` | error | The dry-run cursor was rejected; start the dry run again from the beginning. |
+  | `dry_run_failed` | error | The dry-run batch failed; nothing was written. (The caller shows the expected error's message as detail.) |
+  | `batch_failed_unexpected` | error | The batch failed with an unexpected error, which was logged; the ledger was marked failed if it could be updated; review the status below before running again. |
+  | `dry_run_failed_unexpected` | error | The dry-run batch failed with an unexpected error, which was logged; nothing was written. |
+
+  The two `*_unexpected` texts are fixed. They never include `error.message` or any other error detail.
+
+- Export `LIST_NOTICE_CODES` (only `migration_not_found`) and `DETAIL_NOTICE_CODES`. The detail set is `batch_complete`, `applied`, `force_started`, `force_unavailable`, `already_applied`, `concurrent_run`, `cursor_conflict`, `batch_failed`, `batch_failed_unexpected`, `form_expired`. Dry-run codes never arrive through a query string, because dry runs render directly.
+- Export `getMigrationNotice(code, allowedCodes)`. It returns the notice for an allowed, known code and `null` otherwise, including for non-string input. Handlers use it to parse `?notice=`.
+- Export `classifyMigrationRunError(error, { dryRun })`. It returns a code or `null`, checking in this order:
+  1. `error.code === INVALID_CSRF_TOKEN_CODE` (import it from `./csrf.js`) → `form_expired`.
+  2. `error.name === 'NotFoundError'` → `migration_not_found`.
+  3. `error.code === 'MigrationAlreadyAppliedError'` → `already_applied`.
+  4. `error.code === 'MigrationConcurrencyError'` → `concurrent_run`.
+  5. `error.code === 'MigrationCursorConflictError'` → `cursor_conflict`.
+  6. `dryRun && error.name === 'InvalidCursorError'` → `dry_run_cursor_invalid`. With a real run, `runMigration` never lets `InvalidCursorError` escape, so treat it as unclassified.
+  7. Any other `error.expected === true` → `dry_run_failed` when `dryRun`, else `batch_failed`. `runMigration` rethrows a migration's expected errors unchanged, after recording the ledger failure on a real run.
+  8. Otherwise → `null`, including `AssertionError`, a plain `Error`, and `undefined`. `null` means "unexpected". The caller rethrows it, except for the single `runMigration` call covered by Decision 10, where the handler logs it and uses `getUnexpectedRunCode()`.
+
+  The classifier must **not** map `ValidationError` to `dry_run_cursor_invalid`. A migration may throw its own expected `ValidationError` during a dry run, and that is `dry_run_failed`. The handler maps its own `RunMigrationForm` cursor validation failure to `dry_run_cursor_invalid` directly, before calling the script (T4).
+- Export `getUnexpectedRunCode({ dryRun })`. It returns `dry_run_failed_unexpected` when `dryRun`, else `batch_failed_unexpected`. Keeping it separate from the classifier makes the exception visible at the one call site that uses it.
+- Export `recoverUnexpectedRunError(context, error, { id, dryRun, force })`. It calls:
+
+  ```js
+  context.logger.error(
+      'unexpected error while running migration batch from admin panel',
+      { requestId: context.requestId, migrationId: id, dryRun, force },
+      error,
+  )
+  ```
+
+  and returns `getUnexpectedRunCode({ dryRun })`. Its JSDoc must state that it implements the sanctioned exception in `lib/docs/server-error-handling.md`. It may be called only for an error thrown by the `runMigration` call in the panel's Run, Dry run, and Force handlers, after `classifyMigrationRunError` returned `null`. It never rethrows and never reads `error.message` into its return value.
+- Export `getMigrationOutcomeStatus(code, error)` (or an equivalent the handlers share). It returns `400` for `dry_run_cursor_invalid`, `403` for `form_expired`, `404` for `migration_not_found`, `500` for both `*_unexpected` codes (whatever the error carries), and otherwise `error.httpStatusCode || 500`.
+- JSDoc on every export. No module-private JSDoc.
+
+**Expected touch points**
+
+- `lib/app/presentation/lib/migration-run-outcomes.js` — new.
+- `lib/test/app/presentation/lib/migration-run-outcomes.test.js` — new.
+
+Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
+
+**Acceptance criteria**
+
+- [ ] Every notice has a valid tone, a role consistent with its tone, and a non-empty title and message.
+- [ ] `getMigrationNotice` returns `null` for unknown codes, for known codes outside the allowed set (for example `already_applied` against `LIST_NOTICE_CODES`), and for non-strings. It returns the notice for allowed codes.
+- [ ] The classifier maps each case in the ordered list above, tested with synthetic errors (`{ name, code, expected }` objects or real `kixx/errors` classes).
+- [ ] An `AssertionError`, a plain `Error`, a real-run `InvalidCursorError`, and `undefined` all return `null`.
+- [ ] `getUnexpectedRunCode` returns `dry_run_failed_unexpected` / `batch_failed_unexpected`. Both notices have fixed text with no placeholder. `batch_failed_unexpected` is in `DETAIL_NOTICE_CODES`; `dry_run_failed_unexpected` is in neither allow-list.
+- [ ] `getMigrationOutcomeStatus` returns the documented statuses, including `500` for both unexpected codes even when the error carries another `httpStatusCode`.
+- [ ] `recoverUnexpectedRunError` with a stub `context.logger` (recording calls) and an `AssertionError` that has a `cause`:
+  - It logs exactly once at error level, with the message above.
+  - The info carries `requestId`, `migrationId`, `dryRun`, and `force`.
+  - The third argument is the same error object, so its `cause` is retained.
+  - It returns `batch_failed_unexpected` (`dryRun: false`) and `dry_run_failed_unexpected` (`dryRun: true`).
+
+**Validation**
+
+- `node lib/run-tests.js lib/test/app/presentation/lib/migration-run-outcomes.test.js` — the mapping and allow-list tests pass.
+- `node lib/run-linter.js lib/app/presentation/lib/migration-run-outcomes.js lib/test/app/presentation/lib/migration-run-outcomes.test.js` — no lint errors.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: None yet.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+
+---
+
+### Task T3: Add the Data Migrations list and read-only detail pages with the Developers nav group
+
+**Status:** Not started
+**Depends on:** T1, T2
+**Documentation:** `lib/app/presentation/README.md` (Route Patterns; Reverse Routing; Rendering with HyperviewPageHandler; Page recipe; Admin Sidebar); `lib/docs/frontend-development-guide.md`; `lib/pages/admin/style-guide/table-lists/body.html` and `callouts/body.html`; `lib/templates/README.md` (`#each`, `ifEqual`, `formatDate`)
+
+**Objective**
+
+An admin with migration permission can open Developers → Data Migrations, see every registered migration with its status, and open a detail page showing the full ledger record and any allow-listed notice. An unknown id shows a clear 404 "not found" state inside the section. Admins without the grant see the link and get the standard 403. This task delivers the whole read-only section and its navigation. Action forms come in T4.
+
+**Scope**
+
+- In:
+  - The routes `/migrations` and `/migrations/:id`.
+  - `getAdminMigrations` and `getAdminMigration` in a new `admin-migrations.js` handler module, and its barrel export.
+  - The page directories `pages/admin/migrations/` and `pages/admin/migrations/detail/`.
+  - The Developers group in `admin-nav.html` and the directory card on `pages/admin/page.html`.
+  - Route and handler tests.
+- Out: run, dry-run, and force routes, forms, and handlers (T4); JSON and JS (T5); docs (T6).
+
+**Design and invariants**
+
+- **Routes** (`lib/routes/admin-panel.js`): insert after the files routes and before `{/}`, with `/migrations/:id` before `/migrations`. T4 will insert its action routes above `/migrations/:id`.
+  - `{ pattern: '/migrations/:id', name: 'migration-detail' }`, target `render-detail`, `GET, HEAD`. Handlers: `authorize([{ action: 'urn:kixx:list', resource: 'urn:kixx:admin:migrations' }])`, `AdminPanel.getAdminMigration`, `HyperviewPageHandler({ baseTemplateId: 'admin.html', pathname: '/admin/migrations/detail', usePageCache: false })`.
+  - `{ pattern: '/migrations', name: 'migrations' }`, target `render-list`, `GET, HEAD`. Same `authorize`, then `AdminPanel.getAdminMigrations` and `HyperviewPageHandler({ baseTemplateId: 'admin.html', usePageCache: false })`.
+  - Define a module-level `migrationDecision(action)` helper like `fileDecision`, with a short comment on why the page cache is off: live ledger state, and session-bound CSRF tokens from T4 on.
+- **Handlers** (`lib/app/presentation/request-handlers/admin-panel/admin-migrations.js`, exported through `mod.js`):
+  - `getAdminMigrations`: call `listMigrations(context)`. Map rows to `{ id, description, status, links: { detail } }`. Parse `request.queryParams.notice` with `getMigrationNotice(raw, LIST_NOTICE_CODES)`. Props are `{ migrations, notice, links: { list } }`.
+  - `getAdminMigration`: `id = request.pathnameParams.id`; `migration = await getMigration(context, id)` (T1).
+    - When it is `null`: set `response.status = 404` and props `{ missing: true, links: { list } }`. Do not parse the notice.
+    - Otherwise: props are `{ migration: decorated, notice: getMigrationNotice(raw, DETAIL_NOTICE_CODES), links: { list, detail } }`. `decorated` adds `statsList: [ { name, value } ]` (empty array when `stats` is `null` or empty) to the T1 projection.
+  - Build detail props in one private helper so T4's dry-run and force renders can reuse it. T4 extends the helper with CSRF and action links.
+  - JSDoc on the exported handlers, in the style of `admin-publishing-api-tokens.js`.
+- **List template** (`pages/admin/migrations/page.json`, `page.html`):
+  - `page.json`: `{ "template": "page.html", "subpage": { "title": "Data Migrations", "section": "migrations" } }`.
+  - `page.html`:
+    - A header with the h1 "Data Migrations" and a one-line lede: "registered in this build, in deployment order".
+    - A notice callout (`{{#if notice}}`, `callout callout--{{ notice.tone }}`, `role="{{ notice.role }}"`, the title and message, and an `aria-hidden` icon `[x]`/`[!]`/`[i]` per tone, omitted for success).
+    - A `.table-list` captioned "Migrations" with the columns Id (`<th scope="row"><a href="{{ migration.links.detail }}">{{ migration.id }}</a></th>`), Description, and Status (badge per the tone mapping in Routine choices).
+    - An empty state: "No migrations are registered in this build."
+- **Detail template** (`pages/admin/migrations/detail/page.json`, `page.html`):
+  - `page.json`: `{ "template": "page.html", "subpage": { "title": "Data Migration" } }`. It inherits `section` from the parent; do not repeat it.
+  - When `missing`:
+    - A back link "← Data Migrations" and the h1 "Migration not found".
+    - An error callout with fixed text: no migration with this id is registered in this build.
+    - No id echo.
+  - Otherwise:
+    - A back link, the h1 `{{ migration.id }}`, the description, and the notice callout as on the list page.
+    - A `.table-list` captioned "Ledger" with row-header rows: Status (badge), Batches (`batchCount`, or "None" when null), Started by, Started, Last batch, Completed, and Error.
+    - Format dates with `formatDate ... format="DATETIME_MED"` inside `{{#if}}`. Null shows "Not started" for a pending record, or "Not yet" or "None" as fits.
+    - When `migration.error` is set, Error shows it. It is the ledger's safe message.
+    - A second `.table-list` captioned "Stats" (counter name and value) with the empty state "No stats recorded yet." Use unique caption ids (`ledger-caption`, `stats-caption`).
+    - Mark the actions slot for T4 with a template comment. T4 fills it in.
+- **Nav** (`lib/templates/partials/admin-nav.html`, `{{else}}` branch, after Access):
+
+  ```html
+  <p class="admin-nav__title">Developers</p>
+  <ul class="admin-nav__list">
+      <li><a class="admin-nav__link"{{#ifEqual subpage.section "migrations"}} aria-current="page"{{/ifEqual}} href="/admin/migrations">Data Migrations</a></li>
+  </ul>
+  ```
+
+  No `admin-shell.css` change.
+- **Directory card** (`lib/pages/admin/page.html`): append a card after Files with the title "Data Migrations", a lede like "Review and run the data migrations registered in this build.", and a link "Manage Data Migrations" to `/admin/migrations`.
+
+**Expected touch points**
+
+- `lib/routes/admin-panel.js` — two routes and the decision helper.
+- `lib/app/presentation/request-handlers/admin-panel/admin-migrations.js` — new.
+- `lib/app/presentation/request-handlers/admin-panel/mod.js` — `export * from './admin-migrations.js';`.
+- `lib/pages/admin/migrations/page.json`, `page.html` — new.
+- `lib/pages/admin/migrations/detail/page.json`, `page.html` — new.
+- `lib/templates/partials/admin-nav.html` — the Developers group.
+- `lib/pages/admin/page.html` — the card.
+- `lib/test/routes/admin-panel.test.js` — ordering and decisions.
+- `lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js` — new. Mirror the `makeContext` / `makeRequest` / `makeResponse` mocks in `admin-files.test.js`, with a stub `Migration` Collection (`getByMigrationId`, `createLedgerRecord`, `updateLedgerRecord`), stub records with `get`/`merge`, `context.user = { id: 'admin-1' }`, and `TARGET_PATTERNS` covering every migration target name, with `:id` substitution.
+
+Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
+
+**Acceptance criteria**
+
+- [ ] Both routes precede `{/}` and `*`, and `/migrations/:id` precedes `/migrations`. The first request handler of every target is an `authorize` gate whose `decisions` are `urn:kixx:list` on `urn:kixx:admin:migrations`. Both targets allow `GET, HEAD`.
+- [ ] The list handler returns registry-ordered rows with compiled `/admin/migrations/<id>` links. `?notice=migration_not_found` yields that notice. `?notice=already_applied`, unknown codes, and markup-like values yield `null`.
+- [ ] The detail handler returns the pending projection with `statsList: []` when there is no ledger record, and every ledger field (including `lastBatchAt`) plus `statsList` for an applied stub record. It accepts detail notice codes and rejects `migration_not_found` and unknown codes.
+- [ ] An unknown id sets status 404 and `missing: true`, and the stub Collection records zero reads.
+- [ ] The templates render the described structure with `.table-list`, `.status-badge`, and `.callout` markup copied from the style guide. No `style="` attribute.
+- [ ] The sidebar shows Developers → Data Migrations for every admin and highlights it on the list, detail, and (T4) force pages through the inherited `subpage.section`. The admin directory has the card.
+
+**Validation**
+
+- `node lib/run-tests.js lib/test/routes/admin-panel.test.js lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js` — route ordering, decisions, and handler props pass.
+- `node lib/run-linter.js lib/routes lib/app/presentation/request-handlers/admin-panel lib/test/routes lib/test/app/presentation/request-handlers/admin-panel` — no lint errors.
+- `grep -rn 'style="' lib/pages/admin/migrations lib/templates/partials/admin-nav.html lib/pages/admin/page.html` — prints nothing.
+- `grep -n 'subpage.section "migrations"' lib/templates/partials/admin-nav.html` — one line.
+- `node -e "for (const f of ['lib/pages/admin/migrations/page.json','lib/pages/admin/migrations/detail/page.json']) JSON.parse(require('fs').readFileSync(f,'utf8'))"` — the page.json files parse.
+- `node lib/run-tests.js` — the full unit suite passes.
+- Manual (Operator Runbook): the list, detail, unknown-id, and nav highlight checks in a browser.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: None yet.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+
+---
+
+### Task T4: Run, dry-run, and force flows without JavaScript
+
+**Status:** Not started
+**Depends on:** T3
+**Documentation:** `lib/docs/cross-site-request-forgery.md`; `lib/docs/server-error-handling.md`; `lib/app/presentation/README.md` (Handlers and Execution Order and `skip()`; Request Handlers; Error Handling; Forms; CSRF Protection); `usage-docs/kixx-app/admin-api.md` (Real-run and Dry-run lifecycle)
+
+**Objective**
+
+From the detail page, with JavaScript disabled, an operator can:
+
+- Run one real batch per click (post/redirect/get, with the outcome notice).
+- Dry-run one batch per click, seeing that batch's stats and continuing with a "Dry run next batch" form that carries the returned cursor.
+- Force re-run an applied or failed migration, but only after reading and submitting a separate confirmation page.
+
+Every expected outcome in Decision 7 renders as a specific message. An unexpected failure of the `runMigration` call is logged and shows a fixed-text notice instead of crashing (Decision 10). A double-click or concurrent run shows the concurrency notice. This task is the complete server-side behavior of the actions, and T5 adds JSON to the same handlers. The error-handling docs that record the Decision 10 exception are updated here, so the exception and its documentation land together.
+
+**Scope**
+
+- In:
+  - The routes `/migrations/:id/run`, `/migrations/:id/dry-run`, and `/migrations/:id/force` (GET confirmation and POST).
+  - The handlers `postMigrationRun`, `postMigrationDryRun`, `getMigrationForceConfirmation`, and `postMigrationForce`.
+  - The detail page's actions card and dry-run result card.
+  - The confirmation page `pages/admin/migrations/force/`.
+  - Handler and route tests.
+  - The sanctioned-exception paragraphs in `lib/docs/server-error-handling.md` and in the Error Handling section of `lib/app/presentation/README.md`.
+- Out: `kixx-partial` JSON branches, `data-js-behavior` hooks, the progress readout, and `site.js` (T5); the other docs (T6).
+
+**Design and invariants**
+
+- **Routes**, inserted above `/migrations/:id`, in this order:
+  - `{ pattern: '/migrations/:id/run', name: 'migration-run' }`, target `run`, `POST`. Handlers: `authorize(migrationDecision('run'))`, `AdminPanel.postMigrationRun`.
+  - `{ pattern: '/migrations/:id/dry-run', name: 'migration-dry-run' }`, target `dry-run`, `POST`. Handlers: `authorize(migrationDecision('run'))`, `AdminPanel.postMigrationDryRun`, `HyperviewPageHandler({ baseTemplateId: 'admin.html', pathname: '/admin/migrations/detail', usePageCache: false })`.
+  - `{ pattern: '/migrations/:id/force', name: 'migration-force' }`, with two targets:
+    - `render-confirm` (`GET, HEAD`): `authorize(migrationDecision('run'))`, `AdminPanel.getMigrationForceConfirmation`, `HyperviewPageHandler({ baseTemplateId: 'admin.html', pathname: '/admin/migrations/force', usePageCache: false })`.
+    - `force` (`POST`): `authorize(migrationDecision('run'))`, `AdminPanel.postMigrationForce`.
+  - Add a short route comment explaining why run, dry-run, and force are separate routes: one route cannot host two POST targets.
+- **Common handler rules:**
+  - Read `id` from `request.pathnameParams.id`.
+  - Every POST first calls `validateCsrfFormData`. On `INVALID_CSRF_TOKEN_CODE` it redirects 303 to `<detail>?notice=form_expired` (calling `skip()` on the dry-run route) and runs nothing. Rethrow other errors.
+  - Pass `startedBy: context.user.id` and `now: new Date().toISOString()`.
+  - Wrap **only** the `await runMigration(...)` statement in `try`. In `catch`, call `classifyMigrationRunError(error, { dryRun })`. When it returns `null`, call `code = recoverUnexpectedRunError(context, error, { id, dryRun, force })` (T2), which logs, and continue with that code. Do not rethrow. This is the only place in the panel where an unexpected error is not rethrown (Decision 10). Every other statement in these handlers keeps the normal rule: `validateCsrfFormData` (except `form_expired`), the `getMigration` pre-reads, `getCsrfToken`, and the props helper all rethrow.
+  - `migration_not_found` redirects 303 to `<list>?notice=migration_not_found`.
+  - Compile every redirect with `getHttpTarget`. Share a private `redirectWithNotice(context, response, targetName, params, code)` helper, as in `admin-files.js` `redirect()`.
+- **`postMigrationRun`:**
+  - Call `runMigration(context, { id, dryRun: false, force: false, cursor: null, startedBy, now })`.
+  - On success, redirect 303 to `<detail>?notice=applied` when `result.done`, else `?notice=batch_complete`.
+  - On a classified error, redirect 303 to `<detail>?notice=<code>`: `already_applied`, `concurrent_run`, `cursor_conflict`, `batch_failed`, or `batch_failed_unexpected` (the logged fallback). The detail page then shows the ledger's own safe error (normally "The migration batch failed.") when failure bookkeeping succeeded.
+- **`postMigrationDryRun`:**
+  1. Validate CSRF.
+  2. `migration = await getMigration(context, id)`. If it is `null`: `skip()`, then redirect to the list with `migration_not_found`.
+  3. Parse the cursor: `cursor = normalizeOptionalStringAttribute(formData.get('cursor'))`, `form = new RunMigrationForm({ dryRun: true, force: false, cursor })`, then `form.validate()`. A `ValidationError` renders `dry_run_cursor_invalid` with status 400 and does not call the script.
+  4. Call `runMigration(context, { id, ...form.toJSON(), startedBy, now })`. Avoid object spread if it reads poorly; list the fields explicitly.
+  5. On success, status 200 and `response.updateProps(detailProps + { dryRun })`, where `dryRun` is `{ done, cursor, statsList, notice }`. The notice is `dry_run_done` or `dry_run_batch`. Let the trailing `HyperviewPageHandler` render; do not call `skip()`.
+  6. On a classified error, set the status from `getMigrationOutcomeStatus`. Render the same page with `dryRun: { failed: true, notice, detail }`. `detail` is `error.message` only for `dry_run_failed`, because an expected error's message is client-safe by convention. For `dry_run_cursor_invalid` and `dry_run_failed_unexpected` there is no detail; the unexpected case renders with status 500 and never shows any error text. `migration_not_found` (a race after step 2) uses `skip()` plus the list redirect.
+  7. The detail props helper mints a fresh token with `getCsrfToken()` on every render.
+- **`getMigrationForceConfirmation`:**
+  - `null` → `skip()`, then redirect to the list with `migration_not_found`.
+  - A status other than `applied` or `failed` → `skip()`, then redirect to `<detail>?notice=force_unavailable`.
+  - Otherwise props `{ migration (decorated), csrf: await getCsrfToken(...), links: { force, detail } }`.
+- **`postMigrationForce`:**
+  1. Validate CSRF.
+  2. `formData.get('confirm_force') !== 'yes'` → redirect 303 to the confirmation page; nothing runs.
+  3. `getMigration`: `null` → list notice; a status other than `applied`/`failed` → `<detail>?notice=force_unavailable`.
+  4. `runMigration(context, { id, dryRun: false, force: true, cursor: null, startedBy, now })`.
+  5. On success, redirect to `<detail>?notice=applied` if done, else `force_started`. Classified errors redirect as for Run, including the logged `batch_failed_unexpected` fallback.
+- **Detail props helper** (extend the T3 helper):
+  - Add `csrf` from `getCsrfToken`.
+  - Add `links.run`, `links.dryRun`, and `links.forceConfirm`.
+  - Add the flags `canRun` (`status !== 'applied'`) and `canForce` (`status === 'applied' || status === 'failed'`). Compute the flags in the handler so templates hold no lifecycle logic.
+  - `getAdminMigration` now uses it as well.
+- **Detail template additions** (in the slot left by T3):
+  - **Dry-run result card** (`{{#if dryRun}}`):
+    - The notice callout. When `dryRun.detail` is set, add a `type-body-sm` line with it.
+    - On success, a `.table-list` captioned "Dry-run batch stats" (unique id), with a note that these are this batch's counters only and were not recorded.
+    - When `dryRun.done` is false and the run did not fail, a form POST to `links.dryRun` with the CSRF hidden field, `<input type="hidden" name="cursor" value="{{ dryRun.cursor }}">`, and a button "Dry run next batch" (`button button--primary`).
+  - **Actions card**: the h2 "Actions" and a short lede: Run commits one batch per request and resumes from the last committed batch; Dry run reads and counts without writing anything. Then a `.cluster` with:
+    - `{{#if canRun}}` a POST form to `links.run` (CSRF field; `button button--primary`, label "Run").
+    - A POST form to `links.dryRun` (CSRF field, an empty hidden `cursor`; `button button--secondary`, label "Dry run"; when a dry-run result is showing, label it "Start dry run over").
+    - `{{#if canForce}}` the link `<a class="button button--secondary" href="{{ links.forceConfirm }}">Force re-run</a>`.
+- **Confirmation page** (`pages/admin/migrations/force/page.json` `{ "template": "page.html", "subpage": { "title": "Force Re-run" } }`, `page.html`):
+  - A back link to the detail page, and the h1 "Force re-run" with the migration id.
+  - A `callout callout--warning` (`[!]` icon). It explains that force resets this migration's ledger record (saved cursor, accumulated stats, and batch count are cleared, and the start identity and time are replaced) and starts a fresh run from the first batch. It also says force **does not undo** data changes made by earlier batches; those batches run again over already-changed data, which relies on the migration being idempotent.
+  - The current status (badge) and batch count.
+  - A POST form to `links.force` with the CSRF field and `<input type="hidden" name="confirm_force" value="yes">`, a `button button--danger` labelled "Reset ledger and run first batch", and a "Cancel" link back to the detail page.
+- **Error-handling docs** (record the one sanctioned exception, with its reason and boundary, in each place):
+  - `lib/docs/server-error-handling.md`: a short subsection after "How Each Entry Point Applies the Rule", for example "Sanctioned Exception: Admin Panel Migration Runs". It says:
+    - The `runMigration` call in the admin panel's Run, Dry run, and Force handlers logs an unexpected error at error level (with `cause`) and renders a fixed notice instead of propagating it.
+    - The reason: an operator running migrations interactively should stay on the page, and a migration bug is confined to that one request's batch.
+    - The cost: no router `error` event, no Node.js shutdown, and no Cloudflare exception signal; the log line is the signal.
+    - Every other path, including the Admin API's run endpoint, follows the normal rule.
+    - New exceptions must not be added without an operator decision.
+  - `lib/app/presentation/README.md`, Error Handling: one or two sentences under the "Unexpected (programmer)" bullet pointing to that subsection and naming `recoverUnexpectedRunError` as the only sanctioned use.
+- **Concurrency:** no new locking. A double-clicked no-JS Run sends two POSTs. The browser shows the second response: `concurrent_run` on a version conflict, or `already_applied` if the first finished the migration, or `batch_complete` if it simply ran the next batch. All three are correct.
+
+**Expected touch points**
+
+- `lib/routes/admin-panel.js` — three routes (four targets).
+- `lib/app/presentation/request-handlers/admin-panel/admin-migrations.js` — four handlers and the shared helpers.
+- `lib/pages/admin/migrations/detail/page.html` — the actions and dry-run result cards.
+- `lib/pages/admin/migrations/force/page.json`, `page.html` — new.
+- `lib/test/routes/admin-panel.test.js` — ordering and decisions.
+- `lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js` — flow tests. The mock context gains `requestId` and a recording `logger` stub (`error`, `warn`, `info`, `debug`).
+- `lib/docs/server-error-handling.md` — the sanctioned-exception subsection.
+- `lib/app/presentation/README.md` — the Error Handling pointer.
+
+Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
+
+**Acceptance criteria**
+
+- [ ] Route test: the three action routes come before `/migrations/:id`, which comes before `{/}` and `*`. Every action target's first handler authorizes `urn:kixx:run` on `urn:kixx:admin:migrations`. `render-confirm` allows `GET, HEAD`, and the others allow `POST` only.
+- [ ] Run, with a stub ledger and the registered no-op migration:
+  - No record → the ledger is created with `startedBy: 'admin-1'`, and the redirect is `303 /admin/migrations/2026-07-17-example-noop?notice=applied`.
+  - An `applied` record → `?notice=already_applied`, and no ledger write.
+  - `updateLedgerRecord` throws `{ name: 'VersionConflictError' }`, or `createLedgerRecord` throws `{ name: 'DocumentAlreadyExistsError' }` → `?notice=concurrent_run`.
+  - An unregistered id → `303 /admin/migrations?notice=migration_not_found`.
+  - A CSRF `verify` that returns false → `?notice=form_expired`, with zero ledger calls.
+  - Unexpected failure inside `runMigration`, inside the boundary: `getByMigrationId` rejects, or `updateLedgerRecord` rejects with a plain `Error` (non-conflict). The handler does not throw, redirects 303 to `?notice=batch_failed_unexpected`, and `context.logger.error` was called once with `migrationId`, `dryRun: false`, `force: false`, and the `AssertionError` whose `cause` is the stub's error.
+- [ ] Dry run:
+  - A blank cursor field passes `cursor: null`. Success renders status 200 with `dryRun.done === true`, `dryRun.notice.code === 'dry_run_done'`, `statsList` from the no-op, a fresh CSRF token, and zero ledger writes. `skip` is not called.
+  - A non-string cursor value (for example `formData.set('cursor', new Blob(['x']))`) renders status 400 with `dry_run_cursor_invalid` and does not run the script.
+  - An unregistered id calls `skip()` and redirects to the list notice.
+  - A CSRF failure calls `skip()` and redirects with `form_expired`.
+  - Outside the boundary: when the stub `getByMigrationId` rejects, the dry-run handler's `getMigration` pre-read rethrows an `AssertionError`, and nothing is logged by the handler.
+- [ ] Force:
+  - The confirmation GET renders for `applied` and `failed` stub records, and redirects to `?notice=force_unavailable` for pending and running ones, and to the list notice for an unknown id.
+  - A POST without `confirm_force=yes` redirects to `/admin/migrations/<id>/force` with zero ledger writes.
+  - A POST with it, on an `applied` record, resets and runs. The record ends `applied` with `batchCount` 1 and the new `startedBy`, and the redirect is `?notice=applied`.
+  - A POST on a `running` record redirects to `force_unavailable` without running.
+  - With `confirm_force=yes` on an `applied` record, `updateLedgerRecord` rejecting with a plain `Error` → `?notice=batch_failed_unexpected`, logged with `force: true`.
+- [ ] The templates render all the parts described, only allow-listed or server-derived values reach the page, and there is no `style="`.
+- [ ] `lib/docs/server-error-handling.md` and `lib/app/presentation/README.md` describe the one sanctioned exception, its reason, and its boundary.
+
+**Validation**
+
+- `node lib/run-tests.js lib/test/routes/admin-panel.test.js lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js` — routes and every flow above pass.
+- `node lib/run-linter.js lib/routes lib/app/presentation lib/test/routes lib/test/app/presentation` — no lint errors.
+- `grep -rn 'style="' lib/pages/admin/migrations` — prints nothing.
+- `grep -n 'confirm_force' lib/pages/admin/migrations/force/page.html lib/app/presentation/request-handlers/admin-panel/admin-migrations.js` — the field exists in the form and is rechecked in the handler.
+- `grep -rn 'recoverUnexpectedRunError' lib/app` — appears only in `migration-run-outcomes.js` and in the three POST handlers of `admin-migrations.js`.
+- `grep -n 'recoverUnexpectedRunError\|Sanctioned' lib/docs/server-error-handling.md lib/app/presentation/README.md` — both docs record the exception.
+- `node lib/run-tests.js` — the full unit suite passes.
+- Manual (Operator Runbook): the no-JS flows in a browser with JavaScript disabled.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: None yet.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+
+---
+
+### Task T5: Auto-continue Run and Dry run with JavaScript
+
+**Status:** Not started
+**Depends on:** T4
+**Documentation:** `lib/docs/frontend-development-guide.md` ("Browser JavaScript"); `lib/eslint.config.js` (browser globals, `ecmaVersion: 2017`); `lib/app/presentation/lib/csrf.js` (token lifecycle); the `kixx-partial` fetch pattern in `lib/static-assets/javascript/site.js` (`saveMetadata`, `togglePublish`)
+
+**Objective**
+
+With JavaScript enabled, pressing Run or Dry run keeps posting one batch at a time through the T4 endpoints until the migration is done, the operator presses Stop (which halts after the batch in flight), or the first error. Batch count, accumulated stats, and status update live in an accessible live region. A real run finishes on the server-rendered detail page with the outcome notice. A dry run shows its totals and final message in place. Without JavaScript, nothing changes. This task owns both halves of the enhancement: the JSON contract and the browser behavior.
+
+**Scope**
+
+- In:
+  - `kixx-partial` JSON branches in `postMigrationRun` and `postMigrationDryRun`, with tests.
+  - `data-js-behavior` hooks, the hidden progress readout, and the hidden Stop button in the detail template.
+  - The `migration-runner` IIFE in `site.js`.
+- Out: force looping (deliberately excluded, see Routine choices); a new error handler; any change to the no-JS behavior (T4).
+
+**Design and invariants**
+
+- **Detection:** `request.headers.get('kixx-partial')` is truthy. JS sends `kixx-partial: migration-run`. Every non-JSON behavior from T4 stays byte-for-byte the same for requests without the header.
+- **JSON contract** (document it in a comment above the handlers). Success is status 200:
+
+  ```json
+  {
+      "done": false,
+      "dryRun": false,
+      "cursor": null,
+      "stats": { "scanned": 200 },
+      "migration": { "status": "running", "batchCount": 2, "stats": { "scanned": 200 }, "lastBatchAt": "...", "completedAt": null, "error": null },
+      "notice": { "code": "batch_complete", "tone": "info", "role": "status", "title": "...", "message": "..." },
+      "location": "/admin/migrations/<id>?notice=batch_complete",
+      "csrf": { "fieldName": "csrf_token", "token": "..." }
+  }
+  ```
+
+  - Real run:
+    - `cursor` is always `null`; the server-owned cursor is never sent.
+    - `stats` is the ledger's accumulated stats (`result.stats`).
+    - `migration` is a fresh `getMigration()` read after the batch, giving an exact ledger `batchCount`.
+    - `location` is the URL the no-JS branch would redirect to.
+  - Dry run:
+    - `cursor` is the next caller-owned cursor (`null` when done).
+    - `stats` is this batch's stats.
+    - `migration` is `null`, and `location` is `null`.
+  - Failure uses the status from `getMigrationOutcomeStatus`:
+
+    ```
+    { error: { code, tone, role, title, message, detail }, location, csrf }
+    ```
+
+    - `detail` is set only for `dry_run_failed`.
+    - `location` is the no-JS redirect target: `<detail>?notice=<code>`, or `<list>?notice=migration_not_found`, or `null` for dry-run codes.
+    - For `form_expired`, status 403, `csrf` is omitted.
+  - A fresh token comes from `getCsrfToken()` on every other JSON response.
+  - The dry-run route calls `skip()` before `respondWithJSON`, on every JSON path.
+  - **Unexpected `runMigration` failures** (Decision 10) are JSON too. The handler logs once through `recoverUnexpectedRunError` (the same call as the no-JS path; never log twice) and returns status **500** with `error.code` `batch_failed_unexpected` (real run or force) or `dry_run_failed_unexpected` (dry run). The fixed notice text goes out with no `detail`; never put `error.message` in it. `location` is `<detail>?notice=batch_failed_unexpected` for a real run and `null` for a dry run, and a fresh `csrf` is included. The JS loop gets a JSON body for these, so it shows them like any other classified error, not as an "unexpected response".
+  - Errors outside the Decision 10 boundary (the `getMigration` reads, `getCsrfToken`, CSRF failures other than `form_expired`) still rethrow, so the client gets the admin HTML error page.
+- **Template hooks** (detail page):
+  - Wrap the dry-run result card and the actions card in `<section class="flow" data-js-behavior="migration-runner" data-csrf-field="{{ csrf.fieldName }}">`.
+  - Mark the Run form `data-migration-mode="run"`. Mark both dry-run forms (the actions-card one and the "Dry run next batch" one) `data-migration-mode="dry-run"`.
+  - Inside the section, add a progress block marked `data-migration-progress` with the `hidden` attribute. It holds:
+    - `<p role="status" aria-live="polite" data-migration-progress-status></p>`
+    - a line "Batches: <span data-migration-progress-batches>0</span>"
+    - an `<ul class="list-unstyled" data-migration-progress-stats></ul>`
+    - a `<button type="button" class="button button--secondary" data-migration-stop hidden>Stop</button>`
+  - Use `type-body-sm` text and the existing `.card flow` for the block. No new CSS.
+- **Behavior** (`site.js`, new IIFE block, commented like the existing ones):
+  - **Setup:** for each `[data-js-behavior="migration-runner"]`, find the forms, the progress block, the status element, the batch count, the stats list, and the Stop button. If any is missing, `console.warn` with an eslint-disable comment, as the existing blocks do, and skip this container.
+  - **On submit** of any `form[data-migration-mode]`:
+    - `preventDefault()`. Ignore the submit while a loop is running.
+    - Disable every submit button in the container, reveal the progress block and the Stop button, and set the status to "Running…" or "Dry run running…".
+  - **Each iteration:**
+    - Build the body with `new URLSearchParams(new FormData(form))`, then `body.set(csrfField, latestToken)`. In dry-run mode, also `body.set('cursor', cursor || '')`.
+    - Call `fetch(form.action, { method: 'POST', headers: { 'kixx-partial': 'migration-run' }, body })`.
+    - Check the content type **before** `response.ok`: a JSON 500 (`*_unexpected`) is a normal error response. Only when the response `content-type` does not include `application/json` (an HTML 500 from outside the boundary, a 403 page, or a login redirect followed by `fetch`) does the loop stop and show "The server returned an unexpected response (HTTP <status>). Reload the page to see the current status." For a network failure, stop with "Could not reach the server. Check your connection, then reload the page."
+    - Otherwise parse the JSON and take `data.csrf.token` when present.
+  - **Real-run mode:**
+    - Update batches from `data.migration.batchCount`, the stats list from `data.migration.stats`, and the status text from `data.notice.title`.
+    - On `!response.ok`, on `data.done`, or when Stop was requested, call `window.location.assign(data.location)`. The server-rendered page shows the outcome; this is how the loop "stops on the first error and shows it".
+  - **Dry-run mode:**
+    - Count the batches and sum each stat key into totals in JS.
+    - On `!response.ok`: show `error.title`, `error.message`, and `error.detail` in the status element, and stop. On `dry_run_cursor_invalid`, also clear the form's hidden `cursor`.
+    - On `data.done`: show `data.notice.title` and `data.notice.message` with the totals, clear the cursor and totals, and stop.
+    - When Stop was requested: write the latest cursor into the submitted form's hidden `cursor` input, relabel its button "Continue dry run", keep the totals for the next submit, show "Dry run stopped after N batches. Nothing was written.", and stop.
+    - Otherwise carry `data.cursor` into the next iteration.
+  - **Stop:** a click sets a flag, disables the button, and sets "Stopping after this batch…". The batch in flight always completes, because a request is never aborted.
+  - **When the loop ends** without navigating, re-enable the submit buttons and hide the Stop button.
+  - Rebuild the stats list with `document.createElement('li')` and `textContent` (`name: value`).
+- **Lint constraints:**
+  - `no-constant-condition` and `no-loop-func` are on. Structure the loop as a recursive `step()` that returns a promise, or as a `while (keepRunning)` flag loop that defines no functions inside it.
+  - ES2017 only: no object spread, `?.`, or `??`.
+  - No `innerHTML`.
+  - No new globals are expected, because `fetch`, `FormData`, `URLSearchParams`, and `window` are allowlisted.
+
+**Expected touch points**
+
+- `lib/app/presentation/request-handlers/admin-panel/admin-migrations.js` — the JSON branches.
+- `lib/pages/admin/migrations/detail/page.html` — the hooks, the progress block, and the Stop button.
+- `lib/static-assets/javascript/site.js` — the `migration-runner` block.
+- `lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js` — JSON tests (`makeRequest({ partial: true })` sets `kixx-partial`).
+- `lib/eslint.config.js` — only if a new browser global proves necessary.
+
+Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
+
+**Acceptance criteria**
+
+- [ ] Real run with `kixx-partial`:
+  - Success → 200 JSON with `done: true`, `notice.code: 'applied'`, `migration.status: 'applied'`, `migration.batchCount: 1`, `cursor: null`, `location` `/admin/migrations/<id>?notice=applied`, and a fresh `csrf.token`.
+  - An `applied` record → 409 with `error.code: 'already_applied'` and a `location`.
+  - A version conflict → 409 `concurrent_run`.
+  - An unknown id → 404 `migration_not_found`, with the list `location`.
+  - A CSRF failure → 403 `form_expired` with no `csrf` key.
+  - `updateLedgerRecord` rejects with a plain `Error` → 500 JSON with `error.code: 'batch_failed_unexpected'`, no `error.detail`, and `location` `/admin/migrations/<id>?notice=batch_failed_unexpected`. `context.logger.error` is called exactly once.
+- [ ] Dry run with `kixx-partial`:
+  - Success → 200 JSON with `dryRun: true`, `done: true`, `cursor: null`, the no-op's `stats`, `migration: null`, and a fresh token; `skip` is called.
+  - An invalid cursor → 400 `dry_run_cursor_invalid`; `skip` is called.
+  - An unknown id → 404 JSON; `skip` is called.
+  - The `dry_run_failed_unexpected` branch reuses the same helper and the same status mapping as the real run. The handler cannot reach it with the registered no-op, so T2's `recoverUnexpectedRunError` tests cover the dry-run code. Assert in review that the dry-run JSON error branch uses `getMigrationOutcomeStatus` (500) and omits `detail` for that code.
+- [ ] Requests without the header still behave exactly as in T4, and the T4 tests pass unchanged.
+- [ ] In a browser, Run and Dry run loop to completion with live batch count and stats, Stop halts after the current batch, and the first error stops the loop and is shown. A dry-run Stop can continue. A real run ends on the server-rendered detail page with its notice. (These are operator checks.)
+- [ ] `site.js` passes lint, and the block degrades with a `console.warn` when its markup is missing.
+
+**Validation**
+
+- `node lib/run-tests.js lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js` — the JSON and no-JS flows pass.
+- `node lib/run-linter.js lib/static-assets/javascript lib/app/presentation/request-handlers/admin-panel lib/test/app/presentation/request-handlers/admin-panel` — no lint errors.
+- `grep -n 'innerHTML' lib/static-assets/javascript/site.js` — no new occurrences in the `migration-runner` block.
+- `node lib/run-tests.js` — the full unit suite passes.
+- Manual (Operator Runbook): the JS loop, Stop, error, two-tab concurrency, and expired-form checks.
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: None yet.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+
+---
+
+### Task T6: Document the admin panel migration workflow
+
+**Status:** Not started
+**Depends on:** T3, T4, T5
+**Documentation:** `lib/docs/doc-index.md`; `lib/app/migrations/README.md`; `lib/app/presentation/README.md` (Admin Sidebar); `usage-docs/kixx-app/admin-api.md`; `lib/pages/admin/style-guide/table-lists/body.html`
+
+**Objective**
+
+Every doc that describes how migrations are run, and how the admin sidebar is organized, matches the shipped panel. A developer or operator reading the docs learns that `/admin/migrations` exists, what Run, Dry run, and Force do there, how it differs from the API and CLI, and who can use it. This is a single documentation pass after the behavior is final.
+
+**Scope**
+
+- In: the five documents above. Keep the edits concise, in each document's existing voice and format.
+- Out: `devkit/README.md` and `usage-docs/kixx-devkit/` (the CLI is unchanged); new usage-doc files. There is no admin-panel usage doc, and creating one is not requested.
+
+**Design and invariants**
+
+- `lib/app/migrations/README.md`:
+  - Intro: migrations advance "from the admin panel (`/admin/migrations`) or through the Admin API".
+  - Add a short "Running from the Admin Panel" section:
+    - Developers → Data Migrations, which requires `urn:kixx:run`/`urn:kixx:list` on `urn:kixx:admin:migrations` (Developer and Root Admin).
+    - Each request runs one batch. Without JS, one batch per click; with JS, Run and Dry run continue until done or Stop.
+    - The dry-run cursor stays in the page.
+    - Force requires a confirmation page, resets only the ledger, and never undoes data.
+    - An unexpected batch failure is logged and shown as a notice, and the server keeps running. This differs from the Admin API; link to the exception in `lib/docs/server-error-handling.md` (written in T4).
+  - Keep the pointer to `usage-docs/kixx-app/admin-api.md` for the lifecycle.
+- `lib/docs/doc-index.md`, Data Migrations summary: mention the admin panel alongside the Admin API.
+- `usage-docs/kixx-app/admin-api.md`: add a brief note near the migration sections.
+  - The admin panel at `/admin/migrations` drives the same scripts, ledger, and permissions with cookie sign-in and CSRF instead of HTTP Basic.
+  - One batch per request.
+  - The panel's force asks for confirmation; the API's `force: true` does not.
+  - An unexpected batch failure in the panel shows a notice (and is logged) instead of a 500.
+  - Do not restate the lifecycle.
+- `lib/app/presentation/README.md`, Admin Sidebar: add one or two sentences. The default branch of `admin-nav.html` groups sections under Content, Reference, Access, and Developers. Links are shown to every signed-in admin regardless of permission, and a role without the grant gets the standard 403 when it follows one.
+- `lib/pages/admin/style-guide/table-lists/body.html`, the badge Variants notes: add the migration statuses to the tone notes. Info is "pending"; warning is "expired, running"; success is "active, published, applied"; danger is "revoked, failed". Use entities as elsewhere; `{{ }}` is not processed in `body.html`.
+- If any doc names `site.js` behaviors exhaustively, add `migration-runner`. The frontend guide lists two only as examples, so it needs no change.
+
+**Expected touch points**
+
+- `lib/app/migrations/README.md`
+- `lib/docs/doc-index.md`
+- `usage-docs/kixx-app/admin-api.md`
+- `lib/app/presentation/README.md`
+- `lib/pages/admin/style-guide/table-lists/body.html`
+
+Treat this list as orientation, not permission to ignore other necessary files. Record the actual files changed in the handoff notes.
+
+**Acceptance criteria**
+
+- [ ] Each document above mentions the panel or the Developers group accurately and briefly, and nothing contradicts T3–T5 behavior. In particular: one batch per request, force confirmation, dry-run cursor ownership, and permissions.
+- [ ] No doc claims the panel changes the API, the CLI, or the roles.
+
+**Validation**
+
+- `grep -n "admin/migrations" lib/app/migrations/README.md lib/docs/doc-index.md usage-docs/kixx-app/admin-api.md` — each file mentions the panel.
+- `grep -n "Developers" lib/app/presentation/README.md` — the sidebar note exists.
+- `grep -n "applied\|failed\|running" lib/pages/admin/style-guide/table-lists/body.html` — the badge notes include the migration statuses.
+- `node lib/run-tests.js` — still passes (docs-only change).
+
+**Progress and handoff**
+
+- Completed: Nothing yet.
+- Current state: Not started.
+- Remaining: Everything described above.
+- Decisions and discoveries: None yet.
+- Actual files changed: None yet.
+- Validation run: None yet.
+- Blockers: None.
+
+---
+
+Operator Runbook
+----------------
+
+Run after all tasks are complete. Agents do not perform these steps.
+
+- [ ] Run the full suites from the repo root: `node lib/run-tests.js`, `deno run -A lib/run-tests.js`, `node lib/run-linter.js lib`.
+- [ ] Start the app from `lib/` with `node node-server.js` (port 2026). Sign in at `/login/admin/new` as a **Developer** or **Root Admin**. If no admin exists yet, create one with `kixx admin` (see `usage-docs/kixx-devkit/admin.md`).
+- [ ] Navigation: Developers → Data Migrations appears and is highlighted on `/admin/migrations`, a detail page, and the force confirmation page. The admin directory shows the Data Migrations card. Sign in as an **Admin**-role account: the link shows, and following it returns the standard 403 page.
+- [ ] List and detail: `2026-07-17-example-noop` shows its description and a `pending` badge. Its detail page shows the ledger table with "Not started" values. `/admin/migrations/does-not-exist` shows the in-section "Migration not found" state with status 404.
+- [ ] No-JS flows (disable JavaScript in the browser's devtools):
+  - Dry run → "Dry run complete", with the batch's stats.
+  - Run → redirect with the "applied" notice and a filled ledger. Run is now hidden.
+  - Force re-run → the confirmation page with the reset/no-undo warning → submit → "applied" again, with batch count 1.
+  - Re-submit the Run form from history → the "already applied" notice.
+- [ ] Multi-batch behavior needs a scratch migration. Temporarily register one locally in `lib/app/migrations/mod.js`, and **do not commit it**. It should return `done: false` with cursors `"1"`…`"4"` and `done: true` on the fifth call, with `stats: { scanned: 10 }`. Optional variants:
+  - One that throws an expected error (for example `new ConflictError('Example failure')`) on batch 3, which should show the "batch failed" notice and the ledger error.
+  - One that throws `new Error('x')`, which is unexpected. Without JS, Run redirects to the detail page with the "failed with an unexpected error" notice, and the ledger shows `failed` with "The migration batch failed." The server log has one error-level entry with the migration id and the wrapped error and its `cause`. **The Node.js server keeps running**: confirm that another page loads without a restart. With JS, Run stops and lands on the same notice. A dry run of it shows the dry-run unexpected notice inline (no JS: the detail page with status 500 and the notice), and no error text appears on the page.
+  - One that throws an error named `InvalidCursorError` for an unknown cursor (for the dry-run invalid cursor check).
+- [ ] With the scratch migration, no JS:
+  - Each Run click advances one batch (`batch_complete`).
+  - A dry run shows "Dry run next batch" carrying the cursor. Editing the hidden cursor in devtools gives the invalid-cursor message.
+  - Double-click Run: the result is the concurrency notice or a normal next batch, never an error page.
+- [ ] With the scratch migration, with JS:
+  - Run loops to applied, with live batch count and stats, and ends on the detail page with the "applied" notice.
+  - Start again after Force, press Stop mid-run: it halts after the current batch and lands on `batch_complete`.
+  - A dry run loops with accumulating totals. Stop then "Continue dry run" resumes.
+  - Two tabs running at once: one shows the concurrency notice.
+  - Delete the `kixx_csrf_session` cookie in devtools, then press Run: the "page expired" message appears and nothing runs.
+- [ ] Check both themes, and about 360px width (the tables scroll inside their wrappers, and the page does not scroll sideways).
+- [ ] Remove the scratch migration.
+- [ ] Optional: rebuild and run the e2e suites per `test-app/README.md` (`node tools/build-test-app.js`, then `node run-tests.js --nodejs` / `--cloudflare` from `test-app/`) to confirm nothing regressed, and spot-check the panel on a Cloudflare deployment of the test app.
