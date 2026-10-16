@@ -25,7 +25,7 @@
 </div>
 
 <h3 class="type-h3 doc-section-heading">Variants</h3>
-<p class="doc-lede">Four shipped variants plus a size modifier. Extend them when the project needs another role. <code>.button--small</code> is for compact controls such as the header actions.</p>
+<p class="doc-lede">Four shipped variants plus a size modifier. Extend them when the project needs another role. <code>.button--small</code> is for compact controls such as the header actions and table row actions.</p>
 <div class="example-grid grid-auto">
     <div class="card card--flush example">
         <div class="example__preview"><button class="button" type="button">Cancel</button></div>
@@ -49,7 +49,7 @@
                 <span>dark</span>
             </button>
         </div>
-        <div class="example__label"><code>.button--small</code><span class="example__note">Same box, a smaller size &mdash; combines with any variant</span></div>
+        <div class="example__label"><code>.button--small</code><span class="example__note">Smaller box and label &mdash; combines with any variant</span></div>
     </div>
 </div>
 
@@ -113,7 +113,8 @@
             <li>Lead the label with a verb &mdash; &ldquo;Save changes,&rdquo; &ldquo;Delete,&rdquo; &ldquo;Invite.&rdquo;</li>
             <li>Keep emphasis and sizing consistent across the project's button roles.</li>
             <li>Reserve <code>.button--danger</code> for actions that destroy something.</li>
-            <li>Use <code>.button--secondary</code> for repeated per-row actions and pagination, so they recede behind the view&rsquo;s primary action.</li>
+            <li>Use <code>.button--secondary</code> for pagination and repeated actions, so they recede behind the view&rsquo;s primary action.</li>
+            <li>Use <code>.button--small</code> in dense places &mdash; the header and <a href="/admin/style-guide/table-lists">table list</a> rows.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont flow">
@@ -122,7 +123,7 @@
             <li>Stack several primary buttons competing for the same attention.</li>
             <li>Use <code>.button--secondary</code> as a stand-in for a disabled button &mdash; it is a live control.</li>
             <li>Use a button to navigate &mdash; that&rsquo;s a link&rsquo;s job.</li>
-            <li>Remove the focus ring or drop below the <code>2.5rem</code> target.</li>
+            <li>Remove the focus ring, or drop below the <code>2.5rem</code> target outside <code>.button--small</code> (<code>2rem</code>).</li>
             <li>Introduce motion without respecting reduced-motion preferences or checking that labels and targets remain usable.</li>
         </ul>
     </div>

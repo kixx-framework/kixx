@@ -43,21 +43,21 @@
                         <td>{{ formatDate file.originalUploadedAt format="DATETIME_MED" }}</td>
                         <td class="table-list__actions">
                             <div class="cluster">
-                                <a class="button button--secondary" href="{{ file.links.detail }}">Manage</a>
+                                <a href="{{ file.links.detail }}">Manage</a>
 
                                 {{#if file.isPublished}}
                                 <form method="POST" action="{{ file.links.unpublish }}">
                                     {{#if csrf}}
                                     <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
                                     {{/if}}
-                                    <button class="button" type="submit">Unpublish</button>
+                                    <button class="button button--small" type="submit">Unpublish</button>
                                 </form>
                                 {{else}}
                                 <form method="POST" action="{{ file.links.publish }}">
                                     {{#if csrf}}
                                     <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
                                     {{/if}}
-                                    <button class="button" type="submit">Publish</button>
+                                    <button class="button button--small" type="submit">Publish</button>
                                 </form>
                                 {{/if}}
                             </div>

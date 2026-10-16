@@ -35,8 +35,8 @@
                         <td>Oct 3, 2026, 9:14 AM</td>
                         <td class="table-list__actions">
                             <div class="cluster">
-                                <a class="button button--secondary" href="#anatomy-files-caption">Manage</a>
-                                <button class="button" type="button">Unpublish</button>
+                                <a href="#anatomy-files-caption">Manage</a>
+                                <button class="button button--small" type="button">Unpublish</button>
                             </div>
                         </td>
                     </tr>
@@ -48,8 +48,8 @@
                         <td>Oct 11, 2026, 4:02 PM</td>
                         <td class="table-list__actions">
                             <div class="cluster">
-                                <a class="button button--secondary" href="#anatomy-files-caption">Manage</a>
-                                <button class="button" type="button">Publish</button>
+                                <a href="#anatomy-files-caption">Manage</a>
+                                <button class="button button--small" type="button">Publish</button>
                             </div>
                         </td>
                     </tr>
@@ -65,7 +65,7 @@
         <li><strong>Cells</strong> &mdash; dense <code>--text-body-sm</code> type with a hairline rule between rows. Text wraps, but cells keep a minimum width so the table scrolls rather than crushing text.</li>
         <li><strong>Secondary line</strong> &mdash; a <code>&lt;div class="type-caption"&gt;</code> under the main value, such as the filename beneath a title.</li>
         <li><strong>Status badge</strong> &mdash; <code>.status-badge</code>, the record&rsquo;s state as a word with a tone marker.</li>
-        <li><strong>Actions cell</strong> &mdash; <code>.table-list__actions</code> holds a <code>.cluster</code> of buttons and inline forms that never wraps.</li>
+        <li><strong>Actions cell</strong> &mdash; <code>.table-list__actions</code> holds a <code>.cluster</code> of links and small-button forms that never wraps. Actions stay quiet so the record&rsquo;s fields lead the row.</li>
     </ol>
 </div>
 
@@ -117,9 +117,9 @@
                 &lt;td&gt;1.2 MB&lt;/td&gt;
                 &lt;td class="table-list__actions"&gt;
                     &lt;div class="cluster"&gt;
-                        &lt;a class="button button--secondary" href="/admin/files/…"&gt;Manage&lt;/a&gt;
+                        &lt;a href="/admin/files/…"&gt;Manage&lt;/a&gt;
                         &lt;form method="POST" action="/admin/files/…/unpublish"&gt;
-                            &lt;button class="button" type="submit"&gt;Unpublish&lt;/button&gt;
+                            &lt;button class="button button--small" type="submit"&gt;Unpublish&lt;/button&gt;
                         &lt;/form&gt;
                     &lt;/div&gt;
                 &lt;/td&gt;
@@ -151,7 +151,8 @@
             <li>Use a table list when rows share fields worth comparing down a column.</li>
             <li>Lead each row with the field people scan for, as a row header.</li>
             <li>Show status with a badge whose text is the status word.</li>
-            <li>Use <code>.button--secondary</code> for repeated row actions so they recede.</li>
+            <li>Make row actions links whenever they navigate, such as &ldquo;Manage&rdquo; or &ldquo;View&rdquo;.</li>
+            <li>Use a <code>.button--small</code> inside a form only when the action changes data, such as &ldquo;Publish&rdquo; or &ldquo;Revoke&rdquo;. Add <code>.button--secondary</code> to make it recede further.</li>
         </ul>
     </div>
     <div class="card card--accent-primary guideline guideline--dont flow">
@@ -161,6 +162,7 @@
             <li>Add row hover, zebra stripes, or a stacked mobile layout &mdash; the wrapper scrolls instead.</li>
             <li>Color the badge text or the row; tone belongs to the marker.</li>
             <li>Use a table for a handful of free-form items; reach for cards.</li>
+            <li>Put full-size buttons in a row &mdash; they crowd out the data the row exists to show.</li>
         </ul>
     </div>
 </div>

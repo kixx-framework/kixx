@@ -60,8 +60,9 @@
       .button--danger    red outline — a destructive action (color as signal)
       .button--secondary muted outline — a lower-emphasis action such as a row
                          action or pagination
-      .button--small     a smaller box — compact controls such as header
-                         actions; combines with any variant above
+      .button--small     a smaller box and label — compact controls such as
+                         header and table row actions; combines with any
+                         variant above
 ----------------------------------------------------------------------------- */
 
 .button {
@@ -127,11 +128,13 @@
     border-color: var(--color-ink-muted);
 }
 
-/* Small — a size modifier only; color and states come from the other rules. */
+/* Small — a size modifier only; color and states come from the other rules.
+   The label drops to the dense-row size so it sits inside a .table-list row. */
 .button--small {
-    min-height: 2.25rem;
-    min-width: 2.25rem;
-    padding-inline: var(--space-xs);
+    min-height: 2rem;
+    min-width: 2rem;
+    padding-inline: var(--space-2xs);
+    font-size: var(--text-body-sm);
 }
 
 .button:disabled {
@@ -302,7 +305,8 @@
       .table-list__caption  required; names the list, and is the region's
                             accessible name via aria-labelledby
       .table-list__actions  the cell holding a .cluster of row actions; never
-                            wraps, so actions stay on one line
+                            wraps, so actions stay on one line. Prefer plain
+                            links; a button that must post is .button--small
 
     A secondary line in a cell is a <div class="type-caption"> — no element
     of its own here.
