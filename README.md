@@ -39,9 +39,34 @@ This mono-repo holds every part of the Kixx framework.
 Kixx Library
 ------------
 
-Source code for the Kixx Library lives in `lib/`. Typically we just call it "Kixx", and when we say "Kixx", we are referring to the library in `lib/` (not `devkit/` or `test-app/`).
+The Kixx Library lives in `lib/`. When we say "Kixx", we mean this library (not `devkit/` or `test-app/`).
 
-Kixx provides a full-featured web development environment for building rich web sites and web applications. It not only provides the low level libraries for HTTP request handling, logical domain layers, and utilities, but also a starter app and admin panel to go along with it.
+`lib/` holds two things: the framework, and a working starter app built on it. Your project starts from the starter app. You build your features in the app's folders, and the framework handles the plumbing.
+
+The framework:
+
+- `kixx/` - HTTP routing, server-rendered HTML pages and templates, data storage (documents, key/value, files, and published content), background jobs, email, logging, permissions, and configuration.
+- `plugins/` - Connectors that run the same app on Node.js or Cloudflare. Your app code doesn't change between platforms.
+
+The starter app:
+
+- `app/` - Your application logic: data models, one function per user action, request handlers, background jobs, and data migrations.
+- `pages/`, `templates/`, `static-assets/`, `public/`, `emails/` - Your site's pages, HTML templates, CSS and JavaScript, and email templates. Includes an admin panel and a live style guide.
+- `node-server.js`, `cloudflare-server.js` - The entry points for each platform.
+
+Kixx Devkit
+-----------
+
+The Kixx Devkit lives in `devkit/`. It provides the `kixx` command line tool, which you install from npm or JSR and run against your project. You don't add it to your app's code.
+
+With it you can:
+
+- `kixx dev` - Run your app locally. It restarts when you change the code.
+- `kixx admin` - Create the first admin account, mint publishing tokens, and run data migrations.
+- `kixx app` - Publish your site's content to a running app.
+- `kixx cloudflare` - Create, upload, and deploy your app as a Cloudflare Worker.
+
+See [devkit/README.md](devkit/README.md) to install it.
 
 ---
 
