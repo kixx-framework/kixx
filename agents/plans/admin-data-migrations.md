@@ -553,7 +553,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 - Completed: the run, dry-run, and force routes; `postMigrationRun`, `postMigrationDryRun`, `getMigrationForceConfirmation`, `postMigrationForce`; the detail page's dry-run result and Actions cards; the force confirmation page; route and flow tests; the sanctioned-exception docs.
 - Current state: Complete.
-- Remaining: None. Browser checks remain in the Operator Runbook.
+- Remaining: None. Browser checks confirmed by the operator on 2026-10-16.
 - Decisions and discoveries:
   - Each POST handler catches the `runMigration()` error into a `runError` variable and handles it after the `try`, so the `try` holds only that call. Each of the three call sites calls `classifyMigrationRunError(...) || recoverUnexpectedRunError(...)` directly, keeping the exception visible.
   - The async `getMigrationDetailProps(context, request, response, migration, notice)` adds `csrf`, `canRun`, `canForce`, and `links.run` / `links.dryRun` / `links.forceConfirm`. `renderDryRun()` adds `dryRun` and passes a `null` page-level notice.
@@ -688,7 +688,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
   - An unknown id → 404 JSON; `skip` is called.
   - The `dry_run_failed_unexpected` branch reuses the same helper and the same status mapping as the real run. The handler cannot reach it with the registered no-op, so T2's `recoverUnexpectedRunError` tests cover the dry-run code. Assert in review that the dry-run JSON error branch uses `getMigrationOutcomeStatus` (500) and omits `detail` for that code.
 - [x] Requests without the header still behave exactly as in T4, and the T4 tests pass unchanged.
-- [ ] In a browser, Run and Dry run loop to completion with live batch count and stats, Stop halts after the current batch, and the first error stops the loop and is shown. A dry-run Stop can continue. A real run ends on the server-rendered detail page with its notice. (These are operator checks. Not run by the agent; pending in the Operator Runbook.)
+- [x] In a browser, Run and Dry run loop to completion with live batch count and stats, Stop halts after the current batch, and the first error stops the loop and is shown. A dry-run Stop can continue. A real run ends on the server-rendered detail page with its notice. (Operator checks. Confirmed by the operator in the browser on 2026-10-16.)
 - [x] `site.js` passes lint, and the block degrades with a `console.warn` when its markup is missing.
 
 **Validation**
@@ -702,8 +702,8 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 **Progress and handoff**
 
 - Completed: `kixx-partial` JSON branches in `postMigrationRun` and `postMigrationDryRun` with tests; the detail template's `migration-runner` section, `data-migration-mode` form hooks, and hidden progress block with Stop; the `migration-runner` IIFE in `site.js`.
-- Current state: Complete, except the browser criterion, which is an operator check (documented exception; it is in the Operator Runbook).
-- Remaining: None for agents. Operator: the JS-loop checks in the Operator Runbook.
+- Current state: Complete. The browser criterion was confirmed by the operator on 2026-10-16.
+- Remaining: None.
 - Decisions and discoveries:
   - Each handler still computes `code` once with `classifyMigrationRunError(...) || recoverUnexpectedRunError(...)`, then branches on `isPartialRequest(request)`. No new `recoverUnexpectedRunError` call; it still appears only at the three T4 call sites, so the unexpected error is logged once.
   - New private helpers: `getNoticeLocation()` (shared by redirects and JSON `location`), `getRunErrorLocation()` (now also used by `redirectAfterRunError`), `respondWithRunErrorJSON()`, and `toRunProgress()` (status, batchCount, stats, lastBatchAt, completedAt, error).
@@ -783,7 +783,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 - Completed: the panel is documented in the migrations README (new "Running from the Admin Panel" section), the doc index, the Admin API usage doc, the Admin Sidebar section, and the badge tone notes.
 - Current state: Complete.
-- Remaining: None. Browser checks remain in the Operator Runbook.
+- Remaining: None. Browser checks confirmed by the operator on 2026-10-16.
 - Decisions and discoveries:
   - The migrations README documents the accepted T5 JS dry-run behaviors: a failed batch (other than an invalid cursor) keeps its cursor and totals so resubmitting retries it; after Stop the button is "Continue dry run" and a reload starts over; an expired form shows its message in place. It links to the T4 "Sanctioned Exception" subsection instead of restating it.
   - The Admin API note is a `### Admin panel` subsection at the end of "Run a migration batch", so heading levels nest.
@@ -799,29 +799,31 @@ Operator Runbook
 
 Run after all tasks are complete. Agents do not perform these steps.
 
-- [ ] Run the full suites from the repo root: `node lib/run-tests.js`, `deno run -A lib/run-tests.js`, `node lib/run-linter.js lib`.
-- [ ] Start the app from `lib/` with `node node-server.js` (port 2026). Sign in at `/login/admin/new` as a **Developer** or **Root Admin**. If no admin exists yet, create one with `kixx admin` (see `usage-docs/kixx-devkit/admin.md`).
-- [ ] Navigation: Developers → Data Migrations appears and is highlighted on `/admin/migrations`, a detail page, and the force confirmation page. The admin directory shows the Data Migrations card. Sign in as an **Admin**-role account: the link shows, and following it returns the standard 403 page.
-- [ ] List and detail: `2026-07-17-example-noop` shows its description and a `pending` badge. Its detail page shows the ledger table with "Not started" values. `/admin/migrations/does-not-exist` shows the in-section "Migration not found" state with status 404.
-- [ ] No-JS flows (disable JavaScript in the browser's devtools):
+Completed by the operator on 2026-10-16 (browser checks confirmed; full suites also re-run by the orchestrator: 1918 passed on Node.js and Deno, lint clean). The optional e2e step was not run.
+
+- [x] Run the full suites from the repo root: `node lib/run-tests.js`, `deno run -A lib/run-tests.js`, `node lib/run-linter.js lib`.
+- [x] Start the app from `lib/` with `node node-server.js` (port 2026). Sign in at `/login/admin/new` as a **Developer** or **Root Admin**. If no admin exists yet, create one with `kixx admin` (see `usage-docs/kixx-devkit/admin.md`).
+- [x] Navigation: Developers → Data Migrations appears and is highlighted on `/admin/migrations`, a detail page, and the force confirmation page. The admin directory shows the Data Migrations card. Sign in as an **Admin**-role account: the link shows, and following it returns the standard 403 page.
+- [x] List and detail: `2026-07-17-example-noop` shows its description and a `pending` badge. Its detail page shows the ledger table with "Not started" values. `/admin/migrations/does-not-exist` shows the in-section "Migration not found" state with status 404.
+- [x] No-JS flows (disable JavaScript in the browser's devtools):
   - Dry run → "Dry run complete", with the batch's stats.
   - Run → redirect with the "applied" notice and a filled ledger. Run is now hidden.
   - Force re-run → the confirmation page with the reset/no-undo warning → submit → "applied" again, with batch count 1.
   - Re-submit the Run form from history → the "already applied" notice.
-- [ ] Multi-batch behavior needs a scratch migration. Temporarily register one locally in `lib/app/migrations/mod.js`, and **do not commit it**. It should return `done: false` with cursors `"1"`…`"4"` and `done: true` on the fifth call, with `stats: { scanned: 10 }`. Optional variants:
+- [x] Multi-batch behavior needs a scratch migration. Temporarily register one locally in `lib/app/migrations/mod.js`, and **do not commit it**. It should return `done: false` with cursors `"1"`…`"4"` and `done: true` on the fifth call, with `stats: { scanned: 10 }`. Optional variants:
   - One that throws an expected error (for example `new ConflictError('Example failure')`) on batch 3, which should show the "batch failed" notice and the ledger error.
   - One that throws `new Error('x')`, which is unexpected. Without JS, Run redirects to the detail page with the "failed with an unexpected error" notice, and the ledger shows `failed` with "The migration batch failed." The server log has one error-level entry with the migration id and the wrapped error and its `cause`. **The Node.js server keeps running**: confirm that another page loads without a restart. With JS, Run stops and lands on the same notice. A dry run of it shows the dry-run unexpected notice inline (no JS: the detail page with status 500 and the notice), and no error text appears on the page.
   - One that throws an error named `InvalidCursorError` for an unknown cursor (for the dry-run invalid cursor check).
-- [ ] With the scratch migration, no JS:
+- [x] With the scratch migration, no JS:
   - Each Run click advances one batch (`batch_complete`).
   - A dry run shows "Dry run next batch" carrying the cursor. Editing the hidden cursor in devtools gives the invalid-cursor message.
   - Double-click Run: the result is the concurrency notice or a normal next batch, never an error page.
-- [ ] With the scratch migration, with JS:
+- [x] With the scratch migration, with JS:
   - Run loops to applied, with live batch count and stats, and ends on the detail page with the "applied" notice.
   - Start again after Force, press Stop mid-run: it halts after the current batch and lands on `batch_complete`.
   - A dry run loops with accumulating totals. Stop then "Continue dry run" resumes.
   - Two tabs running at once: one shows the concurrency notice.
   - Delete the `kixx_csrf_session` cookie in devtools, then press Run: the "page expired" message appears and nothing runs.
-- [ ] Check both themes, and about 360px width (the tables scroll inside their wrappers, and the page does not scroll sideways).
-- [ ] Remove the scratch migration.
-- [ ] Optional: rebuild and run the e2e suites per `test-app/README.md` (`node tools/build-test-app.js`, then `node run-tests.js --nodejs` / `--cloudflare` from `test-app/`) to confirm nothing regressed, and spot-check the panel on a Cloudflare deployment of the test app.
+- [x] Check both themes, and about 360px width (the tables scroll inside their wrappers, and the page does not scroll sideways).
+- [x] Remove the scratch migration.
+- [ ] Optional (not run): rebuild and run the e2e suites per `test-app/README.md` (`node tools/build-test-app.js`, then `node run-tests.js --nodejs` / `--cloudflare` from `test-app/`) to confirm nothing regressed, and spot-check the panel on a Cloudflare deployment of the test app.
