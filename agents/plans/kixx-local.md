@@ -1,6 +1,8 @@
 `kixx local` — Local Target Instances
 =====================================
 
+**Plan status:** Complete (2026-10-16). All tasks done; Operator Runbook closed.
+
 Add a `kixx local` command family to the devkit for throwaway, writable instances of a Kixx app. `kixx local create <name>` makes `<target>/instances/<name>/` with a fresh port (`instance.json`), a `.env` and `.env.secrets` pair (fresh Build ID, random secrets named by the app's `example.env.secrets`), and nothing else. `seed` boots the app's `node-server.js` in the `local` environment, creates the root admin over the Admin API with the generated `ADMIN_BOOTSTRAP_TOKEN`, mints a Publishing API token, publishes the app's content to the instance's Build ID over the Publishing API, writes `credentials.json`, and stops the server. `start` runs the existing devserver against the instance. `publish` republishes content to a running instance. `list` and `destroy` manage instances. This replaces the old repo's `tools/local-target.js` (`~/Mark-I/projects/kixx/kixx/tools/local-target.js` and `tools/local-target/{instance,seed,serve}.js`, reference only), with one structural change: the devkit never imports or boots the app in-process. Every write goes over HTTP through existing devkit clients.
 
 Implementation Approach
@@ -607,12 +609,14 @@ Operator Runbook
 
 Not agent validation steps. Run after L8 from the repo root.
 
-- [ ] Decide whether to add `.kixx/instances/` to `lib/.gitignore` (the default target for `lib/` is `lib/.kixx/instances/`, which git currently would track). The command itself never writes `.gitignore` (Decision 6).
-- [ ] Node.js end-to-end against the real app:
+- [x] Decide whether to add `.kixx/instances/` to `lib/.gitignore` (the default target for `lib/` is `lib/.kixx/instances/`, which git currently would track). The command itself never writes `.gitignore` (Decision 6).
+  - Operator chose yes, 2026-10-16: added `.kixx/instances/` to `lib/.gitignore`.
+- [x] Node.js end-to-end against the real app:
   1. `node devkit/kixx.js local create alpha lib --target tmp/local-e2e`
   2. `node devkit/kixx.js local seed alpha lib --target tmp/local-e2e` — expect a Release and `credentials.json`.
   3. `node devkit/kixx.js local start alpha lib --target tmp/local-e2e`. Then, in another shell: log in at `<baseUrl>admin` with the credentials, and `node devkit/kixx.js local publish alpha lib --target tmp/local-e2e` after editing a page.
   4. `node devkit/kixx.js local list lib --target tmp/local-e2e` shows seeded and running.
   5. Ctrl-C, then `node devkit/kixx.js local destroy alpha lib --target tmp/local-e2e`.
   - Orchestrator run, 2026-10-16 09:35 ET (Node.js, HEAD a4be212a): steps 1–5 passed except the browser login and the page edit. Seed created `root@alpha.local`, a Release, and `credentials.json` (0600). Under `start`, `GET /` returned 200, `list` showed seeded and running, `publish` assigned the Release (0 uploads, content unchanged), `destroy` refused while running and succeeded after Ctrl-C. Still for the operator: log in at `<baseUrl>admin` and republish after a real edit.
-- [ ] Repeat with `deno run -RWNE --allow-sys=homedir --allow-run devkit/kixx.js local ...` to confirm the documented permission set suffices.
+  - Operator confirmed the browser login and republish-after-edit, 2026-10-16.
+- [x] ~~Repeat with `deno run -RWNE --allow-sys=homedir --allow-run devkit/kixx.js local ...` to confirm the documented permission set suffices.~~ Not applicable: the operator said Deno support is not being tested yet (2026-10-16).
