@@ -82,7 +82,7 @@ The durable job queue (port contract in `kixx/jobs/job-queue-interface.js`): reg
 
 app/migrations/README.md
 
-Statically registered migrations an operator runs in batches through the Admin API: registration, the module contract, expand/contract deployment ordering, and an authoring checklist. Endpoints are documented outside `lib/` in `../usage-docs/kixx-app/admin-api.md`.
+Statically registered migrations an operator runs in batches from the admin panel (`/admin/migrations`) or through the Admin API: registration, the module contract, expand/contract deployment ordering, and an authoring checklist. Endpoints are documented outside `lib/` in `../usage-docs/kixx-app/admin-api.md`.
 
 ### Administrative Data API
 

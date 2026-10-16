@@ -341,6 +341,15 @@ curl --user 'admin@example.com:password' \
     http://localhost:2026/admin-api/v1/migrations/2026-07-17-example-noop/run
 ```
 
+### Admin panel
+
+The admin panel at `/admin/migrations` (Developers → Data Migrations) drives
+the same scripts, ledger, and permissions, with cookie sign-in and CSRF
+protection instead of HTTP Basic. It also runs one batch per request. Unlike
+the API's `force: true`, the panel's Force re-run asks for confirmation first.
+An unexpected batch failure in the panel is logged and shown as a notice
+instead of a `500`.
+
 ## Jobs
 
 Inspect and recover background jobs.

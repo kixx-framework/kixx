@@ -554,3 +554,5 @@ An email directory holds `email.json` and the files it names. HTML and text temp
 `templates/base/admin.html` renders `admin-nav.html` as the first child of `.admin-layout.with-sidebar`, so an admin page template must render exactly one element after it (normally `<main class="admin-main">`). The login page uses `admin-login.html`, without a sidebar.
 
 The sidebar highlights the section named by `subpage.section` in the section's `page.json`; nested pages inherit it. Never set it in `pages/admin/page.json`, which is the ancestor of every admin page. A new section needs its key in its `page.json` and a link in `templates/partials/admin-nav.html`. `section: "style-guide"` shows the style guide list instead.
+
+The default branch of `admin-nav.html` groups sections under Content, Reference, Access, and Developers (Data Migrations). Every signed-in admin sees every link regardless of permission; a role without the grant gets the standard 403 when it follows one.

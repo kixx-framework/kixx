@@ -722,7 +722,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T6: Document the admin panel migration workflow
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T3, T4, T5
 **Documentation:** `lib/docs/doc-index.md`; `lib/app/migrations/README.md`; `lib/app/presentation/README.md` (Admin Sidebar); `usage-docs/kixx-app/admin-api.md`; `lib/pages/admin/style-guide/table-lists/body.html`
 
@@ -769,8 +769,8 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Each document above mentions the panel or the Developers group accurately and briefly, and nothing contradicts T3–T5 behavior. In particular: one batch per request, force confirmation, dry-run cursor ownership, and permissions.
-- [ ] No doc claims the panel changes the API, the CLI, or the roles.
+- [x] Each document above mentions the panel or the Developers group accurately and briefly, and nothing contradicts T3–T5 behavior. In particular: one batch per request, force confirmation, dry-run cursor ownership, and permissions.
+- [x] No doc claims the panel changes the API, the CLI, or the roles.
 
 **Validation**
 
@@ -781,12 +781,15 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: the panel is documented in the migrations README (new "Running from the Admin Panel" section), the doc index, the Admin API usage doc, the Admin Sidebar section, and the badge tone notes.
+- Current state: Complete.
+- Remaining: None. Browser checks remain in the Operator Runbook.
+- Decisions and discoveries:
+  - The migrations README documents the accepted T5 JS dry-run behaviors: a failed batch (other than an invalid cursor) keeps its cursor and totals so resubmitting retries it; after Stop the button is "Continue dry run" and a reload starts over; an expired form shows its message in place. It links to the T4 "Sanctioned Exception" subsection instead of restating it.
+  - The Admin API note is a `### Admin panel` subsection at the end of "Run a migration batch", so heading levels nest.
+  - No doc lists `site.js` behaviors exhaustively, so none needed `migration-runner`.
+- Actual files changed: `lib/app/migrations/README.md`, `lib/docs/doc-index.md`, `usage-docs/kixx-app/admin-api.md`, `lib/app/presentation/README.md`, `lib/pages/admin/style-guide/table-lists/body.html`.
+- Validation run: all three greps show the expected lines; full suite 1918 passed on Node.js.
 - Blockers: None.
 
 ---
