@@ -401,7 +401,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task L6: `kixx local seed`
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** L2, L4, L5
 **Documentation:** Decisions 2, 4, 5, 7; P4, P5, P8, P9
 
@@ -441,12 +441,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Happy path with fakes: the app process is created with environment `local`, the instance dotenv, and the instance port; the invite uses the `.env.secrets` bootstrap token and `root@<name>.local`; the token client authenticates with that email and password; publish targets the `.env` Build ID; `credentials.json` has all six fields with `baseUrl` `http://localhost:<port>/`; `stop()` was called once.
-- [ ] Refusals (already seeded, missing instance, port busy, missing `BUILD_ID` or bootstrap token) never create an app process.
-- [ ] A failed `ensureReady` throws a `UsageError` containing the reason and output; no client is created.
-- [ ] An invite failure stops the server and leaves no `credentials.json`.
-- [ ] A publish failure stops the server, leaves `credentials.json`, and the error names `kixx local publish <name>`.
-- [ ] Command output contains neither the password nor the token.
+- [x] Happy path with fakes: the app process is created with environment `local`, the instance dotenv, and the instance port; the invite uses the `.env.secrets` bootstrap token and `root@<name>.local`; the token client authenticates with that email and password; publish targets the `.env` Build ID; `credentials.json` has all six fields with `baseUrl` `http://localhost:<port>/`; `stop()` was called once.
+- [x] Refusals (already seeded, missing instance, port busy, missing `BUILD_ID` or bootstrap token) never create an app process.
+- [x] A failed `ensureReady` throws a `UsageError` containing the reason and output; no client is created.
+- [x] An invite failure stops the server and leaves no `credentials.json`.
+- [x] A publish failure stops the server, leaves `credentials.json`, and the error names `kixx local publish <name>`.
+- [x] Command output contains neither the password nor the token.
 
 **Validation**
 
@@ -457,12 +457,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of L6.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries:
+  - `seedInstance` takes a `formatCommand(command)` function so recovery hints match the command's `Next:` hints (app directory and `--target`, via `formatLocalCommand`). Default `kixx local <command>`.
+  - Publish failure message: `Local instance "<name>" has an admin and credentials saved in <path>, but publishing content failed: <cause>` plus `Recover with: kixx local start <name> ..., then kixx local publish <name> ...`. A `ReleaseAssignmentError` already carries that line (via `formatRecovery`), so it is not repeated.
+  - A failed start: `The app server for local instance "<name>" failed to start: <reason>`, then `App server output:` and the captured output when non-empty.
+  - A spent bootstrap token is not re-worded; `acceptInvite`'s "unknown, expired, revoked, or already used" message passes through (document in L8: destroy and re-create).
+  - The command reads the instance itself (before `seedInstance` re-reads it) so the collision warning prints before the server boots. New helper `listEnvNames(instance)` in `devkit/lib/local/command-support.js`; L7 `start` should reuse it.
+  - Without `--verbose`, app server stdout/stderr go to a null sink; AppProcess still captures them for the failure message. AppProcess status lines (`starting app server`, `app server ready on port`, `stopping app server`) print with the `[kixx local] ` prefix.
+  - Password: `generateSecretToken()` (64 hex chars). Token description `kixx local seed`.
+- Actual files changed: `devkit/lib/local/seed-instance.js` (new), `devkit/lib/local/command-support.js` (`listEnvNames`), `devkit/commands/local/seed.js` (new), `devkit/commands/local/index.js`, `devkit/test/lib/local/seed-instance.test.js` (new), `devkit/test/commands/local/seed.test.js` (new), `devkit/test/kixx.test.js` (order now `create,seed,list,destroy`).
+- Validation run: `node devkit/run-tests.js devkit/test/lib/local devkit/test/commands/local devkit/test/commands/index.test.js devkit/test/kixx.test.js` 80 passed; Deno `devkit/test/lib/local devkit/test/commands/local` 51 passed; linter clean on `devkit/lib/local devkit/commands/local devkit/test/lib/local devkit/test/commands/local devkit/test/kixx.test.js`; full Node.js suite 712 passed. `node devkit/kixx.js local seed --help` checked. Real-app seed left to the Operator Runbook.
 - Blockers: None.
 
 ---

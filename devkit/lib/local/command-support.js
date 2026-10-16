@@ -74,3 +74,11 @@ export function formatCollisionWarning(names, env) {
         'this shell and in the instance dotenv files. The app server will refuse to start until ' +
         `${ collisions.length === 1 ? 'it is' : 'they are' } unset.`;
 }
+
+/**
+ * @param {{env: Object<string, string>, secrets: Object<string, string>}} instance - From `readInstance()`
+ * @returns {string[]} Names defined in the instance's `.env` and `.env.secrets`
+ */
+export function listEnvNames(instance) {
+    return [ ...Object.keys(instance.env), ...Object.keys(instance.secrets) ];
+}
