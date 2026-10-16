@@ -162,6 +162,57 @@ describe('publishing/publish-content', ({ it }) => {
 
         assertEqual(6, client.maxActiveUploads);
     });
+
+    it('drops to one upload at a time after the server reports an overload', async () => {
+        const resources = Array.from({ length: 20 }, (_value, index) => {
+            return makeResource('StaticAsset', `asset-${ index }.css`, `hash-${ index }`);
+        });
+        const client = makeClient({ uploadDelay: 2, overloadAfterFirstUpload: true });
+
+        const result = await publishContent(makeArgs(client, resources));
+
+        const uploadedIds = client.uploads.map(({ objectId }) => objectId);
+        assertEqual(20, uploadedIds.length);
+        assertEqual(20, new Set(uploadedIds).size);
+        assertEqual(6, client.maxActiveUploads);
+
+        // Once the uploads in flight at the overload have drained, only one
+        // upload is ever active.
+        const drainedStarts = client.overloadedStarts.filter(({ preOverloadActive }) => preOverloadActive === 0);
+        assert(drainedStarts.length >= 13, `expected at least 13 serial uploads, got ${ drainedStarts.length }`);
+        for (const { active } of drainedStarts) {
+            assertEqual(1, active);
+        }
+
+        assertEqual(1, client.releases.length);
+        assertEqual(true, result.created);
+    });
+
+    it('uploads one at a time when the server is already overloaded', async () => {
+        const resources = Array.from({ length: 10 }, (_value, index) => {
+            return makeResource('StaticAsset', `asset-${ index }.css`, `hash-${ index }`);
+        });
+        const client = makeClient({ uploadDelay: 1, serverOverloaded: true });
+
+        await publishContent(makeArgs(client, resources));
+
+        assertEqual(10, client.uploads.length);
+        assertEqual(1, client.maxActiveUploads);
+    });
+
+    it('reports an upload failure after the drop as an upload phase error', async () => {
+        const resources = Array.from({ length: 5 }, (_value, index) => {
+            return makeResource('StaticAsset', `asset-${ index }.css`, `hash-${ index }`);
+        });
+        const client = makeClient({ serverOverloaded: true, failUploadId: 'hash-2' });
+
+        const caught = await catchAsyncError(() => publishContent(makeArgs(client, resources)));
+
+        assertEqual('PublishContentError', caught.name);
+        assertEqual('upload', caught.phase);
+        assertEqual(3, client.uploads.length);
+        assertEqual(0, client.releases.length);
+    });
 });
 
 function makeArgs(client, resources) {
@@ -222,6 +273,8 @@ function makeClient(options) {
         storedIds = [],
         failUploadId = null,
         uploadDelay = 0,
+        serverOverloaded,
+        overloadAfterFirstUpload = false,
     } = options ?? {};
 
     return {
@@ -233,6 +286,10 @@ function makeClient(options) {
         releases: [],
         activeUploads: 0,
         maxActiveUploads: 0,
+        // Undefined by default, like a client without the getter.
+        serverOverloaded,
+        overloadedStarts: [],
+        preOverloadActive: 0,
         async discover() {
             this.discoveryCount += 1;
             return this.capabilities;
@@ -245,10 +302,30 @@ function makeClient(options) {
         },
         async uploadObject(objectId, payload, limits) {
             this.uploads.push({ objectId, payload, limits });
+            const startedOverloaded = this.serverOverloaded === true;
             this.activeUploads += 1;
             this.maxActiveUploads = Math.max(this.maxActiveUploads, this.activeUploads);
+
+            if (startedOverloaded) {
+                this.overloadedStarts.push({
+                    active: this.activeUploads,
+                    preOverloadActive: this.preOverloadActive,
+                });
+            } else {
+                this.preOverloadActive += 1;
+            }
+
             await delay(uploadDelay);
+
+            // Flip while the other first-wave uploads are still in flight.
+            if (overloadAfterFirstUpload) {
+                this.serverOverloaded = true;
+            }
+
             this.activeUploads -= 1;
+            if (!startedOverloaded) {
+                this.preOverloadActive -= 1;
+            }
 
             if (objectId === failUploadId) {
                 throw new Error(`Upload failed for ${ objectId }`);

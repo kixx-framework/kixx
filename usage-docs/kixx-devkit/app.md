@@ -54,6 +54,11 @@ id, assignment identity, resource counts, uploaded resources, unmatched files,
 and the Release id. Files outside the recognized layout are reported as
 unmatched, not as errors.
 
+If the server reports it is busy (`503`), the command waits (honoring
+`Retry-After`, up to 30 seconds) and retries, then uploads the remaining
+objects one at a time. If it still fails, nothing was assigned, and
+rerunning later is safe.
+
 If the Release is created but assignment fails, the error names the Release
 and prints a ready-to-run recovery command:
 

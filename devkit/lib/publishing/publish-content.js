@@ -19,6 +19,9 @@ import { assertPublishableContentSources } from './content-source-report.js';
 import negotiateCapabilities from './negotiate-capabilities.js';
 
 const MAX_CONCURRENCY = 6;
+// Upload one object at a time once the server reports an overload. The drop
+// is sticky for the run: the store has already shown it cannot keep up.
+const OVERLOADED_CONCURRENCY = 1;
 
 /**
  * A Release creation failure enriched with the last known pipeline state.
@@ -122,7 +125,13 @@ export default async function publishContent(args) {
         capabilities.limits.maxObjectBytes,
     );
     await runPhase('upload', result, () => {
-        return mapWithConcurrency(pendingObjects, async ({ objectId, payload }) => {
+        // A client without the getter (a fake or older client) reads as not
+        // overloaded and keeps full concurrency.
+        const getConcurrency = () => {
+            return client.serverOverloaded === true ? OVERLOADED_CONCURRENCY : MAX_CONCURRENCY;
+        };
+
+        return mapWithConcurrency(pendingObjects, getConcurrency, async ({ objectId, payload }) => {
             const uploaded = await client.uploadObject(objectId, payload, {
                 maxObjectBytes: capabilities.limits.maxObjectBytes,
             });
@@ -318,13 +327,21 @@ async function runPhase(phase, result, fn) {
     }
 }
 
-async function mapWithConcurrency(items, mapper) {
+// Runs mapper over items with up to getConcurrency() workers. The limit is
+// read before each item: a worker whose index is at or above it exits, so
+// the pool can shrink mid-run but never grows. Worker 0 always continues,
+// so every item is processed.
+async function mapWithConcurrency(items, getConcurrency, mapper) {
     const results = new Array(items.length);
     let nextIndex = 0;
     let firstError = null;
 
-    const worker = async () => {
+    const worker = async (workerIndex) => {
         while (!firstError && nextIndex < items.length) {
+            if (workerIndex > 0 && workerIndex >= getConcurrency()) {
+                return;
+            }
+
             const index = nextIndex;
             nextIndex += 1;
 
@@ -337,8 +354,8 @@ async function mapWithConcurrency(items, mapper) {
     };
 
     const workers = Array.from(
-        { length: Math.min(MAX_CONCURRENCY, items.length) },
-        () => worker(),
+        { length: Math.min(getConcurrency(), items.length) },
+        (_, workerIndex) => worker(workerIndex),
     );
     await Promise.all(workers);
 

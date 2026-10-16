@@ -75,7 +75,7 @@ The Publishing API client (`lib/publishing/publishing-api-client.js`) picks the 
 - A `503` without one backs off exponentially from 1 s, because the server is overloaded.
 - Other retries back off exponentially from 100 ms.
 
-Any `503` also sets the client's sticky `serverOverloaded` flag.
+Any `503` also sets the client's sticky `serverOverloaded` flag, which `publishContent()` reads to upload one object at a time.
 
 ### Partial success
 

@@ -1,7 +1,7 @@
 Content Store Overload Handling
 ===============================
 
-**Status:** In progress
+**Status:** Complete (operator runbook pending)
 
 When the Cloudflare content-store Durable Object reports that it is overloaded, the Publishing API answers `503 Service Unavailable` with a `Retry-After` header instead of a generic `500`. The devkit's Publishing API client honors `Retry-After` and backs off for several seconds on a `503`, and `publishContent()` drops to one upload at a time for the rest of the run once the server has reported an overload. Non-overload failures keep their current behavior on both sides. This fixes the downstream failure in kixxauth/nydynamo_com#37, where `release` gave up on an object upload after about one second of retries against an overloaded Durable Object (the overload hit the `statFiles` call that `putObject` makes, before build assignment, so traffic was unaffected).
 
@@ -292,7 +292,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task D2: Publishing drops to serial uploads after a server overload
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** D1
 **Documentation:** `usage-docs/kixx-devkit/app.md` (`publish`), `devkit/docs/architecture.md`
 
@@ -323,11 +323,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The existing test "limits object upload concurrency to six requests" still passes.
-- [ ] New test: with 20 pending objects and a fake client whose `serverOverloaded` flips to `true` during the first upload, every object is uploaded once. After the in-flight uploads drain, at most one upload is active (record active counts per upload start after the flip). The Release is created.
-- [ ] New test: a client that is already `serverOverloaded` before the upload phase never has more than one active upload.
-- [ ] New test: a failing upload after the drop still surfaces as `PublishContentError` with `phase` `'upload'`.
-- [ ] `usage-docs/kixx-devkit/app.md` is updated.
+- [x] The existing test "limits object upload concurrency to six requests" still passes.
+- [x] New test: with 20 pending objects and a fake client whose `serverOverloaded` flips to `true` during the first upload, every object is uploaded once. After the in-flight uploads drain, at most one upload is active (record active counts per upload start after the flip). The Release is created.
+- [x] New test: a client that is already `serverOverloaded` before the upload phase never has more than one active upload.
+- [x] New test: a failing upload after the drop still surfaces as `PublishContentError` with `phase` `'upload'`.
+- [x] `usage-docs/kixx-devkit/app.md` is updated.
 
 **Validation**
 
@@ -338,12 +338,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `OVERLOADED_CONCURRENCY = 1`; `mapWithConcurrency(items, getConcurrency, mapper)` exits workers whose index is at or above the current limit (worker 0 always continues); upload phase reads `client.serverOverloaded === true`. Tests and usage doc.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: The fake client flips `serverOverloaded` at the end of the first completed upload so the other five first-wave uploads are still in flight; the test checks that every upload started after they drain runs alone (at least 13 of them). Mutation check: with the limit pinned to 6, both new concurrency tests fail. Also finished the D1 note in `devkit/docs/error-handling.md` (`publishContent()` reads the flag).
+- Actual files changed: `devkit/lib/publishing/publish-content.js`, `devkit/test/lib/publishing/publish-content.test.js`, `usage-docs/kixx-devkit/app.md`, `devkit/docs/error-handling.md`.
+- Validation run: focused 11 pass (8 repeated Node runs, 3 Deno runs, all pass); `node devkit/run-tests.js` 737 pass; `deno run -A devkit/run-tests.js` 737 pass; `node devkit/run-linter.js devkit` clean.
 - Blockers: None.
 
 ---
