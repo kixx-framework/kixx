@@ -1,0 +1,22 @@
+{{!--
+    Renders a migration notice from lib/app/presentation/lib/migration-run-outcomes.js.
+    Reads `notice` from the current context; the text is static and never echoes
+    request data.
+--}}
+{{#if notice}}
+<div class="callout callout--{{ notice.tone }}" role="{{ notice.role }}">
+    {{#ifEqual notice.tone "error"}}
+    <span class="callout__icon" aria-hidden="true">[x]</span>
+    {{/ifEqual}}
+    {{#ifEqual notice.tone "warning"}}
+    <span class="callout__icon" aria-hidden="true">[!]</span>
+    {{/ifEqual}}
+    {{#ifEqual notice.tone "info"}}
+    <span class="callout__icon" aria-hidden="true">[i]</span>
+    {{/ifEqual}}
+    <div class="callout__body flow">
+        <p class="callout__title">{{ notice.title }}</p>
+        <p class="type-body-sm">{{ notice.message }}</p>
+    </div>
+</div>
+{{/if}}

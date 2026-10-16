@@ -1,0 +1,2 @@
+{{!-- Status badge for a migration ledger status. Reads `status` from the current context. --}}
+<span class="status-badge{{#ifEqual status "pending"}} status-badge--info{{/ifEqual}}{{#ifEqual status "running"}} status-badge--warning{{/ifEqual}}{{#ifEqual status "applied"}} status-badge--success{{/ifEqual}}{{#ifEqual status "failed"}} status-badge--danger{{/ifEqual}}">{{ status }}</span>

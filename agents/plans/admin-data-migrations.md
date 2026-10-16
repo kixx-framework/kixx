@@ -129030,7 +129030,7 @@ e**Progress and handoff**
 
 ### Task T3: Add the Data Migrations list and read-only detail pages with the Developers nav group
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T1, T2
 **Documentation:** `lib/app/presentation/README.md` (Route Patterns; Reverse Routing; Rendering with HyperviewPageHandler; Page recipe; Admin Sidebar); `lib/docs/frontend-development-guide.md`; `lib/pages/admin/style-guide/table-lists/body.html` and `callouts/body.html`; `lib/templates/README.md` (`#each`, `ifEqual`, `formatDate`)
 
@@ -129109,12 +129109,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Both routes precede `{/}` and `*`, and `/migrations/:id` precedes `/migrations`. The first request handler of every target is an `authorize` gate whose `decisions` are `urn:kixx:list` on `urn:kixx:admin:migrations`. Both targets allow `GET, HEAD`.
-- [ ] The list handler returns registry-ordered rows with compiled `/admin/migrations/<id>` links. `?notice=migration_not_found` yields that notice. `?notice=already_applied`, unknown codes, and markup-like values yield `null`.
-- [ ] The detail handler returns the pending projection with `statsList: []` when there is no ledger record, and every ledger field (including `lastBatchAt`) plus `statsList` for an applied stub record. It accepts detail notice codes and rejects `migration_not_found` and unknown codes.
-- [ ] An unknown id sets status 404 and `missing: true`, and the stub Collection records zero reads.
-- [ ] The templates render the described structure with `.table-list`, `.status-badge`, and `.callout` markup copied from the style guide. No `style="` attribute.
-- [ ] The sidebar shows Developers → Data Migrations for every admin and highlights it on the list, detail, and (T4) force pages through the inherited `subpage.section`. The admin directory has the card.
+- [x] Both routes precede `{/}` and `*`, and `/migrations/:id` precedes `/migrations`. The first request handler of every target is an `authorize` gate whose `decisions` are `urn:kixx:list` on `urn:kixx:admin:migrations`. Both targets allow `GET, HEAD`.
+- [x] The list handler returns registry-ordered rows with compiled `/admin/migrations/<id>` links. `?notice=migration_not_found` yields that notice. `?notice=already_applied`, unknown codes, and markup-like values yield `null`.
+- [x] The detail handler returns the pending projection with `statsList: []` when there is no ledger record, and every ledger field (including `lastBatchAt`) plus `statsList` for an applied stub record. It accepts detail notice codes and rejects `migration_not_found` and unknown codes.
+- [x] An unknown id sets status 404 and `missing: true`, and the stub Collection records zero reads.
+- [x] The templates render the described structure with `.table-list`, `.status-badge`, and `.callout` markup copied from the style guide. No `style="` attribute.
+- [x] The sidebar shows Developers → Data Migrations for every admin and highlights it on the list, detail, and (T4) force pages through the inherited `subpage.section`. The admin directory has the card.
 
 **Validation**
 
@@ -129128,12 +129128,20 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: list and detail routes, `getAdminMigrations` / `getAdminMigration`, list and detail templates, the Developers nav group, the directory card, and route and handler tests.
+- Current state: Complete. The force-page nav highlight is covered once T4 adds `pages/admin/migrations/force/` (it inherits `section` from `pages/admin/migrations/page.json`).
+- Remaining: None.
+- Decisions and discoveries:
+  - Two shared partials avoid repeating markup that T4 also needs:
+    - `lib/templates/partials/admin/migration-notice.html` renders `notice` from the current context (tone class, role, `[x]`/`[!]`/`[i]` icon, none for success).
+    - `lib/templates/partials/admin/migration-status-badge.html` renders `status` from the current context. Use it as `{{#with migration}}{{> admin/migration-status-badge.html }}{{/with}}`.
+  - For T4's dry-run card, `{{#with dryRun}}{{> admin/migration-notice.html }}{{/with}}` works, but partials inherit the context stack, so `dryRun.notice` must always be set or the root `notice` shows through.
+  - The private `getMigrationDetailProps(context, migration, notice)` helper builds `{ migration (with statsList), notice, links: { list, detail } }`. It is synchronous; T4 makes it async to add `csrf` from `getCsrfToken(context, request, response)`, the action links, and `canRun` / `canForce`.
+  - The route comment above `migrationDecision` explains the page cache is off for live ledger state; T4 should extend it to mention CSRF tokens.
+  - Templates were checked by compiling and rendering them with the vendored templating engine and `formatDate` (scratch script `tmp/render-migration-pages.mjs`) for the list (rows and empty), detail (applied, pending with error), missing, and nav highlight cases.
+  - The handler test's `makeContext` already has the stub `Migration` Collection (`getByMigrationId`, `createLedgerRecord`, `updateLedgerRecord`, recording `reads` and `writes`), `user`, a CSRF `getService` stub, and `TARGET_PATTERNS` for every migration target. T4 adds `requestId`, a recording `logger`, form data, and a `skip` stub.
+- Actual files changed: `lib/routes/admin-panel.js`, `lib/app/presentation/request-handlers/admin-panel/admin-migrations.js` (new), `lib/app/presentation/request-handlers/admin-panel/mod.js`, `lib/pages/admin/migrations/page.json` and `page.html` (new), `lib/pages/admin/migrations/detail/page.json` and `page.html` (new), `lib/templates/partials/admin/migration-notice.html` (new), `lib/templates/partials/admin/migration-status-badge.html` (new), `lib/templates/partials/admin-nav.html`, `lib/pages/admin/page.html`, `lib/test/routes/admin-panel.test.js`, `lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js` (new).
+- Validation run: route and handler tests 13 passed; lint clean; `style="` grep printed nothing; the nav grep printed one line; both `page.json` files parse; full `node lib/run-tests.js` 1883 passed. Browser checks remain in the Operator Runbook.
 - Blockers: None.
 
 ---

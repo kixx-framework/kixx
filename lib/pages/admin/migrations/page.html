@@ -1,0 +1,36 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <h1>Data Migrations</h1>
+            <p>Data migrations registered in this build, in deployment order.</p>
+        </header>
+
+        {{> admin/migration-notice.html }}
+
+        {{#if migrations}}
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="migrations-caption">
+            <table class="table-list__table">
+                <caption id="migrations-caption" class="table-list__caption">Migrations</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Id</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each migrations as |migration| }}
+                    <tr>
+                        <th scope="row"><a href="{{ migration.links.detail }}">{{ migration.id }}</a></th>
+                        <td>{{ migration.description }}</td>
+                        <td>{{#with migration}}{{> admin/migration-status-badge.html }}{{/with}}</td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <p class="type-body-sm">No migrations are registered in this build.</p>
+        {{/if}}
+    </article>
+</main>

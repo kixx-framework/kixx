@@ -1,0 +1,89 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        {{#if missing}}
+        <header class="admin-content-section__header">
+            <p><a href="{{ links.list }}">&larr; Data Migrations</a></p>
+            <h1>Migration not found</h1>
+        </header>
+
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body flow">
+                <p class="callout__title">Migration not found</p>
+                <p class="type-body-sm">No migration with this id is registered in this build.</p>
+            </div>
+        </div>
+        {{else}}
+        <header class="admin-content-section__header">
+            <p><a href="{{ links.list }}">&larr; Data Migrations</a></p>
+            <h1>{{ migration.id }}</h1>
+            <p>{{ migration.description }}</p>
+        </header>
+
+        {{> admin/migration-notice.html }}
+
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="ledger-caption">
+            <table class="table-list__table">
+                <caption id="ledger-caption" class="table-list__caption">Ledger</caption>
+                <tbody>
+                    <tr>
+                        <th scope="row">Status</th>
+                        <td>{{#with migration}}{{> admin/migration-status-badge.html }}{{/with}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Batches</th>
+                        <td>{{#if migration.batchCount}}{{ migration.batchCount }}{{else}}None{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Started by</th>
+                        <td>{{#if migration.startedBy}}{{ migration.startedBy }}{{else}}Not started{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Started</th>
+                        <td>{{#if migration.startedAt}}{{ formatDate migration.startedAt format="DATETIME_MED" }}{{else}}Not started{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Last batch</th>
+                        <td>{{#if migration.lastBatchAt}}{{ formatDate migration.lastBatchAt format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Completed</th>
+                        <td>{{#if migration.completedAt}}{{ formatDate migration.completedAt format="DATETIME_MED" }}{{else}}Not yet{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Error</th>
+                        {{!-- The ledger stores only a client-safe failure message. --}}
+                        <td>{{#if migration.error}}{{ migration.error }}{{else}}None{{/if}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        {{#if migration.statsList}}
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="stats-caption">
+            <table class="table-list__table">
+                <caption id="stats-caption" class="table-list__caption">Stats</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Counter</th>
+                        <th scope="col">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each migration.statsList as |stat| }}
+                    <tr>
+                        <th scope="row">{{ stat.name }}</th>
+                        <td>{{ stat.value }}</td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <p class="type-body-sm">No stats recorded yet.</p>
+        {{/if}}
+
+        {{!-- Actions: the run, dry-run, and force controls go here. --}}
+        {{/if}}
+    </article>
+</main>

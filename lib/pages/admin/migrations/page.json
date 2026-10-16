@@ -1,0 +1,7 @@
+{
+    "template": "page.html",
+    "subpage": {
+        "title": "Data Migrations",
+        "section": "migrations"
+    }
+}
