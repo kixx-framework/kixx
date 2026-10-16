@@ -61,7 +61,7 @@ export async function handler(context, job) {}
 
 See `docs/server-error-handling.md`.
 
-- Expected error (`error.expected === true`): recorded, then retried with backoff unless `error.retryable === false`. `retryable` defaults to `true` for `OperationalError` and `false` for other expected classes. It is a plain property, not a constructor option: `Object.assign(error, { retryable: false })`.
+- Expected error (`error.expected === true`): recorded, then retried with backoff if `error.retryable` is `true`, else the job fails. `retryable` defaults to `true` for `OperationalError` and `false` for other expected classes. It is a plain property, not a constructor option: `Object.assign(error, { retryable: false })`.
 - Unexpected error: the job fails without retry and is logged. Node then shuts down gracefully with exit code 1; the Durable Object stops claiming for that invocation.
 - Backoff: exponential with full jitter from 10 s, capped at 1 h. A run that outlives its lease (`timeoutSeconds` + 30 s) counts as a failed attempt.
 - A stored job whose name is no longer registered fails with `UnknownJob`.

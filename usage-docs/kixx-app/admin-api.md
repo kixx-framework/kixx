@@ -357,10 +357,11 @@ Inspect and recover background jobs.
 How jobs behave:
 
 - Delivery is at-least-once, so a job may run more than once.
-- An expected error is retried with exponential backoff (full jitter,
-  starting at 10 seconds, capped at 1 hour) until `maxAttempts` is reached,
-  unless the error is marked not retryable. An unexpected error fails the job
-  without retry.
+- An expected `OperationalError` (I/O, integration, storage) is retried with
+  exponential backoff (full jitter, starting at 10 seconds, capped at 1 hour)
+  until `maxAttempts` is reached. Other expected errors fail the job at once.
+  A boolean `retryable` on the error overrides either default. An unexpected
+  error fails the job without retry.
 - A run that outlives its timeout plus 30 seconds counts as a failed attempt.
 - A stored job whose name is no longer registered fails with `UnknownJob`.
 - Finished jobs are purged by age: completed after 7 days and failed after

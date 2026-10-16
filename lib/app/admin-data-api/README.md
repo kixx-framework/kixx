@@ -1,7 +1,7 @@
 # Administrative Data API Resources
 
 Registrations that expose Collections through `/admin-data-api/v1/`. The
-HTTP contract is documented in `../usage-docs/kixx-app/admin-data-api.md`.
+HTTP contract is documented in `usage-docs/kixx-app/admin-data-api.md`.
 
 ## Adding a resource
 

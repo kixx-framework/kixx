@@ -56,7 +56,7 @@ The devkit talks to a Kixx application over wire formats and reads files in the 
 | `lib/publishing/addressing.js` | `kixx/content-addressable-store/addressing.js` | `test/conformance/addressing.test.js` |
 | `lib/publishing/content-layout.js` | `kixx/content-addressable-store/content-layout.js` | `test/conformance/content-layout.test.js` |
 
-`test/conformance/bundle-lib.test.js` and `scan-lib-content.test.js` also run the bundler and content scanner against the real `lib/` app.
+`test/conformance/bundle-lib.test.js` and `scan-lib-content.test.js` also run the bundler and content scanner against the real `lib/` app, and `local-instance-env.test.js` checks generated instance files against `lib/`'s config reader and secrets manifest.
 
 Rules:
 

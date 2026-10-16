@@ -486,10 +486,11 @@ These errors need a route error handler such as `error-handlers/admin-data-api-e
 
 ### Static Assets
 
-`StaticAssetRequestHandler` (`kixx/static-assets/static-asset-request-handler.js`) serves blobs from the `ContentAddressableStore`. `virtual-hosts.js` wires it twice, both before the catch-all:
+`StaticAssetRequestHandler` (`kixx/static-assets/static-asset-request-handler.js`) serves blobs from the `ContentAddressableStore`. `virtual-hosts.js` wires it three times:
 
 - **`/assets/:hash/*pathname`** with `{ fingerprinted: true }`: immutable caching; a matching `If-None-Match` gets `304` without a storage read.
 - **`/:filename.:extension`** for fixed root files like `/favicon.ico`, with `{ cacheControl: 'public, max-age=86400, stale-while-revalidate=604800', throwNotFound: false, skipWhenFound: true }` followed by `HyperviewPageHandler`. The pattern also matches page URLs like `/index.json`, so a miss must fall through. Never mark root files `immutable`; their URLs never change.
+- **`*`** (the catch-all) with `{ throwNotFound: false, skipWhenFound: true }` before `HyperviewPageHandler`. This serves `/stylesheets/**` and `/javascript/**`.
 
 Pathname-mode assets resolve through the current snapshot and revalidate by default. Details: `kixx/static-assets/README.md`.
 
@@ -512,7 +513,7 @@ Keep page directories flat: files named by `template`, `partials`, and `includes
 
 ### Page Context
 
-For `/blog/reviews/music`, Hyperview merges `pages/page.json`, `pages/blog/page.json`, `pages/blog/reviews/page.json`, and `pages/blog/reviews/music/page.json`, more specific last. Ancestors are optional; a missing leaf is a 404. Response props merge last and override all page data.
+For `/blog/reviews/music`, Hyperview merges `pages/page.json`, `pages/blog/page.json`, `pages/blog/reviews/page.json`, and `pages/blog/reviews/music/page.json`, more specific last. Ancestors are optional; a missing leaf, or a leaf with no `template`, is a 404. Response props override all page data; only the reserved `assets` key merges after them.
 
 `page.json` build directives are removed from the template context:
 

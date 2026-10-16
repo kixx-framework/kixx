@@ -21,13 +21,13 @@ node lib/run-linter.js lib             # lint
 **Keep the layers apart.**
 
 - `kixx/` is framework code. `app/`, `pages/`, `templates/`, and the other site folders are the starter app.
-- Platform differences live only in `plugins/` and the entry points (`node-server.js`, `cloudflare-server.js`). Code under `app/` never imports from `plugins/` or a native module (`node:*`, `cloudflare:*`). See `plugins/README.md`.
+- Platform differences live only in `plugins/` and the entry points (`node-server.js`, `cloudflare-server.js`). Code under `app/` never imports from `plugins/` or a native module (`node:*`, `cloudflare:*`). See `lib/plugins/README.md`.
 - Every change must work on Node.js and Cloudflare.
 - `kixx/vendor/` is third-party code. Leave it alone.
 
 **Update the code that depends on `lib/`.**
 
-- The devkit ports some `lib/` modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. When you change one, change its devkit copy in the same commit (see `devkit/docs/architecture.md`), then run `node devkit/run-tests.js devkit/test/conformance`.
+- The devkit ports some `lib/` modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. When you change one, change its devkit copy in the same commit (see `devkit/docs/architecture.md`), then run `node devkit/run-tests.js devkit/test/conformance`. Those tests also bundle and scan `lib/` and read its config and env files, so run them after changing entry points, config, or `lib/example.env*` too.
 - When public behavior changes, update `usage-docs/kixx-app/`.
 - `test-app/` is a copy of `lib/` built by `node tools/build-test-app.js`. Don't edit its copied code.
 

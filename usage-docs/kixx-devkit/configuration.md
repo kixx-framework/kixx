@@ -69,8 +69,9 @@ a stack trace.
 
 ## `--environment`
 
-Every command except `admin gen-secure-token` requires `--environment` (`-e`).
-For `app` and `admin` commands it names a key under `app.environments`. For
+Every `admin`, `app`, and `cloudflare` command except `admin gen-secure-token`
+requires `--environment` (`-e`). `dev start` defaults it to `development`;
+`local` commands do not take it. For `app` and `admin` commands it names a key under `app.environments`. For
 `cloudflare` commands it names a key under `environments` in
 `cloudflare-config.jsonc`. A missing or unknown environment fails before any
 network call.

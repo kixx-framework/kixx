@@ -50,8 +50,8 @@ Write plans to `agents/plans/<feature-name>.md` (lowercase, hyphen-separated) un
 
 Validation commands must be exact and runnable from the repo root, using this project's lint and unit testing tools. Do not validate with end-to-end tests.
 
-- `node run-tests.js <test-path> ...` for focused tests
-- `node run-linter.js <file-or-dir> ...` for linting
+- `node lib/run-tests.js <test-path> ...` for focused tests (`node devkit/run-tests.js` for `devkit/`)
+- `node lib/run-linter.js <file-or-dir> ...` for linting (`node devkit/run-linter.js` for `devkit/`)
 
 Any operator-only steps belong in an operator runbook checklist, never in an agent's validation steps.
 

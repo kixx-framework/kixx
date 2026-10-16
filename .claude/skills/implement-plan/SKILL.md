@@ -114,8 +114,10 @@ otherwise return the blocker and the specific input or action needed to resume.
 Before declaring completion, review the requested scope as a whole: all
 acceptance criteria must be satisfied, required validation must have passed or
 have an explicitly accepted exception, and no required decision may remain
-unresolved. Run the full test suite (`node run-tests.js`) and the linter on
-every JavaScript file changed by the plan (`node run-linter.js <paths>`), and
+unresolved. Run the full test suite (`node lib/run-tests.js`, and
+`node devkit/run-tests.js` if `devkit/` changed) and the linter on every
+JavaScript file changed by the plan (`node lib/run-linter.js <paths>` or
+`node devkit/run-linter.js <paths>`), and
 perform any plan-level integration checks not covered by task validation.
 Correct discrepancies in the plan before reporting the result.
 

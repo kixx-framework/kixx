@@ -30,7 +30,7 @@ Files beside a `pages/**/page.json` are processed according to the directive tha
 
 For example, `body.html` and `page.html` can sit in the same directory and share an `.html` extension while following different rules. A `body.html` file named by `includes` is trusted HTML content for a template to emit with `{{{ includes.body }}}` or `{{ unescape includes.body }}`. Put interpolation, helpers, `{{!-- comments --}}`, or partial tags in `page.html` or a configured partial instead.
 
-The three directories differ in how the publishing tool (outside the scope of this project) treats them:
+The three directories differ in how publishing (`devkit/lib/publishing/`) treats them:
 
 | Directory | Browser URL | Fingerprinted | Production processing |
 | --- | --- | --- | --- |
@@ -38,7 +38,7 @@ The three directories differ in how the publishing tool (outside the scope of th
 | `public/` | `/**` (site root) | No | Published verbatim |
 | `pages/**/page.css` | None — inlined into the HTML | N/A | Included verbatim in page content |
 
-Templates link entrypoints through `assetUrl`, which rewrites the logical pathname to a content-addressed URL when a Release is published and falls back to the bare pathname in development:
+Templates link entrypoints through `assetUrl`, which rewrites the logical pathname to a content-addressed URL. Developer mode scans `static-assets/` into its snapshot, so this works in development too; a pathname missing from the snapshot falls back to the bare pathname:
 
 ```html
 <link href="{{ assetUrl assets "/stylesheets/stylesheet.css" }}" rel="stylesheet">
@@ -137,7 +137,7 @@ There is no CSS linter or formatter in this project; `node run-linter.js` checks
 
 ## CSS Comments
 
-The stylesheets are also developer documentation. Verbose comments are acceptable in `static-assets/stylesheets/` because the bundling tool (outside the scope of this project) strips `.css` and `.js` comments when it scans static assets into a Release — production readers never download them.
+The stylesheets are also developer documentation. Verbose comments are acceptable in `static-assets/stylesheets/` because the devkit bundler strips `.css` and `.js` comments when it scans static assets into a Release — production readers never download them.
 
 **That stripping does not apply to page-local CSS** (`pages/**/page.css`), which is page content, not a static asset. Keep its comments short.
 
@@ -331,7 +331,7 @@ Behavior is written directly against standard DOM APIs (`querySelectorAll`, `dat
 
 Conventions:
 
-- **Behavior is attached with `data-js-behavior="<name>"`, never with a styling class.** Styling classes and behavior hooks are separate vocabularies: renaming a CSS class must never break a script, and removing a behavior must never change the look. `site.js` selects on `[data-js-behavior="theme-toggle"]` and `[data-js-behavior="copy-field"]`.
+- **Behavior is attached with `data-js-behavior="<name>"`, never with a styling class.** Styling classes and behavior hooks are separate vocabularies: renaming a CSS class must never break a script, and removing a behavior must never change the look. For example, `site.js` selects on `[data-js-behavior="theme-toggle"]`.
 - **Each behavior is a self-contained IIFE in `site.js`.** Add a new behavior as another block rather than adding a second entrypoint — there is no bundler, so each additional module file is another request.
 - **Imports are root-relative logical URLs**, e.g. `import formatDate from '/javascript/lib/format-date.js'`. Do not use bare package specifiers; there is no module resolution step for browser code.
 - **Progressive enhancement is the contract.** Pages render and forms submit without JavaScript. A behavior that fails — a missing target, a denied clipboard write — must degrade to something usable and, where the failure is a markup bug, `console.warn` and skip that one control instead of throwing and taking every other control down with it.

@@ -103,7 +103,7 @@ export default class UserCollection extends Collection {
 }
 ```
 
-`app/app.js`:
+`app/app.js`, trimmed to this example:
 
 ```js
 const DOCUMENT_STORE_INDEXES = [
@@ -198,7 +198,7 @@ const { items } = await this.query(context, {
 
 An index definition is `{ name, jsonPath, unique? }`:
 
-- `name` — Lowercase letters, digits, and underscores, starting with a letter. Unique across the store.
+- `name` — Lowercase letters, digits, and underscores, starting with a letter; at most 80 characters. Unique across the store.
 - `jsonPath` — Starts with `$.` (e.g. `$.email_address`, `$.profile.role`).
 - `unique` — Boolean, default `false`. Enforced per `(type, value)`. A violating write throws `DocumentUniqueIndexViolationError` (`indexName` says which index).
 

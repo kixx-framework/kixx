@@ -73,13 +73,13 @@ The Publishing API client (`lib/publishing/publishing-api-client.js`) picks the 
 
 - A `Retry-After` header (seconds or HTTP-date) is honored, capped at 30 s, plus up to 1 s of jitter.
 - A `503` without one backs off exponentially from 1 s, because the server is overloaded.
-- Other retries back off exponentially from 100 ms.
+- Other retries back off exponentially from 100 ms, with jitter.
 
 Any `503` also sets the client's sticky `serverOverloaded` flag, which `publishContent()` reads to upload one object at a time.
 
 ### Partial success
 
-When a multi-step operation fails after creating durable remote state, the error must say what already exists so the operator can finish by hand. `commands/app/publish.js` reports the created Release id when build assignment fails, so `kixx app assign-build` can complete it.
+When a multi-step operation fails after creating durable remote state, the error must say what already exists so the operator can finish by hand. `lib/publishing/publish-release.js` throws `ReleaseAssignmentError` with the created Release id when build assignment fails, so `kixx app assign-build` can complete it.
 
 Wrapping
 --------

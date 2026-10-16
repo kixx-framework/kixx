@@ -1,6 +1,6 @@
 # Plugins
 
-This directory holds the **adapters** in the Kixx ports-and-adapters architecture. It is the layer that makes one application codebase run on Node.js, Cloudflare Workers, Deno, Deno Deploy, and AWS Lambda, with little or no change to the code in `app/`.
+This directory holds the **adapters** in the Kixx ports-and-adapters architecture. It is the layer that makes one application codebase run on Node.js and Cloudflare Workers today, and on Deno, Deno Deploy, and AWS Lambda later, with little or no change to the code in `app/`.
 
 The rule this architecture enforces: **application code never names a platform.** It asks for a capability by name and gets back whatever implements that capability on the runtime it happens to be running on.
 
@@ -112,6 +112,7 @@ export function register(context) {
         'node-key-value-store plugin requires context.config.env.KEY_VALUE_STORE.path',
     );
 
+    // (resolveFilepath assertions omitted)
     const storePath = config.resolveFilepath(storeConfig.path);
 
     context.registerService('KeyValueStore', new KeyValueStore({
@@ -122,16 +123,15 @@ export function register(context) {
 }
 ```
 
-**Cloudflare resolves at request time, from bindings.** A Workers binding is request-scoped and may differ from the module-level `env` captured at startup, so the plugin registers a store that carries nothing but a logger, and the adapter reads its binding off `context.env` on every call:
+**Cloudflare resolves at request time, from bindings.** A Workers binding is request-scoped and may differ from the module-level `env` captured at startup, so the plugin registers a store with no configuration, and the adapter reads its binding off `context.env` on every call:
 
 ```js
 export function register(context) {
-    const { logger } = context;
-    context.registerService('KeyValueStore', new KeyValueStore({ logger }));
+    context.registerService('KeyValueStore', new KeyValueStore());
 }
 ```
 
-This is why `createRequestContext(env, request)` takes the environment as an argument rather than inheriting it: `cloudflare-server.js` passes the per-request `requestEnvironment` from `fetch()`, while `node-server.js` passes the process `env`. Same call, same downstream code, different resolution semantics.
+This is why `createRequestContext(env, request)` takes the environment as an argument rather than inheriting it: `cloudflare-server.js` passes the per-request `requestEnvironment` from `fetch()`, while `node-server.js` passes the `env` it merged from dotenv files and `process.env` at startup. Same call, same downstream code, different resolution semantics.
 
 ## How the Contracts Are Written
 
@@ -164,11 +164,11 @@ Do not add a port for something the application can do portably on its own. A po
 
 ## Adding a New Platform
 
-The matrix above is the checklist. A new target — Deno, Deno Deploy, AWS Lambda — needs:
+A new target — Deno, Deno Deploy, AWS Lambda — needs:
 
-1. An adapter package per port, plus its logger-writer and server-request adapters. The server-request adapter extends `kixx/http-router/base-server-request.js` and supplies only `id`, `ip`, `url`, `headers`, and a body delegate — start from the base class and the interface, not from a copy of a sibling adapter.
+1. An adapter package per port, plus its logger-writer and server-request adapters. The server-request adapter extends `kixx/http-router/base-server-request.js` and supplies only `id`, `ip`, `method` (uppercase), `url`, `headers`, and a body delegate — start from the base class and the interface, not from a copy of a sibling adapter.
 2. A `plugins/<platform>.js` registry mapping each package.
-3. A `<platform>-config.js` source config.
+3. A `<platform>-config.jsonc` config file.
 4. A `<platform>-server.js` entry point that reads config, merges `generalPlugins` with the platform registry, calls `bootApplication({ env, config, LoggerWriter, plugins, app })` to get back `{ appContext, logger }`, constructs the `HttpRouter`, and translates between native requests/responses and `ServerRequest`/`ServerResponse`.
 
 Nothing in `app/`, `kixx/`, `templates/`, or `pages/` should need to change. If a new platform forces a change in `app/`, that is the signal that a port is missing or that a contract promised more than the portable floor.

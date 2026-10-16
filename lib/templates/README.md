@@ -78,7 +78,7 @@ Page template:
 </article>
 ```
 
-Every page's assembled template context can be inspected by adding `.json` to its URL, e.g. `http://localhost:2026/admin/style-guide/aesthetic.json`. This is useful for confirming what data a page template actually receives.
+When `HYPERVIEW.allowJsonResponse` is on (shipped on for `development` and `local`), a page's assembled template context can be inspected by adding `.json` to its URL, e.g. `http://localhost:2026/admin/style-guide/aesthetic.json`. This is useful for confirming what data a page template actually receives.
 
 ## Basic Expressions
 
@@ -807,7 +807,7 @@ Use it only for trusted or already-sanitized HTML.
 
 ### plusOne Helper
 
-`plusOne` adds 1 to a number or numeric string and returns a string. Non-numeric values return an empty string.
+`plusOne` adds 1 to a number or numeric string and returns a string. Values `Number()` cannot parse return an empty string.
 
 ```javascript
 const context = {
@@ -1218,7 +1218,7 @@ In Hyperview, shared partials live under `templates/partials/`. A tag like `{{> 
 templates/partials/website/styles.css
 ```
 
-Partial name resolution is case-insensitive, so `{{> Website/Styles.css }}` resolves the same file.
+Partial names are case-sensitive, and published paths must be lowercase, so `{{> Website/Styles.css }}` is a missing partial.
 
 Base templates live under `templates/base/`. A page template lives beside its `pages/**/page.json` file and is named by that file's `template` directive.
 
@@ -1325,13 +1325,13 @@ Additional partial rules:
 
 - Missing partials render as an empty string.
 - Partial names are literal. Dynamic partial names are not supported.
-- Partial name resolution is case-insensitive.
+- Partial names are case-sensitive.
 - A standalone partial tag propagates its indentation to every line of the partial output.
 - Partials are parsed independently, so delimiter changes in a parent do not affect partial syntax.
 
 ## Custom Helpers
 
-Application helpers live under `app/presentation/template-helpers/`. Import them explicitly in `app/app.js` and register them on the application’s `HyperviewService` during startup:
+Put application helpers under `app/presentation/template-helpers/` (none ship yet). Import them explicitly in `app/app.js` and register them on the application’s `HyperviewService` during startup:
 
 ```javascript
 import formatMoney from './presentation/template-helpers/format-money.js';

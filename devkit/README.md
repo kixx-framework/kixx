@@ -83,8 +83,8 @@ Documentation:
 - [dev.md][dev-doc]: the local devserver.
 - [local.md][local-doc]: throwaway local instances.
 
-`app` commands require an application serving Publishing API build assignment
-protocol 2 and addressing format 4; see [app.md][app-doc-server-requirement].
+`app` commands require an application serving content contract 1, addressing
+format 4, and build assignment protocol 2; see [app.md][app-doc-server-requirement].
 
 Not included: creating D1, KV, or R2 resources, and managing Worker secrets.
 Use the Cloudflare dashboard or Wrangler for those.

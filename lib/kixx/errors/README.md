@@ -13,10 +13,6 @@ Environment Support
 | Node.js | >= 16.13.2 |
 | Deno    | >= 1.0.0   |
 
-Reference Documentation
------------------------
-Check out the `docs/` folder for complete documentation.
-
 Ethos
 -----
 Kixx Server Errors exists to meet 3 goals for better error handling in server-side JavaScript:

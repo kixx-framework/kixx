@@ -82,8 +82,8 @@ Read the saved plan yourself. Check that it:
   within about 250k tokens.
 - Defines observable acceptance criteria and practical validation, including
   relevant failure behavior, documentation, and rollout or migration steps.
-- Uses exact, runnable validation commands (`node run-tests.js <path>`,
-  `node run-linter.js <path>`), and explains how to run manual checks.
+- Uses exact, runnable validation commands (`node lib/run-tests.js <path>`,
+  `node lib/run-linter.js <path>`, or the `devkit/` equivalents), and explains how to run manual checks.
 - Puts deployments and other operator-only steps in an operator runbook
   checklist, not in agent validation steps.
 - Records consequential decisions and makes unresolved questions explicit.

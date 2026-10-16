@@ -40,7 +40,7 @@ HTTP and Hyperview integration: route patterns, handler and middleware execution
 
 kixx/assertions/README.md, kixx/errors/README.md, kixx/vendor/templating/docs/README.md
 
-API references for framework code under `kixx/`: the `is*` tests and `assert*` helpers with `AssertionError`; the standard HTTP error classes and the operational-versus-unexpected distinction; and the generic template engine and its API (`tokenize`, `buildSyntaxTree`, `createRenderFunction`). Prefer the Templating Guide for project template work.
+API references for framework code under `kixx/`: the `is*` tests and `assert*` helpers with `AssertionError`; the operational-versus-unexpected error distinction (the error classes themselves are in `kixx/errors/mod.js`); and the generic template engine and its API (`tokenize`, `buildSyntaxTree`, `createRenderFunction`). Prefer the Templating Guide for project template work.
 
 ### Unit Testing Guide
 

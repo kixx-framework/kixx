@@ -47,7 +47,7 @@ export async function migrate(context, params) {
 - **One bounded batch per call**, with comfortable headroom under every runtime limit. The caller drives the next batch.
 - **Idempotent writes.** Check current state and skip writes already applied. Application writes and the ledger commit are not atomic, so a batch may replay after an interruption or ledger race.
 - **Dry runs** (`params.dryRun`) do the same reads, selection, skips, and counting as a real run, but no application-data writes or external mutations.
-- **Errors.** Handle expected record-level concurrency and domain failures deliberately. On a real run any throw marks the ledger `failed` (best effort), and the next run resumes from the last committed cursor. Expected errors (`error.expected === true`) reach the operator unchanged; others are wrapped in `AssertionError`. `InvalidCursorError` becomes a `409` requiring `force`.
+- **Errors.** Handle expected record-level concurrency and domain failures deliberately. On a real run any throw marks the ledger `failed` (best effort), and the next run resumes from the last committed cursor. Expected errors (`error.expected === true`) reach the operator unchanged; others are wrapped in `AssertionError`. On a real run, `InvalidCursorError` becomes a `409` requiring `force`; a dry run rethrows it unchanged.
 
 ## Expand/Contract Deployment
 

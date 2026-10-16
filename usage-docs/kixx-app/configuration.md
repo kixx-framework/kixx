@@ -199,6 +199,16 @@ On Cloudflare, jobs run inside a Durable Object alarm, and a job must finish
 within one alarm invocation. The default CPU budget is 30 seconds; for
 CPU-heavy jobs raise `WORKER_VERSION.limits.cpu_ms` (maximum 300000).
 
+## File upload settings
+
+`FILES` is a per-environment block in both config files. Both keys are
+required; the app checks them at startup.
+
+| Key | Meaning |
+| --- | --- |
+| `maxUploadBytes` | Largest file upload accepted. Shipped: 52428800 (50 MiB). |
+| `bucket` | Object store bucket for file contents; must name a bucket under `OBJECT_STORE.buckets`. Shipped: `files`. |
+
 ## Cloudflare specifics
 
 The Worker does not read dotenv files. The `kixx` CLI (from the

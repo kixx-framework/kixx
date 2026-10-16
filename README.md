@@ -29,7 +29,7 @@ Repository Layout
 
 This mono-repo holds every part of the Kixx framework.
 
-- `lib/` - The Kixx library (`lib/kixx/`) plus a default application built on it (`app/`, `routes/`, `pages/`, `templates/`, etc.). Not deployable on its own; it will run locally on a devserver (not built yet) under Node.js or Deno. Will later be published to NPM and JSR as a standalone library.
+- `lib/` - The Kixx library (`lib/kixx/`) plus a default application built on it (`app/`, `routes/`, `pages/`, `templates/`, etc.). Not deployable on its own; run it locally with `kixx dev` or `kixx local` under Node.js or Deno. Will later be published to NPM and JSR as a standalone library.
 - `devkit/` - Source for the `kixx-devkit` package (NPM and JSR): the `kixx` command line tool for building and deploying Kixx applications.
 - `test-app/` - A deployable copy of `lib/` used for end-to-end testing on each deployment target. Holds the e2e suite and its runner, run before a release. Copied code is ignored by git; only its config and test harness are tracked. See `test-app/README.md`.
 - `tools/` - Scripts for working on this repo, such as the test app builder.
@@ -62,6 +62,7 @@ The Kixx Devkit lives in `devkit/`. It provides the `kixx` command line tool, wh
 With it you can:
 
 - `kixx dev` - Run your app locally. It restarts when you change the code.
+- `kixx local` - Run throwaway local instances with writable data, to test publishing and admin signup.
 - `kixx admin` - Create the first admin account, mint publishing tokens, and run data migrations.
 - `kixx app` - Publish your site's content to a running app.
 - `kixx cloudflare` - Create, upload, and deploy your app as a Cloudflare Worker.
