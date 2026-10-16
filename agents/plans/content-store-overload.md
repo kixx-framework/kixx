@@ -138,7 +138,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task S2: Cloudflare content store answers an overloaded Durable Object with 503
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** S1
 **Documentation:** `lib/plugins/README.md`, `lib/docs/server-error-handling.md`, `usage-docs/kixx-app/publishing-api.md`
 
@@ -177,13 +177,13 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The existing test "does not retry an overloaded failure" is updated. One call, no scheduler wait (inject a recording `scheduler.wait`). The error has `name` `ServiceUnavailableError`, `code` `ContentStoreOverloaded`, `httpStatusCode` 503, `expected` true, `retryAfterSeconds` 5, and `cause` is the original error.
-- [ ] New test: an error with both `.overloaded` and `.retryable` is not retried and yields the 503 error.
-- [ ] New test: `statFiles()` with an overloaded Durable Object rejects with the 503 error (the path from the incident).
-- [ ] New test: the warn log is emitted with `methodName` (use a recording logger in place of `SILENT_LOGGER` for that case).
-- [ ] Existing tests for retryable, remote, and local errors pass unchanged (500 `OperationalError` and untouched `TypeError`).
-- [ ] `objects.test.js`: when `statObjects` rejects with a `ServiceUnavailableError`, `putObject` rejects with that same error (same `code`, `httpStatusCode`, and `retryAfterSeconds`) and stores nothing.
-- [ ] Interface JSDoc and `publishing-api.md` are updated as described.
+- [x] The existing test "does not retry an overloaded failure" is updated. One call, no scheduler wait (inject a recording `scheduler.wait`). The error has `name` `ServiceUnavailableError`, `code` `ContentStoreOverloaded`, `httpStatusCode` 503, `expected` true, `retryAfterSeconds` 5, and `cause` is the original error.
+- [x] New test: an error with both `.overloaded` and `.retryable` is not retried and yields the 503 error.
+- [x] New test: `statFiles()` with an overloaded Durable Object rejects with the 503 error (the path from the incident).
+- [x] New test: the warn log is emitted with `methodName` (use a recording logger in place of `SILENT_LOGGER` for that case).
+- [x] Existing tests for retryable, remote, and local errors pass unchanged (500 `OperationalError` and untouched `TypeError`).
+- [x] `objects.test.js`: when `statObjects` rejects with a `ServiceUnavailableError`, `putObject` rejects with that same error (same `code`, `httpStatusCode`, and `retryAfterSeconds`) and stores nothing.
+- [x] Interface JSDoc and `publishing-api.md` are updated as described.
 
 **Validation**
 
@@ -195,12 +195,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: overload branch in `#callDurableObject` (warn log, `ServiceUnavailableError` 503, `ContentStoreOverloaded`, `retryAfterSeconds: 5`, checked before `.retryable`), `@throws` JSDoc on methods that list `OperationalError`, interface Errors contract, tests, usage doc.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: Confirmed `ContentAddressableStore.statObjects`/`putObject` and `objects.js` do not wrap errors. The overload check uses truthiness (`cause.overloaded`), since the marker check uses `in`.
+- Actual files changed: `lib/plugins/cloudflare-content-store/lib/content-store.js`, `lib/kixx/content-addressable-store/content-store-interface.js`, `lib/test/plugins/cloudflare-content-store/lib/content-store.test.js`, `lib/test/app/presentation/request-handlers/publishing-api/objects.test.js`, `usage-docs/kixx-app/publishing-api.md`.
+- Validation run: focused 126 pass; `node lib/run-tests.js` 1847 pass; `deno run -A lib/run-tests.js` 1847 pass; lint clean.
 - Blockers: None.
 
 ---

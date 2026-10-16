@@ -178,8 +178,16 @@ Error codes used by this API:
 | `422` | `InvalidReleaseManifest` | The manifest structure or content, or the provenance, is invalid |
 | `422` | `InvalidBuildAssignment` | `data.id`, `attributes.releaseId`, `attributes.expectedAssignmentId`, or `attributes.reason` fails validation |
 | `428` | `PreconditionRequired` | A build pointer write omitted JSON `attributes.expectedAssignmentId` |
+| `503` | `ContentStoreOverloaded` | The content store is temporarily overloaded; retry after the `Retry-After` delay |
 
 Unexpected failures return a generic server error without internal details.
+
+Any endpoint that reads or writes content may answer `503` with a
+`Retry-After` header, in seconds. Wait at least that long, then retry
+idempotent requests. Nothing was written. The `503` a running build serves
+when no Release is assigned (see
+[Bootstrap](#bootstrap-publishing-to-a-store-with-nothing-assigned-anywhere))
+has no `Retry-After` and is not a reason to retry.
 
 ## Discovery
 
