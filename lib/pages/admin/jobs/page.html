@@ -1,0 +1,87 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <h1>Background Jobs</h1>
+            <p>Inspect queued, running, and finished jobs. Completed jobs are kept 7 days and failed jobs 30 in the shipped config.</p>
+        </header>
+
+        {{> admin/job-queue-disabled.html }}
+        {{> admin/notice.html }}
+
+        <form method="GET" action="{{ links.jobs }}" class="cluster">
+            <div class="field">
+                <label class="field__label" for="jobs-status-filter">Status</label>
+                <select class="field__select" id="jobs-status-filter" name="status">
+                    <option value="">Any status</option>
+                    {{#each filters.statusOptions as |option| }}
+                    <option value="{{ option.value }}"{{#if option.selected}} selected{{/if}}>{{ option.label }}</option>
+                    {{/each}}
+                </select>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="jobs-name-filter">Job name</label>
+                <input class="field__input" id="jobs-name-filter" type="text" name="name" value="{{ filters.name }}">
+            </div>
+
+            <button class="button button--secondary" type="submit">Filter</button>
+            {{#if filters.isFiltered}}
+            <a href="{{ links.jobs }}">Clear filters</a>
+            {{/if}}
+        </form>
+
+        {{#if jobs}}
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="jobs-caption">
+            <table class="table-list__table">
+                <caption id="jobs-caption" class="table-list__caption">Jobs</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Job</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Attempts</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Run at</th>
+                        <th scope="col">Finished</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each jobs as |job| }}
+                    <tr>
+                        <th scope="row">
+                            <a href="{{ job.links.detail }}">{{ job.name }}</a>
+                            <div class="type-caption">{{ job.id }}</div>
+                        </th>
+                        <td>{{#with job}}{{> admin/job-status-badge.html }}{{/with}}</td>
+                        <td>{{ job.attempt }} / {{ job.maxAttempts }}</td>
+                        <td>{{#if job.createdAt}}{{ formatDate job.createdAt format="DATETIME_MED" }}{{/if}}</td>
+                        <td>{{#if job.runAt}}{{ formatDate job.runAt format="DATETIME_MED" }}{{/if}}</td>
+                        <td>{{#if job.finishedAt}}{{ formatDate job.finishedAt format="DATETIME_MED" }}{{else}}Not yet{{/if}}</td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        {{#if filters.isFiltered}}
+        <p class="type-body-sm">No jobs match these filters.</p>
+        {{else}}
+        <p class="type-body-sm">No jobs have been recorded yet.</p>
+        {{/if}}
+        {{/if}}
+
+        {{!--
+            Pagination sits outside the list conditional, as on the files page,
+            so an emptied later page keeps its "Previous page" link.
+        --}}
+        {{#if showPagination}}
+        <p class="cluster">
+            {{#if links.previousPage}}
+            <a class="button button--secondary" href="{{ links.previousPage }}">Previous page</a>
+            {{/if}}
+            {{#if links.nextPage}}
+            <a class="button button--secondary" href="{{ links.nextPage }}">Next page</a>
+            {{/if}}
+        </p>
+        {{/if}}
+    </article>
+</main>

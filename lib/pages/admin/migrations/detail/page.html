@@ -20,7 +20,7 @@
             <p>{{ migration.description }}</p>
         </header>
 
-        {{> admin/migration-notice.html }}
+        {{> admin/notice.html }}
 
         <div class="table-list" role="region" tabindex="0" aria-labelledby="ledger-caption">
             <table class="table-list__table">
@@ -91,7 +91,7 @@
             <h2 id="dry-run-heading">Dry-run result</h2>
 
             {{!-- dryRun.notice is always set, so the page-level notice never shows through. --}}
-            {{#with dryRun}}{{> admin/migration-notice.html }}{{/with}}
+            {{#with dryRun}}{{> admin/notice.html }}{{/with}}
 
             {{#if dryRun.detail}}
             <p class="type-body-sm">{{ dryRun.detail }}</p>

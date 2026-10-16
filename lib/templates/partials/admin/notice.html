@@ -1,7 +1,7 @@
 {{!--
-    Renders a migration notice from lib/app/presentation/lib/migration-run-outcomes.js.
-    Reads `notice` from the current context; the text is static and never echoes
-    request data.
+    Renders an admin notice: `{ tone, role, title, message }`, where tone is
+    info, success, warning, or error. Reads `notice` from the current context;
+    the text is static and never echoes request data.
 --}}
 {{#if notice}}
 <div class="callout callout--{{ notice.tone }}" role="{{ notice.role }}">

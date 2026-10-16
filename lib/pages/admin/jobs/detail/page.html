@@ -1,0 +1,108 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        {{#if missing}}
+        <header class="admin-content-section__header">
+            <p><a href="{{ links.jobs }}">&larr; Background Jobs</a></p>
+            <h1>Job not found</h1>
+        </header>
+
+        {{> admin/job-queue-disabled.html }}
+
+        <div class="callout callout--error" role="alert">
+            <span class="callout__icon" aria-hidden="true">[x]</span>
+            <div class="callout__body flow">
+                <p class="callout__title">Job not found</p>
+                <p class="type-body-sm">No job has this id. Finished jobs are purged after their retention period.</p>
+            </div>
+        </div>
+        {{else}}
+        <header class="admin-content-section__header">
+            <p><a href="{{ links.jobs }}">&larr; Background Jobs</a></p>
+            <h1>{{ job.name }}</h1>
+            <p class="type-caption">{{ job.id }}</p>
+        </header>
+
+        {{> admin/job-queue-disabled.html }}
+        {{> admin/notice.html }}
+
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="job-caption">
+            <table class="table-list__table">
+                <caption id="job-caption" class="table-list__caption">Job</caption>
+                <tbody>
+                    <tr>
+                        <th scope="row">Status</th>
+                        <td>{{#with job}}{{> admin/job-status-badge.html }}{{/with}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Attempts</th>
+                        <td>{{ job.attempt }} of {{ job.maxAttempts }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Dedupe key</th>
+                        <td>{{#if job.key}}<code>{{ job.key }}</code>{{else}}None{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Schedule</th>
+                        <td>{{#if job.scheduleName}}{{ job.scheduleName }}{{else}}None{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Scheduled for</th>
+                        <td>{{#if job.scheduledFor}}{{ formatDate job.scheduledFor format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Run at</th>
+                        <td>{{#if job.runAt}}{{ formatDate job.runAt format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Created</th>
+                        <td>{{#if job.createdAt}}{{ formatDate job.createdAt format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Updated</th>
+                        <td>{{#if job.updatedAt}}{{ formatDate job.updatedAt format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Finished</th>
+                        <td>{{#if job.finishedAt}}{{ formatDate job.finishedAt format="DATETIME_MED" }}{{else}}Not yet{{/if}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h2>Payload</h2>
+        <pre class="code-block"><code>{{ job.payloadJson }}</code></pre>
+
+        <h2>Last error</h2>
+        {{#if job.lastError}}
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="last-error-caption">
+            <table class="table-list__table">
+                <caption id="last-error-caption" class="table-list__caption">Last error</caption>
+                <tbody>
+                    <tr>
+                        <th scope="row">Name</th>
+                        <td>{{ job.lastError.name }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Message</th>
+                        <td>{{ job.lastError.message }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Type</th>
+                        <td>{{#if job.lastError.expected}}Expected{{else}}Unexpected{{/if}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {{#if job.lastError.stack}}
+        <pre class="code-block"><code>{{ job.lastError.stack }}</code></pre>
+        {{else}}
+        <p class="type-body-sm">No stack trace recorded.</p>
+        {{/if}}
+        {{else}}
+        <p class="type-body-sm">No failed attempts.</p>
+        {{/if}}
+
+        {{!-- T5 adds the Retry actions card here, shown only when job.canRetry. --}}
+        {{/if}}
+    </article>
+</main>

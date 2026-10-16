@@ -216,7 +216,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T3: Add the jobs list and detail pages with the nav link and shared partials
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `lib/app/presentation/README.md` (Route Patterns; Reverse Routing; Rendering with HyperviewPageHandler; Page recipe; Admin Sidebar); `lib/templates/README.md` (`#each`, `ifEqual`, `with`, `formatDate`, HTML Escaping, Partials); `lib/pages/admin/style-guide/table-lists/body.html` and `callouts/body.html`; `lib/pages/admin/files/page.html` (pagination); `lib/app/presentation/lib/pagination.js`
 
@@ -329,12 +329,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Both routes precede `{/}` and `*`, and `/jobs/:id` precedes `/jobs`. The list target's first handler authorizes `urn:kixx:list` on `urn:kixx:admin:jobs`, and the detail target's authorizes `urn:kixx:get`. Both targets allow `GET, HEAD`.
-- [ ] The list handler implements every filter, validation, and paging behavior above. The paging links are relative URLs on `/admin/jobs` carrying the filters.
-- [ ] The detail handler returns all `JobRecord` fields plus `payloadJson` and `canRetry`. An unknown id gives status 404 and `missing: true`.
-- [ ] The migration pages render exactly as before, now through `admin/notice.html`. The migration handler and route tests pass unchanged, and `grep -rn "migration-notice" lib` prints nothing.
-- [ ] The templates render the structure above. A payload or stack containing `<script>` renders escaped. There is no `style="`.
-- [ ] The sidebar shows Developers → Background Jobs for every admin and highlights it on the list and detail pages. The directory has the card.
+- [x] Both routes precede `{/}` and `*`, and `/jobs/:id` precedes `/jobs`. The list target's first handler authorizes `urn:kixx:list` on `urn:kixx:admin:jobs`, and the detail target's authorizes `urn:kixx:get`. Both targets allow `GET, HEAD`.
+- [x] The list handler implements every filter, validation, and paging behavior above. The paging links are relative URLs on `/admin/jobs` carrying the filters.
+- [x] The detail handler returns all `JobRecord` fields plus `payloadJson` and `canRetry`. An unknown id gives status 404 and `missing: true`.
+- [x] The migration pages render exactly as before, now through `admin/notice.html`. The migration handler and route tests pass unchanged, and `grep -rn "migration-notice" lib` prints nothing.
+- [x] The templates render the structure above. A payload or stack containing `<script>` renders escaped. There is no `style="`.
+- [x] The sidebar shows Developers → Background Jobs for every admin and highlights it on the list and detail pages. The directory has the card.
 
 **Validation**
 
@@ -349,12 +349,40 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Routes, `admin-jobs.js` (`getAdminJobs`, `getAdminJob`), list and detail pages, the renamed `admin/notice.html`, `job-status-badge.html`, `job-queue-disabled.html`, the nav link, the directory card, and tests.
+- Current state: Complete.
+- Remaining: Nothing in T3. Items deferred to later tasks are listed below.
+- Decisions and discoveries:
+  - **Deferred to T4:** the detail page's Schedule row renders `scheduleName` as plain text, and `links.schedules` is not set. The `job-schedules` target does not exist until T4, and `getHttpTarget` on a missing target would crash the detail page for scheduled jobs. T4 must add `links.schedules` (when `scheduleName` is set) and wrap the row in a link. `REGISTERED_NOTICES` is also T4's (an unused `Set` fails lint).
+  - **Deferred to T5:** `getNoticeLocation` is not defined yet (unused functions fail lint). `getJobDetailProps` is currently `(context, job, notice)` and sync; T5 makes it `async (context, request, response, job, notice)` and adds `csrf` and `links.retry`.
+  - All seven notice codes are in the private `NOTICES` table. `LIST_NOTICES` = `job_not_found`; `DETAIL_NOTICES` = `retry_queued`, `retry_conflict`, `run_now_enqueued`, `run_now_already_queued`, `form_expired`.
+  - The status `<select>` needs its options, so `admin-jobs.js` has a local `STATUS_OPTIONS` list used only to render them. The queue still validates the value; `JOB_STATUSES` in `job-state-store.js` is not exported, and `lib/kixx/jobs/` is off limits.
+  - `URLSearchParams` is not an ESLint global in `lib/eslint.config.js`, so the filter base URL is built with `new URL(...).searchParams` instead. T4's `links.runs` (`/admin/jobs?name=<name>`) should do the same.
+  - The templating engine has no `{{else if}}`; nest `{{#if}}` inside `{{else}}`.
+  - The plan said four `migration-notice` references; there were three (list once, detail twice). All updated.
+  - The detail template has a `{{!-- T5 adds the Retry actions card here --}}` comment marking the actions slot.
+  - Render script: `tmp/render-job-pages.mjs` runs the real handlers with a stub context and renders through the vendored engine (`node tmp/render-job-pages.mjs <list-rows|list-filtered-empty|list-empty|list-page2|detail-failed|detail-pending|missing|migrations|nav>`). Its `TARGETS` map already includes the T4–T6 targets; extend its scenarios for later tasks.
+- Actual files changed:
+  - `lib/routes/admin-panel.js`
+  - `lib/app/presentation/request-handlers/admin-panel/admin-jobs.js` (new)
+  - `lib/app/presentation/request-handlers/admin-panel/mod.js`
+  - `lib/pages/admin/jobs/page.json`, `page.html` (new)
+  - `lib/pages/admin/jobs/detail/page.json`, `page.html` (new)
+  - `lib/templates/partials/admin/notice.html` (renamed from `migration-notice.html`, header comment generalized)
+  - `lib/templates/partials/admin/job-status-badge.html`, `job-queue-disabled.html` (new)
+  - `lib/pages/admin/migrations/page.html`, `lib/pages/admin/migrations/detail/page.html` (partial rename)
+  - `lib/templates/partials/admin-nav.html`, `lib/pages/admin/page.html`
+  - `lib/test/routes/admin-panel.test.js`
+  - `lib/test/app/presentation/request-handlers/admin-panel/admin-jobs.test.js` (new)
+- Validation run (2026-10-16):
+  - `node lib/run-tests.js lib/test/routes/admin-panel.test.js lib/test/app/presentation/request-handlers/admin-panel`: 109 tests, passed.
+  - `node lib/run-linter.js lib/routes lib/app/presentation/request-handlers/admin-panel lib/test/routes lib/test/app/presentation/request-handlers/admin-panel`: no errors.
+  - `grep -rn 'style="' lib/pages/admin/jobs lib/templates/partials/admin`: nothing.
+  - `grep -rn "migration-notice" lib`: nothing.
+  - `grep -n 'subpage.section "jobs"' lib/templates/partials/admin-nav.html`: one line.
+  - page.json parse check: passed.
+  - Render checks: list with rows, notice, selected status, and a next link carrying `status`, `name`, `cursor`, `history`; filtered empty with the queue-disabled callout; unfiltered empty; page two with a filtered previous link; failed detail with escaped `<script>` payload and stack; pending detail at attempt 1 with key, schedule, and no stack; missing; migrations list through `admin/notice.html`; nav highlights Background Jobs.
+  - `node lib/run-tests.js`: 1955 tests, passed.
 - Blockers: None.
 
 ---

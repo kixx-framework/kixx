@@ -55,6 +55,7 @@
         <p class="admin-nav__title">Developers</p>
         <ul class="admin-nav__list">
             <li><a class="admin-nav__link"{{#ifEqual subpage.section "migrations"}} aria-current="page"{{/ifEqual}} href="/admin/migrations">Data Migrations</a></li>
+            <li><a class="admin-nav__link"{{#ifEqual subpage.section "jobs"}} aria-current="page"{{/ifEqual}} href="/admin/jobs">Background Jobs</a></li>
         </ul>
         {{/ifEqual}}
     </div>

@@ -1,0 +1,10 @@
+{{!-- Warns that the job queue is disabled. Reads `queueDisabled` from the current context. --}}
+{{#if queueDisabled}}
+<div class="callout callout--warning" role="status">
+    <span class="callout__icon" aria-hidden="true">[!]</span>
+    <div class="callout__body flow">
+        <p class="callout__title">Job queue disabled</p>
+        <p class="type-body-sm">The job queue is disabled in this environment (<code>JOB_QUEUE.enabled</code> is <code>false</code>), so jobs are recorded but not run. The actions still work.</p>
+    </div>
+</div>
+{{/if}}
