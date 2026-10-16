@@ -117,8 +117,8 @@ have an explicitly accepted exception, and no required decision may remain
 unresolved. Run the full test suite (`node lib/run-tests.js`, and
 `node devkit/run-tests.js` if `devkit/` changed) and the linter on every
 JavaScript file changed by the plan (`node lib/run-linter.js <paths>` or
-`node devkit/run-linter.js <paths>`), and
-perform any plan-level integration checks not covered by task validation.
+`node devkit/run-linter.js <paths>`), and perform any plan-level integration
+checks not covered by task validation.
 Correct discrepancies in the plan before reporting the result.
 
 Finish with a link to the updated plan, a concise summary of the implemented
