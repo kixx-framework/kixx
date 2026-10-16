@@ -59,7 +59,7 @@ kixx admin gen-secure-token [--prefix <text>]
 
 | Option | Description |
 | --- | --- |
-| `--prefix` | Literal prefix prepended to the token |
+| `-p`, `--prefix` | Literal prefix prepended to the token |
 
 ## `accept-invite`
 

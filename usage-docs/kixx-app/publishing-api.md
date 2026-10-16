@@ -77,7 +77,10 @@ authentication):
 Authorization: Bearer <publishing-token>
 ```
 
-Create a token through the [Admin API](admin-api.md#create-a-publishing-api-token).
+Create a token through the [Admin API](admin-api.md#create-a-publishing-api-token)
+or with `kixx admin create-publishing-token`. The `kixx app publish` command
+runs the whole publish workflow below for you; see
+[`kixx app`](../kixx-devkit/app.md).
 Missing, malformed, or unknown bearer credentials return `401` with code
 `UNAUTHENTICATED_ERROR`. Expired and revoked tokens return `403` with code
 `PublishingApiTokenInactive`.

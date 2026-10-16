@@ -16,8 +16,9 @@ The API is mounted at:
 ## Exposure model
 
 Nothing is exposed by default. A Collection is reachable only when the
-application registers it in `app/admin-data-api/mod.js`, and only through
-the operations that registration declares. There is no automatic Collection
+application's code registers it as a resource, and only through the
+operations that registration declares. The shipped app registers one
+resource, [Files](#files). There is no automatic Collection
 enumeration and no wildcard grant to future Collections.
 
 A request is allowed only when **both** hold:
@@ -64,7 +65,8 @@ mint a replacement and revoke the old token.
 
 ### Who can manage tokens
 
-Tokens are created and revoked in the admin panel. That requires the
+Tokens are created and revoked in the admin panel at
+`/admin/admin-data-api-tokens`. That requires the
 `urn:kixx:admin:api-tokens:admin-data` resource, held by:
 
 | Role | Can manage data tokens | How |
@@ -362,69 +364,3 @@ This resource edits File **records** only:
   records first.
 - Content references are internal storage details. They are returned to any
   token granted access to `File`; treat such tokens as administrative.
-
-### Verification
-
-The e2e suite in `test-app/test/300-admin-data-api/` (from the repo root)
-exercises this contract against a running target: tokens created and revoked through the admin panel, scoped
-grants, every File operation, stale versions and two concurrent writers, and
-byte checks after every repoint and delete. The deterministic race in which a
-write lands between load and persist is covered by the unit tests in
-`test/unit-tests/app/presentation/request-handlers/admin-data-api/`, which also
-prove that no API request reaches the file object store.
-
-## Adding a resource
-
-Register a Collection by adding a registration object to
-`app/admin-data-api/resources/` and listing it in
-`app/admin-data-api/mod.js`. The registry validates and freezes every
-registration at import, and `app.initialize()` checks each against its
-Collection; any mismatch is a programmer error that fails boot.
-
-```javascript
-export default {
-    type: 'widgets',                 // public JSON:API type: lowercase, hyphenated
-    collection: 'Widget',            // registered Collection name: PascalCase
-    description: 'What the records are, and what direct edits bypass.',
-    attributes: {                    // the complete read projection
-        name: { description: 'Widget name.', schema: { type: 'string' } },
-    },
-    operations: {                    // present = enabled; omit to disable
-        list: {
-            sorts: [
-                // name is the JSON:API sort value; first is the default.
-                // index optionally names one of the Collection's INDEXES.
-                { name: '-createdAt', description: 'Newest first.', descending: true },
-            ],
-        },
-        get: {},
-        create: {
-            attributes: [ 'name' ],  // writable on create
-            required: [ 'name' ],    // subset of attributes
-            // Optional: persist(context, collection, attributes) => Promise<Record>.
-            // Defaults to collection.create(context, attributes).
-        },
-        update: { attributes: [ 'name' ] },
-        delete: {},
-    },
-};
-```
-
-Rules the registry enforces:
-
-- Types and Collections are unique; unknown keys anywhere are rejected.
-- Attribute names are camelCase and may not be server-owned names (`id`,
-  `type`, `version`, `sortKey`, `createdAt`, `updatedAt`, `meta`, `links`,
-  `relationships`). Each attribute needs a description and a JSON schema
-  fragment for discovery. Record schemas describe; `Record#validate()` and the
-  registration enforce.
-- Every attribute must exist in the Collection's Record schema, every enabled
-  operation needs its Collection method, and every sort index must be declared
-  in the Collection's `INDEXES`.
-- Write attribute lists name declared attributes only; server-owned values
-  belong in a `persist` hook (create only) or the Collection.
-- `attributes` and `list.sorts` are non-empty; every sort needs a
-  `description` and a boolean `descending`; operations are objects (`{}`).
-
-Exposing a Collection is a security decision: any token granted on it can read
-every declared attribute of every record.

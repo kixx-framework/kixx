@@ -4,7 +4,13 @@ Paths are relative to `lib/`.
 
 ../usage-docs/kixx-app/configuration.md
 
-Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cloudflare-config.jsonc` (JSONC, `parseJsonc`) versus per-deploy environment variables (dotenv files or Cloudflare bindings) split by secrecy. Covers `readConfig` and environment selection, the `*.jsonc.template` config templates and their Node.js and Cloudflare rendering contexts, merging dotenv files, the server port, the `example.env.secrets` manifest, `DATA_DIRECTORY` and config-relative paths, `JOB_QUEUE` settings, Cloudflare bindings, Worker secrets, resources and packaging, and adding a new setting.
+Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cloudflare-config.jsonc` versus per-deploy environment variables (dotenv files or Cloudflare bindings) split by secrecy. Covers environment selection, merging dotenv files, the server port, the `example.env.secrets` manifest, `DATA_DIRECTORY` and store paths, `JOB_QUEUE` settings, and Cloudflare bindings, secrets, resources, and packaging.
+
+### Configuration Internals
+
+docs/configuration-internals.md
+
+`parseJsonc`, `readConfig`, `resolveFilepath`, and environment merging; the `*.jsonc.template` config templates, their `json` helper, and the Node.js and Cloudflare rendering contexts; and the checklist for adding a new setting.
 
 ### Code Style Guide
 
@@ -64,7 +70,13 @@ The CSRF threat model and the protection for browser HTML forms that sign in or 
 
 ../usage-docs/kixx-app/admin-data-api.md
 
-Version-checked JSON:API access to registered Collections at `/admin-data-api/v1/`, bypassing application workflows but not Record validation. Covers the exposure model, token grants, media types, discovery, resource documents and versions, writes, pagination, errors, audit logging, the `File` resource and its limits, verification, and registering a new resource in `app/admin-data-api/`.
+Version-checked JSON:API access to registered Collections at `/admin-data-api/v1/`, bypassing application workflows but not Record validation. Covers the exposure model, token grants, media types, discovery, resource documents and versions, writes, pagination, errors, audit logging, and the `File` resource and its limits.
+
+### Administrative Data API Resources
+
+app/admin-data-api/README.md
+
+Registering a Collection as an Administrative Data API resource: the registration shape, rules the registry enforces, and where the contract is tested.
 
 ### Plugins and Cross-Platform Architecture
 

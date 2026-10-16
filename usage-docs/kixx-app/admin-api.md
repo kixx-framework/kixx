@@ -136,8 +136,7 @@ Permissions come from the account's stored role IDs on every request:
 | `admin` | No | No |
 | `editor` | No | No |
 
-The role registry (`lib/app/permissions/roles.js`) is the authority. Unknown
-role IDs grant nothing.
+Unknown role IDs grant nothing.
 
 Basic-auth endpoints authenticate and authorize before checking the body. The
 invite endpoint checks, in order: media type, Bearer credential, JSON shape,
@@ -344,11 +343,20 @@ curl --user 'admin@example.com:password' \
 
 ## Jobs
 
-Inspect and recover background jobs. Job behavior (retries, backoff,
-retention) is described in `lib/app/jobs/README.md`.
+Inspect and recover background jobs.
 
-`lib/` is published separately, so that README keeps its own copy of these
-endpoints. Update both when either changes.
+How jobs behave:
+
+- Delivery is at-least-once, so a job may run more than once.
+- An expected error is retried with exponential backoff (full jitter,
+  starting at 10 seconds, capped at 1 hour) until `maxAttempts` is reached,
+  unless the error is marked not retryable. An unexpected error fails the job
+  without retry.
+- A run that outlives its timeout plus 30 seconds counts as a failed attempt.
+- A stored job whose name is no longer registered fails with `UnknownJob`.
+- Finished jobs are purged by age: completed after 7 days and failed after
+  30 in the shipped config (`JOB_QUEUE.retention`). Active jobs are never
+  purged.
 
 ### List jobs
 
@@ -624,7 +632,12 @@ deliberately rerun an applied one.
 
 ### Bootstrap the first admin
 
-1. Configure a strong, secret `ADMIN_BOOTSTRAP_TOKEN` in the deployment.
-2. Redeem it once through the invite endpoint.
+1. Configure a strong, secret `ADMIN_BOOTSTRAP_TOKEN` in the deployment
+   (`kixx admin gen-secure-token` generates one).
+2. Redeem it once through the invite endpoint, or with
+   `kixx admin accept-invite`.
 3. Remove the environment value after the root admin is created. The consumed
    marker prevents reuse even before removal.
+
+The `kixx admin` commands wrap the migration and token endpoints too; see
+[`kixx admin`](../kixx-devkit/admin.md).
