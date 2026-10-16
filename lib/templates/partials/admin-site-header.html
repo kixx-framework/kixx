@@ -11,10 +11,10 @@
                     <span class="type-body-sm">{{ adminAccount.emailAddress }}</span>
                     <form method="post" action="{{ adminAccount.logoutForm.url }}">
                         <input type="hidden" name="{{ adminAccount.logoutForm.csrf.fieldName }}" value="{{ adminAccount.logoutForm.csrf.token }}">
-                        <button class="button" type="submit">Log out</button>
+                        <button class="button button--small" type="submit">Log out</button>
                     </form>
                     {{/if}}
-                    <button class="button theme-toggle" type="button" data-js-behavior="theme-toggle" aria-label="Switch color theme">
+                    <button class="button button--small" type="button" data-js-behavior="theme-toggle" aria-label="Switch color theme">
                         <span class="theme-toggle__label">dark</span>
                     </button>
                 </div>

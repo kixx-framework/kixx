@@ -223,7 +223,7 @@ The starter supports light and dark schemes with the native CSS `light-dark()` f
 - A reader's explicit choice is stored in `localStorage` under the key in `window.COLOR_SCHEME_STORAGE_KEY` and applied to `<html>` as `data-color-scheme="light"` or `"dark"` by the inline script in `templates/partials/common-site-meta.html`. That script runs before paint, so the page never flashes the wrong theme.
 - `design-tokens.css` translates that attribute back into a `color-scheme` declaration (`:root[data-color-scheme="dark"] { color-scheme: dark; }`), which is what makes `light-dark()` pick the other branch.
 - With no attribute set, the page follows the operating system preference.
-- The toggle control is `class="button theme-toggle"` with `data-js-behavior="theme-toggle"`; `static-assets/javascript/site.js` owns its click handling and `aria-pressed` state.
+- The toggle control is `class="button button--small"` with `data-js-behavior="theme-toggle"`; `static-assets/javascript/site.js` owns its click handling and `aria-pressed` state.
 
 While using this scheme model, put color pairs in `light-dark()` semantic tokens instead of component-level `prefers-color-scheme` queries. Scheme resolution belongs at the semantic tier.
 
