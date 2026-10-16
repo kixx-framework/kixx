@@ -11,6 +11,25 @@
 }
 
 /* -----------------------------------------------------------------------------
+    Form Field Row
+
+    Compose .field-row with .cluster on a form whose fields sit side by side,
+    such as a filter bar. Children align on their bottom edge, so controls line
+    up below their labels. Non-field children (buttons, links) take the field
+    control height and center their content, so their tops line up too.
+----------------------------------------------------------------------------- */
+
+.field-row {
+    --cluster-align: flex-end;
+}
+
+.field-row > :not(.field) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+}
+
+/* -----------------------------------------------------------------------------
     Text Fields (single-line inputs) and Selects
 
     .field wraps a label, the control, optional persistent hint text, and
