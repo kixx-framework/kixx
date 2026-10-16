@@ -1,6 +1,6 @@
 # Data Migrations
 
-Migrations are statically registered modules that an operator advances through the Admin API, one bounded batch per request. The `Migration` ledger records committed real-run progress; dry-run progress belongs to the caller. Endpoints and the run lifecycle (resume, `force`, conflicts) are in `docs/admin-api.md`.
+Migrations are statically registered modules that an operator advances through the Admin API, one bounded batch per request. The `Migration` ledger records committed real-run progress; dry-run progress belongs to the caller. Endpoints and the run lifecycle (resume, `force`, conflicts) are in `usage-docs/admin-api.md`.
 
 ## Registration
 
