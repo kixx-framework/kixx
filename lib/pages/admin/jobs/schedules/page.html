@@ -1,0 +1,41 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <h1>Schedules</h1>
+            <p>Recurring jobs declared in code. Cron runs in UTC. A schedule that falls behind runs once to catch up.</p>
+        </header>
+
+        {{> admin/jobs-subnav.html }}
+        {{> admin/job-queue-disabled.html }}
+
+        {{#if schedules}}
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="schedules-caption">
+            <table class="table-list__table">
+                <caption id="schedules-caption" class="table-list__caption">Schedules</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Job</th>
+                        <th scope="col">Cron (UTC)</th>
+                        <th scope="col">Next run</th>
+                        <th scope="col">Last enqueued</th>
+                        <th scope="col">Last job</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each schedules as |schedule| }}
+                    <tr>
+                        <th scope="row"><a href="{{ schedule.links.runs }}">{{ schedule.name }}</a></th>
+                        <td><code>{{ schedule.cron }}</code></td>
+                        <td>{{#if schedule.nextRunAt}}{{ formatDate schedule.nextRunAt format="DATETIME_MED" }}{{/if}}</td>
+                        <td>{{#if schedule.lastEnqueuedAt}}{{ formatDate schedule.lastEnqueuedAt format="DATETIME_MED" }}{{else}}Never{{/if}}</td>
+                        <td>{{#if schedule.links.lastJob}}<a href="{{ schedule.links.lastJob }}">View job</a>{{else}}None{{/if}}</td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <p class="type-body-sm">No recurring schedules are declared in this build.</p>
+        {{/if}}
+    </article>
+</main>

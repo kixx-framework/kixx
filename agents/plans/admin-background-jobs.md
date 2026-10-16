@@ -389,7 +389,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T4: Add the Schedules and Registered jobs pages
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T2, T3
 **Documentation:** `lib/app/jobs/README.md` (Registering a job; Schedules); `lib/kixx/jobs/job-queue-interface.js` (`JobScheduleRecord`); T3's helpers and partials
 
@@ -454,11 +454,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `/jobs/registered` and `/jobs/schedules` precede `/jobs/:id`, which precedes `/jobs`. Both new targets authorize `urn:kixx:list` on `urn:kixx:admin:jobs` and allow `GET, HEAD`.
-- [ ] The schedules handler maps every `JobScheduleRecord` field and builds the run and last-job links.
-- [ ] The registry handler shows resolved defaults and returns `[]` for the shipped registry. It never exposes handlers.
-- [ ] The subnav on all four pages links Jobs, Schedules, and Registered jobs, and marks the current one with `aria-current="page"`. The sidebar highlights Background Jobs on both new pages.
-- [ ] The templates render rows and empty states with no `style="`.
+- [x] `/jobs/registered` and `/jobs/schedules` precede `/jobs/:id`, which precedes `/jobs`. Both new targets authorize `urn:kixx:list` on `urn:kixx:admin:jobs` and allow `GET, HEAD`.
+- [x] The schedules handler maps every `JobScheduleRecord` field and builds the run and last-job links.
+- [x] The registry handler shows resolved defaults and returns `[]` for the shipped registry. It never exposes handlers.
+- [x] The subnav on all four pages links Jobs, Schedules, and Registered jobs, and marks the current one with `aria-current="page"`. The sidebar highlights Background Jobs on both new pages.
+- [x] The templates render rows and empty states with no `style="`.
 
 **Validation**
 
@@ -470,12 +470,31 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Both routes and handlers, both pages, the subnav on all four pages, the detail page's schedule link, and tests.
+- Current state: Complete.
+- Remaining: Nothing in T4.
+- Decisions and discoveries:
+  - `getSectionLinks(context)` always includes `schedules`, so the detail page's `links.schedules` is always set. The template links the Schedule row only when `job.scheduleName` is set. This closes the T3 deferral.
+  - `links.runs` is built by a private `getRunsPathname(context, name)` that reuses `getFilterBase` (which uses `new URL(...).searchParams`, see T3).
+  - `getRegistryPageProps` is currently `async (context, { notice })`. T6 extends it to `(context, request, response, { notice, runNowForm, runNowError })` with CSRF, per-job forms, and `matched` (unused parameters fail lint, so they were not added early).
+  - `REGISTERED_NOTICES` = `job_not_registered`, `form_expired`.
+  - **For T6:** the route test "gates the job pages on the jobs resource" asserts `route.targets.length === 1` for `/jobs/registered`. T6 adds the `run-now` target, so update that test (as the migrations force route test does).
+  - The registered page has a `{{!-- T6 adds one Run now card per job here. --}}` comment inside `{{#if jobs}}`, after the table.
+  - `tmp/render-job-pages.mjs` gained `schedules`, `schedules-empty`, `registered`, and `registered-empty` scenarios.
+- Actual files changed:
+  - `lib/routes/admin-panel.js`
+  - `lib/app/presentation/request-handlers/admin-panel/admin-jobs.js`
+  - `lib/templates/partials/admin/jobs-subnav.html` (new)
+  - `lib/pages/admin/jobs/page.html`, `lib/pages/admin/jobs/detail/page.html` (subnav; schedule link)
+  - `lib/pages/admin/jobs/schedules/page.json`, `page.html` (new)
+  - `lib/pages/admin/jobs/registered/page.json`, `page.html` (new)
+  - `lib/test/routes/admin-panel.test.js`, `lib/test/app/presentation/request-handlers/admin-panel/admin-jobs.test.js`
+- Validation run (2026-10-16):
+  - `node lib/run-tests.js lib/test/routes/admin-panel.test.js lib/test/app/presentation/request-handlers/admin-panel/admin-jobs.test.js lib/test/app/jobs`: 34 tests, passed; registry empty afterwards.
+  - `node lib/run-linter.js lib/routes lib/app/presentation/request-handlers/admin-panel lib/test/routes lib/test/app/presentation/request-handlers/admin-panel`: no errors.
+  - `grep -rn 'style="' lib/pages/admin/jobs`: nothing.
+  - Render checks: schedules with rows (run links, "View job", "Never", "None") and empty with the disabled callout; registered with rows (defaults, cron, escaped description, notice) and empty; subnav `aria-current` correct on each page, and present on the detail and missing states.
+  - `node lib/run-tests.js`: 1962 tests, passed.
 - Blockers: None.
 
 ---

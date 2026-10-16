@@ -6,6 +6,7 @@
             <h1>Job not found</h1>
         </header>
 
+        {{> admin/jobs-subnav.html }}
         {{> admin/job-queue-disabled.html }}
 
         <div class="callout callout--error" role="alert">
@@ -22,6 +23,7 @@
             <p class="type-caption">{{ job.id }}</p>
         </header>
 
+        {{> admin/jobs-subnav.html }}
         {{> admin/job-queue-disabled.html }}
         {{> admin/notice.html }}
 
@@ -43,7 +45,7 @@
                     </tr>
                     <tr>
                         <th scope="row">Schedule</th>
-                        <td>{{#if job.scheduleName}}{{ job.scheduleName }}{{else}}None{{/if}}</td>
+                        <td>{{#if job.scheduleName}}<a href="{{ links.schedules }}">{{ job.scheduleName }}</a>{{else}}None{{/if}}</td>
                     </tr>
                     <tr>
                         <th scope="row">Scheduled for</th>

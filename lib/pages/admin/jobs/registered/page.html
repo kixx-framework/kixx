@@ -1,0 +1,44 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <h1>Registered jobs</h1>
+            <p>Jobs registered in <code>app/jobs/mod.js</code>, with defaults resolved.</p>
+        </header>
+
+        {{> admin/jobs-subnav.html }}
+        {{> admin/job-queue-disabled.html }}
+        {{> admin/notice.html }}
+
+        {{#if jobs}}
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="registered-caption">
+            <table class="table-list__table">
+                <caption id="registered-caption" class="table-list__caption">Registered jobs</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Job</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Max attempts</th>
+                        <th scope="col">Timeout</th>
+                        <th scope="col">Schedule (UTC)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{#each jobs as |job| }}
+                    <tr>
+                        <th scope="row"><a href="{{ job.links.runs }}">{{ job.name }}</a></th>
+                        <td>{{ job.description }}</td>
+                        <td>{{ job.maxAttempts }}</td>
+                        <td>{{ job.timeoutSeconds }}s</td>
+                        <td>{{#if job.cron}}<code>{{ job.cron }}</code>{{else}}None{{/if}}</td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </div>
+
+        {{!-- T6 adds one Run now card per job here. --}}
+        {{else}}
+        <p class="type-body-sm">No jobs are registered in this build. Register one in <code>app/jobs/mod.js</code>.</p>
+        {{/if}}
+    </article>
+</main>

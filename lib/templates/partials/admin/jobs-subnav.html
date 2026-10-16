@@ -1,0 +1,8 @@
+{{!-- Background jobs section subnav. Reads `links` and `jobsView` (list, schedules, or registered) from the current context. --}}
+<nav aria-label="Background jobs">
+    <ul class="cluster list-unstyled">
+        <li><a href="{{ links.jobs }}"{{#ifEqual jobsView "list"}} aria-current="page"{{/ifEqual}}>Jobs</a></li>
+        <li><a href="{{ links.schedules }}"{{#ifEqual jobsView "schedules"}} aria-current="page"{{/ifEqual}}>Schedules</a></li>
+        <li><a href="{{ links.registered }}"{{#ifEqual jobsView "registered"}} aria-current="page"{{/ifEqual}}>Registered jobs</a></li>
+    </ul>
+</nav>
