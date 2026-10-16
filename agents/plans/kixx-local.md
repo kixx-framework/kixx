@@ -80,7 +80,7 @@ These come from the code and project conventions, not from the operator. P1 was 
 
 ### Task L1: Runner support for required leading positionals
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `devkit/commands/README.md` ("The Sub-command Module", "No `positionals`"); planner choice P1
 
@@ -114,11 +114,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `splitPositionals([], [])` returns `{ values: {}, directory: undefined }`; `splitPositionals([], ['../app'])` returns the directory; two positionals with none declared throw `UsageError` with the current "Unexpected argument" message.
-- [ ] With one declared positional: `['alpha']` gives `{ values: { name: 'alpha' }, directory: undefined }`; `['alpha', '../app']` adds the directory; `[]` throws a `UsageError` naming `<name>`; three values throw "Unexpected argument".
-- [ ] Every existing command's help and behavior is unchanged (`devkit/test/kixx.test.js` passes unedited).
-- [ ] The contract test accepts a well-formed `positionals` array and rejects a malformed one (unit-test the validator, or keep it inline in the test and cover it with a local case).
-- [ ] README documents the rule.
+- [x] `splitPositionals([], [])` returns `{ values: {}, directory: undefined }`; `splitPositionals([], ['../app'])` returns the directory; two positionals with none declared throw `UsageError` with the current "Unexpected argument" message.
+- [x] With one declared positional: `['alpha']` gives `{ values: { name: 'alpha' }, directory: undefined }`; `['alpha', '../app']` adds the directory; `[]` throws a `UsageError` naming `<name>`; three values throw "Unexpected argument".
+- [x] Every existing command's help and behavior is unchanged (`devkit/test/kixx.test.js` passes unedited).
+- [x] The contract test accepts a well-formed `positionals` array and rejects a malformed one (unit-test the validator, or keep it inline in the test and cover it with a local case).
+- [x] README documents the rule.
 
 **Validation**
 
@@ -129,12 +129,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of L1.
+- Current state: Complete.
+- Remaining: None. Help for a declared positional is checked end to end in L5.
+- Decisions and discoveries: The validator lives in the helper as `findPositionalsProblem(declared)` (returns a problem string or `null`); the contract test calls it and its unit tests cover well-formed and malformed declarations. `splitPositionals` takes a third argument `{ commandLabel }` for the help hint. With none declared, the extra-argument message is byte-identical to before; with some declared it reads `Unexpected argument "x". Expected <name> and an optional directory.`
+- Actual files changed: `devkit/lib/command-positionals.js` (new), `devkit/kixx.js`, `devkit/commands/README.md`, `devkit/test/lib/command-positionals.test.js` (new), `devkit/test/commands/index.test.js`.
+- Validation run: L1 subset on Node.js 95 tests passed; same files on Deno 36 tests passed; linter clean on the listed files; full Node.js suite 640 tests passed. `devkit/test/kixx.test.js` unedited.
 - Blockers: None.
 
 ---

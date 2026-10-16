@@ -10,6 +10,7 @@ import {
     isPlainObject,
 } from '../../lib/vendor/kixx-assert/mod.js';
 import commandModules from '../../commands/index.js';
+import { findPositionalsProblem } from '../../lib/command-positionals.js';
 
 
 const COMMANDS_DIRECTORY = fileURLToPath(new URL('../../commands/', import.meta.url));
@@ -87,9 +88,10 @@ describe('commands/index.js registry', ({ it }) => {
                 assert(isNonEmptyString(Command.description?.trim()), `${ label } description`);
 
                 assertOptions(label, Command.options);
-                // The runner owns the only positional (the app directory),
-                // so a declaration would silently do nothing.
-                assertEqual(undefined, Command.positionals, `${ label } positionals`);
+                // Required leading positionals only; the runner owns the
+                // trailing app directory.
+                const problem = findPositionalsProblem(Command.positionals);
+                assertEqual(null, problem, `${ label } positionals`);
 
                 for (const key of REQUIRED_SETTINGS_KEYS) {
                     assertKeyPaths(`${ label } ${ key }`, Command[key]);

@@ -121,9 +121,22 @@ config, so `type` (`'string'` or `'boolean'`), `short`, `multiple`, and
 only for help rendering. `--help` is added automatically; do not declare it.
 Negated boolean flags (`--no-foo`) are enabled for command options.
 
-**No `positionals`.** The runner owns the only positional argument, the
-optional app directory, and uses it to find the project. Take every other
-value as an option. A unit test rejects a `positionals` declaration.
+**`positionals`** — Optional array of required leading arguments, each
+`{ name, description }`:
+
+```js
+static positionals = [
+    { name: 'name', description: 'Instance name' },
+];
+```
+
+Every declared positional is required and comes before the optional app
+directory, which the runner owns and uses to find the project. Usage reads
+`kixx <command> <subcommand> [options] <name> [directory]`, and help lists the
+declared positionals before `directory`. Names match `^[a-z][a-z0-9-]*$`, are
+unique, and are never `directory`. A missing value or an extra argument is a
+`UsageError`. Take anything optional as an option, never as a positional.
+`devkit/test/commands/index.test.js` checks the declaration's shape.
 
 **`requiredConfig`** — Dotted key paths which must be present in the merged
 `.kixx/config.json` layers.
@@ -167,10 +180,11 @@ omit the constructor entirely.
 ### run()
 
 ```js
-async run(options) {}
+async run(options, positionals) {}
 ```
 
-`options` is the parsed flag values. Return an integer to set the process exit
+`options` is the parsed flag values. `positionals` is an object keyed by
+declared positional name (`{}` when the command declares none). Return an integer to set the process exit
 code — `0` for success. A non-integer return leaves the exit code alone, which
 also means success.
 
