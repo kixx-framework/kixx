@@ -1,12 +1,12 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from '../../lib/vendor/kixx-assert/mod.js';
-import { readEnvFile } from '../../lib/env-file.js';
+import { formatEnvFile, parseEnvFile, readEnvFile } from '../../lib/env-file.js';
 import createMemoryFileSystem from '../helpers/memory-file-system.js';
 
 const FILEPATH = '/app/.env.production';
 
 
-describe('env-file', ({ it }) => {
+describe('env-file', ({ it, describe }) => {
     it('reads .env.<environment> into names and string values', async () => {
         const values = await read('NAME=value\nEMPTY=\nTOKEN=abc#def');
 
@@ -92,6 +92,64 @@ describe('env-file', ({ it }) => {
 
         assertEqual('1', values.ONE);
         assertEqual('2', values.TWO);
+    });
+
+    describe('parseEnvFile() reservedNames', ({ it }) => {
+        it('accepts BUILD_ID when no names are reserved', () => {
+            const values = parseEnvFile('BUILD_ID=local-a-1\n', '/x/.env', { reservedNames: [] });
+            assertEqual('local-a-1', values.BUILD_ID);
+        });
+
+        it('rejects a custom reserved name', () => {
+            let error = null;
+
+            try {
+                parseEnvFile('PORT=1\n', '/x/.env', { reservedNames: [ 'PORT' ] });
+            } catch (cause) {
+                error = cause;
+            }
+
+            assertEqual('UsageError', error?.name);
+            assert(error.message.includes('"PORT" on line 1'), error.message);
+        });
+    });
+
+    describe('formatEnvFile()', ({ it }) => {
+        it('round-trips bare and single-quoted values through parseEnvFile', () => {
+            const values = {
+                BARE: 'local-a_1.2/x:y@z+w,v',
+                EMPTY: '',
+                SPACED: '/tmp/with space/instance',
+                HASH: 'a # b',
+                DOUBLE: '"quoted"',
+            };
+
+            const text = formatEnvFile(values);
+
+            assert(text.endsWith('\n'), 'ends with a newline');
+            assert(text.includes('BARE=local-a_1.2/x:y@z+w,v\n'), 'bare value unquoted');
+            assert(text.includes('SPACED=\'/tmp/with space/instance\'\n'), 'spaced value single-quoted');
+
+            const parsed = parseEnvFile(text, '/x/.env');
+
+            for (const [ name, value ] of Object.entries(values)) {
+                assertEqual(value, parsed[name], name);
+            }
+        });
+
+        it('rejects single quotes, line breaks, and invalid names', () => {
+            for (const values of [ { A: 'it\'s' }, { A: 'a\nb' }, { A: 'a\rb' }, { '1A': 'x' } ]) {
+                let error = null;
+
+                try {
+                    formatEnvFile(values);
+                } catch (cause) {
+                    error = cause;
+                }
+
+                assertEqual('UsageError', error?.name, JSON.stringify(values));
+            }
+        });
     });
 });
 

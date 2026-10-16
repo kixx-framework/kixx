@@ -250,7 +250,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task L4: Instance environment generation and on-disk instance store
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** This plan's "Instance layout"; Decisions 3, 7; P2, P3, P6, P7, P8
 
@@ -300,13 +300,13 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Names: `alpha`, `a1-b2` accepted; `Alpha`, `a--b`, `-a`, `a/b`, `..`, and the empty string rejected with `UsageError`.
-- [ ] `create` writes the three files with the documented contents. `.env` has `ENVIRONMENT=local`, the generated `BUILD_ID`, an absolute `DATA_DIRECTORY` equal to the instance directory, and no `PORT`. `.env.secrets` has every required manifest name plus `ADMIN_BOOTSTRAP_TOKEN`, each a distinct 64-hex value, and no other optional names. Both secret files have mode 0600 (assert on POSIX only).
-- [ ] `create` refuses an existing instance, a source without `node-server.js`, or a source without `example.env.secrets`, and leaves no directory behind in the last two cases.
-- [ ] `formatEnvFile` round-trips through `parseEnvFile` (bare, single-quoted with spaces and `#`) and rejects `'` and newlines.
-- [ ] `readInstance`, `readCredentials`/`writeCredentials`, `listInstances` (sorted; skips junk; empty when missing), and `destroyInstance` (refuses while a fake `canConnect` returns true; removes otherwise; removes when `instance.json` is missing) behave as specified.
-- [ ] `findProcessEnvCollisions` ignores empty values.
-- [ ] The conformance test passes on Node.js and Deno.
+- [x] Names: `alpha`, `a1-b2` accepted; `Alpha`, `a--b`, `-a`, `a/b`, `..`, and the empty string rejected with `UsageError`.
+- [x] `create` writes the three files with the documented contents. `.env` has `ENVIRONMENT=local`, the generated `BUILD_ID`, an absolute `DATA_DIRECTORY` equal to the instance directory, and no `PORT`. `.env.secrets` has every required manifest name plus `ADMIN_BOOTSTRAP_TOKEN`, each a distinct 64-hex value, and no other optional names. Both secret files have mode 0600 (assert on POSIX only).
+- [x] `create` refuses an existing instance, a source without `node-server.js`, or a source without `example.env.secrets`, and leaves no directory behind in the last two cases.
+- [x] `formatEnvFile` round-trips through `parseEnvFile` (bare, single-quoted with spaces and `#`) and rejects `'` and newlines.
+- [x] `readInstance`, `readCredentials`/`writeCredentials`, `listInstances` (sorted; skips junk; empty when missing), and `destroyInstance` (refuses while a fake `canConnect` returns true; removes otherwise; removes when `instance.json` is missing) behave as specified.
+- [x] `findProcessEnvCollisions` ignores empty values.
+- [x] The conformance test passes on Node.js and Deno.
 
 **Validation**
 
@@ -317,12 +317,18 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of L4.
+- Current state: Complete.
+- Remaining: None. Add a `lib/local/` row to the subsystem map in `devkit/docs/architecture.md` in L5, when the `local` command exists.
+- Decisions and discoveries:
+  - `createInstance` takes `port` as a number (the L5 command parses `--port`) and `now` as a function returning a `Date` (devkit convention, as in `create-worker-version.js`). It validates the port before touching disk, and calls `getFreePort()` only after the env is built.
+  - `buildInstanceEnv` also drops an active `BUILD_ID` from `example.env` before setting its own, and reads `example.env` with `reservedNames: []`.
+  - `writeCredentials` throws `TypeError` (a defect, not an operator error) for a missing field; field order in the file is fixed.
+  - `readInstance` rejects a non-integer or out-of-range `instance.json` port the same as a missing file. `listInstances` reports `port: null` for those.
+  - `kixx-assert`'s `assertEqual` does not deep-compare arrays or objects; tests compare `join()`/`JSON.stringify()` output.
+  - `formatEnvFile` error for `'`/CR/LF names the variable but never prints the value.
+- Actual files changed: `devkit/lib/env-file.js`, `devkit/lib/local/instance-env.js` (new), `devkit/lib/local/instance-store.js` (new), `devkit/test/lib/env-file.test.js`, `devkit/test/lib/local/instance-env.test.js` (new), `devkit/test/lib/local/instance-store.test.js` (new), `devkit/test/conformance/local-instance-env.test.js` (new).
+- Validation run: Node.js L4 subset 45 tests passed; Deno `devkit/test/lib/local` + conformance 30 tests passed; linter clean on listed paths; full Node.js suite 685 tests passed.
 - Blockers: None.
 
 ---

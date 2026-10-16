@@ -11,6 +11,11 @@ import defaultFileSystem from './file-system.js';
 
 const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+// A value made only of these characters needs no quoting in either parser.
+const BARE_VALUE_PATTERN = /^[A-Za-z0-9_\-./:@+,]*$/;
+
+const DEFAULT_RESERVED_NAMES = Object.freeze([ 'BUILD_ID' ]);
+
 /**
  * Reads and parses `<project>/.env.<environment>`. An authored `ENVIRONMENT`
  * is dropped: the Node.js server needs it in this file, but a Worker takes it
@@ -51,11 +56,14 @@ export async function readEnvFile(args) {
 /**
  * @param {string} text - Dotenv file text
  * @param {string} filepath - Path named in error messages
+ * @param {Object} [options]
+ * @param {string[]} [options.reservedNames=['BUILD_ID']] - Names the file may not declare
  * @returns {Object<string, string>} Names to unquoted values
  * @throws {UsageError} When a line is malformed, has an invalid or duplicate
- *     name, or declares `BUILD_ID`
+ *     name, or declares a reserved name
  */
-export function parseEnvFile(text, filepath) {
+export function parseEnvFile(text, filepath, options) {
+    const { reservedNames = DEFAULT_RESERVED_NAMES } = options ?? {};
     const values = Object.create(null);
     const lineNumbers = new Map();
     const lines = text.split(/\r\n|\n/);
@@ -80,9 +88,9 @@ export function parseEnvFile(text, filepath) {
             throw new UsageError(`Invalid name "${ name }" on line ${ lineNumber } in ${ filepath }`);
         }
 
-        if (name === 'BUILD_ID') {
+        if (reservedNames.includes(name)) {
             throw new UsageError(
-                `"BUILD_ID" on line ${ lineNumber } in ${ filepath } is reserved; the deploy tool generates it`,
+                `"${ name }" on line ${ lineNumber } in ${ filepath } is reserved; the deploy tool generates it`,
             );
         }
 
@@ -97,6 +105,37 @@ export function parseEnvFile(text, filepath) {
     });
 
     return values;
+}
+
+/**
+ * Formats names and values as dotenv text that both `parseEnvFile` and the
+ * Node.js server's `util.parseEnv` read back unchanged. Values outside a safe
+ * bare character set are single-quoted, which both parsers treat literally.
+ * @param {Object<string, string>} values - Names to values
+ * @returns {string} One `NAME=value` line per entry, ending in a newline
+ * @throws {UsageError} When a name is invalid, or a value holds a single
+ *     quote, carriage return, or line feed
+ */
+export function formatEnvFile(values) {
+    const lines = Object.entries(values).map(([ name, value ]) => {
+        if (!NAME_PATTERN.test(name)) {
+            throw new UsageError(`Invalid dotenv name "${ name }"`);
+        }
+
+        const text = String(value);
+
+        if (BARE_VALUE_PATTERN.test(text)) {
+            return `${ name }=${ text }`;
+        }
+
+        if (/['\r\n]/.test(text)) {
+            throw new UsageError(`The value of ${ name } cannot be written to a dotenv file: it holds a quote or line break`);
+        }
+
+        return `${ name }='${ text }'`;
+    });
+
+    return `${ lines.join('\n') }\n`;
 }
 
 function unquote(value) {
