@@ -126,7 +126,7 @@ These are not operator decisions. A later agent may revise one, but must record 
 
 ### Task T2: Add the job registry scripts and the Run now form
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `lib/app/transaction-scripts/README.md` (When Not to Write One; Files and Signatures; Return Values; Error Handling); `lib/app/presentation/README.md` (Forms); `lib/app/jobs/README.md`; `lib/kixx/jobs/job-registry.js`; `lib/kixx/jobs/job-queue-interface.js` (`enqueue`)
 
@@ -172,17 +172,17 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `listRegisteredJobs` returns `[]` for the shipped registry. With fixtures, it returns registry order with resolved defaults (5 and 60), explicit values, `cron` for the scheduled entry and `null` otherwise, and no `handler` key.
-- [ ] `runJobNow` for a registered name calls `enqueue` once with that name, the given payload (including `null` and an array), and `{ key: 'admin-run:<name>' }`. It returns the result, including `created: false` when the stub returns it.
-- [ ] `runJobNow` for an unregistered, empty, or non-string name throws `NotFoundError` with `code` `JobNotRegistered`, and the stub records zero enqueue calls.
-- [ ] A stub rejection with `{ name: 'PayloadTooLargeError' }` is rethrown unchanged. A plain `Error` becomes an `AssertionError` whose `cause` is the original.
-- [ ] `RunJobNowForm`:
+- [x] `listRegisteredJobs` returns `[]` for the shipped registry. With fixtures, it returns registry order with resolved defaults (5 and 60), explicit values, `cron` for the scheduled entry and `null` otherwise, and no `handler` key.
+- [x] `runJobNow` for a registered name calls `enqueue` once with that name, the given payload (including `null` and an array), and `{ key: 'admin-run:<name>' }`. It returns the result, including `created: false` when the stub returns it.
+- [x] `runJobNow` for an unregistered, empty, or non-string name throws `NotFoundError` with `code` `JobNotRegistered`, and the stub records zero enqueue calls.
+- [x] A stub rejection with `{ name: 'PayloadTooLargeError' }` is rethrown unchanged. A plain `Error` becomes an `AssertionError` whose `cause` is the original.
+- [x] `RunJobNowForm`:
   - `'{"a":1}'` validates, with `payloadValue.a === 1`.
   - `'  [1, 2]\n'` validates, and `payload` stays the exact submitted string.
   - `'null'` validates to `null`.
   - Blank, whitespace-only, `'{'`, and a non-string (`new Blob(['x'])`) each throw `ValidationError` with a `payload` source and the fixed messages.
   - The parser's message never appears in the error.
-- [ ] After the tests, the `jobs` Map is empty again (`lib/test/app/jobs/mod.test.js` still passes in the same run).
+- [x] After the tests, the `jobs` Map is empty again (`lib/test/app/jobs/mod.test.js` still passes in the same run).
 
 **Validation**
 
@@ -192,12 +192,24 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: Both scripts, the form, and their tests.
+- Current state: Complete.
+- Remaining: Nothing. T4 wires `listRegisteredJobs`; T6 wires `runJobNow` and `RunJobNowForm`.
+- Decisions and discoveries:
+  - `runJobNow` returns a fresh `{ id, name, key, status, runAt, created }` object, dropping any extra fields the queue returns.
+  - `RunJobNowForm` sets `payloadValue = undefined` in the constructor; `validate()` fills it. The form test stubs `getHttpTarget` to check `getFormContext` (submitted text and field error kept).
+  - `withRegisteredJobs` is defined locally in each script test file, per the plan.
+- Actual files changed:
+  - `lib/app/transaction-scripts/jobs/list-registered-jobs.js` (new)
+  - `lib/app/transaction-scripts/jobs/run-job-now.js` (new)
+  - `lib/app/presentation/forms/jobs/run-job-now-form.js` (new)
+  - `lib/test/app/transaction-scripts/jobs/list-registered-jobs.test.js` (new)
+  - `lib/test/app/transaction-scripts/jobs/run-job-now.test.js` (new)
+  - `lib/test/app/presentation/forms/jobs/run-job-now-form.test.js` (new)
+- Validation run (2026-10-16):
+  - `node lib/run-tests.js lib/test/app/transaction-scripts/jobs lib/test/app/presentation/forms/jobs lib/test/app/jobs`: 24 tests, passed.
+  - `node lib/run-linter.js ...` (the four T2 paths): no errors.
+  - `git diff --stat -- lib/app/jobs/mod.js lib/kixx/jobs lib/plugins`: empty.
 - Blockers: None.
 
 ---
