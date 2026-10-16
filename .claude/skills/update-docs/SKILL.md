@@ -22,7 +22,10 @@ paths, audit only those, plus any index entries that describe them. If it says
   a security rule, or a decision recorded in `agents/plans/`), leave both alone
   and report it.
 - **Edit docs only.** Do not change source code, tests, or config.
-- **Skip vendored dependencies.** Vendored docs belong to third-party packages.
+- **Skip vendored dependencies.** Vendored docs (`lib/kixx/vendor/`,
+  `devkit/lib/vendor/`) belong to third-party packages.
+- **Skip copied code.** Everything in `test-app/` that git ignores is a copy of
+  `lib/`. Fix the original instead.
 - **Do not rewrite history.** Leave `agents/journal/` and `agents/plans/` as
   they are; plans are only checked for the decisions they record.
 - **Read-only commands only.** Running `--help` or reading a file is fine.
@@ -44,10 +47,14 @@ Developer and operator guides:
 
 - `README.md`, `usage-docs/**/*.md`, `lib/docs/*.md`
 - `lib/app/*/README.md`, `lib/plugins/README.md`, `lib/templates/README.md`,
-  `lib/test/*/README.md`
+  `lib/test/README.md`
 - `lib/pages/admin/style-guide/` (the live design system)
+- `test-app/README.md`, `test-app/test/README.md`
 
 Kixx framework: `lib/kixx/**/*.md`, except `lib/kixx/vendor/`.
+
+Kixx devkit: `devkit/README.md`, `devkit/docs/*.md`,
+`devkit/commands/README.md`, `devkit/test/README.md`.
 
 ## 1. Find what changed
 
@@ -55,21 +62,22 @@ Find where to focus before reading everything:
 
 ```bash
 git log -1 --format=%H -- <doc>            # last commit that touched a doc
-git log --oneline <that-commit>..HEAD -- lib ':!*.md'
+git log --oneline <that-commit>..HEAD -- lib devkit tools ':!*.md'
 ```
 
 Code that changed after a doc was last edited is where it most likely went
 stale. Also look for things that have no doc yet: new routes in `lib/routes/`,
 transaction scripts, collections, plugins, framework modules in `lib/kixx/`,
-npm scripts, env vars in `lib/example.env*`,
-and new top-level entries in `lib/`.
+env vars in `lib/example.env*`, new top-level entries in `lib/`, devkit
+commands in `devkit/commands/`, and scripts in `tools/`.
 
 ## 2. Verify claims
 
 Check every concrete, testable claim in each doc:
 
 - File and directory paths exist (`git ls-files`, `ls`).
-- Commands, flags, and npm scripts exist (`package.json`, `--help` output).
+- Commands and flags exist (`node devkit/kixx.js <command> --help`, the run
+  commands in `CLAUDE.md`, tasks in `devkit/deno.json`).
 - Class, function, export, route, binding, and config key names match the code.
 - Env vars match `lib/example.env`, `lib/example.env.secrets`,
   `lib/node-config.jsonc`, and `lib/cloudflare-config.jsonc`.
@@ -93,6 +101,9 @@ voice stays consistent and you can resolve conflicts between findings.
   still fit its job.
 - Every path or doc that a skill or agent tells the reader to open still
   exists.
+- `lib/docs/doc-index.md` and `devkit/docs/doc-index.md` list every doc in
+  their folder.
+- The command list in `devkit/README.md` matches `devkit/commands/`.
 
 ## 4. Trim
 
