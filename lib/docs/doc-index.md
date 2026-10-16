@@ -110,7 +110,7 @@ kixx/static-assets/README.md
 
 ### Unit Testing Guide
 
-test/unit-tests/README.md
+test/README.md
 
 Testing with `kixx-test` and `kixx-assert`: file conventions, imports, structure, setup patterns, shared conformance suites, hook semantics, timeouts, skipping, assertions, `MockTracker`, error and rejection tests, and writing good tests.
 

@@ -92,4 +92,4 @@ Use a test-only registry and drive the runner directly:
 await queue.processDueJobs({ now: new Date('2026-03-10T00:16:00Z') });
 ```
 
-`test/fixtures/jobs/example-noop-heartbeat.js` provides a recurring registry (`*/15 * * * *`). See `test/unit-tests/plugins/node-job-queue/job-queue.test.js`.
+`test/fixtures/jobs/example-noop-heartbeat.js` provides a recurring registry (`*/15 * * * *`). See `test/plugins/node-job-queue/job-queue.test.js`.

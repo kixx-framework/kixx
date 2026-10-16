@@ -54,7 +54,7 @@ against `lib/` otherwise.
 
 `node-config.jsonc` and `cloudflare-config.jsonc` can be rendered from
 templates in `lib/`. Today two things render them:
-`test/unit-tests/config-templates.test.js`, and `tools/build-test-app.js`
+`test/config-templates.test.js`, and `tools/build-test-app.js`
 (from the repo root), which renders `test-app`'s configs from its own
 context files. No devkit command uses them yet.
 

@@ -65,5 +65,5 @@ exercises the contract against a running target: tokens created and revoked
 through the admin panel, scoped grants, every File operation, stale versions
 and two concurrent writers, and byte checks after every repoint and delete.
 The race in which a write lands between load and persist is covered by the
-unit tests in `test/unit-tests/app/presentation/request-handlers/admin-data-api/`,
+unit tests in `test/app/presentation/request-handlers/admin-data-api/`,
 which also prove that no API request reaches the file object store.

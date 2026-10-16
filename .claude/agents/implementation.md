@@ -50,7 +50,7 @@ Before starting or resuming a task, you must:
 
 To complete a task:
 
-1. Implement the change, writing or updating unit tests per `test/unit-tests/README.md`. Prefer test-first where practical.
+1. Implement the change, writing or updating unit tests per `test/README.md`. Prefer test-first where practical.
 2. Run every command in the task's **Validation** section, plus the linter on each JavaScript file you changed.
 3. Check off each acceptance criterion that is satisfied.
 4. Record the actual files changed and the validation results in the handoff section, then mark the task `Complete`.

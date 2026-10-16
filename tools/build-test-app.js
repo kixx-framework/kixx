@@ -237,7 +237,7 @@ function hasPath(value, keys) {
     return true;
 }
 
-// Matches lib/test/unit-tests/config-templates.test.js so the tool renders
+// Matches lib/test/config-templates.test.js so the tool renders
 // exactly what the template tests verify.
 function json(_context, _options, value) {
     if (value === undefined) {
