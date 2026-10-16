@@ -76,7 +76,7 @@ Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cl
 
 app/jobs/README.md
 
-The durable job queue (port contract in `kixx/jobs/job-queue-interface.js`): registering jobs, handlers, enqueueing now, later, or on a UTC cron schedule, errors and retries, operating the queue, and testing.
+The durable job queue (port contract in `kixx/jobs/job-queue-interface.js`): registering jobs, handlers, enqueueing now, later, or on a UTC cron schedule, errors and retries, operating the queue (including the admin panel at `/admin/jobs`: inspect, retry, and Run now), and testing.
 
 ### Data Migrations
 

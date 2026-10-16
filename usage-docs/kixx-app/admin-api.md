@@ -463,6 +463,13 @@ GET /admin-api/v1/job-schedules
 `cron` is a UTC 5-field expression. `lastEnqueuedAt` and `lastJobId` are
 `null` before the first occurrence.
 
+### Admin panel
+
+The admin panel at `/admin/jobs` (Developers → Background Jobs) uses the
+same queue and permissions, with cookie sign-in and CSRF protection instead
+of HTTP Basic. It also lists registered jobs and adds Run now, which queues
+a registered job with a JSON payload. Run now has no API equivalent.
+
 ## Accept an admin invite
 
 ```http

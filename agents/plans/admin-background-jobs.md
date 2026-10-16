@@ -689,7 +689,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T7: Document the admin panel jobs section
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T3, T4, T5, T6
 **Documentation:** `lib/app/jobs/README.md`; `lib/app/migrations/README.md` ("Running from the Admin Panel", the precedent); `lib/docs/doc-index.md`; `lib/app/presentation/README.md` (Admin Sidebar); `usage-docs/kixx-app/admin-api.md` (Jobs; the migrations "Admin panel" note)
 
@@ -729,8 +729,8 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Each document mentions the panel accurately and briefly. Nothing contradicts T3–T6: the permissions per action, Retry for failed jobs only, the Run now dedupe key and that it is panel-only, and the queue-disabled warning.
-- [ ] No doc claims the panel changes the API, the CLI, the queue port, or the roles.
+- [x] Each document mentions the panel accurately and briefly. Nothing contradicts T3–T6: the permissions per action, Retry for failed jobs only, the Run now dedupe key and that it is panel-only, and the queue-disabled warning.
+- [x] No doc claims the panel changes the API, the CLI, the queue port, or the roles.
 
 **Validation**
 
@@ -741,12 +741,22 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All four documents.
+- Current state: Complete.
+- Remaining: Nothing. The Operator Runbook below is next.
+- Decisions and discoveries:
+  - The jobs README section sits before "Operating" and says Retry and Run now still record jobs when the queue is disabled.
+  - No doc lists the admin partials, so only the presentation README names `admin/jobs-subnav.html`. `grep -rn "migration-notice" lib usage-docs` was already empty.
+- Actual files changed:
+  - `lib/app/jobs/README.md`
+  - `lib/docs/doc-index.md`
+  - `usage-docs/kixx-app/admin-api.md`
+  - `lib/app/presentation/README.md`
+- Validation run (2026-10-16):
+  - `grep -n "admin/jobs" ...`: one hit in each of the three files.
+  - `grep -n "Background Jobs" lib/app/presentation/README.md`: the sidebar and subnav notes.
+  - `grep -rn "migration-notice" lib usage-docs`: nothing.
+  - `node lib/run-tests.js`: 1977 tests, passed.
 - Blockers: None.
 
 ---

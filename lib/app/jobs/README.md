@@ -66,6 +66,15 @@ See `docs/server-error-handling.md`.
 - Backoff: exponential with full jitter from 10 s, capped at 1 h. A run that outlives its lease (`timeoutSeconds` + 30 s) counts as a failed attempt.
 - A stored job whose name is no longer registered fails with `UnknownJob`.
 
+## Running from the Admin Panel
+
+Developers → Background Jobs (`/admin/jobs`) calls the same `JobQueue` as the Admin API, under `urn:kixx:admin:jobs` (Developer and Root Admin). Viewing needs `urn:kixx:list`/`urn:kixx:get`, Retry needs `urn:kixx:update`, and Run now needs `urn:kixx:create`.
+
+- **Pages.** The jobs list (newest first, status and name filters, paging); job detail (every field, the payload, and the last error with its stack); Schedules (cron in UTC); and Registered jobs (every `mod.js` entry with defaults resolved).
+- **Retry** is offered for `failed` jobs only, as in the API.
+- **Run now** is panel-only. It takes a JSON payload (default `{}`) and enqueues with the dedupe key `admin-run:<name>`: while that run is pending or running, another Run now lands on it instead of queueing a second. The key frees when the job finishes. The handler sees `scheduledFor: null`. Handlers must still be idempotent.
+- **Queue disabled.** With `JOB_QUEUE.enabled: false`, every jobs page warns that jobs are recorded but not run. Retry and Run now still record jobs.
+
 ## Operating
 
 Retention is by age: completed jobs after 7 days, failed after 30 (`JOB_QUEUE.retention`). Active jobs are never purged. `JOB_QUEUE.enabled: false` records jobs without running them, on both platforms. `JOB_QUEUE.concurrency` caps jobs running at once.
