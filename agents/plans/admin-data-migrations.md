@@ -570,7 +570,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T5: Auto-continue Run and Dry run with JavaScript
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T4
 **Documentation:** `lib/docs/frontend-development-guide.md` ("Browser JavaScript"); `lib/eslint.config.js` (browser globals, `ecmaVersion: 2017`); `lib/app/presentation/lib/csrf.js` (token lifecycle); the `kixx-partial` fetch pattern in `lib/static-assets/javascript/site.js` (`saveMetadata`, `togglePublish`)
 
@@ -675,21 +675,21 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Real run with `kixx-partial`:
+- [x] Real run with `kixx-partial`:
   - Success → 200 JSON with `done: true`, `notice.code: 'applied'`, `migration.status: 'applied'`, `migration.batchCount: 1`, `cursor: null`, `location` `/admin/migrations/<id>?notice=applied`, and a fresh `csrf.token`.
   - An `applied` record → 409 with `error.code: 'already_applied'` and a `location`.
   - A version conflict → 409 `concurrent_run`.
   - An unknown id → 404 `migration_not_found`, with the list `location`.
   - A CSRF failure → 403 `form_expired` with no `csrf` key.
   - `updateLedgerRecord` rejects with a plain `Error` → 500 JSON with `error.code: 'batch_failed_unexpected'`, no `error.detail`, and `location` `/admin/migrations/<id>?notice=batch_failed_unexpected`. `context.logger.error` is called exactly once.
-- [ ] Dry run with `kixx-partial`:
+- [x] Dry run with `kixx-partial`:
   - Success → 200 JSON with `dryRun: true`, `done: true`, `cursor: null`, the no-op's `stats`, `migration: null`, and a fresh token; `skip` is called.
   - An invalid cursor → 400 `dry_run_cursor_invalid`; `skip` is called.
   - An unknown id → 404 JSON; `skip` is called.
   - The `dry_run_failed_unexpected` branch reuses the same helper and the same status mapping as the real run. The handler cannot reach it with the registered no-op, so T2's `recoverUnexpectedRunError` tests cover the dry-run code. Assert in review that the dry-run JSON error branch uses `getMigrationOutcomeStatus` (500) and omits `detail` for that code.
-- [ ] Requests without the header still behave exactly as in T4, and the T4 tests pass unchanged.
-- [ ] In a browser, Run and Dry run loop to completion with live batch count and stats, Stop halts after the current batch, and the first error stops the loop and is shown. A dry-run Stop can continue. A real run ends on the server-rendered detail page with its notice. (These are operator checks.)
-- [ ] `site.js` passes lint, and the block degrades with a `console.warn` when its markup is missing.
+- [x] Requests without the header still behave exactly as in T4, and the T4 tests pass unchanged.
+- [ ] In a browser, Run and Dry run loop to completion with live batch count and stats, Stop halts after the current batch, and the first error stops the loop and is shown. A dry-run Stop can continue. A real run ends on the server-rendered detail page with its notice. (These are operator checks. Not run by the agent; pending in the Operator Runbook.)
+- [x] `site.js` passes lint, and the block degrades with a `console.warn` when its markup is missing.
 
 **Validation**
 
@@ -701,12 +701,21 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `kixx-partial` JSON branches in `postMigrationRun` and `postMigrationDryRun` with tests; the detail template's `migration-runner` section, `data-migration-mode` form hooks, and hidden progress block with Stop; the `migration-runner` IIFE in `site.js`.
+- Current state: Complete, except the browser criterion, which is an operator check (documented exception; it is in the Operator Runbook).
+- Remaining: None for agents. Operator: the JS-loop checks in the Operator Runbook.
+- Decisions and discoveries:
+  - Each handler still computes `code` once with `classifyMigrationRunError(...) || recoverUnexpectedRunError(...)`, then branches on `isPartialRequest(request)`. No new `recoverUnexpectedRunError` call; it still appears only at the three T4 call sites, so the unexpected error is logged once.
+  - New private helpers: `getNoticeLocation()` (shared by redirects and JSON `location`), `getRunErrorLocation()` (now also used by `redirectAfterRunError`), `respondWithRunErrorJSON()`, and `toRunProgress()` (status, batchCount, stats, lastBatchAt, completedAt, error).
+  - JSON `error` is the frozen notice copied, plus `detail` only for `dry_run_failed`; the key is absent otherwise.
+  - The dry-run handler calls `skip()` once at the top for a partial request, so every JSON path skips the Hyperview render. No-JS paths are unchanged.
+  - Dry-run `form_expired` JSON carries `location` `<detail>?notice=form_expired` (the no-JS target); other dry-run codes use `null`, `migration_not_found` the list.
+  - Force has no JSON branch (not looped, per Routine choices).
+  - Browser loop: a recursive `step()`; `postBatch()` checks the content type before `response.ok` and treats non-JSON or unparsable JSON as an unexpected response. Handlers attach with `then(onOk, onNetworkError)`, so only fetch failures show the unreachable message.
+  - Beyond the plan: on a dry-run failure other than `dry_run_cursor_invalid`, JS writes the failed batch's cursor into the form so a resubmit retries that batch with the totals kept. A dry-run submit with an empty cursor resets the totals. After a dry-run Stop, the actions-card form becomes "Continue dry run"; starting over then needs a reload.
+  - Template render checked with `tmp/render-migration-actions.mjs dry-ok`.
+- Actual files changed: `lib/app/presentation/request-handlers/admin-panel/admin-migrations.js`, `lib/pages/admin/migrations/detail/page.html`, `lib/static-assets/javascript/site.js`, `lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js`. `lib/eslint.config.js` unchanged (no new globals).
+- Validation run: handler and route tests 48 passed (10 new JSON tests; T4 tests unchanged); lint of the three listed paths and of `lib` clean; no `innerHTML` in `site.js`; no `style="` in `lib/pages/admin/migrations`; `recoverUnexpectedRunError(` only at the three POST call sites; full suite 1918 passed on Node.js and on Deno. Browser checks not run (operator).
 - Blockers: None.
 
 ---

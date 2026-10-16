@@ -83,6 +83,9 @@
         <p class="type-body-sm">No stats recorded yet.</p>
         {{/if}}
 
+        {{!-- With JavaScript, the migration-runner behavior in site.js loops
+        these forms one batch per request and reports progress below. --}}
+        <section class="flow" data-js-behavior="migration-runner" data-csrf-field="{{ csrf.fieldName }}">
         {{#if dryRun}}
         <section class="card flow" aria-labelledby="dry-run-heading">
             <h2 id="dry-run-heading">Dry-run result</h2>
@@ -118,7 +121,7 @@
             {{/if}}
 
             {{#if dryRun.canContinue}}
-            <form method="post" action="{{ links.dryRun }}">
+            <form method="post" action="{{ links.dryRun }}" data-migration-mode="dry-run">
                 <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
                 <input type="hidden" name="cursor" value="{{ dryRun.cursor }}">
                 <button type="submit" class="button button--primary">Dry run next batch</button>
@@ -133,13 +136,13 @@
 
             <div class="cluster">
                 {{#if canRun}}
-                <form method="post" action="{{ links.run }}">
+                <form method="post" action="{{ links.run }}" data-migration-mode="run">
                     <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
                     <button type="submit" class="button button--primary">Run</button>
                 </form>
                 {{/if}}
 
-                <form method="post" action="{{ links.dryRun }}">
+                <form method="post" action="{{ links.dryRun }}" data-migration-mode="dry-run">
                     <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
                     <input type="hidden" name="cursor" value="">
                     <button type="submit" class="button button--secondary">{{#if dryRun}}Start dry run over{{else}}Dry run{{/if}}</button>
@@ -149,6 +152,14 @@
                 <a class="button button--secondary" href="{{ links.forceConfirm }}">Force re-run</a>
                 {{/if}}
             </div>
+        </section>
+
+        <div class="card flow type-body-sm" data-migration-progress hidden>
+            <p role="status" aria-live="polite" data-migration-progress-status></p>
+            <p>Batches: <span data-migration-progress-batches>0</span></p>
+            <ul class="list-unstyled" data-migration-progress-stats></ul>
+            <button type="button" class="button button--secondary" data-migration-stop hidden>Stop</button>
+        </div>
         </section>
         {{/if}}
     </article>
