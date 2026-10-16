@@ -207,7 +207,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task D1: Publishing API client honors `Retry-After` and backs off longer on 503
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None (independent of S1/S2; it reacts to any 503 or `Retry-After`)
 **Documentation:** `devkit/docs/error-handling.md` (Retries), `devkit/docs/packaging-and-runtimes.md` (test seams), `devkit/docs/code-style-guide.md`
 
@@ -253,17 +253,17 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `parseRetryAfter` handles `'5'` → 5000, `' 0 '` → 0, a future HTTP-date relative to the injected now, a past HTTP-date → 0, and `'-1'`, `'1.5'`, `'soon'`, `''`, `null` → `null`.
-- [ ] Client: a 503 with `retry-after: 5` then a 201 waits exactly `5000 + random() * 1000` (assert with a fixed `random`).
-- [ ] Client: `retry-after: 120` is capped to 30000 (+ jitter).
-- [ ] Client: an HTTP-date `Retry-After` is honored using the injected `now`.
-- [ ] Client: a 429 with `Retry-After` honors it.
-- [ ] Client: a bare 503 retried three times waits 1000/2000/4000 × `(0.5 + random())`, and the final error has `status` 503 and `attempts` 4.
-- [ ] Client: a 500 and a network failure keep the 100/200/400 schedule.
-- [ ] Client: an invalid `Retry-After` on a 503 falls back to the 503 backoff.
-- [ ] `serverOverloaded` is `false` on a new client. It becomes `true` after any 503, including one followed by success and the single 503 on `assignBuild` (which still makes exactly one attempt). It stays `false` after 429, 500, and network failures.
-- [ ] Constructing with a non-function `now` fails the assertion.
-- [ ] `devkit/docs/error-handling.md` Retries section is corrected and extended:
+- [x] `parseRetryAfter` handles `'5'` → 5000, `' 0 '` → 0, a future HTTP-date relative to the injected now, a past HTTP-date → 0, and `'-1'`, `'1.5'`, `'soon'`, `''`, `null` → `null`.
+- [x] Client: a 503 with `retry-after: 5` then a 201 waits exactly `5000 + random() * 1000` (assert with a fixed `random`).
+- [x] Client: `retry-after: 120` is capped to 30000 (+ jitter).
+- [x] Client: an HTTP-date `Retry-After` is honored using the injected `now`.
+- [x] Client: a 429 with `Retry-After` honors it.
+- [x] Client: a bare 503 retried three times waits 1000/2000/4000 × `(0.5 + random())`, and the final error has `status` 503 and `attempts` 4.
+- [x] Client: a 500 and a network failure keep the 100/200/400 schedule.
+- [x] Client: an invalid `Retry-After` on a 503 falls back to the 503 backoff.
+- [x] `serverOverloaded` is `false` on a new client. It becomes `true` after any 503, including one followed by success and the single 503 on `assignBuild` (which still makes exactly one attempt). It stays `false` after 429, 500, and network failures.
+- [x] Constructing with a non-function `now` fails the assertion.
+- [x] `devkit/docs/error-handling.md` Retries section is corrected and extended:
   - Idempotent Publishing API writes (object `PUT`, Release `POST`) retry like reads. The current text says writes retry on 429 only, which does not describe this client.
   - A `Retry-After` header is honored up to 30 s.
   - A bare 503 backs off from 1 s.
@@ -280,12 +280,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: `parseRetryAfter`, client delay selection (`Retry-After` capped at 30 s + jitter, 1 s base for bare 503, 100 ms otherwise), `now` option, sticky `serverOverloaded` getter, tests, Retries docs.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: `Date.parse` accepts numeric-looking strings like `'-1'` as dates, so `parseRetryAfter` rejects values made only of digits, signs, dots, and spaces before trying the HTTP-date form. The Retries doc says the client sets `serverOverloaded`; D2 should add that `publishContent()` reads it.
+- Actual files changed: `devkit/lib/parse-retry-after.js` (new), `devkit/test/lib/parse-retry-after.test.js` (new), `devkit/lib/publishing/publishing-api-client.js`, `devkit/test/lib/publishing/publishing-api-client.test.js`, `devkit/docs/error-handling.md`.
+- Validation run: focused 35 pass; `node devkit/run-tests.js` 734 pass; `deno run -A devkit/run-tests.js` 734 pass; `node devkit/run-linter.js devkit` clean.
 - Blockers: None.
 
 ---

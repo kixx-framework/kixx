@@ -13,12 +13,19 @@ import {
     isUndefined,
 } from '../vendor/kixx-assert/mod.js';
 
+import { parseRetryAfter } from '../parse-retry-after.js';
 import { getBlobSize } from './addressing.js';
 import PublishingApiError, { createPublishingApiError } from './publishing-api-error.js';
 
 const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
 const MAX_ATTEMPTS = 4;
 const RETRY_BASE_DELAY_MS = 100;
+// A 503 means the server is overloaded; a fast retry only adds to the load.
+const OVERLOADED_RETRY_BASE_DELAY_MS = 1000;
+// Bounds a server's Retry-After so one bad hint cannot stall a publish.
+const MAX_RETRY_AFTER_MS = 30000;
+// Spreads out concurrent uploads that all received the same Retry-After.
+const RETRY_AFTER_JITTER_MS = 1000;
 const RETRY_STATUSES = new Set([ 429 ]);
 
 /**
@@ -31,7 +38,9 @@ export default class PublishingAPIClient {
     #fetch;
     #wait;
     #random;
+    #now;
     #discovery;
+    #serverOverloaded = false;
 
     /**
      * @param {Object} options - Client configuration
@@ -40,6 +49,7 @@ export default class PublishingAPIClient {
      * @param {typeof fetch} [options.fetch] - Fetch implementation
      * @param {(milliseconds: number) => Promise<void>} [options.wait] - Retry wait implementation
      * @param {() => number} [options.random] - Retry jitter source
+     * @param {() => number} [options.now] - Current time in epoch milliseconds, for HTTP-date `Retry-After` values
      */
     constructor(options) {
         const {
@@ -48,6 +58,7 @@ export default class PublishingAPIClient {
             fetch: fetchImpl = fetch,
             wait = delay,
             random = Math.random,
+            now = Date.now,
         } = options ?? {};
 
         assertNonEmptyString(origin);
@@ -55,12 +66,24 @@ export default class PublishingAPIClient {
         assert(isFunction(fetchImpl), 'PublishingAPIClient() requires a fetch function');
         assert(isFunction(wait), 'PublishingAPIClient() requires a wait function');
         assert(isFunction(random), 'PublishingAPIClient() requires a random function');
+        assert(isFunction(now), 'PublishingAPIClient() requires a now function');
 
         this.#baseUrl = new URL('/publishing-api/v1/', origin);
         this.#token = token;
         this.#fetch = fetchImpl;
         this.#wait = wait;
         this.#random = random;
+        this.#now = now;
+    }
+
+    /**
+     * True once any response through this client had status 503, whether or
+     * not the request was then retried or failed. Sticky for the life of the
+     * client, so callers can reduce load for the rest of a run.
+     * @type {boolean}
+     */
+    get serverOverloaded() {
+        return this.#serverOverloaded;
     }
 
     /**
@@ -294,8 +317,12 @@ export default class PublishingAPIClient {
                 );
             }
 
+            if (response.status === 503) {
+                this.#serverOverloaded = true;
+            }
+
             if (isRetryableStatus(response.status) && attempt < maxAttempts) {
-                await this.#waitBeforeRetry(attempt);
+                await this.#waitBeforeRetryingResponse(response, attempt);
                 continue;
             }
 
@@ -303,10 +330,29 @@ export default class PublishingAPIClient {
         }
     }
 
-    async #waitBeforeRetry(attempt) {
-        const exponentialDelay = RETRY_BASE_DELAY_MS * (2 ** (attempt - 1));
+    async #waitBeforeRetry(attempt, baseDelay = RETRY_BASE_DELAY_MS) {
+        const exponentialDelay = baseDelay * (2 ** (attempt - 1));
         const jitteredDelay = exponentialDelay * (0.5 + this.#random());
         await this.#wait(jitteredDelay);
+    }
+
+    async #waitBeforeRetryingResponse(response, attempt) {
+        // Test fakes and unusual fetch implementations may omit headers.
+        const retryAfterMs = parseRetryAfter(response.headers?.get?.('retry-after'), this.#now());
+
+        if (retryAfterMs !== null) {
+            // Never wait less than the (capped) delay the server asked for.
+            const delayMs = Math.min(retryAfterMs, MAX_RETRY_AFTER_MS) + (this.#random() * RETRY_AFTER_JITTER_MS);
+            await this.#wait(delayMs);
+            return;
+        }
+
+        if (response.status === 503) {
+            await this.#waitBeforeRetry(attempt, OVERLOADED_RETRY_BASE_DELAY_MS);
+            return;
+        }
+
+        await this.#waitBeforeRetry(attempt);
     }
 
     async #readResponse(response, request) {

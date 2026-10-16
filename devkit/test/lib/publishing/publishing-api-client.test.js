@@ -196,8 +196,169 @@ describe('publishing/publishing-api-client', ({ it }) => {
 
         assertEqual(true, result.created);
         assertEqual(2, waits.length);
+        // 429 keeps the fast backoff; a bare 503 backs off from 1 s.
         assertEqual(100, waits[0]);
-        assertEqual(200, waits[1]);
+        assertEqual(2000, waits[1]);
+    });
+
+    it('waits for a Retry-After delay plus jitter on a 503', async () => {
+        const responses = [
+            makeResponse(503, { errors: [] }, { 'retry-after': '5' }),
+            makeObjectResponse(201),
+        ];
+        const waits = [];
+        const client = makeClient(async () => responses.shift(), {
+            wait: async (milliseconds) => waits.push(milliseconds),
+            random: () => 0.25,
+        });
+
+        const result = await client.uploadObject('object-id', 'x', { maxObjectBytes: 1 });
+
+        assertEqual(true, result.created);
+        assertEqual(1, waits.length);
+        assertEqual(5000 + (0.25 * 1000), waits[0]);
+    });
+
+    it('caps a long Retry-After delay at 30 seconds', async () => {
+        const responses = [
+            makeResponse(503, { errors: [] }, { 'retry-after': '120' }),
+            makeObjectResponse(201),
+        ];
+        const waits = [];
+        const client = makeClient(async () => responses.shift(), {
+            wait: async (milliseconds) => waits.push(milliseconds),
+            random: () => 0.25,
+        });
+
+        await client.uploadObject('object-id', 'x', { maxObjectBytes: 1 });
+
+        assertEqual(30000 + (0.25 * 1000), waits[0]);
+    });
+
+    it('honors an HTTP-date Retry-After using the injected clock', async () => {
+        const nowMs = Date.parse('Wed, 21 Oct 2026 07:28:00 GMT');
+        const responses = [
+            makeResponse(503, { errors: [] }, { 'retry-after': 'Wed, 21 Oct 2026 07:28:03 GMT' }),
+            makeObjectResponse(201),
+        ];
+        const waits = [];
+        const client = makeClient(async () => responses.shift(), {
+            wait: async (milliseconds) => waits.push(milliseconds),
+            random: () => 0,
+            now: () => nowMs,
+        });
+
+        await client.uploadObject('object-id', 'x', { maxObjectBytes: 1 });
+
+        assertEqual(3000, waits[0]);
+    });
+
+    it('honors Retry-After on a 429', async () => {
+        const responses = [
+            makeResponse(429, { errors: [] }, { 'retry-after': '2' }),
+            makeObjectResponse(201),
+        ];
+        const waits = [];
+        const client = makeClient(async () => responses.shift(), {
+            wait: async (milliseconds) => waits.push(milliseconds),
+            random: () => 0.25,
+        });
+
+        await client.uploadObject('object-id', 'x', { maxObjectBytes: 1 });
+
+        assertEqual(2000 + (0.25 * 1000), waits[0]);
+    });
+
+    it('backs off from one second on a bare 503', async () => {
+        const waits = [];
+        const client = makeClient(async () => makeResponse(503, { errors: [] }), {
+            wait: async (milliseconds) => waits.push(milliseconds),
+            random: () => 0.25,
+        });
+
+        const caught = await catchAsyncError(() => client.discover());
+
+        assertEqual(JSON.stringify([ 750, 1500, 3000 ]), JSON.stringify(waits));
+        assertEqual(503, caught.status);
+        assertEqual(4, caught.attempts);
+    });
+
+    it('falls back to the 503 backoff when Retry-After is invalid', async () => {
+        const responses = [
+            makeResponse(503, { errors: [] }, { 'retry-after': 'soon' }),
+            makeObjectResponse(201),
+        ];
+        const waits = [];
+        const client = makeClient(async () => responses.shift(), {
+            wait: async (milliseconds) => waits.push(milliseconds),
+            random: () => 0.25,
+        });
+
+        await client.uploadObject('object-id', 'x', { maxObjectBytes: 1 });
+
+        assertEqual(750, waits[0]);
+    });
+
+    it('keeps the fast backoff for 500 responses and network failures', async () => {
+        const serverWaits = [];
+        const serverClient = makeClient(async () => makeResponse(500, { errors: [] }), {
+            wait: async (milliseconds) => serverWaits.push(milliseconds),
+            random: () => 0.25,
+        });
+        const networkWaits = [];
+        const networkClient = makeClient(async () => {
+            throw new Error('connection reset');
+        }, {
+            wait: async (milliseconds) => networkWaits.push(milliseconds),
+            random: () => 0.25,
+        });
+
+        await catchAsyncError(() => serverClient.discover());
+        await catchAsyncError(() => networkClient.discover());
+
+        assertEqual(JSON.stringify([ 75, 150, 300 ]), JSON.stringify(serverWaits));
+        assertEqual(JSON.stringify([ 75, 150, 300 ]), JSON.stringify(networkWaits));
+    });
+
+    it('reports serverOverloaded after any 503, and only a 503', async () => {
+        const responses = [ makeResponse(503, { errors: [] }), makeObjectResponse(201) ];
+        const recovered = makeClient(async () => responses.shift());
+
+        assertEqual(false, recovered.serverOverloaded);
+        await recovered.uploadObject('object-id', 'x', { maxObjectBytes: 1 });
+        assertEqual(true, recovered.serverOverloaded);
+
+        const assignFetch = makeRecordingFetch(() => makeResponse(503, { errors: [] }));
+        const assignClient = makeClient(assignFetch);
+        await catchAsyncError(() => {
+            return assignClient.assignBuild('production', 'release-id', { expectedAssignmentId: null });
+        });
+        assertEqual(1, assignFetch.calls.length);
+        assertEqual(true, assignClient.serverOverloaded);
+
+        for (const responder of [
+            async () => makeResponse(429, { errors: [] }),
+            async () => makeResponse(500, { errors: [] }),
+            async () => {
+                throw new Error('connection reset');
+            },
+        ]) {
+            const client = makeClient(responder);
+            await catchAsyncError(() => client.discover());
+            assertEqual(false, client.serverOverloaded);
+        }
+    });
+
+    it('requires now to be a function', () => {
+        let caught = null;
+        try {
+            makeClient(async () => makeObjectResponse(200), { now: 1 });
+        } catch (error) {
+            caught = error;
+        }
+
+        assert(caught, 'expected an error to be thrown');
+        assertMatches('now function', caught.message);
     });
 
     it('raises after the fourth retryable response', async () => {

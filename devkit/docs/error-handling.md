@@ -63,9 +63,19 @@ All these classes set `name` and `code` to the class name. Branch with `error.na
 API clients retry only when repeating the request is safe:
 
 - Reads (`GET`) retry on 429, 5xx, and network failures.
-- Writes retry on 429 only. A 5xx or network failure on a write surfaces immediately, because the write may have landed (a migration batch, a Release).
+- Writes that are not idempotent retry on 429 only. A 5xx or network failure surfaces immediately, because the write may have landed (an Admin API migration batch).
+- Idempotent Publishing API writes (object `PUT`, Release `POST`) retry like reads: repeating them stores the same bytes or returns the same Release.
+- Publishing API build assignment never retries. Reconcile with `getBuild()` instead.
 
 Keep this rule when adding a client or endpoint. Record the attempt count on the error.
+
+The Publishing API client (`lib/publishing/publishing-api-client.js`) picks the delay from the response:
+
+- A `Retry-After` header (seconds or HTTP-date) is honored, capped at 30 s, plus up to 1 s of jitter.
+- A `503` without one backs off exponentially from 1 s, because the server is overloaded.
+- Other retries back off exponentially from 100 ms.
+
+Any `503` also sets the client's sticky `serverOverloaded` flag.
 
 ### Partial success
 
