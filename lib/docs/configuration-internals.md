@@ -52,8 +52,11 @@ against `lib/` otherwise.
 
 ## Config templates
 
-Build tooling generates `node-config.jsonc` and `cloudflare-config.jsonc` for
-new apps from templates in `lib/`:
+`node-config.jsonc` and `cloudflare-config.jsonc` can be rendered from
+templates in `lib/`. Today two things render them:
+`test/unit-tests/config-templates.test.js`, and `tools/build-test-app.js`
+(from the repo root), which renders `test-app`'s configs from its own
+context files. No devkit command uses them yet.
 
 | File | Purpose |
 | --- | --- |
@@ -62,8 +65,8 @@ new apps from templates in `lib/`:
 | `cloudflare-config.jsonc.template` | Renders `cloudflare-config.jsonc`. |
 | `cloudflare-config-test-context.json` | Context that reproduces today's `cloudflare-config.jsonc`. |
 
-`test/unit-tests/config-templates.test.js` renders each template with its
-example context and asserts the parsed output equals the live `.jsonc` file.
+The unit test renders each template with its example context and asserts
+the parsed output equals the live `.jsonc` file.
 
 Templates hard-code framework-owned values: section structure, binding names,
 Durable Object class names, resource `type` values, and explanatory comments.
@@ -175,19 +178,8 @@ Paths are below `environments.<envName>` unless marked root.
 
 ## Adding a new setting
 
-1. Decide per-deploy vs. per-environment using the question at the top of
-   the usage configuration doc.
-2. Per-environment: add the key under the relevant environment section(s) of
-   `node-config.jsonc` and, if it applies to Cloudflare too,
-   `cloudflare-config.jsonc`. Read it from `config.env` in application code.
-   Also add it to the matching `.jsonc.template`, its example context, and the
-   [Config templates](#config-templates) tables, or `config-templates.test.js`
-   fails.
-3. Per-deploy, non-secret: add the key to `example.env` with an explanatory
-   comment, and to each `.env.<environment>` file that needs a non-default
-   value. Do not author `ENVIRONMENT` or `BUILD_ID` for Cloudflare; the
-   deployment CLI owns them.
-4. Per-deploy, secret: add the key to `example.env.secrets` (mark it
-   `# @optional` if a deployment may legitimately omit it), then follow the
-   ordered steps for adding a secret in the usage configuration doc. Deploy
-   the code that reads it before removing any old fallback.
+Follow "Adding a new setting" in the usage configuration doc. For a
+per-environment setting, also add the key to the matching `.jsonc.template`,
+its example context, and the [Config templates](#config-templates) tables,
+or `config-templates.test.js` fails. Add it to `test-app`'s context files
+too, or `tools/build-test-app.js` fails to render.
