@@ -27,8 +27,9 @@ const ROOT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
 const TEST_ROOT = path.join(ROOT_DIRECTORY, 'test');
 
-// Matches the *.test.js project naming convention.
-const TEST_FILE_PATTERN = /test.js$/;
+// Matches the *.test.js project naming convention. The leading `\.` keeps a
+// module like `latest.js` from being collected as a test file.
+const TEST_FILE_PATTERN = /\.test\.js$/;
 
 // End-to-end tests drive a running application, so the kixx-test default of
 // 1000ms is unusable for them. This acts as a ceiling and not a floor: kixx-test
