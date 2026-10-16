@@ -104,7 +104,17 @@
         <p class="type-body-sm">No failed attempts.</p>
         {{/if}}
 
-        {{!-- T5 adds the Retry actions card here, shown only when job.canRetry. --}}
+        {{#if job.canRetry}}
+        <section class="card flow" aria-labelledby="actions-heading">
+            <h2 id="actions-heading">Actions</h2>
+            <p class="type-body-sm">Retry resets this job to attempt 0 and runs it as soon as possible. Handlers must be idempotent.</p>
+
+            <form method="post" action="{{ links.retry }}">
+                <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                <button type="submit" class="button button--primary">Retry</button>
+            </form>
+        </section>
+        {{/if}}
         {{/if}}
     </article>
 </main>

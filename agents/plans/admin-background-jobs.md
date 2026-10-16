@@ -501,7 +501,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T5: Retry a failed job from the detail page
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T3
 **Documentation:** `lib/docs/cross-site-request-forgery.md`; `lib/app/presentation/README.md` (Request Handlers; Error Handling; CSRF Protection); `lib/kixx/jobs/job-queue-interface.js` (`retry`)
 
@@ -541,11 +541,11 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The route precedes `/jobs/:id`, allows `POST` only, and authorizes `urn:kixx:update` on `urn:kixx:admin:jobs`.
-- [ ] Success: the stub `retry` is called once with the id, and the response is `303 /admin/jobs/<id>?notice=retry_queued`.
-- [ ] A `ConflictError` (a real class, and a plain `{ name: 'ConflictError' }`) → `?notice=retry_conflict`. A `NotFoundError` → `303 /admin/jobs?notice=job_not_found`.
-- [ ] A CSRF `verify` that returns false → `?notice=form_expired`, with zero `retry` calls. A plain `Error` from `retry` is rethrown.
-- [ ] The detail props include `csrf` and `links.retry`. The template shows Retry only for `failed`.
+- [x] The route precedes `/jobs/:id`, allows `POST` only, and authorizes `urn:kixx:update` on `urn:kixx:admin:jobs`.
+- [x] Success: the stub `retry` is called once with the id, and the response is `303 /admin/jobs/<id>?notice=retry_queued`.
+- [x] A `ConflictError` (a real class, and a plain `{ name: 'ConflictError' }`) → `?notice=retry_conflict`. A `NotFoundError` → `303 /admin/jobs?notice=job_not_found`.
+- [x] A CSRF `verify` that returns false → `?notice=form_expired`, with zero `retry` calls. A plain `Error` from `retry` is rethrown.
+- [x] The detail props include `csrf` and `links.retry`. The template shows Retry only for `failed`.
 
 **Validation**
 
@@ -556,12 +556,24 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: The `/jobs/:id/retry` route, `postJobRetry`, CSRF and `links.retry` on the detail props, the Actions card, and tests.
+- Current state: Complete.
+- Remaining: Nothing in T5. Browser checks are in the Operator Runbook.
+- Decisions and discoveries:
+  - `getNoticeLocation(context, target, params, code)` and `readVerifiedFormData(context, request)` now exist in `admin-jobs.js` for T6 to reuse.
+  - `getJobDetailProps` is now `async (context, request, response, job, notice)` and adds `csrf` plus `links.retry`.
+  - The test file has `makePostRequest(id, fields)` (FormData with `csrf_token`, read once) and `makeContext` options `retryError` and `csrfValid`. T6 can pass `fields: { name, payload }` and add an `enqueue` result/rejection option to the stub.
+  - `tmp/render-job-pages.mjs` gained a `detail-completed` scenario.
+- Actual files changed:
+  - `lib/routes/admin-panel.js`
+  - `lib/app/presentation/request-handlers/admin-panel/admin-jobs.js`
+  - `lib/pages/admin/jobs/detail/page.html`
+  - `lib/test/routes/admin-panel.test.js`, `lib/test/app/presentation/request-handlers/admin-panel/admin-jobs.test.js`
+- Validation run (2026-10-16):
+  - `node lib/run-tests.js lib/test/routes/admin-panel.test.js lib/test/app/presentation/request-handlers/admin-panel/admin-jobs.test.js`: 37 tests, passed.
+  - `node lib/run-linter.js lib/routes lib/app/presentation/request-handlers/admin-panel lib/test/routes lib/test/app/presentation/request-handlers/admin-panel`: no errors.
+  - Render checks: a failed job shows the Actions card with the CSRF field and a form posting to `/admin/jobs/<id>/retry`; a completed job shows no card and shows the `retry_queued` notice.
+  - `node lib/run-tests.js`: 1968 tests, passed.
 - Blockers: None.
 
 ---
