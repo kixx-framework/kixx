@@ -191,14 +191,14 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 - Remaining: None.
 - Decisions and discoveries: `create-publishing-token` needs no extraction; seed (L6) calls `AdminAPIClient#createPublishingApiToken` directly. `acceptInvite` also exports `MIN_PASSWORD_LENGTH`/`MAX_PASSWORD_LENGTH`. `ReleaseAssignmentError` now lives in `devkit/lib/publishing/publish-release.js` (named export); nothing else imported it from the command, so there is no re-export. `kixx admin accept-invite` now builds the client (`target.connect()`, which only constructs it) before the password check; no request is sent before the check. `devkit/docs/architecture.md` subsystem row for `lib/admin/` mentions invite redemption.
 - Actual files changed: `devkit/lib/admin/accept-invite.js` (new), `devkit/lib/publishing/publish-release.js` (new), `devkit/lib/publishing/render-publish-result.js` (new), `devkit/commands/admin/accept-invite.js`, `devkit/commands/app/publish.js`, `devkit/test/lib/admin/accept-invite.test.js` (new), `devkit/test/lib/publishing/publish-release.test.js` (new), `devkit/docs/architecture.md`.
-- Validation run: L2 subset 193 tests passed on Node.js; linter clean on listed paths; full Node.js suite 649 tests passed. Existing command tests unedited.
+- Validation run: L2 subset 193 tests passed on Node.js; linter clean on listed paths; full Node.js suite 649 tests passed. Same L2 subset on Deno: 193 tests passed. Existing command tests unedited.
 - Blockers: None.
 
 ---
 
 ### Task L3: Extract a reusable devserver runner
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `devkit/docs/dev.md`; `agents/plans/devserver.md` (completed; historical)
 
@@ -227,8 +227,8 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `devkit/test/commands/dev/start.test.js` and `devkit/test/lib/devserver/*` pass unedited.
-- [ ] New tests: a custom label prefixes the log lines; a missing `node-server.js` throws `UsageError` with the given hint; SIGINT stops the fake devserver and resolves 0 with listeners removed.
+- [x] `devkit/test/commands/dev/start.test.js` and `devkit/test/lib/devserver/*` pass unedited.
+- [x] New tests: a custom label prefixes the log lines; a missing `node-server.js` throws `UsageError` with the given hint; SIGINT stops the fake devserver and resolves 0 with listeners removed.
 
 **Validation**
 
@@ -238,12 +238,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of L3.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: `runDevServer` is the default export of `devkit/lib/devserver/run-dev-server.js`; `createDefaultDevServer` moved with it (module-private). `DevStartCommand` now passes `fileSystem`/`createDevServer` through as given (undefined means the library default). The fake devserver needs only `port`, `start()`, and `stop()`.
+- Actual files changed: `devkit/lib/devserver/run-dev-server.js` (new), `devkit/commands/dev/start.js`, `devkit/test/lib/devserver/run-dev-server.test.js` (new).
+- Validation run: L3 subset 41 tests passed on Node.js and on Deno; linter clean on listed paths; full Node.js suite 651 tests passed. Existing tests unedited.
 - Blockers: None.
 
 ---

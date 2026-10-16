@@ -1,9 +1,6 @@
 import process from 'node:process';
 import path from 'node:path';
-import defaultFileSystem from '../../lib/file-system.js';
-import { AppProcess } from '../../lib/devserver/app-process.js';
-import { DevServer } from '../../lib/devserver/dev-server.js';
-import { wrapText } from '../../lib/text-wrap.js';
+import runDevServer from '../../lib/devserver/run-dev-server.js';
 import UsageError from '../../lib/usage-error.js';
 
 
@@ -51,8 +48,8 @@ export default class DevStartCommand {
             stdout = process.stdout,
             stderr = process.stderr,
             signals = process,
-            fileSystem = defaultFileSystem,
-            createDevServer = createDefaultDevServer,
+            fileSystem,
+            createDevServer,
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
@@ -72,76 +69,19 @@ export default class DevStartCommand {
         // resolve against the wrong directory there.
         const dotenv = options?.dotenv ? path.resolve(options.dotenv) : undefined;
 
-        const serverScript = path.join(this.#projectDirectory, 'node-server.js');
-
-        if (!await this.#fileSystem.isFile(serverScript)) {
-            throw new UsageError(
-                `No app server found at ${ serverScript }. ` +
-                'Pass a Kixx application directory, or run kixx dev start inside one.',
-            );
-        }
-
-        // Watcher paths are relative to the real path, so resolve symlinks
-        // before the watcher starts.
-        const projectDirectory = await this.#fileSystem.realpath(this.#projectDirectory);
-
-        const log = (message) => {
-            this.#output.write(`${ wrapText(`[kixx dev] ${ message }`) }\n`);
-        };
-
-        const devServer = this.#createDevServer({
-            projectDirectory,
+        return await runDevServer({
+            projectDirectory: this.#projectDirectory,
             port,
             environment,
             dotenv,
-            log,
+            label: 'kixx dev',
+            missingServerHint: 'Pass a Kixx application directory, or run kixx dev start inside one.',
+            output: this.#output,
             stdout: this.#stdout,
             stderr: this.#stderr,
-        });
-
-        await devServer.start();
-
-        log(
-            `listening on http://localhost:${ devServer.port } ` +
-            `(environment ${ environment }, app ${ projectDirectory }); press Ctrl-C to stop`,
-        );
-
-        return await this.#waitForShutdown(devServer, log);
-    }
-
-    #waitForShutdown(devServer, log) {
-        const signals = this.#signals;
-
-        return new Promise((resolve, reject) => {
-            let isStopping = false;
-
-            const removeListeners = () => {
-                signals.off('SIGINT', onSignal);
-                signals.off('SIGTERM', onSignal);
-            };
-
-            // Listeners stay installed while stopping, so a second Ctrl-C is
-            // absorbed instead of killing the devserver mid-shutdown. The
-            // child already got the terminal's SIGINT directly.
-            function onSignal() {
-                if (isStopping) {
-                    return;
-                }
-
-                isStopping = true;
-                log('stopping');
-
-                devServer.stop().then(() => {
-                    removeListeners();
-                    resolve(0);
-                }, (cause) => {
-                    removeListeners();
-                    reject(cause);
-                });
-            }
-
-            signals.on('SIGINT', onSignal);
-            signals.on('SIGTERM', onSignal);
+            signals: this.#signals,
+            fileSystem: this.#fileSystem,
+            createDevServer: this.#createDevServer,
         });
     }
 }
@@ -159,12 +99,4 @@ function parsePort(value) {
     }
 
     return port;
-}
-
-function createDefaultDevServer(options) {
-    const { projectDirectory, port, environment, dotenv, log, stdout, stderr } = options;
-
-    const appProcess = new AppProcess({ projectDirectory, environment, dotenv, stdout, stderr, log });
-
-    return new DevServer({ projectDirectory, port, appProcess, log });
 }
