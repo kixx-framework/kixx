@@ -209,6 +209,85 @@ required; the app checks them at startup.
 | `maxUploadBytes` | Largest file upload accepted. Shipped: 52428800 (50 MiB). |
 | `bucket` | Object store bucket for file contents; must name a bucket under `OBJECT_STORE.buckets`. Shipped: `files`. |
 
+## Page rendering settings
+
+`HYPERVIEW` is a per-environment block in both config files. Every key is
+optional; a missing key takes the default.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `useTemplateCache` | `false` | Reuse compiled templates until their content hash changes. Read once at startup. Shipped: off in `development`, on elsewhere. |
+| `usePageCache` | `false` | Cache rendered HTML in the Key/Value Store. Routes and handlers can override it per render. Shipped: off in `development`, on elsewhere. |
+| `pageCacheReadTtlSeconds` | 86400 | Edge-cache TTL for page-cache reads (Cloudflare KV `cacheTtl`; Node accepts and ignores it). |
+| `pageCacheExpirationSeconds` | 86400 | How long a cached page lives. |
+| `allowJsonResponse` | `false` | Serve a page's assembled template context at its URL plus `.json`. Shipped: on in `development` and `local`, off in `production`. |
+
+- **Both TTLs must be at least 60** when `usePageCache` is on. The
+  Key/Value Store rejects shorter TTLs on every platform.
+- **The page-cache key** covers the page's content, the shared partials, the
+  static assets, and, by default, the response props, so a page rendered for
+  one user is not served to another.
+- **Error responses are never cached.** A status of 400 or above skips the
+  page cache whatever the config says.
+- **Keep `allowJsonResponse` off in production.** It publishes every page's
+  full template context, including response props, under a second URL.
+
+## Content store settings
+
+`CONTENT_STORE` names where published pages, templates, static assets, and
+emails come from.
+
+On Node.js:
+
+| Key | Meaning |
+| --- | --- |
+| `developerMode` | `true` reads content straight from the source directories below instead of a published store. Read-only, so the Publishing API cannot write to it. Allowed only in `development`; any other environment fails startup. Shipped: on in `development`. |
+| `pagesDirectory`, `templatesDirectory`, `staticAssetsDirectory`, `emailsDirectory` | Developer mode only. Default `./pages`, `./templates`, `./static-assets`, `./emails`. Resolved like [store paths](#data_directory-and-store-paths). |
+| `rootDirectory` | Required unless developer mode is on. The published content store's directory, resolved like other store paths. |
+
+On Cloudflare:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `blobReadCacheTtlSeconds` | 86400 | Edge-cache TTL for content reads from KV. Values under 60 are raised to 60. Content is addressed by hash, so a long TTL never serves stale content. Shipped: 129600 (36 hours). |
+| `indexCacheTtlSeconds` | 10 | How long an isolate reuses a build's resolved content index. A newly assigned Release can take this long to reach every isolate. |
+| `kvNamespaceName`, `kvNamespaceId` | — | The KV namespace holding content. The devkit binds it by ID and checks that it exists. |
+| `kvBindingName`, `durableObjectBindingName`, `durableObjectClassName` | — | Framework-owned. Leave the shipped values. |
+
+## Admin rate limits
+
+`RATE_LIMIT` throttles admin authentication by client IP. It has one policy
+block per surface, and each block has three keys:
+
+- `maxFailures`: failures that lock the scope.
+- `windowSeconds`: each failure restarts this window. A scope that stops
+  failing for this long resets.
+- `cooldownSeconds`: how long a lock lasts.
+
+| Block | Scope | Counts as a failure | Shipped |
+| --- | --- | --- | --- |
+| `ADMIN_LOGIN` | Per IP, and per IP plus email address | Wrong credentials. Cleared on a successful login. | 5 in 900 s, 900 s lock |
+| `ADMIN_SIGNUP` | Per IP | A signup submission with an unusable invite or invalid fields. Cleared on a successful signup. | 10 in 900 s, 900 s lock |
+| `ADMIN_INVITE` | Per IP | An invite token that matches no invite. An expired, spent, or revoked invite does not count. Checked on both the signup page and the signup submission. | 3 in 900 s, 3600 s lock |
+
+- **A missing block or key falls back** to the shipped value, so a partial
+  config cannot turn a limit off.
+- **`windowSeconds` and `cooldownSeconds` must be at least 60.** Counters
+  live in the Key/Value Store, which rejects shorter TTLs.
+- **Login's per-IP-plus-email scope** means an attacker can't lock a real
+  admin out from the admin's own IP.
+
+## Password hashing
+
+`SECRET_ENCRYPTION.PBKDF2_ITERATIONS` is the PBKDF2-HMAC-SHA-512 iteration
+count for new admin password hashes. Shipped: 50000.
+
+- **Required, as a positive integer.** It is checked when a password is
+  hashed or verified (signup and login), not at startup, so a bad value
+  surfaces as a server error on signup or login.
+- **Changing it is safe.** Each stored hash records its own iteration count,
+  so existing passwords keep working; only new hashes use the new count.
+
 ## Cloudflare specifics
 
 The Worker does not read dotenv files. The `kixx` CLI (from the
