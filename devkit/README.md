@@ -81,12 +81,12 @@ Not included: creating D1, KV, or R2 resources, and managing Worker secrets.
 Use the Cloudflare dashboard or Wrangler for those.
 
 <!-- Absolute links so they resolve on npmjs.com and jsr.io. -->
-[configuration-doc]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/configuration.md
-[admin-doc]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/admin.md
-[app-doc]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/app.md
-[app-doc-server-requirement]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/app.md#server-requirement
-[cloudflare-doc]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/cloudflare.md
-[dev-doc]: https://github.com/kixx-framework/kixx/blob/main/devkit/docs/dev.md
+[configuration-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/configuration.md
+[admin-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/admin.md
+[app-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/app.md
+[app-doc-server-requirement]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/app.md#server-requirement
+[cloudflare-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/cloudflare.md
+[dev-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/dev.md
 
 Development
 -----------

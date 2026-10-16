@@ -1,7 +1,7 @@
 {{!--
 Renders node-config.jsonc from a context object. Callers must register a
 `json` helper that returns JSON.stringify(value) and throws on undefined.
-Context shape: "Config templates" in docs/configuration.md. Example context:
+Context shape: "Config templates" in usage-docs/kixx-app/configuration.md. Example context:
 node-config-test-context.json.
 --}}
 {

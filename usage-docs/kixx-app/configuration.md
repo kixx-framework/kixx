@@ -311,7 +311,6 @@ deployment.
 ## Job queue settings
 
 `JOB_QUEUE` is a per-environment block in both config modules.
-See `app/jobs/README.md` for behavior.
 
 | Key | Platform | Meaning |
 | --- | --- | --- |

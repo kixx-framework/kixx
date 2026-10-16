@@ -13,7 +13,6 @@
         "lib/",
         "deno.json",
         "README.md",
-        "docs/",
         "LICENSE"
     ],
     "engines": {

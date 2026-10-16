@@ -42,7 +42,7 @@ Agent-facing:
 
 Developer and operator guides:
 
-- `README.md`, `usage-docs/*.md`, `lib/docs/*.md`
+- `README.md`, `usage-docs/**/*.md`, `lib/docs/*.md`
 - `lib/app/*/README.md`, `lib/plugins/README.md`, `lib/templates/README.md`,
   `lib/test/*/README.md`
 - `lib/pages/admin/style-guide/` (the live design system)

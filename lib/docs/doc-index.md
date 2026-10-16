@@ -2,7 +2,7 @@ Paths are relative to `lib/`.
 
 ### Configuration
 
-docs/configuration.md
+../usage-docs/kixx-app/configuration.md
 
 Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cloudflare-config.jsonc` (JSONC, `parseJsonc`) versus per-deploy environment variables (dotenv files or Cloudflare bindings) split by secrecy. Covers `readConfig` and environment selection, the `*.jsonc.template` config templates and their Node.js and Cloudflare rendering contexts, merging dotenv files, the server port, the `example.env.secrets` manifest, `DATA_DIRECTORY` and config-relative paths, `JOB_QUEUE` settings, Cloudflare bindings, Worker secrets, resources and packaging, and adding a new setting.
 
@@ -46,7 +46,7 @@ The durable job queue (port contract in `kixx/jobs/job-queue-interface.js`): reg
 
 app/migrations/README.md
 
-Statically registered migrations an operator runs in batches through the Admin API: registration, the module contract, expand/contract deployment ordering, and an authoring checklist. Endpoints are documented outside `lib/` in `../usage-docs/admin-api.md`.
+Statically registered migrations an operator runs in batches through the Admin API: registration, the module contract, expand/contract deployment ordering, and an authoring checklist. Endpoints are documented outside `lib/` in `../usage-docs/kixx-app/admin-api.md`.
 
 ### Presentation Layer Guide
 
@@ -62,7 +62,7 @@ The CSRF threat model and the protection for browser HTML forms that sign in or 
 
 ### Administrative Data API
 
-docs/admin-data-api.md
+../usage-docs/kixx-app/admin-data-api.md
 
 Version-checked JSON:API access to registered Collections at `/admin-data-api/v1/`, bypassing application workflows but not Record validation. Covers the exposure model, token grants, media types, discovery, resource documents and versions, writes, pagination, errors, audit logging, the `File` resource and its limits, verification, and registering a new resource in `app/admin-data-api/`.
 
