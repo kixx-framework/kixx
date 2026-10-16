@@ -580,7 +580,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T6: Run a registered job now from the Registered jobs page
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T2, T4 (run it after T5, since both edit the same handler and test files)
 **Documentation:** `lib/docs/cross-site-request-forgery.md`; `lib/app/presentation/README.md` (Forms; Request Handlers; `skip()`; CSRF Protection); `lib/app/presentation/request-handlers/admin-panel/admin-invites.js` (`postCreateAdminInvite`, the re-render pattern); `lib/app/jobs/README.md` (Enqueueing)
 
@@ -644,14 +644,14 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] The `job-registry` route has `render-list` (`GET, HEAD`, `urn:kixx:list`) and `run-now` (`POST`, `urn:kixx:create`), and still precedes `/jobs/:id`.
-- [ ] A valid `{"a":1}` → `enqueue` is called with the name, `{ a: 1 }`, and `{ key: 'admin-run:<name>' }`. `skip` is called, and the response is `303 /admin/jobs/job-9?notice=run_now_enqueued`. `created: false` → `?notice=run_now_already_queued` on the returned id.
-- [ ] Invalid JSON, or a blank payload → status 422, the page props carry that job's form with `fields.payload.error` set and `fields.payload.value` equal to the exact submitted text, `enqueue` is not called, and `skip` is not called. The other rows' forms default to `{}` with no error.
-- [ ] `PayloadTooLargeError` from `enqueue` → status 413 with the size field error and the submitted text kept.
-- [ ] An unregistered or missing name, with valid JSON → `303 /admin/jobs/registered?notice=job_not_registered`, with zero enqueue calls. The same applies with invalid JSON and an unregistered name, because there is no row to show the error on.
-- [ ] A CSRF failure → `skip`, then `?notice=form_expired`, with zero enqueue calls. An unexpected enqueue failure (the `AssertionError` from T2) is rethrown.
-- [ ] The rendered page escapes a submitted `</textarea><script>` payload. There is no `style="`.
-- [ ] The `jobs` Map is empty after the tests.
+- [x] The `job-registry` route has `render-list` (`GET, HEAD`, `urn:kixx:list`) and `run-now` (`POST`, `urn:kixx:create`), and still precedes `/jobs/:id`.
+- [x] A valid `{"a":1}` → `enqueue` is called with the name, `{ a: 1 }`, and `{ key: 'admin-run:<name>' }`. `skip` is called, and the response is `303 /admin/jobs/job-9?notice=run_now_enqueued`. `created: false` → `?notice=run_now_already_queued` on the returned id.
+- [x] Invalid JSON, or a blank payload → status 422, the page props carry that job's form with `fields.payload.error` set and `fields.payload.value` equal to the exact submitted text, `enqueue` is not called, and `skip` is not called. The other rows' forms default to `{}` with no error.
+- [x] `PayloadTooLargeError` from `enqueue` → status 413 with the size field error and the submitted text kept.
+- [x] An unregistered or missing name, with valid JSON → `303 /admin/jobs/registered?notice=job_not_registered`, with zero enqueue calls. The same applies with invalid JSON and an unregistered name, because there is no row to show the error on.
+- [x] A CSRF failure → `skip`, then `?notice=form_expired`, with zero enqueue calls. An unexpected enqueue failure (the `AssertionError` from T2) is rethrown.
+- [x] The rendered page escapes a submitted `</textarea><script>` payload. There is no `style="`.
+- [x] The `jobs` Map is empty after the tests.
 
 **Validation**
 
@@ -663,12 +663,26 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: The `run-now` POST target, `postJobRunNow`, the extended `getRegistryPageProps`, the per-job Run now cards, and tests.
+- Current state: Complete.
+- Remaining: Nothing in T6. Browser checks are in the Operator Runbook.
+- Decisions and discoveries:
+  - `getRegistryPageProps` is now `async (context, request, response, { notice, runNowForm, runNowError })`. It mints `csrf`, sets `row.form` per job, and returns `matched`. `notice` defaults to `null` on a re-render.
+  - `renderRunNowError` is a private `(context, request, response, skip, form, error, status)` helper; it takes `skip` so the unmatched-name case can redirect.
+  - The payload textarea's `aria-describedby` always names the hint, plus the error when present.
+  - Test helpers added: `makeRunNowRequest(name, payload)`, `makeSkip()`, and `makeContext` options `enqueueResult` / `enqueueError`.
+  - `tmp/render-job-pages.mjs` gained a `registered-error` scenario (drives `postJobRunNow` with a `</textarea><script>` payload).
+- Actual files changed:
+  - `lib/routes/admin-panel.js`
+  - `lib/app/presentation/request-handlers/admin-panel/admin-jobs.js`
+  - `lib/pages/admin/jobs/registered/page.html`
+  - `lib/test/routes/admin-panel.test.js`, `lib/test/app/presentation/request-handlers/admin-panel/admin-jobs.test.js`
+- Validation run (2026-10-16):
+  - `node lib/run-tests.js lib/test/routes/admin-panel.test.js lib/test/app/presentation/request-handlers/admin-panel/admin-jobs.test.js lib/test/app/jobs`: 49 tests, passed; registry empty afterwards.
+  - `node lib/run-linter.js lib/routes lib/app/presentation lib/test/routes lib/test/app/presentation`: no errors.
+  - `grep -rn 'style="' lib/pages/admin/jobs`: nothing.
+  - Render checks: rows with default `{}` forms, CSRF, and hint; a 422 re-render with the error under the submitted job only and the `</textarea><script>` text escaped; empty registry with no cards.
+  - `node lib/run-tests.js`: 1977 tests, passed. `deno run -A lib/run-tests.js`: 1977 tests, passed.
 - Blockers: None.
 
 ---

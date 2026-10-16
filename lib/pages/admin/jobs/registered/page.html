@@ -36,7 +36,36 @@
             </table>
         </div>
 
-        {{!-- T6 adds one Run now card per job here. --}}
+        {{#each jobs as |job| }}
+        <section class="card flow" id="run-{{ job.name }}" aria-labelledby="run-{{ job.name }}-heading">
+            <h2 id="run-{{ job.name }}-heading">Run {{ job.name }} now</h2>
+            <p class="type-body-sm">Queues one run due now, outside any schedule (the handler sees <code>scheduledFor: null</code>). Only one manual run of a job can be pending or running at a time.</p>
+
+            <form method="post" action="{{ job.form.url }}">
+                <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                <input type="hidden" name="name" value="{{ job.form.fields.name.value }}">
+
+                <div class="field{{#if job.form.fields.payload.error}} field--error{{/if}}">
+                    <label class="field__label" for="run-{{ job.name }}-payload">{{ job.form.fields.payload.label }}</label>
+                    <textarea
+                        class="field__input"
+                        id="run-{{ job.name }}-payload"
+                        name="payload"
+                        rows="6"
+                        {{#if job.form.fields.payload.error}}aria-describedby="run-{{ job.name }}-payload-hint run-{{ job.name }}-payload-error" aria-invalid="true"{{else}}aria-describedby="run-{{ job.name }}-payload-hint"{{/if}}
+                    >{{ job.form.fields.payload.value }}</textarea>
+                    <p class="field__hint" id="run-{{ job.name }}-payload-hint">Any JSON value, up to 128 KB. Use {} for an empty payload.</p>
+                    {{#if job.form.fields.payload.error}}
+                    <p class="field__error" id="run-{{ job.name }}-payload-error" role="alert">{{ job.form.fields.payload.error }}</p>
+                    {{/if}}
+                </div>
+
+                <div class="cluster">
+                    <button type="submit" class="button button--primary">Run now</button>
+                </div>
+            </form>
+        </section>
+        {{/each}}
         {{else}}
         <p class="type-body-sm">No jobs are registered in this build. Register one in <code>app/jobs/mod.js</code>.</p>
         {{/if}}
