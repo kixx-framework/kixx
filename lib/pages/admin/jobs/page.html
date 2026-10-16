@@ -54,9 +54,9 @@
                         </th>
                         <td>{{#with job}}{{> admin/job-status-badge.html }}{{/with}}</td>
                         <td>{{ job.attempt }} / {{ job.maxAttempts }}</td>
-                        <td>{{#if job.createdAt}}{{ formatDate job.createdAt format="DATETIME_MED" }}{{/if}}</td>
-                        <td>{{#if job.runAt}}{{ formatDate job.runAt format="DATETIME_MED" }}{{/if}}</td>
-                        <td>{{#if job.finishedAt}}{{ formatDate job.finishedAt format="DATETIME_MED" }}{{else}}Not yet{{/if}}</td>
+                        <td>{{#if job.createdAt}}{{ formatDate job.createdAt format="ISO_DATE_TIME_24" }}{{/if}}</td>
+                        <td>{{#if job.runAt}}{{ formatDate job.runAt format="ISO_DATE_TIME_24" }}{{/if}}</td>
+                        <td>{{#if job.finishedAt}}{{ formatDate job.finishedAt format="ISO_DATE_TIME_24" }}{{else}}Not yet{{/if}}</td>
                     </tr>
                 {{/each}}
                 </tbody>

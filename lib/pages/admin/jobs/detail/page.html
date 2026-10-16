@@ -49,23 +49,23 @@
                     </tr>
                     <tr>
                         <th scope="row">Scheduled for</th>
-                        <td>{{#if job.scheduledFor}}{{ formatDate job.scheduledFor format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                        <td>{{#if job.scheduledFor}}{{ formatDate job.scheduledFor format="ISO_DATE_TIME_24" }}{{else}}None{{/if}}</td>
                     </tr>
                     <tr>
                         <th scope="row">Run at</th>
-                        <td>{{#if job.runAt}}{{ formatDate job.runAt format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                        <td>{{#if job.runAt}}{{ formatDate job.runAt format="ISO_DATE_TIME_24" }}{{else}}None{{/if}}</td>
                     </tr>
                     <tr>
                         <th scope="row">Created</th>
-                        <td>{{#if job.createdAt}}{{ formatDate job.createdAt format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                        <td>{{#if job.createdAt}}{{ formatDate job.createdAt format="ISO_DATE_TIME_24" }}{{else}}None{{/if}}</td>
                     </tr>
                     <tr>
                         <th scope="row">Updated</th>
-                        <td>{{#if job.updatedAt}}{{ formatDate job.updatedAt format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                        <td>{{#if job.updatedAt}}{{ formatDate job.updatedAt format="ISO_DATE_TIME_24" }}{{else}}None{{/if}}</td>
                     </tr>
                     <tr>
                         <th scope="row">Finished</th>
-                        <td>{{#if job.finishedAt}}{{ formatDate job.finishedAt format="DATETIME_MED" }}{{else}}Not yet{{/if}}</td>
+                        <td>{{#if job.finishedAt}}{{ formatDate job.finishedAt format="ISO_DATE_TIME_24" }}{{else}}Not yet{{/if}}</td>
                     </tr>
                 </tbody>
             </table>

@@ -1024,6 +1024,7 @@ Format presets:
 | `UTC` | `Wed, 14 Jun 2017 07:00:00 GMT` |
 | `ISO` | `2017-06-14T07:00:00.000Z` |
 | `ISO_DATE` | `2017-06-14` |
+| `ISO_DATE_TIME_24` | `2017-06-14 07:00` |
 
 ### markup Helper
 

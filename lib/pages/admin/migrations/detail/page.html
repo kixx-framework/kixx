@@ -40,15 +40,15 @@
                     </tr>
                     <tr>
                         <th scope="row">Started</th>
-                        <td>{{#if migration.startedAt}}{{ formatDate migration.startedAt format="DATETIME_MED" }}{{else}}Not started{{/if}}</td>
+                        <td>{{#if migration.startedAt}}{{ formatDate migration.startedAt format="ISO_DATE_TIME_24" }}{{else}}Not started{{/if}}</td>
                     </tr>
                     <tr>
                         <th scope="row">Last batch</th>
-                        <td>{{#if migration.lastBatchAt}}{{ formatDate migration.lastBatchAt format="DATETIME_MED" }}{{else}}None{{/if}}</td>
+                        <td>{{#if migration.lastBatchAt}}{{ formatDate migration.lastBatchAt format="ISO_DATE_TIME_24" }}{{else}}None{{/if}}</td>
                     </tr>
                     <tr>
                         <th scope="row">Completed</th>
-                        <td>{{#if migration.completedAt}}{{ formatDate migration.completedAt format="DATETIME_MED" }}{{else}}Not yet{{/if}}</td>
+                        <td>{{#if migration.completedAt}}{{ formatDate migration.completedAt format="ISO_DATE_TIME_24" }}{{else}}Not yet{{/if}}</td>
                     </tr>
                     <tr>
                         <th scope="row">Error</th>
