@@ -83,7 +83,73 @@
         <p class="type-body-sm">No stats recorded yet.</p>
         {{/if}}
 
-        {{!-- Actions: the run, dry-run, and force controls go here. --}}
+        {{#if dryRun}}
+        <section class="card flow" aria-labelledby="dry-run-heading">
+            <h2 id="dry-run-heading">Dry-run result</h2>
+
+            {{!-- dryRun.notice is always set, so the page-level notice never shows through. --}}
+            {{#with dryRun}}{{> admin/migration-notice.html }}{{/with}}
+
+            {{#if dryRun.detail}}
+            <p class="type-body-sm">{{ dryRun.detail }}</p>
+            {{/if}}
+
+            {{#if dryRun.statsList}}
+            <div class="table-list" role="region" tabindex="0" aria-labelledby="dry-run-stats-caption">
+                <table class="table-list__table">
+                    <caption id="dry-run-stats-caption" class="table-list__caption">Dry-run batch stats</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Counter</th>
+                            <th scope="col">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {{#each dryRun.statsList as |stat| }}
+                        <tr>
+                            <th scope="row">{{ stat.name }}</th>
+                            <td>{{ stat.value }}</td>
+                        </tr>
+                    {{/each}}
+                    </tbody>
+                </table>
+            </div>
+            <p class="type-body-sm">These counters are for this batch only and were not recorded in the ledger.</p>
+            {{/if}}
+
+            {{#if dryRun.canContinue}}
+            <form method="post" action="{{ links.dryRun }}">
+                <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                <input type="hidden" name="cursor" value="{{ dryRun.cursor }}">
+                <button type="submit" class="button button--primary">Dry run next batch</button>
+            </form>
+            {{/if}}
+        </section>
+        {{/if}}
+
+        <section class="card flow" aria-labelledby="actions-heading">
+            <h2 id="actions-heading">Actions</h2>
+            <p class="type-body-sm">Run commits one batch per request and resumes from the last committed batch. Dry run reads and counts without writing anything.</p>
+
+            <div class="cluster">
+                {{#if canRun}}
+                <form method="post" action="{{ links.run }}">
+                    <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                    <button type="submit" class="button button--primary">Run</button>
+                </form>
+                {{/if}}
+
+                <form method="post" action="{{ links.dryRun }}">
+                    <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+                    <input type="hidden" name="cursor" value="">
+                    <button type="submit" class="button button--secondary">{{#if dryRun}}Start dry run over{{else}}Dry run{{/if}}</button>
+                </form>
+
+                {{#if canForce}}
+                <a class="button button--secondary" href="{{ links.forceConfirm }}">Force re-run</a>
+                {{/if}}
+            </div>
+        </section>
         {{/if}}
     </article>
 </main>

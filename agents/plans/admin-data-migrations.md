@@ -408,7 +408,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task T4: Run, dry-run, and force flows without JavaScript
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** T3
 **Documentation:** `lib/docs/cross-site-request-forgery.md`; `lib/docs/server-error-handling.md`; `lib/app/presentation/README.md` (Handlers and Execution Order and `skip()`; Request Handlers; Error Handling; Forms; CSRF Protection); `usage-docs/kixx-app/admin-api.md` (Real-run and Dry-run lifecycle)
 
@@ -515,28 +515,28 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] Route test: the three action routes come before `/migrations/:id`, which comes before `{/}` and `*`. Every action target's first handler authorizes `urn:kixx:run` on `urn:kixx:admin:migrations`. `render-confirm` allows `GET, HEAD`, and the others allow `POST` only.
-- [ ] Run, with a stub ledger and the registered no-op migration:
+- [x] Route test: the three action routes come before `/migrations/:id`, which comes before `{/}` and `*`. Every action target's first handler authorizes `urn:kixx:run` on `urn:kixx:admin:migrations`. `render-confirm` allows `GET, HEAD`, and the others allow `POST` only.
+- [x] Run, with a stub ledger and the registered no-op migration:
   - No record → the ledger is created with `startedBy: 'admin-1'`, and the redirect is `303 /admin/migrations/2026-07-17-example-noop?notice=applied`.
   - An `applied` record → `?notice=already_applied`, and no ledger write.
   - `updateLedgerRecord` throws `{ name: 'VersionConflictError' }`, or `createLedgerRecord` throws `{ name: 'DocumentAlreadyExistsError' }` → `?notice=concurrent_run`.
   - An unregistered id → `303 /admin/migrations?notice=migration_not_found`.
   - A CSRF `verify` that returns false → `?notice=form_expired`, with zero ledger calls.
   - Unexpected failure inside `runMigration`, inside the boundary: `getByMigrationId` rejects, or `updateLedgerRecord` rejects with a plain `Error` (non-conflict). The handler does not throw, redirects 303 to `?notice=batch_failed_unexpected`, and `context.logger.error` was called once with `migrationId`, `dryRun: false`, `force: false`, and the `AssertionError` whose `cause` is the stub's error.
-- [ ] Dry run:
+- [x] Dry run:
   - A blank cursor field passes `cursor: null`. Success renders status 200 with `dryRun.done === true`, `dryRun.notice.code === 'dry_run_done'`, `statsList` from the no-op, a fresh CSRF token, and zero ledger writes. `skip` is not called.
   - A non-string cursor value (for example `formData.set('cursor', new Blob(['x']))`) renders status 400 with `dry_run_cursor_invalid` and does not run the script.
   - An unregistered id calls `skip()` and redirects to the list notice.
   - A CSRF failure calls `skip()` and redirects with `form_expired`.
   - Outside the boundary: when the stub `getByMigrationId` rejects, the dry-run handler's `getMigration` pre-read rethrows an `AssertionError`, and nothing is logged by the handler.
-- [ ] Force:
+- [x] Force:
   - The confirmation GET renders for `applied` and `failed` stub records, and redirects to `?notice=force_unavailable` for pending and running ones, and to the list notice for an unknown id.
   - A POST without `confirm_force=yes` redirects to `/admin/migrations/<id>/force` with zero ledger writes.
   - A POST with it, on an `applied` record, resets and runs. The record ends `applied` with `batchCount` 1 and the new `startedBy`, and the redirect is `?notice=applied`.
   - A POST on a `running` record redirects to `force_unavailable` without running.
   - With `confirm_force=yes` on an `applied` record, `updateLedgerRecord` rejecting with a plain `Error` → `?notice=batch_failed_unexpected`, logged with `force: true`.
-- [ ] The templates render all the parts described, only allow-listed or server-derived values reach the page, and there is no `style="`.
-- [ ] `lib/docs/server-error-handling.md` and `lib/app/presentation/README.md` describe the one sanctioned exception, its reason, and its boundary.
+- [x] The templates render all the parts described, only allow-listed or server-derived values reach the page, and there is no `style="`.
+- [x] `lib/docs/server-error-handling.md` and `lib/app/presentation/README.md` describe the one sanctioned exception, its reason, and its boundary.
 
 **Validation**
 
@@ -551,12 +551,19 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: the run, dry-run, and force routes; `postMigrationRun`, `postMigrationDryRun`, `getMigrationForceConfirmation`, `postMigrationForce`; the detail page's dry-run result and Actions cards; the force confirmation page; route and flow tests; the sanctioned-exception docs.
+- Current state: Complete.
+- Remaining: None. Browser checks remain in the Operator Runbook.
+- Decisions and discoveries:
+  - Each POST handler catches the `runMigration()` error into a `runError` variable and handles it after the `try`, so the `try` holds only that call. Each of the three call sites calls `classifyMigrationRunError(...) || recoverUnexpectedRunError(...)` directly, keeping the exception visible.
+  - The async `getMigrationDetailProps(context, request, response, migration, notice)` adds `csrf`, `canRun`, `canForce`, and `links.run` / `links.dryRun` / `links.forceConfirm`. `renderDryRun()` adds `dryRun` and passes a `null` page-level notice.
+  - `dryRun` props are `{ failed, done, canContinue, cursor, statsList, notice }` on success and `{ failed: true, canContinue: false, notice, detail }` on failure. The template shows "Dry run next batch" only for `canContinue`, so it holds no lifecycle logic. T5 can return the same object in JSON.
+  - `postMigrationRun` does no `getMigration` pre-read; an unknown id comes back from `runMigration` as `NotFoundError` and redirects to the list notice without a ledger read.
+  - Only the dry-run route and the confirmation GET have a trailing `HyperviewPageHandler`, so only their handlers take and call `skip()`.
+  - The action cards use `card flow` sections, as on the files detail page.
+  - Templates were checked by rendering them from real handler props (scratch script `tmp/render-migration-actions.mjs`): applied and pending detail, dry-run success with a continuation cursor (escaped), dry-run cursor rejection, and the force page.
+- Actual files changed: `lib/routes/admin-panel.js`, `lib/app/presentation/request-handlers/admin-panel/admin-migrations.js`, `lib/pages/admin/migrations/detail/page.html`, `lib/pages/admin/migrations/force/page.json` and `page.html` (new), `lib/test/routes/admin-panel.test.js`, `lib/test/app/presentation/request-handlers/admin-panel/admin-migrations.test.js`, `lib/docs/server-error-handling.md`, `lib/app/presentation/README.md`.
+- Validation run: route and handler tests 38 passed; lint clean; the `style="` grep printed nothing; `confirm_force` is in the form and the handler; `recoverUnexpectedRunError` appears only in `migration-run-outcomes.js` and the three POST handlers; both docs record the exception; full suite 1908 passed on Node.js and on Deno.
 - Blockers: None.
 
 ---

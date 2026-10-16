@@ -57,6 +57,16 @@ The rule is about reaching the platform's fatal-error policy, not about the `thr
 
 `cloudflare-server.js` does not rethrow out of `fetch()`. A throw there does not restart the isolate the way `process.exit()` restarts a process; it only replaces the response with Cloudflare's generic error page and risks truncating the log tail. The entry point returns a JSON:API 500 and reports the error to the runtime by passing `waitUntil()` a promise that rejects with it, which still produces the platform `exception` event and still counts against the Worker's error rate.
 
+### Sanctioned Exception: Admin Panel Migration Runs
+
+There is one exception to the rethrow rule. In the admin panel's Run, Dry run, and Force handlers (`app/presentation/request-handlers/admin-panel/admin-migrations.js`), an unexpected error thrown by the `runMigration()` call is not propagated. `recoverUnexpectedRunError()` (`app/presentation/lib/migration-run-outcomes.js`) logs it at error level, with its `cause`, and the handler shows a fixed notice (`batch_failed_unexpected` or `dry_run_failed_unexpected`) that never includes the error's message.
+
+- **Why:** an operator running migrations interactively should stay on the page and get a clear message. A migration bug is confined to that one request's batch.
+- **Cost:** the error never reaches the router, so there is no router `error` event, no Node.js shutdown, and no Cloudflare `exception` event or error-rate count. The log line is the only signal.
+- **Boundary:** the `try` wraps only the `runMigration()` call. Everything else in those handlers rethrows as usual: CSRF validation (other than an expired token), the `getMigration()` status reads, CSRF token minting, and rendering. Every other path, including the Admin API's migration run endpoint, follows the normal rule.
+
+Do not add another exception without an operator decision.
+
 ## Assumptions To Assertions
 
 The way we protect against unexpected errors is to write down our assumptions as **assertions** at the boundaries of our code. An assertion that fails is a loud, immediate crash with a precise message — exactly what you want for a bug.

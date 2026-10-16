@@ -1,0 +1,42 @@
+<main class="admin-main">
+    <article class="admin-content-section flow">
+        <header class="admin-content-section__header">
+            <p><a href="{{ links.detail }}">&larr; {{ migration.id }}</a></p>
+            <h1>Force re-run {{ migration.id }}</h1>
+        </header>
+
+        <div class="callout callout--warning" role="alert">
+            <span class="callout__icon" aria-hidden="true">[!]</span>
+            <div class="callout__body flow">
+                <p class="callout__title">This resets the migration's ledger record</p>
+                <p class="type-body-sm">Force clears the saved cursor, accumulated stats, and batch count, replaces who started the run and when, and starts a fresh run from the first batch.</p>
+                <p class="type-body-sm">Force does not undo data changes made by earlier batches. Those batches run again over already-changed data, which relies on the migration being idempotent.</p>
+            </div>
+        </div>
+
+        <div class="table-list" role="region" tabindex="0" aria-labelledby="force-ledger-caption">
+            <table class="table-list__table">
+                <caption id="force-ledger-caption" class="table-list__caption">Current ledger</caption>
+                <tbody>
+                    <tr>
+                        <th scope="row">Status</th>
+                        <td>{{#with migration}}{{> admin/migration-status-badge.html }}{{/with}}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Batches</th>
+                        <td>{{#if migration.batchCount}}{{ migration.batchCount }}{{else}}None{{/if}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <form class="flow" method="post" action="{{ links.force }}">
+            <input type="hidden" name="{{ csrf.fieldName }}" value="{{ csrf.token }}">
+            <input type="hidden" name="confirm_force" value="yes">
+            <div class="cluster">
+                <button type="submit" class="button button--danger">Reset ledger and run first batch</button>
+                <a href="{{ links.detail }}">Cancel</a>
+            </div>
+        </form>
+    </article>
+</main>

@@ -215,6 +215,7 @@ Classify every error:
 
 - **Expected (operational)** errors are ones the handler is prepared for. `error.expected` is truthy when the thrower considered it operational.
 - **Unexpected (programmer)** errors come from paths assumed unreachable. Never handle them beyond logging and rethrowing; they should crash the system. You may wrap one in an `AssertionError` (with `cause`) to add debugging context.
+  - One sanctioned exception: the `runMigration()` call in the admin panel's migration Run, Dry run, and Force handlers logs an unexpected error and shows a fixed notice instead. `recoverUnexpectedRunError()` is its only permitted use. See "Sanctioned Exception: Admin Panel Migration Runs" in `lib/docs/server-error-handling.md`.
 
 For expected errors:
 
