@@ -7,8 +7,9 @@ and running data migrations against a deployment's Admin API. See
 
 ## Credentials
 
-Admin credentials are never written to a file or passed as arguments. Commands
-prompt for them, with password entry hidden. Set these environment variables
+Never write a remote target's admin credentials to a file or pass them as
+arguments. This applies to every remote, not only production or staging.
+Commands prompt for them, with password entry hidden. Set these environment variables
 to skip a prompt in scripts:
 
 - `KIXX_ADMIN_EMAIL`
@@ -20,6 +21,10 @@ the command fails naming the variable instead of waiting.
 
 Every command resolves the environment and origin before prompting, so a bad
 `-e` fails without asking for secrets.
+
+The one exception is a throwaway local instance: `kixx local seed` writes the
+instance's admin login and Publishing API token to its `credentials.json`. See
+[local.md](local.md).
 
 ## Bootstrap the first admin
 

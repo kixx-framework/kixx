@@ -48,7 +48,7 @@ Deno Permissions
 
 The JSR install grants `-RWNE --allow-sys=homedir --allow-run`. The README explains each flag. If a change needs a new permission (a new environment variable is fine under `-E`; FFI or broader `--allow-sys` is not), update the install and upgrade commands in `README.md`, the `kixx` task in `deno.json`, and the permission list in the README. Prefer designs that need no new permission.
 
-Only `kixx dev start` runs project code. Every other command reads project files (such as `cloudflare-config.jsonc`) as data. Keep it that way.
+Only `kixx dev start`, `kixx local seed`, and `kixx local start` run project code (the app's `node-server.js`, in a child process). Every other command reads project files (such as `cloudflare-config.jsonc`) as data. Keep it that way.
 
 Test Seams
 ----------

@@ -46,4 +46,4 @@ Running the suite on Node.js and Deno, file conventions, `kixx-test` and `kixx-a
 
 ../usage-docs/kixx-devkit/
 
-Public docs for `kixx` users: `configuration.md` (`.kixx` settings, `cloudflare-config.jsonc`, `.env.<env>`, `example.env.secrets`), `admin.md`, `app.md`, `cloudflare.md`, and `dev.md`. Update the matching page when a command's behavior or options change.
+Public docs for `kixx` users: `configuration.md` (`.kixx` settings, `cloudflare-config.jsonc`, `.env.<env>`, `example.env.secrets`), `admin.md`, `app.md`, `cloudflare.md`, `dev.md`, and `local.md`. Update the matching page when a command's behavior or options change.

@@ -97,8 +97,9 @@ level is an object with an `environments` object keyed by environment name:
 A missing file, a parse error, a non-object top level, or a missing
 `environments` object fails with a usage error naming the file. See
 [cloudflare.md](cloudflare.md) for the blocks each command reads. The file is
-data only. Apart from `kixx dev start`, which runs the app's `node-server.js`
-(see [dev.md](dev.md)), devkit never executes project code.
+data only. Apart from `kixx dev start`, `kixx local seed`, and
+`kixx local start`, which run the app's `node-server.js` (see [dev.md](dev.md)
+and [local.md](local.md)), devkit does not run project code.
 
 ### `cloudflare-config.generated.js`
 

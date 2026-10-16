@@ -532,7 +532,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task L8: Documentation
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** L5, L6, L7
 **Documentation:** Decisions 5, 6; `devkit/docs/dev.md` as the style model
 
@@ -574,10 +574,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `local.md` documents every verb and option exactly as implemented (check against `node devkit/kixx.js local <verb> --help`).
-- [ ] `grep -rn "Only \`kixx dev start\`\|never executes project code\|never written to a file" devkit/README.md devkit/docs` shows no stale claim.
-- [ ] `admin.md` wording matches Decision 5.
-- [ ] `devkit/test/manifests.test.js` still passes (docs ship in both packages).
+- [x] `local.md` documents every verb and option exactly as implemented (check against `node devkit/kixx.js local <verb> --help`).
+- [x] `grep -rn "Only \`kixx dev start\`\|never executes project code\|never written to a file" devkit/README.md devkit/docs` shows no stale claim.
+- [x] `admin.md` wording matches Decision 5.
+- [x] `devkit/test/manifests.test.js` still passes (docs ship in both packages).
 
 **Validation**
 
@@ -587,12 +587,17 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of L8.
+- Current state: Complete.
+- Remaining: None. The Operator Runbook below is for the operator.
+- Decisions and discoveries:
+  - The user docs the plan names under `devkit/docs/` (`admin.md`, `configuration.md`, `dev.md`) actually live in `usage-docs/kixx-devkit/`; `devkit/docs/` holds only developer docs. So the new page is `usage-docs/kixx-devkit/local.md` (as the repo rules require for new commands), and `admin.md`/`configuration.md` were edited there. The README link points at `usage-docs/kixx-devkit/local.md`, like the others.
+  - Also updated: `devkit/docs/packaging-and-runtimes.md` (same "only `dev start` runs project code" claim), `devkit/docs/architecture.md` (`lib/admin/` and `lib/publishing/` now also used by `local`; `lib/local/` row mentions seeding), and `devkit/docs/doc-index.md` (usage docs list).
+  - `devkit/lib/admin/prompt-admin-credentials.js` unchanged: its "never accepted from argv or files" describes what the prompt reads, not a general rule, and `kixx local` does not read credentials through it.
+  - `devkit/commands/README.md` unchanged; L1 left no gap.
+  - The stale-claim grep (also over `usage-docs/kixx-devkit`) matches only the two rewritten lines that now name `kixx local seed` and `kixx local start`.
+- Actual files changed: `usage-docs/kixx-devkit/local.md` (new), `usage-docs/kixx-devkit/admin.md`, `usage-docs/kixx-devkit/configuration.md`, `devkit/README.md`, `devkit/docs/packaging-and-runtimes.md`, `devkit/docs/architecture.md`, `devkit/docs/doc-index.md`.
+- Validation run: `local.md` checked against `node devkit/kixx.js local <verb> --help` for all six verbs. `node devkit/run-tests.js devkit/test/manifests.test.js` 4 passed; `node devkit/run-linter.js devkit/lib/admin` and `node devkit/run-linter.js devkit` clean; full suite 721 passed on Node.js and 721 passed on Deno (`~/.deno/bin/deno run -A devkit/run-tests.js`).
 - Blockers: None.
 
 ---

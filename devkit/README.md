@@ -3,9 +3,9 @@ Kixx Devkit
 
 The `kixx` command: local development, build, and deployment tools for Kixx
 applications. It runs the app locally with restarts after code changes,
-creates the first admin account, mints publishing tokens, runs data
-migrations, publishes application content, and builds and deploys Cloudflare
-Worker versions.
+manages throwaway local instances, creates the first admin account, mints
+publishing tokens, runs data migrations, publishes application content, and
+builds and deploys Cloudflare Worker versions.
 
 Install
 -------
@@ -30,11 +30,13 @@ The Deno permissions:
   APIs.
 - `-E` env: the `KIXX_ADMIN_*` prompt variables.
 - `--allow-sys=homedir`: find the `~/.kixx` settings layer.
-- `--allow-run`: `kixx dev start` runs your app's `node-server.js` in a child
-  Deno process with `-A`, so this grants it full access.
+- `--allow-run`: `kixx dev start`, `kixx local seed`, and `kixx local start`
+  run your app's `node-server.js` in a child Deno process with `-A`, so this
+  grants it full access.
 
-No FFI access is needed. Only `kixx dev start` runs project code; every other
-command reads project configuration as data.
+No FFI access is needed. Only `kixx dev start`, `kixx local seed`, and
+`kixx local start` run project code; every other command reads project
+configuration as data.
 
 Upgrade:
 
@@ -63,6 +65,12 @@ Commands
 - `kixx cloudflare create-worker-version` — bundle and upload a Worker version.
 - `kixx cloudflare deploy-version` — route all traffic to a Worker version.
 - `kixx dev start` — run the app locally, restarting after code changes.
+- `kixx local create` — create a throwaway local instance.
+- `kixx local seed` — create an instance's admin, token, and content.
+- `kixx local start` — run an instance under the devserver.
+- `kixx local publish` — republish content to a running instance.
+- `kixx local list` — list instances.
+- `kixx local destroy` — delete a stopped instance.
 
 Documentation:
 
@@ -73,6 +81,7 @@ Documentation:
 - [cloudflare.md][cloudflare-doc]: Workers, versions, deployment, and
   workflows.
 - [dev.md][dev-doc]: the local devserver.
+- [local.md][local-doc]: throwaway local instances.
 
 `app` commands require an application serving Publishing API build assignment
 protocol 2 and addressing format 4; see [app.md][app-doc-server-requirement].
@@ -87,6 +96,7 @@ Use the Cloudflare dashboard or Wrangler for those.
 [app-doc-server-requirement]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/app.md#server-requirement
 [cloudflare-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/cloudflare.md
 [dev-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/dev.md
+[local-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/local.md
 
 Development
 -----------
