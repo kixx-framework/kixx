@@ -20,7 +20,7 @@ lib/          all real logic, grouped by subsystem
 | Directory | Used by | Responsibility |
 |---|---|---|
 | `lib/` (root) | everything | Settings layers (`config-loader.js`), `cloudflare-config.jsonc` loading, JSONC, `.env.<env>` parsing, terminal prompts, text wrapping, the `fileSystem` seam, `UsageError`, hashing, and token generation |
-| `lib/admin/` | `admin` | Admin API client, credential prompting, and environment resolution |
+| `lib/admin/` | `admin` | Admin API client, invite redemption, credential prompting, and environment resolution |
 | `lib/publishing/` | `app` | Scanning content sources, stylesheet bundling, content addressing, capability negotiation, Release creation, and build assignment over the Publishing API |
 | `lib/bundler/` | `cloudflare` | Crawls an app's static ES module graph and strips comments for upload, using vendored `acorn` |
 | `lib/cloudflare/` | `cloudflare` | Cloudflare API client, config validation, bindings, secrets parity, resource checks, Durable Object exports, and the Worker version and deploy pipelines |

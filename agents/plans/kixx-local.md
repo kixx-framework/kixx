@@ -141,7 +141,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 ### Task L2: Extract reusable accept-invite and publish-and-assign operations
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** None
 **Documentation:** `devkit/docs/admin.md`, `devkit/docs/app.md`; Decision 4
 
@@ -173,10 +173,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Acceptance criteria**
 
-- [ ] `devkit/test/commands/admin/accept-invite.test.js` and `devkit/test/commands/app/publish.test.js` pass unedited.
-- [ ] `acceptInvite` unit tests: a short or long password throws before the client is called; each typed error maps to its message; other errors propagate; success returns the account.
-- [ ] `publishRelease` unit tests: a dry run never calls `assignRelease`; success returns `assignmentId`; `UnsupportedServerError` propagates unwrapped; another assignment failure throws `ReleaseAssignmentError` with `releaseId`, `buildId`, `cause`, and the recovery line when `formatRecovery` is supplied (and no recovery line without it); provenance carries `intendedForBuildId`.
-- [ ] No behavior change in either command.
+- [x] `devkit/test/commands/admin/accept-invite.test.js` and `devkit/test/commands/app/publish.test.js` pass unedited.
+- [x] `acceptInvite` unit tests: a short or long password throws before the client is called; each typed error maps to its message; other errors propagate; success returns the account.
+- [x] `publishRelease` unit tests: a dry run never calls `assignRelease`; success returns `assignmentId`; `UnsupportedServerError` propagates unwrapped; another assignment failure throws `ReleaseAssignmentError` with `releaseId`, `buildId`, `cause`, and the recovery line when `formatRecovery` is supplied (and no recovery line without it); provenance carries `intendedForBuildId`.
+- [x] No behavior change in either command.
 
 **Validation**
 
@@ -186,12 +186,12 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 
 **Progress and handoff**
 
-- Completed: Nothing yet.
-- Current state: Not started.
-- Remaining: Everything described above.
-- Decisions and discoveries: None yet.
-- Actual files changed: None yet.
-- Validation run: None yet.
+- Completed: All of L2.
+- Current state: Complete.
+- Remaining: None.
+- Decisions and discoveries: `create-publishing-token` needs no extraction; seed (L6) calls `AdminAPIClient#createPublishingApiToken` directly. `acceptInvite` also exports `MIN_PASSWORD_LENGTH`/`MAX_PASSWORD_LENGTH`. `ReleaseAssignmentError` now lives in `devkit/lib/publishing/publish-release.js` (named export); nothing else imported it from the command, so there is no re-export. `kixx admin accept-invite` now builds the client (`target.connect()`, which only constructs it) before the password check; no request is sent before the check. `devkit/docs/architecture.md` subsystem row for `lib/admin/` mentions invite redemption.
+- Actual files changed: `devkit/lib/admin/accept-invite.js` (new), `devkit/lib/publishing/publish-release.js` (new), `devkit/lib/publishing/render-publish-result.js` (new), `devkit/commands/admin/accept-invite.js`, `devkit/commands/app/publish.js`, `devkit/test/lib/admin/accept-invite.test.js` (new), `devkit/test/lib/publishing/publish-release.test.js` (new), `devkit/docs/architecture.md`.
+- Validation run: L2 subset 193 tests passed on Node.js; linter clean on listed paths; full Node.js suite 649 tests passed. Existing command tests unedited.
 - Blockers: None.
 
 ---
