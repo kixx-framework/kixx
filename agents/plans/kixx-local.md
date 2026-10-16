@@ -614,4 +614,5 @@ Not agent validation steps. Run after L8 from the repo root.
   3. `node devkit/kixx.js local start alpha lib --target tmp/local-e2e`. Then, in another shell: log in at `<baseUrl>admin` with the credentials, and `node devkit/kixx.js local publish alpha lib --target tmp/local-e2e` after editing a page.
   4. `node devkit/kixx.js local list lib --target tmp/local-e2e` shows seeded and running.
   5. Ctrl-C, then `node devkit/kixx.js local destroy alpha lib --target tmp/local-e2e`.
+  - Orchestrator run, 2026-10-16 09:35 ET (Node.js, HEAD a4be212a): steps 1–5 passed except the browser login and the page edit. Seed created `root@alpha.local`, a Release, and `credentials.json` (0600). Under `start`, `GET /` returned 200, `list` showed seeded and running, `publish` assigned the Release (0 uploads, content unchanged), `destroy` refused while running and succeeded after Ctrl-C. Still for the operator: log in at `<baseUrl>admin` and republish after a real edit.
 - [ ] Repeat with `deno run -RWNE --allow-sys=homedir --allow-run devkit/kixx.js local ...` to confirm the documented permission set suffices.
