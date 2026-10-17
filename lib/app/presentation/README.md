@@ -556,6 +556,8 @@ An email directory holds `email.json` and the files it names. HTML and text temp
 
 The sidebar highlights the section named by `subpage.section` in the section's `page.json`; nested pages inherit it. Never set it in `pages/admin/page.json`, which is the ancestor of every admin page. A new section needs its key in its `page.json` and a link in `templates/partials/admin-nav.html`. `section: "style-guide"` shows the style guide list instead.
 
+In `admin-nav.html`, every title and list goes inside `.admin-nav__sections`. Below 52rem the nav collapses behind the Menu toggle (the `admin-nav-toggle` behavior in `static-assets/javascript/site.js`); without JavaScript it stays expanded.
+
 The default branch of `admin-nav.html` groups sections under Content, Reference, Access, and Developers (Data Migrations, Background Jobs). Every signed-in admin sees every link regardless of permission; a role without the grant gets the standard 403 when it follows one.
 
 The Background Jobs section also has an in-page subnav (Jobs, Schedules, Registered jobs, from `admin/jobs-subnav.html`); all four of its pages share `section: "jobs"`.

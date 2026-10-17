@@ -80,6 +80,11 @@ body:has(> .admin-layout) {
     stack with a bottom rule; at the shell breakpoint it becomes the sidebar
     track and owns the vertical divider. Link state uses the same accent signal
     for hover, keyboard focus, and the current page.
+
+    Below the breakpoint the lists collapse behind the Menu toggle. The
+    toggle's aria-expanded drives visibility. It ships hidden until site.js
+    enables it, so pages without JavaScript stay fully expanded. The wide
+    layout hides the toggle and ignores its state.
 ----------------------------------------------------------------------------- */
 
 .admin-nav {
@@ -88,6 +93,26 @@ body:has(> .admin-layout) {
 
 .admin-nav__inner {
     padding-block: clamp(1rem, 3vw, 1.5rem);
+}
+
+/* A nav row, not a .button, so it reads as part of the nav. */
+.admin-nav__toggle {
+    display: block;
+    width: 100%;
+    padding-block: 0.55rem;
+    padding-inline: clamp(1rem, 2.5vw, 1.75rem);
+    border: 0;
+    border-left: 2px solid transparent;
+    background: none;
+    line-height: var(--leading-snug);
+    color: var(--color-ink);
+    font-weight: var(--weight-semibold);
+    text-align: start;
+    cursor: pointer;
+}
+
+.admin-nav__toggle[aria-expanded="false"] + .admin-nav__sections {
+    display: none;
 }
 
 @media (min-width: 52rem) {
@@ -103,6 +128,14 @@ body:has(> .admin-layout) {
         top: 0;
         max-height: 100vh;
         overflow-y: auto;
+    }
+
+    .admin-nav__toggle {
+        display: none;
+    }
+
+    .admin-nav__toggle[aria-expanded="false"] + .admin-nav__sections {
+        display: block;
     }
 }
 
@@ -135,7 +168,9 @@ body:has(> .admin-layout) {
 }
 
 .admin-nav__link:hover,
-.admin-nav__link:focus-visible {
+.admin-nav__link:focus-visible,
+.admin-nav__toggle:hover,
+.admin-nav__toggle:focus-visible {
     border-left-color: var(--color-ink-link);
     background: var(--color-surface-sunken);
     color: var(--color-ink-link);
@@ -149,7 +184,8 @@ body:has(> .admin-layout) {
     font-weight: var(--weight-bold);
 }
 
-.admin-nav__link:focus-visible {
+.admin-nav__link:focus-visible,
+.admin-nav__toggle:focus-visible {
     outline: 2px solid var(--color-focus-outline);
     outline-offset: -2px;
 }
