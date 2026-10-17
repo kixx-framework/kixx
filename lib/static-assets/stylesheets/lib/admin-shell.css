@@ -16,6 +16,12 @@
     short, the row is short, so the nav's divider rule stops above the viewport
     bottom. Scoping the fix to `body:has(> .admin-layout)` keeps standalone
     admin auth pages unaffected and leaves .with-sidebar height-opinion-free.
+
+    Below the breakpoint the tracks wrap onto two flex lines, and the default
+    align-content stretches both lines to share the leftover height. That
+    leaves an empty band under a short (collapsed) nav, so narrow screens pack
+    lines to the top; the wide layout restores stretch for the full-height
+    divider.
 ----------------------------------------------------------------------------- */
 
 body:has(> .admin-layout) {
@@ -27,11 +33,13 @@ body:has(> .admin-layout) {
 .admin-layout {
     --sidebar-content-min: 100%;
     flex: 1 1 auto;
+    align-content: flex-start;
 }
 
 @media (min-width: 52rem) {
     .admin-layout {
         --sidebar-content-min: 60%;
+        align-content: stretch;
     }
 }
 

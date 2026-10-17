@@ -121,6 +121,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 - Decisions and discoveries:
   - The base `.admin-nav__toggle` rule and the collapse rule sit between `.admin-nav__inner` and the nav `@media` block, so the wide overrides inside the media block come later in source. The toggle is not added to the `.admin-nav__link` base selector list, because that rule follows the media block and its `display: block` would beat the wide `display: none`. Hover, focus-visible, and outline rules are shared via the existing link selector lists.
   - No open-state spacing between the toggle and the first list: a rule keyed on `aria-expanded="true"` would also match the hidden server markup and change the no-JS layout. The toggle's own padding separates them.
+  - Review found an empty band (~300px) under the collapsed nav below 52rem. `.admin-layout` is `flex-wrap: wrap` and fills the viewport (`body:has(> .admin-layout)` flex column plus `flex: 1 1 auto`), so its two wrapped flex lines shared the leftover height (`align-content: normal` acts as stretch). The expanded nav had always hidden this. Fix in `admin-shell.css`: `align-content: flex-start` on base `.admin-layout`, `align-content: stretch` in its 52rem rule (keeps the full-height divider), plus a note in the "Admin layout" header comment. `layout.css` unchanged.
   - `reset.css` sets `button { font: inherit; }`; the toggle's own `font-weight` overrides it.
   - The plan's grep for `admin-nav-toggle\|admin-nav-sections` matches only the partial and `site.js`; the CSS uses the BEM classes `.admin-nav__toggle` / `.admin-nav__sections`, as designed. `site.js` reads the target id from `aria-controls` rather than hard-coding it.
 - Actual files changed: `lib/templates/partials/admin-nav.html`, `lib/static-assets/stylesheets/lib/admin-shell.css`, `lib/static-assets/javascript/site.js`, `lib/app/presentation/README.md`.
@@ -131,7 +132,8 @@ Treat this list as orientation, not permission to ignore other necessary files. 
   - Hook/id grep: partial lines 3-4, `site.js` line 941. Palette/literal-color grep: no output. `git diff --stat` of `admin.html` and `layout.css`: no output.
   - `git diff -w` of the partial: only the button, wrapper open, and wrapper close lines added.
   - Rendered the partial with the vendored template engine (scratch script `tmp/render-admin-nav.mjs`) for `/admin` and `/admin/style-guide`: one toggle, `hidden` with `aria-expanded="true"`, immediately followed by the wrapper; balanced divs; `aria-current` intact.
-  - Browser checks: not run (no admin session); left to the Operator Runbook.
+  - Layout fix: `node lib/run-linter.js lib` passes; `node lib/run-tests.js` 1978 tests pass. Static preview (`tmp/nav-preview/`, partial plus real stylesheets and `site.js`, no admin session): at 375x812 with JS, `.admin-nav` 71px (was 368), main starts at 124px, toggle collapsed and visible, opens to 841px on click; at 1200x812, toggle `display: none`, sections shown, nav and main both 812px tall (`align-content: stretch`); no-JS at 375, toggle not displayed and nav fully expanded.
+  - Browser checks with a real admin session: not run; left to the Operator Runbook.
 - Blockers: None.
 
 ---
