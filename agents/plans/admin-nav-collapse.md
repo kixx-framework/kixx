@@ -93,10 +93,10 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 - [x] Rendered admin pages contain exactly one `data-js-behavior="admin-nav-toggle"` button, with `type="button"`, `aria-controls="admin-nav-sections"`, `aria-expanded="true"`, and `hidden` in the server HTML, immediately followed by `<div class="admin-nav__sections" id="admin-nav-sections">`.
 - [x] All existing nav titles, lists, links, and conditionals are inside the wrapper and otherwise unchanged (`git diff` of the partial shows only the added lines and re-indentation).
 - [x] `.admin-layout.with-sidebar` still has exactly two children; `admin.html` and `layout.css` are unchanged.
-- [x] Below 52rem with JavaScript: on load the button is visible, `aria-expanded="false"`, lists hidden; clicking or pressing Enter/Space toggles the lists and `aria-expanded`. (verified by code review; browser confirmation is in the Operator Runbook)
-- [x] At 52rem and wider with JavaScript: the button is not displayed and the lists are shown regardless of `aria-expanded`; sidebar layout, sticky inner, and borders look as before. (verified by code review; browser confirmation is in the Operator Runbook)
-- [x] With JavaScript disabled at any width: no button is visible and the nav is fully expanded, as today. (verified by code review; browser confirmation is in the Operator Runbook)
-- [x] The toggle's hover and keyboard focus-visible styles match `.admin-nav__link` (accent left border, sunken background, focus outline). (verified by code review; browser confirmation is in the Operator Runbook)
+- [x] Below 52rem with JavaScript: on load the button is visible, `aria-expanded="false"`, lists hidden; clicking or pressing Enter/Space toggles the lists and `aria-expanded`. (verified by code review; operator confirmed in a browser 2026-10-17)
+- [x] At 52rem and wider with JavaScript: the button is not displayed and the lists are shown regardless of `aria-expanded`; sidebar layout, sticky inner, and borders look as before. (verified by code review; operator confirmed in a browser 2026-10-17)
+- [x] With JavaScript disabled at any width: no button is visible and the nav is fully expanded, as today. (verified by code review; operator confirmed in a browser 2026-10-17)
+- [x] The toggle's hover and keyboard focus-visible styles match `.admin-nav__link` (accent left border, sunken background, focus outline). (verified by code review; operator confirmed in a browser 2026-10-17)
 - [x] A missing `aria-controls` target logs a warning and leaves that toggle hidden without throwing.
 - [x] CSS uses semantic tokens only, follows the formatting rules, and adds no new breakpoint value.
 - [x] `lib/app/presentation/README.md` and the `admin-shell.css` nav header comment describe the new structure.
@@ -116,8 +116,8 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 **Progress and handoff**
 
 - Completed: T1 implemented. Toggle and `.admin-nav__sections` wrapper in the partial; toggle, collapse, and wide-override CSS plus updated nav header comment; `admin-nav-toggle` IIFE at the end of `site.js`; one-paragraph note in the presentation README.
-- Current state: Complete. Browser behavior not observed (no admin session); the Operator Runbook covers it.
-- Remaining: Operator Runbook only.
+- Current state: Complete. Operator ran the Operator Runbook browser checks on 2026-10-17; all passed.
+- Remaining: Only the pre-release test-app e2e run in the Operator Runbook.
 - Decisions and discoveries:
   - The base `.admin-nav__toggle` rule and the collapse rule sit between `.admin-nav__inner` and the nav `@media` block, so the wide overrides inside the media block come later in source. The toggle is not added to the `.admin-nav__link` base selector list, because that rule follows the media block and its `display: block` would beat the wide `display: none`. Hover, focus-visible, and outline rules are shared via the existing link selector lists.
   - No open-state spacing between the toggle and the first list: a rule keyed on `aria-expanded="true"` would also match the hidden server markup and change the no-JS layout. The toggle's own padding separates them.
@@ -133,7 +133,7 @@ Treat this list as orientation, not permission to ignore other necessary files. 
   - `git diff -w` of the partial: only the button, wrapper open, and wrapper close lines added.
   - Rendered the partial with the vendored template engine (scratch script `tmp/render-admin-nav.mjs`) for `/admin` and `/admin/style-guide`: one toggle, `hidden` with `aria-expanded="true"`, immediately followed by the wrapper; balanced divs; `aria-current` intact.
   - Layout fix: `node lib/run-linter.js lib` passes; `node lib/run-tests.js` 1978 tests pass. Static preview (`tmp/nav-preview/`, partial plus real stylesheets and `site.js`, no admin session): at 375x812 with JS, `.admin-nav` 71px (was 368), main starts at 124px, toggle collapsed and visible, opens to 841px on click; at 1200x812, toggle `display: none`, sections shown, nav and main both 812px tall (`align-content: stretch`); no-JS at 375, toggle not displayed and nav fully expanded.
-  - Browser checks with a real admin session: not run; left to the Operator Runbook.
+  - Browser checks with a real admin session: run by the operator on 2026-10-17; passed.
 - Blockers: None.
 
 ---
@@ -141,13 +141,13 @@ Treat this list as orientation, not permission to ignore other necessary files. 
 Operator Runbook
 ----------------
 
-Run after T1 is complete. Requires a local admin session.
+Run after T1 is complete. Requires a local admin session. Browser checks completed by the operator on 2026-10-17.
 
-- [ ] From `lib/`, run `node node-server.js` (port 2026) and sign in as an admin.
-- [ ] Narrow viewport (about 360px, and just under 52rem, about 830px at default font size), open `http://localhost:2026/admin`: the nav shows only "Menu"; content starts near the top. Click Menu: lists appear and push content down; click again: they hide. Reload: closed again.
-- [ ] Keyboard at narrow width: Tab reaches Menu with the same focus outline and accent as nav links; Enter and Space toggle; Tab continues into the links when open. A screen reader (VoiceOver) announces "Menu, collapsed/expanded, button".
-- [ ] Wide viewport (>= 52rem): no Menu button; sidebar, right rule, and sticky nav look exactly as before. Resize from narrow (closed) to wide: lists are visible; resize back: closed state resumes.
-- [ ] Repeat the narrow check on `/admin/style-guide` (style-guide branch of the nav) and on one section page (e.g. `/admin/files`) to confirm `aria-current` highlighting is intact when opened.
-- [ ] Disable JavaScript in the browser and reload at narrow and wide widths: no Menu button; nav fully expanded as before.
-- [ ] Check light and dark themes.
+- [x] From `lib/`, run `node node-server.js` (port 2026) and sign in as an admin.
+- [x] Narrow viewport (about 360px, and just under 52rem, about 830px at default font size), open `http://localhost:2026/admin`: the nav shows only "Menu"; content starts near the top. Click Menu: lists appear and push content down; click again: they hide. Reload: closed again.
+- [x] Keyboard at narrow width: Tab reaches Menu with the same focus outline and accent as nav links; Enter and Space toggle; Tab continues into the links when open. A screen reader (VoiceOver) announces "Menu, collapsed/expanded, button".
+- [x] Wide viewport (>= 52rem): no Menu button; sidebar, right rule, and sticky nav look exactly as before. Resize from narrow (closed) to wide: lists are visible; resize back: closed state resumes.
+- [x] Repeat the narrow check on `/admin/style-guide` (style-guide branch of the nav) and on one section page (e.g. `/admin/files`) to confirm `aria-current` highlighting is intact when opened.
+- [x] Disable JavaScript in the browser and reload at narrow and wide widths: no Menu button; nav fully expanded as before.
+- [x] Check light and dark themes.
 - [ ] Before a release: `node tools/build-test-app.js`, then run the test-app e2e suite per `test-app/README.md`.
