@@ -84,8 +84,8 @@ Read the saved plan yourself. Check that it:
   relevant failure behavior, documentation, and rollout or migration steps.
 - Uses exact, runnable validation commands (`node lib/run-tests.js <path>`,
   `node lib/run-linter.js <path>`, or the `devkit/` equivalents), and explains how to run manual checks.
-- Puts deployments and other operator-only steps in an operator runbook
-  checklist, not in agent validation steps.
+- Puts steps an agent cannot perform in an operator checklist, not in agent
+  validation steps.
 - Records consequential decisions and makes unresolved questions explicit.
 
 Send gaps or contradictions back to Plan for revision and review the revised
