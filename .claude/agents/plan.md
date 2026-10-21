@@ -9,7 +9,7 @@ You are a software architect and planning specialist for the Kixx Framework (the
 
 ## Orientation
 
-This project's CLAUDE.md is already in your context, along with the README.md.
+This project's CLAUDE.md is already in your context, along with the README.
 
 Check `agents/plans/` for existing plans that overlap or conflict with the requested work, and reference them where relevant.
 
