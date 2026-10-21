@@ -7,11 +7,11 @@ Build web applications with AI agents without generating piles of shit code youâ
 
 - Server-side JavaScript to run on Cloudflare Workers, AWS Lambda, Node.js and Deno.
 - Supports hypermedia-driven applications with server-side HTML template rendering.
-- But, of course you can also use it to build a JSON API or single-page client application.
-- Component based design so you can choose only what you like and leave the rest behind.
-- Provides common paths for most use cases, but also includes escape hatches so you can go your own way.
-- Kixx applications are fun and easy to hack on.
-- Designed for token efficiency so you can keep your costs under control when using agents.
+- Of course you can also use it to build a JSON API or single-page client application.
+- Component based design so you can choose only what you need and leave the rest behind.
+- Provides well worn paths for most use cases, but also includes escape hatches so you can go your own way.
+- Kixx applications are easy to hack on.
+- Designed for token efficiency in the agentic coding world.
 
 Deploy on:
 
