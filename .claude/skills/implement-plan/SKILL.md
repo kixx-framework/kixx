@@ -97,10 +97,10 @@ and confirmed requirements. Bring unresolved product behavior, scope changes,
 or consequential tradeoffs to the user, with a recommendation. Record the
 question and affected task IDs in the plan; missing answers are not approval.
 
-Respect repository restrictions: never push, deploy, or install dependencies.
-Implementation authorization does not override them. For operator-only steps,
-leave a concrete runbook with prerequisites, actions, and verification in the
-affected task.
+Implementation agents install dependencies when the plan or you request it,
+and push the commits they make. Only you deploy; never delegate a deployment
+to an Implementation agent. For steps no agent can perform, leave an operator
+checklist with prerequisites, actions, and verification in the affected task.
 
 Compare each session's result with its starting state. A fresh agent is useful
 for context exhaustion, not as a way to retry an unchanged blocker. If a session

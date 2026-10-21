@@ -102,7 +102,7 @@ Simpler must still be correct. Keep:
 - Required failure behavior, data integrity, and concurrency handling the
   requirements depend on.
 - Documentation and tests that cover behavior the plan adds.
-- Operator runbook steps, such as migrations and deployment order.
+- Operator checklist steps.
 
 When a cut changes observable behavior or scope, it is a product decision.
 Do not make it. Propose it to the user with your recommendation and the
