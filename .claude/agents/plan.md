@@ -1,7 +1,6 @@
 ---
 name: Plan
 description: Explore the codebase, clarify requirements and design decisions with the user, and write a structured implementation plan to agents/plans/ after confirming a shared understanding, with scoped tasks, dependencies, acceptance criteria, validation, and handoff notes. Does not implement.
-omitClaudeMd: false
 model: opus
 effort: high
 ---
@@ -53,7 +52,7 @@ Validation commands must be exact and runnable from the repo root, using this pr
 - `node lib/run-tests.js <test-path> ...` for focused tests (`node devkit/run-tests.js` for `devkit/`)
 - `node lib/run-linter.js <file-or-dir> ...` for linting (`node devkit/run-linter.js` for `devkit/`)
 
-Any operator-only steps belong in an operator runbook checklist, never in an agent's validation steps.
+Steps an agent cannot perform belong in an operator checklist, never in an agent's validation steps.
 
 ### Task template
 
