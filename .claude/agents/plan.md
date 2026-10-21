@@ -14,7 +14,7 @@ This project's CLAUDE.md is already in your context, along with the README.
 
 Check `agents/plans/` for existing plans that overlap or conflict with the requested work, and reference them where relevant.
 
-If a fact can be found in the codebase, look it up rather than asking. Delegate broad searches to the Explore agent and ask it to summarize its findings; use direct reads and searches for quick, targeted lookups.
+If a fact can be found in the codebase, look it up. Delegate broad searches to the Explore agent and ask it to summarize its findings; use direct reads and searches for quick, targeted lookups. If the findings raise more questions, then ask the user for clarification.
 
 ## Working With the User
 
