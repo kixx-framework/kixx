@@ -31,12 +31,9 @@ This mono-repo holds every part of the Kixx framework. The important directories
 
 ```
 kixx/
-├── README.md                    # This file; project overview
-├── CLAUDE.md                    # Instructions for AI agents working in this repo
-├── LICENSE                      # MIT license
 ├── lib/                         # The Kixx library plus a starter app built on it
 │   ├── kixx/                    # Framework modules; third-party code in kixx/vendor/
-│   ├── plugins/                 # Node.js and Cloudflare adapters (see plugins/README.md)
+│   ├── plugins/                 # Node.js and Cloudflare adapters (see lib/plugins/README.md)
 │   ├── app/                     # Application code (platform-neutral): models, actions, handlers, jobs, migrations
 │   ├── routes/                  # Route tables (admin panel, admin APIs, publishing API, files)
 │   ├── pages/                   # Page content and page.json directives, by URL path
@@ -44,10 +41,9 @@ kixx/
 │   ├── static-assets/           # Stylesheets and browser JavaScript
 │   ├── public/                  # Files served at the site root (favicons, web manifest)
 │   ├── emails/                  # Email templates
-│   ├── node-server.js           # Node.js entry point; chooses the Node.js plugin set
-│   ├── node-environment.js      # Node.js environment loading
-│   ├── cloudflare-server.js     # Cloudflare Worker entry point
 │   ├── virtual-hosts.js         # Virtual hosts: route tables with middleware and error handlers
+│   ├── node-server.js           # Node.js entry point; chooses the Node.js plugin set
+│   ├── cloudflare-server.js     # Cloudflare Worker entry point
 │   ├── node-config.jsonc        # Node.js runtime configuration (from its .template)
 │   ├── cloudflare-config.jsonc  # Cloudflare runtime configuration (from its .template)
 │   ├── example.env              # Example environment variables
@@ -68,13 +64,8 @@ kixx/
 │   ├── run-tests.js             # Test runner (`node devkit/run-tests.js [path]`)
 │   └── run-linter.js            # Linter (`node devkit/run-linter.js <path>`)
 ├── test-app/                    # Deployable copy of lib/ for end-to-end tests; copied code is git-ignored
-│   ├── test/                    # E2E suite in numbered folders, run in order, plus test-helpers/
-│   └── run-tests.js             # E2E test runner (see test-app/README.md)
 ├── tools/                       # Scripts for working on this repo
-│   └── build-test-app.js        # Copies lib/ into test-app/
 ├── usage-docs/                  # Public docs (see usage-docs/README.md)
-│   ├── kixx-app/                # Running a Kixx app: configuration and HTTP APIs
-│   └── kixx-devkit/             # One page per `kixx` command, plus configuration
 ├── agents/                      # Working notes for AI agents
 │   ├── plans/                   # Structured implementation plans written by the Plan agent
 │   └── journal/                 # Daily activity journal, one file per day

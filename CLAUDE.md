@@ -100,3 +100,5 @@ Helpful Tips
 When writing something intended for human consumption, (comment, commit message, reply to prompt) use as few words as possible. Get to the point. Less is more.
 
 Let the reader of the code breathe. Add empty lines between logical blocks of code.
+
+When working on a task, exploring local files, or experimenting with a proof-of-concept, lean toward writing Python, Bash, and Node.js scripts in the tmp/ directory to make your work more efficient. These scripts can be throwaway code and will often be more efficient than chaining tool calls.
