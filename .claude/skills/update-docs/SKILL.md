@@ -26,8 +26,8 @@ paths, audit only those, plus any index entries that describe them. If it says
   `devkit/lib/vendor/`) belong to third-party packages.
 - **Skip copied code.** Everything in `test-app/` that git ignores is a copy of
   `lib/`. Fix the original instead.
-- **Do not rewrite history.** Leave `agents/journal/` and `agents/plans/` as
-  they are; plans are only checked for the decisions they record.
+- **Do not rewrite history.** Leave `agents/plans/` as it is; plans are only
+  checked for the decisions they record.
 - **Read-only commands only.** Running `--help` or reading a file is fine.
   Anything that deploys, publishes, or writes to the Publishing or Admin API is
   not.
@@ -115,7 +115,7 @@ Cut:
 
 - Restatements of what the code or another doc already says. Link to it
   instead.
-- History ("previously…", "we changed…"). That belongs in git and the journal.
+- History ("previously…", "we changed…"). That belongs in git.
 - Background and generic advice an agent already follows without being told.
 - Filler, hedging, and repeated examples.
 
@@ -138,10 +138,8 @@ rules, make small edits and say so rather than forcing a rewrite.
 
 ## 5. Finish
 
-1. Add an entry to today's journal in `agents/journal/`, as `CLAUDE.md`
-   requires.
-2. Commit your changes as you work, including any journal entries.
-3. Report to the user, briefly:
+1. Commit your changes as you work.
+2. Report to the user, briefly:
    - Fixes, grouped by file, each with the code evidence behind it.
    - Cuts and other significant rewrites, with word counts before and after.
    - Framework doc edits (`lib/kixx/`) listed separately, since they can

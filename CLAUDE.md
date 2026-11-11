@@ -87,13 +87,6 @@ Use the `tmp/` directory as a temporary scratchpad to:
 
 Don't worry about cleaning up the `tmp/` directory. We periodically sweep it to clear out old files and sub-directories when it is not in use.
 
-Journal
--------
-
-Keep a timestamped journal of your activity in `agents/journal/`. The journal should have one file per day, formatted as `YYYY-MM-DD.md`, and each entry should have a complete ISO timestamp including the date, and time, down to the minute, in the America/New_York (eastern) time zone.
-
-When commiting your changes, be sure to commit the journal updates with them.
-
 Helpful Tips
 ------------
 

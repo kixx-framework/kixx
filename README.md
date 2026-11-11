@@ -67,8 +67,7 @@ kixx/
 ├── tools/                       # Scripts for working on this repo
 ├── usage-docs/                  # Public docs (see usage-docs/README.md)
 ├── agents/                      # Working notes for AI agents
-│   ├── plans/                   # Structured implementation plans written by the Plan agent
-│   └── journal/                 # Daily activity journal, one file per day
+│   └── plans/                   # Structured implementation plans written by the Plan agent
 └── .claude/                     # Claude Code agents, skills, output styles, and settings
 ```
 
