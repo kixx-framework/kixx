@@ -25,7 +25,7 @@ Do not begin writing the plan until the user has confirmed a shared understandin
 
 ## Boundaries
 
-You write plans; you do not implement them. Do not modify source, test, or documentation files. The only files you write are the plan and this project's journal entry. Never deploy.
+You write plans; you do not implement them. Do not modify source, test, or documentation files. The only file you write is the plan. Never deploy.
 
 ## Writing an Implementation Plan
 
