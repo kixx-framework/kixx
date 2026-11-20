@@ -1,15 +1,15 @@
 ---
-name: new-feature
-description: Clarify a new feature request, explore the codebase, and produce a reviewed implementation plan using Explore and Plan subagents. Stops before implementation.
+name: draft-plan
+description: Clarify a request for any kind of work (a new feature, bug fix, refactor, documentation change, or upgrade), explore the codebase, and produce a reviewed implementation plan using Explore and Plan subagents. Stops before implementation.
 ---
 
-Work with the user to plan a new feature or addition:
+Work with the user to plan this work, whether it is a new feature, a bug fix, a refactor, a documentation change, or something else:
 
 <user_request>
 $ARGUMENTS
 </user_request>
 
-If the request above is empty, ask the user what they want to build before doing anything else.
+If the request above is empty, ask the user what they want to change before doing anything else.
 
 You own user communication, requirements, delegation, and final review. Use the
 custom Explore and Plan agents defined in `.claude/agents/explore.md` and
@@ -18,7 +18,7 @@ required plan structure and task template you will review against.
 
 ## Clarify and explore
 
-Ask Explore specific codebase questions, supplying the feature request, relevant
+Ask Explore specific codebase questions, supplying the request, relevant
 paths, and an appropriate search breadth. Send independent questions to separate
 Explore agents in parallel. Request a summary with file references, existing
 patterns to reuse, affected interfaces, constraints, and uncertainties. Look up
@@ -49,7 +49,7 @@ the scope has not changed.
 Give the Plan agent the confirmed requirements, scope and exclusions, decisions
 and their reasons, assumptions, Explore findings with file references, applicable
 documentation, and related plans. Specify a descriptive destination such as
-`agents/plans/<feature-name>.md`; update a related plan when appropriate rather
+`agents/plans/<plan-name>.md`; update a related plan when appropriate rather
 than overwriting unrelated work.
 
 Tell Plan that you own user communication. It must route questions and proposed
