@@ -1,4 +1,4 @@
-Paths are relative to `lib/`.
+Paths are relative to the repository root.
 
 ### Code Style Guide
 
@@ -17,24 +17,6 @@ JSDoc conventions for server-side JavaScript: supported tags, documenting the pu
 docs/server-error-handling.md
 
 Expected operational errors versus programmer bugs and how each entry point applies the rule, turning assumptions into `assert*` checks, and wrapping and rethrowing with `cause`.
-
-### Collections
-
-app/collections/README.md
-
-The data source layer: backing stores, defining Collections and custom helpers, document store writes, reads, deletes, IDs and sort keys, secondary indexes, Records, key/value store Collections, and custom gateways.
-
-### Transaction Scripts
-
-app/transaction-scripts/README.md
-
-Domain logic as one async function per user action: when not to write one, files and signatures, return values, calling Collections and external services, and error handling.
-
-### Presentation Layer Guide
-
-app/presentation/README.md
-
-HTTP and Hyperview integration: route patterns, handler and middleware execution order, response cache policy, reverse routing and target names, request handlers and error handling, `HyperviewPageHandler`, and the `RequestContext`, `ServerRequest`, and `ServerResponse` APIs. Covers HTML and API-only Forms, normalization helpers, CSRF helpers, recipes (page, form workflow, JSON:API endpoint, static assets), page context, emails, and the `/admin` sidebar.
 
 ### Kixx Library References
 
@@ -68,45 +50,15 @@ kixx/static-assets/README.md
 
 ### Configuration
 
-../usage-docs/kixx-app/configuration.md
+usage-docs/kixx-app/configuration.md
 
 Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cloudflare-config.jsonc` versus per-deploy environment variables (dotenv files or Cloudflare bindings) split by secrecy. Covers environment selection, merging dotenv files, the server port, the `example.env.secrets` manifest, `DATA_DIRECTORY` and store paths, `JOB_QUEUE` settings, and Cloudflare bindings, secrets, resources, and packaging.
 
-### Background Jobs
-
-app/jobs/README.md
-
-The durable job queue (port contract in `kixx/jobs/job-queue-interface.js`): registering jobs, handlers, enqueueing now, later, or on a UTC cron schedule, errors and retries, operating the queue (including the admin panel at `/admin/jobs`: inspect, retry, and Run now), and testing.
-
-### Data Migrations
-
-app/migrations/README.md
-
-Statically registered migrations an operator runs in batches from the admin panel (`/admin/migrations`) or through the Admin API: registration, the module contract, expand/contract deployment ordering, and an authoring checklist. Endpoints are documented outside `lib/` in `../usage-docs/kixx-app/admin-api.md`.
-
 ### Administrative Data API
 
-../usage-docs/kixx-app/admin-data-api.md
+usage-docs/kixx-app/admin-data-api.md
 
 Version-checked JSON:API access to registered Collections at `/admin-data-api/v1/`, bypassing application workflows but not Record validation. Covers the exposure model, token grants, media types, discovery, resource documents and versions, writes, pagination, errors, audit logging, and the `File` resource and its limits.
-
-### Administrative Data API Resources
-
-app/admin-data-api/README.md
-
-Registering a Collection as an Administrative Data API resource: the registration shape, rules the registry enforces, and where the contract is tested.
-
-### Plugins and Cross-Platform Architecture
-
-plugins/README.md
-
-Ports-and-adapters architecture: the three plugin roles, adapters that skip the registry, general plugins, the two-phase plugin module contract, where Node.js and Cloudflare differences live, how contracts are written, checklists for adding ports or platforms, and rules for application code.
-
-### Templating Guide
-
-templates/README.md
-
-Kixx Mustache-style templates as rendered by Hyperview: the Hyperview context, expressions and name resolution, sections, falsiness, delimiters, whitespace, built-in helpers, Hyperview helpers (`assetUrl`, `formatDate`, `markup`, `truncate`), HTML escaping, partials, custom helpers, and errors.
 
 ### Frontend Development Guide
 
@@ -114,8 +66,60 @@ docs/frontend-development-guide.md
 
 HTML, CSS, and browser JavaScript conventions: where frontend source lives (`pages/`, `templates/`, `static-assets/`, `public/`) and how `page.json` directives treat files, public pages as the default with `admin.css` layered on `stylesheet.css`, no inline styles, stylesheet organization and formatting, BEM, design tokens, the `light-dark()` scheme and theme toggle, typography, layout primitives, composition, page-local CSS, `data-js-behavior` hooks in `site.js`, and verifying frontend work.
 
+## v6 Reference App
+
+Guides for code that is still in `reference-app/`: v6 starter-app material, not maintained or runnable. Read them when extracting that code.
+
+### Collections
+
+reference-app/app/collections/README.md
+
+The data source layer: backing stores, defining Collections and custom helpers, document store writes, reads, deletes, IDs and sort keys, secondary indexes, Records, key/value store Collections, and custom gateways.
+
+### Transaction Scripts
+
+reference-app/app/transaction-scripts/README.md
+
+Domain logic as one async function per user action: when not to write one, files and signatures, return values, calling Collections and external services, and error handling.
+
+### Presentation Layer Guide
+
+reference-app/app/presentation/README.md
+
+HTTP and Hyperview integration: route patterns, handler and middleware execution order, response cache policy, reverse routing and target names, request handlers and error handling, `HyperviewPageHandler`, and the `RequestContext`, `ServerRequest`, and `ServerResponse` APIs. Covers HTML and API-only Forms, normalization helpers, CSRF helpers, recipes (page, form workflow, JSON:API endpoint, static assets), page context, emails, and the `/admin` sidebar.
+
+### Background Jobs
+
+reference-app/app/jobs/README.md
+
+The durable job queue (port contract in `kixx/jobs/job-queue-interface.js`): registering jobs, handlers, enqueueing now, later, or on a UTC cron schedule, errors and retries, operating the queue (including the admin panel at `/admin/jobs`: inspect, retry, and Run now), and testing.
+
+### Data Migrations
+
+reference-app/app/migrations/README.md
+
+Statically registered migrations an operator runs in batches from the admin panel (`/admin/migrations`) or through the Admin API: registration, the module contract, expand/contract deployment ordering, and an authoring checklist. Endpoints are documented in `usage-docs/kixx-app/admin-api.md`.
+
+### Administrative Data API Resources
+
+reference-app/app/admin-data-api/README.md
+
+Registering a Collection as an Administrative Data API resource: the registration shape, rules the registry enforces, and where the contract is tested.
+
+### Plugins and Cross-Platform Architecture
+
+reference-app/plugins/README.md
+
+Ports-and-adapters architecture: the three plugin roles, adapters that skip the registry, general plugins, the two-phase plugin module contract, where Node.js and Cloudflare differences live, how contracts are written, checklists for adding ports or platforms, and rules for application code.
+
+### Templating Guide
+
+reference-app/templates/README.md
+
+Kixx Mustache-style templates as rendered by Hyperview: the Hyperview context, expressions and name resolution, sections, falsiness, delimiters, whitespace, built-in helpers, Hyperview helpers (`assetUrl`, `formatDate`, `markup`, `truncate`), HTML escaping, partials, custom helpers, and errors.
+
 ### Style Guide (Live Design System)
 
-pages/admin/style-guide/
+reference-app/pages/admin/style-guide/
 
-The live design system, served at `/admin/style-guide` (admin sign-in required); each subdirectory is one page whose content is in `body.html`. Start with `aesthetic/`. Foundation pages (`typography/`, `colors/`, `layout/`) and component pages (`buttons/`, `callouts/`, `cards/`, `forms/`, `text-fields/`, `multi-line-text-areas/`, `copy-fields/`, `table-lists/`) document markup, variants, and usage rules. Read the relevant pages before writing or reviewing markup or CSS, and add a page (plus a link in `templates/partials/admin-nav.html`) when creating a shared component.
+The live design system, served at `/admin/style-guide` (admin sign-in required); each subdirectory is one page whose content is in `body.html`. Start with `aesthetic/`. Foundation pages (`typography/`, `colors/`, `layout/`) and component pages (`buttons/`, `callouts/`, `cards/`, `forms/`, `text-fields/`, `multi-line-text-areas/`, `copy-fields/`, `table-lists/`) document markup, variants, and usage rules. Read the relevant pages before writing or reviewing markup or CSS, and add a page (plus a link in `reference-app/templates/partials/admin-nav.html`) when creating a shared component.

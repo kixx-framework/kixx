@@ -2,34 +2,37 @@
 
 ---
 
-Kixx Library
-------------
+Kixx Core
+---------
 
-Notes for developers and agents working on the Kixx Library (`lib/`, usually just "Kixx").
+Notes for developers and agents working on Kixx core (`kixx/`, usually just "Kixx"). The layout is in README.md.
 
-**Read the docs first.** Before changing code in `lib/`, read `lib/docs/doc-index.md`. It lists every guide and reference with a summary. Read the ones relevant to your task.
+**Read the docs first.** Before changing core, read `docs/doc-index.md`. It lists every guide and reference with a summary. Read the ones relevant to your task.
 
-**Run tests and lint** from the repo root:
+**Run tests and lint** from the repo root, after a one-time `npm install`:
 
 ```
-node lib/run-tests.js                  # full suite on Node.js
-deno run -A lib/run-tests.js           # full suite on Deno
-node lib/run-tests.js lib/test/kixx    # a subtree (must be inside lib/test/)
-node lib/run-linter.js lib             # lint
+node run-tests.js                  # full suite on Node.js
+deno run -A run-tests.js           # full suite on Deno
+node run-tests.js test/kixx/logger # a subtree (must be inside test/)
+node run-linter.js                 # lint everything the root config covers
+node run-linter.js kixx test       # lint a subset (pass only paths that exist)
 ```
 
 **Keep the layers apart.**
 
-- `kixx/` is framework code. `app/`, `pages/`, `templates/`, and the other site folders are the starter app.
-- Platform differences live only in `plugins/` and the entry points (`node-server.js`, `cloudflare-server.js`). Code under `app/` never imports from `plugins/` or a native module (`node:*`, `cloudflare:*`). See `lib/plugins/README.md`.
-- Every change must work on Node.js and Cloudflare.
+- Core under `kixx/` never imports outside `kixx/`.
+- Platform modules (`node:*`, `cloudflare:*`) appear only in `kixx/adapters/`. `test/kixx/import-hygiene.test.js` enforces both rules. The v6 ports-and-adapters guide is `reference-app/plugins/README.md` until S07 replaces it.
+- Every change must work on Node.js, Deno, and Cloudflare.
 - `kixx/vendor/` is third-party code. Leave it alone.
 
-**Update the code that depends on `lib/`.**
+**v6 material.**
 
-- The devkit ports some `lib/` modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. When you change one, change its devkit copy in the same commit (see `devkit/docs/architecture.md`), then run `node devkit/run-tests.js devkit/test/conformance`. Those tests also bundle and scan `lib/` and read its config and env files, so run them after changing entry points, config, or `lib/example.env*` too.
+- `reference-app/` and `test-v6/` aren't maintained and may be broken. Don't run, lint, or fix them.
+- When you change, move, or keep a module, bring its tests back from `test-v6/` with `git mv` (never copy), fix their imports, and make them pass. Tests must not read files by cwd-relative path or from `reference-app/`.
+- The v6 devkit ports four core modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. Its conformance tests wait in `test-v6/devkit/conformance/` and don't run. Keeping the ports in step isn't required until the devkit sections decide their fate.
+- `test-v6/test-app/` and `tools/build-test-app.js` are v6 and knowingly broken.
 - When public behavior changes, update `usage-docs/kixx-app/`.
-- `test-app/` is a copy of `lib/` built by `node tools/build-test-app.js`. Don't edit its copied code.
 
 Kixx Devkit
 -----------
@@ -48,9 +51,11 @@ node devkit/run-linter.js devkit             # lint
 node devkit/kixx.js <command> <subcommand>   # run the CLI from source
 ```
 
+`node devkit/run-tests.js` exits 1 with `No test files found` until the devkit tests come back from `test-v6/devkit/`.
+
 **Keep it stand-alone.** The devkit ships to npm and JSR on its own.
 
-- Never import from outside `devkit/`. Only `devkit/test/conformance/` may read `lib/`.
+- Never import from outside `devkit/`. Only `devkit/test/conformance/` may read core (`kixx/`).
 - No runtime dependencies. Use `node:` built-ins, or vendor the code into `devkit/lib/vendor/` (and leave vendored code alone).
 - It must run on Node.js and Deno.
 - Keep `package.json` and `deno.json` in sync, including the version. See `devkit/docs/packaging-and-runtimes.md`.
@@ -59,7 +64,7 @@ node devkit/kixx.js <command> <subcommand>   # run the CLI from source
 
 **Update what depends on the devkit.**
 
-- Ported `lib/` modules must match the originals. Change both sides together and run `node devkit/run-tests.js devkit/test/conformance`.
+- Ported core modules: see "v6 material" above.
 - When a command's behavior or options change, update its page in `usage-docs/kixx-devkit/` and the command list in `devkit/README.md`.
 - A change needing a new Deno permission must update the install commands in `devkit/README.md` and the `kixx` task in `devkit/deno.json`.
 

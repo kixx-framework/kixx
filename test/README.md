@@ -1,17 +1,32 @@
 # Unit Testing Guide
 
-This project uses two ES module libraries installed in `node_modules/` and imported by bare module name:
+This project uses two ES module libraries installed in the repository root's `node_modules/` and imported by bare module name:
 
 - `kixx-test` provides the test runner API: `describe`, `it`, `before`, `after`, `xit`, `xdescribe`, and `MockTracker`.
 - `kixx-assert` provides assertion helpers. Assertions throw `AssertionError` on failure.
 
 The project test runner imports test files first, which register top-level `describe` blocks, then executes the registered tests.
 
+## Running Tests
+
+Install the dev dependencies once with `npm install` at the repository root. Then, from the repository root:
+
+```
+node run-tests.js                    # full suite on Node.js
+deno run -A run-tests.js             # full suite on Deno
+node run-tests.js test/kixx/logger   # a subtree or file
+node run-tests.js --skip test/kixx   # skip a subtree
+```
+
+Pathnames resolve from your working directory and must be inside `test/`. The runner then changes directory to the repository root before importing tests, and exits 1 when the selection holds no test files.
+
 ## File Conventions
 
-- Put unit tests under `test/`. Fixtures live in `test/fixtures/`. End-to-end tests live in `test-app/test/` at the repo root, with their own runner (see `test-app/test/README.md`).
-- Name test files with the project convention `*.test.js`, for example `test/kixx/logger/logger.test.js`.
-- Mirror the source tree where practical: `kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`.
+- Put unit tests under `test/`, mirroring the source tree: `kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`, adapters by `test/kixx/adapters/<platform>/<name>/…`, and plugins (once they exist) by `test/plugins/<name>/…`.
+- Name test files with the project convention `*.test.js`.
+- There is no `test/fixtures/` yet. Build fixtures in a temporary directory (`fsp.mkdtemp`), or resolve them from `import.meta.url`. Never read files through the working directory or from `reference-app/`.
+- `test-v6/` holds v6 tests that are not run. When you change, move, or keep a module, bring its tests back from `test-v6/` with `git mv` (never copy), fix their imports, and make them pass.
+- The v6 end-to-end suite is parked in `test-v6/test-app/` and is not run; a later section rebuilds `test-app/`.
 - Use one top-level `describe` per test file, named after the module, class, or behavior under test.
 
 ## Imports

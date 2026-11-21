@@ -1,5 +1,7 @@
 # Unit Testing Guide
 
+> **Status:** The devkit's v6 tests are parked in `test-v6/devkit/` and nothing here runs until a devkit section brings them back. Until then `node devkit/run-tests.js` exits 1 with `No test files found`.
+
 This project uses two ES module libraries:
 
 - `kixx-test` provides the test runner API: `describe`, `it`, `before`, `after`, `xit`, `xdescribe`, and `MockTracker`. It is installed in `node_modules/` and imported by bare module name.
@@ -273,7 +275,7 @@ files, so a helper module is never collected as a suite.
   `create-worker-version`; any endpoint outside its allowed set throws, and
   `forbiddenCalls()` reports it.
 
-Fixtures: `lib-cloudflare-config.jsonc` (a copy of repo `lib/`'s config) and
+Fixtures: `lib-cloudflare-config.jsonc` (a copy of the v6 `lib/` config) and
 `worker-project/` (a minimal project; copy it to a temp directory before
 writing into it).
 

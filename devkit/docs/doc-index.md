@@ -40,7 +40,7 @@ Publishing to npm and JSR from one tree: the stand-alone and no-dependency rules
 
 test/README.md
 
-Running the suite on Node.js and Deno, file conventions, `kixx-test` and `kixx-assert` imports and structure, setup patterns, conformance tests against repo `lib/`, hook semantics, timeouts, skipping, assertions, `MockTracker`, the `test/helpers/` stand-ins and fixtures, error and rejection tests, and writing good tests.
+Running the suite on Node.js and Deno, file conventions, `kixx-test` and `kixx-assert` imports and structure, setup patterns, conformance tests (parked in `test-v6/devkit/conformance/` and not run, R16), hook semantics, timeouts, skipping, assertions, `MockTracker`, the `test/helpers/` stand-ins and fixtures, error and rejection tests, and writing good tests.
 
 ### Devkit Usage Docs
 
