@@ -2,18 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { OperationalError } from '../../../kixx/errors/mod.js';
+import { OperationalError } from '../../../../errors/mod.js';
 import {
     AssertionError,
     isUndefined,
     isBoolean,
     assert,
     assertNonEmptyString,
-} from '../../../kixx/assertions/mod.js';
-import TraceLogger from '../../../kixx/logger/trace-logger.js';
+} from '../../../../assertions/mod.js';
+import TraceLogger from '../../../../logger/trace-logger.js';
 
 /**
- * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
+ * @typedef {import('../../../../context/request-context.js').default} RequestContext
  */
 
 // deno-lint-ignore no-control-regex
@@ -76,7 +76,7 @@ const textDecoder = new TextDecoder();
  * Expired entries are filtered out lazily on every read; dead rows are reclaimed
  * by an opportunistic sweep sampled on a fraction of writes rather than a timer.
  *
- * @implements {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueStoreInterface}
+ * @implements {import('../../../../key-value-store/key-value-store-interface.js').KeyValueStoreInterface}
  * @see KeyValueStore in ../../cloudflare-key-value-store/lib/key-value-store.js for the Cloudflare KV implementation
  */
 export default class KeyValueStore {
@@ -92,7 +92,7 @@ export default class KeyValueStore {
 
     /**
      * @param {Object} options - Store configuration
-     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create a KeyValueStore child logger
+     * @param {import('../../../../logger/logger.js').default} options.logger - Root logger used to create a KeyValueStore child logger
      * @param {string} [options.path] - File system path or `':memory:'`. Required when no `database` is supplied.
      * @param {Object} [options.sqliteOptions] - Options forwarded to the `DatabaseSync` constructor when opening `path`
      * @param {import('node:sqlite').DatabaseSync} [options.database] - Pre-opened SQLite connection to use instead of opening `path`
@@ -131,8 +131,8 @@ export default class KeyValueStore {
      *
      * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} key - Cache key
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
-     * @returns {Promise<string|import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|null>} The decoded value, or null when absent or expired
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
+     * @returns {Promise<string|import('../../../../key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|null>} The decoded value, or null when absent or expired
      * @throws {AssertionError} When the key, `options.type`, or `options.cacheTtl` is invalid
      */
     async get(context, key, options) {
@@ -170,8 +170,8 @@ export default class KeyValueStore {
      *
      * @param {RequestContext} _context - Request context accepted for store interface compatibility
      * @param {string} key - Cache key
-     * @param {string|import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|ArrayBufferView} value - Value to store; must match the declared type and be non-null
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
+     * @param {string|import('../../../../key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|ArrayBufferView} value - Value to store; must match the declared type and be non-null
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
      * @returns {Promise<void>}
      * @throws {AssertionError} When the key, value, type, or expiry options are invalid
      */
@@ -270,7 +270,7 @@ export default class KeyValueStore {
 
     /**
      * Resolves and validates the declared value encoding, defaulting to `'text'`.
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read or write options
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read or write options
      * @returns {string} One of `'text'`, `'json'`, or `'arrayBuffer'`
      * @throws {AssertionError} When `options.type` is not a supported value
      */
@@ -291,7 +291,7 @@ export default class KeyValueStore {
      * of the serialized JSON for `'json'`, or a byte copy of the binary input for
      * `'arrayBuffer'`.
      * @param {string} type - Declared encoding
-     * @param {string|import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|ArrayBufferView} value - Value to encode
+     * @param {string|import('../../../../key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer|ArrayBufferView} value - Value to encode
      * @returns {Uint8Array} Bytes to bind to the BLOB column
      * @throws {AssertionError} When the value does not match the declared type
      */
@@ -335,7 +335,7 @@ export default class KeyValueStore {
      * `ArrayBuffer` for `'arrayBuffer'`.
      * @param {string} type - Declared encoding
      * @param {Uint8Array} bytes - Stored bytes from the BLOB column
-     * @returns {string|import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer} The decoded value
+     * @returns {string|import('../../../../key-value-store/key-value-store-interface.js').KeyValueJSONValue|ArrayBuffer} The decoded value
      */
     #decodeValue(type, bytes) {
         if (type === 'text') {
@@ -352,7 +352,7 @@ export default class KeyValueStore {
      * Validates the optional edge-cache hint. This adapter has no cache to apply
      * it to, but still enforces Cloudflare KV's 60-second floor so a `get()`
      * proven on Node throws the same way it would on Workers.
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
      * @throws {AssertionError} When `options.cacheTtl` is not a valid TTL
      */
     #assertValidCacheTtl(options) {
@@ -373,7 +373,7 @@ export default class KeyValueStore {
      * `expires_at` Unix-seconds value, or null when no expiry was supplied. Enforces
      * the contract's 60-second minimum rather than clamping, matching the Cloudflare
      * adapter even though SQLite would accept a shorter expiry.
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
      * @returns {number|null} Absolute expiry in Unix seconds, or null for no expiry
      * @throws {AssertionError} When both expiry options are present or an expiry is invalid
      */

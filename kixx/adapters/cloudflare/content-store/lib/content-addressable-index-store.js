@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { assert, assertNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
+import { assert, assertNonEmptyString, isPlainObject } from '../../../../assertions/mod.js';
 import assignBuild from './assign-build.js';
 import initializeSchema from './initialize-schema.js';
 import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
@@ -237,7 +237,7 @@ export default class ContentAddressableIndexStore extends DurableObject {
      * call cannot interleave the read-compare-write sequence.
      * @param {string} buildId - Build identifier to assign
      * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
-     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult & {success: true}>}
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult & {success: true}>}
      */
     async assignBuild(buildId, assignment) {
         return { success: true, ...assignBuild(this.#sql, buildId, assignment) };

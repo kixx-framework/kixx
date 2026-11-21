@@ -5,7 +5,7 @@
 // plugin exists only to register the framework service and bind it to whichever
 // adapter the running platform's plugin registered under 'ContentStore'.
 
-import ContentAddressableStore from '../../kixx/content-addressable-store/content-addressable-store.js';
+import ContentAddressableStore from '../../../content-addressable-store/content-addressable-store.js';
 
 
 export function register(context) {

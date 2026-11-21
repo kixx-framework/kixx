@@ -1,6 +1,6 @@
-import { assert } from '../../../kixx/assertions/mod.js';
-import { canonicalize, hashString } from '../../../kixx/content-addressable-store/addressing.js';
-import ContentAddressableIndex from '../../../kixx/content-addressable-store/content-addressable-index.js';
+import { assert } from '../../../../assertions/mod.js';
+import { canonicalize, hashString } from '../../../../content-addressable-store/addressing.js';
+import ContentAddressableIndex from '../../../../content-addressable-store/content-addressable-index.js';
 
 
 /**

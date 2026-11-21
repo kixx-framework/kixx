@@ -1,4 +1,4 @@
-import { assert } from '../../../kixx/assertions/mod.js';
+import { assert } from '../../../../assertions/mod.js';
 
 const SCHEMA_VERSION = 3;
 

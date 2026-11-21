@@ -1,4 +1,4 @@
-import { assert } from '../../../kixx/assertions/mod.js';
+import { assert } from '../../../../assertions/mod.js';
 import { getDeveloperBlob } from './developer-blobs.js';
 
 

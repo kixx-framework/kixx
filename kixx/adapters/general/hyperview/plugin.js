@@ -1,6 +1,6 @@
 // General plugin: pure framework logic with no platform variant of its own.
 
-import HyperviewService from '../../kixx/hyperview/hyperview-service.js';
+import HyperviewService from '../../../hyperview/hyperview-service.js';
 
 
 const DEFAULTS = {

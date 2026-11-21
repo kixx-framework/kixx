@@ -12,11 +12,11 @@ import {
     isBoolean,
     isPlainObject,
     isString,
-} from '../../../kixx/assertions/mod.js';
-import { OperationalError } from '../../../kixx/errors/mod.js';
-import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
-import { isValidAssignmentId } from '../../../kixx/content-addressable-store/build-assignment.js';
-import TraceLogger from '../../../kixx/logger/trace-logger.js';
+} from '../../../../assertions/mod.js';
+import { OperationalError } from '../../../../errors/mod.js';
+import { BUILD_ASSIGNMENT_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
+import { isValidAssignmentId } from '../../../../content-addressable-store/build-assignment.js';
+import TraceLogger from '../../../../logger/trace-logger.js';
 
 const BUSY_TIMEOUT_MS = 5000;
 const SCHEMA_VERSION = 3;
@@ -40,7 +40,7 @@ const textDecoder = new TextDecoder();
  * local storage that supports both operations. Network filesystems are not
  * supported. The process umask controls filesystem permissions.
  *
- * @implements {import('../../../kixx/content-addressable-store/content-store-interface.js').ContentStoreInterface}
+ * @implements {import('../../../../content-addressable-store/content-store-interface.js').ContentStoreInterface}
  * @see ContentStore in ../../cloudflare-content-store/lib/content-store.js for the Cloudflare implementation
  */
 export default class ContentStore {
@@ -58,7 +58,7 @@ export default class ContentStore {
 
     /**
      * @param {Object} options - Store configuration
-     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create an adapter child logger
+     * @param {import('../../../../logger/logger.js').default} options.logger - Root logger used to create an adapter child logger
      * @param {string} options.rootDirectory - Resolved directory containing all content-store formats
      * @param {number} options.format - Positive integer content-addressing format
      * @param {Object} [options.sqliteOptions] - Options forwarded when opening SQLite
@@ -408,7 +408,7 @@ export default class ContentStore {
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string} buildId - Build identifier
      * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
-     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
      */
     async assignBuild(context, buildId, assignment) {
         this.#assertOpen();

@@ -1,8 +1,8 @@
 import fsp from 'node:fs/promises';
 
-import { assert, assertNonEmptyString } from '../../../kixx/assertions/mod.js';
-import { OperationalError } from '../../../kixx/errors/mod.js';
-import { canonicalize } from '../../../kixx/content-addressable-store/addressing.js';
+import { assert, assertNonEmptyString } from '../../../../assertions/mod.js';
+import { OperationalError } from '../../../../errors/mod.js';
+import { canonicalize } from '../../../../content-addressable-store/addressing.js';
 
 
 /**

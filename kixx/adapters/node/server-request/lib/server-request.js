@@ -1,9 +1,9 @@
 import {
     isNonEmptyString,
     isString,
-} from '../../../kixx/assertions/mod.js';
-import { BadRequestError } from '../../../kixx/errors/mod.js';
-import BaseServerRequest from '../../../kixx/http-router/base-server-request.js';
+} from '../../../../assertions/mod.js';
+import { BadRequestError } from '../../../../errors/mod.js';
+import BaseServerRequest from '../../../../http-router/base-server-request.js';
 
 let serverRequestSequence = 0;
 
@@ -28,7 +28,7 @@ let serverRequestSequence = 0;
  * starts reading it, which resets the client connection. The entry point must
  * call `discardUnreadBody()` when the response finishes.
  *
- * @implements {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface}
+ * @implements {import('../../../../http-router/server-request-interface.js').ServerRequestInterface}
  * @extends BaseServerRequest
  */
 export default class ServerRequest extends BaseServerRequest {

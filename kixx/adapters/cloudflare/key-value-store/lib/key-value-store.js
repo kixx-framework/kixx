@@ -3,11 +3,11 @@ import {
     isUndefined,
     assert,
     assertNonEmptyString,
-} from '../../../kixx/assertions/mod.js';
-import TraceLogger from '../../../kixx/logger/trace-logger.js';
+} from '../../../../assertions/mod.js';
+import TraceLogger from '../../../../logger/trace-logger.js';
 
 /**
- * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
+ * @typedef {import('../../../../context/request-context.js').default} RequestContext
  */
 
 // deno-lint-ignore no-control-regex
@@ -42,7 +42,7 @@ const DEFAULT_BINDING_NAME = 'KEY_VALUE_STORE';
  * from this platform and made portable, so other adapters reject the same
  * values with the same messages.
  *
- * @implements {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueStoreInterface}
+ * @implements {import('../../../../key-value-store/key-value-store-interface.js').KeyValueStoreInterface}
  */
 export default class KeyValueStore {
 
@@ -51,7 +51,7 @@ export default class KeyValueStore {
      *
      * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string} key - Cache key
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
      * @returns {Promise<string|Object|ArrayBuffer|null>} The decoded value, or null when absent or expired
      * @throws {AssertionError} When the key, `options.type`, or `options.cacheTtl` is invalid
      */
@@ -81,7 +81,7 @@ export default class KeyValueStore {
      * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string} key - Cache key
      * @param {string|Object|ArrayBuffer|ArrayBufferView} value - Value to store; must match the declared type and be non-null
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
      * @returns {Promise<void>}
      * @throws {AssertionError} When the key, value, type, or expiry options are invalid
      */
@@ -158,7 +158,7 @@ export default class KeyValueStore {
 
     /**
      * Resolves and validates the declared value encoding, defaulting to `'text'`.
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read or write options
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read or write options
      * @returns {string} One of `'text'`, `'json'`, or `'arrayBuffer'`
      * @throws {AssertionError} When `options.type` is not a supported value
      */
@@ -206,7 +206,7 @@ export default class KeyValueStore {
      * Validates the optional edge-cache hint and maps it to KV's `get()` options
      * (`cacheTtl`). Enforces the contract's 60-second minimum rather than clamping,
      * matching Cloudflare KV's own floor.
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValueGetOptions} [options] - Read options
      * @returns {Object} KV get options, possibly empty when no cacheTtl was supplied
      * @throws {AssertionError} When `options.cacheTtl` is not a valid TTL
      */
@@ -228,7 +228,7 @@ export default class KeyValueStore {
      * Validates the mutually-exclusive expiry options and maps them to KV's put
      * options (`expirationTtl` for a relative TTL, `expiration` for an absolute
      * one). Enforces the contract's 60-second minimum rather than clamping.
-     * @param {import('../../../kixx/key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
+     * @param {import('../../../../key-value-store/key-value-store-interface.js').KeyValuePutOptions} [options] - Write options
      * @returns {Object} KV put options, possibly empty when no expiry was supplied
      * @throws {AssertionError} When both expiry options are present or an expiry is invalid
      */

@@ -1,4 +1,4 @@
-import { assert, assertArray, assertNonEmptyString, isNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
+import { assert, assertArray, assertNonEmptyString, isNonEmptyString, isPlainObject } from '../../../../assertions/mod.js';
 
 /**
  * @module index-entry-codec

@@ -1,22 +1,22 @@
-import { isValidAssignmentId } from '../../../kixx/content-addressable-store/build-assignment.js';
+import { isValidAssignmentId } from '../../../../content-addressable-store/build-assignment.js';
 import {
     AssertionError,
     OperationalError,
     ServiceUnavailableError,
-} from '../../../kixx/errors/mod.js';
+} from '../../../../errors/mod.js';
 import {
     assert,
     assertArray,
     assertNonEmptyString,
     isString,
     isPlainObject,
-} from '../../../kixx/assertions/mod.js';
-import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
-import TraceLogger from '../../../kixx/logger/trace-logger.js';
+} from '../../../../assertions/mod.js';
+import { BUILD_ASSIGNMENT_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
+import TraceLogger from '../../../../logger/trace-logger.js';
 
 
 /**
- * @typedef {import('../../../kixx/context/request-context.js').default} RequestContext
+ * @typedef {import('../../../../context/request-context.js').default} RequestContext
  */
 
 
@@ -81,7 +81,7 @@ const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
  *
  * Blob and index keys include the configured wire format, isolating data
  * written by format. Build reads use a bounded isolate-local promise cache.
- * @implements {import('../../../kixx/content-addressable-store/content-store-interface.js').ContentStoreInterface}
+ * @implements {import('../../../../content-addressable-store/content-store-interface.js').ContentStoreInterface}
  */
 export default class ContentStore {
 
@@ -97,7 +97,7 @@ export default class ContentStore {
 
     /**
      * @param {Object} options - Store configuration
-     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create the adapter's child logger
+     * @param {import('../../../../logger/logger.js').default} options.logger - Root logger used to create the adapter's child logger
      * @param {string} options.kvBindingName - Name of the KV binding on each request context's environment
      * @param {string} options.durableObjectBindingName - Name of the Durable Object namespace binding on each request context's environment
      * @param {string|number} options.wireFormat - Format identifier appended to persisted blob and index keys
@@ -568,7 +568,7 @@ export default class ContentStore {
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to assign
      * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
-     * @returns {Promise<import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
      */

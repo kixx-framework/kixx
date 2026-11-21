@@ -6,7 +6,7 @@
 import {
     createJSONLogEntry,
     stringifyJSONLogEntry,
-} from '../../../kixx/logger/json-log-entry-serializer.js';
+} from '../../../../logger/json-log-entry-serializer.js';
 
 /**
  * Cloudflare-specific implementation of the Logger writer interface. Serializes
@@ -14,7 +14,7 @@ import {
  * the matching severity method. Cloudflare captures these console calls and
  * makes them available in Workers Logs and Tail Workers.
  *
- * @implements {import('../../../kixx/logger/logger-writer-interface.js').LoggerWriterInterface}
+ * @implements {import('../../../../logger/logger-writer-interface.js').LoggerWriterInterface}
  */
 export default class LoggerWriter {
 

@@ -1,11 +1,11 @@
 // This coordinated import avoids duplicating the content-addressing format
 // constant in the Node adapter package.
-import { FORMAT } from '../../kixx/content-addressable-store/addressing.js';
+import { FORMAT } from '../../../content-addressable-store/addressing.js';
 import {
     assert,
     assertFunction,
     assertNonEmptyString,
-} from '../../kixx/assertions/mod.js';
+} from '../../../assertions/mod.js';
 import ContentStore from './lib/content-store.js';
 import DeveloperContentStore from './lib/developer-content-store.js';
 

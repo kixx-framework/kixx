@@ -4,7 +4,7 @@ import {
     assertArray,
     assertNonEmptyString,
     isPlainObject,
-} from '../../../kixx/assertions/mod.js';
+} from '../../../../assertions/mod.js';
 
 import DeveloperSourceScanner from './developer-source-scanner.js';
 import { buildDeveloperIndex } from './developer-index.js';
@@ -24,7 +24,7 @@ const BULK_FILE_LIMIT = 100;
  * An invalid page does not fail the scan. Reads of that page reject with an
  * `InvalidDeveloperPage` OperationalError while the rest of the site serves.
  *
- * @implements {import('../../../kixx/content-addressable-store/content-store-interface.js').ContentStoreInterface}
+ * @implements {import('../../../../content-addressable-store/content-store-interface.js').ContentStoreInterface}
  */
 export default class DeveloperContentStore {
 
@@ -36,7 +36,7 @@ export default class DeveloperContentStore {
 
     /**
      * @param {Object} options - Store configuration
-     * @param {import('../../../kixx/logger/logger.js').default} options.logger - Root logger used to create an adapter child logger
+     * @param {import('../../../../logger/logger.js').default} options.logger - Root logger used to create an adapter child logger
      * @param {string} options.pagesDirectory - Root of page sources
      * @param {string} options.templatesDirectory - Root of template sources
      * @param {string} options.staticAssetsDirectory - Root of static assets

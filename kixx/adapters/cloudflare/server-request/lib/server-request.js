@@ -1,4 +1,4 @@
-import BaseServerRequest from '../../../kixx/http-router/base-server-request.js';
+import BaseServerRequest from '../../../../http-router/base-server-request.js';
 
 let serverRequestSequence = 0;
 
@@ -15,7 +15,7 @@ let serverRequestSequence = 0;
  * - `ip` comes from `CF-Connecting-IP`, or the Enterprise-only
  *   `True-Client-IP`. `X-Forwarded-For` is deliberately ignored.
  *
- * @implements {import('../../../kixx/http-router/server-request-interface.js').ServerRequestInterface}
+ * @implements {import('../../../../http-router/server-request-interface.js').ServerRequestInterface}
  * @extends BaseServerRequest
  */
 export default class ServerRequest extends BaseServerRequest {

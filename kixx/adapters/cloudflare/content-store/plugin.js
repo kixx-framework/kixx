@@ -2,7 +2,7 @@
 // for logic, but there are cases like this, when we should make an
 // exception. The alternative is maintaining a wire-format constant
 // here, which would run the risk of critical drift.
-import { FORMAT } from '../../kixx/content-addressable-store/addressing.js';
+import { FORMAT } from '../../../content-addressable-store/addressing.js';
 import ContentStore from './lib/content-store.js';
 // Export the Durable Object class for the Cloudflare runtime binding.
 export { default as ContentAddressableIndexStore } from './lib/content-addressable-index-store.js';

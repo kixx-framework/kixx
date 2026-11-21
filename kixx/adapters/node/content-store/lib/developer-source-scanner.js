@@ -6,9 +6,9 @@ import {
     assertNonEmptyString,
     isPlainObject,
     isString,
-} from '../../../kixx/assertions/mod.js';
-import { OperationalError, ValidationError } from '../../../kixx/errors/mod.js';
-import { compareStrings } from '../../../kixx/content-addressable-store/addressing.js';
+} from '../../../../assertions/mod.js';
+import { OperationalError, ValidationError } from '../../../../errors/mod.js';
+import { compareStrings } from '../../../../content-addressable-store/addressing.js';
 import {
     RESERVED_PAGE_FILENAMES,
     getBaseTemplatesPath,
@@ -20,7 +20,7 @@ import {
     getPageTemplatePath,
     getStaticAssetPath,
     isValidPathname,
-} from '../../../kixx/content-addressable-store/content-layout.js';
+} from '../../../../content-addressable-store/content-layout.js';
 
 function makeFileIdentity(filepath, stats) {
     return { filepath, mtimeMs: stats.mtimeMs, size: stats.size };

@@ -1,6 +1,6 @@
-import { isValidAssignmentId } from '../../../kixx/content-addressable-store/build-assignment.js';
-import { assert, assertNonEmptyString, isPlainObject } from '../../../kixx/assertions/mod.js';
-import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-store/content-store-interface.js';
+import { isValidAssignmentId } from '../../../../content-addressable-store/build-assignment.js';
+import { assert, assertNonEmptyString, isPlainObject } from '../../../../assertions/mod.js';
+import { BUILD_ASSIGNMENT_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
 
 /**
  * Runs the synchronous Durable Object SQL assignment operation.
@@ -10,7 +10,7 @@ import { BUILD_ASSIGNMENT_OUTCOME } from '../../../kixx/content-addressable-stor
  * @param {{exec: Function}} sql - Durable Object SQLite handle
  * @param {string} buildId - Build identifier to assign
  * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
- * @returns {import('../../../kixx/content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult} Captured assignment result
+ * @returns {import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult} Captured assignment result
  */
 export default function assignBuild(sql, buildId, assignment) {
     assertNonEmptyString(buildId, 'assignBuild: buildId');

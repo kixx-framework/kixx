@@ -2,7 +2,7 @@ import KeyValueStore from './lib/key-value-store.js';
 import {
     assertFunction,
     assertNonEmptyString,
-} from '../../kixx/assertions/mod.js';
+} from '../../../assertions/mod.js';
 
 export function register(context) {
     const { config, logger } = context;
