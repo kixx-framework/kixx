@@ -63,6 +63,13 @@ async function main() {
     testFiles.sort(compareFilepaths);
     testFiles = dropDuplicateFilepaths(testFiles);
 
+    // An empty selection must fail, so CI never reports a missing suite as a
+    // passing one.
+    if (testFiles.length === 0) {
+        const searched = testPaths.length > 0 ? testPaths.join(', ') : TEST_ROOT;
+        throw new CommandLineError(`No test files found under ${ searched }`, false);
+    }
+
     for (const file of testFiles) {
         // eslint-disable-next-line no-await-in-loop
         await import(pathToFileURL(file.filepath));
