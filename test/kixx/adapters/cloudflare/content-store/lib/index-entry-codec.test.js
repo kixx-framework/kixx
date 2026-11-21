@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import { decodeStorageRow, encodeStorageRow } from '../../../../plugins/cloudflare-content-store/lib/index-entry-codec.js';
-import ContentAddressableIndex from '../../../../kixx/content-addressable-store/content-addressable-index.js';
+import { decodeStorageRow, encodeStorageRow } from '../../../../../../kixx/adapters/cloudflare/content-store/lib/index-entry-codec.js';
+import ContentAddressableIndex from '../../../../../../kixx/content-addressable-store/content-addressable-index.js';
 
 
 function catchError(fn) {

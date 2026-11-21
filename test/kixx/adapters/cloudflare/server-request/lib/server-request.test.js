@@ -4,8 +4,8 @@ import {
     assertEqual,
 } from 'kixx-assert';
 
-import ServerRequest from '../../../../plugins/cloudflare-server-request/lib/server-request.js';
-import serverRequestConformance from '../../../kixx/http-router/server-request-conformance.js';
+import ServerRequest from '../../../../../../kixx/adapters/cloudflare/server-request/lib/server-request.js';
+import serverRequestConformance from '../../../../http-router/server-request-conformance.js';
 
 
 const ORIGIN = 'https://www.example.com';

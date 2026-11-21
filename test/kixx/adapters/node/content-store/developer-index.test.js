@@ -1,8 +1,8 @@
 import { describe } from 'kixx-test';
 import { assertEqual, assertNotEqual } from 'kixx-assert';
 
-import ContentAddressableIndex from '../../../kixx/content-addressable-store/content-addressable-index.js';
-import { buildDeveloperIndex } from '../../../plugins/node-content-store/lib/developer-index.js';
+import ContentAddressableIndex from '../../../../../kixx/content-addressable-store/content-addressable-index.js';
+import { buildDeveloperIndex } from '../../../../../kixx/adapters/node/content-store/lib/developer-index.js';
 
 
 function makeIdentity(filepath, mtimeMs, size) {

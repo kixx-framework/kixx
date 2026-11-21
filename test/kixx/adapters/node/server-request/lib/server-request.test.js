@@ -11,8 +11,8 @@ import {
     assertMatches,
 } from 'kixx-assert';
 
-import ServerRequest from '../../../../plugins/node-server-request/lib/server-request.js';
-import serverRequestConformance from '../../../kixx/http-router/server-request-conformance.js';
+import ServerRequest from '../../../../../../kixx/adapters/node/server-request/lib/server-request.js';
+import serverRequestConformance from '../../../../http-router/server-request-conformance.js';
 
 
 // Build a stand-in for http.IncomingMessage: a Readable stream carrying the body

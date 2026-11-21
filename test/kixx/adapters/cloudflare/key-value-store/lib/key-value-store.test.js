@@ -1,8 +1,8 @@
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import KeyValueStore from '../../../../plugins/cloudflare-key-value-store/lib/key-value-store.js';
-import Logger from '../../../../kixx/logger/logger.js';
+import KeyValueStore from '../../../../../../kixx/adapters/cloudflare/key-value-store/lib/key-value-store.js';
+import Logger from '../../../../../../kixx/logger/logger.js';
 
 
 function makeLogger() {

@@ -7,9 +7,9 @@ import path from 'node:path';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import ContentStore from '../../../../plugins/node-content-store/lib/content-store.js';
-import Logger from '../../../../kixx/logger/logger.js';
-import contentStoreConformance from '../../../kixx/content-addressable-store/content-store-conformance.js';
+import ContentStore from '../../../../../../kixx/adapters/node/content-store/lib/content-store.js';
+import Logger from '../../../../../../kixx/logger/logger.js';
+import contentStoreConformance from '../../../../content-addressable-store/content-store-conformance.js';
 
 
 const temporaryDirectories = [];

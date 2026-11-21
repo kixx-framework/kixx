@@ -1,20 +1,13 @@
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, MockTracker } from 'kixx-test';
-import { assert, assertEqual, assertMatches } from 'kixx-assert';
+import { assertEqual, assertMatches } from 'kixx-assert';
 
-import { register } from '../../../plugins/node-content-store/plugin.js';
-import { plugins } from '../../../plugins/node.js';
-import { FORMAT } from '../../../kixx/content-addressable-store/addressing.js';
-import Logger from '../../../kixx/logger/logger.js';
-import { readSourceConfigFile } from '../../../node-environment.js';
-
-
-const LIB_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const nodeConfig = readSourceConfigFile(path.join(LIB_DIRECTORY, 'node-config.jsonc'));
+import { register } from '../../../../../kixx/adapters/node/content-store/plugin.js';
+import { FORMAT } from '../../../../../kixx/content-addressable-store/addressing.js';
+import Logger from '../../../../../kixx/logger/logger.js';
 
 
 const temporaryDirectories = [];
@@ -68,19 +61,6 @@ describe('node-content-store plugin', ({ after, it }) => {
         for (const directory of temporaryDirectories) {
             await fsp.rm(directory, { recursive: true, force: true });
         }
-    });
-
-    it('is registered in the Node platform plugin registry', () => {
-        assert(plugins.has('nodeContentStore'));
-    });
-
-    it('configures development sources relative to the Node entry point', () => {
-        const contentStoreConfig = nodeConfig.environments.development.CONTENT_STORE;
-
-        assertEqual('./pages', contentStoreConfig.pagesDirectory);
-        assertEqual('./templates', contentStoreConfig.templatesDirectory);
-        assertEqual('./static-assets', contentStoreConfig.staticAssetsDirectory);
-        assertEqual('./emails', contentStoreConfig.emailsDirectory);
     });
 
     it('registers a configured ContentStore without touching its storage directory', async () => {

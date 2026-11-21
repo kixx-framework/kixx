@@ -5,9 +5,9 @@ import path from 'node:path';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import ContentAddressableIndex from '../../../kixx/content-addressable-store/content-addressable-index.js';
-import ContentSnapshot from '../../../kixx/content-addressable-store/content-snapshot.js';
-import DeveloperContentStore from '../../../plugins/node-content-store/lib/developer-content-store.js';
+import ContentAddressableIndex from '../../../../../kixx/content-addressable-store/content-addressable-index.js';
+import ContentSnapshot from '../../../../../kixx/content-addressable-store/content-snapshot.js';
+import DeveloperContentStore from '../../../../../kixx/adapters/node/content-store/lib/developer-content-store.js';
 
 
 function makeLogger() {
@@ -51,21 +51,32 @@ async function catchAsyncError(fn) {
 }
 
 describe('DeveloperContentStore', ({ it }) => {
-    it('serves repository pages through a real ContentSnapshot', async () => {
-        const store = makeStore(path.resolve());
-        const { rootHash, entries } = await store.getBuild({}, null);
-        assertEqual(null, rootHash);
-        const index = new ContentAddressableIndex(entries);
-        const snapshot = new ContentSnapshot(store, index, makeLogger());
+    it('serves workspace pages through a real ContentSnapshot', async () => {
+        const root = await makeWorkspace({
+            'pages/page.json': JSON.stringify({ template: 'page.html', includes: { body: { filename: 'body.html' } } }),
+            'pages/page.html': '<html>{{> body}}</html>',
+            'pages/body.html': '<main></main>',
+            'pages/admin/style-guide/copy-fields/page.json': JSON.stringify({ template: 'page.html' }),
+            'pages/admin/style-guide/copy-fields/page.html': '<html></html>',
+        });
+        try {
+            const store = makeStore(root);
+            const { rootHash, entries } = await store.getBuild({}, null);
+            assertEqual(null, rootHash);
+            const index = new ContentAddressableIndex(entries);
+            const snapshot = new ContentSnapshot(store, index, makeLogger());
 
-        const home = await snapshot.batchGetPageAssets({}, '/');
-        const copyFields = await snapshot.batchGetPageAssets({}, '/admin/style-guide/copy-fields');
+            const home = await snapshot.batchGetPageAssets({}, '/');
+            const copyFields = await snapshot.batchGetPageAssets({}, '/admin/style-guide/copy-fields');
 
-        assert(home.pageDataFiles.length > 0, 'expected root metadata');
-        assert(home.template, 'expected root template');
-        assert(home.includes, 'expected root includes');
-        assert(copyFields.template, 'expected copy-fields template');
-        assertEqual('/pages/admin/style-guide/copy-fields/page.html', copyFields.template.pathname);
+            assert(home.pageDataFiles.length > 0, 'expected root metadata');
+            assert(home.template, 'expected root template');
+            assert(home.includes, 'expected root includes');
+            assert(copyFields.template, 'expected copy-fields template');
+            assertEqual('/pages/admin/style-guide/copy-fields/page.html', copyFields.template.pathname);
+        } finally {
+            await fsp.rm(root, { recursive: true, force: true });
+        }
     });
 
     it('rescans edits without recreating the store', async () => {

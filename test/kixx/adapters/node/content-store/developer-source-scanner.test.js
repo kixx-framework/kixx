@@ -10,7 +10,7 @@ import {
     assertMatches,
 } from 'kixx-assert';
 
-import DeveloperSourceScanner from '../../../plugins/node-content-store/lib/developer-source-scanner.js';
+import DeveloperSourceScanner from '../../../../../kixx/adapters/node/content-store/lib/developer-source-scanner.js';
 
 
 async function makeWorkspace(files = {}) {

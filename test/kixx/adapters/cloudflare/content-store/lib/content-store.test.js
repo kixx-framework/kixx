@@ -1,9 +1,9 @@
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertNotMatches } from 'kixx-assert';
 
-import ContentStore from '../../../../plugins/cloudflare-content-store/lib/content-store.js';
-import ContentAddressableIndex from '../../../../kixx/content-addressable-store/content-addressable-index.js';
-import contentStoreConformance from '../../../kixx/content-addressable-store/content-store-conformance.js';
+import ContentStore from '../../../../../../kixx/adapters/cloudflare/content-store/lib/content-store.js';
+import ContentAddressableIndex from '../../../../../../kixx/content-addressable-store/content-addressable-index.js';
+import contentStoreConformance from '../../../../content-addressable-store/content-store-conformance.js';
 
 
 const SILENT_LOGGER = {

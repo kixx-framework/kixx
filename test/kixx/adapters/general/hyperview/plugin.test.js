@@ -1,9 +1,9 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 
-import ApplicationContext from '../../../kixx/context/application-context.js';
-import HyperviewService from '../../../kixx/hyperview/hyperview-service.js';
-import { register, initialize } from '../../../plugins/hyperview/plugin.js';
+import ApplicationContext from '../../../../../kixx/context/application-context.js';
+import HyperviewService from '../../../../../kixx/hyperview/hyperview-service.js';
+import { register, initialize } from '../../../../../kixx/adapters/general/hyperview/plugin.js';
 
 
 function makeApplicationContext(env) {
