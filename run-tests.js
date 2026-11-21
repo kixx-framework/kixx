@@ -11,7 +11,7 @@ const USAGE = 'Usage: node run-tests.js [--skip <path>] [pathname ...]';
 
 const ROOT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
-// Unit tests only. The e2e suite lives in test-app/ with its own runner.
+// Unit tests only. The v6 tests parked in test-v6/ are never run.
 const TEST_ROOT = path.join(ROOT_DIRECTORY, 'test');
 
 // Matches the *.test.js project naming convention. The leading `\.` keeps a
@@ -48,8 +48,8 @@ async function main() {
     assertPathsInTestRoot(skipPaths, TEST_ROOT, 'Skip');
 
     // Pathnames above are resolved from the caller's directory. Once they are,
-    // pin the working directory to lib/ so tests which read fixtures by
-    // relative path pass no matter where the runner was invoked from.
+    // pin the working directory to the repository root so a run behaves the
+    // same no matter where the runner was invoked from.
     process.chdir(ROOT_DIRECTORY);
 
     const startTime = Date.now();
@@ -71,6 +71,13 @@ async function main() {
     // it. Deduplication depends on this sort to put copies side by side.
     testFiles.sort(compareFilepaths);
     testFiles = dropDuplicateFilepaths(testFiles);
+
+    // An empty selection must fail, so CI never reports a missing suite as a
+    // passing one.
+    if (testFiles.length === 0) {
+        const searched = testPaths.length > 0 ? testPaths.join(', ') : TEST_ROOT;
+        throw new CommandLineError(`No test files found under ${ searched }`, false);
+    }
 
     for (const file of testFiles) {
         // eslint-disable-next-line no-await-in-loop

@@ -1,0 +1,17 @@
+{
+    "lint": {
+        "exclude": [
+            "node_modules/",
+            "kixx/vendor/",
+            "tmp/",
+            "test-v6/",
+            "reference-app/"
+        ],
+        "rules": {
+            "exclude": [
+                "no-slow-types",
+                "no-this-alias"
+            ]
+        }
+    }
+}

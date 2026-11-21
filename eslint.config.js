@@ -321,33 +321,32 @@ const serverRules = Object.assign({}, rules, {
     ],
 });
 
-const browserRules = Object.assign({}, rules, {});
-
 export default [
     {
+        // v6 material (R16), the devkit (it has its own linter), and files
+        // that are not framework JavaScript.
         ignores: [
-            '.kixx/',
-            'docs/',
-            'emails/',
             'kixx/vendor/',
-            'public/',
             'node_modules/',
+            'tmp/',
+            'test-v6/',
+            'reference-app/',
+            'devkit/',
+            'docs/',
+            'usage-docs/',
+            'tools/',
+            'agents/',
         ],
     },
     {
         // For Cloudflare Worker and Node.js
         files: [
-            'app/',
             'kixx/',
             'plugins/',
-            'routes/',
             'test/',
-            'cloudflare-server.js',
-            'node-server.js',
-            'node-environment.js',
+            'eslint.config.js',
             'run-linter.js',
             'run-tests.js',
-            'virtual-hosts.js',
         ],
         languageOptions: {
             ecmaVersion: 2022,
@@ -382,46 +381,5 @@ export default [
             },
         },
         rules: serverRules,
-    },
-    {
-        // For Web browsers
-        files: [
-            'pages/',
-            'static-assets/',
-            'templates/',
-        ],
-        languageOptions: {
-            ecmaVersion: 2017,
-            sourceType: 'module',
-            globals: {
-                window: 'readonly',
-                document: 'readonly',
-                navigator: 'readonly',
-                localStorage: 'readonly',
-                NodeList: 'readonly',
-                Blob: 'readonly',
-                Uint8Array: 'readonly',
-                TextEncoder: 'readonly',
-                TextDecoder: 'readonly',
-                FormData: 'readonly',
-                Date: 'readonly',
-                fetch: 'readonly',
-                Headers: 'readonly',
-                ReadableStream: 'readonly',
-                Request: 'readonly',
-                Response: 'readonly',
-                URL: 'readonly',
-                atob: 'readonly',
-                btoa: 'readonly',
-                setTimeout: 'readonly',
-                clearTimeout: 'readonly',
-                console: 'readonly',
-                structuredClone: 'readonly',
-                crypto: 'readonly',
-                XMLHttpRequest: 'readonly',
-                URLSearchParams: 'readonly',
-            },
-        },
-        rules: browserRules,
     },
 ];

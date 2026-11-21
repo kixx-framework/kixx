@@ -6,7 +6,7 @@ import { runLintCli } from 'kixx-linting';
 const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // Resolve CLI targets from the caller's directory so they still work
-// when the config root is pinned to lib/.
+// when the config root is pinned to the repository root.
 const targets = process.argv.slice(2).map((target) => {
     return path.resolve(process.cwd(), target);
 });

@@ -9,3 +9,7 @@ tmp/
 
 # Site data
 data/
+
+# Dev tooling only; there are no runtime dependencies (TECH-2)
+node_modules/
+package-lock.json

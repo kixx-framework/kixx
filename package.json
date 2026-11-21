@@ -1,0 +1,14 @@
+{
+    "private": true,
+    "description": "Kixx framework repository: core, plugins, devkit, and tooling.",
+    "type": "module",
+    "license": "MIT",
+    "engines": {
+        "node": ">=24"
+    },
+    "devDependencies": {
+        "kixx-assert": "2.1.1",
+        "kixx-linting": "1.1.2",
+        "kixx-test": "3.0.0"
+    }
+}
