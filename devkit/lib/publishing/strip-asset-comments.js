@@ -1,4 +1,4 @@
-import { parse } from '../vendor/acorn/index.js';
+import { parseJavaScript } from '../parse-javascript.js';
 
 /**
  * Removes JavaScript comments while preserving syntax-bearing comment-like text.
@@ -9,7 +9,7 @@ import { parse } from '../vendor/acorn/index.js';
 export function stripJavaScriptComments(source) {
     const comments = [];
 
-    parse(source, {
+    parseJavaScript(source, {
         ecmaVersion: 'latest',
         sourceType: 'module',
         allowHashBang: true,
@@ -21,7 +21,7 @@ export function stripJavaScriptComments(source) {
     });
     const stripped = replaceJavaScriptCommentRanges(source, retainedComments);
 
-    parse(stripped, {
+    parseJavaScript(stripped, {
         ecmaVersion: 'latest',
         sourceType: 'module',
         allowHashBang: true,
