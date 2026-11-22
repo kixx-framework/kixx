@@ -1,0 +1,94 @@
+# Lints the repository and runs the unit suite on Node.js and Deno for every
+# push to any branch and every pull request.
+#
+# Each job checks one thing, so a failed job names its cause. Add a new check
+# as a new job.
+#
+# package-lock.json is not tracked: there are no runtime dependencies, and the
+# dev dependencies are pinned exactly in package.json. So jobs install with
+# `npm install`; `npm ci` would fail without a lockfile. The Deno job installs
+# too, because Deno resolves kixx-test from the same node_modules/.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Keep a result for every commit on main. Elsewhere only the newest push
+  # matters.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint
+        run: node run-linter.js
+
+  test-node:
+    name: Test on Node.js
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Test on Node.js
+        run: node run-tests.js
+
+  test-deno:
+    name: Test on Deno
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.8.x
+
+      # Only to run npm install; the tests run on Deno.
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Test on Deno
+        run: deno run -A run-tests.js

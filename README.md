@@ -31,6 +31,7 @@ This mono-repo holds every part of the Kixx framework. The important directories
 
 ```
 kixx/
+├── .github/workflows/ci.yml     # CI: lint and unit tests on Node.js and Deno
 ├── kixx/                        # Core, vendored into projects as kixx/
 │   ├── config/, context/, http-router/, hyperview/, logger/, ...   # Framework modules
 │   ├── adapters/                # Platform adapters: node/, cloudflare/, general/
@@ -60,6 +61,8 @@ kixx/
 ```
 
 `reference-app/` is what remains of the v6 starter app. It is not maintained or runnable; it shrinks as code moves out of it, and is deleted at the end of the extraction. `test-v6/` holds the v6 tests (end-to-end suite included) until each is brought back beside the code it covers.
+
+**Continuous Integration.** GitHub Actions runs `.github/workflows/ci.yml` on every push and pull request. It runs `node run-linter.js` on Node.js 24, and the unit suite with `node run-tests.js` on Node.js 24 and `deno run -A run-tests.js` on Deno 2.8. The devkit's tests join CI when they come back from `test-v6/devkit/`.
 
 Kixx Core
 ---------
