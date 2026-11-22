@@ -12,7 +12,6 @@ import { compareStrings } from '../../../../content-addressable-store/addressing
 import {
     RESERVED_PAGE_FILENAMES,
     getBaseTemplatesPath,
-    getEmailBundlePath,
     getGlobalTemplatePartialsPath,
     getPageIncludesPath,
     getPageMetadataPath,
@@ -52,7 +51,6 @@ export default class DeveloperSourceScanner {
     #pagesDirectory;
     #templatesDirectory;
     #staticAssetsDirectory;
-    #emailsDirectory;
     #isolatePageErrors;
     #jsonCache = new Map();
 
@@ -61,7 +59,6 @@ export default class DeveloperSourceScanner {
      * @param {string} options.pagesDirectory - Root of page metadata, templates, partials, and includes
      * @param {string} options.templatesDirectory - Root containing shared partials and base templates
      * @param {string} options.staticAssetsDirectory - Root of directly served static assets
-     * @param {string} options.emailsDirectory - Root of email manifests and assets
      * @param {boolean} [options.isolatePageErrors=false] - Record an invalid page as an error recipe instead of failing the scan
      * @param {Object} [options.fileSystem] - Promise-based filesystem API used by tests
      */
@@ -70,7 +67,6 @@ export default class DeveloperSourceScanner {
             pagesDirectory,
             templatesDirectory,
             staticAssetsDirectory,
-            emailsDirectory,
             isolatePageErrors = false,
             fileSystem = fsp,
         } = options ?? {};
@@ -78,13 +74,11 @@ export default class DeveloperSourceScanner {
         assertNonEmptyString(pagesDirectory, 'DeveloperSourceScanner: pagesDirectory');
         assertNonEmptyString(templatesDirectory, 'DeveloperSourceScanner: templatesDirectory');
         assertNonEmptyString(staticAssetsDirectory, 'DeveloperSourceScanner: staticAssetsDirectory');
-        assertNonEmptyString(emailsDirectory, 'DeveloperSourceScanner: emailsDirectory');
         assert(fileSystem, 'DeveloperSourceScanner requires a fileSystem');
 
         this.#pagesDirectory = pagesDirectory;
         this.#templatesDirectory = templatesDirectory;
         this.#staticAssetsDirectory = staticAssetsDirectory;
-        this.#emailsDirectory = emailsDirectory;
         this.#isolatePageErrors = isolatePageErrors;
         this.#fileSystem = fileSystem;
     }
@@ -102,7 +96,6 @@ export default class DeveloperSourceScanner {
         await this.#scanTemplateBundle(entries, 'partials', getGlobalTemplatePartialsPath());
         await this.#scanTemplateBundle(entries, 'base', getBaseTemplatesPath());
         await this.#scanStaticAssets(entries);
-        await this.#scanEmails(entries);
 
         entries.sort(([ left ], [ right ]) => compareStrings(left, right));
         return new Map(entries);
@@ -269,41 +262,6 @@ export default class DeveloperSourceScanner {
         }
     }
 
-    async #scanEmails(entries) {
-        const files = await this.#walkFiles(this.#emailsDirectory);
-        for (const file of files.filter(({ relativePath }) => path.posix.basename(relativePath) === 'email.json')) {
-            this.#assertValidRelativePath(file.relativePath, file.filepath);
-            const emailPath = path.posix.dirname(file.relativePath);
-            const pathname = emailPath === '.' ? '/' : `/${ emailPath }`;
-            const json = await this.#readJson(file);
-            this.#validateEmailJson(file.filepath, json);
-            const sources = [];
-
-            for (const field of [ 'htmlTemplate', 'textTemplate' ]) {
-                if (json[field]) {
-                    const sourceFile = await this.#getNamedFile(path.dirname(file.filepath), json[field].filename);
-                    sources.push({ role: field, id: json[field].id, ...makeFileIdentity(sourceFile.filepath, sourceFile.stats) });
-                }
-            }
-            const sortedPartials = (json.partials ?? []).slice().sort((left, right) => compareStrings(left.id, right.id));
-            for (const { id, filename } of sortedPartials) {
-                const sourceFile = await this.#getNamedFile(path.dirname(file.filepath), filename);
-                sources.push({ role: 'partial', id, ...makeFileIdentity(sourceFile.filepath, sourceFile.stats) });
-            }
-
-            entries.push([
-                getEmailBundlePath(pathname),
-                {
-                    kind: 'email',
-                    sources,
-                    manifests: [ makeFileIdentity(file.filepath, file.stats) ],
-                    contextData: json.contextData ?? {},
-                    facet: { name: 'emails', pathname },
-                },
-            ]);
-        }
-    }
-
     async #walkFiles(root) {
         const files = [];
         const visit = async (directory, relativeDirectory) => {
@@ -414,16 +372,6 @@ export default class DeveloperSourceScanner {
                 throw validationError(filepath, 'includes must map names to objects with a filename');
             }
         }
-    }
-
-    #validateEmailJson(filepath, json) {
-        for (const field of [ 'htmlTemplate', 'textTemplate' ]) {
-            const template = json[field];
-            if (template && (!isPlainObject(template) || !isString(template.id) || !template.id || !isString(template.filename) || !template.filename)) {
-                throw validationError(filepath, `${ field } must contain non-empty id and filename strings`);
-            }
-        }
-        this.#validatePartials(filepath, json);
     }
 
     #validatePartials(filepath, json) {

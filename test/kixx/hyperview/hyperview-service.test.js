@@ -66,7 +66,6 @@ function makeContentSnapshot(spec) {
         baseTemplatesHash = 'base-templates-hash-1',
         staticAssets = null,
         staticAssetsHash = 'static-assets-hash-1',
-        emails = {},
     } = spec ?? {};
 
     const calls = [];
@@ -172,21 +171,6 @@ function makeContentSnapshot(spec) {
             }
 
             return { hash, pageDataFiles, template, partials, includes };
-        },
-
-        async getEmailAssets(context, pathname) {
-            record('getEmailAssets', context, pathname);
-
-            const email = emails[pathname];
-            if (!email) {
-                return null;
-            }
-
-            return makeJsonObject(
-                `/emails${ pathname }.json`,
-                email.hash ?? `${ pathname }-email-hash`,
-                email.bundle,
-            );
         },
     };
 }
@@ -1223,146 +1207,6 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
-    describe('renderEmail()', ({ it }) => {
-
-        function makeEmailSpec() {
-            return {
-                globalPartials: [
-                    { id: 'footer', source: '<footer>Example</footer>' },
-                ],
-                emails: {
-                    '/welcome': {
-                        bundle: {
-                            contextData: { subject: 'Welcome', product: 'Kixx' },
-                            htmlTemplate: { id: 'welcome.html', source: '<p>Hello {{ name }}{{> footer }}</p>' },
-                            textTemplate: { id: 'welcome.txt', source: 'Hello {{ name }}' },
-                        },
-                    },
-                },
-            };
-        }
-
-        it('renders the subject, HTML body, and text body', async () => {
-            const { service } = makeSubject(makeEmailSpec());
-
-            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
-
-            assertEqual('Welcome', email.subject);
-            assertEqual('<p>Hello Rakim<footer>Example</footer></p>', email.html);
-            assertEqual('Hello Rakim', email.text);
-        });
-
-        it('passes the request context to every content read', async () => {
-            const { service, snapshot } = makeSubject(makeEmailSpec());
-
-            await service.renderEmail(CONTEXT, '/welcome', {});
-
-            assert(snapshot.calls.length > 0, 'expected content reads');
-
-            for (const call of snapshot.calls) {
-                assertEqual(CONTEXT, call.context, `${ call.method } received the context`);
-            }
-        });
-
-        it('throws AssertionError when no bundle is published at the pathname', async () => {
-            const { service } = makeSubject(makeEmailSpec());
-
-            const caught = await catchAsyncError(() => {
-                return service.renderEmail(CONTEXT, '/missing', {});
-            });
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
-            assertMatches('/missing', caught.message);
-        });
-
-        it('resolves null for an unpublished representation', async () => {
-            const spec = makeEmailSpec();
-            delete spec.emails['/welcome'].bundle.textTemplate;
-
-            const { service } = makeSubject(spec);
-
-            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
-
-            assertEqual(null, email.text);
-            assertMatches('Hello Rakim', email.html);
-        });
-
-        it('renders a templated subject against the merged context', async () => {
-            const spec = makeEmailSpec();
-            spec.emails['/welcome'].bundle.contextData.subject = {
-                template: 'Welcome to {{ product }}, {{ name }}',
-            };
-
-            const { service } = makeSubject(spec);
-
-            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
-
-            assertEqual('Welcome to Kixx, Rakim', email.subject);
-        });
-
-        it('lets caller props override published context data', async () => {
-            const spec = makeEmailSpec();
-            spec.emails['/welcome'].bundle.htmlTemplate.source = '<p>{{ product }}</p>';
-
-            const { service } = makeSubject(spec);
-
-            const email = await service.renderEmail(CONTEXT, '/welcome', { product: 'Overridden' });
-
-            assertEqual('<p>Overridden</p>', email.html);
-        });
-
-        it('layers the bundle partials over the global partials', async () => {
-            const spec = makeEmailSpec();
-            spec.emails['/welcome'].bundle.partials = [
-                { id: 'footer', source: '<footer>Bundle</footer>' },
-            ];
-
-            const { service } = makeSubject(spec);
-
-            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
-
-            assertMatches('<footer>Bundle</footer>', email.html);
-        });
-
-        it('exposes the bundle includes to the templates', async () => {
-            const spec = makeEmailSpec();
-            spec.emails['/welcome'].bundle.includes = { signoff: 'Thanks.' };
-            spec.emails['/welcome'].bundle.htmlTemplate.source = '<p>{{ includes.signoff }}</p>';
-
-            const { service } = makeSubject(spec);
-
-            const email = await service.renderEmail(CONTEXT, '/welcome', {});
-
-            assertEqual('<p>Thanks.</p>', email.html);
-        });
-
-        it('does not leak one render\'s props into the next', async () => {
-            // The bundle context data is mutated by the merge, so it has to be
-            // parsed fresh on every call.
-            const spec = makeEmailSpec();
-            spec.emails['/welcome'].bundle.htmlTemplate.source = '<p>[{{ name }}]</p>';
-
-            const { service } = makeSubject(spec);
-
-            await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
-            const second = await service.renderEmail(CONTEXT, '/welcome', {});
-
-            assertEqual('<p>[]</p>', second.html);
-        });
-
-        it('reads nothing from the page cache', async () => {
-            const { service, kvStore } = makeSubject(makeEmailSpec(), {
-                serviceOptions: { usePageCache: true },
-            });
-
-            await service.renderEmail(CONTEXT, '/welcome', {});
-
-            assertEqual(0, kvStore.gets.length);
-            assertEqual(0, kvStore.puts.length);
-        });
-    });
-
     describe('createMiniTemplate()', ({ it }) => {
 
         it('compiles and renders template source against a context', () => {
@@ -1426,35 +1270,6 @@ describe('HyperviewService', ({ describe }) => {
                 '<html data-name="HOME"><main>HOME<p>HOME</p><footer>HOME</footer></main></html>',
                 response.body,
             );
-        });
-
-        it('registers a helper for email bodies, partials, and subjects', async () => {
-            const spec = {
-                globalPartials: [
-                    { id: 'signoff', source: '{{ shout name }}' },
-                ],
-                emails: {
-                    '/welcome': {
-                        bundle: {
-                            contextData: {
-                                subject: { template: '{{ shout name }}' },
-                            },
-                            htmlTemplate: { id: 'welcome.html', source: '<p>{{ shout name }} {{> signoff }}</p>' },
-                            textTemplate: { id: 'welcome.txt', source: '{{ shout name }}' },
-                        },
-                    },
-                },
-            };
-            const { service } = makeSubject(spec);
-            service.registerTemplateHelper('shout', (_context, _options, value) => {
-                return String(value).toUpperCase();
-            });
-
-            const email = await service.renderEmail(CONTEXT, '/welcome', { name: 'Rakim' });
-
-            assertEqual('RAKIM', email.subject);
-            assertEqual('<p>RAKIM RAKIM</p>', email.html);
-            assertEqual('RAKIM', email.text);
         });
 
         it('replaces an existing helper and returns the service', () => {

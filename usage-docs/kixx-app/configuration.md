@@ -234,15 +234,15 @@ optional; a missing key takes the default.
 
 ## Content store settings
 
-`CONTENT_STORE` names where published pages, templates, static assets, and
-emails come from.
+`CONTENT_STORE` names where published pages, templates, and static assets come
+from.
 
 On Node.js:
 
 | Key | Meaning |
 | --- | --- |
 | `developerMode` | `true` reads content straight from the source directories below instead of a published store. Read-only, so the Publishing API cannot write to it. Allowed only in `development`; any other environment fails startup. Shipped: on in `development`. |
-| `pagesDirectory`, `templatesDirectory`, `staticAssetsDirectory`, `emailsDirectory` | Developer mode only. Default `./pages`, `./templates`, `./static-assets`, `./emails`. Resolved like [store paths](#data_directory-and-store-paths). |
+| `pagesDirectory`, `templatesDirectory`, `staticAssetsDirectory` | Developer mode only. Default `./pages`, `./templates`, `./static-assets`. Resolved like [store paths](#data_directory-and-store-paths). |
 | `rootDirectory` | Required unless developer mode is on. The published content store's directory, resolved like other store paths. |
 
 On Cloudflare:

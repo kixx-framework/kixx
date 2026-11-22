@@ -17,7 +17,6 @@ import {
     isPageMetadataPath,
     isPagePartialsPath,
     isPageIncludesPath,
-    getEmailBundlePath,
 } from './content-layout.js';
 import {
     canonicalize,
@@ -59,7 +58,7 @@ import {
  * Callers pass *logical* pathnames — `/blog/post`, `/logo.png` — and never the
  * storage pathnames the index is keyed by. Each method applies the layout rule
  * for its content kind, mapping the logical pathname into one of the reserved
- * namespaces (`/pages`, `/templates`, `/assets`, `/emails`). Keeping that
+ * namespaces (`/pages`, `/templates`, `/assets`). Keeping that
  * mapping here rather than at the call sites is what stops one content kind from
  * being written into another's namespace.
  *
@@ -440,58 +439,6 @@ export default class ContentSnapshot {
         const fullPathname = getPageTemplatePath(pathname);
         this.#logger.info('put-page-template put-file', { pathname });
         return await this.#putFile(context, 'text', fullPathname, source);
-    }
-
-    /**
-     * Reads an email bundle's index entry without fetching its bytes.
-     * @param {string} pathname - Logical email pathname
-     * @returns {Promise<import('./content-addressable-index.js').IndexEntry|null>} The entry, or null when no bundle is published
-     */
-    async statEmailAssets(pathname) {
-        assert(isValidPathname(pathname), 'statEmailAssets() requires a valid pathname');
-        const fullPathname = getEmailBundlePath(pathname);
-        return this.#index.getNode(fullPathname);
-    }
-
-    /**
-     * Reads an email bundle: the subject metadata plus the HTML and text
-     * templates for one email, published as a single object.
-     * @param {Object} context - Request or execution context
-     * @param {string} pathname - Logical email pathname
-     * @returns {Promise<import('./content-object.js').JsonContentObject|null>} The parsed bundle, or null when none is published
-     * @throws {AssertionError} When the index names the bundle but the store cannot produce it
-     * @throws {OperationalError} When the backing store fails
-     */
-    async getEmailAssets(context, pathname) {
-        assert(isValidPathname(pathname), 'getEmailAssets() requires a valid pathname');
-
-        const fullPathname = getEmailBundlePath(pathname);
-        this.#logger.info('get-email-assets get-file', { pathname });
-        const result = await this.#getFile(context, 'text', fullPathname);
-
-        if (!result) {
-            return null;
-        }
-
-        const [ stat, json ] = result;
-        return new JsonContentObject(json, stat);
-    }
-
-    /**
-     * Writes an email bundle to the blob store, canonicalized.
-     * @param {Object} context - Request or execution context
-     * @param {string} pathname - Logical email pathname
-     * @param {Object} bundle - The email bundle to publish
-     * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
-     * @throws {OperationalError} When the backing store fails
-     */
-    async putEmailAssets(context, pathname, bundle) {
-        assert(isValidPathname(pathname), 'putEmailAssets() requires a valid pathname');
-        assert(isPlainObject(bundle), 'putEmailAssets() requires a plain object bundle');
-        const fullPathname = getEmailBundlePath(pathname);
-        const json = canonicalize(bundle);
-        this.#logger.info('put-email-assets put-file', { pathname });
-        return await this.#putFile(context, 'text', fullPathname, json);
     }
 
     /**

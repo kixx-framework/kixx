@@ -10,9 +10,9 @@
  *
  * ```js
  * const queue = context.getService('JobQueue');
- * await queue.enqueue(context, 'send-admin-invite-email', { inviteId }, {
+ * await queue.enqueue(context, 'expire-admin-invite', { inviteId }, {
  *     delaySeconds: 300,
- *     key: `invite-email:${ inviteId }`,
+ *     key: `expire-invite:${ inviteId }`,
  * });
  * ```
  *

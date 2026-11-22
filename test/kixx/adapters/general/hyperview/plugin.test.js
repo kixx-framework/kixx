@@ -86,7 +86,11 @@ describe('hyperview plugin', ({ describe }) => {
             // received this exact instance rather than one built separately.
             const hyperviewService = context.getService('HyperviewService');
             const caught = await catchAsyncError(
-                () => hyperviewService.renderEmail({}, '/welcome', {}),
+                () => hyperviewService.renderPage({}, {
+                    url: new URL('https://example.com/welcome'),
+                    props: {},
+                    pathname: '/welcome',
+                }),
             );
 
             assert(caught, 'expected the rejected pathname to throw');

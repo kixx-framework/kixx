@@ -28,7 +28,6 @@ function makeScanner(root, fileSystem, options = {}) {
         pagesDirectory: path.join(root, 'pages'),
         templatesDirectory: path.join(root, 'templates'),
         staticAssetsDirectory: path.join(root, 'static-assets'),
-        emailsDirectory: path.join(root, 'emails'),
         fileSystem,
         ...options,
     });
@@ -79,16 +78,6 @@ describe('DeveloperSourceScanner', ({ it }) => {
             'static-assets/stylesheets/stylesheet.css': 'Stylesheet',
             'static-assets/stylesheets/admin.css': 'Admin stylesheet',
             'static-assets/javascript/site.js': 'Site JavaScript',
-            'emails/welcome/email.json': JSON.stringify({
-                htmlTemplate: { id: 'welcome.html', filename: 'message.html' },
-                partials: [
-                    { id: 'signature.html', filename: 'signature.html' },
-                    { id: 'legal.html', filename: 'legal.html' },
-                ],
-            }),
-            'emails/welcome/message.html': 'Welcome',
-            'emails/welcome/signature.html': 'Signature',
-            'emails/welcome/legal.html': 'Legal',
         });
 
         try {
@@ -96,7 +85,6 @@ describe('DeveloperSourceScanner', ({ it }) => {
             const keys = [ ...manifest.keys() ];
             const template = manifest.get('/pages/admin/style-guide/copy-fields/page.html');
             const partials = manifest.get('/pages/admin/style-guide/copy-fields/__page-partials-bundle');
-            const email = manifest.get('/emails/welcome/__email-assets');
 
             assert(template, 'expected leaf template recipe');
             assertEqual(1, template.manifests.length);
@@ -107,8 +95,6 @@ describe('DeveloperSourceScanner', ({ it }) => {
             assert(manifest.has('/assets/stylesheets/stylesheet.css'));
             assert(manifest.has('/assets/stylesheets/admin.css'));
             assert(manifest.has('/assets/javascript/site.js'));
-            assertEqual('htmlTemplate,partial,partial', email.sources.map(({ role }) => role).join(','));
-            assertEqual('welcome.html,legal.html,signature.html', email.sources.map(({ id }) => id).join(','));
             assertFalsy(manifest.has('/pages/admin/style-guide/copy-fields/body.html'));
             assertEqual(keys.slice().sort().join('\n'), keys.join('\n'));
         } finally {
@@ -221,10 +207,6 @@ describe('DeveloperSourceScanner', ({ it }) => {
             'templates/partials/common/site.html': 'Common partial',
             'templates/base/default.html': 'Base template',
             'static-assets/images/logo.svg': '<svg></svg>',
-            'emails/welcome/email.json': JSON.stringify({
-                htmlTemplate: { id: 'welcome.html', filename: 'message.html' },
-            }),
-            'emails/welcome/message.html': 'Welcome',
         });
 
         try {
@@ -257,10 +239,6 @@ describe('DeveloperSourceScanner', ({ it }) => {
             assertEqual(
                 JSON.stringify({ name: 'staticAssets', pathname: '/images/logo.svg' }),
                 JSON.stringify(manifest.get('/assets/images/logo.svg').facet),
-            );
-            assertEqual(
-                JSON.stringify({ name: 'emails', pathname: '/welcome' }),
-                JSON.stringify(manifest.get('/emails/welcome/__email-assets').facet),
             );
         } finally {
             await fsp.rm(root, { recursive: true, force: true });

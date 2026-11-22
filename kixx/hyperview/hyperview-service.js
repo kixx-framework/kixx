@@ -1,11 +1,10 @@
-import { AssertionError, NotFoundError } from '../errors/mod.js';
+import { NotFoundError } from '../errors/mod.js';
 import HyperviewPage from './hyperview-page.js';
 import * as templating from '../vendor/templating/mod.js';
 import formatDate from './helpers/format-date.js';
 import markup from './helpers/markup.js';
 import truncate from './helpers/truncate.js';
 import assetUrl from './helpers/asset-url.js';
-import deepMerge from '../utils/deep-merge.js';
 import {
     assert,
     assertArray,
@@ -56,7 +55,7 @@ function layerPartials(primary, secondary) {
 }
 
 /**
- * Renders published site content into Hyperview page results and email bodies.
+ * Renders published site content into Hyperview page results.
  *
  * This is the only place the framework turns *content* into *output*. It owns
  * three things and nothing else: choosing what to render, compiling and caching
@@ -181,7 +180,7 @@ export default class HyperviewService {
 
     /**
      * Connects the content and cache services required by the rendering methods.
-     * Call this once after construction and before rendering a page or email.
+     * Call this once after construction and before rendering a page.
      * @param {Object} args - Rendering service dependencies
      * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store holding the rendered-page cache
      * @param {import('../content-addressable-store/content-addressable-store.js').default} args.contentAddressableStore - Published content store used to open snapshots, normalize pathnames, and hash cache-key inputs
@@ -469,77 +468,6 @@ export default class HyperviewService {
         });
     }
 
-    // Compiles an email bundle: the subject metadata plus whichever of the HTML
-    // and text representations were published, and the bundle's own partials.
-    // Nothing here is cached, because emails are rendered far less often than
-    // pages and there is no request-rate pressure to justify the retained memory.
-    async #getEmail(context, content, pathname) {
-        const bundle = await content.getEmailAssets(context, pathname);
-
-        if (!bundle) {
-            return null;
-        }
-
-        // HTML and text are independent representations; an email may publish
-        // either one without requiring the other.
-        let htmlTemplate;
-        if (bundle.json.htmlTemplate) {
-            const { id, source } = bundle.json.htmlTemplate;
-            assertNonEmptyString(
-                id,
-                `Missing or invalid "id" from email HTML template in "${ pathname }"`,
-            );
-            assertNonEmptyString(
-                source,
-                `Missing or invalid "source" from email HTML template in "${ pathname }"`,
-            );
-            htmlTemplate = this.#compileTemplate(id, source);
-        }
-        let textTemplate;
-        if (bundle.json.textTemplate) {
-            const { id, source } = bundle.json.textTemplate;
-            assertNonEmptyString(
-                id,
-                `Missing or invalid "id" from email text template in "${ pathname }"`,
-            );
-            assertNonEmptyString(
-                source,
-                `Missing or invalid "source" from email text template in "${ pathname }"`,
-            );
-            textTemplate = this.#compileTemplate(id, source);
-        }
-
-        const partials = new Map();
-
-        if (bundle.json.partials) {
-            assertArray(bundle.json.partials, `Email template partials must be defined as an Array in "${ pathname }"`);
-
-            for (const { id, source } of bundle.json.partials) {
-                assertNonEmptyString(
-                    id,
-                    `Missing or invalid "id" from email partials in "${ pathname }"`,
-                );
-                assertNonEmptyString(
-                    source,
-                    `Missing or invalid "source" from email partials in "${ pathname }"`,
-                );
-
-                const template = this.#compileTemplate(`${ pathname }/${ id }`, source);
-                partials.set(id, template);
-            }
-        }
-
-        return {
-            contextData: bundle.json.contextData ?? {},
-            htmlTemplate,
-            textTemplate,
-            partials,
-            includes: bundle.json.includes ?? {},
-            hash: bundle.hash,
-        };
-    }
-
-
     /**
      * Renders assembled page-context JSON, a page partial, a page template, or a
      * complete page wrapped by a base template. All content and cache-validator
@@ -826,82 +754,13 @@ export default class HyperviewService {
     }
 
     /**
-     * Renders the available subject, HTML body, and plain-text body for an email.
-     * Caller props override static email context data, and every content read uses
-     * one immutable, request-scoped content snapshot.
-     *
-     * The HTML and text bodies are independent representations: a bundle may
-     * publish either one, and the unpublished field resolves null so the caller
-     * can decide which variants to send without inspecting the source assets.
-     * Unlike page rendering, nothing here is cached or reused between calls.
-     * @param {import('../context/request-context.js').default} context - Context for content access
-     * @param {string} pathname - Canonical pathname identifying the email content
-     * @param {Object} props - Runtime values merged into the email template context
-     * @returns {Promise<{subject: string|null, html: string|null, text: string|null}>} Rendered email fields; unavailable fields are null
-     * @throws {AssertionError} When no email bundle is published at the pathname
-     */
-    async renderEmail(context, pathname, props) {
-        assert(
-            this.#contentAddressableStore.isValidPathname(pathname),
-            'HyperviewService#renderEmail: pathname',
-        );
-
-        // A render reads all of its content, including cache-key inputs, through
-        // exactly one request-scoped snapshot.
-        const content = await this.#contentAddressableStore.openSnapshot(context);
-
-        const email = await this.#getEmail(context, content, pathname);
-
-        // Callers choose email pathnames in code, so a missing published bundle
-        // indicates a deployment mismatch rather than a missing request resource.
-        if (!email) {
-            throw new AssertionError(`No email found for pathname "${ pathname }"`, { pathname });
-        }
-
-        const globalPartials = await this.#loadGlobalTemplatePartials(context, content);
-        const partials = layerPartials(email.partials, globalPartials);
-
-        // Runtime values take precedence over published defaults so callers can
-        // supply recipient- and delivery-specific data.
-        //
-        // deepMerge() mutates its target, and the target here is the bundle's own
-        // contextData. That is only safe because #getEmail() parses the bundle
-        // fresh on every call; caching email bundles would leak one recipient's
-        // props into the next render.
-        const contextData = deepMerge(email.contextData, { includes: email.includes }, props);
-
-        let subject = null;
-        let html = null;
-        let text = null;
-
-        // Subject metadata supports template syntax without gaining access to
-        // partials, matching the same constraint as page title metadata.
-        if (isNonEmptyString(contextData.subject?.template)) {
-            const subjectTemplate = this.createMiniTemplate(`${ pathname }.subject`, contextData.subject.template);
-            subject = subjectTemplate(contextData);
-        } else {
-            subject = contextData.subject;
-        }
-        // Preserve null for an unpublished representation so callers can decide
-        // which body variants to send without inspecting the source assets.
-        if (email.htmlTemplate) {
-            html = email.htmlTemplate(contextData, partials);
-        }
-        if (email.textTemplate) {
-            text = email.textTemplate(contextData, partials);
-        }
-
-        return { subject, html, text };
-    }
-
-    /**
      * Compiles template syntax for metadata fields which do not support partials,
-     * such as page titles, descriptions, and email subject lines.
+     * such as page titles and descriptions.
      *
      * The returned function is bound to an empty partial lookup, so a `{{> name }}`
      * in one of these fields expands to nothing — a missing partial renders as an
      * empty string, per the Mustache spec. Metadata is interpolated into
-     * attributes, headers, and subject lines where a partial's markup would be
+     * attributes and headers where a partial's markup would be
      * meaningless. Custom helpers remain available.
      * @param {string} templateId - Identifier included in template error messages
      * @param {string} templateSource - Template source to compile

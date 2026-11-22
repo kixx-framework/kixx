@@ -16,7 +16,7 @@ async function makeSource(root, filename, source) {
 }
 
 describe('getDeveloperBlob', ({ it }) => {
-    it('materializes file, partial, include, and email recipes', async () => {
+    it('materializes file, partial, and include recipes', async () => {
         const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-developer-blobs-'));
         try {
             const template = await makeSource(root, 'template.html', 'Hello {{ name }}');
@@ -26,15 +26,6 @@ describe('getDeveloperBlob', ({ it }) => {
                 [ '/asset.txt', { kind: 'file', sources: [ template ], manifests: [] } ],
                 [ '/partials', { kind: 'partials', sources: [ { id: 'card.html', ...partial } ], manifests: [] } ],
                 [ '/includes', { kind: 'includes', sources: [ { name: 'body', ...include } ], manifests: [] } ],
-                [ '/email', {
-                    kind: 'email',
-                    sources: [
-                        { role: 'htmlTemplate', id: 'message.html', ...template },
-                        { role: 'partial', id: 'card.html', ...partial },
-                    ],
-                    manifests: [],
-                    contextData: { subject: 'Welcome' },
-                } ],
             ]);
 
             assertEqual('Hello {{ name }}', await getDeveloperBlob(manifest, '/asset.txt', 'text'));
@@ -46,12 +37,6 @@ describe('getDeveloperBlob', ({ it }) => {
                 JSON.stringify({ body: '<p>Include</p>' }),
                 JSON.stringify(JSON.parse(await getDeveloperBlob(manifest, '/includes', 'text'))),
             );
-            assertEqual(JSON.stringify({
-                contextData: { subject: 'Welcome' },
-                htmlTemplate: { id: 'message.html', source: 'Hello {{ name }}' },
-                includes: {},
-                partials: [ { id: 'card.html', source: 'Partial' } ],
-            }), JSON.stringify(JSON.parse(await getDeveloperBlob(manifest, '/email', 'text'))));
         } finally {
             await fsp.rm(root, { recursive: true, force: true });
         }

@@ -15,13 +15,12 @@ import {
  * one of its methods routes through exactly one of these builders, and nothing
  * else in the framework composes a storage pathname by hand.
  *
- * Four reserved top-level namespaces divide the tree:
+ * Three reserved top-level namespaces divide the tree:
  *
  * - `/pages` — one directory per page, holding its `page.json` metadata, its
  *   bundles, and its template file.
  * - `/templates` — the two site-wide bundles shared by every render.
  * - `/assets` — static files served straight to the browser.
- * - `/emails` — email bundles.
  *
  * Bundle filenames are prefixed with a double underscore so they cannot collide
  * with a published page template, whose filename comes from client input.
@@ -60,13 +59,6 @@ export const PAGE_PARTIALS_BUNDLE = '__page-partials-bundle';
  * @readonly
  */
 export const PAGE_INCLUDES_BUNDLE = '__page-includes-bundle';
-
-/**
- * Reserved filename of an email assets bundle within the emails namespace.
- * @type {string}
- * @readonly
- */
-export const EMAIL_ASSETS_BUNDLE = '__email-assets';
 
 /** @type {string} @readonly */
 export const RELEASE_MANIFEST_PATH = '/__kixx/release-manifest.json';
@@ -283,16 +275,4 @@ export function isPagePartialsPath(pathname) {
  */
 export function isPageIncludesPath(pathname) {
     return pathname.startsWith('/pages') && pathname.endsWith(`/${ PAGE_INCLUDES_BUNDLE }`);
-}
-
-/**
- * Constructs the storage path for an email's assets bundle, within its own
- * directory beneath `/emails`.
- * @param {string} pathname - Valid logical email pathname
- * @returns {string} Canonical pathname beneath `/emails`
- * @throws {AssertionError} When pathname is not a valid pathname
- */
-export function getEmailBundlePath(pathname) {
-    assert(isValidPathname(pathname), 'getEmailBundlePath() requires a valid email pathname');
-    return normalizePathname(`emails/${ pathname }/${ EMAIL_ASSETS_BUNDLE }`);
 }

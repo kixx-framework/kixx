@@ -289,7 +289,7 @@ describe('ApplicationContext', ({ describe }) => {
     });
 
     describe('createJobContext', ({ it }) => {
-        const job = { id: 'job-1', name: 'send-email' };
+        const job = { id: 'job-1', name: 'expire-admin-invite' };
 
         it('shares config and runtime and carries the job environment', () => {
             const config = { name: 'job-app' };
@@ -342,7 +342,7 @@ describe('ApplicationContext', ({ describe }) => {
 
             assertEqual('sending', entries[0].message);
             assertEqual('job-1', entries[0].info.jobId);
-            assertEqual('send-email', entries[0].info.jobName);
+            assertEqual('expire-admin-invite', entries[0].info.jobName);
             assertEqual('a@example.com', entries[0].info.to);
             assertEqual('job-1', entries[1].info.jobId);
         });

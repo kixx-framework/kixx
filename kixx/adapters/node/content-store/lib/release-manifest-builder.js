@@ -43,9 +43,6 @@ function placeReference(manifest, facet, reference) {
         manifest.globalTemplatePartials = reference;
     } else if (facet.name === 'baseTemplates') {
         manifest.baseTemplates = reference;
-    } else if (facet.name === 'emails') {
-        manifest.emails = manifest.emails ?? {};
-        manifest.emails[facet.pathname] = reference;
     } else if (facet.name === 'page') {
         manifest.pages = manifest.pages ?? {};
         const page = manifest.pages[facet.pathname] ?? {};

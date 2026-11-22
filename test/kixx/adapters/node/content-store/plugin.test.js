@@ -97,11 +97,10 @@ describe('node-content-store plugin', ({ after, it }) => {
 
         assertEqual('ContentStore', registered.name);
         assertEqual('DeveloperContentStore', registered.service.constructor.name);
-        assertEqual(4, resolveFilepath.mock.callCount());
+        assertEqual(3, resolveFilepath.mock.callCount());
         assertEqual('./pages', resolveFilepath.mock.getCall(0).arguments[0]);
         assertEqual('./templates', resolveFilepath.mock.getCall(1).arguments[0]);
         assertEqual('./static-assets', resolveFilepath.mock.getCall(2).arguments[0]);
-        assertEqual('./emails', resolveFilepath.mock.getCall(3).arguments[0]);
     });
 
     it('rejects developer mode outside the development environment', () => {

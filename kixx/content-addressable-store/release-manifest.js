@@ -10,7 +10,6 @@ import { isValidHash } from './addressing.js';
 import {
     RESERVED_PAGE_FILENAMES,
     getBaseTemplatesPath,
-    getEmailBundlePath,
     getGlobalTemplatePartialsPath,
     getPageIncludesPath,
     getPageMetadataPath,
@@ -35,13 +34,11 @@ const MANIFEST_FIELDS = new Set([
     'globalTemplatePartials',
     'baseTemplates',
     'pages',
-    'emails',
 ]);
 const PAGE_FIELDS = new Set([ 'metadata', 'partials', 'includes', 'templates' ]);
 const REFERENCE_FIELDS = new Set([ 'objectId', 'size' ]);
 const STATIC_ASSET_REFERENCE_FIELDS = new Set([ 'objectId', 'size', 'mediaType' ]);
 const TEMPLATE_FIELDS = new Set([ 'id', 'source' ]);
-const EMAIL_FIELDS = new Set([ 'htmlTemplate', 'textTemplate', 'partials', 'includes', 'contextData' ]);
 
 /**
  * Validates a complete Release manifest and converts it to index source files.
@@ -76,11 +73,6 @@ export function validateReleaseManifest(manifest) {
         getStoragePath: getBaseTemplatesPath,
     });
     validatePages(error, files, paths, manifest.pages);
-    validateReferenceDictionary(error, files, paths, manifest.emails, {
-        source: '/emails',
-        kind: 'email',
-        getStoragePath: getEmailBundlePath,
-    });
 
     if (error.length) {
         throw error;
@@ -90,7 +82,7 @@ export function validateReleaseManifest(manifest) {
 
 /**
  * Validates one parsed structured content object referenced by a manifest.
- * @param {string} kind - One of `globalTemplatePartials`, `baseTemplates`, `pageMetadata`, `pagePartials`, `pageIncludes`, or `email`
+ * @param {string} kind - One of `globalTemplatePartials`, `baseTemplates`, `pageMetadata`, `pagePartials`, or `pageIncludes`
  * @param {*} content - Payload already parsed from JSON; only its content-kind schema is checked
  * @param {string} [source='/content'] - JSON Pointer prefix used in failures
  * @returns {void}
@@ -109,8 +101,6 @@ export function validateStructuredContent(kind, content, source = '/content') {
         validateJsonObject(error, content, source);
     } else if (kind === 'pageIncludes') {
         validateIncludes(error, content, source);
-    } else if (kind === 'email') {
-        validateEmail(error, content, source);
     } else {
         error.push(`Unknown structured content kind "${ kind }"`, source);
     }
@@ -303,47 +293,6 @@ function validateIncludes(error, includes, source) {
         if (!isString(value)) {
             error.push('Include content must be a string', `${ source }/${ escapePointer(name) }`);
         }
-    }
-}
-
-function validateEmail(error, email, source) {
-    if (!isPlainObject(email)) {
-        error.push('Email bundle must be a plain object', source);
-        return;
-    }
-    rejectUnknownFields(error, email, EMAIL_FIELDS, source);
-    const fields = [ 'htmlTemplate', 'textTemplate', 'partials', 'includes' ];
-    if (!fields.some((field) => !isUndefined(email[field]))) {
-        error.push('Email bundle must contain at least one content field', source);
-    }
-    if (!isUndefined(email.htmlTemplate)) {
-        validateTemplateObject(error, email.htmlTemplate, source + '/htmlTemplate', 'HTML template');
-    }
-    if (!isUndefined(email.textTemplate)) {
-        validateTemplateObject(error, email.textTemplate, source + '/textTemplate', 'text template');
-    }
-    if (!isUndefined(email.partials)) {
-        validateTemplateBundle(error, email.partials, source + '/partials', 'email partial');
-    }
-    if (!isUndefined(email.includes)) {
-        validateIncludes(error, email.includes, source + '/includes');
-    }
-    if (!isUndefined(email.contextData)) {
-        validateJsonObject(error, email.contextData, source + '/contextData');
-    }
-}
-
-function validateTemplateObject(error, template, source, label) {
-    if (!isPlainObject(template)) {
-        error.push(`${ label } must be a plain object`, source);
-        return;
-    }
-    rejectUnknownFields(error, template, TEMPLATE_FIELDS, source);
-    if (!isNonEmptyString(template.id)) {
-        error.push(`${ label } id must be a non-empty string`, source + '/id');
-    }
-    if (!isNonEmptyString(template.source)) {
-        error.push(`${ label } source must be a non-empty string`, source + '/source');
     }
 }
 

@@ -36,7 +36,7 @@ kixx/
 │   ├── config/, context/, http-router/, hyperview/, logger/, ...   # Framework modules
 │   ├── adapters/                # Platform adapters: node/, cloudflare/, general/
 │   ├── vendor/                  # Third-party code, vendored unmodified
-│   └── document-store/, email-sender/, jobs/, object-store/, permissions/
+│   └── document-store/, jobs/, object-store/, permissions/
 │                                # Leaving core in later sections (see test/kixx/import-hygiene.test.js)
 ├── test/                        # Unit tests mirroring kixx/ (and later plugins/)
 ├── docs/                        # Maintainer guides; start with doc-index.md

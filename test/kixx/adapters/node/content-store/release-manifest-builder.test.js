@@ -27,7 +27,6 @@ function makeScanner(root) {
         pagesDirectory: path.join(root, 'pages'),
         templatesDirectory: path.join(root, 'templates'),
         staticAssetsDirectory: path.join(root, 'static-assets'),
-        emailsDirectory: path.join(root, 'emails'),
     });
 }
 
@@ -51,10 +50,6 @@ const FIXTURE_FILES = {
     'templates/partials/common/site.html': 'Common partial',
     'templates/base/default.html': 'Base template',
     'static-assets/images/logo.svg': '<svg></svg>',
-    'emails/welcome/email.json': JSON.stringify({
-        htmlTemplate: { id: 'welcome.html', filename: 'message.html' },
-    }),
-    'emails/welcome/message.html': 'Welcome email',
 };
 
 
@@ -88,7 +83,6 @@ describe('buildReleaseManifest', ({ it }) => {
             assert(manifest.globalTemplatePartials, 'expected globalTemplatePartials reference');
             assert(manifest.baseTemplates, 'expected baseTemplates reference');
             assert(manifest.staticAssets['/images/logo.svg'], 'expected static asset reference');
-            assert(manifest.emails['/welcome'], 'expected email reference');
         } finally {
             await fsp.rm(root, { recursive: true, force: true });
         }
@@ -127,7 +121,6 @@ describe('buildReleaseManifest', ({ it }) => {
             const scanner = makeScanner(root);
             const manifest = await buildReleaseManifest({ scanner, putObject: makeRecordingPutObject([]) });
 
-            assertUndefined(manifest.emails);
             assertUndefined(manifest.staticAssets);
             assertUndefined(manifest.globalTemplatePartials);
             assertUndefined(manifest.baseTemplates);
@@ -149,7 +142,6 @@ describe('buildReleaseManifest', ({ it }) => {
                     pagesDirectory: path.join(root, 'pages'),
                     templatesDirectory: path.join(root, 'templates'),
                     staticAssetsDirectory: path.join(root, 'static-assets'),
-                    emailsDirectory: path.join(root, 'emails'),
                     isolatePageErrors: true,
                 }),
                 putObject,

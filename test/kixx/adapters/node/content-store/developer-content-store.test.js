@@ -21,7 +21,6 @@ function makeStore(root, fileSystem) {
         pagesDirectory: path.join(root, 'pages'),
         templatesDirectory: path.join(root, 'templates'),
         staticAssetsDirectory: path.join(root, 'static-assets'),
-        emailsDirectory: path.join(root, 'emails'),
         fileSystem,
     });
 }

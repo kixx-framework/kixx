@@ -153,11 +153,6 @@ describe('ContentAddressableStore', ({ describe, it }) => {
                 { id: 'broken', source: '{{# open }}' },
                 { id: 'unresolved', source: '{{> missing }}' },
             ]);
-            const email = await uploadJson(store, {
-                htmlTemplate: { id: 'html', source: '{{# open }}' },
-                textTemplate: { id: 'text', source: '{{> missing }}' },
-                partials: [ { id: 'signature', source: '{{# open }}' } ],
-            });
             const manifest = {
                 globalTemplatePartials: bundle,
                 baseTemplates: bundle,
@@ -165,7 +160,6 @@ describe('ContentAddressableStore', ({ describe, it }) => {
                     '/one': { partials: bundle, templates: { 'page.html': invalid } },
                     '/two': { templates: { 'page.html': unresolved } },
                 },
-                emails: { '/welcome': email },
             };
 
             const validated = await store.validateRelease({}, manifest);
@@ -305,6 +299,10 @@ describe('ContentAddressableStore', ({ describe, it }) => {
         });
     });
 
+    it('pins content contract version 2', () => {
+        assertEqual(2, CONTENT_CONTRACT_VERSION);
+    });
+
     describe('serving a build', ({ it }) => {
         it('serves a snapshot for a build with a compatible Release', async () => {
             const { store, contentStore } = makeStore();
@@ -373,6 +371,24 @@ describe('ContentAddressableStore', ({ describe, it }) => {
 
             await catchAsyncError(() => store.openSnapshot(context));
             assertEqual(1, errors.length);
+        });
+
+        it('refuses a Release recorded under contract 1', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
+            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, expectedAssignmentId: null });
+
+            const index = new ContentAddressableIndex(contentStore.closures.get(release.releaseId));
+            const contractHash = index.getNode(CONTENT_CONTRACT_PATH).hash;
+            contentStore.blobs.set(contractHash, JSON.stringify({ version: 1 }));
+
+            const context = { runtime: { build: { id: 'build-1' } } };
+            const caught = await catchAsyncError(() => store.openSnapshot(context));
+            assertEqual(503, caught.httpStatusCode);
+            assertEqual('BuildNotServable', caught.code);
+            assert(caught.message.includes('content contract version 1,'));
+            assert(caught.message.includes('supports version 2'));
         });
     });
 

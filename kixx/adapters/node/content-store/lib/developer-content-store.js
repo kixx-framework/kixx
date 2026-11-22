@@ -40,7 +40,6 @@ export default class DeveloperContentStore {
      * @param {string} options.pagesDirectory - Root of page sources
      * @param {string} options.templatesDirectory - Root of template sources
      * @param {string} options.staticAssetsDirectory - Root of static assets
-     * @param {string} options.emailsDirectory - Root of email sources
      * @param {Object} [options.fileSystem] - Promise-based filesystem API used by tests
      */
     constructor(options) {

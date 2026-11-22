@@ -31,14 +31,14 @@ const MISSING_OBJECT_REPORT_LIMIT = 1000;
  * @type {number}
  * @readonly
  */
-export const CONTENT_CONTRACT_VERSION = 1;
+export const CONTENT_CONTRACT_VERSION = 2;
 
 /**
  * The framework-facing entry point to published site content.
  *
- * Site content — page metadata, page templates, template bundles, email
- * bundles, and static assets — is not stored as mutable files. It is stored the
- * way a version control system stores a commit: every file is an immutable blob
+ * Site content — page metadata, page templates, template bundles, and static
+ * assets — is not stored as mutable files. It is stored the way a version
+ * control system stores a commit: every file is an immutable blob
  * named by the hash of its bytes, every directory is an immutable tree named by
  * the hash of its children, and one whole published site is a *closure* named by
  * the hash of its root tree. Publishing a new version writes only the blobs that
@@ -555,9 +555,6 @@ function getStructuredKind(pathname) {
     }
     if (pathname.endsWith('/__page-includes-bundle')) {
         return 'pageIncludes';
-    }
-    if (pathname.endsWith('/__email-assets')) {
-        return 'email';
     }
     return null;
 }

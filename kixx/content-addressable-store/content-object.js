@@ -46,7 +46,7 @@ export class TextContentObject extends ContentObject {
 
 /**
  * A blob read as text and parsed as JSON on construction. Used for page
- * metadata and the partial, include, and email bundles, all of which are
+ * metadata and the partial and include bundles, all of which are
  * written through `canonicalize()`.
  * @extends ContentObject
  */

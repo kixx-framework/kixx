@@ -79,22 +79,6 @@ async function materializeRecipe(recipe, fileSystem) {
     if (recipe.kind === 'includes') {
         return canonicalize(Object.fromEntries(sources.map(({ name, source }) => [ name, source ])));
     }
-    if (recipe.kind === 'email') {
-        const bundle = {
-            contextData: recipe.contextData,
-            partials: sources
-                .filter(({ role }) => role === 'partial')
-                .map(({ id, source }) => ({ id, source })),
-            includes: {},
-        };
-        for (const source of sources) {
-            if (source.role === 'htmlTemplate' || source.role === 'textTemplate') {
-                bundle[source.role] = { id: source.id, source: source.source };
-            }
-        }
-        return canonicalize(bundle);
-    }
-
     assert(false, `getDeveloperBlob: unknown recipe kind "${ recipe.kind }"`);
 }
 

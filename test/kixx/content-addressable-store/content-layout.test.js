@@ -2,7 +2,6 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import {
-    getEmailBundlePath,
     isValidPathname,
     isValidTemplateFilepath,
     normalizePathname,
@@ -97,26 +96,6 @@ describe('content-layout', ({ describe }) => {
             assertEqual(false, isValidTemplateFilepath('/blog/post/page.json'));
             assertEqual(false, isValidTemplateFilepath('/blog/post/__page-partials-bundle'));
             assertEqual(false, isValidTemplateFilepath('/blog/post/__page-includes-bundle'));
-        });
-    });
-
-    describe('getEmailBundlePath()', ({ it }) => {
-        it('produces distinct storage pathnames for distinct email pathnames', () => {
-            const welcome = getEmailBundlePath('/welcome');
-            const passwordReset = getEmailBundlePath('/password-reset');
-
-            assert(welcome !== passwordReset, 'expected distinct storage pathnames');
-        });
-
-        it('nests the bundle beneath the email pathname', () => {
-            assertEqual('/emails/welcome/__email-assets', getEmailBundlePath('/welcome'));
-        });
-
-        it('throws AssertionError when the pathname is not valid', () => {
-            const caught = catchError(() => getEmailBundlePath('/A/b'));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
         });
     });
 });

@@ -17,7 +17,6 @@ const CORE_DIRECTORY = fileURLToPath(new URL('../../kixx/', import.meta.url));
 // Modules still in core that a later section removes.
 const LEAVING_CORE = {
     'document-store': 'S25',
-    'email-sender': 'S03',
     'jobs': 'S28',
     'object-store': 'S27',
     'permissions': 'S29',

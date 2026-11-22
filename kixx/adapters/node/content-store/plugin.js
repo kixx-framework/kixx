@@ -13,7 +13,6 @@ const DEFAULT_SOURCE_DIRECTORIES = {
     pagesDirectory: './pages',
     templatesDirectory: './templates',
     staticAssetsDirectory: './static-assets',
-    emailsDirectory: './emails',
 };
 
 

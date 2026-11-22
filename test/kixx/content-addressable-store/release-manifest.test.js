@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertUndefined } from 'kixx-assert';
+import { assert, assertEqual, assertMatches, assertUndefined } from 'kixx-assert';
 
 import {
     validateReleaseManifest,
@@ -42,13 +42,10 @@ describe('ReleaseManifest', ({ describe, it }) => {
                     },
                 },
             },
-            emails: {
-                '/welcome': reference(OBJECT_C, 9),
-            },
         });
         const byPathname = new Map(files.map((file) => [ file.pathname, file ]));
 
-        assertEqual(9, files.length);
+        assertEqual(8, files.length);
         assertEqual(0, byPathname.get('/assets/app.css').size);
         assertEqual('text/css', byPathname.get('/assets/app.css').metadata.mediaType);
         assertEqual(OBJECT_B, byPathname.get('/templates/__template-partials-bundle').hash);
@@ -58,7 +55,16 @@ describe('ReleaseManifest', ({ describe, it }) => {
         assertEqual(OBJECT_C, byPathname.get('/pages/blog/post/__page-includes-bundle').hash);
         assertEqual(OBJECT_A, byPathname.get('/pages/blog/post/page.html').hash);
         assertEqual(OBJECT_B, byPathname.get('/pages/blog/post/card.html').hash);
-        assertEqual(OBJECT_C, byPathname.get('/emails/welcome/__email-assets').hash);
+    });
+
+    it('rejects an emails facet as an unknown field', () => {
+        const caught = catchError(() => validateReleaseManifest({ emails: {} }));
+
+        assert(caught, 'expected validation to fail');
+        assertEqual('ValidationError', caught.name);
+        assertEqual(1, caught.errors.length);
+        assertEqual('/emails', caught.errors[0].source);
+        assertMatches('Unknown field "emails"', caught.errors[0].message);
     });
 
     it('omits metadata when a static asset does not declare a media type', () => {
@@ -73,12 +79,11 @@ describe('ReleaseManifest', ({ describe, it }) => {
         const caught = catchError(() => validateReleaseManifest({
             staticAssets: { '/Logo.PNG': reference() },
             pages: { 'about': {} },
-            emails: { '/welcome/': reference() },
         }));
 
         assert(caught, 'expected validation to fail');
         assertEqual('VALIDATION_ERROR', caught.code);
-        assertEqual('/staticAssets/~1Logo.PNG,/pages/about,/emails/~1welcome~1', caught.errors.map(({ source }) => source).join(','));
+        assertEqual('/staticAssets/~1Logo.PNG,/pages/about', caught.errors.map(({ source }) => source).join(','));
     });
 
     it('collects malformed containers, references, and unknown fields', () => {
@@ -94,12 +99,11 @@ describe('ReleaseManifest', ({ describe, it }) => {
                     typo: true,
                 },
             },
-            emails: 'bad',
         }));
 
         assert(caught, 'expected validation to fail');
         assertEqual('VALIDATION_ERROR', caught.code);
-        assertEqual(10, caught.errors.length);
+        assertEqual(9, caught.errors.length);
     });
 
     it('rejects reserved and nested page template filenames', () => {
@@ -151,13 +155,6 @@ describe('ReleaseManifest', ({ describe, it }) => {
             validateStructuredContent('pageMetadata', { title: 'About', flags: [ true, null ] });
             validateStructuredContent('pagePartials', [ { id: 'card', source: '<article>' } ]);
             validateStructuredContent('pageIncludes', { intro: 'Hello' });
-            validateStructuredContent('email', {
-                htmlTemplate: { id: 'welcome-html', source: '<h1>Hello</h1>' },
-                textTemplate: { id: 'welcome-text', source: 'Hello' },
-                partials: [ { id: 'signature', source: 'Regards' } ],
-                includes: { legal: 'Terms' },
-                contextData: { recipient: 'Kris' },
-            });
         });
 
         it('reports every malformed template entry and duplicate id', () => {
@@ -171,11 +168,12 @@ describe('ReleaseManifest', ({ describe, it }) => {
             assertEqual(4, caught.errors.length);
         });
 
-        it('rejects unknown email fields and an empty email bundle', () => {
-            const caught = catchError(() => validateStructuredContent('email', { typo: true }));
+        it('rejects the email kind as unknown', () => {
+            const caught = catchError(() => validateStructuredContent('email', {}));
 
             assert(caught, 'expected validation to fail');
-            assertEqual(2, caught.errors.length);
+            assertEqual(1, caught.errors.length);
+            assertMatches('Unknown structured content kind "email"', caught.errors[0].message);
         });
 
         it('rejects non-string includes', () => {
@@ -187,24 +185,18 @@ describe('ReleaseManifest', ({ describe, it }) => {
             assertEqual(2, caught.errors.length);
         });
 
-        it('requires object-shaped metadata and email context data', () => {
+        it('requires object-shaped metadata', () => {
             for (const value of [ null, [], 'text', 1 ]) {
                 const metadataError = catchError(() => validateStructuredContent('pageMetadata', value));
-                const emailError = catchError(() => validateStructuredContent('email', {
-                    includes: {},
-                    contextData: value,
-                }));
 
                 assertEqual(1, metadataError.errors.length);
-                assertEqual(1, emailError.errors.length);
             }
         });
 
-        it('leaves nested metadata and email context values to JSON parsing', () => {
+        it('leaves nested metadata values to JSON parsing', () => {
             const content = JSON.parse('{"nested":{"values":[null,true,1e400]}}');
 
             validateStructuredContent('pageMetadata', content);
-            validateStructuredContent('email', { includes: {}, contextData: content });
         });
     });
 });

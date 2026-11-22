@@ -1,7 +1,7 @@
 # Publishing API v1
 
 The Publishing API publishes and rolls back a website's content: static
-assets, templates, page metadata, and email content.
+assets, templates, and page metadata.
 
 The API is mounted at:
 
@@ -206,7 +206,7 @@ limits.
         "id": "v1",
         "attributes": {
             "runningBuildId": "production",
-            "contentContractVersion": 1,
+            "contentContractVersion": 2,
             "addressingFormat": 4,
             "buildAssignmentProtocolVersion": 2,
             "limits": {
@@ -329,9 +329,6 @@ Content-Type: application/vnd.api+json
                             "page.html": { "objectId": "<object-id>", "size": 28 }
                         }
                     }
-                },
-                "emails": {
-                    "/welcome": { "objectId": "<object-id>", "size": 300 }
                 }
             },
             "provenance": {
@@ -346,8 +343,8 @@ Content-Type: application/vnd.api+json
 
 The manifest is a **complete replacement**: an omitted facet is absent from
 the Release, never inherited from what is live.
-`attributes.manifest` is required (`400` when absent). `staticAssets`, `pages`,
-and `emails` are keyed by canonical pathnames: lowercase, one leading `/`, no
+`attributes.manifest` is required (`400` when absent). `staticAssets` and
+`pages` are keyed by canonical pathnames: lowercase, one leading `/`, no
 trailing slash. A non-canonical pathname is rejected, not normalized. Only
 `pages` may use the root `/`. Unknown fields are rejected at every level. Each reference is
 `{ objectId, size }`; static-asset references may add an optional
@@ -365,7 +362,7 @@ Creation persists nothing if any check fails:
    (`400`);
 2. object existence and size verification against every referenced object id,
    together with JSON parsing and schema validation for structured payloads
-   (template bundles, page metadata, email bundles, includes). Errors from
+   (template bundles, page metadata, includes). Errors from
    both are reported together.
 
 Templates are not compiled and partial references are not resolved, so a
@@ -377,8 +374,8 @@ a manifest naming an object the store does not hold fails with
 `422 MissingContentObjects`, listing every missing reference (up to 1000) —
 not just the first. Malformed JSON or a structured
 payload that violates its schema fails with
-`422 InvalidReleaseManifest`. Metadata and email context data must be JSON
-objects; their nested values are not recursively validated.
+`422 InvalidReleaseManifest`. Page metadata must be a JSON object; its nested
+values are not recursively validated.
 
 The response is `201 Created`:
 
@@ -392,7 +389,7 @@ The response is `201 Created`:
             "createdBy": "<publishing-token-id>",
             "objectCount": 6,
             "totalBytes": 1972,
-            "contractVersion": 1,
+            "contractVersion": 2,
             "provenance": {
                 "sourceRevision": "a1b2c3d",
                 "message": "Publish the About page",
@@ -429,7 +426,7 @@ Returns `200`:
             "releaseId": "<release-id>",
             "objectCount": 6,
             "totalBytes": 1972,
-            "contractVersion": 1
+            "contractVersion": 2
         }
     }
 }
@@ -456,7 +453,7 @@ optional (1 through 100, default 100); `cursor` continues a prior page.
                 "createdBy": "<publishing-token-id>",
                 "objectCount": 6,
                 "totalBytes": 1972,
-                "contractVersion": 1,
+                "contractVersion": 2,
                 "provenance": {}
             }
         }
