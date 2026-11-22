@@ -34,7 +34,6 @@ const BINDING_TYPES = {
     plain_text: { ids: [], texts: [ 'text' ] },
     r2_bucket: { ids: [ 'bucket_name' ], optionalIds: [ 'jurisdiction' ], texts: [] },
     secret_text: { ids: [], texts: [ 'text' ] },
-    send_email: { ids: [], texts: [] },
     version_metadata: { ids: [], texts: [] },
 };
 
@@ -89,8 +88,8 @@ const TEXT_ENCODER = new TextEncoder();
  * payload shape, including base64 transport encoding.
  *
  * Supported binding types: `d1`, `durable_object_namespace`, `images`,
- * `inherit`, `kv_namespace`, `plain_text`, `r2_bucket`, `secret_text`,
- * `send_email`, and `version_metadata`. Other types fail locally with a
+ * `inherit`, `kv_namespace`, `plain_text`, `r2_bucket`, `secret_text`, and
+ * `version_metadata`. Other types fail locally with a
  * useful message instead of an opaque Cloudflare API error.
  *
  * Only the modules, bindings, and Durable Object exports accumulate after

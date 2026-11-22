@@ -368,14 +368,6 @@ IDs (`databaseId`, `namespaceId`, `kvNamespaceId`) and bucket names in
 exists, and fails naming any that is missing. The Durable Object namespaces
 are created by Cloudflare when the first version is deployed.
 
-### Sending email
-
-Cloudflare email sending reads `SEND_EMAIL.from` from the selected
-environment. The shipped value is a placeholder; replace it with a verified
-sender address on an onboarded sender domain before enabling anything that
-sends email. `SEND_EMAIL.bindingName` names the Worker's `send_email`
-binding (default `SEND_EMAIL`).
-
 ### Worker packaging
 
 `cloudflare-server.js` is the entry module. The CLI uploads every statically

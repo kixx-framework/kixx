@@ -77,7 +77,6 @@ Resource blocks produce bindings:
 | `CONTENT_STORE` (`kvBindingName`, `kvNamespaceId`, `durableObjectBindingName`, `durableObjectClassName`) | KV namespace and Durable Object namespace |
 | `JOB_QUEUE` (`durableObjectBindingName`, `durableObjectClassName`) | Durable Object namespace; other keys are application config |
 | `OBJECT_STORE.buckets.<key>` (`bindingName`, `bucketName`, optional `jurisdiction`) | R2 bucket |
-| `SEND_EMAIL` (`bindingName`) | `send_email`; other keys are application config |
 | `IMAGES` (`bindingName`) | `images`; other keys are application config |
 
 `jurisdiction` is `default`, `eu`, or `fedramp`; `default` equals omitting

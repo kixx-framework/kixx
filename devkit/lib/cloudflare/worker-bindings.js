@@ -51,7 +51,6 @@ export function buildWorkerBindings(args) {
         ...contentStoreDurableObjectBindings(environmentConfig, prefix),
         ...jobQueueBindings(environmentConfig, prefix),
         ...objectStoreBindings(environmentConfig, environment),
-        ...nameOnlyBindings(environmentConfig, prefix, 'SEND_EMAIL', 'send_email'),
         ...nameOnlyBindings(environmentConfig, prefix, 'IMAGES', 'images'),
         environmentBinding(environment),
         ...envarsBindings(environment, envars),
@@ -196,8 +195,8 @@ function objectStoreBindings(environmentConfig, environment) {
     });
 }
 
-// A binding with only a name, such as SEND_EMAIL or IMAGES. Every other key
-// in the block is application configuration.
+// A binding with only a name, such as IMAGES. Every other key in the block is
+// application configuration.
 function nameOnlyBindings(environmentConfig, prefix, configKey, type) {
     const block = readBlock(environmentConfig, prefix, configKey);
 
