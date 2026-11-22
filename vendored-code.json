@@ -1,0 +1,72 @@
+{
+    "entries": [
+        {
+            "path": "devkit/lib/vendor/acorn",
+            "name": "acorn",
+            "version": "8.16.0",
+            "source": "github:acornjs/acorn@8bd029044e80fce5b929bcd5ba616bf34ce8a306",
+            "files": "acorn/src/ as src/; acorn/LICENSE as LICENSE; AUTHORS from the repository root",
+            "sha256": "dcced9f6e86a2a0ac2c694e64a8cbc2fe4a02bd3853c64eaa68090004f0a7bc3",
+            "deviation": "Unreleased commit after 8.16.0 (2026-03-29). src/expression.js and src/statement.js differ from tag 8.16.0; src/ differs from tag 8.17.0 in six files."
+        },
+        {
+            "path": "devkit/lib/vendor/kixx-assert",
+            "name": "kixx-assert",
+            "version": "2.1.1",
+            "source": "npm:kixx-assert@2.1.1",
+            "files": "mod.js, README.md, LICENSE",
+            "sha256": "e5a07e2572a2c5d4c566529d2f544de60b172a19552a48fcfad9c6bf138e3696"
+        },
+        {
+            "path": "kixx/assertions",
+            "name": "kixx-assert",
+            "version": "2.1.1",
+            "source": "npm:kixx-assert@2.1.1",
+            "files": "mod.js, README.md, LICENSE",
+            "sha256": "e5a07e2572a2c5d4c566529d2f544de60b172a19552a48fcfad9c6bf138e3696"
+        },
+        {
+            "path": "kixx/errors",
+            "name": "kixx-server-errors",
+            "version": "6.0.0",
+            "source": "npm:kixx-server-errors@6.0.0",
+            "files": "lib/, mod.js, README.md, LICENSE",
+            "sha256": "5ca499bf5b2f2147902cec9ea22f14f517f786adb6f88da84b2e7ff2a73ae29e",
+            "deviation": "Interim copy ahead of 7.0.0: adds lib/payload-too-large-error.js, lib/precondition-failed-error.js, and lib/service-unavailable-error.js, exports them from mod.js, changes lib/wrapped-error.js so code no longer inherits cause.code, drops docs/, and edits README.md (typo fix, Reference Documentation section removed)."
+        },
+        {
+            "path": "kixx/vendor/luxon",
+            "name": "luxon",
+            "version": "3.7.2",
+            "source": "npm:luxon@3.7.2",
+            "files": "src/, README.md, LICENSE.md",
+            "sha256": "9b4bd763a3d5e96bde08f6515c26d9cf0c6ee368a94b0d9399f27980c84ed635",
+            "deviation": "The package's src/package.json is missing."
+        },
+        {
+            "path": "kixx/vendor/marked",
+            "name": "marked",
+            "version": "16.4.2",
+            "source": "npm:marked@16.4.2",
+            "files": "lib/marked.esm.js as mod.js (renamed, unmodified; its sourceMappingURL names a map that is not vendored); README.md; LICENSE.md",
+            "sha256": "71c43be6d6af92fab7a29844b2ffea5ac3eb7b86cfb5636696be7bdce9b80b75"
+        },
+        {
+            "path": "kixx/vendor/path-to-regexp",
+            "name": "path-to-regexp",
+            "version": "unknown",
+            "source": "npm:path-to-regexp",
+            "files": "dist/index.js, dist/index.d.ts, dist/index.js.map, Readme.md, LICENSE",
+            "sha256": "640f7f9fc1f95494e52d1924f97a1a853ddd71dad94873d424cc2478156a785a",
+            "deviation": "Matches no published release (8.2.0, 8.3.0, 8.4.0, 9.0.0 checked; only LICENSE matches all, and dist/index.d.ts matches 8.4.0). dist/index.js is an ES module conversion of a CommonJS build, and its source map is the CommonJS build's. Recorded as 8.3.0 when vendored."
+        },
+        {
+            "path": "kixx/vendor/templating",
+            "name": "kixx-templating",
+            "version": "7.0.0",
+            "source": "npm:kixx-templating@7.0.0",
+            "files": "docs/, lib/, mod.js, README.md, LICENSE",
+            "sha256": "67ca0c4cea806e25725758bf73e393f724a80bc3f939754809b38ce368e38ae3"
+        }
+    ]
+}
