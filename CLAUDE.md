@@ -30,7 +30,8 @@ node run-linter.js kixx test       # lint a subset (pass only paths that exist)
 
 - `reference-app/` and `test-v6/` aren't maintained and may be broken. Don't run, lint, or fix them.
 - When you change, move, or keep a module, bring its tests back from `test-v6/` with `git mv` (never copy), fix their imports, and make them pass. Tests must not read files by cwd-relative path or from `reference-app/`.
-- The v6 devkit ports four core modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. Its conformance tests wait in `test-v6/devkit/conformance/` and don't run. Keeping the ports in step isn't required until the devkit sections decide their fate.
+- When a `test-v6/` file mixes cases for the current work with cases for code a later section reworks, split it. `git mv` the file into the active suite in a commit that holds only renames. Then trim the moved copy to the cases that cover the current work, and restore the rest at the old path unchanged. Delete cases that cover removed code. The parked rest waits for its own section.
+- The v6 devkit ports four core modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. Most of the devkit's conformance tests are still parked in `test-v6/devkit/conformance/` and don't run; `devkit/test/conformance/content-contract.test.js` runs. The devkit's contract pin (`devkit/lib/publishing/negotiate-capabilities.js`) and the manifest shape it composes must stay in step with core. The four ported modules needn't be kept in step until the devkit sections decide their fate.
 - `test-v6/test-app/` and `tools/build-test-app.js` are v6 and knowingly broken.
 - When public behavior changes, update `usage-docs/kixx-app/`.
 
@@ -51,7 +52,7 @@ node devkit/run-linter.js devkit             # lint
 node devkit/kixx.js <command> <subcommand>   # run the CLI from source
 ```
 
-`node devkit/run-tests.js` exits 1 with `No test files found` until the devkit tests come back from `test-v6/devkit/`.
+Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js` runs them. The rest come back with their sections.
 
 **Keep it stand-alone.** The devkit ships to npm and JSR on its own.
 

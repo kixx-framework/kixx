@@ -247,7 +247,6 @@ export function makeReleaseManifest(resources) {
     const manifest = {
         staticAssets: {},
         pages: {},
-        emails: {},
     };
 
     for (const resource of resources) {
@@ -280,9 +279,6 @@ export function makeReleaseManifest(resources) {
                 page.templates[filename] = reference;
                 break;
             }
-            case 'EmailAssets':
-                manifest.emails[normalizePathname(resource.pathname)] = reference;
-                break;
             default:
                 assert(false, `Unsupported publishing resource type: ${ resource.type }`);
         }

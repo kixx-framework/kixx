@@ -83,7 +83,7 @@ Documentation:
 - [dev.md][dev-doc]: the local devserver.
 - [local.md][local-doc]: throwaway local instances.
 
-`app` commands require an application serving content contract 1, addressing
+`app` commands require an application serving content contract 2, addressing
 format 4, and build assignment protocol 2; see [app.md][app-doc-server-requirement].
 
 Not included: creating D1, KV, or R2 resources, and managing Worker secrets.

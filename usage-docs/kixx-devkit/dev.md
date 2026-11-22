@@ -43,7 +43,7 @@ These files trigger a restart:
 
 Changes are ignored in:
 
-- `pages/`, `templates/`, `static-assets/`, `public/`, `emails/`, and `test/`
+- `pages/`, `templates/`, `static-assets/`, `public/`, and `test/`
   at the top level of the project. Directories with these names deeper in the
   tree are still watched.
 - `node_modules/` and any directory whose name starts with `.` (such as

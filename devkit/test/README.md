@@ -1,6 +1,6 @@
 # Unit Testing Guide
 
-> **Status:** The devkit's v6 tests are parked in `test-v6/devkit/` and nothing here runs until a devkit section brings them back. Until then `node devkit/run-tests.js` exits 1 with `No test files found`.
+> **Status:** Some devkit tests are back in `devkit/test/`; the rest are parked in `test-v6/devkit/` until their sections bring them back. `node devkit/run-tests.js` runs what is here. The helpers and fixtures named below are still parked in `test-v6/devkit/helpers/` and `test-v6/devkit/fixtures/`.
 
 This project uses two ES module libraries:
 
@@ -96,12 +96,12 @@ Prefer small file-local helpers over shared global fixtures:
 
 Use `before` when a group intentionally exercises one setup/action/result across several focused `it` blocks. Otherwise, keep setup inside the `it` so the test can be read in isolation.
 
-## Conformance Tests Against Repo `lib/`
+## Conformance Tests Against Core
 
-Nothing under `devkit/` may import from outside `devkit/`, because the package is published stand-alone. Tests in `devkit/test/conformance/` are the one exception: they may import the repository's `lib/` modules, read-only, to prove devkit agrees with the application on wire formats and file dialects (for example `conformance/parse-jsonc.test.js` parses `lib/cloudflare-config.jsonc` with both parsers).
+Nothing under `devkit/` may import from outside `devkit/`, because the package is published stand-alone. Tests in `devkit/test/conformance/` are the one exception: they may import core (`kixx/`) modules, read-only, to prove devkit agrees with the application on wire formats and file dialects (for example `conformance/content-contract.test.js` passes a devkit-composed Release manifest to core's validator).
 
-- Never write into `lib/`. Use an overlay or in-memory `fileSystem` when a test needs a generated file.
-- Compare devkit's result with lib's result rather than restating lib's rules in the test.
+- Never write into `kixx/`. Use an overlay or in-memory `fileSystem` when a test needs a generated file.
+- Compare devkit's result with core's result rather than restating core's rules in the test.
 - `test/` is excluded from both published packages, so these imports never ship.
 
 ## Hook Semantics

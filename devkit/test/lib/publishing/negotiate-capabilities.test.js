@@ -20,7 +20,7 @@ describe('publishing/negotiate-capabilities', ({ it }) => {
     });
 
     it('pins the versions this client speaks', () => {
-        assertEqual(1, CONTENT_CONTRACT_VERSION);
+        assertEqual(2, CONTENT_CONTRACT_VERSION);
         assertEqual(2, BUILD_ASSIGNMENT_PROTOCOL_VERSION);
         assertEqual(4, FORMAT);
     });
@@ -34,12 +34,12 @@ describe('publishing/negotiate-capabilities', ({ it }) => {
     });
 
     it('rejects a mismatched content contract', async () => {
-        const client = makeClient({ contentContractVersion: 2 });
+        const client = makeClient({ contentContractVersion: 1 });
 
         const caught = await catchAsyncError(() => negotiateCapabilities(client));
 
         assertEqual('UnsupportedServerError', caught.name);
-        assertMatches('Content contract: server reports 2; this client composes 1.', caught.message);
+        assertMatches('Content contract: server reports 1; this client composes 2.', caught.message);
     });
 
     it('rejects a mismatched addressing format', async () => {
@@ -72,7 +72,7 @@ describe('publishing/negotiate-capabilities', ({ it }) => {
 
     it('reports every mismatch at once', async () => {
         const client = makeClient({
-            contentContractVersion: 2,
+            contentContractVersion: 1,
             addressingFormat: 3,
             buildAssignmentProtocolVersion: undefined,
         });
@@ -114,7 +114,7 @@ describe('publishing/negotiate-capabilities', ({ it }) => {
 function makeClient(overrides) {
     const capabilities = {
         runningBuildId: 'production',
-        contentContractVersion: 1,
+        contentContractVersion: 2,
         addressingFormat: 4,
         buildAssignmentProtocolVersion: 2,
         limits: {

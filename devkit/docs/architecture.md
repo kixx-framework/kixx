@@ -63,4 +63,4 @@ Rules:
 - When you change one side, change the other in the same commit, and run `node devkit/run-tests.js devkit/test/conformance`.
 - A new port gets a header comment naming its source and a conformance test that compares results with the original.
 - `addressing.js` pins `FORMAT`. A format change upstream changes object ids, so treat it as a migration; see the module header.
-- The `app` commands speak Publishing API build assignment protocol 2, content contract 1, and addressing format 4. `lib/publishing/negotiate-capabilities.js` pins these versions and refuses, before any write, a server that does not support them. Bump them there when the server protocol changes.
+- The `app` commands speak Publishing API build assignment protocol 2, content contract 2, and addressing format 4. `lib/publishing/negotiate-capabilities.js` pins these versions and refuses, before any write, a server that does not support them. Bump them there when the server protocol changes. `test/conformance/content-contract.test.js` checks that the pinned contract matches core's and that `makeReleaseManifest()` output passes core's validator.

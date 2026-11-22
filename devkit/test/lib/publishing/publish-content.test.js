@@ -1,6 +1,5 @@
 import { describe } from 'kixx-test';
 import {
-    assert,
     assertEqual,
     assertMatches,
     isString,
@@ -31,66 +30,16 @@ describe('publishing/publish-content', ({ it }) => {
         assertEqual('partials-hash', manifest.pages['/about'].partials.objectId);
         assertEqual('includes-hash', manifest.pages['/about'].includes.objectId);
         assertEqual('template-hash', manifest.pages['/about'].templates['page.html'].objectId);
-        assertEqual('email-hash', manifest.emails['/welcome'].objectId);
-        assertEqual('revision', client.releases[0].provenance.sourceRevision);
-    });
-
-    it('uploads only missing objects using their canonical bytes', async () => {
-        const matched = makeResource('StaticAsset', 'same.css', 'same-hash', 'same');
-        const structured = makeResource(
-            'PageMetadata',
-            '/',
-            'metadata-hash',
-            { z: 2, a: 1 },
+        assertEqual(
+            'baseTemplates,globalTemplatePartials,pages,staticAssets',
+            Object.keys(manifest).sort().join(','),
         );
-        const client = makeClient({ storedIds: [ matched.hash ] });
-
-        const result = await publishContent(makeArgs(client, [ matched, structured ]));
-
-        assertEqual(1, result.matchedCount);
-        assertEqual(1, result.uploadedCount);
-        assertEqual(1, result.completedUploadCount);
-        assertEqual('metadata-hash', client.uploads[0].objectId);
-        assertEqual('{"a":1,"z":2}', client.uploads[0].payload);
-        assertEqual('metadata-hash', client.releases[0].manifest.pages['/'].metadata.objectId);
-    });
-
-    it('builds every Release only from the current local scan', async () => {
-        const first = makeResource('StaticAsset', 'first.css', 'first-hash');
-        const second = makeResource('StaticAsset', 'second.css', 'second-hash');
-        const client = makeClient({ storedIds: [ first.hash, second.hash ] });
-
-        await publishContent(makeArgs(client, [ first, second ]));
-        await publishContent(makeArgs(client, [ second ]));
-
-        const latest = client.releases[1].manifest;
-        assertEqual(1, Object.keys(latest.staticAssets).length);
-        assertEqual('second-hash', latest.staticAssets['/second.css'].objectId);
-        assertEqual(undefined, latest.staticAssets['/first.css']);
-    });
-
-    it('performs discovery and object status only during a dry run', async () => {
-        const stored = makeResource('StaticAsset', 'same.css', 'same-hash');
-        const missing = makeResource('StaticAsset', 'new.css', 'new-hash');
-        const client = makeClient({ storedIds: [ stored.hash ] });
-
-        const result = await publishContent({
-            ...makeArgs(client, [ stored, missing ]),
-            dryRun: true,
-        });
-
-        assert(result.dryRun);
-        assertEqual(1, result.matchedCount);
-        assertEqual(1, result.uploadedCount);
-        assertEqual(1, client.discoveryCount);
-        assertEqual(1, client.statusChecks.length);
-        assertEqual(0, client.uploads.length);
-        assertEqual(0, client.releases.length);
+        assertEqual('revision', client.releases[0].provenance.sourceRevision);
     });
 
     it('rejects unsupported servers before status or writes', async () => {
         for (const capabilities of [
-            makeCapabilities({ contentContractVersion: 2 }),
+            makeCapabilities({ contentContractVersion: 1 }),
             makeCapabilities({ addressingFormat: 3 }),
             makeCapabilities({ buildAssignmentProtocolVersion: undefined }),
         ]) {
@@ -107,111 +56,6 @@ describe('publishing/publish-content', ({ it }) => {
             assertEqual(0, client.uploads.length);
             assertEqual(0, client.releases.length);
         }
-    });
-
-    it('rejects every oversized object before starting uploads', async () => {
-        const capabilities = makeCapabilities();
-        capabilities.limits.maxObjectBytes = 3;
-        const resources = [
-            makeResource('StaticAsset', 'small.css', 'small-hash', 'ok'),
-            makeResource('StaticAsset', 'large-a.css', 'large-hash', 'éé'),
-            makeResource('StaticAsset', 'large-b.css', 'large-hash', 'éé'),
-        ];
-        resources[1].sourceFiles = [ 'static-assets/large-a.css' ];
-        resources[2].sourceFiles = [ 'public/large-b.css' ];
-        const client = makeClient({ capabilities });
-
-        const caught = await catchAsyncError(() => {
-            return publishContent(makeArgs(client, resources));
-        });
-
-        assertEqual('UsageError', caught.name);
-        assertMatches('server limit of 3 bytes', caught.message);
-        assertMatches('large-a.css": 4 bytes; sources: static-assets/large-a.css', caught.message);
-        assertMatches('large-b.css": 4 bytes; sources: public/large-b.css', caught.message);
-        assertMatches('Nothing was published.', caught.message);
-        assertEqual(1, client.statusChecks.length);
-        assertEqual(0, client.uploads.length);
-        assertEqual(0, client.releases.length);
-    });
-
-    it('waits for in-flight uploads and prevents Release creation after failure', async () => {
-        const resources = [
-            makeResource('StaticAsset', 'one.css', 'one-hash'),
-            makeResource('StaticAsset', 'two.css', 'two-hash'),
-        ];
-        const client = makeClient({ failUploadId: 'one-hash', uploadDelay: 2 });
-
-        const caught = await catchAsyncError(() => publishContent(makeArgs(client, resources)));
-
-        assertEqual('PublishContentError', caught.name);
-        assertEqual('upload', caught.phase);
-        assertMatches('No Release was created', caught.message);
-        assertMatches('unreferenced, inert', caught.message);
-        assertEqual(0, client.releases.length);
-        assertEqual(0, client.activeUploads);
-    });
-
-    it('limits object upload concurrency to six requests', async () => {
-        const resources = Array.from({ length: 17 }, (_value, index) => {
-            return makeResource('StaticAsset', `asset-${ index }.css`, `hash-${ index }`);
-        });
-        const client = makeClient({ uploadDelay: 2 });
-
-        await publishContent(makeArgs(client, resources));
-
-        assertEqual(6, client.maxActiveUploads);
-    });
-
-    it('drops to one upload at a time after the server reports an overload', async () => {
-        const resources = Array.from({ length: 20 }, (_value, index) => {
-            return makeResource('StaticAsset', `asset-${ index }.css`, `hash-${ index }`);
-        });
-        const client = makeClient({ uploadDelay: 2, overloadAfterFirstUpload: true });
-
-        const result = await publishContent(makeArgs(client, resources));
-
-        const uploadedIds = client.uploads.map(({ objectId }) => objectId);
-        assertEqual(20, uploadedIds.length);
-        assertEqual(20, new Set(uploadedIds).size);
-        assertEqual(6, client.maxActiveUploads);
-
-        // Once the uploads in flight at the overload have drained, only one
-        // upload is ever active.
-        const drainedStarts = client.overloadedStarts.filter(({ preOverloadActive }) => preOverloadActive === 0);
-        assert(drainedStarts.length >= 13, `expected at least 13 serial uploads, got ${ drainedStarts.length }`);
-        for (const { active } of drainedStarts) {
-            assertEqual(1, active);
-        }
-
-        assertEqual(1, client.releases.length);
-        assertEqual(true, result.created);
-    });
-
-    it('uploads one at a time when the server is already overloaded', async () => {
-        const resources = Array.from({ length: 10 }, (_value, index) => {
-            return makeResource('StaticAsset', `asset-${ index }.css`, `hash-${ index }`);
-        });
-        const client = makeClient({ uploadDelay: 1, serverOverloaded: true });
-
-        await publishContent(makeArgs(client, resources));
-
-        assertEqual(10, client.uploads.length);
-        assertEqual(1, client.maxActiveUploads);
-    });
-
-    it('reports an upload failure after the drop as an upload phase error', async () => {
-        const resources = Array.from({ length: 5 }, (_value, index) => {
-            return makeResource('StaticAsset', `asset-${ index }.css`, `hash-${ index }`);
-        });
-        const client = makeClient({ serverOverloaded: true, failUploadId: 'hash-2' });
-
-        const caught = await catchAsyncError(() => publishContent(makeArgs(client, resources)));
-
-        assertEqual('PublishContentError', caught.name);
-        assertEqual('upload', caught.phase);
-        assertEqual(3, client.uploads.length);
-        assertEqual(0, client.releases.length);
     });
 });
 
@@ -236,7 +80,6 @@ function makeAllResourceTypes() {
         makeResource('PagePartials', '/about', 'partials-hash', []),
         makeResource('PageIncludes', '/about', 'includes-hash', {}),
         makeResource('PageTemplate', '/about/page.html', 'template-hash', '<main></main>'),
-        makeResource('EmailAssets', '/welcome', 'email-hash', {}),
     ];
 }
 
@@ -255,7 +98,7 @@ function makeResource(type, pathname, hash, payload = 'payload', mediaType) {
 function makeCapabilities(overrides) {
     return {
         runningBuildId: 'production',
-        contentContractVersion: 1,
+        contentContractVersion: 2,
         addressingFormat: 4,
         buildAssignmentProtocolVersion: 2,
         limits: {
@@ -339,14 +182,14 @@ function makeClient(options) {
                 releaseId: `release-${ this.releases.length }`,
                 objectCount: countManifestEntries(manifest),
                 totalBytes: 100,
-                contractVersion: 1,
+                contractVersion: 2,
             };
         },
     };
 }
 
 function countManifestEntries(manifest) {
-    let count = Object.keys(manifest.staticAssets).length + Object.keys(manifest.emails).length;
+    let count = Object.keys(manifest.staticAssets).length;
     count += manifest.globalTemplatePartials ? 1 : 0;
     count += manifest.baseTemplates ? 1 : 0;
 

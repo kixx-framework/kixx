@@ -66,7 +66,6 @@ class ContentSourceScanner {
         await this.#scanTemplates();
         await this.#scanStaticAssets();
         await this.#scanStaticDirectory('public');
-        await this.#scanEmails();
 
         this.#resources.sort((left, right) => {
             return compareStrings(`${ left.type }\0${ left.pathname }`, `${ right.type }\0${ right.pathname }`);
@@ -389,73 +388,6 @@ class ContentSourceScanner {
         return encoder.encode(stripped).buffer;
     }
 
-    async #scanEmails() {
-        const root = path.join(this.#projectDirectory, 'emails');
-        const { files } = await this.#walkFiles(root);
-        const manifests = files.filter(({ relativePath }) => {
-            return path.posix.basename(relativePath) === 'email.json';
-        });
-
-        for (const file of manifests) {
-            this.#matchedFiles.add(file.filepath);
-
-            if (!this.#validateSourcePath(file)) {
-                continue;
-            }
-
-            const json = await this.#readManifest(file, 'email.json');
-            if (!json) {
-                continue;
-            }
-
-            const emailDirectory = path.posix.dirname(file.relativePath);
-            const pathname = emailDirectory === '.' ? '/' : `/${ emailDirectory }`;
-            const email = this.#validateEmailManifest(file, json);
-            const payload = {
-                contextData: json.contextData ?? {},
-                partials: [],
-                includes: {},
-            };
-            const sourceFiles = [ file.sourcePath ];
-
-            for (const role of [ 'htmlTemplate', 'textTemplate' ]) {
-                const specification = email[role];
-                if (!specification) {
-                    continue;
-                }
-
-                const source = await this.#readReferencedText({
-                    manifest: file,
-                    reference: specification.filename,
-                    role: `email ${ role }`,
-                });
-                if (source) {
-                    payload[role] = { id: specification.id, source: source.text };
-                    sourceFiles.push(source.sourcePath);
-                }
-            }
-
-            for (const partial of email.partials) {
-                const source = await this.#readReferencedText({
-                    manifest: file,
-                    reference: partial.filename,
-                    role: `email partial "${ partial.id }"`,
-                });
-                if (source) {
-                    payload.partials.push({ id: partial.id, source: source.text });
-                    sourceFiles.push(source.sourcePath);
-                }
-            }
-
-            this.#resources.push(this.#makeResource(
-                'EmailAssets',
-                pathname,
-                payload,
-                sourceFiles,
-            ));
-        }
-    }
-
     #validatePageManifest(file, json) {
         let template = '';
         if (Object.hasOwn(json, 'template')) {
@@ -471,29 +403,6 @@ class ContentSourceScanner {
             partials: this.#validatePartials(file, json.partials),
             includes: this.#validateIncludes(file, json.includes),
         };
-    }
-
-    #validateEmailManifest(file, json) {
-        const result = {
-            htmlTemplate: null,
-            textTemplate: null,
-            partials: this.#validatePartials(file, json.partials),
-        };
-
-        for (const field of [ 'htmlTemplate', 'textTemplate' ]) {
-            const specification = json[field];
-
-            if (!specification) {
-                continue;
-            }
-            if (this.#isValidSourceSpecification(specification)) {
-                result[field] = specification;
-            } else {
-                this.#invalidManifest(file, `${ field } must contain non-empty id and filename strings`);
-            }
-        }
-
-        return result;
     }
 
     #validatePartials(file, value) {

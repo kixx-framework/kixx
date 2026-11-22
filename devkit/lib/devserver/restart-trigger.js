@@ -2,13 +2,12 @@ import { isNonEmptyString } from '../vendor/kixx-assert/mod.js';
 
 
 // Excluded only at the top level of the project: lib keeps server code in
-// nested directories with these names (kixx/static-assets/, forms/pages/).
+// nested directories with these names (such as kixx/static-assets/).
 const EXCLUDED_TOP_LEVEL_DIRECTORIES = new Set([
     'pages',
     'templates',
     'static-assets',
     'public',
-    'emails',
     'test',
 ]);
 

@@ -8,7 +8,7 @@ never printed.
 
 ## Server requirement
 
-These commands require a deployment serving content contract version 1,
+These commands require a deployment serving content contract version 2,
 addressing format 4, and build assignment protocol 2. Before any write, they
 read the server's capabilities and refuse an older deployment, naming each
 mismatch. Upgrade the deployment, or target one that is already upgraded.
@@ -41,8 +41,8 @@ before deploying it.
 
 Steps:
 
-1. Scan `pages/`, `templates/`, `static-assets/`, `public/`, and `emails/`,
-   and validate the whole tree. Invalid content fails before any write.
+1. Scan `pages/`, `templates/`, `static-assets/`, and `public/`, and validate
+   the whole tree. Invalid content fails before any write.
 2. Ask the server which content-addressed objects it already has, and upload
    only the missing ones.
 3. Create the Release.

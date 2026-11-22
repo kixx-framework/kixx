@@ -11,7 +11,7 @@ import { FORMAT } from './addressing.js';
  * @type {number}
  * @readonly
  */
-export const CONTENT_CONTRACT_VERSION = 1;
+export const CONTENT_CONTRACT_VERSION = 2;
 
 /**
  * Build pointer write protocol this client speaks.
