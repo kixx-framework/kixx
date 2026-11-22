@@ -136,7 +136,7 @@ Paths are below `environments.<envName>` unless marked root.
 | `OBJECT_STORE.buckets` | yes | Keyed by bucket name; each value rendered whole (`{}` or options such as `{ "directory": ... }`). |
 | `FILES.maxUploadBytes`, `FILES.bucket` | yes | |
 | `CONTENT_STORE.developerMode` | optional | When truthy, renders `"developerMode": true` and the directory keys below; otherwise renders `rootDirectory`. Only valid in `development` (enforced at runtime, not by the template). |
-| `CONTENT_STORE.pagesDirectory`, `templatesDirectory`, `staticAssetsDirectory`, `emailsDirectory` | optional | Developer mode only. Each rendered only when present. |
+| `CONTENT_STORE.pagesDirectory`, `templatesDirectory`, `staticAssetsDirectory` | optional | Developer mode only. Each rendered only when present. |
 | `CONTENT_STORE.rootDirectory` | yes, unless developer mode | |
 
 ### Cloudflare context
@@ -157,7 +157,6 @@ Paths are below `environments.<envName>` unless marked root.
 | `WORKER_VERSION.placement` | optional | Rendered whole. |
 | `DURABLE_OBJECT_MIGRATIONS` | optional | Rendered whole; shape owned by the deployment CLI. |
 | `LOGGER.level` | yes | |
-| `SEND_EMAIL.from` | yes | `bindingName` `"SEND_EMAIL"` is framework-owned. |
 | `HYPERVIEW.*`, `SECRET_ENCRYPTION.*`, `RATE_LIMIT.*` | yes | Same as Node.js. |
 | `DOCUMENT_STORE.databaseName` | yes | `type` `"d1"` and `bindingName` `"DOCUMENT_STORE"` are framework-owned. |
 | `DOCUMENT_STORE.databaseId` | optional | When absent, renders a hint to fill in the ID. |

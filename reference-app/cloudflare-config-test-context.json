@@ -37,9 +37,6 @@
             "LOGGER": {
                 "level": "info"
             },
-            "SEND_EMAIL": {
-                "from": "replace-me@example.com"
-            },
             "HYPERVIEW": {
                 "useTemplateCache": true,
                 "usePageCache": true,

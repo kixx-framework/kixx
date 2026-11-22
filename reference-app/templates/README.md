@@ -181,7 +181,7 @@ The first block parameter is required. Separate names with whitespace, not comma
 | `truncate` | `helpers/truncate.js` | Shorten a string to a maximum character count |
 | `assetUrl` | `helpers/asset-url.js` | Render a fingerprinted static-asset URL from the reserved `assets` map |
 
-All are inline helpers, available in page, base, partial, and email templates and in page metadata and email subject mini templates. Templates can pass published `includes` content to them like any value. Mini templates compile without partials, so don't use `{{> partial }}` in them.
+All are inline helpers, available in page, base, and partial templates and in page metadata mini templates. Templates can pass published `includes` content to them like any value. Mini templates compile without partials, so don't use `{{> partial }}` in them.
 
 ### assetUrl
 
@@ -305,7 +305,7 @@ export function register(context) {
 }
 ```
 
-- **Scope.** Registered helpers work wherever Hyperview compiles templates: pages, base templates, partials, page metadata, and email bodies and subjects.
+- **Scope.** Registered helpers work wherever Hyperview compiles templates: pages, base templates, partials, and page metadata.
 - **Same name replaces** the existing helper, including core and Hyperview helpers.
 - **No implicit context.** Capture config in a factory called from `app.js` (`createFormatMoney(context.config.env.DEFAULT_CURRENCY)`); pass request values as template data and arguments.
 - **`registerTemplateHelper()`** requires a non-empty name and a function, and returns the `HyperviewService` for chaining.

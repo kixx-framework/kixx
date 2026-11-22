@@ -88,9 +88,6 @@ node-config-test-context.json.
                 {{#if env.CONTENT_STORE.staticAssetsDirectory}}
                 "staticAssetsDirectory": {{ json env.CONTENT_STORE.staticAssetsDirectory }},
                 {{/if}}
-                {{#if env.CONTENT_STORE.emailsDirectory}}
-                "emailsDirectory": {{ json env.CONTENT_STORE.emailsDirectory }},
-                {{/if}}
                 {{/if}}
                 {{^env.CONTENT_STORE.developerMode}}
                 "rootDirectory": {{ json env.CONTENT_STORE.rootDirectory }},

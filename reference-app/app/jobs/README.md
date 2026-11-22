@@ -5,9 +5,9 @@ A durable job queue. Enqueue a job by name to run now, later, or on a UTC cron s
 ```js
 const queue = context.getService('JobQueue');
 
-await queue.enqueue(context, 'send-admin-invite-email', { inviteId }, {
+await queue.enqueue(context, 'expire-admin-invite', { inviteId }, {
     runAt: '2026-10-01T09:00:00Z', // or delaySeconds: 300, never both; omit both for "now"
-    key: `invite-email:${ inviteId }`, // optional dedupe key
+    key: `expire-invite:${ inviteId }`, // optional dedupe key
 });
 ```
 
@@ -16,10 +16,10 @@ await queue.enqueue(context, 'send-admin-invite-email', { inviteId }, {
 Add an entry to the `Map` in `mod.js`, importing the handler statically (no `import()`). The registry is validated at boot. It ships empty.
 
 ```js
-[ 'send-admin-invite-email', {
-    name: 'send-admin-invite-email',   // must equal the key; lowercase kebab-case
-    description: 'Send the invite email.',
-    handler: sendAdminInviteEmail,
+[ 'expire-admin-invite', {
+    name: 'expire-admin-invite',       // must equal the key; lowercase kebab-case
+    description: 'Expire an unused invite.',
+    handler: expireAdminInvite,
     maxAttempts: 5,                    // default 5
     timeoutSeconds: 60,                // default 60
     schedule: { cron: '0 3 * * *' },   // optional; UTC only

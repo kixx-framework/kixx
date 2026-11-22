@@ -75,11 +75,6 @@ cloudflare-config-test-context.json.
             "LOGGER": {
                 "level": {{ json env.LOGGER.level }},
             },
-            "SEND_EMAIL": {
-                "bindingName": "SEND_EMAIL",
-                // Must be an address on an onboarded, verified sender domain.
-                "from": {{ json env.SEND_EMAIL.from }},
-            },
             "HYPERVIEW": {
                 "useTemplateCache": {{ json env.HYPERVIEW.useTemplateCache }},
                 "usePageCache": {{ json env.HYPERVIEW.usePageCache }},

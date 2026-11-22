@@ -55,7 +55,6 @@
             "OBJECT_STORE": {
                 "path": "../data/nodejs_app/object_store",
                 "buckets": {
-                    "uploads": {},
                     "files": {},
                 },
             },
@@ -68,7 +67,6 @@
                 "pagesDirectory": "./pages",
                 "templatesDirectory": "./templates",
                 "staticAssetsDirectory": "./static-assets",
-                "emailsDirectory": "./emails",
             },
         },
         "local": {
@@ -129,7 +127,6 @@
             "OBJECT_STORE": {
                 "path": "./object_store",
                 "buckets": {
-                    "uploads": {},
                     "files": {},
                 },
             },
@@ -194,7 +191,6 @@
             "OBJECT_STORE": {
                 "path": "../data/nodejs_app/object_store",
                 "buckets": {
-                    "uploads": {},
                     "files": {},
                 },
             },

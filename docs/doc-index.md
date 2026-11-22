@@ -86,7 +86,7 @@ Domain logic as one async function per user action: when not to write one, files
 
 reference-app/app/presentation/README.md
 
-HTTP and Hyperview integration: route patterns, handler and middleware execution order, response cache policy, reverse routing and target names, request handlers and error handling, `HyperviewPageHandler`, and the `RequestContext`, `ServerRequest`, and `ServerResponse` APIs. Covers HTML and API-only Forms, normalization helpers, CSRF helpers, recipes (page, form workflow, JSON:API endpoint, static assets), page context, emails, and the `/admin` sidebar.
+HTTP and Hyperview integration: route patterns, handler and middleware execution order, response cache policy, reverse routing and target names, request handlers and error handling, `HyperviewPageHandler`, and the `RequestContext`, `ServerRequest`, and `ServerResponse` APIs. Covers HTML and API-only Forms, normalization helpers, CSRF helpers, recipes (page, form workflow, JSON:API endpoint, static assets), page context, and the `/admin` sidebar.
 
 ### Background Jobs
 

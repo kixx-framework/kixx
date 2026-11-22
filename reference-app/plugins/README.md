@@ -36,7 +36,7 @@ Everything with a process lifetime goes through the registry.
 
 ### General plugins
 
-Some plugins use the plugin lifecycle without platform-specific logic. `plugins/general.js` registers `contentAddressableStore`, `hyperview`, and `mailer`. The Hyperview content model (the `/pages` and `/templates` namespace, resource reads and writes, manifest validation) is framework-owned and platform-neutral.
+Some plugins use the plugin lifecycle without platform-specific logic. `plugins/general.js` registers `contentAddressableStore` and `hyperview`. The Hyperview content model (the `/pages` and `/templates` namespace, resource reads and writes, manifest validation) is framework-owned and platform-neutral.
 
 ## The Plugin Module Contract
 

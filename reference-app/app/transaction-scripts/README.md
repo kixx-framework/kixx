@@ -50,12 +50,6 @@ Get Collections with `context.getCollection(name)` (API: `app/collections/README
 ```js
 const store = context.getService('ContentAddressableStore');
 const release = await store.createRelease(context, manifest);
-
-const mailer = context.getService('Mailer');
-const { messageId } = await mailer.send(context, '/password-reset', {
-    to: user.email_address,
-    data: { user, resetUrl },
-});
 ```
 
 **Do not put business rules inside a gateway.** A gateway only hides the shape of one external resource: its binding API, key formats, error codes, and wire protocol. Business rules, validation, and branching on domain state belong in the script.

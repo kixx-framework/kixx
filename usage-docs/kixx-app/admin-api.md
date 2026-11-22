@@ -371,7 +371,7 @@ How jobs behave:
 ### List jobs
 
 ```http
-GET /admin-api/v1/jobs?status=failed&name=send-email&limit=50&cursor=<cursor>
+GET /admin-api/v1/jobs?status=failed&name=expire-admin-invite&limit=50&cursor=<cursor>
 ```
 
 Returns jobs newest first. All query parameters are optional; an empty value
@@ -391,7 +391,7 @@ is treated as absent, and a repeated parameter returns `400`.
             "type": "Job",
             "id": "<uuid>",
             "attributes": {
-                "name": "send-email",
+                "name": "expire-admin-invite",
                 "key": null,
                 "scheduleName": null,
                 "payload": {},

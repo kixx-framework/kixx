@@ -16,7 +16,6 @@ Paths below are relative to `lib/`.
 | `pages/` | Page metadata, page templates, page-local partials, and include files |
 | `templates/base/`, `templates/partials/` | Shared document frames and shared fragments |
 | `static-assets/` | Static assets; `stylesheets/` and `javascript/` are served at `/stylesheets/**` and `/javascript/**` |
-| `emails/` | Email templates |
 
 Add a route to the `routes/` module that owns its surface. Edit `virtual-hosts.js` only to mount a new subtree, add a virtual host, or change subtree-level middleware and error handlers.
 
@@ -294,7 +293,7 @@ Created once per request.
 | `runtime` | `AppRuntime`: whether serving HTTP or running a CLI command |
 | `user` | Authenticated principal, or `null`. Auth middleware sets it with `context.setUser(principal)`; it may be a user, API token, service account, or webhook sender. |
 
-`getCollection(name)` and `getService(name)` (e.g. `'EmailService'`) throw if the name is not registered. Target lookups are under [Reverse Routing](#reverse-routing).
+`getCollection(name)` and `getService(name)` (e.g. `'JobQueue'`) throw if the name is not registered. Target lookups are under [Reverse Routing](#reverse-routing).
 
 | Env helper | Returns |
 |---|---|
@@ -507,7 +506,6 @@ Source files map to the immutable storage layout read by `ContentSnapshot`:
 | `/templates/__template-partials-bundle` | `templates/partials/**` | JSON bundle |
 | `/templates/__base-templates-bundle` | `templates/base/**` | JSON bundle |
 | `/assets/**` | `static-assets/**` | Direct file |
-| `/emails/<pathname>/__email-assets` | `emails/<pathname>/email.json` and named files | JSON bundle |
 
 Keep page directories flat: files named by `template`, `partials`, and `includes` sit beside `page.json`, and a child directory is another page, so never create a `partials/` directory inside a page.
 
@@ -536,19 +534,6 @@ Defaults Hyperview fills when absent:
 `page.title` and `page.description` may be `{ "template": "{{ page.author }} — kixx.dev" }`; Hyperview renders it against the assembled context before the page template runs.
 
 **JSON page context.** With `allowJsonResponse`, a pathname ending in `.json` (case-insensitive) returns the assembled context as JSON; `/blog/index.json` serves `/blog`. It is for development and debugging, not an API contract. It includes merged runtime props, so keep it disabled on routes serving authenticated pages.
-
-### Emails
-
-An email directory holds `email.json` and the files it names. HTML and text templates are each optional; `partials` name files in the same directory; `contextData` is static render data.
-
-```json
-{
-    "contextData": { "subject": "Welcome" },
-    "htmlTemplate": { "id": "welcome.html", "filename": "message.html" },
-    "textTemplate": { "id": "welcome.txt", "filename": "message.txt" },
-    "partials": [ { "id": "signature.html", "filename": "signature.html" } ]
-}
-```
 
 ### Admin Sidebar
 
