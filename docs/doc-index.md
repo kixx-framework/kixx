@@ -18,6 +18,12 @@ docs/server-error-handling.md
 
 Expected operational errors versus programmer bugs and how each entry point applies the rule, turning assumptions into `assert*` checks, and wrapping and rethrowing with `cause`.
 
+### Vendored Code
+
+docs/vendored-code.md
+
+The rules for code copied into `kixx/errors/`, `kixx/assertions/`, `kixx/vendor/`, and `devkit/lib/vendor/`: unmodified releases only, the file set for Kixx and third-party libraries, changing Kixx libraries upstream first, adding, upgrading, and removing, and the `vendored-code.json` record and its digest.
+
 ### Kixx Library References
 
 kixx/assertions/README.md, kixx/errors/README.md, kixx/vendor/templating/docs/README.md
