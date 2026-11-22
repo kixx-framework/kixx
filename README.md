@@ -52,7 +52,6 @@ kixx/
 ├── tools/                       # Scripts for working on this repo
 ├── usage-docs/                  # Public docs (see usage-docs/README.md)
 ├── agents/plans/                # Structured implementation plans
-├── .claude/                     # Claude Code agents, skills, and settings
 ├── run-tests.js                 # Unit test runner (`node run-tests.js [path]`)
 ├── run-linter.js                # Linter (`node run-linter.js [path]`)
 ├── eslint.config.js             # Lint config for kixx/, plugins/, and test/
