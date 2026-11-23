@@ -28,11 +28,10 @@
         {
             "path": "kixx/errors",
             "name": "kixx-server-errors",
-            "version": "6.0.0",
-            "source": "npm:kixx-server-errors@6.0.0",
-            "files": "lib/, mod.js, README.md, LICENSE",
-            "sha256": "5ca499bf5b2f2147902cec9ea22f14f517f786adb6f88da84b2e7ff2a73ae29e",
-            "deviation": "Interim copy ahead of 7.0.0: adds lib/payload-too-large-error.js, lib/precondition-failed-error.js, and lib/service-unavailable-error.js, exports them from mod.js, changes lib/wrapped-error.js so code no longer inherits cause.code, drops docs/, and edits README.md (typo fix, Reference Documentation section removed)."
+            "version": "7.0.0",
+            "source": "npm:kixx-server-errors@7.0.0",
+            "files": "docs/, lib/, mod.js, README.md, LICENSE",
+            "sha256": "15eca6d2949a884ca3184c7792c5fd898f77dbf9cac8520317503d95f39f4a0a"
         },
         {
             "path": "kixx/vendor/luxon",
