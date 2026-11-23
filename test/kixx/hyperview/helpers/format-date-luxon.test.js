@@ -5,7 +5,7 @@
 // vendored luxon. It imports luxon, so it is deleted together with luxon.
 //
 // On each runtime, the new helper must print exactly what the v6 helper prints
-// on that same runtime, for every case in the matrix below, except for three
+// on that same runtime, for every case in the matrix below, except for four
 // accepted deviations. Each deviation is handled by name in its own function.
 // Any other difference fails the test with one assertion that lists the count
 // and the first 50 differences.
@@ -339,48 +339,60 @@ function allowASCIIDigits(ours, luxonOutput, options, input) {
     };
 }
 
-// -----------------------------------------------------------------------------
-// PENDING AN OPERATOR DECISION (the gate tripped)
-//
-// NOT an accepted deviation. These differences are filtered out of the failure
-// so the rest of the matrix stays checked, and they are counted and listed in
-// the test's report. The plan records them and the decision needed.
-//
-// A timestamp with a fractional millisecond, in a zone where the wall-clock
-// reading (instant plus offset) has the opposite sign to the instant: luxon
-// truncates the wall reading toward zero, so its ISO milliseconds disagree
-// with its own instant (1.5 in America/New_York prints .002, while
-// toJSDate().getTime() is 1). The helper uses new Date(ms), the same instant
-// in every zone, and prints .001.
-// -----------------------------------------------------------------------------
-
-function isPendingFractionalMillisecond(testCase) {
-    const { format, input } = testCase;
-    return format === 'ISO' && typeof input === 'number' && !Number.isInteger(input);
+// A timestamp with a fractional millisecond is truncated once, like
+// new Date(ms), so one instant shows the same millisecond in every zone. Luxon
+// truncates after adding the zone offset, so when the wall time falls on the
+// other side of 1970-01-01T00:00 from the instant it shows a different
+// millisecond (1.5 prints .001 in UTC but .002 in America/New_York).
+// Compares against luxon's output for the instant truncated once, with the
+// same format, zone, and locale; the other deviations still apply.
+function isFractionalTimestamp(input) {
+    return typeof input === 'number' && Number.isFinite(input) && !Number.isInteger(input);
 }
 
 const FIXED_UTC_ZONES = new Set([ 'UTC', 'utc' ]);
 const INTL_FORMAT_SET = new Set(INTL_FORMATS);
 
-function compareCase(testCase) {
-    const options = buildOptions(testCase);
-    const luxonOutput = runReference(options, testCase.input);
+// Compares the helper's output for the case's input with the reference's
+// output for referenceInput, applying the deviations that depend on format,
+// zone, and locale.
+function compareWithReference(testCase, options, ours, referenceInput) {
+    const luxonOutput = runReference(options, referenceInput);
     const luxonDateTime = referenceDateTime;
-    const ours = runHelper(options, testCase.input);
 
     const { format, zone, locale } = testCase;
 
     if (format === 'UTC' && luxonDateTime) {
-        return { deviation: 'utcFormat', luxonOutput, ours, ...allowUTCFormat(ours, luxonOutput, luxonDateTime.toJSDate()) };
+        return { deviation: 'utcFormat', luxonOutput, ...allowUTCFormat(ours, luxonOutput, luxonDateTime.toJSDate()) };
     }
     if (FIXED_UTC_ZONES.has(zone) && INTL_FORMAT_SET.has(format)) {
-        return { deviation: 'fixedUTCSpacing', luxonOutput, ours, ...allowFixedUTCSpacing(ours, luxonOutput) };
+        return { deviation: 'fixedUTCSpacing', luxonOutput, ...allowFixedUTCSpacing(ours, luxonOutput) };
     }
     if (format === 'ISO_DATE_TIME_24' && locale) {
-        return { deviation: 'asciiDigits', luxonOutput, ours, ...allowASCIIDigits(ours, luxonOutput, options, testCase.input) };
+        return { deviation: 'asciiDigits', luxonOutput, ...allowASCIIDigits(ours, luxonOutput, options, referenceInput) };
     }
 
-    return { deviation: null, luxonOutput, ours, pass: ours === luxonOutput, changed: false };
+    return { deviation: null, luxonOutput, pass: ours === luxonOutput, changed: false };
+}
+
+function compareCase(testCase) {
+    const options = buildOptions(testCase);
+    const ours = runHelper(options, testCase.input);
+    const direct = compareWithReference(testCase, options, ours, testCase.input);
+
+    if (!isFractionalTimestamp(testCase.input)) {
+        return { ...direct, ours, fractional: null };
+    }
+
+    const truncated = compareWithReference(testCase, options, ours, new Date(testCase.input).getTime());
+
+    return {
+        ...truncated,
+        // Report luxon's own output for the original input on failure.
+        luxonOutput: direct.luxonOutput,
+        ours,
+        fractional: { pass: truncated.pass, changed: !direct.pass },
+    };
 }
 
 function describeInput(input) {
@@ -390,6 +402,13 @@ function describeInput(input) {
     return JSON.stringify(input);
 }
 
+function tally(counter, result) {
+    counter.routed += 1;
+    if (result.pass && result.changed) {
+        counter.changed += 1;
+    }
+}
+
 function runMatrix() {
     const counts = {
         comparisons: 0,
@@ -397,43 +416,35 @@ function runMatrix() {
             utcFormat: { routed: 0, changed: 0 },
             fixedUTCSpacing: { routed: 0, changed: 0 },
             asciiDigits: { routed: 0, changed: 0 },
+            fractionalMillisecond: { routed: 0, changed: 0 },
         },
     };
     const differences = [];
-    const pending = [];
 
     for (const testCase of matrixCases()) {
         counts.comparisons += 1;
         const result = compareCase(testCase);
 
         if (result.deviation) {
-            counts.deviations[result.deviation].routed += 1;
-            if (result.pass && result.changed) {
-                counts.deviations[result.deviation].changed += 1;
-            }
+            tally(counts.deviations[result.deviation], result);
+        }
+        if (result.fractional) {
+            tally(counts.deviations.fractionalMillisecond, result.fractional);
         }
 
         if (!result.pass) {
-            const difference = {
+            differences.push({
                 format: testCase.format,
                 zone: testCase.zone,
                 locale: testCase.locale,
                 input: describeInput(testCase.input),
                 luxon: result.luxonOutput,
                 ours: result.ours,
-            };
-
-            if (isPendingFractionalMillisecond(testCase)) {
-                pending.push(difference);
-            } else {
-                differences.push(difference);
-            }
+            });
         }
     }
 
-    counts.pendingFractionalMillisecond = pending.length;
-
-    return { counts, differences, pending };
+    return { counts, differences };
 }
 
 function reportRequested() {
@@ -445,7 +456,7 @@ function reportRequested() {
 describe('formatDate compared with the v6 luxon helper', ({ it }) => {
 
     it('prints what luxon prints, apart from the accepted deviations', () => {
-        const { counts, differences, pending } = runMatrix();
+        const { counts, differences } = runMatrix();
 
         if (reportRequested()) {
             // eslint-disable-next-line no-console
@@ -453,10 +464,6 @@ describe('formatDate compared with the v6 luxon helper', ({ it }) => {
                 zone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
                 ...counts,
             }));
-            for (const difference of pending) {
-                // eslint-disable-next-line no-console
-                console.log(`PENDING ${ JSON.stringify(difference) }`);
-            }
         }
 
         assert(counts.comparisons > 0, 'The matrix is empty');
