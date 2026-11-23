@@ -34,15 +34,6 @@
             "sha256": "15eca6d2949a884ca3184c7792c5fd898f77dbf9cac8520317503d95f39f4a0a"
         },
         {
-            "path": "kixx/vendor/luxon",
-            "name": "luxon",
-            "version": "3.7.2",
-            "source": "npm:luxon@3.7.2",
-            "files": "src/, README.md, LICENSE.md",
-            "sha256": "9b4bd763a3d5e96bde08f6515c26d9cf0c6ee368a94b0d9399f27980c84ed635",
-            "deviation": "The package's src/package.json is missing."
-        },
-        {
             "path": "kixx/vendor/marked",
             "name": "marked",
             "version": "16.4.2",
