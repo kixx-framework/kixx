@@ -18,11 +18,17 @@ docs/server-error-handling.md
 
 Expected operational errors versus programmer bugs and how each entry point applies the rule, turning assumptions into `assert*` checks, and wrapping and rethrowing with `cause`.
 
+### Vendored Code
+
+docs/vendored-code.md
+
+The rules for code copied into `kixx/errors/`, `kixx/assertions/`, `kixx/vendor/`, and `devkit/lib/vendor/`: unmodified releases only, the file set for Kixx and third-party libraries, changing Kixx libraries upstream first, adding, upgrading, and removing, and the `vendored-code.json` record and its digest.
+
 ### Kixx Library References
 
-kixx/assertions/README.md, kixx/errors/README.md, kixx/vendor/templating/docs/README.md
+kixx/assertions/README.md, kixx/errors/README.md, kixx/errors/docs/README.md, kixx/vendor/templating/docs/README.md
 
-API references for framework code under `kixx/`: the `is*` tests and `assert*` helpers with `AssertionError`; the operational-versus-unexpected error distinction (the error classes themselves are in `kixx/errors/mod.js`); and the generic template engine and its API (`tokenize`, `buildSyntaxTree`, `createRenderFunction`). Prefer the Templating Guide for project template work.
+API references for framework code under `kixx/`: the `is*` tests and `assert*` helpers with `AssertionError`; the operational-versus-unexpected error distinction, with a per-class reference for every error class (name, code, HTTP status, options) in `kixx/errors/docs/`; and the generic template engine and its API (`tokenize`, `buildSyntaxTree`, `createRenderFunction`). Prefer the Templating Guide for project template work.
 
 ### Unit Testing Guide
 

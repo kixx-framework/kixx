@@ -13,7 +13,7 @@ Stand-alone Package
 
 - **No imports outside `devkit/`.** The published package contains only `devkit/`. `test/conformance/` is the one exception, and tests are never published.
 - **No runtime dependencies.** Only `node:` built-ins and vendored code. `kixx-test` and `kixx-linting` are dev dependencies.
-- **Vendored code** lives in `lib/vendor/` (`acorn`, `kixx-assert`), unmodified, with its license. Upgrade by replacing the files and updating the version note in its README. The linter skips `lib/vendor/`.
+- **Vendored code** lives in `lib/vendor/` (`acorn`, `kixx-assert`), unmodified, with its license. The version and digest of each copy are recorded in the repository's `vendored-code.json`, and upgrades follow `docs/vendored-code.md` at the repository root. The Kixx-written acorn wrapper is `lib/parse-javascript.js`. The linter skips `lib/vendor/`.
 - **Static command imports.** `commands/index.js` imports every command so the module graph is complete when loaded from a JSR URL, where there is no directory to read. See `commands/README.md`.
 
 The Two Manifests

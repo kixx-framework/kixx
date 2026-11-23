@@ -24,7 +24,7 @@ node run-linter.js kixx test       # lint a subset (pass only paths that exist)
 - Core under `kixx/` never imports outside `kixx/`.
 - Platform modules (`node:*`, `cloudflare:*`) appear only in `kixx/adapters/`. `test/kixx/import-hygiene.test.js` enforces both rules. The v6 ports-and-adapters guide is `reference-app/plugins/README.md` until S07 replaces it.
 - Every change must work on Node.js, Deno, and Cloudflare.
-- `kixx/vendor/` is third-party code. Leave it alone.
+- Vendored code (`kixx/vendor/`, `kixx/errors/`, `kixx/assertions/`, `devkit/lib/vendor/`) is never edited in place. It changes only by following `docs/vendored-code.md`.
 
 **v6 material.**
 
@@ -57,7 +57,7 @@ Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js`
 **Keep it stand-alone.** The devkit ships to npm and JSR on its own.
 
 - Never import from outside `devkit/`. Only `devkit/test/conformance/` may read core (`kixx/`).
-- No runtime dependencies. Use `node:` built-ins, or vendor the code into `devkit/lib/vendor/` (and leave vendored code alone).
+- No runtime dependencies. Use `node:` built-ins, or vendor the code into `devkit/lib/vendor/` by following `docs/vendored-code.md` (and never edit vendored code in place).
 - It must run on Node.js and Deno.
 - Keep `package.json` and `deno.json` in sync, including the version. See `devkit/docs/packaging-and-runtimes.md`.
 

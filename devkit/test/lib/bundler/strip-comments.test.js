@@ -1,6 +1,6 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from '../../../lib/vendor/kixx-assert/mod.js';
-import { parse } from '../../../lib/vendor/acorn/index.js';
+import { parseJavaScript } from '../../../lib/parse-javascript.js';
 import stripComments from '../../../lib/bundler/strip-comments.js';
 
 describe('stripComments', ({ it }) => {
@@ -48,7 +48,7 @@ describe('stripComments', ({ it }) => {
     it('returns source that still parses', () => {
         const source = 'export const value = /* comment */ 1;';
         const result = stripComments(source);
-        const ast = parse(result.source, {
+        const ast = parseJavaScript(result.source, {
             ecmaVersion: 'latest',
             sourceType: 'module',
         });

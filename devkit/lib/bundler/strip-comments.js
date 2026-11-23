@@ -1,4 +1,4 @@
-import { parse } from '../vendor/acorn/index.js';
+import { parseJavaScript } from '../parse-javascript.js';
 
 /**
  * Parses an ES module and removes its comments without changing line numbers.
@@ -8,7 +8,7 @@ import { parse } from '../vendor/acorn/index.js';
  */
 export default function stripComments(source) {
     const comments = [];
-    const ast = parse(source, {
+    const ast = parseJavaScript(source, {
         ecmaVersion: 'latest',
         sourceType: 'module',
         ranges: true,

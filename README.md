@@ -57,6 +57,7 @@ kixx/
 ├── run-linter.js                # Linter (`node run-linter.js [path]`)
 ├── eslint.config.js             # Lint config for kixx/, plugins/, and test/
 ├── package.json                 # Private; dev dependencies only
+├── vendored-code.json           # Version and digest of every vendored copy
 └── deno.json                    # Deno lint settings
 ```
 
