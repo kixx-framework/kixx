@@ -8,6 +8,11 @@
 // only a binding to a plain class, and nothing a unit test imports
 // reaches a shell or a cloudflare:* module.
 //
+// The probe in test-app/probe/ is bundled into every target the
+// integration suite runs on (QA-8). So everything it reaches imports by
+// relative path only, and nothing under test-app/ imports a cloudflare:*
+// module.
+//
 // When a section extracts a module or removes an edge, delete its entry
 // from LEAVING_CORE or KNOWN_EDGES. The rule "lists no module or edge that
 // is already gone" fails until you do.
@@ -21,6 +26,8 @@ import { assertEqual } from 'kixx-assert';
 const REPOSITORY_DIRECTORY = fileURLToPath(new URL('../../', import.meta.url));
 const CORE_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'kixx/');
 const TEST_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test/');
+const TEST_APP_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test-app/');
+const PROBE_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'probe/');
 
 // Modules still in core that a later section removes.
 const LEAVING_CORE = {
@@ -181,6 +188,39 @@ describe('import hygiene', ({ it }) => {
                 }
             }
         }
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('reaches only relative imports from the probe', () => {
+        const violations = [];
+
+        // The same build of the probe runs on Cloudflare, Node.js, and Deno,
+        // so it can hold no package and no platform module. That covers the
+        // probe's own files, the suites it registers, and the core modules
+        // those suites use.
+        for (const { specifiers, chain } of readImportGraph(listJavaScriptFiles(PROBE_DIRECTORY))) {
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            for (const specifier of specifiers) {
+                if (!specifier.startsWith('.')) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('imports no cloudflare:* module in test-app/', () => {
+        // The runner, its helpers, and the integration tests run on a laptop.
+        // A test app's Cloudflare entry point needs its own list here when
+        // the first test app exists.
+        const violations = listJavaScriptFiles(TEST_APP_DIRECTORY).flatMap((filepath) => {
+            return extractSpecifiers(fs.readFileSync(filepath, 'utf8'))
+                .filter((specifier) => specifier.startsWith('cloudflare:'))
+                .map((specifier) => ({ file: toRepositoryPath(filepath), specifier }));
+        });
 
         assertEqual('', formatViolations(violations));
     });
