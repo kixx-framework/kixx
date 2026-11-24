@@ -34,7 +34,7 @@
  * - A query holding more than one statement throws. The platform runs every
  *   statement, but `node:sqlite` silently drops all but the first. Anything
  *   after the first statement's semicolon counts, a trailing comment included.
- * - A query holding no statement (empty, or only a comment) throws.
+ * - An empty query, or one of only whitespace, throws.
  * - `transactionSync` rolls back and throws `TypeError` when its callback
  *   returns a thenable. The platform commits. The fake fails so that an async
  *   callback is caught.
@@ -51,6 +51,10 @@
  * - The 10 GB limit per object and the limit of 100 columns per table.
  * - Lazy cursors. Rows are read eagerly when `exec` runs.
  * - A transaction statement behind a leading SQL comment. `exec` runs it.
+ * - A query that holds a comment or a semicolon but no statement. Never pass
+ *   one. `node:sqlite` prepares an empty statement from it and then mishandles
+ *   that statement: Node.js 24 can crash at a later garbage collection, and
+ *   Deno 2.8 crashes at once.
  * - A binding count that doesn't match the statement's placeholders.
  *   `node:sqlite` binds a missing one as `NULL`. The documentation doesn't say
  *   what the platform does.
@@ -120,6 +124,7 @@ export function createFakeDurableObjectStorage(options) {
 
     const sql = {
         exec(query, ...bindings) {
+            assertHoldsText(query);
             assertStatementLength(query);
             assertNotTransactionStatement(query);
             assertBindingCount(bindings);
@@ -172,6 +177,18 @@ export function createFakeDurableObjectStorage(options) {
     };
 }
 
+
+// Checked before prepare(), because node:sqlite mishandles the empty
+// statement it prepares from a query with no SQL in it (see the module
+// comment).
+function assertHoldsText(query) {
+    if (typeof query !== 'string') {
+        throw new TypeError('the query must be a string');
+    }
+    if (query.trim() === '') {
+        throw new Error('the query does not contain a statement');
+    }
+}
 
 function assertStatementLength(query) {
     const length = textEncoder.encode(query).length;
@@ -235,25 +252,10 @@ function assertBindingSize(values) {
 }
 
 function assertSingleStatement(query, statement) {
-    if (!holdsStatement(statement)) {
-        throw new Error('the query does not contain a statement');
-    }
-
     // sourceSQL holds only the first statement's text, so anything left over
     // is a statement node:sqlite would silently never run.
     if (query.slice(statement.sourceSQL.length).trim() !== '') {
         throw new Error('multi-statement queries are not modeled by this fake');
-    }
-}
-
-// A query with no SQL in it (empty, or only a comment) prepares to an empty
-// statement. Reading sourceSQL from one crashes the Deno 2.8 process, so it is
-// detected through expandedSQL, which throws for one on Node.js and Deno.
-function holdsStatement(statement) {
-    try {
-        return typeof statement.expandedSQL === 'string';
-    } catch {
-        return false;
     }
 }
 

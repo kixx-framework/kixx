@@ -261,15 +261,26 @@ describe('createFakeDurableObjectStorage', ({ describe }) => {
             assertEqual('世界; 😀', storage.sql.exec("SELECT '世界; 😀' AS v").one().v);
         });
 
-        it('rejects a query holding no statement', () => {
+        // A query of only a comment or a semicolon is not tried here: preparing
+        // one can crash the process (see the fake's module comment).
+        it('rejects an empty query and one of only whitespace', () => {
             const storage = makeStorage();
 
-            for (const query of [ '', '   ', '-- only a comment', ';' ]) {
+            for (const query of [ '', '  \n\t ' ]) {
                 const caught = catchError(() => storage.sql.exec(query));
 
                 assert(caught, `expected ${ JSON.stringify(query) } to throw`);
                 assertEqual('the query does not contain a statement', caught.message);
             }
+        });
+
+        it('rejects a query that is not a string with TypeError', () => {
+            const storage = makeStorage();
+
+            const caught = catchError(() => storage.sql.exec(undefined));
+
+            assert(caught, 'expected the missing query to throw');
+            assertEqual('TypeError', caught.name);
         });
     });
 
