@@ -240,6 +240,15 @@ describe('formatDate helper', ({ describe }) => {
             assertEqual('-271821-04-20T12:00:00.000-05:00', renderISO('-271821-04-20T12:00', 'Etc/GMT+5'));
         });
 
+        it('prints ISO fields which agree with a local mean time offset', () => {
+            // New York was -4:56:02 before 1883. The offset prints as -04:56,
+            // so the time must too, or the string names another instant.
+            const iso = renderISO('1850-01-01T00:00:00Z', 'America/New_York');
+
+            assertEqual('1849-12-31T19:04:00.000-04:56', iso);
+            assertEqual(Date.parse('1850-01-01T00:00:00Z'), Date.parse(iso));
+        });
+
         it('resolves a skipped time in date parts the same way', () => {
             const parts = { year: 2017, month: 3, day: 12, hour: 2, minute: 30 };
 

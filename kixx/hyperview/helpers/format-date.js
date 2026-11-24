@@ -522,9 +522,12 @@ function offsetAt(zone, instant) {
     return wallTimestamp - wholeSecond;
 }
 
-// Returns the wall-clock fields and offset of the instant in the zone.
+// Returns the wall-clock fields and offset of the instant in the zone. Local
+// mean time offsets carry seconds (New York was -4:56:02), which ISO cannot
+// print, so the offset is truncated to whole minutes and the fields follow it.
+// Printed fields and offset then always name the same instant.
 function wallFieldsAt(zone, instant) {
-    const offset = offsetAt(zone, instant);
+    const offset = Math.trunc(offsetAt(zone, instant) / MINUTE_MS) * MINUTE_MS;
     const date = new Date(instant + offset);
 
     return {
@@ -651,7 +654,7 @@ function isoOffsetText(zone, offset) {
     const sign = minutes < 0 ? '-' : '+';
     const absolute = Math.abs(minutes);
 
-    return `${ sign }${ pad(Math.trunc(absolute / 60), 2) }:${ pad(Math.trunc(absolute % 60), 2) }`;
+    return `${ sign }${ pad(Math.trunc(absolute / 60), 2) }:${ pad(absolute % 60, 2) }`;
 }
 
 function pad(number, length) {
