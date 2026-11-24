@@ -58,6 +58,9 @@ templates in `lib/`. Today two things render them:
 (from the repo root), which renders `test-app`'s configs from its own
 context files. No devkit command uses them yet.
 
+`tools/build-test-app.js` is a v6 tool and knowingly broken. Don't run it:
+it would wipe `test-app/`, which now holds the integration suite.
+
 | File | Purpose |
 | --- | --- |
 | `node-config.jsonc.template` | Renders `node-config.jsonc`. |
@@ -181,4 +184,5 @@ Follow "Adding a new setting" in the usage configuration doc. For a
 per-environment setting, also add the key to the matching `.jsonc.template`,
 its example context, and the [Config templates](#config-templates) tables,
 or `config-templates.test.js` fails. Add it to `test-app`'s context files
-too, or `tools/build-test-app.js` fails to render.
+too, or `tools/build-test-app.js` fails to render. That tool is v6 and
+knowingly broken, and must not be run: it would wipe `test-app/`.

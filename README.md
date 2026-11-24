@@ -39,6 +39,12 @@ kixx/
 │   └── document-store/, jobs/, object-store/, permissions/
 │                                # Leaving core in later sections (see test/kixx/import-hygiene.test.js)
 ├── test/                        # Unit tests mirroring kixx/ (and later plugins/)
+│   ├── fakes/                   # Shared fakes of platform services (KV, Durable Objects)
+│   └── test-app/                # Unit tests for the integration runner and the probe
+├── test-app/                    # Integration suite, run against a real target (see test-app/README.md)
+│   ├── run-tests.js             # Integration test runner (`node test-app/run-tests.js --local`)
+│   ├── probe/                   # Runs shared test suites inside a running server
+│   └── test/                    # Integration tests
 ├── docs/                        # Maintainer guides; start with doc-index.md
 ├── devkit/                      # The `kixx` CLI, published as kixx-devkit; stand-alone
 │   ├── kixx.js                  # CLI entry point
@@ -55,15 +61,15 @@ kixx/
 ├── agents/plans/                # Structured implementation plans
 ├── run-tests.js                 # Unit test runner (`node run-tests.js [path]`)
 ├── run-linter.js                # Linter (`node run-linter.js [path]`)
-├── eslint.config.js             # Lint config for kixx/, plugins/, and test/
+├── eslint.config.js             # Lint config for kixx/, plugins/, test/, and test-app/
 ├── package.json                 # Private; dev dependencies only
 ├── vendored-code.json           # Version and digest of every vendored copy
 └── deno.json                    # Deno lint settings
 ```
 
-`reference-app/` is what remains of the v6 starter app. It is not maintained or runnable; it shrinks as code moves out of it, and is deleted at the end of the extraction. `test-v6/` holds the v6 tests (end-to-end suite included) until each is brought back beside the code it covers.
+`reference-app/` is what remains of the v6 starter app. It is not maintained or runnable; it shrinks as code moves out of it, and is deleted at the end of the extraction. `test-v6/` holds the v6 tests (the v6 integration suites included) until each is brought back beside the code it covers.
 
-**Continuous Integration.** GitHub Actions runs `.github/workflows/ci.yml` on every push and pull request. It runs `node run-linter.js` on Node.js 24, and the unit suite with `node run-tests.js` on Node.js 24 and `deno run -A run-tests.js` on Deno 2.8. The devkit suite isn't in CI yet; run it by hand with `node devkit/run-tests.js`.
+**Continuous Integration.** GitHub Actions runs `.github/workflows/ci.yml` on every push and pull request. It runs `node run-linter.js` on Node.js 24, and the unit suite with `node run-tests.js` on Node.js 24 and `deno run -A run-tests.js` on Deno 2.8. The devkit suite isn't in CI yet; run it by hand with `node devkit/run-tests.js`. The integration suite in `test-app/` isn't in CI either: the operator runs it against a running or deployed test app.
 
 Kixx Core
 ---------
