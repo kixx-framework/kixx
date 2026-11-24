@@ -432,11 +432,19 @@ function wallClockToInstant(zone, fields) {
 
     // The offset in effect at the wall time is one of the zone's offsets near
     // it. Sampling a day either side catches both sides of any transition.
-    const candidates = new Set([
+    // Near the edge of the Date range a sample's own wall time can be past the
+    // edge, which gives a NaN offset, so those samples are dropped.
+    const samples = [
         offsetAt(zone, clampToDateRange(localTimestamp - DAY_MS)),
         offsetAt(zone, clampToDateRange(localTimestamp)),
         offsetAt(zone, clampToDateRange(localTimestamp + DAY_MS)),
-    ]);
+    ];
+
+    const candidates = new Set(samples.filter((offset) => !Number.isNaN(offset)));
+
+    if (candidates.size === 0) {
+        return { reason: 'invalid input' };
+    }
 
     const matches = [];
 

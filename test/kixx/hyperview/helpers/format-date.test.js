@@ -235,6 +235,11 @@ describe('formatDate helper', ({ describe }) => {
             assertEqual('2017-10-01T03:30:00.000+11:00', renderISO('2017-10-01T02:30', 'Australia/Sydney'));
         });
 
+        it('reads a wall time within a day of the ends of the Date range', () => {
+            assertEqual('+275760-09-12T00:00:00.000+09:00', renderISO('+275760-09-12T00:00', 'Asia/Tokyo'));
+            assertEqual('-271821-04-20T12:00:00.000-05:00', renderISO('-271821-04-20T12:00', 'Etc/GMT+5'));
+        });
+
         it('resolves a skipped time in date parts the same way', () => {
             const parts = { year: 2017, month: 3, day: 12, hour: 2, minute: 30 };
 
