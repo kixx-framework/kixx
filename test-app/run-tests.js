@@ -1,13 +1,17 @@
 /**
- * End-to-end test runner for test-app/.
+ * Integration test runner for test-app/.
  *
- * Runs the suite in test/ against a built and deployed test app. Requires
- * `npm install` in test-app/ first, so this runner and the test files resolve
- * the same kixx-test instance. See test/README.md for targets and options.
+ * Runs the suite in test-app/test/ against a real target: a test app that is
+ * already running on this machine, or one that is already deployed. The
+ * runner starts nothing and deploys nothing; it only points the tests at the
+ * target's base URL.
  *
- * Usage: node run-tests.js [--skip <path>]
- *     [--base-url <url> | --development | --cloudflare | --nodejs]
- *     [--username <username>] [--password <password>] [pathname ...]
+ * It uses the repository's devDependencies, so run `npm install` once at the
+ * repository root. The unit test runner (run-tests.js at the repository root)
+ * never collects this suite.
+ *
+ * Usage: node test-app/run-tests.js [--skip <path>]
+ *     [--base-url <url> | --local | --cloudflare | --nodejs] [pathname ...]
  */
 import process from 'node:process';
 import util from 'node:util';
@@ -19,9 +23,8 @@ import { runTests } from 'kixx-test';
 import { isNonEmptyString } from 'kixx-assert';
 
 
-const USAGE = 'Usage: node run-tests.js [--skip <path>] ' +
-    '[--base-url <url> | --development | --cloudflare | --nodejs] ' +
-    '[--username <username>] [--password <password>] [pathname ...]';
+const USAGE = 'Usage: node test-app/run-tests.js [--skip <path>] ' +
+    '[--base-url <url> | --local | --cloudflare | --nodejs] [pathname ...]';
 
 const ROOT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,50 +34,28 @@ const TEST_ROOT = path.join(ROOT_DIRECTORY, 'test');
 // module like `latest.js` from being collected as a test file.
 const TEST_FILE_PATTERN = /\.test\.js$/;
 
-// End-to-end tests drive a running application, so the kixx-test default of
-// 1000ms is unusable for them. This acts as a ceiling and not a floor: kixx-test
-// resolves the runner option in preference to a block's own timeout, so an
-// individual describe block cannot raise it above this value.
-const END_TO_END_TIMEOUT = 10000;
+// Integration tests drive a running application over the network, so the
+// kixx-test default of 1000ms is unusable for them. This acts as a ceiling and
+// not a floor: kixx-test resolves the runner option in preference to a block's
+// own timeout, so an individual describe block cannot raise it above this value.
+const INTEGRATION_TEST_TIMEOUT = 10000;
 
-const END_TO_END_OPTION_NAMES = [
+// Every option that chooses the target. At most one may be used.
+const TARGET_OPTION_NAMES = [
     'base-url',
-    'username',
-    'password',
-    'development',
+    'local',
     'cloudflare',
     'nodejs',
 ];
 
-const END_TO_END_BASE_URL_OPTION_NAMES = [
-    'base-url',
-    'development',
-    'cloudflare',
-    'nodejs',
-];
-
-const END_TO_END_STRING_OPTION_NAMES = [
-    'base-url',
-    'username',
-    'password',
-];
-
-const END_TO_END_BASE_URLS = new Map([
-    [ 'development', 'http://localhost:2026/' ],
+// These URLs are carried over from v6. Each one is confirmed when a test app
+// is first deployed to that target. The local target is the test app running
+// on this machine with production settings, not in development mode.
+const NAMED_TARGET_BASE_URLS = new Map([
+    [ 'local', 'http://localhost:2026/' ],
     [ 'cloudflare', 'https://kixx-test-app.kixx.workers.dev/' ],
     [ 'nodejs', 'https://nodejs.kixx-testing.dev/' ],
 ]);
-
-const END_TO_END_ENVIRONMENT_VARIABLES = new Map([
-    [ 'base-url', 'E2E_TESTS_BASE_URL' ],
-    [ 'username', 'E2E_TESTS_ROOT_USERNAME' ],
-    [ 'password', 'E2E_TESTS_ROOT_PASSWORD' ],
-]);
-const REQUIRED_END_TO_END_ENVIRONMENT_VARIABLES = [
-    'E2E_TESTS_BASE_URL',
-    'E2E_TESTS_ROOT_USERNAME',
-    'E2E_TESTS_ROOT_PASSWORD',
-];
 
 
 // Signals an invocation problem the user can correct: a bad flag, a pathname
@@ -92,7 +73,7 @@ class CommandLineError extends Error {
 async function main() {
     const args = parseCommandLineArguments();
 
-    configureEndToEndEnvironment(args);
+    configureTargetEnvironment(args);
 
     // The root anchors every containment check below, so confirm it exists
     // before validating any pathname against it.
@@ -102,7 +83,7 @@ async function main() {
     const skipPaths = (args.values.skip || []).map((p) => path.resolve(p));
 
     // Positional and --skip pathnames are both constrained to the suite root, so
-    // a pathname outside it, such as lib's unit tests, fails loudly instead of
+    // a pathname outside it, such as the unit suite, fails loudly instead of
     // importing tests that do not belong to this suite.
     assertPathsInTestRoot(testPaths, TEST_ROOT, 'Test');
     assertPathsInTestRoot(skipPaths, TEST_ROOT, 'Skip');
@@ -132,12 +113,19 @@ async function main() {
     testFiles.sort(compareFilepaths);
     testFiles = dropDuplicateFilepaths(testFiles);
 
+    // An empty selection must fail, so a run never reports a missing suite as
+    // a passing one.
+    if (testFiles.length === 0) {
+        const searched = testPaths.length > 0 ? testPaths.join(', ') : TEST_ROOT;
+        throw new CommandLineError(`No test files found under ${ searched }`, false);
+    }
+
     for (const file of testFiles) {
         // eslint-disable-next-line no-await-in-loop
         await dynamicallyImportFile(file);
     }
 
-    const emitter = runTests({ timeout: END_TO_END_TIMEOUT });
+    const emitter = runTests({ timeout: INTEGRATION_TEST_TIMEOUT });
 
     emitter.on('error', (error) => {
         // eslint-disable-next-line no-console
@@ -224,7 +212,7 @@ function parseCommandLineArguments() {
         return util.parseArgs({
             args: process.argv.slice(2),
             // Strict parsing rejects an unknown or misspelled flag. Without it a
-            // typo like --devlopment would be ignored and the run would fall
+            // typo like --cloudflair would be ignored and the run would fall
             // back to whatever target the environment names.
             strict: true,
             allowPositionals: true,
@@ -232,9 +220,7 @@ function parseCommandLineArguments() {
             options: {
                 skip: { type: 'string', multiple: true },
                 'base-url': { type: 'string' },
-                username: { type: 'string' },
-                password: { type: 'string' },
-                development: { type: 'boolean' },
+                local: { type: 'boolean' },
                 cloudflare: { type: 'boolean' },
                 nodejs: { type: 'boolean' },
             },
@@ -247,10 +233,15 @@ function parseCommandLineArguments() {
     }
 }
 
-function configureEndToEndEnvironment(args) {
+// Resolves the target from the command line and the environment, and leaves
+// it in process.env for the tests. The deploy key is not handled here: tests
+// read it from the environment themselves, and it has no command line flag,
+// because a secret on the command line leaks into shell history and process
+// listings.
+function configureTargetEnvironment(args) {
     const suppliedOptionNames = args.tokens
         .filter(({ kind, name }) => {
-            return kind === 'option' && END_TO_END_OPTION_NAMES.includes(name);
+            return kind === 'option' && TARGET_OPTION_NAMES.includes(name);
         })
         .map(({ name }) => name);
 
@@ -258,11 +249,11 @@ function configureEndToEndEnvironment(args) {
 
     const suppliedOptions = new Set(suppliedOptionNames);
 
-    assertBaseUrlOptionsDoNotConflict(suppliedOptions);
-    assertStringOptionsAreNotEmpty(args.values, suppliedOptions);
-    applyEndToEndEnvironmentOverrides(args.values, suppliedOptions);
-    assertEndToEndEnvironmentIsComplete();
-    assertBaseUrlIsValid(process.env.E2E_TESTS_BASE_URL);
+    assertTargetOptionsDoNotConflict(suppliedOptions);
+    assertBaseUrlOptionIsNotEmpty(args.values, suppliedOptions);
+    applyTargetEnvironmentOverrides(args.values, suppliedOptions);
+    assertBaseUrlIsSet();
+    assertBaseUrlIsValid(process.env.INTEGRATION_TESTS_BASE_URL);
 }
 
 function assertOptionsNotRepeated(optionNames) {
@@ -271,7 +262,7 @@ function assertOptionsNotRepeated(optionNames) {
     for (const optionName of optionNames) {
         if (seen.has(optionName)) {
             throw new CommandLineError(
-                `End-to-end configuration option --${ optionName } cannot be repeated.`,
+                `Integration test configuration option --${ optionName } cannot be repeated.`,
                 true,
             );
         }
@@ -279,59 +270,46 @@ function assertOptionsNotRepeated(optionNames) {
     }
 }
 
-function assertBaseUrlOptionsDoNotConflict(suppliedOptions) {
-    const baseUrlOptions = END_TO_END_BASE_URL_OPTION_NAMES.filter((optionName) => {
-        return suppliedOptions.has(optionName);
-    });
-
-    if (baseUrlOptions.length > 1) {
+function assertTargetOptionsDoNotConflict(suppliedOptions) {
+    if (suppliedOptions.size > 1) {
         throw new CommandLineError(
             'Only one base URL option may be used: ' +
-                '--base-url, --development, --cloudflare, or --nodejs.',
+                '--base-url, --local, --cloudflare, or --nodejs.',
             true,
         );
     }
 }
 
-function assertStringOptionsAreNotEmpty(values, suppliedOptions) {
-    for (const optionName of END_TO_END_STRING_OPTION_NAMES) {
-        if (suppliedOptions.has(optionName) && values[optionName] === '') {
-            throw new CommandLineError(
-                `End-to-end configuration option --${ optionName } cannot be empty.`,
-                true,
-            );
-        }
+function assertBaseUrlOptionIsNotEmpty(values, suppliedOptions) {
+    if (suppliedOptions.has('base-url') && values['base-url'] === '') {
+        throw new CommandLineError(
+            'Integration test configuration option --base-url cannot be empty.',
+            true,
+        );
     }
 }
 
-function applyEndToEndEnvironmentOverrides(values, suppliedOptions) {
+function applyTargetEnvironmentOverrides(values, suppliedOptions) {
     // This process-local marker describes the explicit CLI preset. Clear any
     // inherited value so --base-url cannot accidentally select preset behavior.
-    delete process.env.E2E_TESTS_TARGET;
+    delete process.env.INTEGRATION_TESTS_TARGET;
 
-    for (const [ optionName, environmentVariable ] of END_TO_END_ENVIRONMENT_VARIABLES) {
-        if (suppliedOptions.has(optionName)) {
-            process.env[environmentVariable] = values[optionName];
-        }
+    if (suppliedOptions.has('base-url')) {
+        process.env.INTEGRATION_TESTS_BASE_URL = values['base-url'];
     }
 
-    for (const [ optionName, baseUrl ] of END_TO_END_BASE_URLS) {
+    for (const [ optionName, baseUrl ] of NAMED_TARGET_BASE_URLS) {
         if (suppliedOptions.has(optionName)) {
-            process.env.E2E_TESTS_BASE_URL = baseUrl;
-            process.env.E2E_TESTS_TARGET = optionName;
+            process.env.INTEGRATION_TESTS_BASE_URL = baseUrl;
+            process.env.INTEGRATION_TESTS_TARGET = optionName;
         }
     }
 }
 
-function assertEndToEndEnvironmentIsComplete() {
-    const missingVariables = REQUIRED_END_TO_END_ENVIRONMENT_VARIABLES
-        .filter((environmentVariable) => {
-            return !isNonEmptyString(process.env[environmentVariable]);
-        });
-
-    if (missingVariables.length > 0) {
+function assertBaseUrlIsSet() {
+    if (!isNonEmptyString(process.env.INTEGRATION_TESTS_BASE_URL)) {
         throw new CommandLineError(
-            `Missing required end-to-end environment variables: ${ missingVariables.join(', ') }.`,
+            'Missing required integration test environment variable: INTEGRATION_TESTS_BASE_URL.',
             true,
         );
     }
@@ -340,7 +318,7 @@ function assertEndToEndEnvironmentIsComplete() {
 function assertBaseUrlIsValid(baseUrl) {
     if (baseUrl.trim() !== baseUrl) {
         throw new CommandLineError(
-            'E2E_TESTS_BASE_URL cannot have leading or trailing whitespace.',
+            'INTEGRATION_TESTS_BASE_URL cannot have leading or trailing whitespace.',
             true,
         );
     }
@@ -350,14 +328,14 @@ function assertBaseUrlIsValid(baseUrl) {
         url = new URL(baseUrl);
     } catch {
         throw new CommandLineError(
-            'E2E_TESTS_BASE_URL must be a valid absolute HTTP(S) URL.',
+            'INTEGRATION_TESTS_BASE_URL must be a valid absolute HTTP(S) URL.',
             true,
         );
     }
 
     if (![ 'http:', 'https:' ].includes(url.protocol) || !isNonEmptyString(url.hostname)) {
         throw new CommandLineError(
-            'E2E_TESTS_BASE_URL must be a valid absolute HTTP(S) URL.',
+            'INTEGRATION_TESTS_BASE_URL must be a valid absolute HTTP(S) URL.',
             true,
         );
     }

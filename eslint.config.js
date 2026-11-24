@@ -344,6 +344,7 @@ export default [
             'kixx/',
             'plugins/',
             'test/',
+            'test-app/',
             'eslint.config.js',
             'run-linter.js',
             'run-tests.js',
