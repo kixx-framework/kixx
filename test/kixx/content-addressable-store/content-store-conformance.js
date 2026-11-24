@@ -1,4 +1,4 @@
-import { assert, assertEqual } from 'kixx-assert';
+import { assert, assertEqual } from '../../../kixx/assertions/mod.js';
 
 
 /**

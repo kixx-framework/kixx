@@ -4,7 +4,7 @@ import {
     assertFalsy,
     assertMatches,
     assertValidDate,
-} from 'kixx-assert';
+} from '../../../kixx/assertions/mod.js';
 
 /**
  * @callback MakeServerRequest
