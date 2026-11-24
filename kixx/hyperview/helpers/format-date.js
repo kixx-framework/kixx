@@ -146,7 +146,7 @@ const formatterCache = new Map();
  * @param {string} [options.locale] - BCP 47 locale tag, such as `en-US`; defaults to the runtime's locale
  * @param {string|number|Date|Object} date - Value to format
  * @returns {string} The formatted date, an empty string for an empty string, null, or undefined, or an escaped message
- * @see formatDate Helper in ../../../templates/README.md for template usage
+ * @see formatDate Helper in ../../../reference-app/templates/README.md for template usage
  */
 export default function formatDate(_context, options, date) {
     if (date === '' || date === null || typeof date === 'undefined') {
