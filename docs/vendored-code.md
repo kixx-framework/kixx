@@ -8,7 +8,7 @@ Kixx has no runtime npm dependencies. Code it needs from elsewhere is copied in 
 |---|---|
 | `kixx/errors/` | kixx-server-errors |
 | `kixx/assertions/` | kixx-assert |
-| `kixx/vendor/<name>/` | One third-party or Kixx library per directory (templating, marked, path-to-regexp, luxon) |
+| `kixx/vendor/<name>/` | One third-party or Kixx library per directory (templating, marked, path-to-regexp) |
 | `devkit/lib/vendor/<name>/` | Code the CLI needs (acorn, kixx-assert) |
 
 `vendored-code.json` has one entry per directory: what it is, which release it came from, and a digest of its bytes. `test/vendored-code.test.js` fails when a directory's bytes no longer match its digest, when a vendored directory has no entry, or when an entry has no directory. CI runs it.

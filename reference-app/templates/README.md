@@ -176,7 +176,7 @@ The first block parameter is required. Separate names with whitespace, not comma
 
 | Helper | Source | Description |
 | --- | --- | --- |
-| `formatDate` | `helpers/format-date.js` | Format ISO strings, millisecond timestamps, Dates, or Luxon object values |
+| `formatDate` | `helpers/format-date.js` | Format ISO 8601 strings, millisecond timestamps, Dates, or date-part objects |
 | `markup` | `helpers/markup.js` | Convert Markdown to raw HTML with the vendored `marked` parser |
 | `truncate` | `helpers/truncate.js` | Shorten a string to a maximum character count |
 | `assetUrl` | `helpers/asset-url.js` | Render a fingerprinted static-asset URL from the reserved `assets` map |
@@ -199,17 +199,28 @@ Renders `/assets/<hash>/<pathname>` for a pathname in the snapshot's static asse
 {{ formatDate zone="America/New_York" game.startTime }}
 ```
 
-- **Inputs:** ISO string, millisecond timestamp, `Date`, or an object for Luxon's `DateTime.fromObject()` (`{ "year": 2025, "month": 10, "day": 24 }`).
-- **`zone`** (IANA, default system), **`locale`** (BCP 47, default system), **`format`** (preset, default `DATETIME_SHORT`).
-- `""`, `null`, and `undefined` render `""`. Invalid dates render an escaped `Invalid date ...` message.
+Formats a date with the runtime's `Intl.DateTimeFormat`.
 
-| Preset | Example in `en-US` |
+- **Inputs:**
+  - An ISO 8601 calendar date or date-time string, basic (`20170422T103015Z`) or extended (`2017-04-22T10:30:15Z`). The time is optional and follows `T`. Seconds and a fraction of a second are optional, and so is the offset (`Z` or `±HH[:MM]`). Month and day can be left off (`2017`, `2017-04`, but not basic `201704`), except before a time. Don't mix the two forms within the date and time (`2017-0422`, `2017-04-22T1030`); the offset may take either. A space between the date and time, week dates (`2017-W16-6`), ordinal dates (`2017-112`), and time-only strings (`10:30`) aren't accepted.
+  - A millisecond timestamp, or a `Date`.
+  - An object of date parts, such as `{ "year": 2025, "month": 10, "day": 24 }`. The keys are exactly `year`, `month`, `day`, `hour`, `minute`, `second`, and `millisecond`, and the values are numbers (`null` counts as missing). `year` is required. A missing smaller unit takes its minimum: month and day 1, the rest 0.
+- **Wall-clock time:** a value without an offset (a string without `Z` or `±HH:MM`, or an object of date parts) is a time in `zone`, or in the server's zone. A value with an offset, a timestamp, or a `Date` is that instant, shown in `zone`.
+- **`zone`:** an IANA zone name in any case, aliases such as `US/Eastern` included, or `UTC`/`GMT`. The default is the server's zone, which is UTC on Cloudflare Workers. With `UTC` or `GMT`, `ISO` ends in `Z` and zone names print as `UTC`. `Etc/UTC` prints `+00:00` and `Coordinated Universal Time`.
+- **Daylight saving time:** a wall-clock time that happens twice, when the clocks go back, resolves to the earlier occurrence. A time that's skipped, when the clocks go forward, moves forward by the gap: `2017-03-12T02:30` in America/New_York is 3:30 AM.
+- **`locale`:** a BCP 47 tag such as `en-US`. The default is the server's. A malformed tag (`en_US`) renders a message. An unknown but well-formed tag falls back to the default.
+- **`format`:** a name from the table below. The default is `DATETIME_SHORT`. An unknown name renders a message.
+
+The examples are October 14, 1983 at 13:30:23 in America/New_York, with `locale="en-US"`.
+
+| Format | Example |
 | --- | --- |
 | `DATE_SHORT` | `10/14/1983` |
 | `DATE_MED` | `Oct 14, 1983` |
 | `DATE_MED_WITH_WEEKDAY` | `Fri, Oct 14, 1983` |
 | `DATE_FULL` | `October 14, 1983` |
 | `DATE_HUGE` | `Friday, October 14, 1983` |
+| `DATE_MONTH_DATE` | `Oct 14` |
 | `TIME_SIMPLE` | `1:30 PM` |
 | `TIME_WITH_SECONDS` | `1:30:23 PM` |
 | `TIME_WITH_SHORT_OFFSET` | `1:30:23 PM EDT` |
@@ -219,19 +230,29 @@ Renders `/assets/<hash>/<pathname>` for a pathname in the snapshot's static asse
 | `TIME_24_WITH_SHORT_OFFSET` | `13:30:23 EDT` |
 | `TIME_24_WITH_LONG_OFFSET` | `13:30:23 Eastern Daylight Time` |
 | `DATETIME_SHORT` | `10/14/1983, 1:30 PM` |
+| `DATETIME_SHORT_WITH_SECONDS` | `10/14/1983, 1:30:23 PM` |
 | `DATETIME_MED` | `Oct 14, 1983, 1:30 PM` |
+| `DATETIME_MED_WITH_SECONDS` | `Oct 14, 1983, 1:30:23 PM` |
 | `DATETIME_MED_WITH_WEEKDAY` | `Fri, Oct 14, 1983, 1:30 PM` |
 | `DATETIME_FULL` | `October 14, 1983 at 1:30 PM EDT` |
-| `DATETIME_HUGE` | `Friday, October 14, 1983 at 1:30 PM Eastern Daylight Time` |
-| `DATETIME_SHORT_WITH_SECONDS` | `10/14/1983, 1:30:23 PM` |
-| `DATETIME_MED_WITH_SECONDS` | `Oct 14, 1983, 1:30:23 PM` |
 | `DATETIME_FULL_WITH_SECONDS` | `October 14, 1983 at 1:30:23 PM EDT` |
+| `DATETIME_HUGE` | `Friday, October 14, 1983 at 1:30 PM Eastern Daylight Time` |
 | `DATETIME_HUGE_WITH_SECONDS` | `Friday, October 14, 1983 at 1:30:23 PM Eastern Daylight Time` |
-| `DATE_MONTH_DATE` | `Oct 14` |
-| `UTC` | `Wed, 14 Jun 2017 07:00:00 GMT` |
-| `ISO` | `2017-06-14T07:00:00.000Z` |
-| `ISO_DATE` | `2017-06-14` |
-| `ISO_DATE_TIME_24` | `2017-06-14 07:00` |
+| `ISO` | `1983-10-14T13:30:23.000-04:00` |
+| `ISO_DATE` | `1983-10-14` |
+| `ISO_DATE_TIME_24` | `1983-10-14 13:30` |
+| `UTC` | `Fri, 14 Oct 1983 17:30:23 GMT` |
+
+- `UTC` is the HTTP date (RFC 7231): always the UTC instant, in English. It ignores `zone` and `locale`.
+- `ISO`, `ISO_DATE`, and `ISO_DATE_TIME_24` always use ASCII digits, whatever the locale.
+- A timestamp with a fractional millisecond is truncated, as `new Date(ms)` does.
+- Localized output comes from the runtime's `Intl` data, so it can differ slightly between Node.js, Deno, and Cloudflare for some locales.
+
+**Errors.** `formatDate` never throws. `""`, `null`, and `undefined` render `""`. Any other problem renders an escaped message in place of the date, so a bad value shows on the page instead of failing the request:
+
+- `Invalid date (<reason>) <value>`, for example `Invalid date (unparsable) String(not-a-date)`. The reason is left out for a value that is never a date, such as `true`.
+- `Unknown date format <name>`, for example `Unknown date format String(NOPE)`.
+- `Invalid locale <tag>`, for example `Invalid locale String(en_US)`.
 
 ### markup
 

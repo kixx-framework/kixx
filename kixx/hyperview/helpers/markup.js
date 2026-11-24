@@ -20,7 +20,7 @@ import { toFriendlyString } from '../../assertions/mod.js';
  * @param {Object} _options - Named helper arguments; unused
  * @param {string} markdown - Markdown source to render
  * @returns {string} Rendered HTML, an empty string for a falsy value, or a diagnostic string for a non-string value
- * @see markup Helper in ../../../templates/README.md for template usage
+ * @see markup Helper in ../../../reference-app/templates/README.md for template usage
  */
 export default function markup(_context, _options, markdown) {
     if (!markdown) {

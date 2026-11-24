@@ -17,7 +17,7 @@ import { isNumberNotNaN, toFriendlyString } from '../../assertions/mod.js';
  * @param {number} length - Maximum number of characters to keep; the string is returned unchanged when this is not a number
  * @param {string} [ellipsis='&hellip;'] - Suffix appended when the string is shortened; pass an empty string to append nothing
  * @returns {string} The original string when it is already short enough or no length was given, the shortened string otherwise, an empty string for a falsy value, or a diagnostic string for a non-string value
- * @see truncate Helper in ../../../templates/README.md for template usage
+ * @see truncate Helper in ../../../reference-app/templates/README.md for template usage
  */
 export default function truncate(_context, _options, str, length, ellipsis) {
     if (!str) {
