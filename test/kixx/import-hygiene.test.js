@@ -1,10 +1,16 @@
 // Core is vendored as-is into projects (R1, CORE-1), so it must be
-// self-contained: relative imports stay inside kixx/, platform modules
+// self-contained: relative imports stay inside kixx/, node:* modules
 // appear only in adapters, and nothing imports a module that is leaving
 // core except the known edges below.
 //
+// Unit tests never run the platform (QA-7, D56). So cloudflare:* modules
+// appear only in the Durable Object shells listed below, each shell is
+// only a binding to a plain class, and nothing a unit test imports
+// reaches a shell or a cloudflare:* module.
+//
 // When a section extracts a module or removes an edge, delete its entry
-// from LEAVING_CORE or KNOWN_EDGES. Rule 4 fails until you do.
+// from LEAVING_CORE or KNOWN_EDGES. The rule "lists no module or edge that
+// is already gone" fails until you do.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +18,9 @@ import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 
 
-const CORE_DIRECTORY = fileURLToPath(new URL('../../kixx/', import.meta.url));
+const REPOSITORY_DIRECTORY = fileURLToPath(new URL('../../', import.meta.url));
+const CORE_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'kixx/');
+const TEST_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test/');
 
 // Modules still in core that a later section removes.
 const LEAVING_CORE = {
@@ -28,6 +36,15 @@ const KNOWN_EDGES = [
     { from: 'context/application-context.js', to: 'jobs/job-logger.js', removedBy: 'S28' },
 ];
 
+// Durable Object classes, as core-relative paths. These are the only core
+// files that import a cloudflare:* module. List a new shell here.
+//
+// Core has no Cloudflare entry point to list. One would export a shell, so
+// the rule that no unit test reaches a shell keeps tests away from it too.
+const DURABLE_OBJECT_SHELLS = [
+    'adapters/cloudflare/content-store/lib/content-addressable-index-store.js',
+];
+
 // Static import and export specifiers, including multi-line import lists.
 // Excluding `(` and `=` keeps it from matching `export function f(…)`,
 // `export const x = '…'`, and JSDoc `import('…')` type references.
@@ -39,7 +56,7 @@ export function extractSpecifiers(source) {
 }
 
 
-describe('core import hygiene', ({ it }) => {
+describe('import hygiene', ({ it }) => {
     const imports = readCoreImports();
 
     it('extracts only static import and export specifiers', () => {
@@ -70,13 +87,41 @@ describe('core import hygiene', ({ it }) => {
         assertEqual('', formatViolations(violations));
     });
 
-    it('imports platform modules only in adapters', () => {
+    it('imports node:* modules only in adapters, and no bare specifier', () => {
         const violations = imports.filter(({ file, specifier }) => {
-            if (specifier.startsWith('.')) {
+            // cloudflare:* modules have their own rule, next.
+            if (specifier.startsWith('.') || specifier.startsWith('cloudflare:')) {
                 return false;
             }
-            const isPlatform = specifier.startsWith('node:') || specifier.startsWith('cloudflare:');
-            return !isPlatform || !file.startsWith('adapters/');
+            return !specifier.startsWith('node:') || !file.startsWith('adapters/');
+        });
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('imports cloudflare:* modules only in Durable Object shells', () => {
+        const cloudflareImports = imports.filter(({ specifier }) => specifier.startsWith('cloudflare:'));
+
+        // The importers must be exactly the listed shells, so an entry that
+        // no longer imports a cloudflare:* module fails too.
+        const problems = cloudflareImports
+            .filter(({ file }) => !DURABLE_OBJECT_SHELLS.includes(file))
+            .map(({ file, specifier }) => `${ file } -> ${ specifier } (not in DURABLE_OBJECT_SHELLS)`);
+
+        for (const shell of DURABLE_OBJECT_SHELLS) {
+            if (!cloudflareImports.some(({ file }) => file === shell)) {
+                problems.push(`DURABLE_OBJECT_SHELLS lists ${ shell }, which imports no cloudflare:* module`);
+            }
+        }
+
+        assertEqual('', problems.join('\n'));
+    });
+
+    it('keeps every Durable Object shell to cloudflare:workers and relative imports', () => {
+        const violations = imports.filter(({ file, specifier }) => {
+            return DURABLE_OBJECT_SHELLS.includes(file)
+                && !specifier.startsWith('.')
+                && specifier !== 'cloudflare:workers';
         });
 
         assertEqual('', formatViolations(violations));
@@ -117,19 +162,36 @@ describe('core import hygiene', ({ it }) => {
 
         assertEqual('', stale.join('\n'));
     });
+
+    it('reaches no cloudflare:* module or Durable Object shell from a unit test', () => {
+        const violations = [];
+
+        // Every .js file under test/ is a starting point: test files, and the
+        // fakes and suites they share.
+        for (const { file, specifiers, chain } of readImportGraph(listJavaScriptFiles(TEST_DIRECTORY))) {
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            if (DURABLE_OBJECT_SHELLS.includes(toCorePath(file))) {
+                violations.push({ file: trail, specifier: '(a Durable Object shell)' });
+            }
+
+            for (const specifier of specifiers) {
+                if (specifier.startsWith('cloudflare:')) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
+    });
 });
 
 
 // Returns one record per specifier in every .js file under core, vendor/
 // included: vendored code ships too.
 function readCoreImports() {
-    const files = fs.readdirSync(CORE_DIRECTORY, { recursive: true })
-        .map((name) => name.split(path.sep).join('/'))
-        .filter((name) => name.endsWith('.js'))
-        .sort();
-
-    return files.flatMap((file) => {
-        const filepath = path.join(CORE_DIRECTORY, file);
+    return listJavaScriptFiles(CORE_DIRECTORY).flatMap((filepath) => {
+        const file = toCorePath(filepath);
         const source = fs.readFileSync(filepath, 'utf8');
 
         return extractSpecifiers(source).map((specifier) => {
@@ -141,6 +203,46 @@ function readCoreImports() {
     });
 }
 
+// Follows static relative specifiers from the entry files (absolute paths)
+// to every file they reach, reading each file once. Returns one record per
+// reached file: its path, its specifiers, and the chain of files that led to
+// it, starting at an entry file.
+//
+// A dynamic import() isn't followed, because SPECIFIER_PATTERN doesn't
+// match one.
+function readImportGraph(entryFiles) {
+    const graph = new Map();
+    const queue = entryFiles.map((filepath) => [ filepath ]);
+
+    while (queue.length > 0) {
+        const chain = queue.shift();
+        const file = chain.at(-1);
+
+        if (graph.has(file)) {
+            continue;
+        }
+
+        const specifiers = extractSpecifiers(fs.readFileSync(file, 'utf8'));
+        graph.set(file, { file, specifiers, chain });
+
+        for (const specifier of specifiers) {
+            if (specifier.startsWith('.')) {
+                queue.push([ ...chain, path.resolve(path.dirname(file), specifier) ]);
+            }
+        }
+    }
+
+    return Array.from(graph.values());
+}
+
+// Absolute paths of every .js file under the directory, at any depth.
+function listJavaScriptFiles(directory) {
+    return fs.readdirSync(directory, { recursive: true })
+        .filter((name) => name.endsWith('.js'))
+        .map((name) => path.join(directory, name))
+        .sort();
+}
+
 function isInsideCore(filepath) {
     const relativePath = path.relative(CORE_DIRECTORY, filepath);
     return !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
@@ -148,6 +250,10 @@ function isInsideCore(filepath) {
 
 function toCorePath(filepath) {
     return path.relative(CORE_DIRECTORY, filepath).split(path.sep).join('/');
+}
+
+function toRepositoryPath(filepath) {
+    return path.relative(REPOSITORY_DIRECTORY, filepath).split(path.sep).join('/');
 }
 
 function leavingModuleOf(corePath) {
