@@ -86,10 +86,20 @@ const MINUTE_MS = 60000;
 
 const UNIT_NAMES = [ 'year', 'month', 'day', 'hour', 'minute', 'second', 'millisecond' ];
 
-// Basic or extended ISO 8601 calendar date, with an optional time after `T`.
+// ISO 8601 calendar dates, with an optional time after `T` which needs a full
+// date. Extended (2017-04-22T10:30) and basic (20170422T1030) forms don't mix,
+// and basic has no year-month (201704 would read like YYMMDD). The offset may
+// take either form, because +0000 after an extended time is common in data.
 // Groups: year, month, day, hour, minute, second, fraction, Z, offset hours,
 // offset minutes.
-const ISO_PATTERN = /^([+-]\d{6}|\d{4})(?:-?(\d\d)(?:-?(\d\d))?)?(?:[Tt](\d\d)(?::?(\d\d)(?::?(\d\d)(?:[.,](\d{1,30}))?)?)?(?:([Zz])|([+-]\d\d)(?::?(\d\d))?)?)?$/;
+const ISO_OFFSET = String.raw`(?:([Zz])|([+-]\d\d)(?::?(\d\d))?)?`;
+const ISO_FRACTION = String.raw`(?:[.,](\d{1,30}))?`;
+const ISO_YEAR = String.raw`([+-]\d{6}|\d{4})`;
+
+const ISO_PATTERNS = [
+    new RegExp(`^${ ISO_YEAR }(?:-(\\d\\d)(?:-(\\d\\d)(?:[Tt](\\d\\d)(?::(\\d\\d)(?::(\\d\\d)${ ISO_FRACTION })?)?${ ISO_OFFSET })?)?)?$`),
+    new RegExp(`^${ ISO_YEAR }(?:(\\d\\d)(\\d\\d)(?:[Tt](\\d\\d)(?:(\\d\\d)(?:(\\d\\d)${ ISO_FRACTION })?)?${ ISO_OFFSET })?)?$`),
+];
 
 const SYSTEM_ZONE = Object.freeze({ timeZone: undefined, isFixedUTC: false });
 const FIXED_UTC_ZONE = Object.freeze({ timeZone: 'UTC', isFixedUTC: true });
@@ -108,8 +118,9 @@ const formatterCache = new Map();
  * source produced:
  * - An ISO 8601 calendar date or date-time string, basic or extended, with an
  *   optional time after `T`, optional seconds and fraction, and an optional
- *   offset (`Z` or `±HH[:MM]`). Week dates, ordinal dates, time-only strings,
- *   and a space separator are not accepted.
+ *   offset (`Z` or `±HH[:MM]`). A time needs a full date, and the date and
+ *   time can't mix the basic and extended forms. Week dates, ordinal dates,
+ *   time-only strings, and a space separator are not accepted.
  * - A millisecond timestamp (a number) or a `Date`.
  * - A plain object of date parts with exactly the keys `year`, `month`, `day`,
  *   `hour`, `minute`, `second`, and `millisecond`. Values are numbers; `null`
@@ -273,7 +284,7 @@ function toInstant(zone, value) {
 }
 
 function stringToInstant(zone, value) {
-    const match = ISO_PATTERN.exec(value);
+    const match = ISO_PATTERNS[0].exec(value) ?? ISO_PATTERNS[1].exec(value);
 
     if (!match) {
         return { reason: 'unparsable' };
