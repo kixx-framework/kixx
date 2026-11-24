@@ -493,13 +493,13 @@ describe('formatDate helper', ({ describe }) => {
 
         it('pads ISO_DATE_TIME_24 years to four digits', () => {
             assertEqual('0099-01-01 00:00', render('0099-01-01T00:00:00Z', { format: 'ISO_DATE_TIME_24', zone: 'UTC' }));
-            assertEqual('-0044-03-15 00:00', render('-000044-03-15T00:00:00Z', { format: 'ISO_DATE_TIME_24', zone: 'UTC' }));
-            assertEqual('12000-01-01 00:00', render('+012000-01-01T00:00:00Z', { format: 'ISO_DATE_TIME_24', zone: 'UTC' }));
         });
 
-        it('uses the expanded year form for ISO_DATE outside 0 to 9999', () => {
+        it('uses the expanded year form for ISO_DATE and ISO_DATE_TIME_24 outside 0 to 9999', () => {
             assertEqual('+012000-01-01', render('+012000-01-01T00:00:00Z', { format: 'ISO_DATE', zone: 'UTC' }));
             assertEqual('-000044-03-15', render('-000044-03-15T00:00:00Z', { format: 'ISO_DATE', zone: 'UTC' }));
+            assertEqual('+012000-01-01 00:00', render('+012000-01-01T00:00:00Z', { format: 'ISO_DATE_TIME_24', zone: 'UTC' }));
+            assertEqual('-000044-03-15 00:00', render('-000044-03-15T00:00:00Z', { format: 'ISO_DATE_TIME_24', zone: 'UTC' }));
         });
     });
 

@@ -625,9 +625,9 @@ function formatISODate(zone, instant) {
 }
 
 function formatISODateTime24(zone, instant) {
-    const { year, month, day, hour, minute } = wallFieldsAt(zone, instant);
+    const fields = wallFieldsAt(zone, instant);
 
-    return `${ pad(year, 4) }-${ pad(month, 2) }-${ pad(day, 2) } ${ pad(hour, 2) }:${ pad(minute, 2) }`;
+    return `${ isoDateText(fields) } ${ pad(fields.hour, 2) }:${ pad(fields.minute, 2) }`;
 }
 
 function formatUTC(_zone, instant) {
